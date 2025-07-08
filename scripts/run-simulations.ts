@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { simulationRunner } from '../simulations/core/simulationRunner.old';
+import { simulationRunner } from '../simulations/core/simulationRunner';
 
 async function runSimulations(): Promise<void> {
   const simulationsDir = path.join(process.cwd(), 'simulations');
