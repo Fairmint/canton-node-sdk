@@ -9,7 +9,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     
     steps:
@@ -32,30 +32,25 @@ jobs:
       - name: Build package
         run: npm run build
 
-      - name: Auto-increment version and publish
-        run: |
-          # Get current version
-          CURRENT_VERSION=$(npm version --json | jq -r '.["canton-node-sdk"]')
-          
-          # Extract major, minor, patch
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
-          
-          # Increment patch version
-          NEW_PATCH=$((PATCH + 1))
-          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
-          
-          # Update version in package.json
-          npm version $NEW_VERSION --no-git-tag-version
-          
-          # Publish to GitHub Packages
-          npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prepare release
+        run: npm run prepare-release
 
-      - name: Create git tag
+      - name: Publish to GitHub Packages
+        run: npm publish
+
+      - name: Create and push git tag
         run: |
-          NEW_VERSION=$(npm version --json | jq -r '.["canton-node-sdk"]')
+          # Get the new version from package.json
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          
+          # Read the changelog to create tag message
+          CHANGELOG=$(cat CHANGELOG.md | head -20)
+          TAG_MESSAGE="Release v$NEW_VERSION\n\n$CHANGELOG"
+          
+          # Create git tag with detailed message
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
-          git push origin "v$NEW_VERSION" 
+          git tag -a "v$NEW_VERSION" -m "$TAG_MESSAGE"
+          git push origin "v$NEW_VERSION"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -62,3 +62,6 @@ pids
 
 # Yarn Integrity file
 .yarn-integrity 
+
+# Auto-generated
+CHANGELOG.md

@@ -1,0 +1,145 @@
+#!/usr/bin/env node
+
+import fs from 'fs';
+import { execSync } from 'child_process';
+import path from 'path';
+
+interface PackageJson {
+  version: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Prepare release by incrementing version and generating changelog
+ * This script can be run locally to test the release process
+ */
+function prepareRelease(): void {
+  try {
+    // Read package.json
+    const packageJsonPath: string = path.join(process.cwd(), 'package.json');
+    const packageJson: PackageJson = JSON.parse(
+      fs.readFileSync(packageJsonPath, 'utf8')
+    );
+
+    const currentVersion: string = packageJson.version;
+    console.log(`Current version: ${currentVersion}`);
+
+    // Extract major, minor, patch
+    const versionParts: number[] = currentVersion.split('.').map(Number);
+
+    if (versionParts.length !== 3) {
+      throw new Error('Invalid version format. Expected format: x.y.z');
+    }
+
+    const major: number = versionParts[0]!;
+    const minor: number = versionParts[1]!;
+    const patch: number = versionParts[2]!;
+
+    // Increment patch version
+    const newPatch: number = patch + 1;
+    const newVersion: string = `${major}.${minor}.${newPatch}`;
+
+    console.log(`New version: ${newVersion}`);
+
+    // Update version in package.json (without git tag)
+    packageJson.version = newVersion;
+    fs.writeFileSync(
+      packageJsonPath,
+      JSON.stringify(packageJson, null, 2) + '\n'
+    );
+
+    console.log('✅ Updated package.json with new version');
+
+    // Generate changelog since last tag or main branch
+    let commits: string;
+    let lastTag: string | null = null;
+    try {
+      lastTag = execSync('git describe --tags --abbrev=0 2>/dev/null', {
+        encoding: 'utf8',
+      }).trim();
+      console.log(`Last tag: ${lastTag}`);
+      commits = execSync(`git log --oneline --format="%s" ${lastTag}..HEAD`, {
+        encoding: 'utf8',
+      }).trim();
+    } catch {
+      // No previous tag, get commits ahead of main branch
+      console.log(
+        'No previous tag found, getting commits ahead of main branch'
+      );
+      commits = execSync('git log --oneline --format="%s" main..HEAD', {
+        encoding: 'utf8',
+      }).trim();
+    }
+
+    if (!commits) {
+      console.log('No commits found for changelog');
+      return;
+    }
+
+    // Extract PR numbers and create changelog
+    const commitLines: string[] = commits
+      .split('\n')
+      .map((commit: string): string => {
+        // Extract PR number from commit message (format: "message (#123)" or "message (fixes #123)")
+        const prMatch: RegExpMatchArray | null = commit.match(/#(\d+)/);
+        if (prMatch && prMatch[1]) {
+          const prNum: string = prMatch[1];
+          return `- ${commit} ([#${prNum}](https://github.com/Fairmint/canton-node-sdk/pull/${prNum}))`;
+        } else {
+          return `- ${commit}`;
+        }
+      });
+
+    const changelog: string = commitLines.join('\n');
+
+    console.log('\n📋 Generated changelog:');
+    console.log('='.repeat(50));
+    console.log(changelog);
+    console.log('='.repeat(50));
+
+    // Create detailed tag message
+    const tagMessage: string = `Release v${newVersion}\n\nChanges:\n${changelog}`;
+
+    console.log('\n🏷️  Tag message preview:');
+    console.log('='.repeat(50));
+    console.log(tagMessage);
+    console.log('='.repeat(50));
+
+    // Save changelog to file for reference
+    const changelogPath: string = path.join(process.cwd(), 'CHANGELOG.md');
+
+    // Add previous version link if available
+    const previousVersionLink: string = lastTag
+      ? `\n[Previous version: ${lastTag}](https://github.com/Fairmint/canton-node-sdk/releases/tag/${lastTag})`
+      : '';
+
+    const changelogContent: string = `# Changelog for v${newVersion}\n\n${changelog}${previousVersionLink}\n\n`;
+
+    // Prepend to existing changelog if it exists
+    if (fs.existsSync(changelogPath)) {
+      const existingChangelog: string = fs.readFileSync(changelogPath, 'utf8');
+      fs.writeFileSync(changelogPath, changelogContent + existingChangelog);
+    } else {
+      fs.writeFileSync(changelogPath, changelogContent);
+    }
+
+    console.log(`\n✅ Saved changelog to CHANGELOG.md`);
+    console.log(`\n🎯 Ready for release! Next steps:`);
+    console.log(`1. Review the changes above`);
+    console.log(`2. Run: npm publish (if ready to publish)`);
+    console.log(
+      `3. Run: git tag -a "v${newVersion}" -m "${tagMessage.replace(/\n/g, '\\n')}"`
+    );
+    console.log(`4. Run: git push origin "v${newVersion}"`);
+  } catch (error) {
+    console.error('❌ Error preparing release:', (error as Error).message);
+    process.exit(1);
+  }
+}
+
+// Run the script
+if (require.main === module) {
+  prepareRelease();
+}
+
+export { prepareRelease };

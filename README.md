@@ -1,5 +1,7 @@
 # Canton Node SDK
 
+[![Publish to GitHub Packages](https://github.com/Fairmint/canton-node-sdk/actions/workflows/publish.yml/badge.svg)](https://github.com/Fairmint/canton-node-sdk/actions/workflows/publish.yml)
+
 A TypeScript SDK for interacting with Canton blockchain nodes.
 
 ## For End Users

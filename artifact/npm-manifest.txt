@@ -1,0 +1,4 @@
+README.md
+dist/hello
+dist/index
+package.json
