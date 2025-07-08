@@ -34,11 +34,27 @@ export default [
     },
   },
   {
-    files: ['src/**/*.ts', 'test/**/*.ts'],
+    files: ['src/**/*.ts', 'test/**/*.ts', 'scripts/**/*.ts'],
     languageOptions: {
       parserOptions: {
         project: './tsconfig.json',
       },
+    },
+  },
+  {
+    files: ['scripts/**/*.ts'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        require: 'readonly',
+        module: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+      },
+    },
+    rules: {
+      'no-console': 'off', // Allow console statements in scripts
     },
   },
   {

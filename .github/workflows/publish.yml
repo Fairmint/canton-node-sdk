@@ -32,56 +32,20 @@ jobs:
       - name: Build package
         run: npm run build
 
-      - name: Auto-increment version and publish
+      - name: Prepare release
+        run: npm run prepare-release
+
+      - name: Publish to GitHub Packages
+        run: npm publish
+
+      - name: Create and push git tag
         run: |
-          # Get current version from package.json
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          # Get the new version from package.json
+          NEW_VERSION=$(node -p "require('./package.json').version")
           
-          # Extract major, minor, patch
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
-          
-          # Increment patch version
-          NEW_PATCH=$((PATCH + 1))
-          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
-          
-          # Update version in package.json
-          npm version $NEW_VERSION --no-git-tag-version
-          
-          # Publish to GitHub Packages
-          npm publish
-
-          # Generate changelog since last tag
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -z "$LAST_TAG" ]; then
-            # No previous tag, get all commits
-            COMMITS=$(git log --oneline --format="%s" HEAD)
-          else
-            # Get commits since last tag
-            COMMITS=$(git log --oneline --format="%s" ${LAST_TAG}..HEAD)
-          fi
-          
-          # Extract PR numbers and create changelog
-          CHANGELOG=""
-          PR_LINKS=""
-          
-          while IFS= read -r commit; do
-            # Extract PR number from commit message (format: "message (#123)" or "message (fixes #123)")
-            PR_NUM=$(echo "$commit" | grep -o '#[0-9]\+' | head -1)
-            if [ ! -z "$PR_NUM" ]; then
-              PR_NUM_CLEAN=$(echo "$PR_NUM" | sed 's/#//')
-              PR_LINKS="$PR_LINKS\n- PR #$PR_NUM_CLEAN: https://github.com/${{ github.repository }}/pull/$PR_NUM_CLEAN"
-            fi
-            CHANGELOG="$CHANGELOG\n- $commit"
-          done <<< "$COMMITS"
-          
-          # Create detailed tag message
-          TAG_MESSAGE="Release v$NEW_VERSION
-
-Changes in this release:
-$CHANGELOG
-
-Pull Requests included:
-$PR_LINKS"
+          # Read the changelog to create tag message
+          CHANGELOG=$(cat CHANGELOG.md | head -20)
+          TAG_MESSAGE="Release v$NEW_VERSION\n\n$CHANGELOG"
           
           # Create git tag with detailed message
           git config --local user.email "action@github.com"
