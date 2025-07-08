@@ -17,8 +17,4 @@ dist/index
 dist/utils/typeValidation
 dist/utils/validators/eventsByContractIdValidator
 dist/utils/validators/index
-example.env
 package.json
-simulations/getEventsByContractId.ts
-simulations/index.ts
-simulations/results/LedgerJsonApiClient_getEventsByContractId_00528fab06fe8694392494a01925bae6cdb94c35c14a8bbffcebca23278521b2e4ca1112200794083bad5ae157d245234eaa_truncated.json
