@@ -42,4 +42,4 @@ describe('sayHelloFormal', () => {
     const result = sayHelloFormal('', '');
     expect(result).toBe('Greetings, !');
   });
-}); 
+});

@@ -3,6 +3,7 @@ import tseslint from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 import prettier from 'eslint-config-prettier';
 import prettierPlugin from 'eslint-plugin-prettier';
+import markdown from 'eslint-plugin-markdown';
 
 /** @type {import('eslint').Linter.FlatConfig[]} */
 export default [
@@ -12,7 +13,6 @@ export default [
     languageOptions: {
       parser: tsParser,
       parserOptions: {
-        project: './tsconfig.json',
         sourceType: 'module',
         ecmaVersion: 2020,
       },
@@ -34,7 +34,15 @@ export default [
     },
   },
   {
-    files: ['**/*.test.ts'],
+    files: ['src/**/*.ts', 'test/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        project: './tsconfig.json',
+      },
+    },
+  },
+  {
+    files: ['**/*.test.ts', 'test/**/*.ts'],
     languageOptions: {
       globals: {
         describe: 'readonly',

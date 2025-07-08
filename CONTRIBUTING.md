@@ -2,7 +2,8 @@
 
 ## Publishing
 
-This package is automatically published via CI/CD when changes are pushed to the main branch. The publishing workflow:
+This package is automatically published via CI/CD when changes are pushed to the main branch. The
+publishing workflow:
 
 1. Runs on every push to the `main` branch
 2. Automatically increments the patch version
@@ -15,7 +16,8 @@ This package is automatically published via CI/CD when changes are pushed to the
 
 The publishing workflow requires the following environment setup:
 
-1. **GitHub Token**: The workflow uses `GITHUB_TOKEN` which is automatically provided by GitHub Actions
+1. **GitHub Token**: The workflow uses `GITHUB_TOKEN` which is automatically provided by GitHub
+   Actions
 2. **Repository Permissions**: The workflow requires:
    - `contents: read` - to checkout code
    - `packages: write` - to publish to GitHub Packages
