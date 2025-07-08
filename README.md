@@ -1,5 +1,7 @@
 # Canton Node SDK
 
+[![Publish to GitHub Packages](https://github.com/Fairmint/canton-node-sdk/actions/workflows/publish.yml/badge.svg)](https://github.com/Fairmint/canton-node-sdk/actions/workflows/publish.yml)
+
 A TypeScript SDK for interacting with Canton blockchain nodes.
 
 ## For End Users
@@ -40,45 +42,7 @@ For automated builds and deployments, you'll need to configure authentication:
    npm install
    ```
 
-### Usage
-
-```typescript
-import { CantonNodeSDK } from '@fairmint/canton-node-sdk';
-
-// Initialize the SDK
-const sdk = new CantonNodeSDK({
-  // configuration options
-});
-
-// Use the SDK methods
-// Example: const result = await sdk.someMethod();
-```
-
 ## For Contributors
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for information about setting up the development
 environment.
-
-### Publishing
-
-This package is automatically published via CI/CD when changes are pushed to the main branch. The
-publishing workflow:
-
-1. Runs on every push to the `main` branch
-2. Automatically increments the patch version
-3. Publishes to GitHub Packages
-4. Creates a git tag for the release
-
-**No manual publishing is required or recommended.**
-
-### CI Configuration
-
-The publishing workflow requires the following environment setup:
-
-1. **GitHub Token**: The workflow uses `GITHUB_TOKEN` which is automatically provided by GitHub
-   Actions
-2. **Repository Permissions**: The workflow requires:
-   - `contents: read` - to checkout code
-   - `packages: write` - to publish to GitHub Packages
-
-These permissions are configured in the workflow file and should not need manual setup.
