@@ -20,10 +20,6 @@ jobs:
             - node_modules
             - package-lock.json
       - run:
-          name: Install jq
-          command: |
-            sudo apt-get update && sudo apt-get install -y jq
-      - run:
           name: Generate NPM Manifest
           command: |
             npm run artifact:manifest
