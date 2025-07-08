@@ -34,8 +34,8 @@ jobs:
 
       - name: Auto-increment version and publish
         run: |
-          # Get current version
-          CURRENT_VERSION=$(npm version --json | jq -r '.["canton-node-sdk"]')
+          # Get current version from package.json
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
           
           # Extract major, minor, patch
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
@@ -54,7 +54,7 @@ jobs:
 
       - name: Create git tag
         run: |
-          NEW_VERSION=$(npm version --json | jq -r '.["canton-node-sdk"]')
+          NEW_VERSION=$(node -p "require('./package.json').version")
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
