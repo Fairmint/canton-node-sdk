@@ -1,0 +1,10 @@
+dist/hello.d.ts
+dist/hello.d.ts.map
+dist/hello.js
+dist/hello.js.map
+dist/index.d.ts
+dist/index.d.ts.map
+dist/index.js
+dist/index.js.map
+package.json
+README.md

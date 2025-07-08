@@ -6,10 +6,12 @@ test/
 coverage/
 
 # Development files
+scripts/
 .eslintrc*
 eslint.config.mjs
 jest.config.js
-tsconfig.json
+tsconfig*.json
+.npmpackagejsonlintrc.json
 
 # Git
 .git/
