@@ -10,6 +10,8 @@ This package is published to GitHub Packages as a private package. To use it in 
 
 #### Local Development
 
+
+
 1. [Create a GitHub Personal Access Token](https://github.com/settings/tokens/new) with `read:packages` scope
 2. Configure npm to use GitHub Packages for the `@fairmint` scope by adding to your `~/.npmrc`:
    ```ini

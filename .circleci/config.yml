@@ -22,7 +22,7 @@ jobs:
       - run:
           name: Generate NPM Manifest
           command: |
-            npm run manifest
+            npm run artifact:manifest
       - run:
           name: Lint
           command: |
