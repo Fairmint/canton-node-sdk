@@ -9,7 +9,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     
     steps:
@@ -50,10 +50,43 @@ jobs:
           # Publish to GitHub Packages
           npm publish
 
-          # Create git tag
+          # Generate changelog since last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            # No previous tag, get all commits
+            COMMITS=$(git log --oneline --format="%s" HEAD)
+          else
+            # Get commits since last tag
+            COMMITS=$(git log --oneline --format="%s" ${LAST_TAG}..HEAD)
+          fi
+          
+          # Extract PR numbers and create changelog
+          CHANGELOG=""
+          PR_LINKS=""
+          
+          while IFS= read -r commit; do
+            # Extract PR number from commit message (format: "message (#123)" or "message (fixes #123)")
+            PR_NUM=$(echo "$commit" | grep -o '#[0-9]\+' | head -1)
+            if [ ! -z "$PR_NUM" ]; then
+              PR_NUM_CLEAN=$(echo "$PR_NUM" | sed 's/#//')
+              PR_LINKS="$PR_LINKS\n- PR #$PR_NUM_CLEAN: https://github.com/${{ github.repository }}/pull/$PR_NUM_CLEAN"
+            fi
+            CHANGELOG="$CHANGELOG\n- $commit"
+          done <<< "$COMMITS"
+          
+          # Create detailed tag message
+          TAG_MESSAGE="Release v$NEW_VERSION
+
+Changes in this release:
+$CHANGELOG
+
+Pull Requests included:
+$PR_LINKS"
+          
+          # Create git tag with detailed message
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
-          git push origin "v$NEW_VERSION" 
+          git tag -a "v$NEW_VERSION" -m "$TAG_MESSAGE"
+          git push origin "v$NEW_VERSION"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
