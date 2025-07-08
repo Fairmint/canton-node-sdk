@@ -1,4 +1,4 @@
-export { SimulationRunner } from './SimulationRunner';
+export { simulationRunner } from './simulationRunner.old';
 
 import { LedgerJsonApiClient } from '../../src/clients/ledger-json-api/LedgerJsonApiClient';
 
@@ -8,7 +8,7 @@ export async function simulate<T>(
   simulationName: string,
   expectedType?: keyof typeof import('../../src/utils/validators').validators
 ): Promise<T | { error: string; details: unknown }> {
-  const { SimulationRunner } = await import('./SimulationRunner');
-  const runner = new SimulationRunner();
+  const { simulationRunner } = await import('./simulationRunner.old');
+  const runner = new simulationRunner();
   return runner.runSimulation(simulationName, simulationFn, expectedType);
 }

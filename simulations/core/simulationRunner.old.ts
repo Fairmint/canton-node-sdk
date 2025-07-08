@@ -9,7 +9,7 @@ import { validateResponse } from '../../src/utils/validators';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export class SimulationRunner {
+export class simulationRunner {
   private resultsDir: string;
   private writtenFiles: Set<string>;
 
