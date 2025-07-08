@@ -19,7 +19,7 @@
     "lint": "npm run lint:eslint && npm run lint:prettier && npm run lint:npm",
     "lint:check": "npm run lint:eslint:check && npm run lint:prettier:check && npm run lint:npm:check",
     "clean": "rm -rf dist",
-    "artifact:manifest": "npm run build && mkdir -p artifact && npm pack --dry-run --json > /tmp/npm-pack.json 2>/dev/null && jq -r '.[0].files[].path' /tmp/npm-pack.json | sort | tsx scripts/collapse-manifest.ts > artifact/npm-manifest.txt",
+    "artifact:manifest": "npm run build && mkdir -p artifact && npm pack --dry-run --json 2>&1 | tail -n +2 > /tmp/npm-pack.json && jq -r '.[0].files[].path' /tmp/npm-pack.json | sort | tsx scripts/collapse-manifest.ts > artifact/npm-manifest.txt",
     "prepublishOnly": "npm run clean && npm run build",
     "prepack": "npm run clean && npm run build",
     "prepare-release": "tsx scripts/prepare-release.ts"
