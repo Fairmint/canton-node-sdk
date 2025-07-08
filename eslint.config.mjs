@@ -34,15 +34,23 @@ export default [
     },
   },
   {
-    files: ['src/**/*.ts', 'test/**/*.ts', 'scripts/**/*.ts'],
+    files: ['src/**/*.ts', 'test/**/*.ts', 'scripts/**/*.ts', 'simulations/**/*.ts'],
     languageOptions: {
       parserOptions: {
         project: './tsconfig.lint.json',
       },
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        require: 'readonly',
+        module: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+      },
     },
   },
   {
-    files: ['scripts/**/*.ts'],
+    files: ['scripts/**/*.ts', 'simulations/**/*.ts'],
     languageOptions: {
       globals: {
         console: 'readonly',
@@ -54,7 +62,7 @@ export default [
       },
     },
     rules: {
-      'no-console': 'off', // Allow console statements in scripts
+      'no-console': 'off', // Allow console statements in scripts and simulations
     },
   },
   {
