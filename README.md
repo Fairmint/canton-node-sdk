@@ -42,11 +42,6 @@ For automated builds and deployments, you'll need to configure authentication:
 
 ### Usage
 
-
-
-
-
-
 ```typescript
 import { CantonNodeSDK } from '@fairmint/canton-node-sdk';
 
