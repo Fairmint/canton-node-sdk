@@ -29,19 +29,19 @@ export class ProviderConfig {
   }
 
   getCurrentNetwork(): NetworkType {
-    const currentNetwork = env.CURRENT_NETWORK?.toLowerCase();
+    const currentNetwork = env.CANTON_CURRENT_NETWORK?.toLowerCase();
     if (currentNetwork === 'mainnet' || currentNetwork === 'devnet') {
       return currentNetwork;
     }
-    throw new Error('Missing required environment variable: CURRENT_NETWORK');
+    throw new Error('Missing required environment variable: CANTON_CURRENT_NETWORK');
   }
 
   getCurrentProvider(): ProviderType {
-    const currentProvider = env.CURRENT_PROVIDER?.toLowerCase();
+    const currentProvider = env.CANTON_CURRENT_PROVIDER?.toLowerCase();
     if (currentProvider === 'intellect' || currentProvider === '5n') {
       return currentProvider;
     }
-    throw new Error('Missing required environment variable: CURRENT_PROVIDER');
+    throw new Error('Missing required environment variable: CANTON_CURRENT_PROVIDER');
   }
 
   getProviderConfig(

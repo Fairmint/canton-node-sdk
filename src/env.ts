@@ -9,8 +9,8 @@ config();
 export interface EnvConfig {
   // Development/Testing
   NODE_ENV?: 'development' | 'production' | 'test';
-  CURRENT_NETWORK?: 'devnet' | 'testnet' | 'mainnet';
-  CURRENT_PROVIDER?: string;
+  CANTON_CURRENT_NETWORK?: 'devnet' | 'testnet' | 'mainnet';
+  CANTON_CURRENT_PROVIDER?: string;
 
   // Dynamic API configuration - will be populated based on environment variables
   [key: string]: string | undefined;
@@ -58,15 +58,15 @@ function parseNodeEnv(value: string): 'development' | 'production' | 'test' {
 export const env: EnvConfig = {
   // Development/Testing
   NODE_ENV: parseEnvVar('NODE_ENV', parseNodeEnv, 'development'),
-  CURRENT_NETWORK: parseEnvVar('CURRENT_NETWORK', value => {
+  CANTON_CURRENT_NETWORK: parseEnvVar('CANTON_CURRENT_NETWORK', value => {
     if (!['devnet', 'testnet', 'mainnet'].includes(value)) {
       throw new Error(
-        `Invalid CURRENT_NETWORK: ${value}. Must be 'devnet', 'testnet', or 'mainnet'`
+        `Invalid CANTON_CURRENT_NETWORK: ${value}. Must be 'devnet', 'testnet', or 'mainnet'`
       );
     }
     return value as 'devnet' | 'testnet' | 'mainnet';
   }),
-  CURRENT_PROVIDER: parseEnvVar('CURRENT_PROVIDER', String),
+  CANTON_CURRENT_PROVIDER: parseEnvVar('CANTON_CURRENT_PROVIDER', String),
 };
 
 /**
@@ -77,8 +77,8 @@ export function getApiUri(
   network?: string,
   provider?: string
 ): string {
-  const targetNetwork = network || env.CURRENT_NETWORK;
-  const targetProvider = provider || env.CURRENT_PROVIDER;
+  const targetNetwork = network || env.CANTON_CURRENT_NETWORK;
+  const targetProvider = provider || env.CANTON_CURRENT_PROVIDER;
 
   if (!targetNetwork || !targetProvider) {
     throw new Error(
@@ -104,8 +104,8 @@ export function getApiClientId(
   network?: string,
   provider?: string
 ): string | undefined {
-  const targetNetwork = network || env.CURRENT_NETWORK;
-  const targetProvider = provider || env.CURRENT_PROVIDER;
+  const targetNetwork = network || env.CANTON_CURRENT_NETWORK;
+  const targetProvider = provider || env.CANTON_CURRENT_PROVIDER;
 
   if (!targetNetwork || !targetProvider) {
     return undefined;
@@ -123,8 +123,8 @@ export function getApiClientSecret(
   network?: string,
   provider?: string
 ): string | undefined {
-  const targetNetwork = network || env.CURRENT_NETWORK;
-  const targetProvider = provider || env.CURRENT_PROVIDER;
+  const targetNetwork = network || env.CANTON_CURRENT_NETWORK;
+  const targetProvider = provider || env.CANTON_CURRENT_PROVIDER;
 
   if (!targetNetwork || !targetProvider) {
     return undefined;
