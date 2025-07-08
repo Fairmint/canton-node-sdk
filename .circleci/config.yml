@@ -1,0 +1,76 @@
+version: 2.1
+
+jobs:
+  build-and-test:
+    docker:
+      - image: cimg/node:21.7.0
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - npm-deps-{{ checksum "package.json" }}
+            - npm-deps-
+      - run:
+          name: Install Dependencies
+          command: |
+            npm install
+      - save_cache:
+          key: npm-deps-{{ checksum "package.json" }}
+          paths:
+            - node_modules
+            - package-lock.json
+      - run:
+          name: Generate NPM Manifest
+          command: |
+            npm run manifest
+      - run:
+          name: Lint
+          command: |
+            npm run lint
+      - run:
+          name: Check for changes and commit
+          command: |
+            # Configure git user for commits
+            git config user.name "CircleCI Bot"
+            git config user.email "circleci-bot@example.com"
+
+            # Configure Git authentication using GitHub token
+            git config --global credential.helper store
+            echo "https://$GITHUB_TOKEN:x-oauth-basic@github.com" > ~/.git-credentials
+
+            # Add GitHub to known hosts to avoid SSH host key verification prompt
+            mkdir -p ~/.ssh
+            ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+
+            # Check if there are any changes
+            if git diff --exit-code --quiet && git diff --cached --exit-code --quiet; then
+              echo "No changes detected from lint/format/manifest. Build continues successfully."
+            else
+              echo "Changes detected from lint/format/manifest. Committing and pushing changes..."
+              
+              # Add all changes
+              git add .
+              
+              # Commit with descriptive message
+              git commit -m "Auto-fix: lint, format, and manifest changes"
+              
+              # Push changes using HTTPS authentication
+              git push origin $CIRCLE_BRANCH
+              
+              echo "Changes have been committed and pushed."
+              echo "Failing the build to indicate that changes were made."
+              exit 1
+            fi
+      - run:
+          name: Build
+          command: |
+            npm run build
+      - run:
+          name: Test
+          command: |
+            npm run test
+
+workflows:
+  build-and-test-workflow:
+    jobs:
+      - build-and-test

@@ -1,0 +1,61 @@
+{
+  "name": "@fairmint/canton-node-sdk",
+  "version": "1.0.0",
+  "description": "Canton Node SDK",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint:eslint": "eslint src/**/*.ts --fix",
+    "lint:eslint:check": "eslint src/**/*.ts",
+    "lint:prettier": "prettier --write src/**/*.ts",
+    "lint:prettier:check": "prettier --check src/**/*.ts",
+    "lint:npm:check": "npmPkgJsonLint .",
+    "lint:npm": "npmPkgJsonLint . --fix",
+    "lint": "npm run lint:eslint && npm run lint:prettier && npm run lint:npm",
+    "lint:check": "npm run lint:eslint:check && npm run lint:prettier:check && npm run lint:npm:check",
+    "clean": "rm -rf dist",
+    "artifact:manifest": "mkdir -p artifact && npm pack --dry-run --json | jq -r '.[0].files[].path' | sort > artifact/npm-manifest.txt",
+    "prepublishOnly": "npm run clean && npm run build",
+    "prepack": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "canton",
+    "sdk",
+    "typescript",
+    "blockchain",
+    "daml"
+  ],
+  "author": "Fairmint",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fairmint/canton-node-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Fairmint/canton-node-sdk/issues"
+  },
+  "homepage": "https://github.com/Fairmint/canton-node-sdk#readme",
+  "devDependencies": {
+    "@types/jest": "30.0.0",
+    "@types/node": "24.0.10",
+    "@typescript-eslint/eslint-plugin": "8.36.0",
+    "@typescript-eslint/parser": "8.36.0",
+    "eslint": "9.30.1",
+    "eslint-config-prettier": "10.1.5",
+    "eslint-plugin-import": "2.32.0",
+    "eslint-plugin-prettier": "5.5.1",
+    "jest": "30.0.4",
+    "npm-package-json-lint": "9.0.0",
+    "prettier": "3.6.2",
+    "ts-jest": "29.4.0",
+    "typescript": "5.8.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

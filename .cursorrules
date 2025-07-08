@@ -1,0 +1,9 @@
+# Cursor Rules
+
+After suggesting code changes, run:
+
+`yarn lint && yarn build && yarn test`
+
+If there are any errors or warnings, fix them and repeat until clean.
+
+When writing comments and README files, use concise language and leave out unimportant details.
