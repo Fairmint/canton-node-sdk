@@ -4,6 +4,7 @@ src/
 # Test files
 test/
 coverage/
+simulations/
 
 # Development files
 scripts/
@@ -12,6 +13,7 @@ eslint.config.mjs
 jest.config.js
 tsconfig*.json
 .npmpackagejsonlintrc.json
+*.env
 
 # Git
 .git/
