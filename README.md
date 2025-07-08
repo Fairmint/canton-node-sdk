@@ -1,123 +1,84 @@
 # Canton Node SDK
 
-A simple TypeScript SDK with strict linting and comprehensive testing.
+A TypeScript SDK for interacting with Canton blockchain nodes.
 
-## Features
+## For End Users
 
-- 🚀 TypeScript with strict configuration
-- 🔍 ESLint with strict TypeScript rules
-- 💅 Prettier for consistent code formatting
-- 🧪 Jest for unit testing with coverage
-- 📦 Built-in type declarations
+### Installation
 
-## Prerequisites
+This package is published to GitHub Packages as a private package. To use it in your project:
 
-- Node.js >= 18.0.0
-- npm or yarn
+#### Local Development
 
-## Installation
+1. [Create a GitHub Personal Access Token](https://github.com/settings/tokens/new) with
+   `read:packages` scope
+2. Configure npm to use GitHub Packages for the `@fairmint` scope by adding to your `~/.npmrc`:
 
-```bash
-npm install
-```
+   ```ini
+   @fairmint:registry=https://npm.pkg.github.com
+   //npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN
+   ```
 
-## Development
+3. Install the package:
 
-### Build the project
+   ```bash
+   npm install @fairmint/canton-node-sdk
+   ```
 
-```bash
-npm run build
-```
+#### CI/CD Setup
 
-### Watch mode for development
+For automated builds and deployments, you'll need to configure authentication:
 
-```bash
-npm run dev
-```
+1. [Create a GitHub Personal Access Token](https://github.com/settings/tokens/new) with
+   `read:packages` scope
+2. Add the token as a secret in your CI environment (e.g., `GITHUB_TOKEN`)
+3. Configure npm in your CI pipeline:
 
-### Run tests
+   ```bash
+   echo "@fairmint:registry=https://npm.pkg.github.com" >> .npmrc
+   echo "//npm.pkg.github.com/:_authToken=$GITHUB_TOKEN" >> .npmrc
+   npm install
+   ```
 
-```bash
-# Run tests once
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run tests with coverage
-npm run test:coverage
-```
-
-### Linting and Formatting
-
-```bash
-# Check for linting issues
-npm run lint
-
-# Fix linting issues automatically
-npm run lint:fix
-
-# Format code with Prettier
-npm run format
-
-# Check if code is properly formatted
-npm run format:check
-```
-
-## Usage
+### Usage
 
 ```typescript
-import { sayHello, sayHelloFormal } from 'canton-node-sdk';
+import { CantonNodeSDK } from '@fairmint/canton-node-sdk';
 
-// Simple greeting
-const greeting = sayHello('World');
-console.log(greeting); // "Hello, World!"
+// Initialize the SDK
+const sdk = new CantonNodeSDK({
+  // configuration options
+});
 
-// Formal greeting
-const formalGreeting = sayHelloFormal('Smith', 'Dr.');
-console.log(formalGreeting); // "Greetings, Dr. Smith!"
+// Use the SDK methods
+// Example: const result = await sdk.someMethod();
 ```
 
-## Project Structure
+## For Contributors
 
-```
-canton-node-sdk/
-├── src/
-│   ├── index.ts          # Main SDK functions
-│   └── index.test.ts     # Unit tests
-├── dist/                 # Compiled output (generated)
-├── coverage/             # Test coverage reports (generated)
-├── package.json          # Dependencies and scripts
-├── tsconfig.json         # TypeScript configuration
-├── .eslintrc.js          # ESLint configuration
-├── .prettierrc           # Prettier configuration
-├── jest.config.js        # Jest configuration
-└── README.md             # This file
-```
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for information about setting up the development
+environment.
 
-## Scripts
+### Publishing
 
-- `npm run build` - Compile TypeScript to JavaScript
-- `npm run dev` - Watch mode for development
-- `npm test` - Run unit tests
-- `npm run test:watch` - Run tests in watch mode
-- `npm run test:coverage` - Run tests with coverage report
-- `npm run lint` - Check for linting issues
-- `npm run lint:fix` - Fix linting issues automatically
-- `npm run format` - Format code with Prettier
-- `npm run format:check` - Check if code is properly formatted
-- `npm run clean` - Remove dist directory
+This package is automatically published via CI/CD when changes are pushed to the main branch. The
+publishing workflow:
 
-## Contributing
+1. Runs on every push to the `main` branch
+2. Automatically increments the patch version
+3. Publishes to GitHub Packages
+4. Creates a git tag for the release
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests: `npm test`
-5. Run linting: `npm run lint`
-6. Format code: `npm run format`
-7. Submit a pull request
+**No manual publishing is required or recommended.**
 
-## License
+### CI Configuration
 
-MIT 
+The publishing workflow requires the following environment setup:
+
+1. **GitHub Token**: The workflow uses `GITHUB_TOKEN` which is automatically provided by GitHub
+   Actions
+2. **Repository Permissions**: The workflow requires:
+   - `contents: read` - to checkout code
+   - `packages: write` - to publish to GitHub Packages
+
+These permissions are configured in the workflow file and should not need manual setup.

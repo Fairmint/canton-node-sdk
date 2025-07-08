@@ -1,0 +1,61 @@
+name: Publish to GitHub Packages
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@fairmint'
+
+      - name: Install dependencies
+        run: npm i
+
+      - name: Build package
+        run: npm run build
+
+      - name: Auto-increment version and publish
+        run: |
+          # Get current version
+          CURRENT_VERSION=$(npm version --json | jq -r '.["canton-node-sdk"]')
+          
+          # Extract major, minor, patch
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+          
+          # Increment patch version
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+          
+          # Update version in package.json
+          npm version $NEW_VERSION --no-git-tag-version
+          
+          # Publish to GitHub Packages
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create git tag
+        run: |
+          NEW_VERSION=$(npm version --json | jq -r '.["canton-node-sdk"]')
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+          git push origin "v$NEW_VERSION" 
