@@ -4,7 +4,9 @@
   "description": "Canton Node SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "private": true,
+  "publishConfig": {
+    "access": "restricted"
+  },
   "scripts": {
     "build": "tsc",
     "test": "jest",
