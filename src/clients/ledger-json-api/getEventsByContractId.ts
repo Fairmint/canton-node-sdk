@@ -76,7 +76,12 @@ export class GetEventsByContractId {
     }
   }
 
-  private handleError(error: unknown, operation: string): Error {
+  private handleError(error: unknown, operation: string): Error | any {
+    // If the error is already an API response object (has code, cause, etc.), return it as-is
+    if (error && typeof error === 'object' && 'code' in error && 'cause' in error) {
+      return error;
+    }
+    
     if (error instanceof Error) {
       return new Error(`Failed to ${operation}: ${error.message}`);
     }

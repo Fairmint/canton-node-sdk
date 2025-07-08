@@ -12,6 +12,18 @@ type GetHeadersConfig = {
   includeBearerToken?: boolean;
 };
 
+// Custom error class to preserve API error responses
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly originalError: any,
+    public readonly status?: number
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 let displayedLogMessage = false;
 
 export class AbstractClient {
@@ -341,17 +353,20 @@ export class AbstractClient {
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        const errorData = error.response?.data
-          ? JSON.stringify(error.response.data, null, 2)
-          : error.message;
-
         // Log the request and error
         await this.logRequestResponse(
           url,
           { data, headers },
-          JSON.parse(errorData)
+          error.response?.data || error
         );
-        throw new Error(`POST request failed: ${errorData}`);
+        
+        // If we have error response data, throw it directly
+        if (error.response?.data) {
+          throw error.response.data;
+        }
+        
+        // Otherwise throw a generic error
+        throw new Error(`POST request failed: ${error.message}`);
       }
       // Log the request and error
       await this.logRequestResponse(url, { data, headers }, error);
@@ -377,10 +392,13 @@ export class AbstractClient {
       await this.logRequestResponse(url, { headers }, error);
 
       if (axios.isAxiosError(error)) {
-        const errorData = error.response?.data
-          ? JSON.stringify(error.response.data, null, 2)
-          : error.message;
-        throw new Error(`GET request failed: ${errorData}`);
+        // If we have error response data, throw it directly
+        if (error.response?.data) {
+          throw error.response.data;
+        }
+        
+        // Otherwise throw a generic error
+        throw new Error(`GET request failed: ${error.message}`);
       }
       throw error;
     }
