@@ -49,8 +49,8 @@ jobs:
             # Check if the last commit was an auto-fix commit to prevent infinite loops
             LAST_COMMIT_MSG=$(git log -1 --pretty=%B)
             if [[ "$LAST_COMMIT_MSG" == "Auto-fix: lint, format, and manifest changes" ]]; then
-              echo "Last commit was an auto-fix commit. Skipping to prevent infinite loop."
-              exit 0
+              echo "Last commit was an auto-fix commit. Halting build to prevent infinite loop."
+              exit 1
             fi
 
             # Check if there are any changes
