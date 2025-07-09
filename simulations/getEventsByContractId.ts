@@ -1,4 +1,4 @@
-import SimulationRunner from './core/SimulationRunner';
+import SimulationRunner from './core/SimulationRunner.old';
 import { EventsByContractIdResponseSchema } from '../src/clients/ledger-json-api/schemas';
 
 const runner = new SimulationRunner();

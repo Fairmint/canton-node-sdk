@@ -14,7 +14,7 @@
     "test": "jest",
     "test:watch": "jest --watch", 
     "test:coverage": "jest --coverage",
-    "simulate": "tsx scripts/run-simulations.ts",
+    "simulate": "tsx --tsconfig tsconfig.lint.json scripts/run-simulations.ts",
     "test:all": "npm run test && npm run simulate",
     "lint:eslint": "eslint src/**/*.ts test/**/*.ts scripts/**/*.ts simulations/**/*.ts --fix",
     "lint:eslint:check": "eslint src/**/*.ts test/**/*.ts scripts/**/*.ts simulations/**/*.ts",
