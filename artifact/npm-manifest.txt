@@ -1,3 +1,4 @@
+.cursorignore
 README.md
 build/src/clients/index
 build/src/clients/ledger-json-api/LedgerJsonApiClient
@@ -21,7 +22,6 @@ build/src/core/ClientFactory
 build/src/core/auth/AuthenticationManager
 build/src/core/auth/index
 build/src/core/config/EnvLoader
-build/src/core/config/ProviderConfigBuilder
 build/src/core/config/index
 build/src/core/errors
 build/src/core/http/HttpClient
