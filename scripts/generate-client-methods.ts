@@ -38,7 +38,7 @@ function extractOperationInfo(
   const regex =
     /export const (\w+) = createApiOperation<\s*([\w]+),\s*([\w]+)\s*>/s;
   const match = regex.exec(fileContent);
-  if (!match) return null;
+  if (!match || !match[1] || !match[2] || !match[3]) return null;
 
   return {
     operationName: match[1],

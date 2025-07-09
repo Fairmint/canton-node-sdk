@@ -29,7 +29,7 @@
     "prepack": "npm run clean && npm run build:core",
     "prepublishOnly": "npm run prepack",
     "prepare-release": "tsx scripts/prepare-release.ts",
-    "generate-client-methods": "tsx scripts/generate-client-methods.ts 1>&2"
+    "generate-client-methods": "tsx scripts/generate-client-methods.ts"
   },
   "keywords": [
     "canton",
