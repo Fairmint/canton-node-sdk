@@ -108,16 +108,12 @@ export class EnvLoader {
     return value as ProviderType;
   }
 
-  public getApiUri(apiType: string, network?: NetworkType, provider?: ProviderType): string {
+  public getApiUri(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {
     const targetNetwork = network || this.getCurrentNetwork();
     const targetProvider = provider || this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_URI`;
     const uri = this.env[envKey];
-
-    if (!uri) {
-      throw new ConfigurationError(`Missing required environment variable: ${envKey}`);
-    }
 
     return uri;
   }
