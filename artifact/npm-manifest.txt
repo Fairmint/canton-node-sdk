@@ -21,7 +21,6 @@ build/src/core/ClientFactory
 build/src/core/auth/AuthenticationManager
 build/src/core/auth/index
 build/src/core/config/EnvLoader
-build/src/core/config/EnvironmentConfig
 build/src/core/config/ProviderConfigBuilder
 build/src/core/config/index
 build/src/core/errors
