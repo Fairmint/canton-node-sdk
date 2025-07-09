@@ -1,4 +1,4 @@
-import { ApiType, AuthConfig, ApiConfig, ProviderConfig, NetworkType, ProviderType } from '../types';
+import { ApiType, AuthConfig, ApiConfig, ProviderConfig, NetworkType, ProviderType, PartialProviderConfig } from '../types';
 import { EnvironmentConfig } from './EnvironmentConfig';
 
 /** Builds provider-specific configuration from environment variables */
@@ -31,15 +31,11 @@ export class ProviderConfigBuilder {
     apiType: ApiType,
     network?: NetworkType,
     provider?: ProviderType
-  ): ProviderConfig {
+  ): PartialProviderConfig {
     const targetNetwork = network || this.envConfig.getCurrentNetwork();
     const targetProvider = provider || this.envConfig.getCurrentProvider();
 
-    const apis: Record<ApiType, ApiConfig> = {
-      LEDGER_JSON_API: {},
-      VALIDATOR_API: {},
-      SCAN_API: {},
-    } as Record<ApiType, ApiConfig>;
+    const apis: Partial<Record<ApiType, ApiConfig>> = {};
 
     apis[apiType] = this.buildApiConfig(apiType, targetNetwork, targetProvider);
 

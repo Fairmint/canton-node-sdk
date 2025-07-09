@@ -6,7 +6,6 @@ import { Logger, LoggerConfig } from './Logger';
 export class FileLogger implements Logger {
   private logDir: string;
   private enableFileLogging: boolean;
-  private displayedLogMessage = false;
 
   constructor(config: LoggerConfig = {}) {
     this.enableFileLogging = config.enableLogging ?? true;
@@ -18,10 +17,6 @@ export class FileLogger implements Logger {
   private setupLogging(): void {
     if (!this.enableFileLogging) {
       return;
-    }
-
-    if (!this.displayedLogMessage) {
-      this.displayedLogMessage = true;
     }
 
     if (!fs.existsSync(this.logDir)) {

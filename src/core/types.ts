@@ -26,6 +26,12 @@ export interface ProviderConfig {
   apis: Record<ApiType, ApiConfig>;
 }
 
+export interface PartialProviderConfig {
+  providerName: string;
+  authUrl: string;
+  apis: Partial<Record<ApiType, ApiConfig>>;
+}
+
 export interface RequestConfig {
   contentType?: string;
   includeBearerToken?: boolean;

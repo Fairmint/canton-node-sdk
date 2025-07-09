@@ -1,6 +1,6 @@
 import {
   ApiType,
-  ProviderConfig,
+  PartialProviderConfig,
   ClientConfig,
   NetworkType,
   ProviderType,
@@ -13,7 +13,7 @@ import { ConfigurationError } from './errors';
 
 /** Abstract base class providing common functionality for all API clients */
 export abstract class BaseClient {
-  protected config: ProviderConfig;
+  protected config: PartialProviderConfig;
   protected apiType: ApiType;
   protected clientConfig: ClientConfig;
   protected authManager: AuthenticationManager;
