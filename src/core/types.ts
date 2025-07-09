@@ -44,6 +44,9 @@ export interface ClientConfig {
 
   // Direct configuration options
   authUrl?: string;
+  partyId?: string;
+  userId?: string;
+  managedParties?: string[];
   apis?: {
     LEDGER_JSON_API?: ApiConfig;
     VALIDATOR_API?: ApiConfig;

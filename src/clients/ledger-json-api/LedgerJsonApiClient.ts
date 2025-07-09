@@ -12,7 +12,7 @@ export class LedgerJsonApiClient extends BaseClient {
   public getTransactionTreeByOffset!: (params: GetTransactionTreeByOffsetParams) => Promise<TransactionTreeByOffsetResponse>;
   // AUTO-GENERATED METHODS END
 
-  constructor(clientConfig?: Partial<ClientConfig>) {
+  constructor(clientConfig: ClientConfig) {
     super('LEDGER_JSON_API', clientConfig);
     this.initializeMethods();
   }

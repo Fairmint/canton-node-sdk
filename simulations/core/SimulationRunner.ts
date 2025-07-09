@@ -17,7 +17,7 @@ export default class SimulationRunner {
 
     // Create client instance with file logger
     this.client = new LedgerJsonApiClient({
-      ...EnvLoader.getInstance().loadConfig(),
+      ...EnvLoader.getConfig('LEDGER_JSON_API'),
       logger: new FileLogger(),
     });
   }
