@@ -3,7 +3,7 @@
   "details": {
     "name": "ApiError",
     "message": "HTTP 400: INVALID_FIELD",
-    "stack": "ApiError: HTTP 400: INVALID_FIELD\n    at HttpClient.handleRequestError (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/src/core/http/HttpClient.ts:88:19)\n    at HttpClient.makePostRequest (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/src/core/http/HttpClient.ts:43:18)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async ApiOperation.execute (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/src/core/operations/ApiOperationFactory.ts:36:22)\n    at async SimulationRunner.runSimulation (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/simulations/core/SimulationRunner.ts:91:20)\n    at async runAllTests (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/simulations/getEventsByContractId.ts:21:3)",
+    "stack": "PLACEHOLDER_STACK_TRACE",
     "code": "API_ERROR",
     "status": 400,
     "statusText": "Bad Request",
@@ -15,7 +15,7 @@
       "context": {
         "participant": "participant",
         "definite_answer": "false",
-        "tid": "69d2a5b7d599c93549b7089a6e44c684",
+        "tid": "34df1af8da8718ef61f93cd73470b60a",
         "category": "8"
       },
       "resources": [],

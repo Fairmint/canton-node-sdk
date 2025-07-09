@@ -59,17 +59,19 @@ export default class SimulationRunner {
     }
   }
 
-  private replaceTraceId(data: unknown): unknown {
+  private sanitizeData(data: unknown): unknown {
     if (typeof data === 'object' && data !== null) {
       if (Array.isArray(data)) {
-        return data.map(item => this.replaceTraceId(item));
+        return data.map(item => this.sanitizeData(item));
       } else {
         const result: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(data)) {
           if (key === 'traceId' && typeof value === 'string') {
             result[key] = 'PLACEHOLDER_TRACE_ID';
+          } else if (key === 'stack' && typeof value === 'string') {
+            result[key] = 'PLACEHOLDER_STACK_TRACE';
           } else {
-            result[key] = this.replaceTraceId(value);
+            result[key] = this.sanitizeData(value);
           }
         }
         return result;
@@ -104,8 +106,8 @@ export default class SimulationRunner {
 
       const filepath = path.join(this.resultsDir, filename);
 
-      // Replace traceId with placeholder before writing
-      const sanitizedData = this.replaceTraceId(data);
+      // Replace traceId and stack with placeholders before writing
+      const sanitizedData = this.sanitizeData(data);
       fs.writeFileSync(filepath, JSON.stringify(sanitizedData, null, 2));
       this.writtenFiles.add(filename);
 
@@ -136,8 +138,8 @@ export default class SimulationRunner {
 
       const filepath = path.join(this.resultsDir, filename);
 
-      // Replace traceId with placeholder before writing
-      const sanitizedErrorDetails = this.replaceTraceId(errorDetails);
+      // Replace traceId and stack with placeholders before writing
+      const sanitizedErrorDetails = this.sanitizeData(errorDetails);
       fs.writeFileSync(
         filepath,
         JSON.stringify(sanitizedErrorDetails, null, 2)
