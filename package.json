@@ -2,29 +2,34 @@
   "name": "@fairmint/canton-node-sdk",
   "version": "0.0.1",
   "description": "Canton Node SDK",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "build/src/index.js",
+  "types": "build/src/index.d.ts",
   "publishConfig": {
     "access": "restricted"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "npm run build:core && npm run build:lint",
+    "build:core": "npm run generate-client-methods && tsc",
+    "build:lint": "tsc -p tsconfig.lint.json",
     "test": "jest",
-    "test:watch": "jest --watch",
+    "test:watch": "jest --watch", 
     "test:coverage": "jest --coverage",
-    "lint:eslint": "eslint src/**/*.ts test/**/*.ts scripts/**/*.ts --fix",
-    "lint:eslint:check": "eslint src/**/*.ts test/**/*.ts scripts/**/*.ts",
-    "lint:prettier": "prettier --write src/**/*.ts test/**/*.ts scripts/**/*.ts **/*.md",
-    "lint:prettier:check": "prettier --check src/**/*.ts test/**/*.ts scripts/**/*.ts **/*.md",
+    "simulate": "tsx --tsconfig tsconfig.lint.json scripts/run-simulations.ts",
+    "test:all": "npm run test && npm run simulate",
+    "lint:eslint": "eslint src/**/*.ts test/**/*.ts scripts/**/*.ts simulations/**/*.ts --fix",
+    "lint:eslint:check": "eslint src/**/*.ts test/**/*.ts scripts/**/*.ts simulations/**/*.ts",
+    "lint:prettier": "prettier --write src/**/*.ts test/**/*.ts scripts/**/*.ts simulations/**/*.ts **/*.md",
+    "lint:prettier:check": "prettier --check src/**/*.ts test/**/*.ts scripts/**/*.ts simulations/**/*.ts **/*.md",
     "lint:npm:check": "npmPkgJsonLint .",
     "lint:npm": "npmPkgJsonLint . --fix",
     "lint": "npm run lint:eslint && npm run lint:prettier && npm run lint:npm",
     "lint:check": "npm run lint:eslint:check && npm run lint:prettier:check && npm run lint:npm:check",
-    "clean": "rm -rf dist",
-    "artifact:manifest": "npm run build && mkdir -p artifact && npm pack --dry-run --json 2>&1 | tail -n +13 > /tmp/npm-pack.json && jq -r '.[0].files[].path' /tmp/npm-pack.json | sort | tsx scripts/collapse-manifest.ts > artifact/npm-manifest.txt",
-    "prepublishOnly": "npm run clean && npm run build",
-    "prepack": "npm run clean && npm run build",
-    "prepare-release": "tsx scripts/prepare-release.ts"
+    "clean": "rm -rf build",
+    "artifact:manifest": "mkdir -p artifact && npm pack --dry-run --json --ignore-scripts > /tmp/npm-pack.json 2>/dev/null && jq -r '.[0].files[].path' /tmp/npm-pack.json | sort | tsx scripts/collapse-manifest.ts > artifact/npm-manifest.txt",
+    "prepack": "npm run clean && npm run build:core",
+    "prepublishOnly": "npm run prepack",
+    "prepare-release": "tsx scripts/prepare-release.ts",
+    "generate-client-methods": "tsx scripts/generate-client-methods.ts"
   },
   "keywords": [
     "canton",
@@ -46,7 +51,6 @@
   "devDependencies": {
     "@types/jest": "30.0.0",
     "@types/node": "24.0.11",
-    "tsx": "4.20.3",
     "@typescript-eslint/eslint-plugin": "8.36.0",
     "@typescript-eslint/parser": "8.36.0",
     "eslint": "9.30.1",
@@ -59,9 +63,15 @@
     "npm-package-json-lint": "9.0.0",
     "prettier": "3.6.2",
     "ts-jest": "29.4.0",
+    "tsx": "4.20.3",
     "typescript": "5.8.3"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "axios": "1.10.0",
+    "dotenv": "17.1.0",
+    "zod": "3.25.76"
   }
 }

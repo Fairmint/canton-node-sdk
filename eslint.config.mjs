@@ -7,6 +7,9 @@ import markdown from 'eslint-plugin-markdown';
 
 /** @type {import('eslint').Linter.FlatConfig[]} */
 export default [
+  {
+    ignores: ['build/**', 'node_modules/**'],
+  },
   js.configs.recommended,
   {
     files: ['**/*.ts'],
@@ -34,16 +37,11 @@ export default [
     },
   },
   {
-    files: ['src/**/*.ts', 'test/**/*.ts', 'scripts/**/*.ts'],
+    files: ['src/**/*.ts', 'test/**/*.ts', 'scripts/**/*.ts', 'simulations/**/*.ts'],
     languageOptions: {
       parserOptions: {
         project: './tsconfig.lint.json',
       },
-    },
-  },
-  {
-    files: ['scripts/**/*.ts'],
-    languageOptions: {
       globals: {
         console: 'readonly',
         process: 'readonly',
@@ -53,8 +51,23 @@ export default [
         __filename: 'readonly',
       },
     },
+  },
+  {
+    files: ['test/**/*.ts', 'scripts/**/*.ts', 'simulations/**/*.ts'],
     rules: {
-      'no-console': 'off', // Allow console statements in scripts
+      'no-console': 'off', // Allow console statements in tests, scripts, and simulations
+    },
+  },
+  {
+    files: ['scripts/**/*.ts', 'simulations/**/*.ts'],
+    languageOptions: {
+      globals: {
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        global: 'readonly',
+      },
     },
   },
   {

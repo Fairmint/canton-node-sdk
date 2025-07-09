@@ -20,6 +20,10 @@ jobs:
             - node_modules
             - package-lock.json
       - run:
+          name: Build
+          command: |
+            npm run build
+      - run:
           name: Generate NPM Manifest
           command: |
             npm run artifact:manifest
@@ -27,6 +31,10 @@ jobs:
           name: Lint
           command: |
             npm run lint
+      - run:
+          name: Run Simulate
+          command: |
+            npm run simulate
       - run:
           name: Check for changes and commit
           command: |
@@ -46,7 +54,16 @@ jobs:
             if git diff --exit-code --quiet && git diff --cached --exit-code --quiet; then
               echo "No changes detected from lint/format/manifest. Build continues successfully."
             else
-              echo "Changes detected from lint/format/manifest. Committing and pushing changes..."
+              echo "Changes detected from lint/format/manifest. Checking if last commit was auto-fix..."
+              
+              # Check if the last commit was an auto-fix commit to prevent infinite loops
+              LAST_COMMIT_MSG=$(git log -1 --pretty=%B)
+              if [[ "$LAST_COMMIT_MSG" == "Auto-fix: lint, format, and manifest changes" ]]; then
+                echo "Last commit was an auto-fix commit and there are still changes. Halting build to prevent infinite loop."
+                exit 1
+              fi
+              
+              echo "Committing and pushing changes..."
               
               # Add all changes
               git add .
@@ -61,10 +78,6 @@ jobs:
               echo "Failing the build to indicate that changes were made."
               exit 1
             fi
-      - run:
-          name: Build
-          command: |
-            npm run build
       - run:
           name: Test
           command: |

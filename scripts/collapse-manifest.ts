@@ -14,10 +14,17 @@ function collapseManifest(): void {
   try {
     // Read all lines from stdin
     const input = readFileSync(0, 'utf-8');
+
     const lines = input
       .trim()
       .split('\n')
       .filter(line => line.length > 0);
+
+    // Exit with error if no files found
+    if (lines.length === 0) {
+      console.error('ERROR: No files found for manifest generation');
+      process.exit(1);
+    }
 
     // Track files to exclude (mapping files)
     const filesToExclude = new Set<string>();

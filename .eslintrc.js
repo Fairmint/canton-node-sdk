@@ -25,5 +25,5 @@ module.exports = {
     node: true,
     es2020: true,
   },
-  ignorePatterns: ['dist/', 'node_modules/', '*.js'],
+  ignorePatterns: ['build/', 'node_modules/', '*.js'],
 }; 

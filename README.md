@@ -4,6 +4,14 @@
 
 A TypeScript SDK for interacting with Canton blockchain nodes.
 
+## Features
+
+- **Type-safe API client** with full TypeScript support
+- **OAuth2 authentication** with automatic token management
+- **Multi-provider support** across devnet/testnet/mainnet
+- **Production-ready** error handling, logging, and retry logic
+- **Environment-based configuration** with automatic .env loading
+
 ## For End Users
 
 ### Installation

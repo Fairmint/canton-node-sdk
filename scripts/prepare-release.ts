@@ -1,5 +1,21 @@
 #!/usr/bin/env node
 
+/**
+ * Prepare Release Script
+ *
+ * Prepares a new release by incrementing version and generating changelog.
+ *
+ * Usage:
+ *   npm run prepare-release
+ *
+ * Features:
+ * - Increments patch version in package.json
+ * - Creates changelog from commits since last tag
+ * - Links commits to GitHub PRs
+ * - Safe for local testing (no git operations)
+ * - Saves changelog to CHANGELOG.md
+ */
+
 import fs from 'fs';
 import { execSync } from 'child_process';
 import path from 'path';
