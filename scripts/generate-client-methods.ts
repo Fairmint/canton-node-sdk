@@ -151,9 +151,6 @@ function updateClientFile(): void {
   );
 
   fs.writeFileSync(CLIENT_FILE, content);
-  console.log(
-    '✅ Updated client imports, method declarations, and implementations'
-  );
 }
 
 if (require.main === module) {
