@@ -126,14 +126,7 @@ function prepareRelease(): void {
     const commitLines: string[] = commits
       .split('\n')
       .map((commit: string): string => {
-        // Extract PR number from commit message (format: "message (#123)" or "message (fixes #123)")
-        const prMatch: RegExpMatchArray | null = commit.match(/#(\d+)/);
-        if (prMatch && prMatch[1]) {
-          const prNum: string = prMatch[1];
-          return `- ${commit} ([#${prNum}](https://github.com/Fairmint/canton-node-sdk/pull/${prNum}))`;
-        } else {
-          return `- ${commit}`;
-        }
+        return `- ${commit}`;
       });
 
     const changelog: string = commitLines.join('\n');
