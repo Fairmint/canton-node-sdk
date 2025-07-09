@@ -5,7 +5,7 @@ import {
   NetworkType,
   ProviderType,
 } from './types';
-import { EnvironmentConfig } from './config/EnvironmentConfig';
+import { EnvLoader } from './config/EnvLoader';
 import { ProviderConfigBuilder } from './config/ProviderConfigBuilder';
 import { AuthenticationManager } from './auth/AuthenticationManager';
 import { HttpClient } from './http/HttpClient';
@@ -18,16 +18,16 @@ export abstract class BaseClient {
   protected clientConfig: ClientConfig;
   protected authManager: AuthenticationManager;
   protected httpClient: HttpClient;
-  protected envConfig: EnvironmentConfig;
+  protected envLoader: EnvLoader;
 
   constructor(apiType: ApiType, config?: Partial<ClientConfig>) {
     this.apiType = apiType;
-    this.envConfig = EnvironmentConfig.getInstance();
+    this.envLoader = EnvLoader.getInstance();
 
     // Build client configuration
     this.clientConfig = {
-      network: config?.network || this.envConfig.getCurrentNetwork(),
-      provider: config?.provider || this.envConfig.getCurrentProvider(),
+      network: config?.network || this.envLoader.getCurrentNetwork(),
+      provider: config?.provider || this.envLoader.getCurrentProvider(),
       ...(config?.logger && { logger: config.logger }),
     };
 
@@ -95,18 +95,22 @@ export abstract class BaseClient {
     return apiConfig?.apiUrl || '';
   }
 
-  public getPartyId(): string | undefined {
-    const apiConfig = this.config.apis[this.apiType];
-    return apiConfig?.partyId;
+  public getPartyId(): string {
+    return this.envLoader.getPartyId(
+      this.clientConfig.network,
+      this.clientConfig.provider
+    );
   }
 
   public getUserId(): string | undefined {
-    const apiConfig = this.config.apis[this.apiType];
-    return apiConfig?.userId;
+    return this.envLoader.getUserId(
+      this.clientConfig.network,
+      this.clientConfig.provider
+    );
   }
 
   public getManagedParties(): string[] {
-    return this.envConfig.getManagedParties(
+    return this.envLoader.getManagedParties(
       this.clientConfig.network,
       this.clientConfig.provider
     );
@@ -135,5 +139,13 @@ export abstract class BaseClient {
 
   public getProviderName(): string {
     return this.config.providerName;
+  }
+
+  public getAuthUrl(): string {
+    return this.config.authUrl;
+  }
+
+  public getApiType(): ApiType {
+    return this.apiType;
   }
 }

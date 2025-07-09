@@ -1,24 +1,24 @@
 import { ApiType, AuthConfig, ApiConfig, ProviderConfig, NetworkType, ProviderType, PartialProviderConfig, ClientConfig } from '../types';
-import { EnvironmentConfig } from './EnvironmentConfig';
+import { EnvLoader } from './EnvLoader';
 
 /** Builds provider-specific configuration from environment variables */
 export class ProviderConfigBuilder {
-  private envConfig: EnvironmentConfig;
+  private envLoader: EnvLoader;
 
   constructor() {
-    this.envConfig = EnvironmentConfig.getInstance();
+    this.envLoader = EnvLoader.getInstance();
   }
 
   public buildProviderConfig(
     network?: NetworkType,
     provider?: ProviderType
   ): ProviderConfig {
-    const targetNetwork = network || this.envConfig.getCurrentNetwork();
-    const targetProvider = provider || this.envConfig.getCurrentProvider();
+    const targetNetwork = network || this.envLoader.getCurrentNetwork();
+    const targetProvider = provider || this.envLoader.getCurrentProvider();
 
     return {
       providerName: `${targetProvider}_${targetNetwork}`,
-      authUrl: this.envConfig.getAuthUrl(targetNetwork, targetProvider),
+      authUrl: this.envLoader.getAuthUrl(targetNetwork, targetProvider),
       apis: {
         LEDGER_JSON_API: this.buildApiConfig('LEDGER_JSON_API', targetNetwork, targetProvider),
         VALIDATOR_API: this.buildApiConfig('VALIDATOR_API', targetNetwork, targetProvider),
@@ -33,8 +33,8 @@ export class ProviderConfigBuilder {
     provider?: ProviderType,
     config?: Partial<ClientConfig>
   ): PartialProviderConfig {
-    const targetNetwork = network || this.envConfig.getCurrentNetwork();
-    const targetProvider = provider || this.envConfig.getCurrentProvider();
+    const targetNetwork = network || this.envLoader.getCurrentNetwork();
+    const targetProvider = provider || this.envLoader.getCurrentProvider();
 
     const apis: Partial<Record<ApiType, ApiConfig>> = {};
 
@@ -44,7 +44,7 @@ export class ProviderConfigBuilder {
       apis[apiType] = this.buildApiConfig(apiType, targetNetwork, targetProvider);
     }
 
-    const authUrl = (config && config.authUrl) || this.envConfig.getAuthUrl(targetNetwork, targetProvider);
+    const authUrl = (config && config.authUrl) || this.envLoader.getAuthUrl(targetNetwork, targetProvider);
 
     return {
       providerName: `${targetProvider}_${targetNetwork}`,
@@ -58,22 +58,22 @@ export class ProviderConfigBuilder {
     network: NetworkType,
     provider: ProviderType
   ): ApiConfig {
-    const clientSecret = this.envConfig.getApiClientSecret(apiType, network, provider);
+    const clientSecret = this.envLoader.getApiClientSecret(apiType, network, provider);
     const auth: AuthConfig = {
       grantType: 'client_credentials',
-      clientId: this.envConfig.getApiClientId(apiType, network, provider) || '',
+      clientId: this.envLoader.getApiClientId(apiType, network, provider) || '',
       ...(clientSecret && { clientSecret }),
     };
 
     const apiConfig: ApiConfig = {
-      apiUrl: this.envConfig.getApiUri(apiType, network, provider),
+      apiUrl: this.envLoader.getApiUri(apiType, network, provider),
       auth,
     };
 
     // Add party-specific configuration for APIs that support it
     if (apiType === 'LEDGER_JSON_API' || apiType === 'VALIDATOR_API') {
-      apiConfig.partyId = this.envConfig.getPartyId(network, provider);
-      const userId = this.envConfig.getUserId(network, provider);
+      apiConfig.partyId = this.envLoader.getPartyId(network, provider);
+      const userId = this.envLoader.getUserId(network, provider);
       if (userId) {
         apiConfig.userId = userId;
       }
