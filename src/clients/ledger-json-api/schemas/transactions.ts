@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { TreeEventSchema } from './events';
 
-// Transaction tree schema
 export const TransactionTreeSchema = z
   .object({
     updateId: z.string(),
@@ -19,14 +18,12 @@ export const TransactionTreeSchema = z
   })
   .strict();
 
-// Command response schema
 export const CommandResponseSchema = z
   .object({
     transactionTree: TransactionTreeSchema,
   })
   .strict();
 
-// Create contract response schema
 export const CreateContractResponseSchema = z
   .object({
     contractId: z.string(),
@@ -34,7 +31,6 @@ export const CreateContractResponseSchema = z
   })
   .strict();
 
-// Update by ID schemas
 export const UpdateByIdRequestSchema = z
   .object({
     updateId: z.string(),
@@ -50,14 +46,12 @@ export const UpdateByIdResponseSchema = z
   })
   .strict();
 
-// Transaction tree by offset response schema
 export const TransactionTreeByOffsetResponseSchema = z
   .object({
     transaction: TransactionTreeSchema,
   })
   .strict();
 
-// Type exports
 export type TransactionTree = z.infer<typeof TransactionTreeSchema>;
 export type CommandResponse = z.infer<typeof CommandResponseSchema>;
 export type CreateContractResponse = z.infer<

@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-// Common parameter schemas
 export const NonEmptyStringSchema = z
   .string()
   .min(1, 'Value must be a non-empty string')
@@ -16,6 +15,5 @@ export const GetTransactionTreeByOffsetParamsSchema = z.object({
   parties: z.array(z.string()).optional(),
 });
 
-// Type exports
 export type GetEventsByContractIdParams = z.infer<typeof GetEventsByContractIdParamsSchema>;
 export type GetTransactionTreeByOffsetParams = z.infer<typeof GetTransactionTreeByOffsetParamsSchema>; 

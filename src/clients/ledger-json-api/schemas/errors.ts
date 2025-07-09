@@ -1,12 +1,10 @@
 import { z } from 'zod';
 
-// Common error response structure
 export const ErrorResponseSchema = z.object({
   error: z.string(),
   details: z.unknown(),
 });
 
-// Specific error response types for different HTTP status codes
 export const BadRequestErrorSchema = ErrorResponseSchema.extend({
   details: z.object({
     name: z.string().optional(),
@@ -37,14 +35,12 @@ export const ValidationErrorSchema = ErrorResponseSchema.extend({
   }).optional(),
 });
 
-// Union type for all error responses
 export const ApiErrorResponseSchema = z.union([
   BadRequestErrorSchema,
   NotFoundErrorSchema,
   ValidationErrorSchema,
 ]);
 
-// Type exports
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
 export type BadRequestError = z.infer<typeof BadRequestErrorSchema>;
 export type NotFoundError = z.infer<typeof NotFoundErrorSchema>;

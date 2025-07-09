@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { RecordSchema } from './base';
 
-// Tree event schemas
 export const CreatedTreeEventSchema = z
   .object({
     CreatedTreeEvent: z
@@ -82,7 +81,6 @@ export const TreeEventSchema = z.union([
   ArchivedTreeEventSchema,
 ]);
 
-// Event format schema
 export const EventFormatSchema = z
   .object({
     verbose: z.boolean(),
@@ -96,7 +94,6 @@ export const EventFormatSchema = z
   })
   .strict();
 
-// Events by contract ID schemas
 export const EventsByContractIdRequestSchema = z
   .object({
     contractId: z.string(),
@@ -155,7 +152,6 @@ export const EventsByContractIdResponseSchema = z
       'EventsByContractIdResponse must have at least one of: created, archived',
   });
 
-// Type exports
 export type CreatedTreeEvent = z.infer<typeof CreatedTreeEventSchema>;
 export type ExercisedTreeEvent = z.infer<typeof ExercisedTreeEventSchema>;
 export type ArchivedTreeEvent = z.infer<typeof ArchivedTreeEventSchema>;

@@ -1,11 +1,6 @@
-import { BaseClient } from '../../core/BaseClient';
-import { ClientConfig } from '../../core/types';
-import { GetEventsByContractId } from './operations/getEventsByContractId';
-import { GetTransactionTreeByOffset } from './operations/getTransactionTreeByOffset';
-import { GetEventsByContractIdParams } from './schemas/params';
-import { EventsByContractIdResponse } from './schemas/events';
-import { GetTransactionTreeByOffsetParams } from './schemas/params';
-import { TransactionTreeByOffsetResponse } from './schemas/transactions';
+import { BaseClient, ClientConfig } from '../../core';
+import { GetEventsByContractId, GetTransactionTreeByOffset } from './operations';
+import { GetEventsByContractIdParams, EventsByContractIdResponse, GetTransactionTreeByOffsetParams, TransactionTreeByOffsetResponse } from './schemas';
 
 /** Client for interacting with Canton's Ledger JSON API */
 export class LedgerJsonApiClient extends BaseClient {

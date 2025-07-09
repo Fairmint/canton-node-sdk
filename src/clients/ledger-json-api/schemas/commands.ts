@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { RecordSchema } from './base';
 
-// Command schemas
 export const CreateCommandSchema = z
   .object({
     CreateCommand: z
@@ -31,7 +30,6 @@ export const CommandSchema = z.union([
   ExerciseCommandSchema,
 ]);
 
-// Disclosed contract schema
 export const DisclosedContractSchema = z
   .object({
     templateId: z.string().optional(),
@@ -41,7 +39,6 @@ export const DisclosedContractSchema = z
   })
   .strict();
 
-// Command request schema
 export const CommandRequestSchema = z
   .object({
     commands: z.array(CommandSchema),
@@ -52,7 +49,6 @@ export const CommandRequestSchema = z
   })
   .strict();
 
-// Type exports
 export type CreateCommand = z.infer<typeof CreateCommandSchema>;
 export type ExerciseCommand = z.infer<typeof ExerciseCommandSchema>;
 export type Command = z.infer<typeof CommandSchema>;

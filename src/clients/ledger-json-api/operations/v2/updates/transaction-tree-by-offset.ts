@@ -1,7 +1,7 @@
-import { createApiOperation } from '../../../core/operations/ApiOperationFactory';
-import { GetTransactionTreeByOffsetParamsSchema, GetTransactionTreeByOffsetParams } from '../schemas';
-import { TransactionTreeByOffsetResponse } from '../schemas/transactions';
-import { EnvironmentConfig } from '../../../core/config/EnvironmentConfig';
+import { createApiOperation } from '../../../../../core/operations/ApiOperationFactory';
+import { GetTransactionTreeByOffsetParamsSchema, GetTransactionTreeByOffsetParams } from '../../../schemas';
+import { TransactionTreeByOffsetResponse } from '../../../schemas/transactions';
+import { EnvironmentConfig } from '../../../../../core/config/EnvironmentConfig';
 
 export const GetTransactionTreeByOffset = createApiOperation<
   GetTransactionTreeByOffsetParams,

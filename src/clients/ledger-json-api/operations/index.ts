@@ -1,2 +1,1 @@
-export { GetEventsByContractId } from './getEventsByContractId';
-export { GetTransactionTreeByOffset } from './getTransactionTreeByOffset'; 
+export * from './v2'; 
