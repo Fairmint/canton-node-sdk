@@ -41,6 +41,24 @@ export default class SimulationRunner {
     return `${sanitizedName}.json`;
   }
 
+  private checkForDuplicateFile(filename: string): void {
+    const filepath = path.join(this.resultsDir, filename);
+
+    // Check if file already exists on disk
+    if (fs.existsSync(filepath)) {
+      throw new Error(
+        `File already exists: ${filename}. This indicates a duplicate simulation or naming conflict.`
+      );
+    }
+
+    // Check if file was already written in this session
+    if (this.writtenFiles.has(filename)) {
+      throw new Error(
+        `Duplicate filename detected: ${filename}. This indicates a copy-paste error or naming conflict.`
+      );
+    }
+  }
+
   async runSimulation<T>(
     simulationName: string,
     simulationFn: (client: LedgerJsonApiClient) => Promise<T>,
@@ -65,14 +83,11 @@ export default class SimulationRunner {
 
       // Save result to file
       const filename = this.generateFilename(simulationName);
-      const filepath = path.join(this.resultsDir, filename);
 
-      // Check for duplicate filenames
-      if (this.writtenFiles.has(filename)) {
-        throw new Error(
-          `Duplicate filename detected: ${filename}. This indicates a copy-paste error or naming conflict.`
-        );
-      }
+      // Check for duplicate files before writing
+      this.checkForDuplicateFile(filename);
+
+      const filepath = path.join(this.resultsDir, filename);
 
       fs.writeFileSync(filepath, JSON.stringify(data, null, 2));
       this.writtenFiles.add(filename);
@@ -98,14 +113,11 @@ export default class SimulationRunner {
 
       // Save error to file
       const filename = this.generateFilename(simulationName);
-      const filepath = path.join(this.resultsDir, filename);
 
-      // Check for duplicate filenames even for errors
-      if (this.writtenFiles.has(filename)) {
-        throw new Error(
-          `Duplicate filename detected: ${filename}. This indicates a copy-paste error or naming conflict.`
-        );
-      }
+      // Check for duplicate files before writing (even for errors)
+      this.checkForDuplicateFile(filename);
+
+      const filepath = path.join(this.resultsDir, filename);
 
       fs.writeFileSync(filepath, JSON.stringify(errorDetails, null, 2));
       this.writtenFiles.add(filename);

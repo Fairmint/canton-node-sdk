@@ -2,12 +2,12 @@
 
 /**
  * Prepare Release Script
- * 
+ *
  * Prepares a new release by incrementing version and generating changelog.
- * 
+ *
  * Usage:
  *   npm run prepare-release
- * 
+ *
  * Features:
  * - Increments patch version in package.json
  * - Creates changelog from commits since last tag

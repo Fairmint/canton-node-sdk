@@ -1,5 +1,0 @@
-{
-  "name": "Error",
-  "message": "Failed to get events by contract ID: Invalid URL",
-  "stack": "Error: Failed to get events by contract ID: Invalid URL\n    at ApiOperation.handleError (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/src/clients/base/ApiOperation.ts:57:14)\n    at ApiOperation.execute (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/src/clients/base/ApiOperationFactory.ts:45:20)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async simulationRunner.runSimulation (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/simulations/core/simulationRunner.ts:61:20)"
-}

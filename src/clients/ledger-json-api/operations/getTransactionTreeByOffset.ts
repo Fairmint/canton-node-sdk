@@ -9,7 +9,7 @@ export const GetTransactionTreeByOffset = createApiOperation<
   paramsSchema: GetTransactionTreeByOffsetParamsSchema,
   operation: 'get transaction tree by offset',
   method: 'POST',
-  buildUrl: () => '/transactions/transaction-trees-by-offset',
+  buildUrl: (_params, apiUrl) => `${apiUrl}/transactions/transaction-trees-by-offset`,
   buildRequestData: (params) => ({
     offset: params.offset,
     parties: params.parties,
