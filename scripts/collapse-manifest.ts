@@ -14,7 +14,7 @@ function collapseManifest(): void {
   try {
     // Read all lines from stdin
     const input = readFileSync(0, 'utf-8');
-    
+
     const lines = input
       .trim()
       .split('\n')
