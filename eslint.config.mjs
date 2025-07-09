@@ -53,6 +53,12 @@ export default [
     },
   },
   {
+    files: ['test/**/*.ts', 'scripts/**/*.ts', 'simulations/**/*.ts'],
+    rules: {
+      'no-console': 'off', // Allow console statements in tests, scripts, and simulations
+    },
+  },
+  {
     files: ['scripts/**/*.ts', 'simulations/**/*.ts'],
     languageOptions: {
       globals: {
@@ -62,6 +68,11 @@ export default [
         module: 'readonly',
         __dirname: 'readonly',
         __filename: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        global: 'readonly',
       },
     },
     rules: {

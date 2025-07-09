@@ -37,7 +37,7 @@ async function runSimulations(): Promise<void> {
       } else {
         // Fallback: if no runAllTests export, the module should have executed on import
         // Wait a bit to ensure any async operations complete
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => global.setTimeout(resolve, 100));
       }
 
       console.log(`✅ Completed: ${path.basename(file)}`);
