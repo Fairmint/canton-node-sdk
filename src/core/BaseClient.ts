@@ -41,7 +41,7 @@ export abstract class BaseClient {
     };
 
     // Build provider configuration
-    const configBuilder = new ProviderConfigBuilder();
+    const configBuilder = new ProviderConfigBuilder(this.envLoader);
     this.config = configBuilder.buildApiSpecificConfig(
       this.apiType,
       this.clientConfig.network,
@@ -105,6 +105,11 @@ export abstract class BaseClient {
   }
 
   public getPartyId(): string {
+    // Use provided configuration first, fall back to environment variables
+    const apiConfig = this.config.apis[this.apiType];
+    if (apiConfig?.partyId) {
+      return apiConfig.partyId;
+    }
     return this.envLoader.getPartyId(
       this.clientConfig.network,
       this.clientConfig.provider
@@ -112,6 +117,11 @@ export abstract class BaseClient {
   }
 
   public getUserId(): string | undefined {
+    // Use provided configuration first, fall back to environment variables
+    const apiConfig = this.config.apis[this.apiType];
+    if (apiConfig?.userId) {
+      return apiConfig.userId;
+    }
     return this.envLoader.getUserId(
       this.clientConfig.network,
       this.clientConfig.provider
@@ -119,6 +129,8 @@ export abstract class BaseClient {
   }
 
   public getManagedParties(): string[] {
+    // For now, always use environment variables for managed parties
+    // as this is not typically provided in the API config
     return this.envLoader.getManagedParties(
       this.clientConfig.network,
       this.clientConfig.provider

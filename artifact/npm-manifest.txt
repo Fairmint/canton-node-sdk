@@ -35,4 +35,7 @@ build/src/core/operations/ApiOperationFactory
 build/src/core/operations/index
 build/src/core/types
 build/src/index
+examples/simple-integration/index
+examples/simple-integration/package.json
+examples/simple-integration/test
 package.json

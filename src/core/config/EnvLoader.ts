@@ -30,7 +30,7 @@ export interface EnvLoaderOptions {
 
 /** Singleton class for managing environment variables and configuration */
 export class EnvLoader {
-  private static instance: EnvLoader;
+  private static instance: EnvLoader | undefined;
   private env: Record<string, string | undefined>;
   private options: EnvLoaderOptions;
 
@@ -47,6 +47,10 @@ export class EnvLoader {
       EnvLoader.instance.options = { ...EnvLoader.instance.options, ...options };
     }
     return EnvLoader.instance;
+  }
+
+  public static resetInstance() {
+    EnvLoader.instance = undefined;
   }
 
   /**

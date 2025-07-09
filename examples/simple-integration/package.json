@@ -1,0 +1,16 @@
+{
+  "name": "canton-sdk-simple-integration",
+  "version": "1.0.0",
+  "description": "Simple integration example for Canton Node SDK",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "@fairmint/canton-node-sdk": "file:../.."
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+} 
