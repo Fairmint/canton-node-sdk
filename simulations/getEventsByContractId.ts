@@ -16,7 +16,7 @@ const TEST_CONTRACT_IDS = {
 export async function runAllTests() {
   await runner.runSimulation(
     'getEventsByContractId_valid',
-    client => client.getEventsByContractId.execute({
+    client => client.getEventsByContractId({
       contractId: TEST_CONTRACT_IDS.VALID,
     }),
     EventsByContractIdResponseSchema
@@ -24,7 +24,7 @@ export async function runAllTests() {
 
   await runner.runSimulation(
     'getEventsByContractId_invalid_format',
-    client => client.getEventsByContractId.execute({
+    client => client.getEventsByContractId({
       contractId: TEST_CONTRACT_IDS.INVALID_FORMAT,
     }),
     BadRequestErrorSchema
@@ -32,7 +32,7 @@ export async function runAllTests() {
 
   await runner.runSimulation(
     'getEventsByContractId_non_existent',
-    client => client.getEventsByContractId.execute({
+    client => client.getEventsByContractId({
       contractId: TEST_CONTRACT_IDS.NON_EXISTENT,
     }),
     NotFoundErrorSchema

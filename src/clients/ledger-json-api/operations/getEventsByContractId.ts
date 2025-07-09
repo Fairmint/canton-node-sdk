@@ -9,7 +9,7 @@ export const GetEventsByContractId = createApiOperation<
   paramsSchema: GetEventsByContractIdParamsSchema,
   operation: 'get events by contract ID',
   method: 'POST',
-  buildUrl: (_params, apiUrl) => `${apiUrl}/events/events-by-contract-id`,
+  buildUrl: (_params, apiUrl) => `${apiUrl}/v2/events/events-by-contract-id`,
   buildRequestData: (params) => {
     const config = EnvironmentConfig.getInstance();
     const currentPartyId = config.getPartyId();

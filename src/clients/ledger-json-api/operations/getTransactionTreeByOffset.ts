@@ -21,7 +21,7 @@ export const GetTransactionTreeByOffset = createApiOperation<
       ])
     );
 
-    const baseUrl = `${apiUrl}/updates/transaction-tree-by-offset/${params.offset}`;
+    const baseUrl = `${apiUrl}/v2/updates/transaction-tree-by-offset/${params.offset}`;
     
     if (readParties.length > 0) {
       const queryParams = new URLSearchParams();
