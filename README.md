@@ -45,8 +45,8 @@ For automated builds and deployments, you'll need to configure authentication:
 3. Configure npm in your CI pipeline:
 
    ```bash
-   echo "@fairmint:registry=https://npm.pkg.github.com" >> .npmrc
-   echo "//npm.pkg.github.com/:_authToken=$GITHUB_TOKEN" >> .npmrc
+   echo "@fairmint:registry=https://npm.pkg.github.com" >> ~/.npmrc
+   echo "//npm.pkg.github.com/:_authToken=$GITHUB_TOKEN" >> ~/.npmrc
    npm install
    ```
 
