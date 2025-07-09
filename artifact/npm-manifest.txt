@@ -2,9 +2,12 @@ README.md
 build/src/clients/index
 build/src/clients/ledger-json-api/LedgerJsonApiClient
 build/src/clients/ledger-json-api/index
-build/src/clients/ledger-json-api/operations/getEventsByContractId
-build/src/clients/ledger-json-api/operations/getTransactionTreeByOffset
 build/src/clients/ledger-json-api/operations/index
+build/src/clients/ledger-json-api/operations/v2/events/events-by-contract-id
+build/src/clients/ledger-json-api/operations/v2/events/index
+build/src/clients/ledger-json-api/operations/v2/index
+build/src/clients/ledger-json-api/operations/v2/updates/index
+build/src/clients/ledger-json-api/operations/v2/updates/transaction-tree-by-offset
 build/src/clients/ledger-json-api/schemas/base
 build/src/clients/ledger-json-api/schemas/commands
 build/src/clients/ledger-json-api/schemas/errors
@@ -17,6 +20,7 @@ build/src/core/BaseClient
 build/src/core/ClientFactory
 build/src/core/auth/AuthenticationManager
 build/src/core/auth/index
+build/src/core/config/EnvLoader
 build/src/core/config/EnvironmentConfig
 build/src/core/config/ProviderConfigBuilder
 build/src/core/config/index
