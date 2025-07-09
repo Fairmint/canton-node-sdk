@@ -46,6 +46,13 @@ jobs:
             mkdir -p ~/.ssh
             ssh-keyscan -H github.com >> ~/.ssh/known_hosts
 
+            # Check if the last commit was an auto-fix commit to prevent infinite loops
+            LAST_COMMIT_MSG=$(git log -1 --pretty=%B)
+            if [[ "$LAST_COMMIT_MSG" == "Auto-fix: lint, format, and manifest changes" ]]; then
+              echo "Last commit was an auto-fix commit. Skipping to prevent infinite loop."
+              exit 0
+            fi
+
             # Check if there are any changes
             if git diff --exit-code --quiet && git diff --cached --exit-code --quiet; then
               echo "No changes detected from lint/format/manifest. Build continues successfully."
