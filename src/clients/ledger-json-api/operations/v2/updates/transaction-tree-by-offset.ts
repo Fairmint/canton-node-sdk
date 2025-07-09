@@ -1,7 +1,7 @@
-import { createApiOperation } from '../../../../../core/operations/ApiOperationFactory';
-import { GetTransactionTreeByOffsetParamsSchema, GetTransactionTreeByOffsetParams } from '../../../schemas';
-import { TransactionTreeByOffsetResponse } from '../../../schemas/transactions';
-import { EnvironmentConfig } from '../../../../../core/config/EnvironmentConfig';
+import { createApiOperation, EnvLoader } from '../../../../../core';
+import { GetTransactionTreeByOffsetParamsSchema, GetTransactionTreeByOffsetParams, TransactionTreeByOffsetResponse } from '../../../schemas';
+
+const config = EnvLoader.getInstance();
 
 export const GetTransactionTreeByOffset = createApiOperation<
   GetTransactionTreeByOffsetParams,
@@ -11,7 +11,6 @@ export const GetTransactionTreeByOffset = createApiOperation<
   operation: 'get transaction tree by offset',
   method: 'GET',
   buildUrl: (params, apiUrl) => {
-    const config = EnvironmentConfig.getInstance();
     const currentPartyId = config.getPartyId();
     
     const readParties = Array.from(

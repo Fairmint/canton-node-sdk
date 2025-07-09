@@ -28,14 +28,22 @@ export interface EnvLoaderOptions {
   currentProvider?: ProviderType;
 }
 
-/** Loads configuration from environment variables and produces a ClientConfig */
+/** Singleton class for managing environment variables and configuration */
 export class EnvLoader {
+  private static instance: EnvLoader;
   private env: Record<string, string | undefined>;
   private options: EnvLoaderOptions;
 
-  constructor(options: EnvLoaderOptions = {}) {
+  private constructor(options: EnvLoaderOptions = {}) {
     this.env = process.env;
     this.options = options;
+  }
+
+  public static getInstance(options: EnvLoaderOptions = {}): EnvLoader {
+    if (!EnvLoader.instance) {
+      EnvLoader.instance = new EnvLoader(options);
+    }
+    return EnvLoader.instance;
   }
 
   /**
@@ -64,7 +72,17 @@ export class EnvLoader {
     };
   }
 
-  private getCurrentNetwork(): NetworkType {
+  public getNodeEnv(): 'development' | 'production' | 'test' {
+    const value = this.env['NODE_ENV'] || 'development';
+    if (!['development', 'production', 'test'].includes(value)) {
+      throw new ConfigurationError(
+        `Invalid NODE_ENV: ${value}. Must be 'development', 'production', or 'test'`
+      );
+    }
+    return value as 'development' | 'production' | 'test';
+  }
+
+  public getCurrentNetwork(): NetworkType {
     if (this.options.currentNetwork) {
       return this.options.currentNetwork;
     }
@@ -77,7 +95,7 @@ export class EnvLoader {
     return value as NetworkType;
   }
 
-  private getCurrentProvider(): ProviderType {
+  public getCurrentProvider(): ProviderType {
     if (this.options.currentProvider) {
       return this.options.currentProvider;
     }
@@ -90,34 +108,116 @@ export class EnvLoader {
     return value as ProviderType;
   }
 
-  private getAuthUrl(network: NetworkType, provider: ProviderType): string {
-    const envKey = `CANTON_${network.toUpperCase()}_${provider.toUpperCase()}_AUTH_URL`;
+  public getApiUri(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {
+    const targetNetwork = network || this.getCurrentNetwork();
+    const targetProvider = provider || this.getCurrentProvider();
+
+    const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_URI`;
+    const uri = this.env[envKey];
+
+    return uri;
+  }
+
+  public getApiClientId(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {
+    const targetNetwork = network || this.getCurrentNetwork();
+    const targetProvider = provider || this.getCurrentProvider();
+
+    const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_CLIENT_ID`;
+    return this.env[envKey];
+  }
+
+  public getApiClientSecret(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {
+    const targetNetwork = network || this.getCurrentNetwork();
+    const targetProvider = provider || this.getCurrentProvider();
+
+    const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_CLIENT_SECRET`;
+    return this.env[envKey];
+  }
+
+  public getAuthUrl(network?: NetworkType, provider?: ProviderType): string {
+    const targetNetwork = network || this.getCurrentNetwork();
+    const targetProvider = provider || this.getCurrentProvider();
+
+    const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_AUTH_URL`;
     const authUrl = this.env[envKey];
+
     if (!authUrl) {
       throw new ConfigurationError(`Missing required environment variable: ${envKey}`);
     }
+
     return authUrl;
   }
 
+  public getPartyId(network?: NetworkType, provider?: ProviderType): string {
+    const targetNetwork = network || this.getCurrentNetwork();
+    const targetProvider = provider || this.getCurrentProvider();
+
+    const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_PARTY_ID`;
+    const partyId = this.env[envKey];
+
+    if (!partyId) {
+      throw new ConfigurationError(`Missing required environment variable: ${envKey}`);
+    }
+
+    return partyId;
+  }
+
+  public getUserId(network?: NetworkType, provider?: ProviderType): string | undefined {
+    const targetNetwork = network || this.getCurrentNetwork();
+    const targetProvider = provider || this.getCurrentProvider();
+
+    const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_USER_ID`;
+    return this.env[envKey];
+  }
+
+  public getDatabaseUrl(network?: NetworkType): string {
+    const targetNetwork = network || this.getCurrentNetwork();
+    const envKey = `CANTON_${targetNetwork.toUpperCase()}_DATABASE_URL`;
+    const databaseUrl = this.env[envKey];
+
+    if (!databaseUrl) {
+      throw new ConfigurationError(`Missing required environment variable: ${envKey}`);
+    }
+
+    return databaseUrl;
+  }
+
+  public getManagedParties(network?: NetworkType, provider?: ProviderType): string[] {
+    const targetNetwork = network || this.getCurrentNetwork();
+    const targetProvider = provider || this.getCurrentProvider();
+
+    const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_MANAGED_PARTIES`;
+    const managedParties = this.env[envKey];
+
+    if (!managedParties) {
+      return [];
+    }
+
+    return managedParties.split(',').map(party => party.trim()).filter(party => party.length > 0);
+  }
+
   private loadApiConfig(apiType: string, network: NetworkType, provider: ProviderType): ApiConfig | undefined {
-    const envKey = `CANTON_${network.toUpperCase()}_${provider.toUpperCase()}_${apiType.toUpperCase()}`;
-    const apiUrl = this.env[`${envKey}_URI`];
-    const clientId = this.env[`${envKey}_CLIENT_ID`];
-    const clientSecret = this.env[`${envKey}_CLIENT_SECRET`];
-    const partyId = this.env[`CANTON_${network.toUpperCase()}_${provider.toUpperCase()}_PARTY_ID`];
-    const userId = this.env[`CANTON_${network.toUpperCase()}_${provider.toUpperCase()}_USER_ID`];
+    const apiUrl = this.getApiUri(apiType, network, provider);
+    const clientId = this.getApiClientId(apiType, network, provider);
+    const clientSecret = this.getApiClientSecret(apiType, network, provider);
+    const partyId = this.getPartyId(network, provider);
+    const userId = this.getUserId(network, provider);
+    
     if (!apiUrl || !clientId) {
       return undefined;
     }
+    
     const auth: AuthConfig = {
       grantType: 'client_credentials',
       clientId: clientId || '',
       ...(clientSecret && { clientSecret }),
     };
+    
     const apiConfig: ApiConfig = {
       apiUrl: apiUrl || '',
       auth,
     };
+    
     if (partyId) {
       apiConfig.partyId = String(partyId);
     }
