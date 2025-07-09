@@ -28,6 +28,10 @@ jobs:
           command: |
             npm run lint
       - run:
+          name: Build
+          command: |
+            npm run build
+      - run:
           name: Run Simulate
           command: |
             npm run simulate
@@ -74,10 +78,6 @@ jobs:
               echo "Failing the build to indicate that changes were made."
               exit 1
             fi
-      - run:
-          name: Build
-          command: |
-            npm run build
       - run:
           name: Test
           command: |
