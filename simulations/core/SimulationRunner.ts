@@ -7,11 +7,17 @@ import { FileLogger } from '../../src/core/logging';
 export default class SimulationRunner {
   private resultsDir: string;
   private writtenFiles: Set<string>;
+  private client: LedgerJsonApiClient;
 
   constructor() {
     this.resultsDir = path.join(__dirname, '..', 'results');
     this.writtenFiles = new Set();
     this.ensureResultsDir();
+
+    // Create client instance with file logger
+    const logger = new FileLogger();
+    this.client = new LedgerJsonApiClient({ logger });
+    this.client.getEventsByContractId.
   }
 
   private ensureResultsDir(): void {
@@ -88,13 +94,9 @@ export default class SimulationRunner {
     simulationFn: (client: LedgerJsonApiClient) => Promise<T>,
     expectedSchema: import('zod').ZodSchema<R>
   ): Promise<T | { error: string; details: unknown }> {
-    // Create client instance with file logger
-    const logger = new FileLogger();
-    const client = new LedgerJsonApiClient({ logger });
-
     try {
       // Run simulation
-      const data = await simulationFn(client);
+      const data = await simulationFn(this.client);
 
       // Validate response type if specified
       if (expectedSchema) {
