@@ -3,6 +3,7 @@ import { ClientConfig } from '../../core/types';
 import { GetEventsByContractId } from './operations/getEventsByContractId';
 import { GetTransactionTreeByOffset } from './operations/getTransactionTreeByOffset';
 
+/** Client for interacting with Canton's Ledger JSON API */
 export class LedgerJsonApiClient extends BaseClient {
   public readonly getEventsByContractId: InstanceType<typeof GetEventsByContractId>;
   public readonly getTransactionTreeByOffset: InstanceType<typeof GetTransactionTreeByOffset>;

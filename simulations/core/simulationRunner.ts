@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { LedgerJsonApiClient } from '../../src/clients/ledger-json-api/LedgerJsonApiClient';
 
+/** Manages simulation execution, result storage, and file handling for API testing */
 export default class SimulationRunner {
   private resultsDir: string;
   private writtenFiles: Set<string>;

@@ -3,6 +3,7 @@ import { BaseClient } from '../BaseClient';
 import { RequestConfig } from '../types';
 import { ValidationError } from '../errors';
 
+/** Abstract base class for API operations with parameter validation and request handling */
 export abstract class ApiOperation<Params, Response> {
   constructor(public client: BaseClient) {}
 

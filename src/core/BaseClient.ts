@@ -11,6 +11,7 @@ import { AuthenticationManager } from './auth/AuthenticationManager';
 import { HttpClient } from './http/HttpClient';
 import { ConfigurationError } from './errors';
 
+/** Abstract base class providing common functionality for all API clients */
 export abstract class BaseClient {
   protected config: ProviderConfig;
   protected apiType: ApiType;

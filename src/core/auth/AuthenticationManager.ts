@@ -10,6 +10,7 @@ export interface AuthResponse {
   scope?: string;
 }
 
+/** Manages OAuth2 authentication and token lifecycle */
 export class AuthenticationManager {
   private bearerToken: string | null = null;
   private tokenExpiry: number | null = null;

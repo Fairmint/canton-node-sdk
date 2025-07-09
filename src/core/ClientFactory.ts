@@ -2,6 +2,7 @@ import { ApiType, ClientConfig } from './types';
 import { BaseClient } from './BaseClient';
 import { ConfigurationError } from './errors';
 
+/** Factory for creating and managing API client instances */
 export class ClientFactory {
   private static clientRegistry: Map<
     ApiType,

@@ -3,6 +3,7 @@ import { RequestConfig } from '../types';
 import { ApiError, NetworkError } from '../errors';
 import { Logger } from '../logging';
 
+/** Handles HTTP requests with authentication, logging, and error handling */
 export class HttpClient {
   private axiosInstance: AxiosInstance;
   private logger: Logger | undefined;

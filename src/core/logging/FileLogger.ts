@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { Logger, LoggerConfig } from './Logger';
 
+/** Logs API requests and responses to files with sensitive data redaction */
 export class FileLogger implements Logger {
   private logDir: string;
   private enableFileLogging: boolean;

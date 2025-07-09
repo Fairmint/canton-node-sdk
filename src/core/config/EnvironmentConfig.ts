@@ -23,6 +23,7 @@ if (result.error && fs.existsSync(parentEnvPath)) {
   }
 }
 
+/** Singleton class for managing environment variables and configuration */
 export class EnvironmentConfig {
   private static instance: EnvironmentConfig;
   private env: Record<string, string | undefined>;

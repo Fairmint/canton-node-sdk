@@ -1,6 +1,7 @@
 import { ApiType, AuthConfig, ApiConfig, ProviderConfig, NetworkType, ProviderType } from '../types';
 import { EnvironmentConfig } from './EnvironmentConfig';
 
+/** Builds provider-specific configuration from environment variables */
 export class ProviderConfigBuilder {
   private envConfig: EnvironmentConfig;
 
