@@ -1,4 +1,3 @@
-.cursorignore
 README.md
 build/src/clients/index
 build/src/clients/ledger-json-api/LedgerJsonApiClient
