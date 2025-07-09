@@ -24,9 +24,9 @@ This package is published to GitHub Packages as a private package. To use it in 
    `read:packages` scope
 2. Configure npm to use GitHub Packages for the `@fairmint` scope by adding to your `~/.npmrc`:
 
-   ```ini
-   @fairmint:registry=https://npm.pkg.github.com
-   //npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN
+   ```bash
+   echo "@fairmint:registry=https://npm.pkg.github.com" >> ~/.npmrc
+   echo "//npm.pkg.github.com/:_authToken=<YOUR_GITHUB_TOKEN>" >> ~/.npmrc
    ```
 
 3. Install the package:
