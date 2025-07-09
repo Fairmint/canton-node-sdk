@@ -1,3 +1,1 @@
-import SimulationRunner from './SimulationRunner';
-
-export { SimulationRunner };
+export * from './SimulationRunner';
