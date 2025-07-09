@@ -62,21 +62,12 @@ export default [
     files: ['scripts/**/*.ts', 'simulations/**/*.ts'],
     languageOptions: {
       globals: {
-        console: 'readonly',
-        process: 'readonly',
-        require: 'readonly',
-        module: 'readonly',
-        __dirname: 'readonly',
-        __filename: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
         setInterval: 'readonly',
         clearInterval: 'readonly',
         global: 'readonly',
       },
-    },
-    rules: {
-      'no-console': 'off', // Allow console statements in scripts and simulations
     },
   },
   {
