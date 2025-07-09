@@ -24,6 +24,10 @@ export class HttpClient {
       await this.logRequestResponse(url, { method: 'GET', headers }, response.data);
       return response.data;
     } catch (error) {
+      // Log the error response before throwing
+      if (axios.isAxiosError(error)) {
+        await this.logRequestResponse(url, { method: 'GET' }, error.response?.data || error.message);
+      }
       throw this.handleRequestError(error);
     }
   }
@@ -40,6 +44,10 @@ export class HttpClient {
       await this.logRequestResponse(url, { method: 'POST', headers, data }, response.data);
       return response.data;
     } catch (error) {
+      // Log the error response before throwing
+      if (axios.isAxiosError(error)) {
+        await this.logRequestResponse(url, { method: 'POST', data }, error.response?.data || error.message);
+      }
       throw this.handleRequestError(error);
     }
   }

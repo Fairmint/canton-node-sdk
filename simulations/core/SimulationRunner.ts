@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { LedgerJsonApiClient } from '../../src/clients/ledger-json-api/LedgerJsonApiClient';
+import { FileLogger } from '../../src/core/logging';
 
 /** Manages simulation execution, result storage, and file handling for API testing */
 export default class SimulationRunner {
@@ -82,13 +83,14 @@ export default class SimulationRunner {
     return data;
   }
 
-  async runSimulation<T>(
+  async runSimulation<T, R = T>(
     simulationName: string,
     simulationFn: (client: LedgerJsonApiClient) => Promise<T>,
-    expectedSchema?: import('zod').ZodSchema<T>
+    expectedSchema: import('zod').ZodSchema<R>
   ): Promise<T | { error: string; details: unknown }> {
-    // Create client instance using the new architecture
-    const client = new LedgerJsonApiClient();
+    // Create client instance with file logger
+    const logger = new FileLogger();
+    const client = new LedgerJsonApiClient({ logger });
 
     try {
       // Run simulation
@@ -131,6 +133,20 @@ export default class SimulationRunner {
               }
             : error,
       };
+
+      // Validate error against expected schema if provided
+      if (expectedSchema) {
+        try {
+          expectedSchema.parse(errorDetails);
+          console.log(`✅ Error response validated against schema.`);
+        } catch (schemaError) {
+          console.log(`❌ Error response failed schema validation`);
+          console.error(schemaError);
+          throw new Error(
+            `Error response validation failed: ${schemaError instanceof Error ? schemaError.message : String(schemaError)}`
+          );
+        }
+      }
 
       // Save error to file
       const filename = this.generateFilename(simulationName);

@@ -8,14 +8,20 @@ export const CreatedTreeEventSchema = z
       .object({
         value: z
           .object({
+            offset: z.number(),
+            nodeId: z.number(),
             contractId: z.string(),
             templateId: z.string(),
+            contractKey: z.string().nullable(),
             createArgument: RecordSchema,
+            createdEventBlob: z.string(),
+            interfaceViews: z.array(z.string()),
             witnessParties: z.array(z.string()),
             signatories: z.array(z.string()),
             observers: z.array(z.string()),
             createdAt: z.string(),
             packageName: z.string(),
+            implementedInterfaces: z.array(z.string()).optional(),
           })
           .strict(),
       })
@@ -29,8 +35,11 @@ export const ExercisedTreeEventSchema = z
       .object({
         value: z
           .object({
+            offset: z.number(),
+            nodeId: z.number(),
             contractId: z.string(),
             templateId: z.string(),
+            interfaceId: z.string().nullable(),
             choice: z.string(),
             choiceArgument: RecordSchema,
             actingParties: z.array(z.string()),
@@ -38,6 +47,8 @@ export const ExercisedTreeEventSchema = z
             exerciseResult: RecordSchema,
             packageName: z.string(),
             consuming: z.boolean(),
+            lastDescendantNodeId: z.number().optional(),
+            implementedInterfaces: z.array(z.string()).optional(),
           })
           .strict(),
       })
@@ -51,10 +62,13 @@ export const ArchivedTreeEventSchema = z
       .object({
         value: z
           .object({
+            offset: z.number(),
+            nodeId: z.number(),
             contractId: z.string(),
             templateId: z.string(),
             witnessParties: z.array(z.string()),
             packageName: z.string(),
+            implementedInterfaces: z.array(z.string()).optional(),
           })
           .strict(),
       })

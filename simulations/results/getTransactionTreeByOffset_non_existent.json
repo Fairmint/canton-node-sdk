@@ -1,15 +1,15 @@
 {
-  "error": "HTTP 404: CONTRACT_EVENTS_NOT_FOUND",
+  "error": "HTTP 404: TRANSACTION_NOT_FOUND",
   "details": {
     "name": "ApiError",
-    "message": "HTTP 404: CONTRACT_EVENTS_NOT_FOUND",
+    "message": "HTTP 404: TRANSACTION_NOT_FOUND",
     "stack": "PLACEHOLDER_STACK_TRACE",
     "code": "API_ERROR",
     "status": 404,
     "statusText": "Not Found",
     "response": {
-      "code": "CONTRACT_EVENTS_NOT_FOUND",
-      "cause": "Contract events not found, or not visible.",
+      "code": "TRANSACTION_NOT_FOUND",
+      "cause": "Transaction not found, or not visible.",
       "correlationId": null,
       "traceId": "PLACEHOLDER_TRACE_ID",
       "context": {
@@ -20,8 +20,8 @@
       },
       "resources": [
         [
-          "ErrorResource(CONTRACT_ID)",
-          "00528fab06fe8694392494a01925bae6cdb94c35c14a8bbffcebca23278521b2e4ca1112200794083bad5ae157d245234eaa24b5dff2a88b1d62caa8c70701fab4ba4f9baa"
+          "ErrorResource(OFFSET)",
+          "9999999"
         ]
       ],
       "errorCategory": 11,

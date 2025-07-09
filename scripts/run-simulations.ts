@@ -24,12 +24,22 @@ async function runSimulations(): Promise<void> {
   // Track failures
   let hasFailures = false;
 
-  // Run each simulation file
+  // Run each simulation file sequentially
   for (const file of simulationFiles) {
     console.log(`\n🚀 Running simulation: ${path.basename(file)}`);
     try {
-      // Import and execute the simulation file
-      await import(file);
+      // Import the simulation module
+      const simulationModule = await import(file);
+
+      // If the module exports a runAllTests function, call it and wait for completion
+      if (typeof simulationModule.runAllTests === 'function') {
+        await simulationModule.runAllTests();
+      } else {
+        // Fallback: if no runAllTests export, the module should have executed on import
+        // Wait a bit to ensure any async operations complete
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
       console.log(`✅ Completed: ${path.basename(file)}`);
     } catch (error) {
       console.error(`❌ Failed: ${path.basename(file)}`);

@@ -11,4 +11,7 @@ export * from './events';
 export * from './transactions';
 
 // Parameter schemas
-export * from './params'; 
+export * from './params';
+
+// Error schemas
+export * from './errors'; 

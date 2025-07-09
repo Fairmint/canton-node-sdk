@@ -41,10 +41,4 @@ export const GetEventsByContractId = createApiOperation<
 
     return request;
   },
-  transformResponse: (response) => {
-    if (!response) {
-      throw new Error('No response received');
-    }
-    return response;
-  },
 }); 

@@ -4,18 +4,18 @@ import { TreeEventSchema } from './events';
 // Transaction tree schema
 export const TransactionTreeSchema = z
   .object({
-    transaction: z
-      .object({
-        updateId: z.string(),
-      })
-      .strict()
-      .optional(),
     updateId: z.string(),
+    commandId: z.string().optional(),
+    workflowId: z.string().optional(),
     effectiveAt: z.string(),
-    offset: z.string(),
+    offset: z.number(),
     eventsById: z.record(TreeEventSchema),
     recordTime: z.string(),
     synchronizerId: z.string(),
+    traceContext: z.object({
+      traceparent: z.string(),
+      tracestate: z.string().nullable(),
+    }).optional(),
   })
   .strict();
 
@@ -53,7 +53,7 @@ export const UpdateByIdResponseSchema = z
 // Transaction tree by offset response schema
 export const TransactionTreeByOffsetResponseSchema = z
   .object({
-    transactionTree: TransactionTreeSchema,
+    transaction: TransactionTreeSchema,
   })
   .strict();
 

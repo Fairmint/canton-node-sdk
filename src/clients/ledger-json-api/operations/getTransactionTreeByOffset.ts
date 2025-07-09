@@ -1,6 +1,7 @@
 import { createApiOperation } from '../../../core/operations/ApiOperationFactory';
 import { GetTransactionTreeByOffsetParamsSchema, GetTransactionTreeByOffsetParams } from '../schemas';
 import { TransactionTreeByOffsetResponse } from '../schemas/transactions';
+import { EnvironmentConfig } from '../../../core/config/EnvironmentConfig';
 
 export const GetTransactionTreeByOffset = createApiOperation<
   GetTransactionTreeByOffsetParams,
@@ -8,16 +9,28 @@ export const GetTransactionTreeByOffset = createApiOperation<
 >({
   paramsSchema: GetTransactionTreeByOffsetParamsSchema,
   operation: 'get transaction tree by offset',
-  method: 'POST',
-  buildUrl: (_params, apiUrl) => `${apiUrl}/transactions/transaction-trees-by-offset`,
-  buildRequestData: (params) => ({
-    offset: params.offset,
-    parties: params.parties,
-  }),
-  transformResponse: (response) => {
-    if (!response) {
-      throw new Error('No response received');
+  method: 'GET',
+  buildUrl: (params, apiUrl) => {
+    const config = EnvironmentConfig.getInstance();
+    const currentPartyId = config.getPartyId();
+    
+    const readParties = Array.from(
+      new Set([
+        currentPartyId,
+        ...(params.parties || []),
+      ])
+    );
+
+    const baseUrl = `${apiUrl}/updates/transaction-tree-by-offset/${params.offset}`;
+    
+    if (readParties.length > 0) {
+      const queryParams = new URLSearchParams();
+      readParties.forEach(party => {
+        queryParams.append('parties', party);
+      });
+      return `${baseUrl}?${queryParams.toString()}`;
     }
-    return response;
+    
+    return baseUrl;
   },
 }); 
