@@ -21,7 +21,6 @@ export class FileLogger implements Logger {
     }
 
     if (!this.displayedLogMessage) {
-      console.log(`🔍 Logging enabled: ${this.enableFileLogging} to ${this.logDir}`);
       this.displayedLogMessage = true;
     }
 

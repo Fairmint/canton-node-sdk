@@ -54,10 +54,6 @@ export abstract class BaseClient {
 
     // Initialize HTTP client with logger
     this.httpClient = new HttpClient(this.clientConfig.logger);
-
-    console.log(
-      `🔍 Connected to ${this.config.providerName} (${this.apiType})`
-    );
   }
 
   public async authenticate(): Promise<string> {
