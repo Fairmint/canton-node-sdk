@@ -5,7 +5,7 @@ import {
   NetworkType,
   ProviderType,
 } from './types';
-import { EnvLoader } from './config/EnvLoader';
+import { EnvLoader, EnvLoaderOptions } from './config/EnvLoader';
 import { ProviderConfigBuilder } from './config/ProviderConfigBuilder';
 import { AuthenticationManager } from './auth/AuthenticationManager';
 import { HttpClient } from './http/HttpClient';
@@ -22,12 +22,21 @@ export abstract class BaseClient {
 
   constructor(apiType: ApiType, config?: Partial<ClientConfig>) {
     this.apiType = apiType;
-    this.envLoader = EnvLoader.getInstance();
+
+    // Get network and provider from config or environment
+    const network = config?.network;
+    const provider = config?.provider;
+
+    // Initialize EnvLoader with options if network/provider are provided
+    const envLoaderOptions: EnvLoaderOptions = {};
+    if (network) envLoaderOptions.currentNetwork = network;
+    if (provider) envLoaderOptions.currentProvider = provider;
+    this.envLoader = EnvLoader.getInstance(envLoaderOptions);
 
     // Build client configuration
     this.clientConfig = {
-      network: config?.network || this.envLoader.getCurrentNetwork(),
-      provider: config?.provider || this.envLoader.getCurrentProvider(),
+      network: network || this.envLoader.getCurrentNetwork(),
+      provider: provider || this.envLoader.getCurrentProvider(),
       ...(config?.logger && { logger: config.logger }),
     };
 
