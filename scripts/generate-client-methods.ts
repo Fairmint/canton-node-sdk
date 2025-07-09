@@ -3,15 +3,21 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const CLIENT_FILE = path.join(__dirname, '../src/clients/ledger-json-api/LedgerJsonApiClient.ts');
-const OPERATIONS_DIR = path.join(__dirname, '../src/clients/ledger-json-api/operations/v2');
+const CLIENT_FILE = path.join(
+  __dirname,
+  '../src/clients/ledger-json-api/LedgerJsonApiClient.ts'
+);
+const OPERATIONS_DIR = path.join(
+  __dirname,
+  '../src/clients/ledger-json-api/operations/v2'
+);
 const SCHEMAS_IMPORT_PATH = '../schemas';
 
 // Recursively get all .ts files in a directory
 function getAllTsFiles(dir: string): string[] {
   let results: string[] = [];
   const list = fs.readdirSync(dir);
-  list.forEach((file) => {
+  list.forEach(file => {
     const filePath = path.join(dir, file);
     const stat = fs.statSync(filePath);
     if (stat && stat.isDirectory()) {
@@ -24,13 +30,16 @@ function getAllTsFiles(dir: string): string[] {
 }
 
 // Extract operation info from a file
-function extractOperationInfo(fileContent: string) {
+function extractOperationInfo(
+  fileContent: string
+): { operationName: string; paramsType: string; responseType: string } | null {
   // Matches: export const OperationName = createApiOperation<Params, Response>({...})
   // Handles multiline exports with type parameters on separate lines
-  const regex = /export const (\w+) = createApiOperation<\s*([\w]+),\s*([\w]+)\s*>/s;
+  const regex =
+    /export const (\w+) = createApiOperation<\s*([\w]+),\s*([\w]+)\s*>/s;
   const match = regex.exec(fileContent);
   if (!match) return null;
-  
+
   return {
     operationName: match[1],
     paramsType: match[2],
@@ -38,27 +47,37 @@ function extractOperationInfo(fileContent: string) {
   };
 }
 
-function relativeImportPath(from: string, to: string) {
+function relativeImportPath(from: string, to: string): string {
   let rel = path.relative(path.dirname(from), to).replace(/\\/g, '/');
   if (!rel.startsWith('.')) rel = './' + rel;
   return rel.replace(/\.ts$/, '');
 }
 
-function generateMethodDeclarations(ops: {operationName: string, paramsType: string, responseType: string}[]) {
-  return ops.map(op => {
-    const methodName = operationNameToMethodName(op.operationName);
-    return `  public ${methodName}!: (params: ${op.paramsType}) => Promise<${op.responseType}>;`;
-  }).join('\n');
+function generateMethodDeclarations(
+  ops: { operationName: string; paramsType: string; responseType: string }[]
+): string {
+  return ops
+    .map(op => {
+      const methodName = operationNameToMethodName(op.operationName);
+      return `  public ${methodName}!: (params: ${op.paramsType}) => Promise<${op.responseType}>;`;
+    })
+    .join('\n');
 }
 
-function generateMethodImplementations(ops: {operationName: string, paramsType: string, responseType: string}[]) {
-  return ops.map(op => {
-    const methodName = operationNameToMethodName(op.operationName);
-    return `    this.${methodName} = (params) => new ${op.operationName}(this).execute(params);`;
-  }).join('\n');
+function generateMethodImplementations(
+  ops: { operationName: string; paramsType: string; responseType: string }[]
+): string {
+  return ops
+    .map(op => {
+      const methodName = operationNameToMethodName(op.operationName);
+      return `    this.${methodName} = (params) => new ${op.operationName}(this).execute(params);`;
+    })
+    .join('\n');
 }
 
-function generateImports(ops: {paramsType: string, responseType: string}[]) {
+function generateImports(
+  ops: { paramsType: string; responseType: string }[]
+): string {
   // Collect all unique types
   const types = new Set<string>();
   ops.forEach(op => {
@@ -68,8 +87,12 @@ function generateImports(ops: {paramsType: string, responseType: string}[]) {
   return `import { ${Array.from(types).sort().join(', ')} } from '${SCHEMAS_IMPORT_PATH}';`;
 }
 
-function generateOperationImports(opFiles: {operationName: string, importPath: string}[]) {
-  return opFiles.map(op => `import { ${op.operationName} } from '${op.importPath}';`).join('\n');
+function generateOperationImports(
+  opFiles: { operationName: string; importPath: string }[]
+): string {
+  return opFiles
+    .map(op => `import { ${op.operationName} } from '${op.importPath}';`)
+    .join('\n');
 }
 
 // Convert operation name to method name (e.g., GetEventsByContractId -> getEventsByContractId)
@@ -77,19 +100,26 @@ function operationNameToMethodName(operationName: string): string {
   return operationName.charAt(0).toLowerCase() + operationName.slice(1);
 }
 
-function updateClientFile() {
+function updateClientFile(): void {
   // 1. Scan all operation files
   const files = getAllTsFiles(OPERATIONS_DIR);
-  
-  const allOps = files.map(file => {
-    const content = fs.readFileSync(file, 'utf8');
-    const info = extractOperationInfo(content);
-    if (!info) return null;
-    return {
-      ...info,
-      importPath: relativeImportPath(CLIENT_FILE, file),
-    };
-  }).filter(Boolean) as {operationName: string, paramsType: string, responseType: string, importPath: string}[];
+
+  const allOps = files
+    .map(file => {
+      const content = fs.readFileSync(file, 'utf8');
+      const info = extractOperationInfo(content);
+      if (!info) return null;
+      return {
+        ...info,
+        importPath: relativeImportPath(CLIENT_FILE, file),
+      };
+    })
+    .filter(Boolean) as {
+    operationName: string;
+    paramsType: string;
+    responseType: string;
+    importPath: string;
+  }[];
 
   // 2. Generate method declarations, implementations, and imports
   const methodDecls = generateMethodDeclarations(allOps);
@@ -101,7 +131,10 @@ function updateClientFile() {
   let content = fs.readFileSync(CLIENT_FILE, 'utf8');
 
   // 4. Replace the import line for schemas
-  content = content.replace(/import \{[^}]+\} from '\.\.\/schemas';/, importDecl);
+  content = content.replace(
+    /import \{[^}]+\} from '\.\.\/schemas';/,
+    importDecl
+  );
 
   // 5. Replace the codegen marker sections
   content = content.replace(
@@ -118,9 +151,11 @@ function updateClientFile() {
   );
 
   fs.writeFileSync(CLIENT_FILE, content);
-  console.log('✅ Updated client imports, method declarations, and implementations');
+  console.log(
+    '✅ Updated client imports, method declarations, and implementations'
+  );
 }
 
 if (require.main === module) {
   updateClientFile();
-} 
+}
