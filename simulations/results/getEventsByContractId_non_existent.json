@@ -3,7 +3,7 @@
   "details": {
     "name": "ApiError",
     "message": "HTTP 400: INVALID_FIELD",
-    "stack": "ApiError: HTTP 400: INVALID_FIELD\n    at HttpClient.handleRequestError (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/src/core/http/HttpClient.ts:88:19)\n    at HttpClient.makePostRequest (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/src/core/http/HttpClient.ts:43:18)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async ApiOperation.execute (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/src/core/operations/ApiOperationFactory.ts:36:22)\n    at async SimulationRunner.runSimulation (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/simulations/core/SimulationRunner.ts:72:20)\n    at async runAllTests (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/simulations/getEventsByContractId.ts:28:3)",
+    "stack": "ApiError: HTTP 400: INVALID_FIELD\n    at HttpClient.handleRequestError (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/src/core/http/HttpClient.ts:88:19)\n    at HttpClient.makePostRequest (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/src/core/http/HttpClient.ts:43:18)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async ApiOperation.execute (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/src/core/operations/ApiOperationFactory.ts:36:22)\n    at async SimulationRunner.runSimulation (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/simulations/core/SimulationRunner.ts:91:20)\n    at async runAllTests (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/simulations/getEventsByContractId.ts:28:3)",
     "code": "API_ERROR",
     "status": 400,
     "statusText": "Bad Request",
@@ -11,11 +11,11 @@
       "code": "INVALID_FIELD",
       "cause": "The submitted command has a field with invalid value: Invalid field contract_id: cannot parse ContractId \"a0528fab06fe8694392494a01925bae6cdb94c35c14a8bbffcebca23278521b2e4ca1112200794083bad5ae157d245234eaa24b5dff2a88b1d62caa8c70701fab4ba4f9ba0\"",
       "correlationId": null,
-      "traceId": "b1248897efb10b3af88d1967e7403ecf",
+      "traceId": "PLACEHOLDER_TRACE_ID",
       "context": {
         "participant": "participant",
         "definite_answer": "false",
-        "tid": "b1248897efb10b3af88d1967e7403ecf",
+        "tid": "48405b2319fad9ed028080fb42e696b9",
         "category": "8"
       },
       "resources": [],

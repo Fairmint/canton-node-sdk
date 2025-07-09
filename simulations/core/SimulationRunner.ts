@@ -59,6 +59,25 @@ export default class SimulationRunner {
     }
   }
 
+  private replaceTraceId(data: unknown): unknown {
+    if (typeof data === 'object' && data !== null) {
+      if (Array.isArray(data)) {
+        return data.map(item => this.replaceTraceId(item));
+      } else {
+        const result: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(data)) {
+          if (key === 'traceId' && typeof value === 'string') {
+            result[key] = 'PLACEHOLDER_TRACE_ID';
+          } else {
+            result[key] = this.replaceTraceId(value);
+          }
+        }
+        return result;
+      }
+    }
+    return data;
+  }
+
   async runSimulation<T>(
     simulationName: string,
     simulationFn: (client: LedgerJsonApiClient) => Promise<T>,
@@ -85,7 +104,9 @@ export default class SimulationRunner {
 
       const filepath = path.join(this.resultsDir, filename);
 
-      fs.writeFileSync(filepath, JSON.stringify(data, null, 2));
+      // Replace traceId with placeholder before writing
+      const sanitizedData = this.replaceTraceId(data);
+      fs.writeFileSync(filepath, JSON.stringify(sanitizedData, null, 2));
       this.writtenFiles.add(filename);
 
       console.log(`✅ Simulation "${simulationName}" completed`);
@@ -115,7 +136,12 @@ export default class SimulationRunner {
 
       const filepath = path.join(this.resultsDir, filename);
 
-      fs.writeFileSync(filepath, JSON.stringify(errorDetails, null, 2));
+      // Replace traceId with placeholder before writing
+      const sanitizedErrorDetails = this.replaceTraceId(errorDetails);
+      fs.writeFileSync(
+        filepath,
+        JSON.stringify(sanitizedErrorDetails, null, 2)
+      );
       this.writtenFiles.add(filename);
 
       console.log(`⚠️  Simulation "${simulationName}" failed (expected)`);
