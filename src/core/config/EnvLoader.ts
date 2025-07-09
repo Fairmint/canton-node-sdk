@@ -155,7 +155,12 @@ export class EnvLoader {
     return authUrl;
   }
 
-  public getPartyId(network?: NetworkType, provider?: ProviderType): string {
+  public getPartyId(network?: NetworkType, provider?: ProviderType, overridePartyId?: string): string {
+    // If a party ID override is provided, use it instead of environment variables
+    if (overridePartyId) {
+      return overridePartyId;
+    }
+
     const targetNetwork = network || this.getCurrentNetwork();
     const targetProvider = provider || this.getCurrentProvider();
 

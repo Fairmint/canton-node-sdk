@@ -112,7 +112,8 @@ export abstract class BaseClient {
     }
     return this.envLoader.getPartyId(
       this.clientConfig.network,
-      this.clientConfig.provider
+      this.clientConfig.provider,
+      apiConfig?.partyId
     );
   }
 

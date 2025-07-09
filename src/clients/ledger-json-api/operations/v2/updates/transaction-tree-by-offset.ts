@@ -1,7 +1,5 @@
-import { createApiOperation, EnvLoader } from '../../../../../core';
+import { createApiOperation, ApiOperation } from '../../../../../core';
 import { GetTransactionTreeByOffsetParamsSchema, GetTransactionTreeByOffsetParams, TransactionTreeByOffsetResponse } from '../../../schemas';
-
-const config = EnvLoader.getInstance();
 
 export const GetTransactionTreeByOffset = createApiOperation<
   GetTransactionTreeByOffsetParams,
@@ -10,15 +8,19 @@ export const GetTransactionTreeByOffset = createApiOperation<
   paramsSchema: GetTransactionTreeByOffsetParamsSchema,
   operation: 'get transaction tree by offset',
   method: 'GET',
-  buildUrl: (params, apiUrl) => {
-    const currentPartyId = config.getPartyId();
+  buildUrl: function(
+    this: ApiOperation<GetTransactionTreeByOffsetParams, TransactionTreeByOffsetResponse>,
+    params: GetTransactionTreeByOffsetParams,
+    apiUrl: string
+  ) {
+    const currentPartyId = this.getPartyId();
     
     const readParties = Array.from(
       new Set([
-        currentPartyId,
+        ...(currentPartyId ? [currentPartyId] : []),
         ...(params.parties || []),
       ])
-    );
+    ).filter((party): party is string => party !== undefined);
 
     const baseUrl = `${apiUrl}/v2/updates/transaction-tree-by-offset/${params.offset}`;
     
