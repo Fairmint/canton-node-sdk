@@ -7,6 +7,9 @@ import markdown from 'eslint-plugin-markdown';
 
 /** @type {import('eslint').Linter.FlatConfig[]} */
 export default [
+  {
+    ignores: ['build/**', 'dist/**', 'node_modules/**'],
+  },
   js.configs.recommended,
   {
     files: ['**/*.ts'],

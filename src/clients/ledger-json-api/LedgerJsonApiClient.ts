@@ -1,24 +1,16 @@
-import {
-  AbstractClient,
-  ProviderConfig,
-  NetworkType,
-  ProviderType,
-} from '../base';
-import { GetEventsByContractId } from './getEventsByContractId';
-import { GetTransactionTreeByOffset } from './getTransactionTreeByOffset';
+import { BaseClient } from '../../core/BaseClient';
+import { ClientConfig } from '../../core/types';
+import { GetEventsByContractId } from './operations/getEventsByContractId';
+import { GetTransactionTreeByOffset } from './operations/getTransactionTreeByOffset';
 
-export class LedgerJsonApiClient extends AbstractClient {
-  public readonly getEventsByContractId: GetEventsByContractId;
-  public readonly getTransactionTreeByOffset: GetTransactionTreeByOffset;
+export class LedgerJsonApiClient extends BaseClient {
+  public readonly getEventsByContractId: InstanceType<typeof GetEventsByContractId>;
+  public readonly getTransactionTreeByOffset: InstanceType<typeof GetTransactionTreeByOffset>;
 
-  constructor(
-    config: ProviderConfig,
-    network?: NetworkType,
-    providerType?: ProviderType
-  ) {
-    super(config, 'JSON_API', network, providerType);
+  constructor(clientConfig?: Partial<ClientConfig>) {
+    super('LEDGER_JSON_API', clientConfig);
 
     this.getEventsByContractId = new GetEventsByContractId(this);
     this.getTransactionTreeByOffset = new GetTransactionTreeByOffset(this);
   }
-}
+} 

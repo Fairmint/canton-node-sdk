@@ -1,17 +1,5 @@
 {
-  "code": "INVALID_FIELD",
-  "cause": "The submitted command has a field with invalid value: Invalid field contract_id: cannot parse ContractId \"a0528fab06fe8694392494a01925bae6cdb94c35c14a8bbffcebca23278521b2e4ca1112200794083bad5ae157d245234eaa24b5dff2a88b1d62caa8c70701fab4ba4f9ba0\"",
-  "correlationId": null,
-  "traceId": "ee9a8a75ddcbf920e4acb287f8cb749f",
-  "context": {
-    "participant": "participant",
-    "definite_answer": "false",
-    "tid": "ee9a8a75ddcbf920e4acb287f8cb749f",
-    "category": "8"
-  },
-  "resources": [],
-  "errorCategory": 8,
-  "grpcCodeValue": 3,
-  "retryInfo": null,
-  "definiteAnswer": null
+  "name": "Error",
+  "message": "Failed to get events by contract ID: Invalid URL",
+  "stack": "Error: Failed to get events by contract ID: Invalid URL\n    at ApiOperation.handleError (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/src/clients/base/ApiOperation.ts:57:14)\n    at ApiOperation.execute (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/src/clients/base/ApiOperationFactory.ts:45:20)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async simulationRunner.runSimulation (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/simulations/core/simulationRunner.ts:61:20)"
 }

@@ -8,4 +8,7 @@ export * from './commands';
 export * from './events';
 
 // Transaction schemas
-export * from './transactions'; 
+export * from './transactions';
+
+// Parameter schemas
+export * from './params'; 

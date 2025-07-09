@@ -1,15 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { LedgerJsonApiClient } from '../../src/clients/ledger-json-api/LedgerJsonApiClient';
-import { ProviderConfig } from '../../src/clients/base';
 import { validateResponse } from '../../src/utils/validators';
 
-// Get __dirname equivalent for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-export class simulationRunner {
+export default class SimulationRunner {
   private resultsDir: string;
   private writtenFiles: Set<string>;
 
@@ -52,9 +46,8 @@ export class simulationRunner {
     simulationFn: (client: LedgerJsonApiClient) => Promise<T>,
     expectedType?: keyof typeof import('../../src/utils/validators').validators
   ): Promise<T | { error: string; details: unknown }> {
-    // Create client instance
-    const config = new ProviderConfig();
-    const client = new LedgerJsonApiClient(config);
+    // Create client instance using the new architecture
+    const client = new LedgerJsonApiClient();
 
     try {
       // Run simulation
@@ -90,15 +83,18 @@ export class simulationRunner {
       return data;
     } catch (error) {
       // Handle expected errors
-      const errorDetails =
-        error instanceof Error
-          ? {
-              name: error.name,
-              message: error.message,
-              stack: error.stack,
-              ...(error as unknown as Record<string, unknown>),
-            }
-          : error;
+      const errorDetails: { error: string; details: unknown } = {
+        error: error instanceof Error ? error.message : String(error),
+        details:
+          error instanceof Error
+            ? {
+                name: error.name,
+                message: error.message,
+                stack: error.stack,
+                ...(error as unknown as Record<string, unknown>),
+              }
+            : error,
+      };
 
       // Save error to file
       const filename = this.generateFilename(simulationName);

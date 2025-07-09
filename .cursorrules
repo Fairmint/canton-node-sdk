@@ -7,3 +7,5 @@ After suggesting code changes, run:
 If there are any errors or warnings, fix them and repeat until clean.
 
 When writing comments and README files, use concise language and leave out unimportant details.
+
+Prefer comments in files over README docs unless discussing concepts that span multiple files.

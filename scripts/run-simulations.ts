@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { simulationRunner } from '../simulations/core/simulationRunner';
+import SimulationRunner from '../simulations/core/SimulationRunner';
 
 async function runSimulations(): Promise<void> {
   const simulationsDir = path.join(process.cwd(), 'simulations');
@@ -18,7 +18,7 @@ async function runSimulations(): Promise<void> {
   simulationFiles.forEach(file => console.log(`  - ${path.basename(file)}`));
 
   // Initialize simulation runner and clear results directory
-  const runner = new simulationRunner();
+  const runner = new SimulationRunner();
   runner.clearResultsDir();
 
   // Track failures
