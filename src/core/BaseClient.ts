@@ -20,15 +20,15 @@ export abstract class BaseClient {
   protected httpClient: HttpClient;
   protected envConfig: EnvironmentConfig;
 
-  constructor(apiType: ApiType, clientConfig?: Partial<ClientConfig>) {
+  constructor(apiType: ApiType, config?: Partial<ClientConfig>) {
     this.apiType = apiType;
     this.envConfig = EnvironmentConfig.getInstance();
 
     // Build client configuration
     this.clientConfig = {
-      network: clientConfig?.network || this.envConfig.getCurrentNetwork(),
-      provider: clientConfig?.provider || this.envConfig.getCurrentProvider(),
-      ...(clientConfig?.logger && { logger: clientConfig.logger }),
+      network: config?.network || this.envConfig.getCurrentNetwork(),
+      provider: config?.provider || this.envConfig.getCurrentProvider(),
+      ...(config?.logger && { logger: config.logger }),
     };
 
     // Build provider configuration
@@ -36,7 +36,8 @@ export abstract class BaseClient {
     this.config = configBuilder.buildApiSpecificConfig(
       this.apiType,
       this.clientConfig.network,
-      this.clientConfig.provider
+      this.clientConfig.provider,
+      config
     );
 
     // Initialize authentication manager

@@ -1,4 +1,4 @@
-import { ApiType, AuthConfig, ApiConfig, ProviderConfig, NetworkType, ProviderType, PartialProviderConfig } from '../types';
+import { ApiType, AuthConfig, ApiConfig, ProviderConfig, NetworkType, ProviderType, PartialProviderConfig, ClientConfig } from '../types';
 import { EnvironmentConfig } from './EnvironmentConfig';
 
 /** Builds provider-specific configuration from environment variables */
@@ -30,18 +30,25 @@ export class ProviderConfigBuilder {
   public buildApiSpecificConfig(
     apiType: ApiType,
     network?: NetworkType,
-    provider?: ProviderType
+    provider?: ProviderType,
+    config?: Partial<ClientConfig>
   ): PartialProviderConfig {
     const targetNetwork = network || this.envConfig.getCurrentNetwork();
     const targetProvider = provider || this.envConfig.getCurrentProvider();
 
     const apis: Partial<Record<ApiType, ApiConfig>> = {};
 
-    apis[apiType] = this.buildApiConfig(apiType, targetNetwork, targetProvider);
+    if (config && config.apis && config.apis[apiType]) {
+      apis[apiType] = config.apis[apiType]!;
+    } else {
+      apis[apiType] = this.buildApiConfig(apiType, targetNetwork, targetProvider);
+    }
+
+    const authUrl = (config && config.authUrl) || this.envConfig.getAuthUrl(targetNetwork, targetProvider);
 
     return {
       providerName: `${targetProvider}_${targetNetwork}`,
-      authUrl: this.envConfig.getAuthUrl(targetNetwork, targetProvider),
+      authUrl,
       apis,
     };
   }

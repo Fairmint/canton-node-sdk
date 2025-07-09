@@ -58,7 +58,7 @@ export class AuthenticationManager {
 
     try {
       const response = await axios.post<AuthResponse>(
-        this.authUrl,
+        this.authUrl + '/',
         formData.toString(),
         {
           headers: {

@@ -41,4 +41,12 @@ export interface ClientConfig {
   network: NetworkType;
   provider: ProviderType;
   logger?: import('./logging').Logger;
+
+  // Direct configuration options
+  authUrl?: string;
+  apis?: {
+    LEDGER_JSON_API?: ApiConfig;
+    VALIDATOR_API?: ApiConfig;
+    SCAN_API?: ApiConfig;
+  };
 }

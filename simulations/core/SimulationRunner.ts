@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { LedgerJsonApiClient } from '../../src/clients/ledger-json-api/LedgerJsonApiClient';
 import { FileLogger } from '../../src/core/logging';
+import { EnvLoader } from '../../src/core';
 
 /** Manages simulation execution, result storage, and file handling for API testing */
 export default class SimulationRunner {
@@ -15,8 +16,10 @@ export default class SimulationRunner {
     this.ensureResultsDir();
 
     // Create client instance with file logger
-    const logger = new FileLogger();
-    this.client = new LedgerJsonApiClient({ logger });
+    this.client = new LedgerJsonApiClient({
+      ...new EnvLoader().loadConfig(),
+      logger: new FileLogger(),
+    });
   }
 
   private ensureResultsDir(): void {

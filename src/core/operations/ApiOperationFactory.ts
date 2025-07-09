@@ -20,7 +20,6 @@ export function createApiOperation<Params, Response>(
       // Validate parameters
       const validatedParams = this.validateParams(params, config.paramsSchema);
 
-      try {
         const url = config.buildUrl(validatedParams, this.getApiUrl());
         const requestConfig = config.requestConfig || { 
           contentType: 'application/json', 
@@ -42,10 +41,6 @@ export function createApiOperation<Params, Response>(
         }
 
         return response;
-      } catch (error) {
-        // Re-throw the error as it's already properly typed from the base classes
-        throw error;
-      }
     }
   };
 } 
