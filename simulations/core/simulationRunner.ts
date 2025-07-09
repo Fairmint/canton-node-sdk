@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import { LedgerJsonApiClient } from '../../src/clients/ledger-json-api/LedgerJsonApiClient';
-import { validateResponse } from '../../src/utils/validators';
 
 export default class SimulationRunner {
   private resultsDir: string;
@@ -62,7 +61,7 @@ export default class SimulationRunner {
   async runSimulation<T>(
     simulationName: string,
     simulationFn: (client: LedgerJsonApiClient) => Promise<T>,
-    expectedType?: keyof typeof import('../../src/utils/validators').validators
+    expectedSchema?: import('zod').ZodSchema<T>
   ): Promise<T | { error: string; details: unknown }> {
     // Create client instance using the new architecture
     const client = new LedgerJsonApiClient();
@@ -72,13 +71,9 @@ export default class SimulationRunner {
       const data = await simulationFn(client);
 
       // Validate response type if specified
-      if (expectedType) {
-        if (!validateResponse(data, expectedType)) {
-          throw new Error(
-            `Response validation failed for type: ${expectedType}`
-          );
-        }
-        console.log(`✅ Response validated against type: ${expectedType}`);
+      if (expectedSchema) {
+        expectedSchema.parse(data);
+        console.log(`✅ Response validated against schema.`);
       }
 
       // Save result to file

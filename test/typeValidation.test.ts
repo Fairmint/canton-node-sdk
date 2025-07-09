@@ -1,5 +1,7 @@
-import { validateEventsByContractIdResponse } from '../src/utils/validators/eventsByContractIdValidator';
-import { EventsByContractIdResponse } from '../src/clients/ledger-json-api/schemas';
+import {
+  EventsByContractIdResponse,
+  EventsByContractIdResponseSchema,
+} from '../src/clients/ledger-json-api/schemas';
 
 describe('EventsByContractIdResponse validation', () => {
   it('should validate a correct response', (): void => {
@@ -24,7 +26,9 @@ describe('EventsByContractIdResponse validation', () => {
       },
     };
 
-    expect(validateEventsByContractIdResponse(validResponse)).toBe(true);
+    expect(() =>
+      EventsByContractIdResponseSchema.parse(validResponse)
+    ).not.toThrow();
   });
 
   it('should validate a response with archived event', (): void => {
@@ -43,15 +47,17 @@ describe('EventsByContractIdResponse validation', () => {
       },
     };
 
-    expect(validateEventsByContractIdResponse(validResponse)).toBe(true);
+    expect(() =>
+      EventsByContractIdResponseSchema.parse(validResponse)
+    ).not.toThrow();
   });
 
   it('should fail validation when neither created nor archived is present', (): void => {
     const invalidResponse = {};
 
-    expect(() => validateEventsByContractIdResponse(invalidResponse)).toThrow(
-      'EventsByContractIdResponse must have at least one of: created, archived'
-    );
+    expect(() =>
+      EventsByContractIdResponseSchema.parse(invalidResponse)
+    ).toThrow();
   });
 
   it('should fail validation when response has extra fields', (): void => {
@@ -77,16 +83,16 @@ describe('EventsByContractIdResponse validation', () => {
       extraField: 'should not be here',
     };
 
-    expect(() => validateEventsByContractIdResponse(invalidResponse)).toThrow(
-      'EventsByContractIdResponse has unexpected properties: extraField'
-    );
+    expect(() =>
+      EventsByContractIdResponseSchema.parse(invalidResponse)
+    ).toThrow();
   });
 
   it('should fail validation when response is not an object', (): void => {
     const invalidResponse = 'not an object';
 
-    expect(() => validateEventsByContractIdResponse(invalidResponse)).toThrow(
-      'EventsByContractIdResponse must be an object, got string'
-    );
+    expect(() =>
+      EventsByContractIdResponseSchema.parse(invalidResponse)
+    ).toThrow();
   });
 });

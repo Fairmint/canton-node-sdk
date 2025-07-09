@@ -28,6 +28,10 @@ jobs:
           command: |
             npm run lint
       - run:
+          name: Run Simulate
+          command: |
+            npm run simulate
+      - run:
           name: Check for changes and commit
           command: |
             # Configure git user for commits
