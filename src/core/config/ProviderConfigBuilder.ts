@@ -5,8 +5,8 @@ import { EnvLoader } from './EnvLoader';
 export class ProviderConfigBuilder {
   private envLoader: EnvLoader;
 
-  constructor() {
-    this.envLoader = EnvLoader.getInstance();
+  constructor(envLoader?: EnvLoader) {
+    this.envLoader = envLoader || EnvLoader.getInstance();
   }
 
   public buildProviderConfig(
