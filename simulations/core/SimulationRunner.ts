@@ -70,6 +70,8 @@ export default class SimulationRunner {
             result[key] = 'PLACEHOLDER_TRACE_ID';
           } else if (key === 'stack' && typeof value === 'string') {
             result[key] = 'PLACEHOLDER_STACK_TRACE';
+          } else if (key === 'tid' && typeof value === 'string') {
+            result[key] = 'PLACEHOLDER_TID';
           } else {
             result[key] = this.sanitizeData(value);
           }
