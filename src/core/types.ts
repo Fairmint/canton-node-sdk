@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 export type NetworkType = 'devnet' | 'testnet' | 'mainnet';
 export type ProviderType = 'intellect' | '5n';
 
@@ -33,19 +31,8 @@ export interface RequestConfig {
   includeBearerToken?: boolean;
 }
 
-export interface ApiOperationConfig<Params, Response> {
-  paramsSchema: z.ZodSchema<Params>;
-  operation: string;
-  method: 'GET' | 'POST';
-  buildUrl: (params: Params, apiUrl: string) => string;
-  buildRequestData?: (params: Params) => unknown;
-  requestConfig?: RequestConfig;
-  transformResponse?: (response: unknown) => Response;
-}
-
 export interface ClientConfig {
   network: NetworkType;
   provider: ProviderType;
-  enableLogging?: boolean;
-  logDir?: string;
+  logger?: import('./logging').Logger;
 }

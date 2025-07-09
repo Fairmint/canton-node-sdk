@@ -27,8 +27,7 @@ export abstract class BaseClient {
     this.clientConfig = {
       network: clientConfig?.network || this.envConfig.getCurrentNetwork(),
       provider: clientConfig?.provider || this.envConfig.getCurrentProvider(),
-      enableLogging: clientConfig?.enableLogging ?? true,
-      ...(clientConfig?.logDir && { logDir: clientConfig.logDir }),
+      ...(clientConfig?.logger && { logger: clientConfig.logger }),
     };
 
     // Build provider configuration
@@ -52,11 +51,8 @@ export abstract class BaseClient {
       apiConfig.auth
     );
 
-    // Initialize HTTP client
-    this.httpClient = new HttpClient(
-      this.clientConfig.enableLogging,
-      this.clientConfig.logDir
-    );
+    // Initialize HTTP client with logger
+    this.httpClient = new HttpClient(this.clientConfig.logger);
 
     console.log(
       `🔍 Connected to ${this.config.providerName} (${this.apiType})`
