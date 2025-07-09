@@ -7,6 +7,7 @@ build/src/clients/ledger-json-api/operations/getTransactionTreeByOffset
 build/src/clients/ledger-json-api/operations/index
 build/src/clients/ledger-json-api/schemas/base
 build/src/clients/ledger-json-api/schemas/commands
+build/src/clients/ledger-json-api/schemas/errors
 build/src/clients/ledger-json-api/schemas/events
 build/src/clients/ledger-json-api/schemas/index
 build/src/clients/ledger-json-api/schemas/params
