@@ -17,7 +17,6 @@ export default class SimulationRunner {
     // Create client instance with file logger
     const logger = new FileLogger();
     this.client = new LedgerJsonApiClient({ logger });
-    this.client.getEventsByContractId.
   }
 
   private ensureResultsDir(): void {
