@@ -42,6 +42,9 @@ export class EnvLoader {
   public static getInstance(options: EnvLoaderOptions = {}): EnvLoader {
     if (!EnvLoader.instance) {
       EnvLoader.instance = new EnvLoader(options);
+    } else if (options.currentNetwork || options.currentProvider) {
+      // Update existing instance with new options
+      EnvLoader.instance.options = { ...EnvLoader.instance.options, ...options };
     }
     return EnvLoader.instance;
   }
