@@ -14,17 +14,11 @@ function collapseManifest(): void {
   try {
     // Read all lines from stdin
     const input = readFileSync(0, 'utf-8');
-
-    // Debug: Log input length and first few characters
-    console.error(`DEBUG: Input length: ${input.length}`);
-    console.error(`DEBUG: Input preview: ${input.substring(0, 200)}...`);
-
+    
     const lines = input
       .trim()
       .split('\n')
       .filter(line => line.length > 0);
-
-    console.error(`DEBUG: Found ${lines.length} lines after filtering`);
 
     // Exit with error if no files found
     if (lines.length === 0) {
@@ -46,9 +40,6 @@ function collapseManifest(): void {
       }
     }
 
-    console.error(`DEBUG: Files to exclude: ${filesToExclude.size}`);
-    console.error(`DEBUG: Files to keep: ${filesToKeep.size}`);
-
     // Second pass: collapse .d.ts and .js files into single entries
     for (const file of filesToKeep) {
       if (file.endsWith('.d.ts') || file.endsWith('.js')) {
@@ -60,8 +51,6 @@ function collapseManifest(): void {
         collapsedFiles.add(file);
       }
     }
-
-    console.error(`DEBUG: Final collapsed files: ${collapsedFiles.size}`);
 
     // Output the collapsed files in sorted order
     const sortedFiles = Array.from(collapsedFiles).sort();
