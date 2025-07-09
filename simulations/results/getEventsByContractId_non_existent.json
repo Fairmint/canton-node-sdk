@@ -1,54 +1,28 @@
 {
-  "error": "POST request to https://ledger-api.validator.devnet.transfer-agent.xyz/v2/events/events-by-contract-id failed with status 400 Bad Request: {\n  \"code\": \"INVALID_FIELD\",\n  \"cause\": \"The submitted command has a field with invalid value: Invalid field contract_id: cannot parse ContractId \\\"a0528fab06fe8694392494a01925bae6cdb94c35c14a8bbffcebca23278521b2e4ca1112200794083bad5ae157d245234eaa24b5dff2a88b1d62caa8c70701fab4ba4f9ba0\\\"\",\n  \"correlationId\": null,\n  \"traceId\": \"492e03dd09cc2474b1347566994fcd70\",\n  \"context\": {\n    \"participant\": \"participant\",\n    \"definite_answer\": \"false\",\n    \"tid\": \"492e03dd09cc2474b1347566994fcd70\",\n    \"category\": \"8\"\n  },\n  \"resources\": [],\n  \"errorCategory\": 8,\n  \"grpcCodeValue\": 3,\n  \"retryInfo\": null,\n  \"definiteAnswer\": null\n}",
+  "error": "HTTP 400: INVALID_FIELD",
   "details": {
     "name": "ApiError",
-    "message": "POST request to https://ledger-api.validator.devnet.transfer-agent.xyz/v2/events/events-by-contract-id failed with status 400 Bad Request: {\n  \"code\": \"INVALID_FIELD\",\n  \"cause\": \"The submitted command has a field with invalid value: Invalid field contract_id: cannot parse ContractId \\\"a0528fab06fe8694392494a01925bae6cdb94c35c14a8bbffcebca23278521b2e4ca1112200794083bad5ae157d245234eaa24b5dff2a88b1d62caa8c70701fab4ba4f9ba0\\\"\",\n  \"correlationId\": null,\n  \"traceId\": \"492e03dd09cc2474b1347566994fcd70\",\n  \"context\": {\n    \"participant\": \"participant\",\n    \"definite_answer\": \"false\",\n    \"tid\": \"492e03dd09cc2474b1347566994fcd70\",\n    \"category\": \"8\"\n  },\n  \"resources\": [],\n  \"errorCategory\": 8,\n  \"grpcCodeValue\": 3,\n  \"retryInfo\": null,\n  \"definiteAnswer\": null\n}",
-    "stack": "ApiError: POST request to https://ledger-api.validator.devnet.transfer-agent.xyz/v2/events/events-by-contract-id failed with status 400 Bad Request: {\n  \"code\": \"INVALID_FIELD\",\n  \"cause\": \"The submitted command has a field with invalid value: Invalid field contract_id: cannot parse ContractId \\\"a0528fab06fe8694392494a01925bae6cdb94c35c14a8bbffcebca23278521b2e4ca1112200794083bad5ae157d245234eaa24b5dff2a88b1d62caa8c70701fab4ba4f9ba0\\\"\",\n  \"correlationId\": null,\n  \"traceId\": \"492e03dd09cc2474b1347566994fcd70\",\n  \"context\": {\n    \"participant\": \"participant\",\n    \"definite_answer\": \"false\",\n    \"tid\": \"492e03dd09cc2474b1347566994fcd70\",\n    \"category\": \"8\"\n  },\n  \"resources\": [],\n  \"errorCategory\": 8,\n  \"grpcCodeValue\": 3,\n  \"retryInfo\": null,\n  \"definiteAnswer\": null\n}\n    at HttpClient.handleRequestError (/home/circleci/project/src/core/http/HttpClient.ts:90:14)\n    at HttpClient.makePostRequest (/home/circleci/project/src/core/http/HttpClient.ts:43:18)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at ApiOperation.execute (/home/circleci/project/src/core/operations/ApiOperationFactory.ts:36:22)\n    at SimulationRunner.runSimulation (/home/circleci/project/simulations/core/SimulationRunner.ts:72:20)\n    at runAllTests (/home/circleci/project/simulations/getEventsByContractId.ts:28:3)",
+    "message": "HTTP 400: INVALID_FIELD",
+    "stack": "ApiError: HTTP 400: INVALID_FIELD\n    at HttpClient.handleRequestError (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/src/core/http/HttpClient.ts:88:19)\n    at HttpClient.makePostRequest (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/src/core/http/HttpClient.ts:43:18)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async ApiOperation.execute (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/src/core/operations/ApiOperationFactory.ts:36:22)\n    at async SimulationRunner.runSimulation (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/simulations/core/SimulationRunner.ts:72:20)\n    at async runAllTests (/Users/nickcuso/Documents/code/Fairmint/canton-node-sdk/simulations/getEventsByContractId.ts:28:3)",
     "code": "API_ERROR",
-    "originalError": {
-      "message": "Request failed with status code 400",
-      "name": "AxiosError",
-      "stack": "AxiosError: Request failed with status code 400\n    at settle (/home/circleci/project/node_modules/axios/lib/core/settle.js:19:12)\n    at IncomingMessage.handleStreamEnd (/home/circleci/project/node_modules/axios/lib/adapters/http.js:599:11)\n    at IncomingMessage.emit (node:events:531:35)\n    at endReadableNT (node:internal/streams/readable:1696:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:82:21)\n    at Axios.request (/home/circleci/project/node_modules/axios/lib/core/Axios.js:45:41)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at HttpClient.makePostRequest (/home/circleci/project/src/core/http/HttpClient.ts:38:24)\n    at ApiOperation.execute (/home/circleci/project/src/core/operations/ApiOperationFactory.ts:36:22)\n    at SimulationRunner.runSimulation (/home/circleci/project/simulations/core/SimulationRunner.ts:72:20)\n    at runAllTests (/home/circleci/project/simulations/getEventsByContractId.ts:28:3)",
-      "config": {
-        "transitional": {
-          "silentJSONParsing": true,
-          "forcedJSONParsing": true,
-          "clarifyTimeoutError": false
-        },
-        "adapter": [
-          "xhr",
-          "http",
-          "fetch"
-        ],
-        "transformRequest": [
-          null
-        ],
-        "transformResponse": [
-          null
-        ],
-        "timeout": 0,
-        "xsrfCookieName": "XSRF-TOKEN",
-        "xsrfHeaderName": "X-XSRF-TOKEN",
-        "maxContentLength": -1,
-        "maxBodyLength": -1,
-        "env": {},
-        "headers": {
-          "Accept": "application/json, text/plain, */*",
-          "Content-Type": "application/json",
-          "Authorization": "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6ImNjNmI4OGQ2YjA5MmE0N2MzYmRhMGM0NjhmMzIwNmQ5IiwidHlwIjoiSldUIn0.eyJpc3MiOiJodHRwczovL2F1dGgudHJhbnNmZXItYWdlbnQueHl6L2FwcGxpY2F0aW9uL28vdmFsaWRhdG9yLWRldm5ldC1tMm0vIiwic3ViIjoiNSIsImF1ZCI6InZhbGlkYXRvci1kZXZuZXQtbTJtIiwiZXhwIjoxNzUyMDcwNjM4LCJpYXQiOjE3NTIwNjg4MzgsImF1dGhfdGltZSI6MTc1MjA2ODgzOCwiYWNyIjoiZ29hdXRoZW50aWsuaW8vcHJvdmlkZXJzL29hdXRoMi9kZWZhdWx0IiwiYXpwIjoidmFsaWRhdG9yLWRldm5ldC1tMm0iLCJ1aWQiOiJveUVsUHVqbEhlNHJ1TkI0RUdnYjc1RDU1Um1WbDN2MEJaR0ZPbDhDIn0.Ds78PU3SqWf9Nrp9Wz8vCA8YmYrFG-FTm95YZ_91BST5PKrrWzGrmcRQpKJLEn9SEWozAjNgl8CUa6-0ugPWsNQFNjctOa53-sEEUhILQ5slZgvrB5UI3pRjV0VFFhM9zmM9ER0ifN3AyaZ2QNFtTvc2GivRH4zeXn8CSM4rRVycJ8Lz_WA6XzuYr1Ep7hc5QPoGAzfuXlfIVcpwTG4IMCKOw_sxe23V8wzidGixcs7Ivr8NQeLuUz6Wok_1QbklM_twt1vZQd4jP1hRq-Lg_lq09_nNpn3Lvax1g6OHyT9H2fvwCkJ5PtD-N0c1xnARSxOteL-zSAXV-hr3KDwUwMrleW9dtweQcJiNZc7HBJsSPUqzitkPlsrqm3pPtxiPy3V-rCRImt4J3PWkw3JZYR-pVcSVdtKcsJTLl7RDhAsQBf7qYSjJrl67POEWmTLYBkB9ZaANiSSemER39YwT5PPkOdQaAc3EtYTtMi7z9kAo85OpUC8JPnESgfSuRxf8yPkqx43BUIhDcRax03ENTymcJE5nLkduiJYmZO1Ee--jbh1Sr9hGPaNF3qxb-dV7OCXFQCojsJSruicUYZqHmNRp8_nl4q7SIREPPwNtstfwweUcwYifc2H6B-siocUGDBeqc36e5VAv2doOllvTy0dAiaCI8TGv0c1N1IazBAs",
-          "User-Agent": "axios/1.10.0",
-          "Content-Length": "318",
-          "Accept-Encoding": "gzip, compress, deflate, br"
-        },
-        "method": "post",
-        "url": "https://ledger-api.validator.devnet.transfer-agent.xyz/v2/events/events-by-contract-id",
-        "data": "{\"contractId\":\"a0528fab06fe8694392494a01925bae6cdb94c35c14a8bbffcebca23278521b2e4ca1112200794083bad5ae157d245234eaa24b5dff2a88b1d62caa8c70701fab4ba4f9ba0\",\"eventFormat\":{\"verbose\":true,\"filtersByParty\":{\"TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34\":{\"cumulative\":[]}}}}",
-        "allowAbsoluteUrls": true
-      },
-      "code": "ERR_BAD_REQUEST",
-      "status": 400
-    },
     "status": 400,
-    "statusText": "Bad Request"
+    "statusText": "Bad Request",
+    "response": {
+      "code": "INVALID_FIELD",
+      "cause": "The submitted command has a field with invalid value: Invalid field contract_id: cannot parse ContractId \"a0528fab06fe8694392494a01925bae6cdb94c35c14a8bbffcebca23278521b2e4ca1112200794083bad5ae157d245234eaa24b5dff2a88b1d62caa8c70701fab4ba4f9ba0\"",
+      "correlationId": null,
+      "traceId": "b1248897efb10b3af88d1967e7403ecf",
+      "context": {
+        "participant": "participant",
+        "definite_answer": "false",
+        "tid": "b1248897efb10b3af88d1967e7403ecf",
+        "category": "8"
+      },
+      "resources": [],
+      "errorCategory": 8,
+      "grpcCodeValue": 3,
+      "retryInfo": null,
+      "definiteAnswer": null
+    }
   }
 }

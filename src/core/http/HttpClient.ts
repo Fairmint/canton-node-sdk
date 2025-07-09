@@ -24,7 +24,7 @@ export class HttpClient {
       await this.logRequestResponse(url, { method: 'GET', headers }, response.data);
       return response.data;
     } catch (error) {
-      throw this.handleRequestError(error, 'GET', url);
+      throw this.handleRequestError(error);
     }
   }
 
@@ -40,7 +40,7 @@ export class HttpClient {
       await this.logRequestResponse(url, { method: 'POST', headers, data }, response.data);
       return response.data;
     } catch (error) {
-      throw this.handleRequestError(error, 'POST', url);
+      throw this.handleRequestError(error);
     }
   }
 
@@ -79,25 +79,18 @@ export class HttpClient {
     }
   }
 
-  private handleRequestError(error: unknown, method: string, url: string): Error {
+  private handleRequestError(error: unknown): Error {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
-      const statusText = error.response?.statusText;
-      const errorData = error.response?.data
-        ? JSON.stringify(error.response.data, null, 2)
-        : error.message;
-
-      return new ApiError(
-        `${method} request to ${url} failed with status ${status} ${statusText}: ${errorData}`,
-        status,
-        statusText,
-        error
-      );
+      const data = error.response?.data || {};
+      const code = data.code;
+      const msg = code ? `HTTP ${status}: ${code}` : `HTTP ${status}`;
+      const err = new ApiError(msg, status, error.response?.statusText);
+      (err as any).response = data;
+      return err;
     }
-
     return new NetworkError(
-      `${method} request to ${url} failed: ${error instanceof Error ? error.message : String(error)}`,
-      error
+      `Request failed: ${error instanceof Error ? error.message : String(error)}`
     );
   }
 } 

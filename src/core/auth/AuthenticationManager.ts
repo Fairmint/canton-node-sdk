@@ -90,16 +90,12 @@ export class AuthenticationManager {
           : error.message;
 
         throw new ApiError(
-          `Authentication failed with status ${status} ${statusText}: ${errorData}`,
-          status,
-          statusText,
-          error
+          `Authentication failed with status ${status} ${statusText}: ${errorData}`
         );
       }
 
       throw new AuthenticationError(
-        `Authentication failed: ${error instanceof Error ? error.message : String(error)}`,
-        error
+        `Authentication failed: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
