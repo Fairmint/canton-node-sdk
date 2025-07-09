@@ -6,7 +6,7 @@ import { ConfigurationError } from './errors';
 export class ClientFactory {
   private static clientRegistry: Map<
     ApiType,
-    new (config?: Partial<ClientConfig>) => BaseClient
+    new (config: ClientConfig) => BaseClient
   > = new Map();
 
   /**
@@ -14,7 +14,7 @@ export class ClientFactory {
    */
   public static registerClient(
     apiType: ApiType,
-    clientClass: new (config?: Partial<ClientConfig>) => BaseClient
+    clientClass: new (config: ClientConfig) => BaseClient
   ): void {
     this.clientRegistry.set(apiType, clientClass);
   }
@@ -24,7 +24,7 @@ export class ClientFactory {
    */
   public static createClient(
     apiType: ApiType,
-    config?: Partial<ClientConfig>
+    config: ClientConfig
   ): BaseClient {
     const ClientClass = this.clientRegistry.get(apiType);
 

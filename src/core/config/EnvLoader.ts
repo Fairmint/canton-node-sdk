@@ -54,6 +54,37 @@ export class EnvLoader {
   }
 
   /**
+   * Get configuration for a specific API type from environment variables
+   * @param apiType The API type to get configuration for
+   * @returns ClientConfig with only the specified API configured
+   */
+  public static getConfig(apiType: string): ClientConfig {
+    const envLoader = EnvLoader.getInstance();
+    const network = envLoader.getCurrentNetwork();
+    const provider = envLoader.getCurrentProvider();
+    const authUrl = envLoader.getAuthUrl(network, provider);
+
+    // Get API-specific configuration
+    const apiConfig = envLoader.loadApiConfig(apiType, network, provider);
+    if (!apiConfig) {
+      throw new ConfigurationError(
+        `Missing required environment variables for ${apiType}. ` +
+        `Required: CANTON_${network.toUpperCase()}_${provider.toUpperCase()}_${apiType.toUpperCase()}_URI, ` +
+        `CANTON_${network.toUpperCase()}_${provider.toUpperCase()}_${apiType.toUpperCase()}_CLIENT_ID`
+      );
+    }
+
+    return {
+      network,
+      provider,
+      authUrl,
+      apis: {
+        [apiType]: apiConfig,
+      },
+    };
+  }
+
+  /**
    * Load complete configuration from environment variables as a ClientConfig
    */
   public loadConfig(): ClientConfig {
