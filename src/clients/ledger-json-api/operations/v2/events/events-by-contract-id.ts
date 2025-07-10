@@ -1,5 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { GetEventsByContractIdParamsSchema, GetEventsByContractIdParams, EventsByContractIdRequest, EventsByContractIdResponse } from '../../../schemas';
+import { GetEventsByContractIdParamsSchema, GetEventsByContractIdParams } from '../../../schemas/operations';
+import { EventsByContractIdRequest, EventsByContractIdResponse } from '../../../schemas/api';
 
 /**
  * @description Retrieves events for a specific contract ID with filtering options

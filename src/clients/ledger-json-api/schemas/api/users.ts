@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UpdateMaskSchema } from './common';
+import { UpdateMaskSchema } from '../common';
 
 /**
  * Object metadata for resources.

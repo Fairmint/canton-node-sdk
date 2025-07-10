@@ -3,7 +3,8 @@ import { GetEventsByContractId } from './operations/v2/events/events-by-contract
 import { GetTransactionTreeByOffset } from './operations/v2/updates/transaction-tree-by-offset';
 // AUTO-GENERATED OPERATION IMPORTS END
 import { BaseClient, ClientConfig } from '../../core';
-import { GetEventsByContractIdParams, EventsByContractIdResponse, GetTransactionTreeByOffsetParams, TransactionTreeByOffsetResponse } from './schemas';
+import { GetEventsByContractIdParams, GetTransactionTreeByOffsetParams } from './schemas/operations';
+import { EventsByContractIdResponse, TransactionTreeByOffsetResponse } from './schemas/api';
 
 /** Client for interacting with Canton's Ledger JSON API */
 export class LedgerJsonApiClient extends BaseClient {

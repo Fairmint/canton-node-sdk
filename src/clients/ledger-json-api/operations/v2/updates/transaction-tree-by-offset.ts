@@ -1,5 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { GetTransactionTreeByOffsetParamsSchema, GetTransactionTreeByOffsetParams, TransactionTreeByOffsetResponse } from '../../../schemas';
+import { GetTransactionTreeByOffsetParamsSchema, GetTransactionTreeByOffsetParams } from '../../../schemas/operations';
+import { TransactionTreeByOffsetResponse } from '../../../schemas/api';
 
 /**
  * @description Retrieves transaction tree data starting from a specific offset

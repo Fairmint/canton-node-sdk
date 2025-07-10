@@ -6,7 +6,7 @@ import {
   UnassignedEventDetailsSchema 
 } from './event-details';
 import { EventFormatSchema, TreeEventSchema } from './events';
-import { TraceContextSchema } from './common';
+import { TraceContextSchema } from '../common';
 import { JsCommandsSchema } from './commands';
 
 /**

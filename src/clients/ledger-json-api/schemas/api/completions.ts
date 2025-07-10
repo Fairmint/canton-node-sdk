@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { StatusDetailsSchema } from './event-details';
 import { DeduplicationPeriodSchema } from './commands';
-import { TraceContextSchema } from './common';
+import { TraceContextSchema } from '../common';
 
 /**
  * Status information for completions.

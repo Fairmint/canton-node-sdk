@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import { RecordSchema } from './base';
+import { RecordSchema } from '../base';
 import {
   DeduplicationDurationSchema,
   DeduplicationOffsetSchema,
   EmptyDeduplicationSchema,
   MinLedgerTimeRelSchema,
   PrefetchContractKeySchema
-} from './common';
+} from '../common';
 
 export const CreateCommandSchema = z
   .object({
