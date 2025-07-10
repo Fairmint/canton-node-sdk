@@ -65,6 +65,7 @@ pids
 
 # Auto-generated
 CHANGELOG.md
+docs/
 
 # Local only
 wip/

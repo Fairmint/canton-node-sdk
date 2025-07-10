@@ -9,7 +9,8 @@
   },
   "scripts": {
     "build": "npm run build:core && npm run build:lint",
-    "build:core": "npm run generate-client-methods && tsc",
+    "build:core": "npm run build:core:generate-client-methods && tsc",
+    "build:core:generate-client-methods": "tsx scripts/generate-client-methods.ts",
     "build:lint": "tsc -p tsconfig.lint.json",
     "test": "jest",
     "test:watch": "jest --watch", 
@@ -30,7 +31,7 @@
     "prepack": "npm run clean && npm run build:core",
     "prepublishOnly": "npm run prepack",
     "prepare-release": "tsx scripts/prepare-release.ts",
-    "generate-client-methods": "tsx scripts/generate-client-methods.ts"
+    "docs": "tsx scripts/generate-operation-docs.ts"
   },
   "keywords": [
     "canton",
