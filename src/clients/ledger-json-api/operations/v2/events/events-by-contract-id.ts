@@ -1,6 +1,18 @@
 import { createApiOperation } from '../../../../../core';
 import { GetEventsByContractIdParamsSchema, GetEventsByContractIdParams, EventsByContractIdRequest, EventsByContractIdResponse } from '../../../schemas';
 
+/**
+ * @description Retrieves events for a specific contract ID with filtering options
+ * @example
+ * ```typescript
+ * const events = await client.getEventsByContractId({
+ *   contractId: 'contract-123',
+ *   readAs: ['party1', 'party2']
+ * });
+ * ```
+ * @param contractId - The unique identifier of the contract
+ * @param readAs - Optional array of party IDs to read events as
+ */
 export const GetEventsByContractId = createApiOperation<
   GetEventsByContractIdParams,
   EventsByContractIdResponse
@@ -34,6 +46,8 @@ export const GetEventsByContractId = createApiOperation<
             {} as Record<string, { cumulative: string[] }>
           ),
         },
+        includeCreatedEventBlob: true,
+        includeInterfaceViews: true,
       },
     };
 

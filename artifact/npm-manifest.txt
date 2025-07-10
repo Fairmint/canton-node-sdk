@@ -10,11 +10,19 @@ build/src/clients/ledger-json-api/operations/v2/updates/index
 build/src/clients/ledger-json-api/operations/v2/updates/transaction-tree-by-offset
 build/src/clients/ledger-json-api/schemas/base
 build/src/clients/ledger-json-api/schemas/commands
+build/src/clients/ledger-json-api/schemas/common
+build/src/clients/ledger-json-api/schemas/completions
 build/src/clients/ledger-json-api/schemas/errors
+build/src/clients/ledger-json-api/schemas/event-details
 build/src/clients/ledger-json-api/schemas/events
 build/src/clients/ledger-json-api/schemas/index
+build/src/clients/ledger-json-api/schemas/packages
 build/src/clients/ledger-json-api/schemas/params
+build/src/clients/ledger-json-api/schemas/reassignment
+build/src/clients/ledger-json-api/schemas/state
 build/src/clients/ledger-json-api/schemas/transactions
+build/src/clients/ledger-json-api/schemas/updates
+build/src/clients/ledger-json-api/schemas/users
 build/src/clients/register
 build/src/core/BaseClient
 build/src/core/ClientFactory
@@ -34,7 +42,4 @@ build/src/core/operations/ApiOperationFactory
 build/src/core/operations/index
 build/src/core/types
 build/src/index
-examples/simple-integration/index
-examples/simple-integration/package.json
-examples/simple-integration/test
 package.json

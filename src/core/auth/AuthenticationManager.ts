@@ -25,7 +25,6 @@ export class AuthenticationManager {
     if (this.isTokenValid()) {
       return this.bearerToken!;
     }
-
     // Check if authentication credentials are provided
     if (!this.authConfig.clientId || this.authConfig.clientId.trim() === '') {
       // No authentication credentials provided, skip authentication

@@ -1,6 +1,18 @@
 import { createApiOperation } from '../../../../../core';
 import { GetTransactionTreeByOffsetParamsSchema, GetTransactionTreeByOffsetParams, TransactionTreeByOffsetResponse } from '../../../schemas';
 
+/**
+ * @description Retrieves transaction tree data starting from a specific offset
+ * @example
+ * ```typescript
+ * const transactionTree = await client.getTransactionTreeByOffset({
+ *   offset: 1000,
+ *   parties: ['party1', 'party2']
+ * });
+ * ```
+ * @param offset - The starting offset for transaction retrieval
+ * @param parties - Optional array of party IDs to filter transactions by
+ */
 export const GetTransactionTreeByOffset = createApiOperation<
   GetTransactionTreeByOffsetParams,
   TransactionTreeByOffsetResponse

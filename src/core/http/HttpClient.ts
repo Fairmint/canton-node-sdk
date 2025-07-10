@@ -82,7 +82,6 @@ export class HttpClient {
     request: unknown,
     response: unknown
   ): Promise<void> {
-    console.log('logging request response', url, request, response);
     if (this.logger) {
       await this.logger.logRequestResponse(url, request, response);
     }
