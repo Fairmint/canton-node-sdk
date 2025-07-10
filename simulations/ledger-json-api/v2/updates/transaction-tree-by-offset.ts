@@ -1,9 +1,9 @@
-import SimulationRunner from './core/SimulationRunner';
+import SimulationRunner from '../../../core/SimulationRunner';
 import { 
   TransactionTreeByOffsetResponseSchema,
   BadRequestErrorSchema,
   NotFoundErrorSchema
-} from '../src/clients/ledger-json-api/schemas';
+} from '../../../../src/clients/ledger-json-api/schemas';
 
 const runner = new SimulationRunner();
 
@@ -16,7 +16,7 @@ const TEST_OFFSETS = {
 export async function runAllTests() {
   // Test with valid offset and parties
   await runner.runSimulation(
-    'getTransactionTreeByOffset_valid',
+    'valid',
     client => client.getTransactionTreeByOffset({
       offset: TEST_OFFSETS.VALID,
     }),
@@ -25,7 +25,7 @@ export async function runAllTests() {
 
   // Test with invalid offset format
   await runner.runSimulation(
-    'getTransactionTreeByOffset_invalid_format',
+    'invalid_format',
     client => client.getTransactionTreeByOffset({
       offset: TEST_OFFSETS.INVALID_FORMAT,
     }),
@@ -34,7 +34,7 @@ export async function runAllTests() {
 
   // Test with non-existent offset
   await runner.runSimulation(
-    'getTransactionTreeByOffset_non_existent',
+    'non_existent',
     client => client.getTransactionTreeByOffset({
       offset: TEST_OFFSETS.NON_EXISTENT,
     }),
