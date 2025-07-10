@@ -56,12 +56,13 @@ export class EnvLoader {
   /**
    * Get configuration for a specific API type from environment variables
    * @param apiType The API type to get configuration for
+   * @param options Optional network and provider to use instead of reading from env
    * @returns ClientConfig with only the specified API configured
    */
-  public static getConfig(apiType: string): ClientConfig {
+  public static getConfig(apiType: string, options?: { network?: NetworkType; provider?: ProviderType }): ClientConfig {
     const envLoader = EnvLoader.getInstance();
-    const network = envLoader.getCurrentNetwork();
-    const provider = envLoader.getCurrentProvider();
+    const network = options?.network || envLoader.getCurrentNetwork();
+    const provider = options?.provider || envLoader.getCurrentProvider();
     const authUrl = envLoader.getAuthUrl(network, provider);
 
     // Get API-specific configuration
