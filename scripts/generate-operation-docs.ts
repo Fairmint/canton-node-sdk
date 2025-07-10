@@ -176,7 +176,9 @@ layout: default
 ---
 
 `;
-    const indexContent = frontMatter + `# Canton Node SDK Operations
+    const indexContent =
+      frontMatter +
+      `# Canton Node SDK Operations
 
 This document provides an overview of all available operations in the Canton Node SDK.
 
@@ -234,7 +236,9 @@ layout: default
 ---
 
 `;
-    const docContent = frontMatter + `# ${operation.name}
+    const docContent =
+      frontMatter +
+      `# ${operation.name}
 
 ${operation.description ? `## Description\n\n${operation.description}\n\n` : ''}
 

@@ -18,4 +18,4 @@ The Canton Node SDK is designed to simplify interactions with Canton blockchain 
 
 ---
 
-*Documentation auto-generated from operation definitions* 
+_Documentation auto-generated from operation definitions_
