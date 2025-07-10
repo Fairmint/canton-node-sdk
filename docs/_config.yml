@@ -1,0 +1,26 @@
+title: Canton Node SDK Documentation
+description: Auto-generated documentation for Canton Node SDK operations
+
+# Include _generated in processing
+include:
+  - _generated
+
+collections:
+  operations:
+    output: true
+    permalink: /operations/:name/
+
+defaults:
+  - scope:
+      path: "_operations"
+      type: operations
+    values:
+      layout: default
+  - scope:
+      path: "_generated/operations.md"
+    values:
+      layout: default
+      permalink: /operations/
+
+markdown: kramdown
+permalink: pretty 
