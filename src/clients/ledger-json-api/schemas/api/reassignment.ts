@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { AssignCommandSchema, UnassignCommandSchema } from './commands';
 import { EmptyCommandSchema, CreatedEventDetailsSchema, UnassignedEventDetailsSchema } from './event-details';
 import { EventFormatSchema } from './events';
-import { TraceContextSchema } from './common';
+import { TraceContextSchema } from '../common';
 
 /**
  * Reassignment command wrapper.

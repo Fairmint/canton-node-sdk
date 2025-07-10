@@ -82,6 +82,10 @@ jobs:
           name: Test
           command: |
             npm run test
+      - run:
+          name: Docs # Just verifies doc generation works, actual publishing happens in GitHub Actions
+          command: |
+            npm run docs
 
 workflows:
   build-and-test-workflow:

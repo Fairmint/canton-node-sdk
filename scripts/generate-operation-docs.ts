@@ -8,7 +8,6 @@ interface OperationInfo {
   name: string;
   filePath: string;
   method: 'GET' | 'POST';
-  operation: string;
   description?: string;
   examples?: string[];
   parameters?: string[];
@@ -81,7 +80,7 @@ class OperationDocGenerator {
     // Extract JSDoc comments and operation metadata
     this.extractMetadata(sourceFile, operationInfo);
 
-    if (operationInfo.name && operationInfo.method && operationInfo.operation) {
+    if (operationInfo.name && operationInfo.method) {
       this.operations.push(operationInfo as OperationInfo);
     }
   }
@@ -134,11 +133,6 @@ class OperationDocGenerator {
                 ts.isStringLiteral(prop.initializer)
               ) {
                 operationInfo.method = prop.initializer.text as 'GET' | 'POST';
-              } else if (
-                propName === 'operation' &&
-                ts.isStringLiteral(prop.initializer)
-              ) {
-                operationInfo.operation = prop.initializer.text;
               }
             }
           }
@@ -186,7 +180,7 @@ This document provides an overview of all available operations in the Canton Nod
 ${this.operations
   .map(op => {
     const docPath = `operations/${op.name}.md`;
-    return `- [${op.operation}](./${docPath}) - ${op.description || 'No description available'}`;
+    return `- [${op.name}](./${docPath}) - ${op.description || 'No description available'}`;
   })
   .join('\n')}
 
@@ -195,13 +189,13 @@ ${this.operations
 ### Events
 ${this.operations
   .filter(op => op.filePath.includes('/events/'))
-  .map(op => `- [${op.operation}](./operations/${op.name}.md)`)
+  .map(op => `- [${op.name}](./operations/${op.name}.md)`)
   .join('\n')}
 
 ### Updates  
 ${this.operations
   .filter(op => op.filePath.includes('/updates/'))
-  .map(op => `- [${op.operation}](./operations/${op.name}.md)`)
+  .map(op => `- [${op.name}](./operations/${op.name}.md)`)
   .join('\n')}
 
 ## Quick Reference
@@ -211,7 +205,7 @@ ${this.operations
 ${this.operations
   .map(
     op =>
-      `| [${op.operation}](./operations/${op.name}.md) | \`${op.method}\` | ${op.description || 'No description'} |`
+      `| [${op.name}](./operations/${op.name}.md) | \`${op.method}\` | ${op.description || 'No description'} |`
   )
   .join('\n')}
 
@@ -226,7 +220,7 @@ ${this.operations
   }
 
   private async generateOperationDoc(operation: OperationInfo): Promise<void> {
-    const docContent = `# ${operation.operation}
+    const docContent = `# ${operation.name}
 
 ${operation.description ? `## Description\n\n${operation.description}\n\n` : ''}
 
@@ -265,7 +259,7 @@ const client = new CantonNodeClient({
 ${
   operation.examples && operation.examples.length > 0
     ? operation.examples[0]
-    : `// Example usage for ${operation.operation}`
+    : `// Example usage for ${operation.name}`
 }
 \`\`\`
 

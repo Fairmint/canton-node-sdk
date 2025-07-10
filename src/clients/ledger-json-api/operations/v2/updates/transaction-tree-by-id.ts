@@ -1,24 +1,24 @@
 import { createApiOperation } from '../../../../../core';
-import { GetTransactionTreeByOffsetParamsSchema, GetTransactionTreeByOffsetParams } from '../../../schemas/operations';
-import { TransactionTreeByOffsetResponse } from '../../../schemas/api';
+import { GetTransactionTreeByIdParamsSchema, GetTransactionTreeByIdParams } from '../../../schemas/operations';
+import { GetTransactionTreeResponse } from '../../../schemas/api';
 
 /**
- * @description Retrieves transaction tree data starting from a specific offset
+ * @description Get transaction tree by id
  * @example
  * ```typescript
- * const transactionTree = await client.getTransactionTreeByOffset({
- *   offset: 1000,
+ * const transactionTree = await client.getTransactionTreeById({
+ *   updateId: 'update-123',
  *   parties: ['party1', 'party2']
  * });
  * ```
- * @param offset - The starting offset for transaction retrieval
+ * @param updateId - Update ID to fetch the transaction tree for
  * @param parties - Optional array of party IDs to filter transactions by
  */
-export const GetTransactionTreeByOffset = createApiOperation<
-  GetTransactionTreeByOffsetParams,
-  TransactionTreeByOffsetResponse
+export const GetTransactionTreeById = createApiOperation<
+  GetTransactionTreeByIdParams,
+  GetTransactionTreeResponse
 >({
-  paramsSchema: GetTransactionTreeByOffsetParamsSchema,
+  paramsSchema: GetTransactionTreeByIdParamsSchema,
   method: 'GET',
   buildUrl: (params, apiUrl, client) => {
     const currentPartyId = client.getPartyId();
@@ -30,7 +30,7 @@ export const GetTransactionTreeByOffset = createApiOperation<
       ])
     );
 
-    const baseUrl = `${apiUrl}/v2/updates/transaction-tree-by-offset/${params.offset}`;
+    const baseUrl = `${apiUrl}/v2/updates/transaction-tree-by-id/${params.updateId}`;
     
     if (readParties.length > 0) {
       const queryParams = new URLSearchParams();

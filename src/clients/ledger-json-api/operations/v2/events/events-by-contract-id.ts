@@ -1,5 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { GetEventsByContractIdParamsSchema, GetEventsByContractIdParams, EventsByContractIdRequest, EventsByContractIdResponse } from '../../../schemas';
+import { GetEventsByContractIdParamsSchema, GetEventsByContractIdParams } from '../../../schemas/operations';
+import { EventsByContractIdRequest, EventsByContractIdResponse } from '../../../schemas/api';
 
 /**
  * @description Retrieves events for a specific contract ID with filtering options
@@ -18,7 +19,6 @@ export const GetEventsByContractId = createApiOperation<
   EventsByContractIdResponse
 >({
   paramsSchema: GetEventsByContractIdParamsSchema,
-  operation: 'get events by contract ID',
   method: 'POST',
   buildUrl: (_params: GetEventsByContractIdParams, apiUrl: string) => `${apiUrl}/v2/events/events-by-contract-id`,
   buildRequestData: (params: GetEventsByContractIdParams, client) => {

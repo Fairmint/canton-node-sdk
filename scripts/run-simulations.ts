@@ -2,20 +2,32 @@ import fs from 'fs';
 import path from 'path';
 import SimulationRunner from '../simulations/core/SimulationRunner';
 
+function findSimulationFiles(dir: string): string[] {
+  let results: string[] = [];
+  const list = fs.readdirSync(dir);
+  for (const file of list) {
+    const filePath = path.join(dir, file);
+    const stat = fs.statSync(filePath);
+    if (stat && stat.isDirectory()) {
+      if (file === 'core') continue;
+      results = results.concat(findSimulationFiles(filePath));
+    } else if (file.endsWith('.ts') && file !== 'index.ts') {
+      results.push(filePath);
+    }
+  }
+  return results;
+}
+
 async function runSimulations(): Promise<void> {
   const simulationsDir = path.join(process.cwd(), 'simulations');
 
-  // Find all TypeScript files in the simulations directory (excluding core and index files)
-  const simulationFiles = fs
-    .readdirSync(simulationsDir)
-    .filter(
-      file =>
-        file.endsWith('.ts') && file !== 'index.ts' && !file.startsWith('core')
-    )
-    .map(file => path.join(simulationsDir, file));
+  // Recursively find all TypeScript files in the simulations directory (excluding core and index files)
+  const simulationFiles = findSimulationFiles(simulationsDir);
 
   console.log(`Found ${simulationFiles.length} simulation files:`);
-  simulationFiles.forEach(file => console.log(`  - ${path.basename(file)}`));
+  simulationFiles.forEach(file =>
+    console.log(`  - ${path.relative(simulationsDir, file)}`)
+  );
 
   // Initialize simulation runner and clear results directory
   const runner = new SimulationRunner();
@@ -26,7 +38,9 @@ async function runSimulations(): Promise<void> {
 
   // Run each simulation file sequentially
   for (const file of simulationFiles) {
-    console.log(`\n🚀 Running simulation: ${path.basename(file)}`);
+    console.log(
+      `\n🚀 Running simulation: ${path.relative(simulationsDir, file)}`
+    );
     try {
       // Import the simulation module
       const simulationModule = await import(file);
@@ -40,9 +54,9 @@ async function runSimulations(): Promise<void> {
         await new Promise(resolve => global.setTimeout(resolve, 100));
       }
 
-      console.log(`✅ Completed: ${path.basename(file)}`);
+      console.log(`✅ Completed: ${path.relative(simulationsDir, file)}`);
     } catch (error) {
-      console.error(`❌ Failed: ${path.basename(file)}`);
+      console.error(`❌ Failed: ${path.relative(simulationsDir, file)}`);
       console.error(error);
       hasFailures = true;
     }

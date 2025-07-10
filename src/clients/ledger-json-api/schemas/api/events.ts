@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RecordSchema } from './base';
+import { RecordSchema } from '../base';
 
 export const CreatedTreeEventSchema = z
   .object({

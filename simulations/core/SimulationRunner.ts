@@ -91,11 +91,45 @@ export default class SimulationRunner {
     return data;
   }
 
+  private static getCallerSimulationPath(): string | undefined {
+    const stack = new Error().stack;
+    if (!stack) return undefined;
+
+    const lines = stack.split('\n');
+    // Skip the first few lines (Error constructor, this method, runSimulation)
+    for (let i = 3; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line) continue;
+      // Look for file paths in the stack trace
+      const match =
+        line.match(/\((.*):\d+:\d+\)$/) || line.match(/at (.*):\d+:\d+$/);
+      if (match && match[1]) {
+        const fullPath = match[1];
+        if (typeof fullPath === 'string') {
+          // Find the 'simulations/' part and get the relative path
+          const idx = fullPath.lastIndexOf('simulations/');
+          if (idx !== -1) {
+            const relativePath = fullPath.slice(idx + 'simulations/'.length);
+            // Remove .ts extension
+            return relativePath.replace(/\.ts$/, '');
+          }
+        }
+      }
+    }
+    return undefined;
+  }
+
   async runSimulation<T, R = T>(
     simulationName: string,
     simulationFn: (client: LedgerJsonApiClient) => Promise<T>,
-    expectedSchema: import('zod').ZodSchema<R>
+    expectedSchema: import('zod').ZodSchema<R>,
+    simulationFilePath?: string // relative to simulations/
   ): Promise<T | { error: string; details: unknown }> {
+    // Auto-detect simulation file path if not provided
+    if (!simulationFilePath) {
+      simulationFilePath = SimulationRunner.getCallerSimulationPath();
+    }
+
     try {
       // Run simulation
       const data = await simulationFn(this.client);
@@ -107,17 +141,26 @@ export default class SimulationRunner {
       }
 
       // Save result to file
+      let resultDir = this.resultsDir;
+      if (simulationFilePath) {
+        // Remove .ts extension and use as subdirectory
+        const relPath = simulationFilePath
+          .replace(/\\/g, '/')
+          .replace(/\.ts$/, '');
+        resultDir = path.join(this.resultsDir, relPath);
+        fs.mkdirSync(resultDir, { recursive: true });
+      }
       const filename = this.generateFilename(simulationName);
 
       // Check for duplicate files before writing
-      this.checkForDuplicateFile(filename);
+      this.checkForDuplicateFile(path.join(simulationFilePath || '', filename));
 
-      const filepath = path.join(this.resultsDir, filename);
+      const filepath = path.join(resultDir, filename);
 
       // Replace traceId and stack with placeholders before writing
       const sanitizedData = this.sanitizeData(data);
       fs.writeFileSync(filepath, JSON.stringify(sanitizedData, null, 2));
-      this.writtenFiles.add(filename);
+      this.writtenFiles.add(path.join(simulationFilePath || '', filename));
 
       console.log(`✅ Simulation "${simulationName}" completed`);
       console.log(`📁 Result saved to: ${filepath}`);
@@ -153,12 +196,21 @@ export default class SimulationRunner {
       }
 
       // Save error to file
+      let resultDir = this.resultsDir;
+      if (simulationFilePath) {
+        // Remove .ts extension and use as subdirectory
+        const relPath = simulationFilePath
+          .replace(/\\/g, '/')
+          .replace(/\.ts$/, '');
+        resultDir = path.join(this.resultsDir, relPath);
+        fs.mkdirSync(resultDir, { recursive: true });
+      }
       const filename = this.generateFilename(simulationName);
 
       // Check for duplicate files before writing (even for errors)
-      this.checkForDuplicateFile(filename);
+      this.checkForDuplicateFile(path.join(simulationFilePath || '', filename));
 
-      const filepath = path.join(this.resultsDir, filename);
+      const filepath = path.join(resultDir, filename);
 
       // Replace traceId and stack with placeholders before writing
       const sanitizedErrorDetails = this.sanitizeData(errorDetails);
@@ -166,7 +218,7 @@ export default class SimulationRunner {
         filepath,
         JSON.stringify(sanitizedErrorDetails, null, 2)
       );
-      this.writtenFiles.add(filename);
+      this.writtenFiles.add(path.join(simulationFilePath || '', filename));
 
       console.log(`⚠️  Simulation "${simulationName}" failed (expected)`);
       console.log(`📁 Error details saved to: ${filepath}`);

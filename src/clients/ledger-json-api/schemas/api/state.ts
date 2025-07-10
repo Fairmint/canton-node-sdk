@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FilterSchema, ApiFeaturesSchema } from './common';
+import { FilterSchema, ApiFeaturesSchema } from '../common';
 import { EventFormatSchema } from './events';
 import { 
   CreatedEventDetailsSchema, 
