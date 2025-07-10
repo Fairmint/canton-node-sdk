@@ -171,7 +171,14 @@ class OperationDocGenerator {
   }
 
   private async generateOperationsIndex(): Promise<void> {
-    const indexContent = `# Canton Node SDK Operations
+    const frontMatter = `---
+layout: default
+---
+
+`;
+    const indexContent =
+      frontMatter +
+      `# Canton Node SDK Operations
 
 This document provides an overview of all available operations in the Canton Node SDK.
 
@@ -179,8 +186,8 @@ This document provides an overview of all available operations in the Canton Nod
 
 ${this.operations
   .map(op => {
-    const docPath = `operations/${op.name}.md`;
-    return `- [${op.name}](./${docPath}) - ${op.description || 'No description available'}`;
+    const docPath = `/operations/${op.name}/`;
+    return `- [${op.name}](${docPath}) - ${op.description || 'No description available'}`;
   })
   .join('\n')}
 
@@ -189,13 +196,13 @@ ${this.operations
 ### Events
 ${this.operations
   .filter(op => op.filePath.includes('/events/'))
-  .map(op => `- [${op.name}](./operations/${op.name}.md)`)
+  .map(op => `- [${op.name}](/operations/${op.name}/)`)
   .join('\n')}
 
 ### Updates  
 ${this.operations
   .filter(op => op.filePath.includes('/updates/'))
-  .map(op => `- [${op.name}](./operations/${op.name}.md)`)
+  .map(op => `- [${op.name}](/operations/${op.name}/)`)
   .join('\n')}
 
 ## Quick Reference
@@ -205,7 +212,7 @@ ${this.operations
 ${this.operations
   .map(
     op =>
-      `| [${op.name}](./operations/${op.name}.md) | \`${op.method}\` | ${op.description || 'No description'} |`
+      `| [${op.name}](/operations/${op.name}/) | \`${op.method}\` | ${op.description || 'No description'} |`
   )
   .join('\n')}
 
@@ -214,13 +221,24 @@ ${this.operations
 *Generated automatically from operation definitions*
 `;
 
-    const indexPath = path.join(process.cwd(), 'docs', 'operations.md');
+    const generatedDir = path.join(process.cwd(), 'docs', '_generated');
+    if (!fs.existsSync(generatedDir)) {
+      fs.mkdirSync(generatedDir, { recursive: true });
+    }
+    const indexPath = path.join(generatedDir, 'operations.md');
     fs.writeFileSync(indexPath, indexContent);
     console.log(`📄 Generated operations index: ${indexPath}`);
   }
 
   private async generateOperationDoc(operation: OperationInfo): Promise<void> {
-    const docContent = `# ${operation.name}
+    const frontMatter = `---
+layout: default
+---
+
+`;
+    const docContent =
+      frontMatter +
+      `# ${operation.name}
 
 ${operation.description ? `## Description\n\n${operation.description}\n\n` : ''}
 
@@ -271,7 +289,7 @@ ${
     const docPath = path.join(
       process.cwd(),
       'docs',
-      'operations',
+      '_operations',
       `${operation.name}.md`
     );
 
