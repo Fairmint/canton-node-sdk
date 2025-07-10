@@ -18,7 +18,6 @@ export const GetEventsByContractId = createApiOperation<
   EventsByContractIdResponse
 >({
   paramsSchema: GetEventsByContractIdParamsSchema,
-  operation: 'get events by contract ID',
   method: 'POST',
   buildUrl: (_params: GetEventsByContractIdParams, apiUrl: string) => `${apiUrl}/v2/events/events-by-contract-id`,
   buildRequestData: (params: GetEventsByContractIdParams, client) => {

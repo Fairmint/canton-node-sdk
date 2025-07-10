@@ -18,7 +18,6 @@ export const GetTransactionTreeByOffset = createApiOperation<
   TransactionTreeByOffsetResponse
 >({
   paramsSchema: GetTransactionTreeByOffsetParamsSchema,
-  operation: 'get transaction tree by offset',
   method: 'GET',
   buildUrl: (params, apiUrl, client) => {
     const currentPartyId = client.getPartyId();

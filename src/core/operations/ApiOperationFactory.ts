@@ -5,7 +5,6 @@ import { BaseClient } from '../BaseClient';
 
 export interface ApiOperationConfig<Params, Response> {
   paramsSchema: z.ZodSchema<Params>;
-  operation: string;
   method: 'GET' | 'POST';
   buildUrl: (params: Params, apiUrl: string, client: BaseClient) => string;
   buildRequestData?: (params: Params, client: BaseClient) => unknown;
