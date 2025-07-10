@@ -1,7 +1,5 @@
-import { EnvLoader ,createApiOperation } from '../../../../../core';
+import { createApiOperation } from '../../../../../core';
 import { GetEventsByContractIdParamsSchema, GetEventsByContractIdParams, EventsByContractIdRequest, EventsByContractIdResponse } from '../../../schemas';
-
-const config = EnvLoader.getInstance();
 
 export const GetEventsByContractId = createApiOperation<
   GetEventsByContractIdParams,
@@ -11,8 +9,8 @@ export const GetEventsByContractId = createApiOperation<
   operation: 'get events by contract ID',
   method: 'POST',
   buildUrl: (_params: GetEventsByContractIdParams, apiUrl: string) => `${apiUrl}/v2/events/events-by-contract-id`,
-  buildRequestData: (params: GetEventsByContractIdParams) => {
-    const currentPartyId = config.getPartyId();
+  buildRequestData: (params: GetEventsByContractIdParams, client) => {
+    const currentPartyId = client.getPartyId();
     
     const readParties = Array.from(
       new Set([
