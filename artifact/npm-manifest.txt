@@ -10,8 +10,10 @@ build/src/clients/ledger-json-api/operations/v2/updates/index
 build/src/clients/ledger-json-api/operations/v2/updates/transaction-tree-by-offset
 build/src/clients/ledger-json-api/schemas/base
 build/src/clients/ledger-json-api/schemas/commands
+build/src/clients/ledger-json-api/schemas/common
 build/src/clients/ledger-json-api/schemas/completions
 build/src/clients/ledger-json-api/schemas/errors
+build/src/clients/ledger-json-api/schemas/event-details
 build/src/clients/ledger-json-api/schemas/events
 build/src/clients/ledger-json-api/schemas/index
 build/src/clients/ledger-json-api/schemas/packages
@@ -27,8 +29,6 @@ build/src/core/ClientFactory
 build/src/core/auth/AuthenticationManager
 build/src/core/auth/index
 build/src/core/config/EnvLoader
-build/src/core/config/EnvironmentConfig
-build/src/core/config/ProviderConfigBuilder
 build/src/core/config/index
 build/src/core/errors
 build/src/core/http/HttpClient
