@@ -24,10 +24,13 @@ console.log(`   Ledger JSON API client available: ${hasLedgerClient}\n`);
 // Example 3: Try to create a client with environment configuration
 console.log('🔧 Attempting to create client with environment config...');
 try {
-  const config = EnvLoader.getConfig('LEDGER_JSON_API');
+  console.log('   ⚙️ Loading config...');
+  const config = EnvLoader.getConfig('LEDGER_JSON_API', { network: 'devnet', provider: '5n' });
+  console.log('   ✨ Config loaded successfully!');
+  console.log('   🔄 Creating client...');
   const client = ClientFactory.createClient('LEDGER_JSON_API', config);
-  console.log('   ✅ Client created successfully!');
   console.log(`   📊 Client type: ${client.constructor.name}\n`);
+  console.log('   ✅ Client created successfully!');
 } catch (error) {
   console.log('   ⚠️  Client creation failed (expected without environment variables):');
   console.log(`      ${error.message}\n`);
