@@ -34,6 +34,8 @@ export const GetEventsByContractId = createApiOperation<
             {} as Record<string, { cumulative: string[] }>
           ),
         },
+        includeCreatedEventBlob: true,
+        includeInterfaceViews: true,
       },
     };
 
