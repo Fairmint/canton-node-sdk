@@ -74,10 +74,9 @@ class OperationDocGenerator {
 
     const operationInfo: Partial<OperationInfo> = {
       filePath,
-      name: path.basename(filePath, '.ts'),
     };
 
-    // Extract JSDoc comments and operation metadata
+    // Extract function name and other metadata
     this.extractMetadata(sourceFile, operationInfo);
 
     if (operationInfo.name && operationInfo.method) {
@@ -90,6 +89,20 @@ class OperationDocGenerator {
     operationInfo: Partial<OperationInfo>
   ): void {
     const visit = (node: ts.Node): void => {
+      // Look for exported constant declarations (function names)
+      if (
+        ts.isVariableStatement(node) &&
+        node.modifiers?.some(mod => mod.kind === ts.SyntaxKind.ExportKeyword)
+      ) {
+        for (const declaration of node.declarationList.declarations) {
+          if (ts.isVariableDeclaration(declaration) && declaration.name) {
+            if (ts.isIdentifier(declaration.name)) {
+              operationInfo.name = declaration.name.text;
+            }
+          }
+        }
+      }
+
       // Look for JSDoc comments
       const jsDoc = ts.getJSDocTags(node);
       for (const tag of jsDoc) {
@@ -170,55 +183,74 @@ class OperationDocGenerator {
     }
   }
 
+  private detectCategories(): string[] {
+    const categories = new Set<string>();
+
+    for (const operation of this.operations) {
+      // Extract category from file path
+      // Path format: .../operations/v2/category/filename.ts
+      const pathParts = operation.filePath.split('/');
+      const operationsIndex = pathParts.findIndex(
+        part => part === 'operations'
+      );
+
+      if (operationsIndex !== -1 && pathParts[operationsIndex + 2]) {
+        const category = pathParts[operationsIndex + 2];
+        if (category) {
+          categories.add(category);
+        }
+      }
+    }
+
+    return Array.from(categories).sort();
+  }
+
+  private generateCategorySection(category: string): string {
+    const categoryOperations = this.operations.filter(op =>
+      op.filePath.includes(`/${category}/`)
+    );
+
+    if (categoryOperations.length === 0) {
+      return '';
+    }
+
+    // Sort operations by function name
+    categoryOperations.sort((a, b) => a.name.localeCompare(b.name));
+
+    const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
+
+    return `### ${categoryName}
+
+| Operation | Description |
+|-----------|-------------|
+${categoryOperations
+  .map(
+    op =>
+      `| [${op.name}](/operations/${op.name}/) | ${op.description || 'No description'} |`
+  )
+  .join('\n')}`;
+  }
+
   private async generateOperationsIndex(): Promise<void> {
     const frontMatter = `---
 layout: default
 ---
 
 `;
+
+    // Dynamically detect categories from operation file paths
+    const categories = this.detectCategories();
+
     const indexContent =
       frontMatter +
       `# Canton Node SDK Operations
 
 This document provides an overview of all available operations in the Canton Node SDK.
 
-## Available Operations
+## Operations by Category
 
-${this.operations
-  .map(op => {
-    const docPath = `/operations/${op.name}/`;
-    return `- [${op.name}](${docPath}) - ${op.description || 'No description available'}`;
-  })
-  .join('\n')}
+${categories.map(category => this.generateCategorySection(category)).join('\n\n')}
 
-## Operation Categories
-
-### Events
-${this.operations
-  .filter(op => op.filePath.includes('/events/'))
-  .map(op => `- [${op.name}](/operations/${op.name}/)`)
-  .join('\n')}
-
-### Updates  
-${this.operations
-  .filter(op => op.filePath.includes('/updates/'))
-  .map(op => `- [${op.name}](/operations/${op.name}/)`)
-  .join('\n')}
-
-## Quick Reference
-
-| Operation | Method | Description |
-|-----------|--------|-------------|
-${this.operations
-  .map(
-    op =>
-      `| [${op.name}](/operations/${op.name}/) | \`${op.method}\` | ${op.description || 'No description'} |`
-  )
-  .join('\n')}
-
----
-
-*Generated automatically from operation definitions*
 `;
 
     const generatedDir = path.join(process.cwd(), 'docs', '_generated');
