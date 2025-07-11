@@ -1,1 +1,1 @@
-export * from './events-by-contract-id'; 
+export * from './get-events-by-contract-id'; 

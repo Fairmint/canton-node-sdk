@@ -1,1 +1,1 @@
-export * from './get-version'; 
+export * from './get'; 
