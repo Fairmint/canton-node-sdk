@@ -1,14 +1,19 @@
 // AUTO-GENERATED OPERATION IMPORTS START
-import { GetEventsByContractId } from './operations/v2/events/events-by-contract-id';
-import { GetUpdates } from './operations/v2/updates/flats';
-import { GetTransactionById } from './operations/v2/updates/transaction-by-id';
-import { GetTransactionByOffset } from './operations/v2/updates/transaction-by-offset';
-import { GetTransactionTreeById } from './operations/v2/updates/transaction-tree-by-id';
-import { GetTransactionTreeByOffset } from './operations/v2/updates/transaction-tree-by-offset';
-import { GetUpdateTrees } from './operations/v2/updates/trees';
-import { GetUpdateById } from './operations/v2/updates/update-by-id';
-import { GetUpdateByOffset } from './operations/v2/updates/update-by-offset';
-import { GetVersion } from './operations/v2/version/get-version';
+import { GetEventsByContractId } from './operations/v2/events/get-events-by-contract-id';
+import { GetPackageStatus } from './operations/v2/packages/get-package-status';
+import { GetPreferredPackageVersion } from './operations/v2/packages/get-preferred-package-version';
+import { GetPreferredPackages } from './operations/v2/packages/get-preferred-packages';
+import { ListPackages } from './operations/v2/packages/get';
+import { UploadDarFile } from './operations/v2/packages/post';
+import { GetUpdates } from './operations/v2/updates/get-flats';
+import { GetTransactionById } from './operations/v2/updates/get-transaction-by-id';
+import { GetTransactionByOffset } from './operations/v2/updates/get-transaction-by-offset';
+import { GetTransactionTreeById } from './operations/v2/updates/get-transaction-tree-by-id';
+import { GetTransactionTreeByOffset } from './operations/v2/updates/get-transaction-tree-by-offset';
+import { GetUpdateTrees } from './operations/v2/updates/get-trees';
+import { GetUpdateById } from './operations/v2/updates/get-update-by-id';
+import { GetUpdateByOffset } from './operations/v2/updates/get-update-by-offset';
+import { GetVersion } from './operations/v2/version/get';
 // AUTO-GENERATED OPERATION IMPORTS END
 import { BaseClient, ClientConfig } from '../../core';
 import { 
@@ -20,7 +25,12 @@ import {
   GetUpdateByOffsetParams,
   GetTransactionByIdParams,
   GetUpdateByIdParams,
-  GetTransactionTreeByIdParams
+  GetTransactionTreeByIdParams,
+  ListPackagesParams,
+  UploadDarFileParams,
+  GetPackageStatusParams,
+  GetPreferredPackagesParams,
+  GetPreferredPackageVersionParams
 } from './schemas/operations';
 import { 
   EventsByContractIdResponse, 
@@ -30,13 +40,23 @@ import {
   GetTransactionResponse,
   GetUpdateResponse,
   GetTransactionTreeResponse,
-  GetLedgerApiVersionResponse
+  GetLedgerApiVersionResponse,
+  ListPackagesResponse,
+  UploadDarFileResponse,
+  GetPackageStatusResponse,
+  GetPreferredPackagesResponse,
+  GetPreferredPackageVersionResponse
 } from './schemas/api';
 
 /** Client for interacting with Canton's Ledger JSON API */
 export class LedgerJsonApiClient extends BaseClient {
   // AUTO-GENERATED METHODS START
   public getEventsByContractId!: (params: GetEventsByContractIdParams) => Promise<EventsByContractIdResponse>;
+  public getPackageStatus!: (params: GetPackageStatusParams) => Promise<GetPackageStatusResponse>;
+  public getPreferredPackageVersion!: (params: GetPreferredPackageVersionParams) => Promise<GetPreferredPackageVersionResponse>;
+  public getPreferredPackages!: (params: GetPreferredPackagesParams) => Promise<GetPreferredPackagesResponse>;
+  public listPackages!: (params: ListPackagesParams) => Promise<ListPackagesResponse>;
+  public uploadDarFile!: (params: UploadDarFileParams) => Promise<UploadDarFileResponse>;
   public getUpdates!: (params: GetUpdatesParams) => Promise<GetUpdatesResponse>;
   public getTransactionById!: (params: GetTransactionByIdParams) => Promise<GetTransactionResponse>;
   public getTransactionByOffset!: (params: GetTransactionByOffsetParams) => Promise<GetTransactionResponse>;
@@ -66,6 +86,11 @@ export class LedgerJsonApiClient extends BaseClient {
   private initializeMethods(): void {
     // AUTO-GENERATED METHOD IMPLEMENTATIONS START
     this.getEventsByContractId = (params) => new GetEventsByContractId(this).execute(params);
+    this.getPackageStatus = (params) => new GetPackageStatus(this).execute(params);
+    this.getPreferredPackageVersion = (params) => new GetPreferredPackageVersion(this).execute(params);
+    this.getPreferredPackages = (params) => new GetPreferredPackages(this).execute(params);
+    this.listPackages = (params) => new ListPackages(this).execute(params);
+    this.uploadDarFile = (params) => new UploadDarFile(this).execute(params);
     this.getUpdates = (params) => new GetUpdates(this).execute(params);
     this.getTransactionById = (params) => new GetTransactionById(this).execute(params);
     this.getTransactionByOffset = (params) => new GetTransactionByOffset(this).execute(params);

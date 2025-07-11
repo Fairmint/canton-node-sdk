@@ -5,4 +5,7 @@ export * from './base';
 export * from './events';
 
 // Update parameter schemas
-export * from './updates'; 
+export * from './updates';
+
+// Package parameter schemas
+export * from './packages'; 
