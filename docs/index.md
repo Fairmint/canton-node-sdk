@@ -9,6 +9,7 @@ Welcome to the Canton Node SDK documentation. This TypeScript SDK provides a com
 
 ## Quick Start
 
+- **[Getting Started](/getting-started/)** - Installation and basic usage examples
 - **[Operations Documentation](/operations/)** - Complete reference of all available operations
 - **[Individual Operations](/operations/)** - Browse specific operation details
 

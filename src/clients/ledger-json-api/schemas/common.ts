@@ -77,13 +77,76 @@ export const UpdateMaskSchema = z.object({
 });
 
 /**
+ * Experimental features configuration.
+ */
+export const ExperimentalFeaturesSchema = z.object({
+  /** Static time support. */
+  staticTime: z.object({
+    /** Whether static time is supported. */
+    supported: z.boolean(),
+  }),
+  /** Command inspection service support. */
+  commandInspectionService: z.object({
+    /** Whether command inspection service is supported. */
+    supported: z.boolean(),
+  }),
+});
+
+/**
+ * User management features configuration.
+ */
+export const UserManagementFeaturesSchema = z.object({
+  /** Whether user management is supported. */
+  supported: z.boolean(),
+  /** Maximum rights per user. */
+  maxRightsPerUser: z.number(),
+  /** Maximum users page size. */
+  maxUsersPageSize: z.number(),
+});
+
+/**
+ * Party management features configuration.
+ */
+export const PartyManagementFeaturesSchema = z.object({
+  /** Maximum parties page size. */
+  maxPartiesPageSize: z.number(),
+});
+
+/**
+ * Duration with seconds and nanoseconds.
+ */
+export const DurationSchema = z.object({
+  /** Duration in seconds. */
+  seconds: z.number(),
+  /** Duration in nanoseconds. */
+  nanos: z.number(),
+  /** Unknown fields. */
+  unknownFields: z.object({
+    /** Fields object. */
+    fields: z.record(z.any()),
+  }),
+});
+
+/**
+ * Offset checkpoint features configuration.
+ */
+export const OffsetCheckpointFeaturesSchema = z.object({
+  /** Maximum offset checkpoint emission delay. */
+  maxOffsetCheckpointEmissionDelay: DurationSchema,
+});
+
+/**
  * API features supported by the endpoint.
  */
 export const ApiFeaturesSchema = z.object({
-  /** List of supported features. */
-  features: z.array(z.string()),
-  /** Feature metadata. */
-  metadata: z.record(z.any()).optional(),
+  /** Experimental features. */
+  experimental: ExperimentalFeaturesSchema,
+  /** User management features. */
+  userManagement: UserManagementFeaturesSchema,
+  /** Party management features. */
+  partyManagement: PartyManagementFeaturesSchema,
+  /** Offset checkpoint features. */
+  offsetCheckpoint: OffsetCheckpointFeaturesSchema,
 });
 
 // Export types
@@ -95,4 +158,9 @@ export type EmptyDeduplication = z.infer<typeof EmptyDeduplicationSchema>;
 export type MinLedgerTimeRel = z.infer<typeof MinLedgerTimeRelSchema>;
 export type PrefetchContractKey = z.infer<typeof PrefetchContractKeySchema>;
 export type UpdateMask = z.infer<typeof UpdateMaskSchema>;
+export type ExperimentalFeatures = z.infer<typeof ExperimentalFeaturesSchema>;
+export type UserManagementFeatures = z.infer<typeof UserManagementFeaturesSchema>;
+export type PartyManagementFeatures = z.infer<typeof PartyManagementFeaturesSchema>;
+export type Duration = z.infer<typeof DurationSchema>;
+export type OffsetCheckpointFeatures = z.infer<typeof OffsetCheckpointFeaturesSchema>;
 export type ApiFeatures = z.infer<typeof ApiFeaturesSchema>; 

@@ -15,6 +15,8 @@ build/src/clients/ledger-json-api/operations/v2/updates/transaction-tree-by-offs
 build/src/clients/ledger-json-api/operations/v2/updates/trees
 build/src/clients/ledger-json-api/operations/v2/updates/update-by-id
 build/src/clients/ledger-json-api/operations/v2/updates/update-by-offset
+build/src/clients/ledger-json-api/operations/v2/version/get-version
+build/src/clients/ledger-json-api/operations/v2/version/index
 build/src/clients/ledger-json-api/schemas/api/commands
 build/src/clients/ledger-json-api/schemas/api/completions
 build/src/clients/ledger-json-api/schemas/api/errors
