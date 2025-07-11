@@ -8,6 +8,7 @@ import { GetTransactionTreeByOffset } from './operations/v2/updates/transaction-
 import { GetUpdateTrees } from './operations/v2/updates/trees';
 import { GetUpdateById } from './operations/v2/updates/update-by-id';
 import { GetUpdateByOffset } from './operations/v2/updates/update-by-offset';
+import { GetVersion } from './operations/v2/version/get-version';
 // AUTO-GENERATED OPERATION IMPORTS END
 import { BaseClient, ClientConfig } from '../../core';
 import { 
@@ -28,7 +29,8 @@ import {
   GetUpdateTreesResponse,
   GetTransactionResponse,
   GetUpdateResponse,
-  GetTransactionTreeResponse
+  GetTransactionTreeResponse,
+  GetLedgerApiVersionResponse
 } from './schemas/api';
 
 /** Client for interacting with Canton's Ledger JSON API */
@@ -43,6 +45,7 @@ export class LedgerJsonApiClient extends BaseClient {
   public getUpdateTrees!: (params: GetUpdateTreesParams) => Promise<GetUpdateTreesResponse>;
   public getUpdateById!: (params: GetUpdateByIdParams) => Promise<GetUpdateResponse>;
   public getUpdateByOffset!: (params: GetUpdateByOffsetParams) => Promise<GetUpdateResponse>;
+  public getVersion!: (params: void) => Promise<GetLedgerApiVersionResponse>;
   // AUTO-GENERATED METHODS END
 
   constructor(clientConfig: ClientConfig) {
@@ -71,6 +74,7 @@ export class LedgerJsonApiClient extends BaseClient {
     this.getUpdateTrees = (params) => new GetUpdateTrees(this).execute(params);
     this.getUpdateById = (params) => new GetUpdateById(this).execute(params);
     this.getUpdateByOffset = (params) => new GetUpdateByOffset(this).execute(params);
+    this.getVersion = (params) => new GetVersion(this).execute(params);
     // AUTO-GENERATED METHOD IMPLEMENTATIONS END
   }
 } 
