@@ -1,4 +1,5 @@
 ---
+sdk_version: 0.0.1
 layout: default
 title: Configuration Guide - Canton Node SDK
 ---

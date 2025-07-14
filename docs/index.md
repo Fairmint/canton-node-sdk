@@ -1,6 +1,7 @@
 ---
 layout: default
 title: Canton Node SDK Documentation
+sdk_version: 0.0.1
 ---
 
 # Canton Node SDK

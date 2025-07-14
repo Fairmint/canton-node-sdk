@@ -46,12 +46,31 @@
             align-items: center;
         }
         
+        .nav-brand-container {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+        }
+        
         .nav-brand {
             font-weight: 700;
             font-size: 22px;
             color: #222;
             text-decoration: none;
             letter-spacing: -1px;
+            line-height: 1;
+        }
+        
+        .nav-version {
+            background: linear-gradient(90deg, #3385ff 0%, #0066FF 100%);
+            color: #fff;
+            font-weight: 600;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            box-shadow: 0 2px 8px 0 rgba(0, 102, 255, 0.08);
+            line-height: 1;
         }
         
         .nav-links {
@@ -257,7 +276,12 @@
     <nav class="nav">
         <div class="container">
             <div class="nav-content">
-                <a href="/" class="nav-brand">Canton Node SDK</a>
+                <div class="nav-brand-container">
+                    <a href="/" class="nav-brand">Canton Node SDK</a>
+                    {% if page.sdk_version %}
+                    <span class="nav-version">v{{ page.sdk_version }}</span>
+                    {% endif %}
+                </div>
                 <div class="nav-links">
                     <a href="/">Home</a>
                     <a href="/operations/">Operations</a>
