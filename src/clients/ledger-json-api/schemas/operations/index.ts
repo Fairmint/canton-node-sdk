@@ -8,4 +8,7 @@ export * from './events';
 export * from './updates';
 
 // Package parameter schemas
-export * from './packages'; 
+export * from './packages';
+
+// User parameter schemas
+export * from './users'; 

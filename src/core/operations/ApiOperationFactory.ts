@@ -5,7 +5,7 @@ import { BaseClient } from '../BaseClient';
 
 export interface ApiOperationConfig<Params, Response> {
   paramsSchema: z.ZodSchema<Params>;
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'DELETE' | 'PATCH';
   buildUrl: (params: Params, apiUrl: string, client: BaseClient) => string;
   buildRequestData?: (params: Params, client: BaseClient) => unknown;
   requestConfig?: RequestConfig;
@@ -30,9 +30,15 @@ export function createApiOperation<Params, Response>(
 
         if (config.method === 'GET') {
           response = await this.makeGetRequest(url, requestConfig);
+        } else if (config.method === 'DELETE') {
+          response = await this.makeDeleteRequest(url, requestConfig);
         } else {
           const data = config.buildRequestData?.(validatedParams, this.client);
-          response = await this.makePostRequest(url, data, requestConfig);
+          if (config.method === 'POST') {
+            response = await this.makePostRequest(url, data, requestConfig);
+          } else if (config.method === 'PATCH') {
+            response = await this.makePatchRequest(url, data, requestConfig);
+          }
         }
 
         // Transform response if needed

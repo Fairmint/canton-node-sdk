@@ -52,6 +52,45 @@ export class HttpClient {
     }
   }
 
+  public async makeDeleteRequest<T>(
+    url: string,
+    config: RequestConfig = {}
+  ): Promise<T> {
+    try {
+      const headers = await this.buildHeaders(config);
+      const response = await this.axiosInstance.delete<T>(url, { headers });
+
+      await this.logRequestResponse(url, { method: 'DELETE', headers }, response.data);
+      return response.data;
+    } catch (error) {
+      // Log the error response before throwing
+      if (axios.isAxiosError(error)) {
+        await this.logRequestResponse(url, { method: 'DELETE' }, error.response?.data || error.message);
+      }
+      throw this.handleRequestError(error);
+    }
+  }
+
+  public async makePatchRequest<T>(
+    url: string,
+    data: unknown,
+    config: RequestConfig = {}
+  ): Promise<T> {
+    try {
+      const headers = await this.buildHeaders(config);
+      const response = await this.axiosInstance.patch<T>(url, data, { headers });
+
+      await this.logRequestResponse(url, { method: 'PATCH', headers, data }, response.data);
+      return response.data;
+    } catch (error) {
+      // Log the error response before throwing
+      if (axios.isAxiosError(error)) {
+        await this.logRequestResponse(url, { method: 'PATCH', data }, error.response?.data || error.message);
+      }
+      throw this.handleRequestError(error);
+    }
+  }
+
   private async buildHeaders(config: RequestConfig): Promise<Record<string, string>> {
     const headers: Record<string, string> = {};
 

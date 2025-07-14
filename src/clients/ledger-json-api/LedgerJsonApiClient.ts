@@ -13,6 +13,15 @@ import { GetTransactionTreeByOffset } from './operations/v2/updates/get-transact
 import { GetUpdateTrees } from './operations/v2/updates/get-trees';
 import { GetUpdateById } from './operations/v2/updates/get-update-by-id';
 import { GetUpdateByOffset } from './operations/v2/updates/get-update-by-offset';
+import { CreateUser } from './operations/v2/users/create-user';
+import { GetAuthenticatedUser } from './operations/v2/users/get-authenticated-user';
+import { GetUser } from './operations/v2/users/get-user';
+import { GrantUserRights } from './operations/v2/users/grant-user-rights';
+import { ListUserRights } from './operations/v2/users/list-user-rights';
+import { ListUsers } from './operations/v2/users/list-users';
+import { RevokeUserRights } from './operations/v2/users/revoke-user-rights';
+import { UpdateUserIdentityProvider } from './operations/v2/users/update-user-identity-provider';
+import { UpdateUser } from './operations/v2/users/update-user';
 import { GetVersion } from './operations/v2/version/get';
 // AUTO-GENERATED OPERATION IMPORTS END
 import { BaseClient, ClientConfig } from '../../core';
@@ -30,7 +39,16 @@ import {
   UploadDarFileParams,
   GetPackageStatusParams,
   GetPreferredPackagesParams,
-  GetPreferredPackageVersionParams
+  GetPreferredPackageVersionParams,
+  CreateUserParams,
+  GetAuthenticatedUserParams,
+  GetUserParams,
+  GrantUserRightsParams,
+  ListUserRightsParams,
+  ListUsersParams,
+  RevokeUserRightsParams,
+  UpdateUserIdentityProviderParams,
+  UpdateUserParams
 } from './schemas/operations';
 import { 
   EventsByContractIdResponse, 
@@ -45,7 +63,15 @@ import {
   UploadDarFileResponse,
   GetPackageStatusResponse,
   GetPreferredPackagesResponse,
-  GetPreferredPackageVersionResponse
+  GetPreferredPackageVersionResponse,
+  CreateUserResponse,
+  GetUserResponse,
+  GrantUserRightsResponse,
+  ListUserRightsResponse,
+  ListUsersResponse,
+  RevokeUserRightsResponse,
+  UpdateUserIdentityProviderIdResponse,
+  UpdateUserResponse
 } from './schemas/api';
 
 /** Client for interacting with Canton's Ledger JSON API */
@@ -65,6 +91,15 @@ export class LedgerJsonApiClient extends BaseClient {
   public getUpdateTrees!: (params: GetUpdateTreesParams) => Promise<GetUpdateTreesResponse>;
   public getUpdateById!: (params: GetUpdateByIdParams) => Promise<GetUpdateResponse>;
   public getUpdateByOffset!: (params: GetUpdateByOffsetParams) => Promise<GetUpdateResponse>;
+  public createUser!: (params: CreateUserParams) => Promise<CreateUserResponse>;
+  public getAuthenticatedUser!: (params: GetAuthenticatedUserParams) => Promise<GetUserResponse>;
+  public getUser!: (params: GetUserParams) => Promise<GetUserResponse>;
+  public grantUserRights!: (params: GrantUserRightsParams) => Promise<GrantUserRightsResponse>;
+  public listUserRights!: (params: ListUserRightsParams) => Promise<ListUserRightsResponse>;
+  public listUsers!: (params: ListUsersParams) => Promise<ListUsersResponse>;
+  public revokeUserRights!: (params: RevokeUserRightsParams) => Promise<RevokeUserRightsResponse>;
+  public updateUserIdentityProvider!: (params: UpdateUserIdentityProviderParams) => Promise<UpdateUserIdentityProviderIdResponse>;
+  public updateUser!: (params: UpdateUserParams) => Promise<UpdateUserResponse>;
   public getVersion!: (params: void) => Promise<GetLedgerApiVersionResponse>;
   // AUTO-GENERATED METHODS END
 
@@ -99,6 +134,15 @@ export class LedgerJsonApiClient extends BaseClient {
     this.getUpdateTrees = (params) => new GetUpdateTrees(this).execute(params);
     this.getUpdateById = (params) => new GetUpdateById(this).execute(params);
     this.getUpdateByOffset = (params) => new GetUpdateByOffset(this).execute(params);
+    this.createUser = (params) => new CreateUser(this).execute(params);
+    this.getAuthenticatedUser = (params) => new GetAuthenticatedUser(this).execute(params);
+    this.getUser = (params) => new GetUser(this).execute(params);
+    this.grantUserRights = (params) => new GrantUserRights(this).execute(params);
+    this.listUserRights = (params) => new ListUserRights(this).execute(params);
+    this.listUsers = (params) => new ListUsers(this).execute(params);
+    this.revokeUserRights = (params) => new RevokeUserRights(this).execute(params);
+    this.updateUserIdentityProvider = (params) => new UpdateUserIdentityProvider(this).execute(params);
+    this.updateUser = (params) => new UpdateUser(this).execute(params);
     this.getVersion = (params) => new GetVersion(this).execute(params);
     // AUTO-GENERATED METHOD IMPLEMENTATIONS END
   }
