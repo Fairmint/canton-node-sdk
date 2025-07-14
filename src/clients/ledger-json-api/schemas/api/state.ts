@@ -78,14 +78,19 @@ export const JsContractEntrySchema = z.union([
 ]);
 
 /**
- * Get active contracts response.
+ * Get active contracts response item.
  */
-export const JsGetActiveContractsResponseSchema = z.object({
+export const JsGetActiveContractsResponseItemSchema = z.object({
   /** Workflow ID (optional). */
   workflowId: z.string().optional(),
   /** Contract entry. */
   contractEntry: JsContractEntrySchema,
 });
+
+/**
+ * Get active contracts response (array of contract entries).
+ */
+export const JsGetActiveContractsResponseSchema = z.array(JsGetActiveContractsResponseItemSchema);
 
 /**
  * Get ledger end response.
@@ -143,6 +148,7 @@ export type JsIncompleteAssigned = z.infer<typeof JsIncompleteAssignedSchema>;
 export type JsIncompleteUnassigned = z.infer<typeof JsIncompleteUnassignedSchema>;
 export type JsEmpty = z.infer<typeof JsEmptySchema>;
 export type JsContractEntry = z.infer<typeof JsContractEntrySchema>;
+export type JsGetActiveContractsResponseItem = z.infer<typeof JsGetActiveContractsResponseItemSchema>;
 export type JsGetActiveContractsResponse = z.infer<typeof JsGetActiveContractsResponseSchema>;
 export type GetLedgerEndResponse = z.infer<typeof GetLedgerEndResponseSchema>;
 export type GetLatestPrunedOffsetsResponse = z.infer<typeof GetLatestPrunedOffsetsResponseSchema>;

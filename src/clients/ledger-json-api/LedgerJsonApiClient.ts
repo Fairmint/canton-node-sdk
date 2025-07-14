@@ -17,6 +17,10 @@ import { GetPartyDetails } from './operations/v2/parties/get-party-details';
 import { ListKnownParties } from './operations/v2/parties/get';
 import { AllocateParty } from './operations/v2/parties/post';
 import { UpdatePartyDetails } from './operations/v2/parties/update-party-details';
+import { GetActiveContracts } from './operations/v2/state/get-active-contracts';
+import { GetConnectedSynchronizers } from './operations/v2/state/get-connected-synchronizers';
+import { GetLatestPrunedOffsets } from './operations/v2/state/get-latest-pruned-offsets';
+import { GetLedgerEnd } from './operations/v2/state/get-ledger-end';
 import { GetUpdates } from './operations/v2/updates/get-flats';
 import { GetTransactionById } from './operations/v2/updates/get-transaction-by-id';
 import { GetTransactionByOffset } from './operations/v2/updates/get-transaction-by-offset';
@@ -70,7 +74,11 @@ import {
   GetPartyDetailsParams,
   ListKnownPartiesParams,
   AllocatePartyParams,
-  UpdatePartyDetailsParams
+  UpdatePartyDetailsParams,
+  GetActiveContractsParams,
+  GetConnectedSynchronizersParams,
+  GetLedgerEndParams,
+  GetLatestPrunedOffsetsParams
 } from './schemas/operations';
 import { 
   EventsByContractIdResponse, 
@@ -104,7 +112,11 @@ import {
   GetPartiesResponse,
   ListKnownPartiesResponse,
   AllocatePartyResponse,
-  UpdatePartyDetailsResponse
+  UpdatePartyDetailsResponse,
+  JsGetActiveContractsResponse,
+  GetConnectedSynchronizersResponse,
+  GetLedgerEndResponse,
+  GetLatestPrunedOffsetsResponse
 } from './schemas/api';
 
 /** Client for interacting with Canton's Ledger JSON API */
@@ -128,6 +140,10 @@ export class LedgerJsonApiClient extends BaseClient {
   public listKnownParties!: (params: ListKnownPartiesParams) => Promise<ListKnownPartiesResponse>;
   public allocateParty!: (params: AllocatePartyParams) => Promise<AllocatePartyResponse>;
   public updatePartyDetails!: (params: UpdatePartyDetailsParams) => Promise<UpdatePartyDetailsResponse>;
+  public getActiveContracts!: (params: GetActiveContractsParams) => Promise<JsGetActiveContractsResponse>;
+  public getConnectedSynchronizers!: (params: GetConnectedSynchronizersParams) => Promise<GetConnectedSynchronizersResponse>;
+  public getLatestPrunedOffsets!: (params: GetLatestPrunedOffsetsParams) => Promise<GetLatestPrunedOffsetsResponse>;
+  public getLedgerEnd!: (params: GetLedgerEndParams) => Promise<GetLedgerEndResponse>;
   public getUpdates!: (params: GetUpdatesParams) => Promise<GetUpdatesResponse>;
   public getTransactionById!: (params: GetTransactionByIdParams) => Promise<GetTransactionResponse>;
   public getTransactionByOffset!: (params: GetTransactionByOffsetParams) => Promise<GetTransactionResponse>;
@@ -182,6 +198,10 @@ export class LedgerJsonApiClient extends BaseClient {
     this.listKnownParties = (params) => new ListKnownParties(this).execute(params);
     this.allocateParty = (params) => new AllocateParty(this).execute(params);
     this.updatePartyDetails = (params) => new UpdatePartyDetails(this).execute(params);
+    this.getActiveContracts = (params) => new GetActiveContracts(this).execute(params);
+    this.getConnectedSynchronizers = (params) => new GetConnectedSynchronizers(this).execute(params);
+    this.getLatestPrunedOffsets = (params) => new GetLatestPrunedOffsets(this).execute(params);
+    this.getLedgerEnd = (params) => new GetLedgerEnd(this).execute(params);
     this.getUpdates = (params) => new GetUpdates(this).execute(params);
     this.getTransactionById = (params) => new GetTransactionById(this).execute(params);
     this.getTransactionByOffset = (params) => new GetTransactionByOffset(this).execute(params);

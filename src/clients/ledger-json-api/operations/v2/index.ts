@@ -5,4 +5,5 @@ export * from './packages';
 export * from './parties';
 export * from './users';
 export * from './authenticated-user';
-export * from './commands'; 
+export * from './commands';
+export * from './state'; 
