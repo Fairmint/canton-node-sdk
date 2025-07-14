@@ -34,5 +34,8 @@ export * from './users';
 // Idps schemas
 export * from './idps';
 
+// Interactive submission schemas
+export * from './interactive-submission';
+
 // Command response schemas
 export * from './command-responses'; 

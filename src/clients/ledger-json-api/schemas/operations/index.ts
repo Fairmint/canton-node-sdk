@@ -19,6 +19,9 @@ export * from './users';
 // Idps parameter schemas
 export * from './idps';
 
+// Interactive submission parameter schemas
+export * from './interactive-submission';
+
 // Command parameter schemas
 export * from './commands';
 
