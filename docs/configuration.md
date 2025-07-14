@@ -37,7 +37,7 @@ CANTON_DEVNET_5N_LEDGER_JSON_API_CLIENT_SECRET=your-client-secret
 You can also configure the SDK programmatically:
 
 ```typescript
-import { ClientFactory } from '@fairmint/canton-node-sdk';
+import { LedgerJsonApiClient } from '@fairmint/canton-node-sdk';
 
 const config = {
   network: 'devnet',
@@ -56,7 +56,7 @@ const config = {
   },
 };
 
-const client = ClientFactory.createClient('LEDGER_JSON_API', config);
+const client = new LedgerJsonApiClient(config);
 ```
 
 ## 🌍 Multi-Environment Setup
@@ -110,8 +110,7 @@ const prodConfig = EnvLoader.getConfig('LEDGER_JSON_API', {
 });
 
 // Use environment-specific configuration
-const client = ClientFactory.createClient(
-  'LEDGER_JSON_API',
+const client = new LedgerJsonApiClient(
   process.env.NODE_ENV === 'production' ? prodConfig : devConfig
 );
 ```
@@ -124,7 +123,7 @@ The SDK supports OAuth2 authentication with automatic token management:
 
 ```typescript
 // Authentication is handled automatically
-const client = ClientFactory.createClient('LEDGER_JSON_API', config);
+const client = new LedgerJsonApiClient(config);
 
 // Get authenticated user information
 const user = await client.getAuthenticatedUser({
@@ -165,7 +164,7 @@ const config = {
   }),
 };
 
-const client = ClientFactory.createClient('LEDGER_JSON_API', config);
+const client = new LedgerJsonApiClient(config);
 ```
 
 ### **Console Logger**

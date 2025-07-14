@@ -43,17 +43,23 @@ npm install
 ### Basic Setup
 
 ```typescript
-import { ClientFactory, EnvLoader } from '@fairmint/canton-node-sdk';
+import { LedgerJsonApiClient, EnvLoader } from '@fairmint/canton-node-sdk';
 
-// Check available API types
-const availableTypes = ClientFactory.getRegisteredApiTypes();
-console.log('Available API types:', availableTypes);
+// Load configuration from environment variables
+const config = EnvLoader.getConfig('LEDGER_JSON_API', {
+  network: 'devnet',
+  provider: '5n',
+});
+
+// Create a client instance
+const client = new LedgerJsonApiClient(config);
+console.log('Client created successfully:', client.constructor.name);
 ```
 
 ### Creating a Client
 
 ```typescript
-import { ClientFactory, EnvLoader } from '@fairmint/canton-node-sdk';
+import { LedgerJsonApiClient, EnvLoader } from '@fairmint/canton-node-sdk';
 
 try {
   // Load configuration from environment variables
@@ -63,7 +69,7 @@ try {
   });
 
   // Create a client instance
-  const client = ClientFactory.createClient('LEDGER_JSON_API', config);
+  const client = new LedgerJsonApiClient(config);
 
   console.log('Client created successfully:', client.constructor.name);
 } catch (error) {
@@ -86,10 +92,10 @@ CANTON_AUTH_TOKEN=your-auth-token
 ### Error Handling
 
 ```typescript
-import { ClientFactory } from '@fairmint/canton-node-sdk';
+import { LedgerJsonApiClient } from '@fairmint/canton-node-sdk';
 
 try {
-  const client = ClientFactory.createClient('LEDGER_JSON_API');
+  const client = new LedgerJsonApiClient();
   // Use the client...
 } catch (error) {
   if (error.message.includes('configuration')) {

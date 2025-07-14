@@ -18,7 +18,7 @@ Thrown when there are issues with SDK configuration:
 import { ConfigurationError } from '@fairmint/canton-node-sdk';
 
 try {
-  const client = ClientFactory.createClient('LEDGER_JSON_API', invalidConfig);
+  const client = new LedgerJsonApiClient(invalidConfig);
 } catch (error) {
   if (error instanceof ConfigurationError) {
     console.error('Configuration error:', error.message);
@@ -145,7 +145,7 @@ try {
 
 ```typescript
 import {
-  ClientFactory,
+  LedgerJsonApiClient,
   ConfigurationError,
   ValidationError,
   AuthenticationError,
@@ -154,7 +154,7 @@ import {
 
 async function handleApiCall() {
   try {
-    const client = ClientFactory.createClient('LEDGER_JSON_API', config);
+    const client = new LedgerJsonApiClient(config);
     const result = await client.listPackages();
     return result;
   } catch (error) {
@@ -269,7 +269,7 @@ const config = {
   }),
 };
 
-const client = ClientFactory.createClient('LEDGER_JSON_API', config);
+const client = new LedgerJsonApiClient(config);
 ```
 
 ### **Request/Response Logging**
@@ -412,12 +412,12 @@ describe('API Error Handling', () => {
     const invalidConfig = { network: 'invalid' };
 
     expect(() => {
-      ClientFactory.createClient('LEDGER_JSON_API', invalidConfig);
+      new LedgerJsonApiClient(invalidConfig);
     }).toThrow(ConfigurationError);
   });
 
   it('should handle authentication failures', async () => {
-    const client = ClientFactory.createClient('LEDGER_JSON_API', config);
+    const client = new LedgerJsonApiClient(config);
 
     try {
       await client.getAuthenticatedUser({ identityProviderId: 'invalid' });
