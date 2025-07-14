@@ -9,14 +9,14 @@ import { GetActiveContractsRequest, JsGetActiveContractsResponse } from '../../.
  * const activeContracts = await client.getActiveContracts({
  *   activeAtOffset: 1000,
  *   parties: ['party1', 'party2'],
- *   verbose: true
+ *   verbose: true // optional, defaults to false
  * });
  * ```
  * @param activeAtOffset - The offset at which the snapshot of the active contracts will be computed
  * @param limit - Maximum number of elements to return (optional)
  * @param streamIdleTimeoutMs - Timeout to complete and send result if no new elements are received (optional)
  * @param parties - Parties to filter by (optional)
- * @param verbose - Whether to include verbose information (optional)
+ * @param verbose - Whether to include verbose information (optional, defaults to false)
  */
 export const GetActiveContracts = createApiOperation<
   GetActiveContractsParams,
@@ -46,8 +46,9 @@ export const GetActiveContracts = createApiOperation<
 
     const request: GetActiveContractsRequest = {
       activeAtOffset: params.activeAtOffset ?? 0,
+      verbose: params.verbose ?? false,
       eventFormat: {
-        verbose: params.verbose ?? true,
+        verbose: params.verbose ?? false,
         filtersByParty: {
           ...parties.reduce(
             (acc, party) => {
