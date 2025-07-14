@@ -900,7 +900,7 @@ ${closeBrace}`;
 ${categoryOperations
   .map(
     op =>
-      `| [${op.name}](/operations/${op.name}/) | ${op.description || 'No description'} |`
+      `| [${op.name}](/operations/${op.name.toLowerCase()}/) | ${op.description || 'No description'} |`
   )
   .join('\n')}`;
   }
@@ -1022,7 +1022,7 @@ ${
       process.cwd(),
       'docs',
       '_operations',
-      `${operation.name}.md`
+      `${operation.name.toLowerCase()}.md`
     );
 
     // Ensure operations directory exists
