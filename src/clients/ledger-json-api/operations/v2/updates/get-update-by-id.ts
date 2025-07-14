@@ -8,21 +8,11 @@ import { GetUpdateResponse } from '../../../schemas/api';
  * ```typescript
  * const update = await client.getUpdateById({
  *   updateId: 'update-123',
- *   updateFormat: {
- *     includeTransactions: {
- *       eventFormat: {
- *         filtersByParty: {
- *           'party1': { cumulative: [] }
- *         },
- *         verbose: true
- *       },
- *       transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA'
- *     }
- *   }
+ *   requestingParties: ['party1', 'party2']
  * });
  * ```
  * @param updateId - ID of the update to fetch
- * @param updateFormat - Update format for the request
+ * @param requestingParties - Optional array of party IDs requesting the update
  */
 export const GetUpdateById = createApiOperation<
   GetUpdateByIdParams,
@@ -31,11 +21,30 @@ export const GetUpdateById = createApiOperation<
   paramsSchema: GetUpdateByIdParamsSchema,
   method: 'POST',
   buildUrl: (_params: GetUpdateByIdParams, apiUrl: string) => `${apiUrl}/v2/updates/update-by-id`,
-  buildRequestData: (params: GetUpdateByIdParams) => {
-    // Build request body
+  buildRequestData: (params: GetUpdateByIdParams, client) => {
+    // Get current party ID from client
+    const currentPartyId = client.getPartyId();
+    
+    // Use provided parties or default to empty array
+    let requestingParties = params.requestingParties ?? [];
+    
+    // Ensure current party ID is included
+    if (!requestingParties.includes(currentPartyId)) {
+      requestingParties.push(currentPartyId);
+    }
+
+    // Build request body with simplified format
     const request = {
       updateId: params.updateId,
-      updateFormat: params.updateFormat,
+      requestingParties,
+      updateFormat: {
+        includeTransactions: {
+          eventFormat: {
+            verbose: true,
+          },
+          transactionShape: 'TRANSACTION_SHAPE_UNSPECIFIED',
+        },
+      },
     };
 
     return request;

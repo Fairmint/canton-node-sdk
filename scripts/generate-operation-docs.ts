@@ -361,7 +361,7 @@ class OperationDocGenerator {
       if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name)) {
         const propName = prop.name.text;
         // Pass indentLevel + 1 for nested objects
-        let propType = this.extractPropertyType(
+        const propType = this.extractPropertyType(
           prop.initializer,
           fromFilePath,
           indentLevel + 1
@@ -596,7 +596,11 @@ ${closeBrace}`;
           case 'boolean':
             return 'boolean';
           case 'object':
-            return this.extractZodObjectStructure(node, fromFilePath, indentLevel);
+            return this.extractZodObjectStructure(
+              node,
+              fromFilePath,
+              indentLevel
+            );
           case 'array':
             return this.extractZodArrayStructure(node, fromFilePath);
           case 'union':
@@ -630,7 +634,11 @@ ${closeBrace}`;
           case 'z.boolean':
             return 'boolean';
           case 'z.object':
-            return this.extractZodObjectStructure(node, fromFilePath, indentLevel);
+            return this.extractZodObjectStructure(
+              node,
+              fromFilePath,
+              indentLevel
+            );
           case 'z.array':
             return this.extractZodArrayStructure(node, fromFilePath);
           case 'z.union':
