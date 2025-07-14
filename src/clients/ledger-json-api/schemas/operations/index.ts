@@ -16,6 +16,9 @@ export * from './parties';
 // User parameter schemas
 export * from './users';
 
+// Idps parameter schemas
+export * from './idps';
+
 // Command parameter schemas
 export * from './commands';
 

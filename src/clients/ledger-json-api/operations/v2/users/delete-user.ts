@@ -1,5 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { DeleteUserParamsSchema, DeleteUserParams } from '../../../schemas/operations';
+import { DeleteUserResponse } from '../../../schemas/api';
 
 /**
  * @description Delete a user from the participant node
@@ -11,7 +12,7 @@ import { DeleteUserParamsSchema, DeleteUserParams } from '../../../schemas/opera
  */
 export const DeleteUser = createApiOperation<
   DeleteUserParams,
-  Record<string, never>
+  DeleteUserResponse
 >({
   paramsSchema: DeleteUserParamsSchema,
   method: 'DELETE',

@@ -31,5 +31,8 @@ export * from './updates';
 // User and party management schemas
 export * from './users';
 
+// Idps schemas
+export * from './idps';
+
 // Command response schemas
 export * from './command-responses'; 

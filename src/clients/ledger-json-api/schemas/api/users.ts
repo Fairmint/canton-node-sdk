@@ -200,6 +200,11 @@ export const UpdateUserIdentityProviderIdRequestSchema = z.object({
 export const UpdateUserIdentityProviderIdResponseSchema = z.object({});
 
 /**
+ * Delete user response.
+ */
+export const DeleteUserResponseSchema = z.object({});
+
+/**
  * Allocate party request.
  */
 export const AllocatePartyRequestSchema = z.object({
@@ -291,6 +296,7 @@ export type RevokeUserRightsRequest = z.infer<typeof RevokeUserRightsRequestSche
 export type RevokeUserRightsResponse = z.infer<typeof RevokeUserRightsResponseSchema>;
 export type UpdateUserIdentityProviderIdRequest = z.infer<typeof UpdateUserIdentityProviderIdRequestSchema>;
 export type UpdateUserIdentityProviderIdResponse = z.infer<typeof UpdateUserIdentityProviderIdResponseSchema>;
+export type DeleteUserResponse = z.infer<typeof DeleteUserResponseSchema>;
 export type AllocatePartyRequest = z.infer<typeof AllocatePartyRequestSchema>;
 export type AllocatePartyResponse = z.infer<typeof AllocatePartyResponseSchema>;
 export type UpdatePartyDetailsRequest = z.infer<typeof UpdatePartyDetailsRequestSchema>;

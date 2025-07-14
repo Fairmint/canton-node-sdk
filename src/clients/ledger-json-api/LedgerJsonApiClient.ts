@@ -7,6 +7,11 @@ import { SubmitAndWaitForTransactionTree } from './operations/v2/commands/submit
 import { SubmitAndWaitForTransaction } from './operations/v2/commands/submit-and-wait-for-transaction';
 import { SubmitAndWait } from './operations/v2/commands/submit-and-wait';
 import { GetEventsByContractId } from './operations/v2/events/get-events-by-contract-id';
+import { DeleteIdentityProviderConfig } from './operations/v2/idps/delete-idp';
+import { GetIdentityProviderConfig } from './operations/v2/idps/get-idp';
+import { ListIdentityProviderConfigs } from './operations/v2/idps/get';
+import { UpdateIdentityProviderConfig } from './operations/v2/idps/patch-idp';
+import { CreateIdentityProviderConfig } from './operations/v2/idps/post';
 import { GetPackageStatus } from './operations/v2/packages/get-package-status';
 import { GetPreferredPackageVersion } from './operations/v2/packages/get-preferred-package-version';
 import { GetPreferredPackages } from './operations/v2/packages/get-preferred-packages';
@@ -30,6 +35,7 @@ import { GetUpdateTrees } from './operations/v2/updates/get-trees';
 import { GetUpdateById } from './operations/v2/updates/get-update-by-id';
 import { GetUpdateByOffset } from './operations/v2/updates/get-update-by-offset';
 import { CreateUser } from './operations/v2/users/create-user';
+import { DeleteUser } from './operations/v2/users/delete-user';
 import { GetUser } from './operations/v2/users/get-user';
 import { GrantUserRights } from './operations/v2/users/grant-user-rights';
 import { ListUserRights } from './operations/v2/users/list-user-rights';
@@ -40,84 +46,8 @@ import { UpdateUser } from './operations/v2/users/update-user';
 import { GetVersion } from './operations/v2/version/get';
 // AUTO-GENERATED OPERATION IMPORTS END
 import { BaseClient, ClientConfig } from '../../core';
-import { 
-  GetEventsByContractIdParams, 
-  GetTransactionTreeByOffsetParams,
-  GetUpdatesParams,
-  GetUpdateTreesParams,
-  GetTransactionByOffsetParams,
-  GetUpdateByOffsetParams,
-  GetTransactionByIdParams,
-  GetUpdateByIdParams,
-  GetTransactionTreeByIdParams,
-  ListPackagesParams,
-  UploadDarFileParams,
-  GetPackageStatusParams,
-  GetPreferredPackagesParams,
-  GetPreferredPackageVersionParams,
-  CreateUserParams,
-  GetAuthenticatedUserParams,
-  GetUserParams,
-  GrantUserRightsParams,
-  ListUserRightsParams,
-  ListUsersParams,
-  RevokeUserRightsParams,
-  UpdateUserIdentityProviderParams,
-  UpdateUserParams,
-  AsyncSubmitReassignmentParams,
-  AsyncSubmitParams,
-  SubmitAndWaitForReassignmentParams,
-  SubmitAndWaitForTransactionTreeParams,
-  SubmitAndWaitForTransactionParams,
-  SubmitAndWaitParams,
-  GetParticipantIdParams,
-  GetPartyDetailsParams,
-  ListKnownPartiesParams,
-  AllocatePartyParams,
-  UpdatePartyDetailsParams,
-  GetActiveContractsParams,
-  GetConnectedSynchronizersParams,
-  GetLedgerEndParams,
-  GetLatestPrunedOffsetsParams
-} from './schemas/operations';
-import { 
-  EventsByContractIdResponse, 
-  TransactionTreeByOffsetResponse,
-  GetUpdatesResponse,
-  GetUpdateTreesResponse,
-  GetTransactionResponse,
-  GetUpdateResponse,
-  GetTransactionTreeResponse,
-  GetLedgerApiVersionResponse,
-  ListPackagesResponse,
-  UploadDarFileResponse,
-  GetPackageStatusResponse,
-  GetPreferredPackagesResponse,
-  GetPreferredPackageVersionResponse,
-  CreateUserResponse,
-  GetUserResponse,
-  GrantUserRightsResponse,
-  ListUserRightsResponse,
-  ListUsersResponse,
-  RevokeUserRightsResponse,
-  UpdateUserIdentityProviderIdResponse,
-  UpdateUserResponse,
-  SubmitReassignmentResponse,
-  SubmitResponse,
-  JsSubmitAndWaitForReassignmentResponse,
-  JsSubmitAndWaitForTransactionTreeResponse,
-  JsSubmitAndWaitForTransactionResponse,
-  SubmitAndWaitResponse,
-  GetParticipantIdResponse,
-  GetPartiesResponse,
-  ListKnownPartiesResponse,
-  AllocatePartyResponse,
-  UpdatePartyDetailsResponse,
-  JsGetActiveContractsResponse,
-  GetConnectedSynchronizersResponse,
-  GetLedgerEndResponse,
-  GetLatestPrunedOffsetsResponse
-} from './schemas/api';
+import { AllocatePartyParams, AsyncSubmitParams, AsyncSubmitReassignmentParams, CreateIdentityProviderConfigParams, CreateUserParams, DeleteIdentityProviderConfigParams, DeleteUserParams, GetActiveContractsParams, GetAuthenticatedUserParams, GetConnectedSynchronizersParams, GetEventsByContractIdParams, GetIdentityProviderConfigParams, GetLatestPrunedOffsetsParams, GetLedgerEndParams, GetPackageStatusParams, GetParticipantIdParams, GetPartyDetailsParams, GetPreferredPackageVersionParams, GetPreferredPackagesParams, GetTransactionByIdParams, GetTransactionByOffsetParams, GetTransactionTreeByIdParams, GetTransactionTreeByOffsetParams, GetUpdateByIdParams, GetUpdateByOffsetParams, GetUpdateTreesParams, GetUpdatesParams, GetUserParams, GrantUserRightsParams, ListIdentityProviderConfigsParams, ListKnownPartiesParams, ListPackagesParams, ListUserRightsParams, ListUsersParams, RevokeUserRightsParams, SubmitAndWaitForReassignmentParams, SubmitAndWaitForTransactionParams, SubmitAndWaitForTransactionTreeParams, SubmitAndWaitParams, UpdateIdentityProviderConfigParams, UpdatePartyDetailsParams, UpdateUserIdentityProviderParams, UpdateUserParams, UploadDarFileParams } from './schemas/operations';
+import { AllocatePartyResponse, CreateIdentityProviderConfigResponse, CreateUserResponse, DeleteIdentityProviderConfigResponse, DeleteUserResponse, EventsByContractIdResponse, GetConnectedSynchronizersResponse, GetIdentityProviderConfigResponse, GetLatestPrunedOffsetsResponse, GetLedgerApiVersionResponse, GetLedgerEndResponse, GetPackageStatusResponse, GetParticipantIdResponse, GetPartiesResponse, GetPreferredPackageVersionResponse, GetPreferredPackagesResponse, GetTransactionResponse, GetTransactionTreeResponse, GetUpdateResponse, GetUpdateTreesResponse, GetUpdatesResponse, GetUserResponse, GrantUserRightsResponse, JsGetActiveContractsResponse, JsSubmitAndWaitForReassignmentResponse, JsSubmitAndWaitForTransactionResponse, JsSubmitAndWaitForTransactionTreeResponse, ListIdentityProviderConfigsResponse, ListKnownPartiesResponse, ListPackagesResponse, ListUserRightsResponse, ListUsersResponse, RevokeUserRightsResponse, SubmitAndWaitResponse, SubmitReassignmentResponse, SubmitResponse, TransactionTreeByOffsetResponse, UpdateIdentityProviderConfigResponse, UpdatePartyDetailsResponse, UpdateUserIdentityProviderIdResponse, UpdateUserResponse, UploadDarFileResponse } from './schemas/api';
 
 /** Client for interacting with Canton's Ledger JSON API */
 export class LedgerJsonApiClient extends BaseClient {
@@ -130,6 +60,11 @@ export class LedgerJsonApiClient extends BaseClient {
   public submitAndWaitForTransaction!: (params: SubmitAndWaitForTransactionParams) => Promise<JsSubmitAndWaitForTransactionResponse>;
   public submitAndWait!: (params: SubmitAndWaitParams) => Promise<SubmitAndWaitResponse>;
   public getEventsByContractId!: (params: GetEventsByContractIdParams) => Promise<EventsByContractIdResponse>;
+  public deleteIdentityProviderConfig!: (params: DeleteIdentityProviderConfigParams) => Promise<DeleteIdentityProviderConfigResponse>;
+  public getIdentityProviderConfig!: (params: GetIdentityProviderConfigParams) => Promise<GetIdentityProviderConfigResponse>;
+  public listIdentityProviderConfigs!: (params: ListIdentityProviderConfigsParams) => Promise<ListIdentityProviderConfigsResponse>;
+  public updateIdentityProviderConfig!: (params: UpdateIdentityProviderConfigParams) => Promise<UpdateIdentityProviderConfigResponse>;
+  public createIdentityProviderConfig!: (params: CreateIdentityProviderConfigParams) => Promise<CreateIdentityProviderConfigResponse>;
   public getPackageStatus!: (params: GetPackageStatusParams) => Promise<GetPackageStatusResponse>;
   public getPreferredPackageVersion!: (params: GetPreferredPackageVersionParams) => Promise<GetPreferredPackageVersionResponse>;
   public getPreferredPackages!: (params: GetPreferredPackagesParams) => Promise<GetPreferredPackagesResponse>;
@@ -153,6 +88,7 @@ export class LedgerJsonApiClient extends BaseClient {
   public getUpdateById!: (params: GetUpdateByIdParams) => Promise<GetUpdateResponse>;
   public getUpdateByOffset!: (params: GetUpdateByOffsetParams) => Promise<GetUpdateResponse>;
   public createUser!: (params: CreateUserParams) => Promise<CreateUserResponse>;
+  public deleteUser!: (params: DeleteUserParams) => Promise<DeleteUserResponse>;
   public getUser!: (params: GetUserParams) => Promise<GetUserResponse>;
   public grantUserRights!: (params: GrantUserRightsParams) => Promise<GrantUserRightsResponse>;
   public listUserRights!: (params: ListUserRightsParams) => Promise<ListUserRightsResponse>;
@@ -188,6 +124,11 @@ export class LedgerJsonApiClient extends BaseClient {
     this.submitAndWaitForTransaction = (params) => new SubmitAndWaitForTransaction(this).execute(params);
     this.submitAndWait = (params) => new SubmitAndWait(this).execute(params);
     this.getEventsByContractId = (params) => new GetEventsByContractId(this).execute(params);
+    this.deleteIdentityProviderConfig = (params) => new DeleteIdentityProviderConfig(this).execute(params);
+    this.getIdentityProviderConfig = (params) => new GetIdentityProviderConfig(this).execute(params);
+    this.listIdentityProviderConfigs = (params) => new ListIdentityProviderConfigs(this).execute(params);
+    this.updateIdentityProviderConfig = (params) => new UpdateIdentityProviderConfig(this).execute(params);
+    this.createIdentityProviderConfig = (params) => new CreateIdentityProviderConfig(this).execute(params);
     this.getPackageStatus = (params) => new GetPackageStatus(this).execute(params);
     this.getPreferredPackageVersion = (params) => new GetPreferredPackageVersion(this).execute(params);
     this.getPreferredPackages = (params) => new GetPreferredPackages(this).execute(params);
@@ -211,6 +152,7 @@ export class LedgerJsonApiClient extends BaseClient {
     this.getUpdateById = (params) => new GetUpdateById(this).execute(params);
     this.getUpdateByOffset = (params) => new GetUpdateByOffset(this).execute(params);
     this.createUser = (params) => new CreateUser(this).execute(params);
+    this.deleteUser = (params) => new DeleteUser(this).execute(params);
     this.getUser = (params) => new GetUser(this).execute(params);
     this.grantUserRights = (params) => new GrantUserRights(this).execute(params);
     this.listUserRights = (params) => new ListUserRights(this).execute(params);
