@@ -1,11 +1,22 @@
 // AUTO-GENERATED OPERATION IMPORTS START
 import { GetAuthenticatedUser } from './operations/v2/authenticated-user/get';
+import { AsyncSubmitReassignment } from './operations/v2/commands/async/submit-reassignment';
+import { AsyncSubmit } from './operations/v2/commands/async/submit';
+import { SubmitAndWaitForReassignment } from './operations/v2/commands/submit-and-wait-for-reassignment';
+import { SubmitAndWaitForTransactionTree } from './operations/v2/commands/submit-and-wait-for-transaction-tree';
+import { SubmitAndWaitForTransaction } from './operations/v2/commands/submit-and-wait-for-transaction';
+import { SubmitAndWait } from './operations/v2/commands/submit-and-wait';
 import { GetEventsByContractId } from './operations/v2/events/get-events-by-contract-id';
 import { GetPackageStatus } from './operations/v2/packages/get-package-status';
 import { GetPreferredPackageVersion } from './operations/v2/packages/get-preferred-package-version';
 import { GetPreferredPackages } from './operations/v2/packages/get-preferred-packages';
 import { ListPackages } from './operations/v2/packages/get';
 import { UploadDarFile } from './operations/v2/packages/post';
+import { GetParticipantId } from './operations/v2/parties/get-participant-id';
+import { GetPartyDetails } from './operations/v2/parties/get-party-details';
+import { ListKnownParties } from './operations/v2/parties/get';
+import { AllocateParty } from './operations/v2/parties/post';
+import { UpdatePartyDetails } from './operations/v2/parties/update-party-details';
 import { GetUpdates } from './operations/v2/updates/get-flats';
 import { GetTransactionById } from './operations/v2/updates/get-transaction-by-id';
 import { GetTransactionByOffset } from './operations/v2/updates/get-transaction-by-offset';
@@ -48,7 +59,18 @@ import {
   ListUsersParams,
   RevokeUserRightsParams,
   UpdateUserIdentityProviderParams,
-  UpdateUserParams
+  UpdateUserParams,
+  AsyncSubmitReassignmentParams,
+  AsyncSubmitParams,
+  SubmitAndWaitForReassignmentParams,
+  SubmitAndWaitForTransactionTreeParams,
+  SubmitAndWaitForTransactionParams,
+  SubmitAndWaitParams,
+  GetParticipantIdParams,
+  GetPartyDetailsParams,
+  ListKnownPartiesParams,
+  AllocatePartyParams,
+  UpdatePartyDetailsParams
 } from './schemas/operations';
 import { 
   EventsByContractIdResponse, 
@@ -71,19 +93,41 @@ import {
   ListUsersResponse,
   RevokeUserRightsResponse,
   UpdateUserIdentityProviderIdResponse,
-  UpdateUserResponse
+  UpdateUserResponse,
+  SubmitReassignmentResponse,
+  SubmitResponse,
+  JsSubmitAndWaitForReassignmentResponse,
+  JsSubmitAndWaitForTransactionTreeResponse,
+  JsSubmitAndWaitForTransactionResponse,
+  SubmitAndWaitResponse,
+  GetParticipantIdResponse,
+  GetPartiesResponse,
+  ListKnownPartiesResponse,
+  AllocatePartyResponse,
+  UpdatePartyDetailsResponse
 } from './schemas/api';
 
 /** Client for interacting with Canton's Ledger JSON API */
 export class LedgerJsonApiClient extends BaseClient {
   // AUTO-GENERATED METHODS START
   public getAuthenticatedUser!: (params: GetAuthenticatedUserParams) => Promise<GetUserResponse>;
+  public asyncSubmitReassignment!: (params: AsyncSubmitReassignmentParams) => Promise<SubmitReassignmentResponse>;
+  public asyncSubmit!: (params: AsyncSubmitParams) => Promise<SubmitResponse>;
+  public submitAndWaitForReassignment!: (params: SubmitAndWaitForReassignmentParams) => Promise<JsSubmitAndWaitForReassignmentResponse>;
+  public submitAndWaitForTransactionTree!: (params: SubmitAndWaitForTransactionTreeParams) => Promise<JsSubmitAndWaitForTransactionTreeResponse>;
+  public submitAndWaitForTransaction!: (params: SubmitAndWaitForTransactionParams) => Promise<JsSubmitAndWaitForTransactionResponse>;
+  public submitAndWait!: (params: SubmitAndWaitParams) => Promise<SubmitAndWaitResponse>;
   public getEventsByContractId!: (params: GetEventsByContractIdParams) => Promise<EventsByContractIdResponse>;
   public getPackageStatus!: (params: GetPackageStatusParams) => Promise<GetPackageStatusResponse>;
   public getPreferredPackageVersion!: (params: GetPreferredPackageVersionParams) => Promise<GetPreferredPackageVersionResponse>;
   public getPreferredPackages!: (params: GetPreferredPackagesParams) => Promise<GetPreferredPackagesResponse>;
   public listPackages!: (params: ListPackagesParams) => Promise<ListPackagesResponse>;
   public uploadDarFile!: (params: UploadDarFileParams) => Promise<UploadDarFileResponse>;
+  public getParticipantId!: (params: GetParticipantIdParams) => Promise<GetParticipantIdResponse>;
+  public getPartyDetails!: (params: GetPartyDetailsParams) => Promise<GetPartiesResponse>;
+  public listKnownParties!: (params: ListKnownPartiesParams) => Promise<ListKnownPartiesResponse>;
+  public allocateParty!: (params: AllocatePartyParams) => Promise<AllocatePartyResponse>;
+  public updatePartyDetails!: (params: UpdatePartyDetailsParams) => Promise<UpdatePartyDetailsResponse>;
   public getUpdates!: (params: GetUpdatesParams) => Promise<GetUpdatesResponse>;
   public getTransactionById!: (params: GetTransactionByIdParams) => Promise<GetTransactionResponse>;
   public getTransactionByOffset!: (params: GetTransactionByOffsetParams) => Promise<GetTransactionResponse>;
@@ -121,12 +165,23 @@ export class LedgerJsonApiClient extends BaseClient {
   private initializeMethods(): void {
     // AUTO-GENERATED METHOD IMPLEMENTATIONS START
     this.getAuthenticatedUser = (params) => new GetAuthenticatedUser(this).execute(params);
+    this.asyncSubmitReassignment = (params) => new AsyncSubmitReassignment(this).execute(params);
+    this.asyncSubmit = (params) => new AsyncSubmit(this).execute(params);
+    this.submitAndWaitForReassignment = (params) => new SubmitAndWaitForReassignment(this).execute(params);
+    this.submitAndWaitForTransactionTree = (params) => new SubmitAndWaitForTransactionTree(this).execute(params);
+    this.submitAndWaitForTransaction = (params) => new SubmitAndWaitForTransaction(this).execute(params);
+    this.submitAndWait = (params) => new SubmitAndWait(this).execute(params);
     this.getEventsByContractId = (params) => new GetEventsByContractId(this).execute(params);
     this.getPackageStatus = (params) => new GetPackageStatus(this).execute(params);
     this.getPreferredPackageVersion = (params) => new GetPreferredPackageVersion(this).execute(params);
     this.getPreferredPackages = (params) => new GetPreferredPackages(this).execute(params);
     this.listPackages = (params) => new ListPackages(this).execute(params);
     this.uploadDarFile = (params) => new UploadDarFile(this).execute(params);
+    this.getParticipantId = (params) => new GetParticipantId(this).execute(params);
+    this.getPartyDetails = (params) => new GetPartyDetails(this).execute(params);
+    this.listKnownParties = (params) => new ListKnownParties(this).execute(params);
+    this.allocateParty = (params) => new AllocateParty(this).execute(params);
+    this.updatePartyDetails = (params) => new UpdatePartyDetails(this).execute(params);
     this.getUpdates = (params) => new GetUpdates(this).execute(params);
     this.getTransactionById = (params) => new GetTransactionById(this).execute(params);
     this.getTransactionByOffset = (params) => new GetTransactionByOffset(this).execute(params);

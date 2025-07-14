@@ -12,10 +12,12 @@ interface OperationInfo {
   examples?: string[];
   parameters?: string[];
   responseType?: string;
+  responseSchema?: string;
 }
 
 class OperationDocGenerator {
   private operations: OperationInfo[] = [];
+  private schemaCache = new Map<string, string>();
 
   async generateDocs(): Promise<void> {
     console.log('🔍 Scanning operations directory...');
@@ -80,6 +82,12 @@ class OperationDocGenerator {
     this.extractMetadata(sourceFile, operationInfo);
 
     if (operationInfo.name && operationInfo.method) {
+      // Extract response schema if we have a response type
+      if (operationInfo.responseType) {
+        operationInfo.responseSchema = await this.extractResponseSchema(
+          operationInfo.responseType
+        );
+      }
       this.operations.push(operationInfo as OperationInfo);
     }
   }
@@ -181,6 +189,225 @@ class OperationDocGenerator {
         }
       }
     }
+  }
+
+  private async extractResponseSchema(responseType: string): Promise<string> {
+    // Check cache first
+    if (this.schemaCache.has(responseType)) {
+      const cached = this.schemaCache.get(responseType);
+      if (cached) return cached;
+    }
+
+    // Look for the schema in the schemas directory
+    const schemasDir = path.join(
+      process.cwd(),
+      'src/clients/ledger-json-api/schemas'
+    );
+    const schemaFiles = [
+      'api/updates.ts',
+      'api/transactions.ts',
+      'api/events.ts',
+      'api/packages.ts',
+      'api/users.ts',
+      'api/commands.ts',
+      'api/state.ts',
+      'api/errors.ts',
+      'api/completions.ts',
+      'api/event-details.ts',
+      'api/reassignment.ts',
+      'api/command-responses.ts',
+    ];
+
+    for (const schemaFile of schemaFiles) {
+      const filePath = path.join(schemasDir, schemaFile);
+      if (fs.existsSync(filePath)) {
+        const schema = await this.findSchemaInFile(filePath, responseType);
+        if (schema) {
+          this.schemaCache.set(responseType, schema);
+          return schema;
+        }
+      }
+    }
+
+    // If not found, return the type name as fallback
+    return `\`${responseType}\``;
+  }
+
+  private async findSchemaInFile(
+    filePath: string,
+    responseType: string
+  ): Promise<string | null> {
+    const sourceCode = fs.readFileSync(filePath, 'utf-8');
+    const sourceFile = ts.createSourceFile(
+      filePath,
+      sourceCode,
+      ts.ScriptTarget.Latest,
+      true
+    );
+
+    let schemaDefinition: string | null = null;
+    const schemaName = responseType.replace('Response', 'ResponseSchema');
+
+    const visit = (node: ts.Node): void => {
+      // Look for schema export that matches the response type
+      if (
+        ts.isVariableStatement(node) &&
+        node.modifiers?.some(mod => mod.kind === ts.SyntaxKind.ExportKeyword)
+      ) {
+        for (const declaration of node.declarationList.declarations) {
+          if (
+            ts.isVariableDeclaration(declaration) &&
+            ts.isIdentifier(declaration.name) &&
+            declaration.name.text === schemaName
+          ) {
+            // Found the schema, now extract its structure
+            console.log(`Found schema ${schemaName} in ${filePath}`);
+            schemaDefinition = this.extractSchemaStructure(
+              declaration.initializer
+            );
+            return;
+          }
+        }
+      }
+
+      ts.forEachChild(node, visit);
+    };
+
+    visit(sourceFile);
+
+    if (!schemaDefinition) {
+      console.log(`Schema ${schemaName} not found in ${filePath}`);
+    }
+
+    return schemaDefinition;
+  }
+
+  private extractSchemaStructure(node: ts.Expression | undefined): string {
+    if (!node) return '';
+
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'z.object'
+    ) {
+      return this.extractZodObjectStructure(node);
+    } else if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'z.array'
+    ) {
+      return this.extractZodArrayStructure(node);
+    } else if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'z.union'
+    ) {
+      return this.extractZodUnionStructure(node);
+    }
+
+    return '';
+  }
+
+  private extractZodObjectStructure(node: ts.CallExpression): string {
+    const arg = node.arguments[0];
+    if (!arg || !ts.isObjectLiteralExpression(arg)) return '';
+
+    const properties: string[] = [];
+
+    for (const prop of arg.properties) {
+      if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name)) {
+        const propName = prop.name.text;
+        const propType = this.extractPropertyType(prop.initializer);
+        const isOptional =
+          propType.endsWith(' | undefined') || propType.endsWith(' | null');
+        const cleanType = propType
+          .replace(' | undefined', '')
+          .replace(' | null', '');
+
+        properties.push(
+          `    ${propName}${isOptional ? '?' : ''}: ${cleanType};`
+        );
+      }
+    }
+
+    return `{\n${properties.join('\n')}\n}`;
+  }
+
+  private extractZodArrayStructure(node: ts.CallExpression): string {
+    const arg = node.arguments[0];
+    if (!arg) return 'any[]';
+
+    const elementType = this.extractPropertyType(arg);
+    return `${elementType}[]`;
+  }
+
+  private extractZodUnionStructure(node: ts.CallExpression): string {
+    const arg = node.arguments[0];
+    if (!arg || !ts.isArrayLiteralExpression(arg)) return 'any';
+
+    const types = arg.elements.map(element =>
+      this.extractPropertyType(element)
+    );
+    return types.join(' | ');
+  }
+
+  private extractPropertyType(node: ts.Expression): string {
+    if (ts.isCallExpression(node)) {
+      if (ts.isIdentifier(node.expression)) {
+        switch (node.expression.text) {
+          case 'z.string':
+            return 'string';
+          case 'z.number':
+            return 'number';
+          case 'z.boolean':
+            return 'boolean';
+          case 'z.object':
+            return this.extractZodObjectStructure(node);
+          case 'z.array':
+            return this.extractZodArrayStructure(node);
+          case 'z.union':
+            return this.extractZodUnionStructure(node);
+          case 'z.record':
+            return 'Record<string, any>';
+          case 'z.any':
+            return 'any';
+          case 'z.null':
+            return 'null';
+          case 'z.undefined':
+            return 'undefined';
+          default:
+            return 'any';
+        }
+      }
+    } else if (ts.isPropertyAccessExpression(node)) {
+      // Handle z.string().optional() or similar
+      if (
+        ts.isCallExpression(node.expression) &&
+        ts.isIdentifier(node.expression.expression) &&
+        node.name.text === 'optional'
+      ) {
+        const baseType = this.extractPropertyType(node.expression);
+        return `${baseType} | undefined`;
+      }
+      if (
+        ts.isCallExpression(node.expression) &&
+        ts.isIdentifier(node.expression.expression) &&
+        node.name.text === 'nullable'
+      ) {
+        const baseType = this.extractPropertyType(node.expression);
+        return `${baseType} | null`;
+      }
+    } else if (ts.isIdentifier(node)) {
+      // Handle schema references - try to resolve them
+      const schemaName = node.text;
+      if (schemaName.endsWith('Schema')) {
+        // For now, return a simplified type name
+        return schemaName.replace('Schema', '');
+      }
+      return 'any';
+    }
+
+    return 'any';
   }
 
   private detectCategories(): string[] {
@@ -294,7 +521,7 @@ ${
 }
 
 ## Response Type
-${operation.responseType ? `\`${operation.responseType}\`` : 'Response type information not available'}
+${operation.responseSchema || (operation.responseType ? `\`${operation.responseType}\`` : 'Response type information not available')}
 
 ## Usage
 

@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { CreateUserParamsSchema, CreateUserParams } from '../../../schemas/operations';
-import { CreateUserResponse } from '../../../schemas/api';
+import { CreateUserResponse, CreateUserRequest } from '../../../schemas/api';
 
 /**
  * @description Create a new user on the participant node
@@ -27,8 +27,8 @@ export const CreateUser = createApiOperation<
   paramsSchema: CreateUserParamsSchema,
   method: 'POST',
   buildUrl: (_params: CreateUserParams, apiUrl: string) => `${apiUrl}/v2/users`,
-  buildRequestData: (params: CreateUserParams) => {
-    const requestBody: any = {
+  buildRequestData: (params: CreateUserParams): CreateUserRequest => {
+    const requestBody: CreateUserRequest = {
       user: params.user,
     };
     

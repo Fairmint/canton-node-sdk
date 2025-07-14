@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { GrantUserRightsParamsSchema, GrantUserRightsParams } from '../../../schemas/operations';
-import { GrantUserRightsResponse } from '../../../schemas/api';
+import { GrantUserRightsResponse, GrantUserRightsRequest } from '../../../schemas/api';
 
 /**
  * @description Grant rights to a user
@@ -24,8 +24,8 @@ export const GrantUserRights = createApiOperation<
   paramsSchema: GrantUserRightsParamsSchema,
   method: 'POST',
   buildUrl: (params: GrantUserRightsParams, apiUrl: string) => `${apiUrl}/v2/users/${params.userId}/rights`,
-  buildRequestData: (params: GrantUserRightsParams) => {
-    const requestBody: any = {
+  buildRequestData: (params: GrantUserRightsParams): GrantUserRightsRequest => {
+    const requestBody: GrantUserRightsRequest = {
       userId: params.userId,
     };
     

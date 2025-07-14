@@ -29,4 +29,7 @@ export * from './transactions';
 export * from './updates';
 
 // User and party management schemas
-export * from './users'; 
+export * from './users';
+
+// Command response schemas
+export * from './command-responses'; 

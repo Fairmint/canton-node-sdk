@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { RevokeUserRightsParamsSchema, RevokeUserRightsParams } from '../../../schemas/operations';
-import { RevokeUserRightsResponse } from '../../../schemas/api';
+import { RevokeUserRightsResponse, RevokeUserRightsRequest } from '../../../schemas/api';
 
 /**
  * @description Revoke rights from a user
@@ -23,8 +23,8 @@ export const RevokeUserRights = createApiOperation<
   paramsSchema: RevokeUserRightsParamsSchema,
   method: 'PATCH',
   buildUrl: (params: RevokeUserRightsParams, apiUrl: string) => `${apiUrl}/v2/users/${params.userId}/rights`,
-  buildRequestData: (params: RevokeUserRightsParams) => {
-    const requestBody: any = {
+  buildRequestData: (params: RevokeUserRightsParams): RevokeUserRightsRequest => {
+    const requestBody: RevokeUserRightsRequest = {
       userId: params.userId,
     };
     

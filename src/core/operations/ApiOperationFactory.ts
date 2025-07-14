@@ -9,7 +9,7 @@ export interface ApiOperationConfig<Params, Response> {
   buildUrl: (params: Params, apiUrl: string, client: BaseClient) => string;
   buildRequestData?: (params: Params, client: BaseClient) => unknown;
   requestConfig?: RequestConfig;
-  transformResponse?: (response: any) => Response;
+  transformResponse?: (response: Response) => Response;
 }
 
 export function createApiOperation<Params, Response>(
@@ -26,18 +26,20 @@ export function createApiOperation<Params, Response>(
           includeBearerToken: true 
         };
 
-        let response: any;
+        let response: Response;
 
         if (config.method === 'GET') {
-          response = await this.makeGetRequest(url, requestConfig);
+          response = await this.makeGetRequest<Response>(url, requestConfig);
         } else if (config.method === 'DELETE') {
-          response = await this.makeDeleteRequest(url, requestConfig);
+          response = await this.makeDeleteRequest<Response>(url, requestConfig);
         } else {
           const data = config.buildRequestData?.(validatedParams, this.client);
           if (config.method === 'POST') {
-            response = await this.makePostRequest(url, data, requestConfig);
+            response = await this.makePostRequest<Response>(url, data, requestConfig);
           } else if (config.method === 'PATCH') {
-            response = await this.makePatchRequest(url, data, requestConfig);
+            response = await this.makePatchRequest<Response>(url, data, requestConfig);
+          } else {
+            throw new Error(`Unsupported HTTP method: ${config.method}`);
           }
         }
 

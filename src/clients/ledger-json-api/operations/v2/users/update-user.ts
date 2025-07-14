@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { UpdateUserParamsSchema, UpdateUserParams } from '../../../schemas/operations';
-import { UpdateUserResponse } from '../../../schemas/api';
+import { UpdateUserResponse, UpdateUserRequest } from '../../../schemas/api';
 
 /**
  * @description Update a user on the participant node
@@ -30,8 +30,8 @@ export const UpdateUser = createApiOperation<
   paramsSchema: UpdateUserParamsSchema,
   method: 'PATCH',
   buildUrl: (params: UpdateUserParams, apiUrl: string) => `${apiUrl}/v2/users/${params.userId}`,
-  buildRequestData: (params: UpdateUserParams) => {
-    const requestBody: any = {
+  buildRequestData: (params: UpdateUserParams): UpdateUserRequest => {
+    const requestBody: UpdateUserRequest = {
       user: params.user,
       updateMask: params.updateMask,
     };
