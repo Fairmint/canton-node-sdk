@@ -1,18 +1,19 @@
 import { createApiOperation } from '../../../../../core';
 import { GetActiveContractsParamsSchema, GetActiveContractsParams } from '../../../schemas/operations';
 import { GetActiveContractsRequest, JsGetActiveContractsResponse } from '../../../schemas/api';
+import { LedgerJsonApiClient } from '../../../LedgerJsonApiClient';
 
 /**
  * @description Query active contracts list (blocking call)
  * @example
  * ```typescript
  * const activeContracts = await client.getActiveContracts({
- *   activeAtOffset: 1000,
+ *   activeAtOffset: 1000, // optional, defaults to ledger-end if not provided
  *   parties: ['party1', 'party2'],
  *   verbose: true // optional, defaults to false
  * });
  * ```
- * @param activeAtOffset - The offset at which the snapshot of the active contracts will be computed
+ * @param activeAtOffset - The offset at which the snapshot of the active contracts will be computed (optional, defaults to ledger-end)
  * @param limit - Maximum number of elements to return (optional)
  * @param streamIdleTimeoutMs - Timeout to complete and send result if no new elements are received (optional)
  * @param parties - Parties to filter by (optional)
@@ -34,7 +35,7 @@ export const GetActiveContracts = createApiOperation<
     }
     return url.toString();
   },
-  buildRequestData: (params: GetActiveContractsParams, client) => {
+  buildRequestData: async (params: GetActiveContractsParams, client) => {
     const currentPartyId = client.getPartyId();
     
     const parties = Array.from(
@@ -44,8 +45,18 @@ export const GetActiveContracts = createApiOperation<
       ])
     );
 
+    // If activeAtOffset is not provided, get the current ledger end
+    let activeAtOffset: number;
+    if (params.activeAtOffset !== undefined) {
+      activeAtOffset = params.activeAtOffset;
+    } else {
+      const ledgerClient = client as LedgerJsonApiClient;
+      const ledgerEnd = await ledgerClient.getLedgerEnd({});
+      activeAtOffset = ledgerEnd.offset;
+    }
+
     const request: GetActiveContractsRequest = {
-      activeAtOffset: params.activeAtOffset ?? 0,
+      activeAtOffset,
       verbose: params.verbose ?? false,
       eventFormat: {
         verbose: params.verbose ?? false,
