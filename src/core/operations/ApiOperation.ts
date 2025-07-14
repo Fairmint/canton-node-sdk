@@ -40,6 +40,21 @@ export abstract class ApiOperation<Params, Response> {
     return this.client.makePostRequest<T>(url, data, config);
   }
 
+  public async makeDeleteRequest<T>(
+    url: string,
+    config: RequestConfig = {}
+  ): Promise<T> {
+    return this.client.makeDeleteRequest<T>(url, config);
+  }
+
+  public async makePatchRequest<T>(
+    url: string,
+    data: unknown,
+    config: RequestConfig = {}
+  ): Promise<T> {
+    return this.client.makePatchRequest<T>(url, data, config);
+  }
+
   public getManagedParties(): string[] {
     return this.client.getManagedParties();
   }
