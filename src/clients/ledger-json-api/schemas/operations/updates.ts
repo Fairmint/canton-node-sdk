@@ -194,25 +194,8 @@ export const GetTransactionByIdParamsSchema = z.object({
 export const GetUpdateByIdParamsSchema = z.object({
   /** ID of the update to fetch. */
   updateId: z.string(),
-  /** Update format for the request. */
-  updateFormat: z.object({
-    includeTransactions: z.object({
-      eventFormat: OperationEventFormatSchema,
-      transactionShape: TransactionShapeSchema,
-    }).optional(),
-    includeReassignments: z.object({
-      filtersByParty: z.record(z.object({
-        cumulative: z.array(CumulativeFilterSchema),
-      })),
-      filtersForAnyParty: FiltersForAnyPartySchema,
-      verbose: z.boolean().optional(),
-    }).optional(),
-    includeTopologyEvents: z.object({
-      includeParticipantAuthorizationEvents: z.object({
-        parties: z.array(z.string()).optional(),
-      }).optional(),
-    }).optional(),
-  }),
+  /** Parties requesting the update (optional). */
+  requestingParties: z.array(z.string()).optional(),
 });
 
 /**

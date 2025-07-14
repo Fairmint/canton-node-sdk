@@ -11,7 +11,7 @@ const OPERATIONS_DIR = path.join(
   __dirname,
   '../src/clients/ledger-json-api/operations/v2'
 );
-const SCHEMAS_IMPORT_PATH = '../schemas';
+// const SCHEMAS_IMPORT_PATH = '../schemas';
 
 // Recursively get all .ts files in a directory
 function getAllTsFiles(dir: string): string[] {
@@ -75,16 +75,25 @@ function generateMethodImplementations(
     .join('\n');
 }
 
-function generateImports(
-  ops: { paramsType: string; responseType: string }[]
-): string {
+function generateImports(ops: { paramsType: string; responseType: string }[]): {
+  operationsImport: string;
+  apiImport: string;
+} {
   // Collect all unique types
-  const types = new Set<string>();
+  const paramTypes = new Set<string>();
+  const responseTypes = new Set<string>();
+
   ops.forEach(op => {
-    types.add(op.paramsType);
-    types.add(op.responseType);
+    if (op.paramsType !== 'void') {
+      paramTypes.add(op.paramsType);
+    }
+    responseTypes.add(op.responseType);
   });
-  return `import { ${Array.from(types).sort().join(', ')} } from '${SCHEMAS_IMPORT_PATH}';`;
+
+  const operationsImport = `import { ${Array.from(paramTypes).sort().join(', ')} } from './schemas/operations';`;
+  const apiImport = `import { ${Array.from(responseTypes).sort().join(', ')} } from './schemas/api';`;
+
+  return { operationsImport, apiImport };
 }
 
 function generateOperationImports(
@@ -124,16 +133,20 @@ function updateClientFile(): void {
   // 2. Generate method declarations, implementations, and imports
   const methodDecls = generateMethodDeclarations(allOps);
   const methodImpls = generateMethodImplementations(allOps);
-  const importDecl = generateImports(allOps);
+  const { operationsImport, apiImport } = generateImports(allOps);
   const opImports = generateOperationImports(allOps);
 
   // 3. Read the client file
   let content = fs.readFileSync(CLIENT_FILE, 'utf8');
 
-  // 4. Replace the import line for schemas
+  // 4. Replace the import lines for schemas
   content = content.replace(
-    /import \{[^}]+\} from '\.\.\/schemas';/,
-    importDecl
+    /import \{[^}]+\} from '\.\/schemas\/operations';/,
+    operationsImport
+  );
+  content = content.replace(
+    /import \{[^}]+\} from '\.\/schemas\/api';/,
+    apiImport
   );
 
   // 5. Replace the codegen marker sections

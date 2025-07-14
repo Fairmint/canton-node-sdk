@@ -45,7 +45,7 @@ export const GetActiveContracts = createApiOperation<
     );
 
     const request: GetActiveContractsRequest = {
-      activeAtOffset: params.activeAtOffset,
+      activeAtOffset: params.activeAtOffset ?? 0,
       eventFormat: {
         verbose: params.verbose ?? true,
         filtersByParty: {

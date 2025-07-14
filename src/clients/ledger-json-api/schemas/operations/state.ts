@@ -5,8 +5,8 @@ import { NonEmptyStringSchema } from './base';
  * Parameters for getting active contracts.
  */
 export const GetActiveContractsParamsSchema = z.object({
-  /** The offset at which the snapshot of the active contracts will be computed. */
-  activeAtOffset: z.number(),
+  /** The offset at which the snapshot of the active contracts will be computed. Defaults to 0 if not provided. */
+  activeAtOffset: z.number().optional(),
   /** Maximum number of elements to return (optional). */
   limit: z.number().optional(),
   /** Timeout to complete and send result if no new elements are received (optional). */
