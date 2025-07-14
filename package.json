@@ -31,7 +31,7 @@
     "prepack": "npm run clean && npm run build:core",
     "prepublishOnly": "npm run prepack",
     "prepare-release": "tsx scripts/prepare-release.ts",
-    "docs": "tsx scripts/generate-operation-docs.ts",
+    "docs": "tsx scripts/update-docs-version.ts && tsx scripts/generate-operation-docs.ts",
     "docs:dev": "npm run docs && cd docs && bundle exec jekyll serve --livereload --port 4000",
     "docs:build": "npm run docs && cd docs && bundle exec jekyll build"
   },

@@ -18,6 +18,14 @@ interface OperationInfo {
 class OperationDocGenerator {
   private operations: OperationInfo[] = [];
   private schemaCache = new Map<string, string>();
+  private sdkVersion: string;
+
+  constructor() {
+    // Read SDK version from package.json
+    const packageJsonPath = path.join(process.cwd(), 'package.json');
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    this.sdkVersion = packageJson.version;
+  }
 
   async generateDocs(): Promise<void> {
     console.log('🔍 Scanning operations directory...');
@@ -908,6 +916,7 @@ ${categoryOperations
   private async generateOperationsIndex(): Promise<void> {
     const frontMatter = `---
 layout: default
+sdk_version: ${this.sdkVersion}
 ---
 
 `;
@@ -963,6 +972,7 @@ ${categories.map(category => this.generateCategorySection(category)).join('\n\n'
 
     const frontMatter = `---
 layout: default
+sdk_version: ${this.sdkVersion}
 ---
 
 `;
