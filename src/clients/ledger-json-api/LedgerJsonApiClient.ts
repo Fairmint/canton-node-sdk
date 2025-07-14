@@ -1,4 +1,5 @@
 // AUTO-GENERATED OPERATION IMPORTS START
+import { GetAuthenticatedUser } from './operations/v2/authenticated-user/get';
 import { GetEventsByContractId } from './operations/v2/events/get-events-by-contract-id';
 import { GetPackageStatus } from './operations/v2/packages/get-package-status';
 import { GetPreferredPackageVersion } from './operations/v2/packages/get-preferred-package-version';
@@ -14,7 +15,6 @@ import { GetUpdateTrees } from './operations/v2/updates/get-trees';
 import { GetUpdateById } from './operations/v2/updates/get-update-by-id';
 import { GetUpdateByOffset } from './operations/v2/updates/get-update-by-offset';
 import { CreateUser } from './operations/v2/users/create-user';
-import { GetAuthenticatedUser } from './operations/v2/users/get-authenticated-user';
 import { GetUser } from './operations/v2/users/get-user';
 import { GrantUserRights } from './operations/v2/users/grant-user-rights';
 import { ListUserRights } from './operations/v2/users/list-user-rights';
@@ -77,6 +77,7 @@ import {
 /** Client for interacting with Canton's Ledger JSON API */
 export class LedgerJsonApiClient extends BaseClient {
   // AUTO-GENERATED METHODS START
+  public getAuthenticatedUser!: (params: GetAuthenticatedUserParams) => Promise<GetUserResponse>;
   public getEventsByContractId!: (params: GetEventsByContractIdParams) => Promise<EventsByContractIdResponse>;
   public getPackageStatus!: (params: GetPackageStatusParams) => Promise<GetPackageStatusResponse>;
   public getPreferredPackageVersion!: (params: GetPreferredPackageVersionParams) => Promise<GetPreferredPackageVersionResponse>;
@@ -92,7 +93,6 @@ export class LedgerJsonApiClient extends BaseClient {
   public getUpdateById!: (params: GetUpdateByIdParams) => Promise<GetUpdateResponse>;
   public getUpdateByOffset!: (params: GetUpdateByOffsetParams) => Promise<GetUpdateResponse>;
   public createUser!: (params: CreateUserParams) => Promise<CreateUserResponse>;
-  public getAuthenticatedUser!: (params: GetAuthenticatedUserParams) => Promise<GetUserResponse>;
   public getUser!: (params: GetUserParams) => Promise<GetUserResponse>;
   public grantUserRights!: (params: GrantUserRightsParams) => Promise<GrantUserRightsResponse>;
   public listUserRights!: (params: ListUserRightsParams) => Promise<ListUserRightsResponse>;
@@ -120,6 +120,7 @@ export class LedgerJsonApiClient extends BaseClient {
    */
   private initializeMethods(): void {
     // AUTO-GENERATED METHOD IMPLEMENTATIONS START
+    this.getAuthenticatedUser = (params) => new GetAuthenticatedUser(this).execute(params);
     this.getEventsByContractId = (params) => new GetEventsByContractId(this).execute(params);
     this.getPackageStatus = (params) => new GetPackageStatus(this).execute(params);
     this.getPreferredPackageVersion = (params) => new GetPreferredPackageVersion(this).execute(params);
@@ -135,7 +136,6 @@ export class LedgerJsonApiClient extends BaseClient {
     this.getUpdateById = (params) => new GetUpdateById(this).execute(params);
     this.getUpdateByOffset = (params) => new GetUpdateByOffset(this).execute(params);
     this.createUser = (params) => new CreateUser(this).execute(params);
-    this.getAuthenticatedUser = (params) => new GetAuthenticatedUser(this).execute(params);
     this.getUser = (params) => new GetUser(this).execute(params);
     this.grantUserRights = (params) => new GrantUserRights(this).execute(params);
     this.listUserRights = (params) => new ListUserRights(this).execute(params);

@@ -6,5 +6,4 @@ export * from './update-user';
 export * from './list-user-rights';
 export * from './grant-user-rights';
 export * from './revoke-user-rights';
-export * from './update-user-identity-provider';
-export * from './get-authenticated-user'; 
+export * from './update-user-identity-provider'; 
