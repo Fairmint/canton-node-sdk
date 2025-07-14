@@ -37,7 +37,7 @@ Built-in OAuth2 support with automatic token management:
 
 ```typescript
 // Authentication is handled automatically
-const client = ClientFactory.createClient('LEDGER_JSON_API', config);
+const client = new LedgerJsonApiClient(config);
 // Tokens are managed behind the scenes
 const user = await client.getAuthenticatedUser({
   identityProviderId: 'default',
@@ -152,16 +152,13 @@ await client.grantUserRights({
 
 ## Developer Tools
 
-### Client Factory Pattern
+### Direct Client Instantiation
 
-Simple and consistent client creation:
+Simple and direct client creation:
 
 ```typescript
-// Check available API types
-const availableTypes = ClientFactory.getRegisteredApiTypes();
-
-// Create clients easily
-const client = ClientFactory.createClient('LEDGER_JSON_API', config);
+// Create clients directly
+const client = new LedgerJsonApiClient(config);
 ```
 
 ## Use Cases

@@ -1,0 +1,626 @@
+[
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 432,
+          "nodeId": 0,
+          "contractId": "0094275003a994fa330f78d91ddda5d57ac3b66bf95c26dd4929b79849b6d7878dca111220b47b1bab98d085b5d49198119463ea59467f0318a8453507b3608cd71a933ea5",
+          "templateId": "940b9fd181c0cf358dd8c38934a8c908d2a3ee5a4728f72481b4de6720f3f8d5:Splice.Wallet.Install:WalletAppInstall",
+          "contractKey": null,
+          "createArgument": {
+            "dsoParty": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "validatorParty": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "endUserName": "4",
+            "endUserParty": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "signatories": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "observers": [],
+          "createdAt": "2025-07-02T14:48:00.440162Z",
+          "packageName": "splice-wallet"
+        },
+        "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "reassignmentCounter": 0
+      }
+    }
+  },
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 433,
+          "nodeId": 0,
+          "contractId": "00dfa5aa48839fdd014615266fda848579984ea756005378afe55666b8700e0419ca111220e95c5f1716417f87c6903195e620884253ea59217511808a8b6261380fc5afd1",
+          "templateId": "940b9fd181c0cf358dd8c38934a8c908d2a3ee5a4728f72481b4de6720f3f8d5:Splice.Wallet.Install:WalletAppInstall",
+          "contractKey": null,
+          "createArgument": {
+            "dsoParty": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "validatorParty": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "endUserName": "7",
+            "endUserParty": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "signatories": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "observers": [],
+          "createdAt": "2025-07-02T14:48:00.440162Z",
+          "packageName": "splice-wallet"
+        },
+        "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "reassignmentCounter": 0
+      }
+    }
+  },
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 434,
+          "nodeId": 0,
+          "contractId": "001f5b82c52711edc309558907534e78e96b2e819a89ae90b1aa2fd39eb854beffca1112205216480561d0b8bb5cb10aaba3796e337b4baee9ce7aee51a7475ee695d7e41d",
+          "templateId": "940b9fd181c0cf358dd8c38934a8c908d2a3ee5a4728f72481b4de6720f3f8d5:Splice.Wallet.Install:WalletAppInstall",
+          "contractKey": null,
+          "createArgument": {
+            "dsoParty": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "validatorParty": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "endUserName": "6",
+            "endUserParty": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "signatories": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "observers": [],
+          "createdAt": "2025-07-02T14:48:00.440199Z",
+          "packageName": "splice-wallet"
+        },
+        "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "reassignmentCounter": 0
+      }
+    }
+  },
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 443,
+          "nodeId": 0,
+          "contractId": "0090af2432028edf2b198ed51c8fb7d946a0df959a957481a7c953cfac03a770e4ca11122099fe7e1a3c318d8c5d2ec2dac422b6573cbf39cf34e69ba88b7b12d35fdc64d9",
+          "templateId": "a5b055492fb8f08b2e7bc0fc94da6da50c39c2e1d7f24cd5ea8db12fc87c1332:Splice.Amulet:ValidatorRight",
+          "contractKey": null,
+          "createArgument": {
+            "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "user": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "validator": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "signatories": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "observers": [],
+          "createdAt": "2025-07-02T14:48:05.447730Z",
+          "packageName": "splice-amulet"
+        },
+        "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "reassignmentCounter": 0
+      }
+    }
+  },
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 454,
+          "nodeId": 3,
+          "contractId": "007b1e430d2f04fd01f5a5db0e0b1dc1854010944d9239959a6c41a1fee7e0d86eca111220567ec1ae033e775885bea285dd3a77fbd43ab5b5295d9cd1506aed8f559de16c",
+          "templateId": "940b9fd181c0cf358dd8c38934a8c908d2a3ee5a4728f72481b4de6720f3f8d5:Splice.Wallet.TopUpState:ValidatorTopUpState",
+          "contractKey": null,
+          "createArgument": {
+            "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "validator": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "memberId": "PAR::TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "migrationId": "0",
+            "lastPurchasedAt": "2025-07-02T14:48:38.430192Z"
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "signatories": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "observers": [],
+          "createdAt": "2025-07-02T14:48:38.430192Z",
+          "packageName": "splice-wallet"
+        },
+        "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "reassignmentCounter": 0
+      }
+    }
+  },
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 3087,
+          "nodeId": 0,
+          "contractId": "00331fd90dc7bc1df1a3fa04f952eb144ecd891a2cfb112a18e0b11a962b6db865ca1112201c72d4dc21c393ef43c3d15e4ccd4bf50e3582fec7a3fa71c5986d9717f03413",
+          "templateId": "940b9fd181c0cf358dd8c38934a8c908d2a3ee5a4728f72481b4de6720f3f8d5:Splice.Wallet.Install:WalletAppInstall",
+          "contractKey": null,
+          "createArgument": {
+            "dsoParty": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "validatorParty": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "endUserName": "9",
+            "endUserParty": "9::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "signatories": [
+            "9::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "observers": [],
+          "createdAt": "2025-07-02T16:48:05.062813Z",
+          "packageName": "splice-wallet"
+        },
+        "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "reassignmentCounter": 0
+      }
+    }
+  },
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 3090,
+          "nodeId": 0,
+          "contractId": "00caaa2eacaab3f93ceb10ddd74e5414e88402b0751df91de7c305e995df6e12dfca1112209b543f9e1ff20fda62d9f4776fefca702dfc5c2a24a690ac3117810d46d462c1",
+          "templateId": "a5b055492fb8f08b2e7bc0fc94da6da50c39c2e1d7f24cd5ea8db12fc87c1332:Splice.Amulet:ValidatorRight",
+          "contractKey": null,
+          "createArgument": {
+            "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "user": "9::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "validator": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "signatories": [
+            "9::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "observers": [],
+          "createdAt": "2025-07-02T16:48:07.701844Z",
+          "packageName": "splice-amulet"
+        },
+        "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "reassignmentCounter": 0
+      }
+    }
+  },
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 3112,
+          "nodeId": 15,
+          "contractId": "0013be37494949fe4ed3a6c053bba2c9100bc077292023fc95caa29e60b996194aca111220ad69824360d78a5d31353f015e0ebc961d7ba1c456e66ae929999a6f172487f3",
+          "templateId": "a5b055492fb8f08b2e7bc0fc94da6da50c39c2e1d7f24cd5ea8db12fc87c1332:Splice.AmuletAllocation:AmuletAllocation",
+          "contractKey": null,
+          "createArgument": {
+            "lockedAmulet": "00740156224ccab35641a969ef65a423ad6fa2b1c8fa9b34e2250beef5d37d2bedca1112204ebba01713b490b15f7876a88b18f3eb6d6b8098e6840ed1b712b7a0d84d1139",
+            "allocation": {
+              "settlement": {
+                "executor": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+                "settlementRef": {
+                  "id": "6"
+                },
+                "requestedAt": "2025-07-02T16:51:20.167422Z",
+                "allocateBefore": "2025-07-02T17:51:00Z",
+                "settleBefore": "2025-07-02T18:01:00Z",
+                "meta": {
+                  "values": {}
+                }
+              },
+              "transferLegId": "420",
+              "transferLeg": {
+                "sender": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+                "receiver": "9::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+                "amount": "1.0000000000",
+                "instrumentId": {
+                  "admin": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+                  "id": "Amulet"
+                },
+                "meta": {
+                  "values": {}
+                }
+              }
+            }
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "signatories": [
+            "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "observers": [],
+          "createdAt": "2025-07-02T16:51:20.399838Z",
+          "packageName": "splice-amulet"
+        },
+        "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "reassignmentCounter": 0
+      }
+    }
+  },
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 3343,
+          "nodeId": 0,
+          "contractId": "00917a96c5732f584f8eb8952e43aee5cbaf8b0a1dd8af8e344212ecd26a6cb2e7ca111220c52445683851d8820dca3ac167afb0ec32244b2d5d3d4174bbccfce9d52f3acd",
+          "templateId": "940b9fd181c0cf358dd8c38934a8c908d2a3ee5a4728f72481b4de6720f3f8d5:Splice.Wallet.Install:WalletAppInstall",
+          "contractKey": null,
+          "createArgument": {
+            "dsoParty": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "validatorParty": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "endUserName": "10",
+            "endUserParty": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "signatories": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "observers": [],
+          "createdAt": "2025-07-02T17:27:01.489374Z",
+          "packageName": "splice-wallet"
+        },
+        "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "reassignmentCounter": 0
+      }
+    }
+  },
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 3993,
+          "nodeId": 2,
+          "contractId": "00591ccca9642b4682a73e0ce1c986d582849873e8bd18d1f99ed6a647775654d5ca111220a8e3a2c04dbe5bd12818cf2d0dcf571a7cd2544a42a6f8c17402a5cfc846410a",
+          "templateId": "a5b055492fb8f08b2e7bc0fc94da6da50c39c2e1d7f24cd5ea8db12fc87c1332:Splice.Amulet:FeaturedAppRight",
+          "contractKey": null,
+          "createArgument": {
+            "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "provider": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "signatories": [
+            "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
+          ],
+          "observers": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "createdAt": "2025-07-02T19:38:45.400200Z",
+          "packageName": "splice-amulet"
+        },
+        "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "reassignmentCounter": 0
+      }
+    }
+  },
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 3999,
+          "nodeId": 14,
+          "contractId": "00181f9942c7377a59683fb601ed257999bcdaf9b9ea755ef85e670ce1a7201bfcca11122038c62febea5221efb39d2cbc54204a3dc8bd1aa374143264307c28e2125b0829",
+          "templateId": "a5b055492fb8f08b2e7bc0fc94da6da50c39c2e1d7f24cd5ea8db12fc87c1332:Splice.AmuletRules:TransferPreapproval",
+          "contractKey": null,
+          "createArgument": {
+            "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "receiver": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "provider": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "validFrom": "2025-07-02T19:38:56.185257Z",
+            "lastRenewedAt": "2025-07-02T19:38:56.185257Z",
+            "expiresAt": "2025-09-30T19:38:56.146487Z"
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "signatories": [
+            "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "observers": [],
+          "createdAt": "2025-07-02T19:38:56.185257Z",
+          "packageName": "splice-amulet"
+        },
+        "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "reassignmentCounter": 0
+      }
+    }
+  },
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 4083,
+          "nodeId": 0,
+          "contractId": "00b2b600a1b1fca1eccebbd42e9acd64eadd7eb516d513a9d4e022973a6400c37eca111220f8f43c7f855f5eecb9565af4b5e488b03b696ed649f49e9b701c651225648626",
+          "templateId": "940b9fd181c0cf358dd8c38934a8c908d2a3ee5a4728f72481b4de6720f3f8d5:Splice.Wallet.Install:WalletAppInstall",
+          "contractKey": null,
+          "createArgument": {
+            "dsoParty": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "validatorParty": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "endUserName": "5",
+            "endUserParty": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "signatories": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "observers": [],
+          "createdAt": "2025-07-02T19:50:51.891531Z",
+          "packageName": "splice-wallet"
+        },
+        "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "reassignmentCounter": 0
+      }
+    }
+  },
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 83361,
+          "nodeId": 3,
+          "contractId": "00ea2730e2311a83c2924e6eba9a94b774a4ae4e6d0d8a907fe8745d272b8b0b8bca111220079615d9bb1c820f782984f1d232670f92e3366248af33608eb511dfdb69a456",
+          "templateId": "a5b055492fb8f08b2e7bc0fc94da6da50c39c2e1d7f24cd5ea8db12fc87c1332:Splice.ValidatorLicense:ValidatorLivenessActivityRecord",
+          "contractKey": null,
+          "createArgument": {
+            "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "validator": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "round": {
+              "number": "1681"
+            }
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "signatories": [
+            "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
+          ],
+          "observers": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "createdAt": "2025-07-14T16:59:14.291457Z",
+          "packageName": "splice-amulet"
+        },
+        "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "reassignmentCounter": 0
+      }
+    }
+  },
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 83423,
+          "nodeId": 3,
+          "contractId": "0040281115bfb32cb33f0603654d57d4d7d0f12c787bff899f0e288eb35a663aefca111220d9341de5bb723a99b5ae1fa365d8cdff944a4d269d6bb6330e1c30f537a8bb9e",
+          "templateId": "a5b055492fb8f08b2e7bc0fc94da6da50c39c2e1d7f24cd5ea8db12fc87c1332:Splice.ValidatorLicense:ValidatorLivenessActivityRecord",
+          "contractKey": null,
+          "createArgument": {
+            "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "validator": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "round": {
+              "number": "1682"
+            }
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "signatories": [
+            "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
+          ],
+          "observers": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "createdAt": "2025-07-14T17:13:24.222644Z",
+          "packageName": "splice-amulet"
+        },
+        "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "reassignmentCounter": 0
+      }
+    }
+  },
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 83464,
+          "nodeId": 2,
+          "contractId": "00fcce69f3b4956728ce09d7cbc9be8b65e80e10340044f39eb2cb04bfd6ada30aca111220ac4c9ecd04155d8a08c6247185c016b439dc626363f7c7c53e88bb3b3972bbe4",
+          "templateId": "a5b055492fb8f08b2e7bc0fc94da6da50c39c2e1d7f24cd5ea8db12fc87c1332:Splice.ValidatorLicense:ValidatorLicense",
+          "contractKey": null,
+          "createArgument": {
+            "validator": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "sponsor": "Five-North-1::12206609cad507245db7373aedab44db9c6438a15c7af874af2b689059ebffd91cd3",
+            "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "faucetState": {
+              "firstReceivedFor": {
+                "number": "0"
+              },
+              "lastReceivedFor": {
+                "number": "1683"
+              },
+              "numCouponsMissed": "0"
+            },
+            "metadata": {
+              "lastUpdatedAt": "2025-07-09T00:20:16.189561Z",
+              "version": "0.4.4",
+              "contactPoint": "nodeadmin@fivenorth.io"
+            },
+            "lastActiveAt": "2025-07-14T17:22:38.706901Z"
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "signatories": [
+            "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
+          ],
+          "observers": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "createdAt": "2025-07-14T17:22:38.706901Z",
+          "packageName": "splice-amulet"
+        },
+        "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "reassignmentCounter": 0
+      }
+    }
+  },
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 83464,
+          "nodeId": 3,
+          "contractId": "006f6bb833c8c5effc91c28d3844bf4171bfbbdddab216a05d09343c0de3912c99ca1112204fd6a4c33f0640ab6ab6ccaf4b5542cd7e7aa012512dd90c614e954f7e0b8ca3",
+          "templateId": "a5b055492fb8f08b2e7bc0fc94da6da50c39c2e1d7f24cd5ea8db12fc87c1332:Splice.ValidatorLicense:ValidatorLivenessActivityRecord",
+          "contractKey": null,
+          "createArgument": {
+            "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "validator": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "round": {
+              "number": "1683"
+            }
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "signatories": [
+            "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
+          ],
+          "observers": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "createdAt": "2025-07-14T17:22:38.706901Z",
+          "packageName": "splice-amulet"
+        },
+        "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "reassignmentCounter": 0
+      }
+    }
+  },
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 83469,
+          "nodeId": 11,
+          "contractId": "00755e9ca7fd5f8a7991f83d0835152e40eeb048cd802c8040ca63cba35fc437f2ca1112200241cc5a4943b954195a7e779ad6c5568f3b97607eb4b6e082d5cb35cd6be4b8",
+          "templateId": "a5b055492fb8f08b2e7bc0fc94da6da50c39c2e1d7f24cd5ea8db12fc87c1332:Splice.Amulet:Amulet",
+          "contractKey": null,
+          "createArgument": {
+            "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "owner": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
+            "amount": {
+              "initialAmount": "93429.8993779998",
+              "createdAt": {
+                "number": "1683"
+              },
+              "ratePerRound": {
+                "rate": "0.0003805180"
+              }
+            }
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "signatories": [
+            "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+            "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
+          ],
+          "observers": [],
+          "createdAt": "2025-07-14T17:23:25.040031Z",
+          "packageName": "splice-amulet"
+        },
+        "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+        "reassignmentCounter": 0
+      }
+    }
+  }
+]
