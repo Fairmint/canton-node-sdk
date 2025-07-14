@@ -7,7 +7,7 @@ export interface ApiOperationConfig<Params, Response> {
   paramsSchema: z.ZodSchema<Params>;
   method: 'GET' | 'POST' | 'DELETE' | 'PATCH';
   buildUrl: (params: Params, apiUrl: string, client: BaseClient) => string;
-  buildRequestData?: (params: Params, client: BaseClient) => unknown;
+  buildRequestData?: (params: Params, client: BaseClient) => unknown | Promise<unknown>;
   requestConfig?: RequestConfig;
   transformResponse?: (response: Response) => Response;
 }
@@ -33,7 +33,7 @@ export function createApiOperation<Params, Response>(
         } else if (config.method === 'DELETE') {
           response = await this.makeDeleteRequest<Response>(url, requestConfig);
         } else {
-          const data = config.buildRequestData?.(validatedParams, this.client);
+          const data = await config.buildRequestData?.(validatedParams, this.client);
           if (config.method === 'POST') {
             response = await this.makePostRequest<Response>(url, data, requestConfig);
           } else if (config.method === 'PATCH') {
