@@ -56,6 +56,11 @@ jobs:
             else
               echo "Changes detected from lint/format/manifest. Checking if last commit was auto-fix..."
               
+              # Display the diff for debugging
+              echo "=== DIFF OF CHANGES ==="
+              git diff
+              echo "=== END DIFF ==="
+              
               # Check if the last commit was an auto-fix commit to prevent infinite loops
               LAST_COMMIT_MSG=$(git log -1 --pretty=%B)
               if [[ "$LAST_COMMIT_MSG" == "Auto-fix: lint, format, and manifest changes" ]]; then
