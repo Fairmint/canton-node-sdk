@@ -6,6 +6,7 @@ import {
 const runner = new SimulationRunner();
 
 export async function runAllTests() {
+  // Disabled due to frequent changes
   // Test: successful active contracts query (happy case)
   await runner.runSimulation(
     'get_active_contracts',
