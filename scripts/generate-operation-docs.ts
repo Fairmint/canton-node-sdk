@@ -1009,23 +1009,14 @@ ${operation.responseSchema || `\`${operation.responseType}\``}
 ## Usage
 
 \`\`\`typescript
-import { LedgerJsonApiClient } from '@fairmint/canton-node-sdk';
+import { LedgerJsonApiClient, EnvLoader } from '@fairmint/canton-node-sdk';
 
-const client = new LedgerJsonApiClient({
+const config = EnvLoader.getConfig('LEDGER_JSON_API', {
   network: 'devnet',
-  provider: '5n',
-  apis: {
-    LEDGER_JSON_API: {
-      apiUrl: 'https://your-canton-node.com/ledger-json-api',
-      auth: {
-        grantType: 'client_credentials',
-        clientId: 'your-client-id',
-        clientSecret: 'your-client-secret'
-      },
-      partyId: 'your-party-id'
-    }
-  }
+  provider: '5n'
 });
+
+const client = new LedgerJsonApiClient(config);
 
 ${
   operation.examples && operation.examples.length > 0
