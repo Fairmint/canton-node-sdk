@@ -40,7 +40,8 @@ console.log(`Connected to Canton ${version.version}`);
 - **[Features](/features/)** - Detailed capabilities overview
 - **[Configuration](/configuration/)** - Environment and client configuration
 - **[Error Handling](/error-handling/)** - Error types and handling patterns
-- **[Operations](/operations/)** - Complete API reference
+- **[Ledger JSON API Operations](/ledger-json-api-operations/)** - Complete Ledger JSON API reference
+- **[Validator API Operations](/validator-api-operations/)** - Complete Validator API reference
 
 ## Requirements
 

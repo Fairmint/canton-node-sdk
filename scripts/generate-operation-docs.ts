@@ -13,6 +13,7 @@ interface OperationInfo {
   parameters?: string[];
   responseType?: string;
   responseSchema?: string;
+  apiType: 'ledger-json-api' | 'validator-api';
 }
 
 class OperationDocGenerator {
@@ -28,13 +29,21 @@ class OperationDocGenerator {
   }
 
   async generateDocs(): Promise<void> {
-    console.log('🔍 Scanning operations directory...');
+    console.log('🔍 Scanning operations directories...');
 
-    const operationsDir = path.join(
+    // Scan ledger-json-api operations
+    const ledgerOperationsDir = path.join(
       process.cwd(),
       'src/clients/ledger-json-api/operations'
     );
-    await this.scanOperations(operationsDir);
+    await this.scanOperations(ledgerOperationsDir, 'ledger-json-api');
+
+    // Scan validator-api operations
+    const validatorOperationsDir = path.join(
+      process.cwd(),
+      'src/clients/validator-api/operations'
+    );
+    await this.scanOperations(validatorOperationsDir, 'validator-api');
 
     console.log(`📝 Found ${this.operations.length} operations`);
 
@@ -55,25 +64,31 @@ class OperationDocGenerator {
     console.log('✅ Documentation generation complete!');
   }
 
-  private async scanOperations(dir: string): Promise<void> {
+  private async scanOperations(
+    dir: string,
+    apiType: 'ledger-json-api' | 'validator-api'
+  ): Promise<void> {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
 
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
 
       if (entry.isDirectory()) {
-        await this.scanOperations(fullPath);
+        await this.scanOperations(fullPath, apiType);
       } else if (
         entry.isFile() &&
         entry.name.endsWith('.ts') &&
         !entry.name.startsWith('index')
       ) {
-        await this.extractOperationInfo(fullPath);
+        await this.extractOperationInfo(fullPath, apiType);
       }
     }
   }
 
-  private async extractOperationInfo(filePath: string): Promise<void> {
+  private async extractOperationInfo(
+    filePath: string,
+    apiType: 'ledger-json-api' | 'validator-api'
+  ): Promise<void> {
     const sourceCode = fs.readFileSync(filePath, 'utf-8');
     const sourceFile = ts.createSourceFile(
       filePath,
@@ -84,16 +99,18 @@ class OperationDocGenerator {
 
     const operationInfo: Partial<OperationInfo> = {
       filePath,
+      apiType,
     };
 
     // Extract function name and other metadata
     this.extractMetadata(sourceFile, operationInfo);
 
-    if (operationInfo.name && operationInfo.method) {
+    if (operationInfo.name && operationInfo.method && operationInfo.apiType) {
       // Extract response schema if we have a response type
       if (operationInfo.responseType) {
         operationInfo.responseSchema = await this.extractResponseSchema(
-          operationInfo.responseType
+          operationInfo.responseType,
+          operationInfo.apiType
         );
       }
       this.operations.push(operationInfo as OperationInfo);
@@ -199,17 +216,20 @@ class OperationDocGenerator {
     }
   }
 
-  private async extractResponseSchema(responseType: string): Promise<string> {
+  private async extractResponseSchema(
+    responseType: string,
+    apiType: 'ledger-json-api' | 'validator-api'
+  ): Promise<string> {
     // Check cache first
     if (this.schemaCache.has(responseType)) {
       const cached = this.schemaCache.get(responseType);
       if (cached) return cached;
     }
 
-    // Look for the schema in the schemas directory
+    // Look for the schema in the appropriate schemas directory
     const schemasDir = path.join(
       process.cwd(),
-      'src/clients/ledger-json-api/schemas'
+      `src/clients/${apiType}/schemas`
     );
     const apiDir = path.join(schemasDir, 'api');
     let schemaFiles: string[] = [];
@@ -227,13 +247,17 @@ class OperationDocGenerator {
       .map(f => f);
     schemaFiles.push(...parentSchemaFiles);
 
-    for (const schemaFile of schemaFiles) {
-      const filePath = path.join(schemasDir, schemaFile);
-      if (fs.existsSync(filePath)) {
-        const schema = await this.findSchemaInFile(filePath, responseType);
-        if (schema) {
-          this.schemaCache.set(responseType, schema);
-          return schema;
+    // Try both the raw responseType and responseType + 'Schema'
+    const candidates = [responseType, responseType + 'Schema'];
+    for (const candidate of candidates) {
+      for (const schemaFile of schemaFiles) {
+        const filePath = path.join(schemasDir, schemaFile);
+        if (fs.existsSync(filePath)) {
+          const schema = await this.findSchemaInFile(filePath, candidate);
+          if (schema) {
+            this.schemaCache.set(responseType, schema);
+            return schema;
+          }
         }
       }
     }
@@ -248,6 +272,8 @@ class OperationDocGenerator {
     filePath: string,
     responseType: string
   ): Promise<string | null> {
+    if (!fs.existsSync(filePath)) return null;
+
     const sourceCode = fs.readFileSync(filePath, 'utf-8');
     const sourceFile = ts.createSourceFile(
       filePath,
@@ -256,11 +282,13 @@ class OperationDocGenerator {
       true
     );
 
+    let found = false;
     let schemaDefinition: string | null = null;
-    const schemaName = responseType.replace('Response', 'ResponseSchema');
+
+    // Build local schema map for this file
+    const localSchemaMap = this.buildLocalSchemaMap(filePath);
 
     const visit = (node: ts.Node): void => {
-      // Look for schema export that matches the response type
       if (
         ts.isVariableStatement(node) &&
         node.modifiers?.some(mod => mod.kind === ts.SyntaxKind.ExportKeyword)
@@ -269,33 +297,29 @@ class OperationDocGenerator {
           if (
             ts.isVariableDeclaration(declaration) &&
             ts.isIdentifier(declaration.name) &&
-            declaration.name.text === schemaName
+            declaration.name.text === responseType
           ) {
-            // Found the schema, now extract its structure
-            console.log(`Found schema ${schemaName} in ${filePath}`);
+            found = true;
             schemaDefinition = this.extractSchemaStructure(
-              declaration.initializer
+              declaration.initializer,
+              filePath,
+              localSchemaMap
             );
             return;
           }
         }
       }
-
       ts.forEachChild(node, visit);
     };
 
     visit(sourceFile);
-
-    if (!schemaDefinition) {
-      console.log(`Schema ${schemaName} not found in ${filePath}`);
-    }
-
-    return schemaDefinition;
+    return found ? schemaDefinition : null;
   }
 
   private extractSchemaStructure(
     node: ts.Expression | undefined,
-    fromFilePath?: string
+    fromFilePath?: string,
+    localSchemaMap?: Map<string, ts.Expression>
   ): string {
     if (!node) return '';
 
@@ -306,22 +330,48 @@ class OperationDocGenerator {
         const propertyName = node.expression.name.text;
         switch (propertyName) {
           case 'object':
-            return this.extractZodObjectStructure(node, fromFilePath);
+            return this.extractZodObjectStructure(
+              node,
+              fromFilePath,
+              1,
+              localSchemaMap
+            );
           case 'array':
-            return this.extractZodArrayStructure(node, fromFilePath);
+            return this.extractZodArrayStructure(
+              node,
+              fromFilePath,
+              localSchemaMap
+            );
           case 'union':
-            return this.extractZodUnionStructure(node, fromFilePath);
+            return this.extractZodUnionStructure(
+              node,
+              fromFilePath,
+              localSchemaMap
+            );
           default:
             return 'any';
         }
       } else if (ts.isIdentifier(node.expression)) {
         switch (node.expression.text) {
           case 'z.object':
-            return this.extractZodObjectStructure(node, fromFilePath);
+            return this.extractZodObjectStructure(
+              node,
+              fromFilePath,
+              1,
+              localSchemaMap
+            );
           case 'z.array':
-            return this.extractZodArrayStructure(node, fromFilePath);
+            return this.extractZodArrayStructure(
+              node,
+              fromFilePath,
+              localSchemaMap
+            );
           case 'z.union':
-            return this.extractZodUnionStructure(node, fromFilePath);
+            return this.extractZodUnionStructure(
+              node,
+              fromFilePath,
+              localSchemaMap
+            );
           default:
             return 'any';
         }
@@ -337,7 +387,8 @@ class OperationDocGenerator {
       if (schemaName.endsWith('Schema')) {
         const resolvedType = this.resolveSchemaReference(
           schemaName,
-          fromFilePath
+          fromFilePath,
+          localSchemaMap
         );
         if (resolvedType) {
           return resolvedType;
@@ -357,7 +408,8 @@ class OperationDocGenerator {
   private extractZodObjectStructure(
     node: ts.CallExpression,
     fromFilePath?: string,
-    indentLevel: number = 1
+    indentLevel: number = 1,
+    localSchemaMap?: Map<string, ts.Expression>
   ): string {
     const arg = node.arguments[0];
     if (!arg || !ts.isObjectLiteralExpression(arg)) return '{}';
@@ -368,12 +420,27 @@ class OperationDocGenerator {
     for (const prop of arg.properties) {
       if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name)) {
         const propName = prop.name.text;
-        // Pass indentLevel + 1 for nested objects
-        const propType = this.extractPropertyType(
-          prop.initializer,
-          fromFilePath,
-          indentLevel + 1
-        );
+        let propType;
+        // If the initializer is an identifier and ends with 'Schema', resolve it
+        if (
+          ts.isIdentifier(prop.initializer) &&
+          prop.initializer.text.endsWith('Schema')
+        ) {
+          propType = this.extractPropertyType(
+            prop.initializer,
+            fromFilePath,
+            indentLevel + 1,
+            localSchemaMap
+          );
+        } else {
+          // Pass indentLevel + 1 for nested objects
+          propType = this.extractPropertyType(
+            prop.initializer,
+            fromFilePath,
+            indentLevel + 1,
+            localSchemaMap
+          );
+        }
 
         // Check if the property is optional by looking for .optional() calls
         const isOptional = this.isPropertyOptional(prop.initializer);
@@ -536,44 +603,40 @@ ${closeBrace}`;
 
   private extractZodArrayStructure(
     node: ts.CallExpression,
-    fromFilePath?: string
+    fromFilePath?: string,
+    localSchemaMap?: Map<string, ts.Expression>
   ): string {
     const arg = node.arguments[0];
     if (!arg) return 'any[]';
 
-    const elementType = this.extractPropertyType(arg, fromFilePath);
+    const elementType = this.extractPropertyType(
+      arg,
+      fromFilePath,
+      2,
+      localSchemaMap
+    );
     return `${elementType}[]`;
   }
 
   private extractZodUnionStructure(
     node: ts.CallExpression,
-    fromFilePath?: string
+    fromFilePath?: string,
+    localSchemaMap?: Map<string, ts.Expression>
   ): string {
-    const arg = node.arguments[0];
-    if (!arg || !ts.isArrayLiteralExpression(arg)) return 'any';
+    const args = node.arguments;
+    if (args.length === 0) return 'any';
 
-    const types = arg.elements.map(element => {
-      const elementType = this.extractPropertyType(element, fromFilePath);
-
-      // If it's an object with a single property (like { JsCreated: ... }),
-      // extract just the property name for better readability
-      if (elementType.startsWith('{') && elementType.includes(':')) {
-        const match = elementType.match(/\s*(\w+):\s*/);
-        if (match) {
-          return match[1];
-        }
-      }
-
-      return elementType;
-    });
-
+    const types = args.map(arg =>
+      this.extractPropertyType(arg, fromFilePath, 2, localSchemaMap)
+    );
     return types.join(' | ');
   }
 
   private extractPropertyType(
     node: ts.Expression,
     fromFilePath?: string,
-    indentLevel: number = 2
+    indentLevel: number = 2,
+    localSchemaMap?: Map<string, ts.Expression>
   ): string {
     if (ts.isCallExpression(node)) {
       // Handle chained calls like z.string().optional()
@@ -586,7 +649,8 @@ ${closeBrace}`;
           const baseType = this.extractPropertyType(
             node.expression.expression,
             fromFilePath,
-            indentLevel
+            indentLevel,
+            localSchemaMap
           );
           if (propertyName === 'optional') {
             return `${baseType} | undefined`;
@@ -607,14 +671,27 @@ ${closeBrace}`;
             return this.extractZodObjectStructure(
               node,
               fromFilePath,
-              indentLevel
+              indentLevel,
+              localSchemaMap
             );
           case 'array':
-            return this.extractZodArrayStructure(node, fromFilePath);
+            return this.extractZodArrayStructure(
+              node,
+              fromFilePath,
+              localSchemaMap
+            );
           case 'union':
-            return this.extractZodUnionStructure(node, fromFilePath);
+            return this.extractZodUnionStructure(
+              node,
+              fromFilePath,
+              localSchemaMap
+            );
           case 'record':
-            return this.extractZodRecordStructure(node, fromFilePath);
+            return this.extractZodRecordStructure(
+              node,
+              fromFilePath,
+              localSchemaMap
+            );
           case 'any':
             return 'any';
           case 'unknown':
@@ -628,7 +705,11 @@ ${closeBrace}`;
               return 'any'; // Unknown Zod type
             }
             // Try to resolve as a schema reference
-            return this.extractSchemaStructure(node, fromFilePath);
+            return this.extractSchemaStructure(
+              node,
+              fromFilePath,
+              localSchemaMap
+            );
         }
       }
 
@@ -645,14 +726,27 @@ ${closeBrace}`;
             return this.extractZodObjectStructure(
               node,
               fromFilePath,
-              indentLevel
+              indentLevel,
+              localSchemaMap
             );
           case 'z.array':
-            return this.extractZodArrayStructure(node, fromFilePath);
+            return this.extractZodArrayStructure(
+              node,
+              fromFilePath,
+              localSchemaMap
+            );
           case 'z.union':
-            return this.extractZodUnionStructure(node, fromFilePath);
+            return this.extractZodUnionStructure(
+              node,
+              fromFilePath,
+              localSchemaMap
+            );
           case 'z.record':
-            return this.extractZodRecordStructure(node, fromFilePath);
+            return this.extractZodRecordStructure(
+              node,
+              fromFilePath,
+              localSchemaMap
+            );
           case 'z.any':
             return 'any';
           case 'z.unknown':
@@ -669,7 +763,8 @@ ${closeBrace}`;
       if (schemaName.endsWith('Schema')) {
         const resolvedType = this.resolveSchemaReference(
           schemaName,
-          fromFilePath
+          fromFilePath,
+          localSchemaMap
         );
         if (resolvedType) {
           return resolvedType;
@@ -684,7 +779,8 @@ ${closeBrace}`;
 
   private extractZodRecordStructure(
     node: ts.CallExpression,
-    fromFilePath?: string
+    fromFilePath?: string,
+    localSchemaMap?: Map<string, ts.Expression>
   ): string {
     const args = node.arguments;
     if (args.length === 0) return 'Record<string, any>';
@@ -693,15 +789,15 @@ ${closeBrace}`;
     // z.record(keyType, valueType) means Record<keyType, valueType>
     if (args.length === 1) {
       const valueType = args[0]
-        ? this.extractPropertyType(args[0], fromFilePath)
+        ? this.extractPropertyType(args[0], fromFilePath, 2, localSchemaMap)
         : 'any';
       return `Record<string, ${valueType}>`;
     } else if (args.length === 2) {
       const keyType = args[0]
-        ? this.extractPropertyType(args[0], fromFilePath)
+        ? this.extractPropertyType(args[0], fromFilePath, 2, localSchemaMap)
         : 'string';
       const valueType = args[1]
-        ? this.extractPropertyType(args[1], fromFilePath)
+        ? this.extractPropertyType(args[1], fromFilePath, 2, localSchemaMap)
         : 'any';
       return `Record<${keyType}, ${valueType}>`;
     }
@@ -709,20 +805,78 @@ ${closeBrace}`;
     return 'Record<string, any>';
   }
 
+  // Helper to build a map of all exported schemas in a file
+  private buildLocalSchemaMap(filePath: string): Map<string, ts.Expression> {
+    const schemaMap = new Map<string, ts.Expression>();
+    if (!fs.existsSync(filePath)) return schemaMap;
+    const sourceCode = fs.readFileSync(filePath, 'utf-8');
+    const sourceFile = ts.createSourceFile(
+      filePath,
+      sourceCode,
+      ts.ScriptTarget.Latest,
+      true
+    );
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isVariableStatement(node) &&
+        node.modifiers?.some(mod => mod.kind === ts.SyntaxKind.ExportKeyword)
+      ) {
+        for (const declaration of node.declarationList.declarations) {
+          if (
+            ts.isVariableDeclaration(declaration) &&
+            ts.isIdentifier(declaration.name)
+          ) {
+            schemaMap.set(declaration.name.text, declaration.initializer!);
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+    return schemaMap;
+  }
+
   private resolveSchemaReference(
     schemaName: string,
-    fromFilePath?: string
+    fromFilePath?: string,
+    localSchemaMap?: Map<string, ts.Expression>
   ): string | null {
     // Check cache first
     if (this.schemaCache.has(schemaName)) {
       return this.schemaCache.get(schemaName) || null;
     }
 
-    // Look for the schema in the schemas directory
-    const schemasDir = path.join(
-      process.cwd(),
-      'src/clients/ledger-json-api/schemas'
-    );
+    // If fromFilePath is provided, build or use the local schema map
+    let schemaMap = localSchemaMap;
+    if (!schemaMap && fromFilePath && fs.existsSync(fromFilePath)) {
+      schemaMap = this.buildLocalSchemaMap(fromFilePath);
+    }
+    // Try to resolve from the local schema map first
+    if (schemaMap && schemaMap.has(schemaName)) {
+      const expr = schemaMap.get(schemaName)!;
+      const schemaDefinition = this.extractSchemaStructure(
+        expr,
+        fromFilePath,
+        localSchemaMap
+      );
+      this.schemaCache.set(schemaName, schemaDefinition);
+      return schemaDefinition;
+    }
+
+    // Determine which API schemas directory to search based on fromFilePath
+    let schemasDir: string;
+    if (fromFilePath && fromFilePath.includes('validator-api')) {
+      schemasDir = path.join(
+        process.cwd(),
+        'src/clients/validator-api/schemas'
+      );
+    } else {
+      schemasDir = path.join(
+        process.cwd(),
+        'src/clients/ledger-json-api/schemas'
+      );
+    }
+
     const apiDir = path.join(schemasDir, 'api');
     let schemaFiles: string[] = [];
     if (fs.existsSync(apiDir)) {
@@ -737,8 +891,9 @@ ${closeBrace}`;
       .map(f => f);
     schemaFiles.push(...parentSchemaFiles);
 
-    // If fromFilePath is provided, search it first
+    // If fromFilePath is provided, search it first (with schemaMap)
     if (fromFilePath && fs.existsSync(fromFilePath)) {
+      // Also build import map for imported schemas
       const sourceCode = fs.readFileSync(fromFilePath, 'utf-8');
       const sourceFile = ts.createSourceFile(
         fromFilePath,
@@ -746,11 +901,7 @@ ${closeBrace}`;
         ts.ScriptTarget.Latest,
         true
       );
-      let found = false;
-      let schemaDefinition: string | null = null;
       const importMap: Record<string, string> = {};
-
-      // First, build a map of imported identifiers to their source files
       ts.forEachChild(sourceFile, node => {
         if (
           ts.isImportDeclaration(node) &&
@@ -768,35 +919,7 @@ ${closeBrace}`;
           }
         }
       });
-
-      // Then, look for the schema in the current file
-      const visit = (node: ts.Node): void => {
-        if (
-          ts.isVariableStatement(node) &&
-          node.modifiers?.some(mod => mod.kind === ts.SyntaxKind.ExportKeyword)
-        ) {
-          for (const declaration of node.declarationList.declarations) {
-            if (
-              ts.isVariableDeclaration(declaration) &&
-              ts.isIdentifier(declaration.name) &&
-              declaration.name.text === schemaName
-            ) {
-              found = true;
-              schemaDefinition = this.extractSchemaStructure(
-                declaration.initializer
-              );
-              return;
-            }
-          }
-        }
-        ts.forEachChild(node, visit);
-      };
-      visit(sourceFile);
-      if (found && schemaDefinition) {
-        this.schemaCache.set(schemaName, schemaDefinition);
-        return schemaDefinition;
-      }
-      // If not found, check if it's imported and follow the import
+      // If not found locally, check if it's imported and follow the import
       if (importMap[schemaName]) {
         // Resolve the import path relative to fromFilePath
         let importFilePath = importMap[schemaName];
@@ -812,51 +935,29 @@ ${closeBrace}`;
           resolvedPath = path.join(schemasDir, importFilePath);
         }
         if (fs.existsSync(resolvedPath)) {
-          return this.resolveSchemaReference(schemaName, resolvedPath);
+          return this.resolveSchemaReference(
+            schemaName,
+            resolvedPath,
+            localSchemaMap
+          );
         }
       }
+      // If not found, do not retry local search (prevents infinite loop)
     }
 
     // Fallback: search all schema files
     for (const schemaFile of schemaFiles) {
       const filePath = path.join(schemasDir, schemaFile);
       if (fs.existsSync(filePath)) {
-        const sourceCode = fs.readFileSync(filePath, 'utf-8');
-        const sourceFile = ts.createSourceFile(
-          filePath,
-          sourceCode,
-          ts.ScriptTarget.Latest,
-          true
-        );
-
-        let found = false;
-        let schemaDefinition: string | null = null;
-
-        const visit = (node: ts.Node): void => {
-          if (
-            ts.isVariableStatement(node) &&
-            node.modifiers?.some(
-              mod => mod.kind === ts.SyntaxKind.ExportKeyword
-            )
-          ) {
-            for (const declaration of node.declarationList.declarations) {
-              if (
-                ts.isVariableDeclaration(declaration) &&
-                ts.isIdentifier(declaration.name) &&
-                declaration.name.text === schemaName
-              ) {
-                found = true;
-                schemaDefinition = this.extractSchemaStructure(
-                  declaration.initializer
-                );
-                return;
-              }
-            }
-          }
-          ts.forEachChild(node, visit);
-        };
-        visit(sourceFile);
-        if (found && schemaDefinition) {
+        // Build a local schema map for this file
+        const fileSchemaMap = this.buildLocalSchemaMap(filePath);
+        if (fileSchemaMap.has(schemaName)) {
+          const expr = fileSchemaMap.get(schemaName)!;
+          const schemaDefinition = this.extractSchemaStructure(
+            expr,
+            filePath,
+            localSchemaMap
+          );
           this.schemaCache.set(schemaName, schemaDefinition);
           return schemaDefinition;
         }
@@ -865,12 +966,12 @@ ${closeBrace}`;
     return null;
   }
 
-  private detectCategories(): string[] {
-    const categories = new Set<string>();
+  private detectCategories(): { apiType: string; categories: string[] }[] {
+    const apiCategories = new Map<string, Set<string>>();
 
     for (const operation of this.operations) {
       // Extract category from file path
-      // Path format: .../operations/v2/category/filename.ts
+      // Path format: .../operations/v2/category/filename.ts or .../operations/v0/category/filename.ts
       const pathParts = operation.filePath.split('/');
       const operationsIndex = pathParts.findIndex(
         part => part === 'operations'
@@ -879,17 +980,23 @@ ${closeBrace}`;
       if (operationsIndex !== -1 && pathParts[operationsIndex + 2]) {
         const category = pathParts[operationsIndex + 2];
         if (category) {
-          categories.add(category);
+          if (!apiCategories.has(operation.apiType)) {
+            apiCategories.set(operation.apiType, new Set());
+          }
+          apiCategories.get(operation.apiType)!.add(category);
         }
       }
     }
 
-    return Array.from(categories).sort();
+    return Array.from(apiCategories.entries()).map(([apiType, categories]) => ({
+      apiType,
+      categories: Array.from(categories).sort(),
+    }));
   }
 
-  private generateCategorySection(category: string): string {
-    const categoryOperations = this.operations.filter(op =>
-      op.filePath.includes(`/${category}/`)
+  private generateCategorySection(apiType: string, category: string): string {
+    const categoryOperations = this.operations.filter(
+      op => op.apiType === apiType && op.filePath.includes(`/${category}/`)
     );
 
     if (categoryOperations.length === 0) {
@@ -914,35 +1021,40 @@ ${categoryOperations
   }
 
   private async generateOperationsIndex(): Promise<void> {
-    const frontMatter = `---
-layout: default
-sdk_version: ${this.sdkVersion}
----
-
-`;
+    // No frontMatter in generated files
 
     // Dynamically detect categories from operation file paths
-    const categories = this.detectCategories();
+    const apiCategories = this.detectCategories();
 
-    const indexContent =
-      frontMatter +
-      `# Canton Node SDK Operations
+    // Generate separate pages for each API
+    for (const apiData of apiCategories) {
+      const { apiType, categories } = apiData;
 
-This document provides an overview of all available operations in the Canton Node SDK.
+      const apiName =
+        apiType === 'ledger-json-api' ? 'Ledger JSON API' : 'Validator API';
+      const fileName =
+        apiType === 'ledger-json-api'
+          ? 'ledger-json-api-operations.md'
+          : 'validator-api-operations.md';
+
+      const indexContent = `# Canton Node SDK - ${apiName} Operations
+
+This document provides an overview of all available operations in the Canton Node SDK for the ${apiName}.
 
 ## Operations by Category
 
-${categories.map(category => this.generateCategorySection(category)).join('\n\n')}
+${categories.map(category => this.generateCategorySection(apiType, category)).join('\n\n')}
 
 `;
 
-    const generatedDir = path.join(process.cwd(), 'docs', '_generated');
-    if (!fs.existsSync(generatedDir)) {
-      fs.mkdirSync(generatedDir, { recursive: true });
+      const generatedDir = path.join(process.cwd(), 'docs', '_generated');
+      if (!fs.existsSync(generatedDir)) {
+        fs.mkdirSync(generatedDir, { recursive: true });
+      }
+      const indexPath = path.join(generatedDir, fileName);
+      fs.writeFileSync(indexPath, indexContent);
+      console.log(`📄 Generated ${apiName} operations index: ${indexPath}`);
     }
-    const indexPath = path.join(generatedDir, 'operations.md');
-    fs.writeFileSync(indexPath, indexContent);
-    console.log(`📄 Generated operations index: ${indexPath}`);
   }
 
   private async generateOperationDoc(operation: OperationInfo): Promise<void> {
@@ -1003,18 +1115,19 @@ ${
 
 ## Response Type
 \`\`\`json
-${operation.responseSchema || `\`${operation.responseType}\``}
-\`\`\`
+${operation.responseSchema || `\`${operation.responseType}\``}\`\`\`
 
 ## Usage
 
 \`\`\`typescript
-import { CantonNodeClient } from '@fairmint/canton-node-sdk';
+import { ${operation.apiType === 'ledger-json-api' ? 'LedgerJsonApiClient' : 'ValidatorApiClient'}, EnvLoader } from '@fairmint/canton-node-sdk';
 
-const client = new CantonNodeClient({
-  apiUrl: 'https://your-canton-node.com',
-  partyId: 'your-party-id'
+const config = EnvLoader.getConfig('${operation.apiType === 'ledger-json-api' ? 'LEDGER_JSON_API' : 'VALIDATOR_API'}', {
+  network: 'devnet',
+  provider: '5n'
 });
+
+const client = new ${operation.apiType === 'ledger-json-api' ? 'LedgerJsonApiClient' : 'ValidatorApiClient'}(config);
 
 ${
   operation.examples && operation.examples.length > 0
