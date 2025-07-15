@@ -430,16 +430,16 @@
     "contractEntry": {
       "JsActiveContract": {
         "createdEvent": {
-          "offset": 83361,
+          "offset": 89669,
           "nodeId": 3,
-          "contractId": "00ea2730e2311a83c2924e6eba9a94b774a4ae4e6d0d8a907fe8745d272b8b0b8bca111220079615d9bb1c820f782984f1d232670f92e3366248af33608eb511dfdb69a456",
+          "contractId": "006308d507039aff5e73647bca3e460dced0a46aa6b7587a038b6b54a725441eeaca1112203a3ac69c0feb3901d2b4aff2cb474d67381faa3d72ca452e8c9f1c31d7735722",
           "templateId": "a5b055492fb8f08b2e7bc0fc94da6da50c39c2e1d7f24cd5ea8db12fc87c1332:Splice.ValidatorLicense:ValidatorLivenessActivityRecord",
           "contractKey": null,
           "createArgument": {
             "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
             "validator": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
             "round": {
-              "number": "1681"
+              "number": "1811"
             }
           },
           "createdEventBlob": "",
@@ -453,7 +453,7 @@
           "observers": [
             "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
           ],
-          "createdAt": "2025-07-14T16:59:14.291457Z",
+          "createdAt": "2025-07-15T15:29:04.174921Z",
           "packageName": "splice-amulet"
         },
         "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
@@ -466,16 +466,16 @@
     "contractEntry": {
       "JsActiveContract": {
         "createdEvent": {
-          "offset": 83423,
+          "offset": 89721,
           "nodeId": 3,
-          "contractId": "0040281115bfb32cb33f0603654d57d4d7d0f12c787bff899f0e288eb35a663aefca111220d9341de5bb723a99b5ae1fa365d8cdff944a4d269d6bb6330e1c30f537a8bb9e",
+          "contractId": "00c3243b1bfdb2d466cfd779acf6491d0bcf976a4c8aebe4539b9010bbb4f25412ca11122006d5144e89a23e89e348956f0aa9258fe3339b3cac51ee3d154f4b15ebbc2b85",
           "templateId": "a5b055492fb8f08b2e7bc0fc94da6da50c39c2e1d7f24cd5ea8db12fc87c1332:Splice.ValidatorLicense:ValidatorLivenessActivityRecord",
           "contractKey": null,
           "createArgument": {
             "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
             "validator": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
             "round": {
-              "number": "1682"
+              "number": "1812"
             }
           },
           "createdEventBlob": "",
@@ -489,7 +489,7 @@
           "observers": [
             "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
           ],
-          "createdAt": "2025-07-14T17:13:24.222644Z",
+          "createdAt": "2025-07-15T15:41:30.186056Z",
           "packageName": "splice-amulet"
         },
         "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
@@ -502,9 +502,9 @@
     "contractEntry": {
       "JsActiveContract": {
         "createdEvent": {
-          "offset": 83464,
+          "offset": 89772,
           "nodeId": 2,
-          "contractId": "00fcce69f3b4956728ce09d7cbc9be8b65e80e10340044f39eb2cb04bfd6ada30aca111220ac4c9ecd04155d8a08c6247185c016b439dc626363f7c7c53e88bb3b3972bbe4",
+          "contractId": "00473222540d506e8664e45abb35003b023564fae5d1e55bb6cbeac91e03f7c293ca111220728698fe3b2a80a9474aaa10c0e96c43f8e2c17a34f41d9e320b5256eb4a1412",
           "templateId": "a5b055492fb8f08b2e7bc0fc94da6da50c39c2e1d7f24cd5ea8db12fc87c1332:Splice.ValidatorLicense:ValidatorLicense",
           "contractKey": null,
           "createArgument": {
@@ -516,16 +516,16 @@
                 "number": "0"
               },
               "lastReceivedFor": {
-                "number": "1683"
+                "number": "1813"
               },
               "numCouponsMissed": "0"
             },
             "metadata": {
-              "lastUpdatedAt": "2025-07-09T00:20:16.189561Z",
-              "version": "0.4.4",
+              "lastUpdatedAt": "2025-07-14T23:14:48.940511Z",
+              "version": "0.4.5",
               "contactPoint": "nodeadmin@fivenorth.io"
             },
-            "lastActiveAt": "2025-07-14T17:22:38.706901Z"
+            "lastActiveAt": "2025-07-15T15:51:22.78124Z"
           },
           "createdEventBlob": "",
           "interfaceViews": [],
@@ -538,7 +538,7 @@
           "observers": [
             "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
           ],
-          "createdAt": "2025-07-14T17:22:38.706901Z",
+          "createdAt": "2025-07-15T15:51:22.781240Z",
           "packageName": "splice-amulet"
         },
         "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
@@ -551,16 +551,16 @@
     "contractEntry": {
       "JsActiveContract": {
         "createdEvent": {
-          "offset": 83464,
+          "offset": 89772,
           "nodeId": 3,
-          "contractId": "006f6bb833c8c5effc91c28d3844bf4171bfbbdddab216a05d09343c0de3912c99ca1112204fd6a4c33f0640ab6ab6ccaf4b5542cd7e7aa012512dd90c614e954f7e0b8ca3",
+          "contractId": "0096dce83357e529ae50003b513d6ee23ff4e51ccabf87a87c4f24f9d6eaf168a8ca1112203ba578b6e2d34b41a51dea47036cff37278786417eca41b3153fe40ea1a70893",
           "templateId": "a5b055492fb8f08b2e7bc0fc94da6da50c39c2e1d7f24cd5ea8db12fc87c1332:Splice.ValidatorLicense:ValidatorLivenessActivityRecord",
           "contractKey": null,
           "createArgument": {
             "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
             "validator": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
             "round": {
-              "number": "1683"
+              "number": "1813"
             }
           },
           "createdEventBlob": "",
@@ -574,7 +574,7 @@
           "observers": [
             "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
           ],
-          "createdAt": "2025-07-14T17:22:38.706901Z",
+          "createdAt": "2025-07-15T15:51:22.781240Z",
           "packageName": "splice-amulet"
         },
         "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
@@ -587,18 +587,18 @@
     "contractEntry": {
       "JsActiveContract": {
         "createdEvent": {
-          "offset": 83469,
-          "nodeId": 11,
-          "contractId": "00755e9ca7fd5f8a7991f83d0835152e40eeb048cd802c8040ca63cba35fc437f2ca1112200241cc5a4943b954195a7e779ad6c5568f3b97607eb4b6e082d5cb35cd6be4b8",
+          "offset": 89780,
+          "nodeId": 8,
+          "contractId": "0085ff220bf66b25bbb9eaf5ad82a2fd0dec50b74724aaffcf46c8bd6840407731ca1112201b04675330561e8670f07e5a21f5b913e242e519af54c57dcf26d3cc8afe4434",
           "templateId": "a5b055492fb8f08b2e7bc0fc94da6da50c39c2e1d7f24cd5ea8db12fc87c1332:Splice.Amulet:Amulet",
           "contractKey": null,
           "createArgument": {
             "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
             "owner": "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34",
             "amount": {
-              "initialAmount": "93429.8993779998",
+              "initialAmount": "100683.6750026741",
               "createdAt": {
-                "number": "1683"
+                "number": "1813"
               },
               "ratePerRound": {
                 "rate": "0.0003805180"
@@ -615,7 +615,7 @@
             "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
           ],
           "observers": [],
-          "createdAt": "2025-07-14T17:23:25.040031Z",
+          "createdAt": "2025-07-15T15:52:43.161673Z",
           "packageName": "splice-amulet"
         },
         "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
