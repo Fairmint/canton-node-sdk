@@ -255,6 +255,5 @@ export type EventsByContractIdRequest = z.infer<
 >;
 export type CreatedEvent = z.infer<typeof CreatedEventSchema>;
 export type ArchivedEvent = z.infer<typeof ArchivedEventSchema>;
-export type EventsByContractIdResponse = z.infer<
-  typeof EventsByContractIdResponseSchema
->; 
+// Re-export the OpenAPI-generated type for consistency
+export type { EventsByContractIdResponse } from '../../operations/v2/events/get-events-by-contract-id'; 

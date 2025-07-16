@@ -1,18 +1,18 @@
-import { BaseClient, createApiOperation } from '../../../../../core';
+import { createApiOperation } from '../../../../../core';
 import { z } from 'zod';
 import type { paths } from '../../../../../generated/openapi-types';
-import { EventsByContractIdResponse } from '../../../schemas/api/events';
 
-// Type aliases for better readability and to avoid repetition
-type GetEventsByContractIdRequest = paths['/v2/events/events-by-contract-id']['post']['requestBody']['content']['application/json'];
+const endpoint = '/v2/events/events-by-contract-id';
 
-// Schema for the parameters
 export const EventsByContractIdParamsSchema = z.object({
   contractId: z.string(),
   readAs: z.array(z.string()).optional(),
 });
 
 export type EventsByContractIdParams = z.infer<typeof EventsByContractIdParamsSchema>;
+
+export type EventsByContractIdRequest = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
+export type EventsByContractIdResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
 /**
  * @description Retrieves events for a specific contract ID with filtering options
@@ -30,27 +30,18 @@ export const GetEventsByContractId = createApiOperation<
 >({
   paramsSchema: EventsByContractIdParamsSchema,
   method: 'POST',
-  buildUrl: (_params: EventsByContractIdParams, apiUrl: string) => `${apiUrl}/v2/events/events-by-contract-id`,
-  buildRequestData: (params: EventsByContractIdParams, client: BaseClient): GetEventsByContractIdRequest => {
-    const readParties = Array.from(
-      new Set([
-        client.getPartyId(),
-        ...(params.readAs || []),
-      ])
-    );
-
+  buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
+  buildRequestData: (
+    params,
+    client
+  ): EventsByContractIdRequest => {
+    const readParties = [...new Set([client.getPartyId(), ...(params.readAs || [])])];
     return {
       contractId: params.contractId,
       eventFormat: {
         verbose: true,
-        filtersByParty: readParties.reduce(
-          (acc, party) => {
-            acc[party] = {
-              cumulative: [],
-            };
-            return acc;
-          },
-          {} as Record<string, { cumulative: [] }>,
+        filtersByParty: Object.fromEntries(
+          readParties.map(party => [party, { cumulative: [] }])
         ),
       },
     };
