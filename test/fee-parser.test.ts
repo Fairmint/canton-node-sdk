@@ -13,7 +13,7 @@ describe('Fee Parser', () => {
    * -3.4343846200 from 1a50f9 [-1.22212262 fee]
    * Sender charge amount 4035.7435221100 - 4032.3087569720 = 3.434765138 [wtf is this?, 0.000380518 delta from above]
    *   -- this is the holdingFees
-   * 22.6217254480 to Fairmint 
+   * 22.6217254480 to Fairmint
    */
   const sampleEventTree: Record<string, TreeEvent> = {
     '0': {
