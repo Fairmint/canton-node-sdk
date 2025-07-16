@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../../core';
 import { CreateBuyTrafficRequestResponse } from '../../../../schemas/api';
-import { CreateBuyTrafficRequestParamsSchema } from '../../../../schemas/operations';
+import { CreateBuyTrafficRequestParamsSchema, CreateBuyTrafficRequestParams } from '../../../../schemas/operations';
 
 /**
  * @description Create a new buy traffic request to purchase traffic from another validator
@@ -17,7 +17,7 @@ import { CreateBuyTrafficRequestParamsSchema } from '../../../../schemas/operati
  * ```
  */
 export const CreateBuyTrafficRequest = createApiOperation<
-  typeof CreateBuyTrafficRequestParamsSchema._type,
+  CreateBuyTrafficRequestParams,
   CreateBuyTrafficRequestResponse
 >({
   paramsSchema: CreateBuyTrafficRequestParamsSchema,

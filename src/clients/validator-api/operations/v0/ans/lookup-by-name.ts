@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { LookupAnsEntryByNameResponse } from '../../../schemas/api';
-import { LookupAnsEntryByNameParamsSchema } from '../../../schemas/operations';
+import { LookupAnsEntryByNameParamsSchema, LookupAnsEntryByNameParams } from '../../../schemas/operations';
 
 /**
  * @description Lookup ANS entry by name
@@ -11,7 +11,7 @@ import { LookupAnsEntryByNameParamsSchema } from '../../../schemas/operations';
  * ```
  */
 export const LookupAnsEntryByName = createApiOperation<
-  typeof LookupAnsEntryByNameParamsSchema._type,
+  LookupAnsEntryByNameParams,
   LookupAnsEntryByNameResponse
 >({
   paramsSchema: LookupAnsEntryByNameParamsSchema,

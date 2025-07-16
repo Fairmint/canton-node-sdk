@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { LookupFeaturedAppRightResponse } from '../../../schemas/api';
-import { GetFeaturedAppRightParamsSchema } from '../../../schemas/operations';
+import { GetFeaturedAppRightParamsSchema, GetFeaturedAppRightParams } from '../../../schemas/operations';
 
 /**
  * @description Lookup featured app right
@@ -11,7 +11,7 @@ import { GetFeaturedAppRightParamsSchema } from '../../../schemas/operations';
  * ```
  */
 export const LookupFeaturedAppRight = createApiOperation<
-  typeof GetFeaturedAppRightParamsSchema._type,
+  GetFeaturedAppRightParams,
   LookupFeaturedAppRightResponse
 >({
   paramsSchema: GetFeaturedAppRightParamsSchema,

@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../../core';
 import { CreateTransferOfferResponse } from '../../../../schemas/api';
-import { CreateTransferOfferParamsSchema } from '../../../../schemas/operations';
+import { CreateTransferOfferParamsSchema, CreateTransferOfferParams } from '../../../../schemas/operations';
 
 /**
  * @description Create a new transfer offer to send tokens to another party
@@ -17,7 +17,7 @@ import { CreateTransferOfferParamsSchema } from '../../../../schemas/operations'
  * ```
  */
 export const CreateTransferOffer = createApiOperation<
-  typeof CreateTransferOfferParamsSchema._type,
+  CreateTransferOfferParams,
   CreateTransferOfferResponse
 >({
   paramsSchema: CreateTransferOfferParamsSchema,

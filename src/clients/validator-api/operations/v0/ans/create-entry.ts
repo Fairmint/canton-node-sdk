@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { CreateAnsEntryResponse } from '../../../schemas/api';
-import { CreateAnsEntryParamsSchema } from '../../../schemas/operations';
+import { CreateAnsEntryParamsSchema, CreateAnsEntryParams } from '../../../schemas/operations';
 
 /**
  * @description Create a new ANS entry
@@ -15,7 +15,7 @@ import { CreateAnsEntryParamsSchema } from '../../../schemas/operations';
  * ```
  */
 export const CreateAnsEntry = createApiOperation<
-  typeof CreateAnsEntryParamsSchema._type,
+  CreateAnsEntryParams,
   CreateAnsEntryResponse
 >({
   paramsSchema: CreateAnsEntryParamsSchema,

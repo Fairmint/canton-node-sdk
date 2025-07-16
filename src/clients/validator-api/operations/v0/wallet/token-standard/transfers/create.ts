@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../../../core';
 import { TransferInstructionResultResponse } from '../../../../../schemas/api';
-import { CreateTokenStandardTransferParamsSchema } from '../../../../../schemas/operations';
+import { CreateTokenStandardTransferParamsSchema, CreateTokenStandardTransferParams } from '../../../../../schemas/operations';
 
 /**
  * @description Create a new token standard transfer to send tokens to another party
@@ -17,11 +17,11 @@ import { CreateTokenStandardTransferParamsSchema } from '../../../../../schemas/
  * ```
  */
 export const CreateTokenStandardTransfer = createApiOperation<
-  typeof CreateTokenStandardTransferParamsSchema._type,
+  CreateTokenStandardTransferParams,
   TransferInstructionResultResponse
 >({
   paramsSchema: CreateTokenStandardTransferParamsSchema,
   method: 'POST',
-  buildUrl: (_params: typeof CreateTokenStandardTransferParamsSchema._type, apiUrl: string) => `${apiUrl}/api/validator/v0/wallet/token-standard/transfers`,
-  buildRequestData: (params: typeof CreateTokenStandardTransferParamsSchema._type) => params,
+  buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/wallet/token-standard/transfers`,
+  buildRequestData: (params) => params,
 }); 

@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { LookupTransferCommandCounterByPartyResponse } from '../../../schemas/api';
-import { LookupTransferCommandCounterByPartyParamsSchema } from '../../../schemas/operations';
+import { LookupTransferCommandCounterByPartyParamsSchema, LookupTransferCommandCounterByPartyParams } from '../../../schemas/operations';
 
 /**
  * @description Lookup transfer command counter by party
@@ -11,7 +11,7 @@ import { LookupTransferCommandCounterByPartyParamsSchema } from '../../../schema
  * ```
  */
 export const LookupTransferCommandCounterByParty = createApiOperation<
-  typeof LookupTransferCommandCounterByPartyParamsSchema._type,
+  LookupTransferCommandCounterByPartyParams,
   LookupTransferCommandCounterByPartyResponse
 >({
   paramsSchema: LookupTransferCommandCounterByPartyParamsSchema,
