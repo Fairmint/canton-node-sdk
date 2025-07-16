@@ -1,6 +1,7 @@
 import { createApiOperation } from '../../../../../core';
-import { ListPackagesParamsSchema, ListPackagesParams } from '../../../schemas/operations';
+import type { paths } from '../../../../../generated/openapi-types';
 import { ListPackagesResponse } from '../../../schemas/api';
+import { z } from 'zod';
 
 /**
  * @description List all packages available on the participant node
@@ -11,10 +12,10 @@ import { ListPackagesResponse } from '../../../schemas/api';
  * ```
  */
 export const ListPackages = createApiOperation<
-  ListPackagesParams,
+  void,
   ListPackagesResponse
 >({
-  paramsSchema: ListPackagesParamsSchema,
+  paramsSchema: z.void(),
   method: 'GET',
-  buildUrl: (_params: ListPackagesParams, apiUrl: string) => `${apiUrl}/v2/packages`,
+  buildUrl: (_params: void, apiUrl: string) => `${apiUrl}/v2/packages`,
 }); 

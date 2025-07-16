@@ -1,5 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { GetParticipantIdParamsSchema, GetParticipantIdParams } from '../../../schemas/operations';
+import { z } from 'zod';
+import type { paths } from '../../../../../generated/openapi-types';
 import { GetParticipantIdResponse } from '../../../schemas/api';
 
 /**
@@ -11,10 +12,10 @@ import { GetParticipantIdResponse } from '../../../schemas/api';
  * ```
  */
 export const GetParticipantId = createApiOperation<
-  GetParticipantIdParams,
+  void,
   GetParticipantIdResponse
 >({
-  paramsSchema: GetParticipantIdParamsSchema,
+  paramsSchema: z.void(),
   method: 'GET',
-  buildUrl: (_params: GetParticipantIdParams, apiUrl: string) => `${apiUrl}/v2/parties/participant-id`,
+  buildUrl: (_params: void, apiUrl: string) => `${apiUrl}/v2/parties/participant-id`,
 }); 

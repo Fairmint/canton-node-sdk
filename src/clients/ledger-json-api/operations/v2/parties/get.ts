@@ -1,6 +1,17 @@
 import { createApiOperation } from '../../../../../core';
-import { ListKnownPartiesParamsSchema, ListKnownPartiesParams } from '../../../schemas/operations';
+import { z } from 'zod';
+import type { paths } from '../../../../../generated/openapi-types';
 import { ListKnownPartiesResponse } from '../../../schemas/api';
+
+// Schema for the parameters
+export const ListKnownPartiesParamsSchema = z.object({
+  /** Maximum number of elements in a returned page */
+  pageSize: z.number().int().optional(),
+  /** Token to continue results from a given page */
+  pageToken: z.string().optional(),
+});
+
+export type ListKnownPartiesParams = z.infer<typeof ListKnownPartiesParamsSchema>;
 
 /**
  * @description List all known parties

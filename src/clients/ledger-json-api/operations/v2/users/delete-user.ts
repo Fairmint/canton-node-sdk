@@ -1,9 +1,20 @@
 import { createApiOperation } from '../../../../../core';
-import { DeleteUserParamsSchema, DeleteUserParams } from '../../../schemas/operations';
-import { DeleteUserResponse } from '../../../schemas/api';
+import { z } from 'zod';
+import type { paths } from '../../../../../generated/openapi-types';
+
+// Type aliases for better readability and to avoid repetition
+type DeleteUserResponse = paths['/v2/users/{user-id}']['delete']['responses']['200']['content']['application/json'];
+
+// Schema for the parameters
+export const DeleteUserParamsSchema = z.object({
+  /** User ID to delete */
+  userId: z.string(),
+});
+
+export type DeleteUserParams = z.infer<typeof DeleteUserParamsSchema>;
 
 /**
- * @description Delete a user from the participant node
+ * @description Delete a user
  * @example
  * ```typescript
  * await client.deleteUser({ userId: 'alice' });

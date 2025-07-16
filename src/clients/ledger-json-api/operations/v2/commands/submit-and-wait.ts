@@ -1,6 +1,42 @@
-import { createApiOperation } from '../../../../../core';
-import { SubmitAndWaitParamsSchema, SubmitAndWaitParams } from '../../../schemas/operations';
+import { BaseClient, createApiOperation } from '../../../../../core';
+import { z } from 'zod';
+import type { paths } from '../../../../../generated/openapi-types';
 import { SubmitAndWaitResponse } from '../../../schemas/api';
+
+// Type aliases for better readability and to avoid repetition
+type SubmitAndWaitRequest = paths['/v2/commands/submit-and-wait']['post']['requestBody']['content']['application/json'];
+
+// Schema for the parameters  
+export const SubmitAndWaitParamsSchema = z.object({
+  /** Commands to submit and wait for completion. */
+  commands: z.array(z.any()),
+  /** Unique identifier for the command. */
+  commandId: z.string(),
+  /** Parties on whose behalf the command should be executed. */
+  actAs: z.array(z.string()),
+  /** User ID submitting the command (optional if using authentication). */
+  userId: z.string().optional(),
+  /** Parties to read as (optional). */
+  readAs: z.array(z.string()).optional(),
+  /** Workflow ID (optional). */
+  workflowId: z.string().optional(),
+  /** Deduplication period (optional). */
+  deduplicationPeriod: z.any().optional(),
+  /** Minimum ledger time absolute (optional). */
+  minLedgerTimeAbs: z.string().optional(),
+  /** Minimum ledger time relative (optional). */
+  minLedgerTimeRel: z.any().optional(),
+  /** Submission ID (optional). */
+  submissionId: z.string().optional(),
+  /** Disclosed contracts (optional). */
+  disclosedContracts: z.array(z.any()).optional(),
+  /** Synchronizer ID (optional). */
+  synchronizerId: z.string().optional(),
+  /** Package ID selection preference (optional). */
+  packageIdSelectionPreference: z.array(z.string()).optional(),
+});
+
+export type SubmitAndWaitParams = z.infer<typeof SubmitAndWaitParamsSchema>;
 
 /**
  * @description Submit a batch of commands and wait for the completion details
@@ -26,7 +62,6 @@ import { SubmitAndWaitResponse } from '../../../schemas/api';
  * @param disclosedContracts - Disclosed contracts (optional)
  * @param synchronizerId - Synchronizer ID (optional)
  * @param packageIdSelectionPreference - Package ID selection preference (optional)
- * @param prefetchContractKeys - Prefetch contract keys (optional)
  */
 export const SubmitAndWait = createApiOperation<
   SubmitAndWaitParams,
@@ -35,7 +70,7 @@ export const SubmitAndWait = createApiOperation<
   paramsSchema: SubmitAndWaitParamsSchema,
   method: 'POST',
   buildUrl: (_params: SubmitAndWaitParams, apiUrl: string) => `${apiUrl}/v2/commands/submit-and-wait`,
-  buildRequestData: (params: SubmitAndWaitParams, client) => {
+  buildRequestData: (params: SubmitAndWaitParams, client: BaseClient): SubmitAndWaitRequest => {
     const currentPartyId = client.getPartyId();
     
     const readParties = Array.from(
@@ -49,8 +84,8 @@ export const SubmitAndWait = createApiOperation<
       commands: params.commands,
       commandId: params.commandId,
       actAs: params.actAs,
-      userId: params.userId,
       readAs: readParties,
+      userId: params.userId,
       workflowId: params.workflowId,
       deduplicationPeriod: params.deduplicationPeriod,
       minLedgerTimeAbs: params.minLedgerTimeAbs,
@@ -59,7 +94,6 @@ export const SubmitAndWait = createApiOperation<
       disclosedContracts: params.disclosedContracts,
       synchronizerId: params.synchronizerId,
       packageIdSelectionPreference: params.packageIdSelectionPreference,
-      prefetchContractKeys: params.prefetchContractKeys,
     };
   },
 }); 
