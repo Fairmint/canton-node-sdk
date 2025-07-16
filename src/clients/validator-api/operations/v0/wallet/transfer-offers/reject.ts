@@ -1,5 +1,5 @@
 import { createApiOperation } from '../../../../../../core';
-import { RejectTransferOfferParamsSchema } from '../../../../schemas/operations';
+import { RejectTransferOfferParamsSchema, RejectTransferOfferParams } from '../../../../schemas/operations';
 import { RejectTransferOfferResponse } from '../../../../schemas/api';
 
 /**
@@ -11,7 +11,7 @@ import { RejectTransferOfferResponse } from '../../../../schemas/api';
  * ```
  */
 export const RejectTransferOffer = createApiOperation<
-  typeof RejectTransferOfferParamsSchema._type,
+  RejectTransferOfferParams,
   RejectTransferOfferResponse
 >({
   paramsSchema: RejectTransferOfferParamsSchema,

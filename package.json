@@ -9,11 +9,12 @@
   },
   "scripts": {
     "build": "npm run build:core && npm run build:lint",
-    "build:core": "npm run build:core:generate-client-methods && tsc",
+    "build:core": "npm run build:core:generate-client-methods && npm run generate:openapi-types && tsc",
     "build:core:generate-client-methods": "tsx scripts/generate-client-methods.ts",
+    "generate:openapi-types": "npx openapi-typescript artifact/openapi-spec.yaml -o src/generated/openapi-types.ts",
     "build:lint": "tsc -p tsconfig.lint.json",
     "test": "jest",
-    "test:watch": "jest --watch", 
+    "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:integration": "node scripts/test-integration.js",
     "simulate": "tsx --tsconfig tsconfig.lint.json scripts/run-simulations.ts",
@@ -54,10 +55,10 @@
   "homepage": "https://github.com/Fairmint/canton-node-sdk#readme",
   "devDependencies": {
     "@types/jest": "30.0.0",
-    "@types/node": "24.0.11",
-    "@typescript-eslint/eslint-plugin": "8.36.0",
-    "@typescript-eslint/parser": "8.36.0",
-    "eslint": "9.30.1",
+    "@types/node": "24.0.14",
+    "@typescript-eslint/eslint-plugin": "8.37.0",
+    "@typescript-eslint/parser": "8.37.0",
+    "eslint": "9.31.0",
     "eslint-config-prettier": "10.1.5",
     "eslint-plugin-import": "2.32.0",
     "eslint-plugin-markdown": "5.1.0",
@@ -76,6 +77,8 @@
   "dependencies": {
     "axios": "1.10.0",
     "dotenv": "17.2.0",
+    "openapi-fetch": "^0.14.0",
+    "openapi-typescript": "^7.8.0",
     "zod": "3.25.76"
   }
 }

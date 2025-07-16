@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { OnboardUserResponse } from '../../../schemas/api';
-import { CreateUserParamsSchema } from '../../../schemas/operations';
+import { CreateUserParamsSchema, CreateUserParams } from '../../../schemas/operations';
 
 /**
  * @description Create a new user in the system
@@ -14,7 +14,7 @@ import { CreateUserParamsSchema } from '../../../schemas/operations';
  * ```
  */
 export const CreateUser = createApiOperation<
-  typeof CreateUserParamsSchema._type,
+  CreateUserParams,
   OnboardUserResponse
 >({
   paramsSchema: CreateUserParamsSchema,

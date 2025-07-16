@@ -1,5 +1,5 @@
 import { createApiOperation } from '../../../../../../core';
-import { WithdrawTransferOfferParamsSchema } from '../../../../schemas/operations';
+import { WithdrawTransferOfferParamsSchema, WithdrawTransferOfferParams } from '../../../../schemas/operations';
 import { WithdrawTransferOfferResponse } from '../../../../schemas/api';
 
 /**
@@ -11,7 +11,7 @@ import { WithdrawTransferOfferResponse } from '../../../../schemas/api';
  * ```
  */
 export const WithdrawTransferOffer = createApiOperation<
-  typeof WithdrawTransferOfferParamsSchema._type,
+  WithdrawTransferOfferParams,
   WithdrawTransferOfferResponse
 >({
   paramsSchema: WithdrawTransferOfferParamsSchema,

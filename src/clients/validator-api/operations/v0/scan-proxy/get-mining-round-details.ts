@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { GetMiningRoundDetailsResponse } from '../../../schemas/api';
-import { GetMiningRoundDetailsParamsSchema } from '../../../schemas/operations';
+import { GetMiningRoundDetailsParamsSchema, GetMiningRoundDetailsParams } from '../../../schemas/operations';
 
 /**
  * @description Get details for a specific mining round
@@ -11,7 +11,7 @@ import { GetMiningRoundDetailsParamsSchema } from '../../../schemas/operations';
  * ```
  */
 export const GetMiningRoundDetails = createApiOperation<
-  typeof GetMiningRoundDetailsParamsSchema._type,
+  GetMiningRoundDetailsParams,
   GetMiningRoundDetailsResponse
 >({
   paramsSchema: GetMiningRoundDetailsParamsSchema,

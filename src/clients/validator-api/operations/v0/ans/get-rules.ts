@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { GetAnsRulesResponse } from '../../../schemas/api';
-import { GetAnsRulesParamsSchema } from '../../../schemas/operations';
+import { GetAnsRulesParamsSchema, GetAnsRulesParams } from '../../../schemas/operations';
 
 /**
  * @description Get ANS rules for a specific name
@@ -11,7 +11,7 @@ import { GetAnsRulesParamsSchema } from '../../../schemas/operations';
  * ```
  */
 export const GetAnsRules = createApiOperation<
-  typeof GetAnsRulesParamsSchema._type,
+  GetAnsRulesParams,
   GetAnsRulesResponse
 >({
   paramsSchema: GetAnsRulesParamsSchema,

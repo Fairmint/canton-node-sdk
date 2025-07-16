@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { ExternalPartyBalanceResponse } from '../../../schemas/api';
-import { GetExternalPartyBalanceParamsSchema } from '../../../schemas/operations';
+import { GetExternalPartyBalanceParamsSchema, GetExternalPartyBalanceParams } from '../../../schemas/operations';
 
 /**
  * @description Get external party balance information
@@ -11,7 +11,7 @@ import { GetExternalPartyBalanceParamsSchema } from '../../../schemas/operations
  * ```
  */
 export const GetExternalPartyBalance = createApiOperation<
-  typeof GetExternalPartyBalanceParamsSchema._type,
+  GetExternalPartyBalanceParams,
   ExternalPartyBalanceResponse
 >({
   paramsSchema: GetExternalPartyBalanceParamsSchema,

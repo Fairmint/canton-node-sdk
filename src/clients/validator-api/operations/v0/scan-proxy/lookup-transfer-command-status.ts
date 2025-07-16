@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { LookupTransferCommandStatusResponse } from '../../../schemas/api';
-import { LookupTransferCommandStatusParamsSchema } from '../../../schemas/operations';
+import { LookupTransferCommandStatusParamsSchema, LookupTransferCommandStatusParams } from '../../../schemas/operations';
 
 /**
  * @description Lookup transfer command status
@@ -14,7 +14,7 @@ import { LookupTransferCommandStatusParamsSchema } from '../../../schemas/operat
  * ```
  */
 export const LookupTransferCommandStatus = createApiOperation<
-  typeof LookupTransferCommandStatusParamsSchema._type,
+  LookupTransferCommandStatusParams,
   LookupTransferCommandStatusResponse
 >({
   paramsSchema: LookupTransferCommandStatusParamsSchema,

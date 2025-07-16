@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../../core';
 import { AcceptTransferOfferResponse } from '../../../../schemas/api';
-import { AcceptTransferOfferParamsSchema } from '../../../../schemas/operations';
+import { AcceptTransferOfferParamsSchema, AcceptTransferOfferParams } from '../../../../schemas/operations';
 
 /**
  * @description Accept a transfer offer by contract ID
@@ -11,7 +11,7 @@ import { AcceptTransferOfferParamsSchema } from '../../../../schemas/operations'
  * ```
  */
 export const AcceptTransferOffer = createApiOperation<
-  typeof AcceptTransferOfferParamsSchema._type,
+  AcceptTransferOfferParams,
   AcceptTransferOfferResponse
 >({
   paramsSchema: AcceptTransferOfferParamsSchema,
