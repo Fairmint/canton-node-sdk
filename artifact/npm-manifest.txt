@@ -162,5 +162,6 @@ build/src/core/operations/ApiOperation
 build/src/core/operations/ApiOperationFactory
 build/src/core/operations/index
 build/src/core/types
+build/src/generated/openapi-types
 build/src/index
 package.json
