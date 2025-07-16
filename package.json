@@ -11,7 +11,7 @@
     "build": "npm run build:core && npm run build:lint",
     "build:core": "npm run build:core:generate-client-methods && npm run generate:openapi-types && tsc",
     "build:core:generate-client-methods": "tsx scripts/generate-client-methods.ts",
-    "generate:openapi-types": "npx openapi-typescript openapi-spec.yaml -o src/generated/openapi-types.ts",
+    "generate:openapi-types": "npx openapi-typescript artifact/openapi-spec.yaml -o src/generated/openapi-types.ts",
     "build:lint": "tsc -p tsconfig.lint.json",
     "test": "jest",
     "test:watch": "jest --watch",

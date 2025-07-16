@@ -1,6 +1,6 @@
 import { BaseClient, createApiOperation } from '../../../../../core';
 import { z } from 'zod';
-import type { paths } from '../../../../../openapi-types';
+import type { paths } from '../../../../../generated/openapi-types';
 import { EventsByContractIdResponse } from '../../../schemas/api/events';
 
 // Type aliases for better readability and to avoid repetition
