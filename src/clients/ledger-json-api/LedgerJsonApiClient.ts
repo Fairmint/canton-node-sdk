@@ -12,6 +12,10 @@ import { GetUpdateByOffset } from './operations/v2/updates/get-update-by-offset'
 import { GetUpdateById } from './operations/v2/updates/get-update-by-id';
 import { GetTransactionById } from './operations/v2/updates/get-transaction-by-id';
 import { GetTransactionTreeById } from './operations/v2/updates/get-transaction-tree-by-id';
+import { GetActiveContracts } from './operations/v2/state/get-active-contracts';
+import { GetConnectedSynchronizers } from './operations/v2/state/get-connected-synchronizers';
+import { GetLedgerEnd } from './operations/v2/state/get-ledger-end';
+import { GetLatestPrunedOffsets } from './operations/v2/state/get-latest-pruned-offsets';
 import { CreateUser } from './operations/v2/users/create-user';
 import { DeleteUser } from './operations/v2/users/delete-user';
 import { GetUser } from './operations/v2/users/get-user';
@@ -48,6 +52,10 @@ import type { GetUpdateByOffsetParams, GetUpdateByOffsetResponse } from './opera
 import type { GetUpdateByIdParams, GetUpdateByIdResponse } from './operations/v2/updates/get-update-by-id';
 import type { GetTransactionByIdParams, GetTransactionByIdResponse } from './operations/v2/updates/get-transaction-by-id';
 import type { GetTransactionTreeByIdParams, GetTransactionTreeByIdResponse } from './operations/v2/updates/get-transaction-tree-by-id';
+import type { GetActiveContractsParams, GetActiveContractsResponse } from './operations/v2/state/get-active-contracts';
+import type { GetConnectedSynchronizersParams, GetConnectedSynchronizersResponse } from './operations/v2/state/get-connected-synchronizers';
+import type { GetLedgerEndParams, GetLedgerEndResponse } from './operations/v2/state/get-ledger-end';
+import type { GetLatestPrunedOffsetsParams, GetLatestPrunedOffsetsResponse } from './operations/v2/state/get-latest-pruned-offsets';
 import type { CreateUserParams } from './operations/v2/users/create-user';
 import type { DeleteUserParams, DeleteUserResponse } from './operations/v2/users/delete-user';
 import type { GetUserParams, GetUserResponse } from './operations/v2/users/get-user';
@@ -93,6 +101,12 @@ export class LedgerJsonApiClient extends BaseClient {
   public getUpdateById!: (params: GetUpdateByIdParams) => Promise<GetUpdateByIdResponse>;
   public getTransactionById!: (params: GetTransactionByIdParams) => Promise<GetTransactionByIdResponse>;
   public getTransactionTreeById!: (params: GetTransactionTreeByIdParams) => Promise<GetTransactionTreeByIdResponse>;
+
+  // State
+  public getActiveContracts!: (params: GetActiveContractsParams) => Promise<GetActiveContractsResponse>;
+  public getConnectedSynchronizers!: (params: GetConnectedSynchronizersParams) => Promise<GetConnectedSynchronizersResponse>;
+  public getLedgerEnd!: (params: GetLedgerEndParams) => Promise<GetLedgerEndResponse>;
+  public getLatestPrunedOffsets!: (params: GetLatestPrunedOffsetsParams) => Promise<GetLatestPrunedOffsetsResponse>;
 
   // Users
   public createUser!: (params: CreateUserParams) => Promise<any>;
@@ -178,6 +192,12 @@ export class LedgerJsonApiClient extends BaseClient {
     this.getUpdateById = (params) => new GetUpdateById(this).execute(params);
     this.getTransactionById = (params) => new GetTransactionById(this).execute(params);
     this.getTransactionTreeById = (params) => new GetTransactionTreeById(this).execute(params);
+
+    // State
+    this.getActiveContracts = (params) => new GetActiveContracts(this).execute(params);
+    this.getConnectedSynchronizers = (params) => new GetConnectedSynchronizers(this).execute(params);
+    this.getLedgerEnd = (params) => new GetLedgerEnd(this).execute(params);
+    this.getLatestPrunedOffsets = (params) => new GetLatestPrunedOffsets(this).execute(params);
 
     // Users
     this.createUser = (params) => new CreateUser(this).execute(params);
