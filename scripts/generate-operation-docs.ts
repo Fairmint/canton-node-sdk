@@ -14,12 +14,14 @@ interface OperationInfo {
   responseType?: string;
   responseSchema?: string;
   apiType: 'ledger-json-api' | 'validator-api';
+  category?: string;
 }
 
 class OperationDocGenerator {
   private operations: OperationInfo[] = [];
   private schemaCache = new Map<string, string>();
   private sdkVersion: string;
+  private githubRepo = 'https://github.com/Fairmint/canton-node-sdk';
 
   constructor() {
     // Read SDK version from package.json
@@ -105,15 +107,156 @@ class OperationDocGenerator {
     // Extract function name and other metadata
     this.extractMetadata(sourceFile, operationInfo);
 
+    // Extract category from file path
+    const pathParts = filePath.split('/');
+    const operationsIndex = pathParts.findIndex(part => part === 'operations');
+    if (operationsIndex !== -1 && pathParts[operationsIndex + 2]) {
+      operationInfo.category =
+        pathParts[operationsIndex + 2] || 'uncategorized';
+    }
+
     if (operationInfo.name && operationInfo.method && operationInfo.apiType) {
       // Extract response schema if we have a response type
       if (operationInfo.responseType) {
-        operationInfo.responseSchema = await this.extractResponseSchema(
-          operationInfo.responseType,
-          operationInfo.apiType
-        );
+        try {
+          operationInfo.responseSchema = await this.extractResponseSchema(
+            operationInfo.responseType,
+            operationInfo.apiType
+          );
+        } catch {
+          // If schema extraction fails, just use the type name
+          operationInfo.responseSchema = `{ /* ${operationInfo.responseType} */ }`;
+        }
       }
+
+      // Extract parameters from the operation file
+      operationInfo.parameters =
+        await this.extractParametersFromOperation(filePath);
+
       this.operations.push(operationInfo as OperationInfo);
+    }
+  }
+
+  private async extractParametersFromOperation(
+    filePath: string
+  ): Promise<string[]> {
+    try {
+      const sourceCode = fs.readFileSync(filePath, 'utf-8');
+      const sourceFile = ts.createSourceFile(
+        filePath,
+        sourceCode,
+        ts.ScriptTarget.Latest,
+        true
+      );
+
+      const parameters: string[] = [];
+
+      // Look for parameter type imports and definitions
+      const visit = (node: ts.Node): void => {
+        // Look for import statements that might import parameter types
+        if (ts.isImportDeclaration(node) && node.importClause) {
+          const importPath = (node.moduleSpecifier as ts.StringLiteral).text;
+          if (importPath.includes('schemas/operations')) {
+            // Extract imported types that might be parameter types
+            if (
+              node.importClause.namedBindings &&
+              ts.isNamedImports(node.importClause.namedBindings)
+            ) {
+              for (const element of node.importClause.namedBindings.elements) {
+                const typeName = element.name.text;
+                if (
+                  typeName.includes('Params') ||
+                  typeName.includes('Request')
+                ) {
+                  // Try to extract parameter info from schema
+                  const paramInfo = this.extractParameterInfoFromSchema(
+                    typeName,
+                    filePath
+                  );
+                  if (paramInfo.length > 0) {
+                    parameters.push(...paramInfo);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        ts.forEachChild(node, visit);
+      };
+
+      visit(sourceFile);
+
+      return parameters.length > 0 ? parameters : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private extractParameterInfoFromSchema(
+    typeName: string,
+    operationFilePath: string
+  ): string[] {
+    try {
+      // Determine the API type from the file path
+      const apiType = operationFilePath.includes('validator-api')
+        ? 'validator-api'
+        : 'ledger-json-api';
+
+      // Look for schema files
+      const schemasDir = path.join(
+        process.cwd(),
+        `src/clients/${apiType}/schemas/operations`
+      );
+
+      if (!fs.existsSync(schemasDir)) {
+        return [];
+      }
+
+      const schemaFiles = fs
+        .readdirSync(schemasDir)
+        .filter(f => f.endsWith('.ts'));
+
+      for (const schemaFile of schemaFiles) {
+        const schemaPath = path.join(schemasDir, schemaFile);
+        const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
+
+        // Simple pattern matching for parameter schemas
+        if (schemaContent.includes(typeName)) {
+          const parameters: string[] = [];
+
+          // Extract basic parameter patterns from the schema
+          const patterns = [
+            /(\w+):\s*z\.string\(\)/g,
+            /(\w+):\s*z\.number\(\)/g,
+            /(\w+):\s*z\.boolean\(\)/g,
+            /(\w+):\s*z\.array\(/g,
+            /(\w+):\s*z\.object\(/g,
+          ];
+
+          for (const pattern of patterns) {
+            let match;
+            while ((match = pattern.exec(schemaContent)) !== null) {
+              const paramName = match[1];
+              if (paramName && !parameters.includes(paramName)) {
+                // Check if it's optional
+                const isOptional =
+                  schemaContent.includes(`${paramName}:`) &&
+                  schemaContent.includes('.optional()');
+                parameters.push(
+                  `${paramName}${isOptional ? ' (optional)' : ''}`
+                );
+              }
+            }
+          }
+
+          return parameters;
+        }
+      }
+
+      return [];
+    } catch {
+      return [];
     }
   }
 
@@ -137,27 +280,34 @@ class OperationDocGenerator {
       }
 
       // Look for JSDoc comments
-      const jsDoc = ts.getJSDocTags(node);
+      const jsDoc = ts.getJSDocCommentsAndTags(node);
       for (const tag of jsDoc) {
-        if (tag.tagName.text === 'description') {
-          operationInfo.description = tag.comment
-            ? tag.comment.toString().trim()
-            : '';
-        } else if (tag.tagName.text === 'example') {
-          if (!operationInfo.examples) operationInfo.examples = [];
-          const exampleText = tag.comment?.toString().trim() || '';
-          // Clean up the example text
-          const cleanExample = exampleText
-            .replace(/```typescript\n?/g, '')
-            .replace(/```\n?/g, '')
-            .trim();
-          operationInfo.examples.push(cleanExample);
-        } else if (tag.tagName.text === 'param') {
-          if (!operationInfo.parameters) operationInfo.parameters = [];
-          const paramText = tag.comment?.toString().trim() || '';
-          // Only add if not already present
-          if (!operationInfo.parameters.includes(paramText)) {
-            operationInfo.parameters.push(paramText);
+        if (ts.isJSDoc(tag)) {
+          // Skip JSDoc containers, look for actual tags
+          continue;
+        }
+
+        if ('tagName' in tag && tag.tagName) {
+          if (tag.tagName.text === 'description') {
+            operationInfo.description = tag.comment
+              ? tag.comment.toString().trim()
+              : '';
+          } else if (tag.tagName.text === 'example') {
+            if (!operationInfo.examples) operationInfo.examples = [];
+            const exampleText = tag.comment?.toString().trim() || '';
+            // Clean up the example text
+            const cleanExample = exampleText
+              .replace(/```typescript\n?/g, '')
+              .replace(/```\n?/g, '')
+              .trim();
+
+            // Only add if not already present (prevent duplicates)
+            if (
+              cleanExample &&
+              !operationInfo.examples.includes(cleanExample)
+            ) {
+              operationInfo.examples.push(cleanExample);
+            }
           }
         }
       }
@@ -1037,7 +1187,12 @@ ${categoryOperations
           ? 'ledger-json-api-operations.md'
           : 'validator-api-operations.md';
 
-      const indexContent = `# Canton Node SDK - ${apiName} Operations
+      const indexContent = `---
+layout: default
+sdk_version: ${this.sdkVersion}
+---
+
+# Canton Node SDK - ${apiName} Operations
 
 This document provides an overview of all available operations in the Canton Node SDK for the ${apiName}.
 
@@ -1087,6 +1242,37 @@ ${categories.map(category => this.generateCategorySection(apiType, category)).jo
       );
     }
 
+    // Get navigation for this operation
+    const navigation = this.generateNavigationForOperation(operation);
+
+    // Deduplicate examples
+    const uniqueExamples = operation.examples
+      ? [...new Set(operation.examples)]
+      : [];
+
+    // Fix response schema JSON formatting
+    let responseSchemaFormatted =
+      operation.responseSchema || `{ /* ${operation.responseType} */ }`;
+    if (
+      responseSchemaFormatted.startsWith('`') &&
+      responseSchemaFormatted.endsWith('`')
+    ) {
+      // Remove wrapping backticks if present
+      responseSchemaFormatted = responseSchemaFormatted.slice(1, -1);
+    }
+
+    // Ensure proper JSON formatting
+    if (
+      !responseSchemaFormatted.startsWith('{') &&
+      !responseSchemaFormatted.startsWith('[')
+    ) {
+      responseSchemaFormatted = `{ /* ${responseSchemaFormatted} */ }`;
+    }
+
+    // Create GitHub link for source file
+    const relativeFilePath = path.relative(process.cwd(), operation.filePath);
+    const githubLink = `${this.githubRepo}/blob/main/${relativeFilePath}`;
+
     const frontMatter = `---
 layout: default
 sdk_version: ${this.sdkVersion}
@@ -1097,30 +1283,33 @@ sdk_version: ${this.sdkVersion}
       frontMatter +
       `# ${operation.name}
 
-${operation.description ? `## Description\n\n${operation.description}\n\n` : ''}
+${navigation}
 
-## Method
-\`${operation.method}\`
+${operation.description ? `## Description\n\n${operation.description}\n\n` : ''}
 
 ## Parameters
 ${
   operation.parameters && operation.parameters.length > 0
-    ? operation.parameters.map(param => `- ${param}`).join('\n')
+    ? operation.parameters.map(param => `- \`${param}\``).join('\n')
     : 'None'
-}
-
-## Examples
-${
-  operation.examples && operation.examples.length > 0
-    ? operation.examples
-        .map(example => `\`\`\`typescript\n${example}\n\`\`\``)
-        .join('\n\n')
-    : 'No examples available'
 }
 
 ## Response Type
 \`\`\`json
-${operation.responseSchema || `\`${operation.responseType}\``}\`\`\`
+${responseSchemaFormatted}
+\`\`\`
+
+## Method
+\`${operation.method}\`
+
+## Examples
+${
+  uniqueExamples.length > 0
+    ? uniqueExamples
+        .map(example => `\`\`\`typescript\n${example}\n\`\`\``)
+        .join('\n\n')
+    : 'No examples available'
+}
 
 ## Usage
 
@@ -1135,15 +1324,15 @@ const config = EnvLoader.getConfig('${operation.apiType === 'ledger-json-api' ? 
 const client = new ${operation.apiType === 'ledger-json-api' ? 'LedgerJsonApiClient' : 'ValidatorApiClient'}(config);
 
 ${
-  operation.examples && operation.examples.length > 0
-    ? operation.examples[0]
+  uniqueExamples.length > 0
+    ? uniqueExamples[0]
     : `// Example usage for ${operation.name}`
 }
 \`\`\`
 
 ---
 
-*Generated from: \`${path.relative(process.cwd(), operation.filePath)}\`*
+*Generated from: [${relativeFilePath}](${githubLink})*
 `;
 
     const docPath = path.join(
@@ -1161,6 +1350,66 @@ ${
 
     fs.writeFileSync(docPath, docContent);
     console.log(`📄 Generated operation doc: ${docPath}`);
+  }
+
+  private generateNavigationForOperation(operation: OperationInfo): string {
+    // Get all operations for the same API type
+    const sameApiOperations = this.operations.filter(
+      op => op.apiType === operation.apiType
+    );
+
+    // Group by category
+    const categorizedOps = new Map<string, OperationInfo[]>();
+    sameApiOperations.forEach(op => {
+      const category = op.category || 'uncategorized';
+      if (!categorizedOps.has(category)) {
+        categorizedOps.set(category, []);
+      }
+      categorizedOps.get(category)!.push(op);
+    });
+
+    // Sort categories and operations
+    const sortedCategories = Array.from(categorizedOps.keys()).sort();
+
+    let navigation = `<nav class="operation-nav" style="background: #f8fbff; border: 1px solid #e6eaf0; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+  <div style="font-weight: 600; margin-bottom: 12px; color: #222;">
+    ${operation.apiType === 'ledger-json-api' ? 'Ledger JSON API' : 'Validator API'} Operations
+  </div>
+`;
+
+    for (const category of sortedCategories) {
+      const categoryOps = categorizedOps
+        .get(category)!
+        .sort((a, b) => a.name.localeCompare(b.name));
+      const categoryName =
+        category.charAt(0).toUpperCase() +
+        category.slice(1).replace(/[-_]/g, ' ');
+
+      navigation += `  <div style="margin-bottom: 8px;">
+    <div style="font-weight: 500; font-size: 14px; color: #555; margin-bottom: 4px;">${categoryName}</div>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+`;
+
+      for (const op of categoryOps) {
+        const isCurrentPage = op.name === operation.name;
+        const linkStyle = isCurrentPage
+          ? 'background: #0066FF; color: white; font-weight: 600;'
+          : 'background: white; color: #0066FF; border: 1px solid #e6eaf0;';
+
+        navigation += `      <a href="/operations/${op.name.toLowerCase()}/" style="${linkStyle} padding: 4px 8px; border-radius: 4px; font-size: 12px; text-decoration: none; transition: all 0.2s;">${op.name}</a>
+`;
+      }
+
+      navigation += `    </div>
+  </div>
+`;
+    }
+
+    navigation += `</nav>
+
+`;
+
+    return navigation;
   }
 }
 
