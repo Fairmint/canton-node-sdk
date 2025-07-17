@@ -52,7 +52,7 @@
   "bugs": {
     "url": "https://github.com/Fairmint/canton-node-sdk/issues"
   },
-  "homepage": "https://github.com/Fairmint/canton-node-sdk#readme",
+  "homepage": "https://sdk.canton.fairmint.com/",
   "devDependencies": {
     "@types/jest": "30.0.0",
     "@types/node": "24.0.14",

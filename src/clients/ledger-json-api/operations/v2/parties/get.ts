@@ -1,40 +1,27 @@
 import { createApiOperation } from '../../../../../core';
 import { z } from 'zod';
 import type { paths } from '../../../../../generated/openapi-types';
-import { ListKnownPartiesResponse } from '../../../schemas/api';
 
-// Schema for the parameters
-export const ListKnownPartiesParamsSchema = z.object({
-  /** Maximum number of elements in a returned page */
-  pageSize: z.number().int().optional(),
-  /** Token to continue results from a given page */
+const endpoint = '/v2/parties';
+
+export const GetPartiesParamsSchema = z.object({
+  pageSize: z.number().optional(),
   pageToken: z.string().optional(),
 });
 
-export type ListKnownPartiesParams = z.infer<typeof ListKnownPartiesParamsSchema>;
+export type GetPartiesParams = z.infer<typeof GetPartiesParamsSchema>;
+export type GetPartiesResponse = paths[typeof endpoint]['get']['responses']['200']['content']['application/json'];
 
-/**
- * @description List all known parties
- * @example
- * ```typescript
- * const parties = await client.listKnownParties({ pageSize: 10 });
- * console.log(`Found ${parties.partyDetails.length} parties`);
- * ```
- */
-export const ListKnownParties = createApiOperation<
-  ListKnownPartiesParams,
-  ListKnownPartiesResponse
+export const GetParties = createApiOperation<
+  GetPartiesParams,
+  GetPartiesResponse
 >({
-  paramsSchema: ListKnownPartiesParamsSchema,
+  paramsSchema: GetPartiesParamsSchema,
   method: 'GET',
-  buildUrl: (params: ListKnownPartiesParams, apiUrl: string) => {
-    const url = new URL(`${apiUrl}/v2/parties`);
-    if (params.pageSize !== undefined) {
-      url.searchParams.set('pageSize', params.pageSize.toString());
-    }
-    if (params.pageToken !== undefined) {
-      url.searchParams.set('pageToken', params.pageToken);
-    }
+  buildUrl: (params, apiUrl) => {
+    const url = new URL(`${apiUrl}${endpoint}`);
+    if (params.pageSize) url.searchParams.set('pageSize', params.pageSize.toString());
+    if (params.pageToken) url.searchParams.set('pageToken', params.pageToken);
     return url.toString();
   },
 }); 

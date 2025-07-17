@@ -1,10 +1,6 @@
-import { BaseClient, createApiOperation } from '../../../../../core';
 import { z } from 'zod';
-import type { paths } from '../../../../../generated/openapi-types';
 import { UploadDarFileResponse } from '../../../schemas/api';
-
-// Type aliases for better readability and to avoid repetition
-type UploadDarFileRequest = paths['/v2/packages']['post']['requestBody']['content']['application/octet-stream'];
+import { createApiOperation } from '../../../../../core';
 
 // Schema for the parameters  
 export const UploadDarFileParamsSchema = z.object({

@@ -1,6 +1,5 @@
 import { createApiOperation } from '../../../../../core';
 import { z } from 'zod';
-import type { paths } from '../../../../../generated/openapi-types';
 import { GetPackageStatusResponse } from '../../../schemas/api';
 
 // Schema for the parameters

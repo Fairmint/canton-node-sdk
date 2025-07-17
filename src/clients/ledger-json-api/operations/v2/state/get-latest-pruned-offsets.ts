@@ -1,6 +1,11 @@
 import { createApiOperation } from '../../../../../core';
-import { GetLatestPrunedOffsetsParamsSchema, GetLatestPrunedOffsetsParams } from '../../../schemas/operations';
-import { GetLatestPrunedOffsetsResponse } from '../../../schemas/api';
+import { z } from 'zod';
+import type { paths } from '../../../../../generated/openapi-types';
+
+const endpoint = '/v2/state/latest-pruned-offsets' as const;
+
+export type GetLatestPrunedOffsetsParams = paths[typeof endpoint]['get']['parameters']['query'];
+export type GetLatestPrunedOffsetsResponse = paths[typeof endpoint]['get']['responses']['200']['content']['application/json'];
 
 /**
  * @description Get latest pruned offsets
@@ -10,11 +15,9 @@ import { GetLatestPrunedOffsetsResponse } from '../../../schemas/api';
  * console.log(`Participant pruned up to: ${prunedOffsets.participantPrunedUpToInclusive}`);
  * ```
  */
-export const GetLatestPrunedOffsets = createApiOperation<
-  GetLatestPrunedOffsetsParams,
-  GetLatestPrunedOffsetsResponse
->({
-  paramsSchema: GetLatestPrunedOffsetsParamsSchema,
+export const GetLatestPrunedOffsets = createApiOperation<GetLatestPrunedOffsetsParams, GetLatestPrunedOffsetsResponse>({
+  paramsSchema: z.any(),
   method: 'GET',
-  buildUrl: (_params: GetLatestPrunedOffsetsParams, apiUrl: string) => `${apiUrl}/v2/state/latest-pruned-offsets`,
+  buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
+  buildRequestData: () => ({}),
 }); 

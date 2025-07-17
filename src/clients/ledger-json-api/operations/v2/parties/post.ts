@@ -41,9 +41,14 @@ export const AllocateParty = createApiOperation<
   buildUrl: (_params: AllocatePartyParams, apiUrl: string) => `${apiUrl}/v2/parties`,
   buildRequestData: (params: AllocatePartyParams, _client: BaseClient): AllocatePartyRequest => {
     return {
-      partyIdHint: params.partyIdHint,
-      identityProviderId: params.identityProviderId,
-      localMetadata: params.localMetadata,
+      partyIdHint: params.partyIdHint ?? '',
+      identityProviderId: params.identityProviderId ?? '',
+      ...(params.localMetadata && {
+        localMetadata: {
+          resourceVersion: params.localMetadata.resourceVersion ?? '',
+          annotations: params.localMetadata.annotations ?? {},
+        },
+      }),
     };
   },
 }); 

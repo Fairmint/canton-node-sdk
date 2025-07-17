@@ -1,29 +1,25 @@
 import { createApiOperation } from '../../../../../../core';
-import { AsyncSubmitReassignmentParamsSchema, AsyncSubmitReassignmentParams } from '../../../../schemas/operations';
-import { SubmitReassignmentResponse } from '../../../../schemas/api';
+import { z } from 'zod';
+import type { paths } from '../../../../../../generated/openapi-types';
 
-/**
- * @description Submit reassignment command asynchronously
- * @example
- * ```typescript
- * const result = await client.asyncSubmitReassignment({
- *   reassignmentCommands: {
- *     commandId: 'unique-command-id',
- *     submitter: 'party1',
- *     commands: [assignCommand, unassignCommand]
- *   }
- * });
- * ```
- * @param reassignmentCommands - Reassignment commands to submit
- */
+const endpoint = '/v2/commands/async/submit-reassignment';
+
+export const AsyncSubmitReassignmentParamsSchema = z.object({
+  reassignmentCommands: z.any(),
+});
+
+export type AsyncSubmitReassignmentParams = z.infer<typeof AsyncSubmitReassignmentParamsSchema>;
+export type AsyncSubmitReassignmentRequest = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
+export type AsyncSubmitReassignmentResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
+
 export const AsyncSubmitReassignment = createApiOperation<
   AsyncSubmitReassignmentParams,
-  SubmitReassignmentResponse
+  AsyncSubmitReassignmentResponse
 >({
   paramsSchema: AsyncSubmitReassignmentParamsSchema,
   method: 'POST',
-  buildUrl: (_params: AsyncSubmitReassignmentParams, apiUrl: string) => `${apiUrl}/v2/commands/async/submit-reassignment`,
-  buildRequestData: (params: AsyncSubmitReassignmentParams) => {
+  buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
+  buildRequestData: (params): AsyncSubmitReassignmentRequest => {
     return {
       reassignmentCommands: params.reassignmentCommands,
     };

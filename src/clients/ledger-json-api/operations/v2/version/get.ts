@@ -1,5 +1,4 @@
 import { createApiOperation } from '../../../../../core';
-import type { paths } from '../../../../../generated/openapi-types';
 import { GetLedgerApiVersionResponse } from '../../../schemas/api';
 import { z } from 'zod';
 

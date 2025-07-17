@@ -1,42 +1,22 @@
 import { createApiOperation } from '../../../../../core';
-import { GrantUserRightsParamsSchema, GrantUserRightsParams } from '../../../schemas/operations';
-import { GrantUserRightsResponse, GrantUserRightsRequest } from '../../../schemas/api';
+import { z } from 'zod';
+import type { paths } from '../../../../../generated/openapi-types';
 
-/**
- * @description Grant rights to a user
- * @example
- * ```typescript
- * const result = await client.grantUserRights({
- *   userId: 'alice',
- *   rights: [
- *     { kind: { CanActAs: { party: 'Alice::1220' } } },
- *     { kind: { CanReadAs: { party: 'Bob::1221' } } }
- *   ],
- *   identityProviderId: 'default'
- * });
- * console.log(`Granted ${result.newlyGrantedRights.length} new rights`);
- * ```
- */
-export const GrantUserRights = createApiOperation<
-  GrantUserRightsParams,
-  GrantUserRightsResponse
->({
-  paramsSchema: GrantUserRightsParamsSchema,
+const endpoint = '/v2/users/{user-id}/rights' as const;
+
+// The params type should include both path parameters and request body
+export type GrantUserRightsParams = {
+  userId: string; // Path parameter
+} & paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
+
+export type GrantUserRightsResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
+
+export const GrantUserRights = createApiOperation<GrantUserRightsParams, GrantUserRightsResponse>({
+  paramsSchema: z.any(),
   method: 'POST',
-  buildUrl: (params: GrantUserRightsParams, apiUrl: string) => `${apiUrl}/v2/users/${params.userId}/rights`,
-  buildRequestData: (params: GrantUserRightsParams): GrantUserRightsRequest => {
-    const requestBody: GrantUserRightsRequest = {
-      userId: params.userId,
-    };
-    
-    if (params.rights) {
-      requestBody.rights = params.rights;
-    }
-    
-    if (params.identityProviderId) {
-      requestBody.identityProviderId = params.identityProviderId;
-    }
-    
+  buildUrl: (params, apiUrl) => `${apiUrl}/v2/users/${params.userId}/rights`,
+  buildRequestData: (params) => {
+    const { userId, ...requestBody } = params;
     return requestBody;
   },
 }); 

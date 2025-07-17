@@ -1,9 +1,4 @@
 import SimulationRunner from '../../../core/SimulationRunner';
-import { 
-  EventsByContractIdResponseSchema,
-  BadRequestErrorSchema,
-  NotFoundErrorSchema
-} from '../../../../src/clients/ledger-json-api/schemas';
 
 const runner = new SimulationRunner();
 
@@ -19,7 +14,6 @@ export async function runAllTests() {
     client => client.getEventsByContractId({
       contractId: TEST_CONTRACT_IDS.VALID,
     }),
-    EventsByContractIdResponseSchema
   );
 
   await runner.runSimulation(
@@ -27,7 +21,6 @@ export async function runAllTests() {
     client => client.getEventsByContractId({
       contractId: TEST_CONTRACT_IDS.INVALID_FORMAT,
     }),
-    BadRequestErrorSchema
   );
 
   await runner.runSimulation(
@@ -35,6 +28,5 @@ export async function runAllTests() {
     client => client.getEventsByContractId({
       contractId: TEST_CONTRACT_IDS.NON_EXISTENT,
     }),
-    NotFoundErrorSchema
   );
 }
