@@ -1,8 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { GetPartyDetailsParamsSchema, GetPartyDetailsParams } from '../../../schemas/operations';
-import { GetPartiesResponse } from '../../../schemas/api';
-
-const endpoint = '/v2/parties/{party}' as const;
+import type { paths } from '../../../../../generated/openapi-types';
 
 /**
  * @description Get party details for a specific party
@@ -12,12 +10,12 @@ const endpoint = '/v2/parties/{party}' as const;
  *   party: 'alice@example.com',
  *   identityProviderId: 'default'
  * });
- * console.log(`Party: ${partyDetails.partyDetails[0].party}`);
+ * console.log(`Party: ${partyDetails.partyDetails.party}`);
  * ```
  */
 export const GetPartyDetails = createApiOperation<
   GetPartyDetailsParams,
-  GetPartiesResponse
+  paths['/v2/parties/{party}']['get']['responses']['200']['content']['application/json']
 >({
   paramsSchema: GetPartyDetailsParamsSchema,
   method: 'GET',

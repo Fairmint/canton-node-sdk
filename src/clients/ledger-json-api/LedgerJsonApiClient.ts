@@ -63,7 +63,7 @@ import type { InteractiveSubmissionGetPreferredPackageVersionParams } from './sc
 import type { InteractiveSubmissionGetPreferredPackagesParams } from './schemas/operations';
 import type { InteractiveSubmissionAllocatePartyResponse, InteractiveSubmissionCreateUserResponse, InteractiveSubmissionUploadDarResponse } from './schemas/api';
 import type { GetPreferredPackageVersionResponse, GetPreferredPackagesResponse } from './schemas/api';
-import type { GetPartiesParams, GetPartiesResponse } from './operations/v2/parties/get';
+import type { GetPartiesParams } from './operations/v2/parties/get';
 import type { GetParticipantIdParams, GetParticipantIdResponse } from './operations/v2/parties/get-participant-id';
 import type { GetPartyDetailsParams } from './schemas/operations';
 import type { AllocatePartyParams } from './operations/v2/parties/post';
