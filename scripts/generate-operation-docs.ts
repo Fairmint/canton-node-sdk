@@ -128,6 +128,14 @@ class OperationDocGenerator {
     // Look for imports from schemas to understand parameter and response types
     const imports = this.extractImports(sourceFile);
 
+    // Check if this operation uses OpenAPI types (imports from generated/openapi-types)
+    const usesOpenApiTypes = sourceCode.includes('generated/openapi-types');
+    
+    if (usesOpenApiTypes) {
+      // Extract response type from OpenAPI-based operations
+      this.extractOpenApiResponseType(sourceCode, operationInfo);
+    }
+
     // Handle specific operation types with known parameter structures
     if (operationInfo.name === 'CreateUser') {
       if (operationInfo.apiType === 'validator-api') {
@@ -335,7 +343,29 @@ class OperationDocGenerator {
     }
   }
 
-  // @ts-expect-error - Method preserved for future use
+  private extractOpenApiResponseType(
+    sourceCode: string,
+    operationInfo: Partial<OperationInfo>
+  ): void {
+    // Look for response type definitions like: AsyncSubmitReassignmentResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
+    const responseTypeMatch = sourceCode.match(/export\s+type\s+(\w+Response)\s*=/);
+    if (responseTypeMatch) {
+      operationInfo.responseType = responseTypeMatch[1];
+      // For OpenAPI types, we'll use a generic response schema since the actual structure comes from the OpenAPI spec
+      operationInfo.responseSchema = `{ /* OpenAPI response type: ${responseTypeMatch[1]} */ }`;
+    } else {
+      // Look for OpenAPI types used directly in createApiOperation calls
+      // Pattern: paths['/path/to/endpoint']['method']['responses']['200']['content']['application/json']
+      const openApiResponseMatch = sourceCode.match(/paths\[['"`][^'"`]+['"`]\]\[['"`]\w+['"`]\]\[['"`]responses['"`]\]\[['"`]\d+['"`]\]\[['"`]content['"`]\]\[['"`]application\/json['"`]\]/);
+      if (openApiResponseMatch) {
+        // Extract the operation name and create a response type name
+        const operationName = operationInfo.name || 'UnknownOperation';
+        operationInfo.responseType = `${operationName}Response`;
+        operationInfo.responseSchema = `{ /* OpenAPI response type from paths */ }`;
+      }
+    }
+  }
+
   private async extractResponseSchema(
     responseType: string,
     apiType: 'ledger-json-api' | 'validator-api'
