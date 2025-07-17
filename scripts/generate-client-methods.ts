@@ -139,14 +139,10 @@ function updateClientFile(): void {
   // 3. Read the client file
   let content = fs.readFileSync(CLIENT_FILE, 'utf8');
 
-  // 4. Replace the import lines for schemas
+  // 4. Replace the schema import sections
   content = content.replace(
-    /import \{[^}]+\} from '\.\/schemas\/operations';/,
-    operationsImport
-  );
-  content = content.replace(
-    /import \{[^}]+\} from '\.\/schemas\/api';/,
-    apiImport
+    /(\/\/ AUTO-GENERATED SCHEMA IMPORTS START)([\s\S]*?)(\/\/ AUTO-GENERATED SCHEMA IMPORTS END)/,
+    `$1\n${operationsImport}\n${apiImport}\n$3`
   );
 
   // 5. Replace the codegen marker sections
