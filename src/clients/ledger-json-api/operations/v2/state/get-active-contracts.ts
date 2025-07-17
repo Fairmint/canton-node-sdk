@@ -16,7 +16,7 @@ export const GetActiveContracts = createApiOperation<GetActiveContractsParams, G
     // If activeAtOffset is not specified, default to ledger end offset
     if (params.activeAtOffset === undefined) {
       const ledgerClient = client as LedgerJsonApiClient;
-      const ledgerEnd = await ledgerClient.getLedgerEnd({});
+      const ledgerEnd = await ledgerClient.getLedgerEnd(undefined);
       return {
         ...params,
         activeAtOffset: ledgerEnd.offset,
