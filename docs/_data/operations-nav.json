@@ -1,0 +1,346 @@
+{
+  "ledger-json-api": {
+    "authenticated-user": [
+      {
+        "name": "GetAuthenticatedUser",
+        "url": "/operations/getauthenticateduser/"
+      }
+    ],
+    "commands": [
+      {
+        "name": "AsyncSubmit",
+        "url": "/operations/asyncsubmit/"
+      },
+      {
+        "name": "AsyncSubmitReassignment",
+        "url": "/operations/asyncsubmitreassignment/"
+      },
+      {
+        "name": "Completions",
+        "url": "/operations/completions/"
+      },
+      {
+        "name": "SubmitAndWait",
+        "url": "/operations/submitandwait/"
+      },
+      {
+        "name": "SubmitAndWaitForReassignment",
+        "url": "/operations/submitandwaitforreassignment/"
+      },
+      {
+        "name": "SubmitAndWaitForTransaction",
+        "url": "/operations/submitandwaitfortransaction/"
+      },
+      {
+        "name": "SubmitAndWaitForTransactionTree",
+        "url": "/operations/submitandwaitfortransactiontree/"
+      }
+    ],
+    "events": [
+      {
+        "name": "GetEventsByContractId",
+        "url": "/operations/geteventsbycontractid/"
+      }
+    ],
+    "idps": [
+      {
+        "name": "CreateIdentityProviderConfig",
+        "url": "/operations/createidentityproviderconfig/"
+      },
+      {
+        "name": "DeleteIdentityProviderConfig",
+        "url": "/operations/deleteidentityproviderconfig/"
+      },
+      {
+        "name": "GetIdentityProviderConfig",
+        "url": "/operations/getidentityproviderconfig/"
+      },
+      {
+        "name": "ListIdentityProviderConfigs",
+        "url": "/operations/listidentityproviderconfigs/"
+      },
+      {
+        "name": "UpdateIdentityProviderConfig",
+        "url": "/operations/updateidentityproviderconfig/"
+      }
+    ],
+    "interactive-submission": [
+      {
+        "name": "InteractiveSubmissionAllocateParty",
+        "url": "/operations/interactivesubmissionallocateparty/"
+      },
+      {
+        "name": "InteractiveSubmissionCreateUser",
+        "url": "/operations/interactivesubmissioncreateuser/"
+      },
+      {
+        "name": "InteractiveSubmissionUploadDar",
+        "url": "/operations/interactivesubmissionuploaddar/"
+      }
+    ],
+    "packages": [
+      {
+        "name": "GetPackageStatus",
+        "url": "/operations/getpackagestatus/"
+      },
+      {
+        "name": "GetPreferredPackages",
+        "url": "/operations/getpreferredpackages/"
+      },
+      {
+        "name": "GetPreferredPackageVersion",
+        "url": "/operations/getpreferredpackageversion/"
+      },
+      {
+        "name": "ListPackages",
+        "url": "/operations/listpackages/"
+      },
+      {
+        "name": "UploadDarFile",
+        "url": "/operations/uploaddarfile/"
+      }
+    ],
+    "parties": [
+      {
+        "name": "AllocateParty",
+        "url": "/operations/allocateparty/"
+      },
+      {
+        "name": "GetParticipantId",
+        "url": "/operations/getparticipantid/"
+      },
+      {
+        "name": "GetPartyDetails",
+        "url": "/operations/getpartydetails/"
+      },
+      {
+        "name": "ListKnownParties",
+        "url": "/operations/listknownparties/"
+      },
+      {
+        "name": "UpdatePartyDetails",
+        "url": "/operations/updatepartydetails/"
+      }
+    ],
+    "state": [
+      {
+        "name": "GetActiveContracts",
+        "url": "/operations/getactivecontracts/"
+      },
+      {
+        "name": "GetConnectedSynchronizers",
+        "url": "/operations/getconnectedsynchronizers/"
+      },
+      {
+        "name": "GetLatestPrunedOffsets",
+        "url": "/operations/getlatestprunedoffsets/"
+      },
+      {
+        "name": "GetLedgerEnd",
+        "url": "/operations/getledgerend/"
+      }
+    ],
+    "updates": [
+      {
+        "name": "GetTransactionById",
+        "url": "/operations/gettransactionbyid/"
+      },
+      {
+        "name": "GetTransactionByOffset",
+        "url": "/operations/gettransactionbyoffset/"
+      },
+      {
+        "name": "GetTransactionTreeById",
+        "url": "/operations/gettransactiontreebyid/"
+      },
+      {
+        "name": "GetTransactionTreeByOffset",
+        "url": "/operations/gettransactiontreebyoffset/"
+      },
+      {
+        "name": "GetUpdateById",
+        "url": "/operations/getupdatebyid/"
+      },
+      {
+        "name": "GetUpdateByOffset",
+        "url": "/operations/getupdatebyoffset/"
+      },
+      {
+        "name": "GetUpdates",
+        "url": "/operations/getupdates/"
+      },
+      {
+        "name": "GetUpdateTrees",
+        "url": "/operations/getupdatetrees/"
+      }
+    ],
+    "users": [
+      {
+        "name": "CreateUser",
+        "url": "/operations/createuser/"
+      },
+      {
+        "name": "DeleteUser",
+        "url": "/operations/deleteuser/"
+      },
+      {
+        "name": "GetUser",
+        "url": "/operations/getuser/"
+      },
+      {
+        "name": "GrantUserRights",
+        "url": "/operations/grantuserrights/"
+      },
+      {
+        "name": "ListUserRights",
+        "url": "/operations/listuserrights/"
+      },
+      {
+        "name": "ListUsers",
+        "url": "/operations/listusers/"
+      },
+      {
+        "name": "RevokeUserRights",
+        "url": "/operations/revokeuserrights/"
+      },
+      {
+        "name": "UpdateUser",
+        "url": "/operations/updateuser/"
+      },
+      {
+        "name": "UpdateUserIdentityProvider",
+        "url": "/operations/updateuseridentityprovider/"
+      }
+    ],
+    "version": [
+      {
+        "name": "GetVersion",
+        "url": "/operations/getversion/"
+      }
+    ]
+  },
+  "validator-api": {
+    "admin": [
+      {
+        "name": "CreateUser",
+        "url": "/operations/createuser/"
+      },
+      {
+        "name": "GetExternalPartyBalance",
+        "url": "/operations/getexternalpartybalance/"
+      }
+    ],
+    "ans": [
+      {
+        "name": "CreateAnsEntry",
+        "url": "/operations/createansentry/"
+      },
+      {
+        "name": "GetAnsRules",
+        "url": "/operations/getansrules/"
+      },
+      {
+        "name": "ListAnsEntriesProxy",
+        "url": "/operations/listansentriesproxy/"
+      },
+      {
+        "name": "LookupAnsEntryByName",
+        "url": "/operations/lookupansentrybyname/"
+      },
+      {
+        "name": "LookupAnsEntryByParty",
+        "url": "/operations/lookupansentrybyparty/"
+      }
+    ],
+    "register.ts": [
+      {
+        "name": "RegisterNewUser",
+        "url": "/operations/registernewuser/"
+      }
+    ],
+    "scan-proxy": [
+      {
+        "name": "GetAmuletRules",
+        "url": "/operations/getamuletrules/"
+      },
+      {
+        "name": "GetDsoPartyId",
+        "url": "/operations/getdsopartyid/"
+      },
+      {
+        "name": "GetMiningRoundDetails",
+        "url": "/operations/getminingrounddetails/"
+      },
+      {
+        "name": "GetOpenAndIssuingMiningRounds",
+        "url": "/operations/getopenandissuingminingrounds/"
+      },
+      {
+        "name": "LookupFeaturedAppRight",
+        "url": "/operations/lookupfeaturedappright/"
+      },
+      {
+        "name": "LookupTransferCommandCounterByParty",
+        "url": "/operations/lookuptransfercommandcounterbyparty/"
+      },
+      {
+        "name": "LookupTransferCommandStatus",
+        "url": "/operations/lookuptransfercommandstatus/"
+      }
+    ],
+    "wallet": [
+      {
+        "name": "AcceptTransferOffer",
+        "url": "/operations/accepttransferoffer/"
+      },
+      {
+        "name": "CreateBuyTrafficRequest",
+        "url": "/operations/createbuytrafficrequest/"
+      },
+      {
+        "name": "CreateTokenStandardTransfer",
+        "url": "/operations/createtokenstandardtransfer/"
+      },
+      {
+        "name": "CreateTransferOffer",
+        "url": "/operations/createtransferoffer/"
+      },
+      {
+        "name": "GetAmulets",
+        "url": "/operations/getamulets/"
+      },
+      {
+        "name": "GetBuyTrafficRequestStatus",
+        "url": "/operations/getbuytrafficrequeststatus/"
+      },
+      {
+        "name": "GetTransferOfferStatus",
+        "url": "/operations/gettransferofferstatus/"
+      },
+      {
+        "name": "GetUserStatus",
+        "url": "/operations/getuserstatus/"
+      },
+      {
+        "name": "GetWalletBalance",
+        "url": "/operations/getwalletbalance/"
+      },
+      {
+        "name": "ListTokenStandardTransfers",
+        "url": "/operations/listtokenstandardtransfers/"
+      },
+      {
+        "name": "ListTransferOffers",
+        "url": "/operations/listtransferoffers/"
+      },
+      {
+        "name": "RejectTransferOffer",
+        "url": "/operations/rejecttransferoffer/"
+      },
+      {
+        "name": "WithdrawTransferOffer",
+        "url": "/operations/withdrawtransferoffer/"
+      }
+    ]
+  }
+}

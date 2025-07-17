@@ -460,7 +460,7 @@
         </div>
         {% endif %}
         
-        <!-- This will be populated by JavaScript if needed -->
+        <!-- This will be populated by JavaScript for operation pages -->
         <div id="dynamicNav"></div>
     </div>
     
@@ -480,6 +480,9 @@
             const overlay = document.querySelector('.nav-overlay');
             nav.classList.add('open');
             overlay.classList.add('open');
+            
+            // Load dynamic navigation if on an operation page
+            loadDynamicNavigation();
         }
         
         function closeNav() {
@@ -489,10 +492,69 @@
             overlay.classList.remove('open');
         }
         
+        function loadDynamicNavigation() {
+            const dynamicNav = document.getElementById('dynamicNav');
+            
+            // Check if we're on an operation page and have the necessary metadata
+            const apiType = '{{ page.api_type }}';
+            const currentOperation = '{{ page.operation_name }}';
+            
+            if (!apiType || !currentOperation) {
+                return; // Not an operation page
+            }
+            
+            // Use Jekyll data - inject the navigation data directly
+            const navData = {{ site.data.operations-nav | jsonify }};
+            
+            if (!navData || !navData[apiType]) {
+                return;
+            }
+            
+            const operations = navData[apiType];
+            
+            // Build navigation HTML
+            let html = `<div class="floating-nav-section">
+                <div class="floating-nav-section-title">${apiType === 'ledger-json-api' ? 'Ledger JSON API' : 'Validator API'} Operations</div>
+            `;
+            
+            // Sort categories
+            const categories = Object.keys(operations).sort();
+            
+            for (const category of categories) {
+                const categoryOps = operations[category];
+                const categoryName = category.charAt(0).toUpperCase() + 
+                    category.slice(1).replace(/[-_]/g, ' ');
+                
+                html += `<div style="margin-bottom: 16px;">
+                    <div style="font-weight: 500; font-size: 12px; color: #777; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">${categoryName}</div>
+                    <div class="floating-nav-links">
+                `;
+                
+                for (const operation of categoryOps) {
+                    const isActive = operation.name === currentOperation;
+                    const activeClass = isActive ? ' active' : '';
+                    html += `<a href="${operation.url}" class="${activeClass}">${operation.name}</a>`;
+                }
+                
+                html += `</div></div>`;
+            }
+            
+            html += `</div>`;
+            dynamicNav.innerHTML = html;
+        }
+        
         // Close nav on escape key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closeNav();
+            }
+        });
+        
+        // Load dynamic navigation on page load if nav is already open
+        document.addEventListener('DOMContentLoaded', function() {
+            const nav = document.getElementById('floatingNav');
+            if (nav.classList.contains('open')) {
+                loadDynamicNavigation();
             }
         });
     </script>

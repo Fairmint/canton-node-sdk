@@ -55,6 +55,9 @@ class OperationDocGenerator {
       fs.mkdirSync(docsDir, { recursive: true });
     }
 
+    // Generate navigation data file
+    await this.generateNavigationData();
+
     // Generate main operations index
     await this.generateOperationsIndex();
 
@@ -1246,6 +1249,9 @@ ${categories.map(category => this.generateCategorySection(apiType, category)).jo
     const frontMatter = `---
 layout: default
 sdk_version: ${this.sdkVersion}
+api_type: ${operation.apiType}
+operation_name: ${operation.name}
+operation_category: ${operation.category || 'uncategorized'}
 ---
 
 `;
@@ -1316,6 +1322,62 @@ ${
 
     fs.writeFileSync(docPath, docContent);
     console.log(`📄 Generated operation doc: ${docPath}`);
+  }
+
+  private async generateNavigationData(): Promise<void> {
+    // Group operations by API type and category
+    const navigationData = {
+      'ledger-json-api': {} as Record<
+        string,
+        Array<{ name: string; url: string }>
+      >,
+      'validator-api': {} as Record<
+        string,
+        Array<{ name: string; url: string }>
+      >,
+    };
+
+    for (const operation of this.operations) {
+      const category = operation.category || 'uncategorized';
+      const apiData = navigationData[operation.apiType];
+
+      if (!apiData[category]) {
+        apiData[category] = [];
+      }
+
+      apiData[category].push({
+        name: operation.name,
+        url: `/operations/${operation.name.toLowerCase()}/`,
+      });
+    }
+
+    // Sort categories and operations
+    for (const apiType of Object.keys(navigationData) as Array<
+      keyof typeof navigationData
+    >) {
+      const apiData = navigationData[apiType];
+      for (const category of Object.keys(apiData)) {
+        const categoryOps = apiData[category];
+        if (categoryOps) {
+          categoryOps.sort((a, b) => a.name.localeCompare(b.name));
+        }
+      }
+    }
+
+    // Write navigation data to docs directory
+    const navDataPath = path.join(
+      process.cwd(),
+      'docs',
+      '_data',
+      'operations-nav.json'
+    );
+    const navDataDir = path.dirname(navDataPath);
+    if (!fs.existsSync(navDataDir)) {
+      fs.mkdirSync(navDataDir, { recursive: true });
+    }
+
+    fs.writeFileSync(navDataPath, JSON.stringify(navigationData, null, 2));
+    console.log(`📄 Generated navigation data: ${navDataPath}`);
   }
 
   private generateNavigationForOperation(operation: OperationInfo): string {
