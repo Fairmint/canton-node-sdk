@@ -450,17 +450,7 @@
             <button class="floating-nav-close" onclick="closeNav()">&times;</button>
         </div>
         
-        {% if page.url contains '/operations/' %}
-        <div class="floating-nav-section">
-            <div class="floating-nav-section-title">Quick Access</div>
-            <div class="floating-nav-links">
-                <a href="/ledger-json-api-operations/">← Ledger JSON API</a>
-                <a href="/validator-api-operations/">← Validator API</a>
-            </div>
-        </div>
-        {% endif %}
-        
-        <!-- This will be populated by JavaScript if needed -->
+        <!-- This will be populated by JavaScript -->
         <div id="dynamicNav"></div>
     </div>
     
@@ -487,6 +477,86 @@
             const overlay = document.querySelector('.nav-overlay');
             nav.classList.remove('open');
             overlay.classList.remove('open');
+        }
+        
+        function loadDynamicNavigation() {
+            const dynamicNav = document.getElementById('dynamicNav');
+            
+            // Get current page info
+            const currentApiType = '{{ page.api_type }}';
+            const currentOperation = '{{ page.operation_name }}';
+            
+            // Use Jekyll data - inject the navigation data directly
+            const navData = {{ site.data.operations-nav | jsonify }};
+            
+            if (!navData) {
+                return;
+            }
+            
+            // Build navigation HTML
+            let html = '';
+            
+            // Sort API types
+            const apiTypes = Object.keys(navData).sort();
+            
+            for (const apiType of apiTypes) {
+                const operations = navData[apiType];
+                const isCurrentApi = apiType === currentApiType;
+                const isExpanded = isCurrentApi || !currentApiType; // Expand current API or all if not on operation page
+                
+                const apiDisplayName = apiType === 'ledger-json-api' ? 'Ledger JSON API' : 'Validator API';
+                const expandIcon = isExpanded ? '−' : '+';
+                
+                html += `<div class="floating-nav-section">
+                    <div class="floating-nav-section-header" onclick="toggleApiSection('${apiType}')" style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 16px; font-weight: 600; color: #222;">${expandIcon}</span>
+                        <span style="font-weight: 600; color: #222;">${apiDisplayName}</span>
+                    </div>
+                    <div id="api-section-${apiType}" class="api-section" style="display: ${isExpanded ? 'block' : 'none'}; margin-top: 12px;">
+                `;
+                
+                if (operations) {
+                    // Sort categories
+                    const categories = Object.keys(operations).sort();
+                    
+                    for (const category of categories) {
+                        const categoryOps = operations[category];
+                        const categoryName = category.charAt(0).toUpperCase() + 
+                            category.slice(1).replace(/[-_]/g, ' ');
+                        
+                        html += `<div style="margin-bottom: 16px;">
+                            <div style="font-weight: 500; font-size: 12px; color: #777; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">${categoryName}</div>
+                            <div class="floating-nav-links">
+                        `;
+                        
+                        for (const operation of categoryOps) {
+                            const isActive = operation.name === currentOperation && apiType === currentApiType;
+                            const activeClass = isActive ? ' active' : '';
+                            html += `<a href="${operation.url}" class="${activeClass}">${operation.name}</a>`;
+                        }
+                        
+                        html += `</div></div>`;
+                    }
+                }
+                
+                html += `</div></div>`;
+            }
+            
+            dynamicNav.innerHTML = html;
+        }
+        
+        function toggleApiSection(apiType) {
+            const section = document.getElementById(`api-section-${apiType}`);
+            const header = section.previousElementSibling;
+            const icon = header.querySelector('span:first-child');
+            
+            if (section.style.display === 'none') {
+                section.style.display = 'block';
+                icon.textContent = '−';
+            } else {
+                section.style.display = 'none';
+                icon.textContent = '+';
+            }
         }
         
         // Close nav on escape key
