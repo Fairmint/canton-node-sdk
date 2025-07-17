@@ -22,6 +22,7 @@ import { RevokeUserRights } from './operations/v2/users/revoke-user-rights';
 import { UpdateUserIdentityProvider } from './operations/v2/users/update-user-identity-provider';
 import { UpdateUser } from './operations/v2/users/update-user';
 import { ListPackages } from './operations/v2/packages/get';
+import { UploadDarFile } from './operations/v2/packages/post';
 import { InteractiveSubmissionAllocateParty } from './operations/v2/interactive-submission/allocate-party';
 import { InteractiveSubmissionCreateUser } from './operations/v2/interactive-submission/create-user';
 import { InteractiveSubmissionUploadDar } from './operations/v2/interactive-submission/upload-dar';
@@ -56,6 +57,8 @@ import type { ListUsersParams, ListUsersResponse } from './operations/v2/users/l
 import type { RevokeUserRightsParams, RevokeUserRightsResponse } from './operations/v2/users/revoke-user-rights';
 import type { UpdateUserIdentityProviderParams, UpdateUserIdentityProviderResponse } from './operations/v2/users/update-user-identity-provider';
 import type { UpdateUserParams, UpdateUserResponse } from './operations/v2/users/update-user';
+import type { UploadDarFileParams } from './operations/v2/packages/post';
+import type { UploadDarFileResponse } from './schemas/api';
 import type { InteractiveSubmissionAllocatePartyParams } from './schemas/operations';
 import type { InteractiveSubmissionCreateUserParams } from './schemas/operations';
 import type { InteractiveSubmissionUploadDarParams } from './schemas/operations';
@@ -122,6 +125,20 @@ export class LedgerJsonApiClient extends BaseClient {
   public listPackages!: () => Promise<import('../../generated/openapi-types').paths['/v2/packages']['get']['responses']['200']['content']['application/json']>;
 
   /**
+   * Upload a DAR file to the participant node
+   * @description Upload a DAR file to the participant node
+   * @returns The upload result.
+   * @example
+   * ```typescript
+   * const result = await client.uploadDarFile({
+   *   darFile: fs.readFileSync('my-package.dar'),
+   *   submissionId: 'unique-submission-id'
+   * });
+   * ```
+   */
+  public uploadDarFile!: (params: UploadDarFileParams) => Promise<UploadDarFileResponse>;
+
+  /**
    * Get the version details of the participant node
    * @description Get the version details of the participant node
    * @returns The version information of the participant node.
@@ -180,6 +197,7 @@ export class LedgerJsonApiClient extends BaseClient {
     this.allocateParty = (params) => new AllocateParty(this).execute(params);
     this.updatePartyDetails = (params) => new UpdatePartyDetails(this).execute(params);
     this.listPackages = () => new ListPackages(this).execute();
+    this.uploadDarFile = (params) => new UploadDarFile(this).execute(params);
     this.getVersion = () => new (require('./operations/v2/version/get').GetVersion)(this).execute();
 
     // Interactive Submission
