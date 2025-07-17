@@ -71,7 +71,8 @@ export class EnvLoader {
       throw new ConfigurationError(
         `Missing required environment variables for ${apiType}. ` +
         `Required: CANTON_${network.toUpperCase()}_${provider.toUpperCase()}_${apiType.toUpperCase()}_URI, ` +
-        `CANTON_${network.toUpperCase()}_${provider.toUpperCase()}_${apiType.toUpperCase()}_CLIENT_ID`
+        `CANTON_${network.toUpperCase()}_${provider.toUpperCase()}_${apiType.toUpperCase()}_CLIENT_ID, ` +
+        `and either CLIENT_SECRET (for client_credentials) or USERNAME/PASSWORD (for password grant)`
       );
     }
 
@@ -85,31 +86,6 @@ export class EnvLoader {
     };
   }
 
-  /**
-   * Load complete configuration from environment variables as a ClientConfig
-   */
-  public loadConfig(): ClientConfig {
-    const network = this.getCurrentNetwork();
-    const provider = this.getCurrentProvider();
-    const authUrl = this.getAuthUrl(network, provider);
-
-    // Build API configs for each supported API type
-    const apis: ClientConfig['apis'] = {};
-    const apiTypes = ['LEDGER_JSON_API', 'VALIDATOR_API', 'SCAN_API'] as const;
-    for (const apiType of apiTypes) {
-      const apiConfig = this.loadApiConfig(apiType, network, provider);
-      if (apiConfig) {
-        apis[apiType] = apiConfig;
-      }
-    }
-
-    return {
-      network,
-      provider,
-      authUrl,
-      apis,
-    };
-  }
 
   public getNodeEnv(): 'development' | 'production' | 'test' {
     const value = this.env['NODE_ENV'] || 'development';
@@ -170,6 +146,22 @@ export class EnvLoader {
     const targetProvider = provider || this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_CLIENT_SECRET`;
+    return this.env[envKey];
+  }
+
+  public getApiUsername(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {
+    const targetNetwork = network || this.getCurrentNetwork();
+    const targetProvider = provider || this.getCurrentProvider();
+
+    const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_USERNAME`;
+    return this.env[envKey];
+  }
+
+  public getApiPassword(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {
+    const targetNetwork = network || this.getCurrentNetwork();
+    const targetProvider = provider || this.getCurrentProvider();
+
+    const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_PASSWORD`;
     return this.env[envKey];
   }
 
@@ -239,6 +231,8 @@ export class EnvLoader {
     const apiUrl = this.getApiUri(apiType, network, provider);
     const clientId = this.getApiClientId(apiType, network, provider);
     const clientSecret = this.getApiClientSecret(apiType, network, provider);
+    const username = this.getApiUsername(apiType, network, provider);
+    const password = this.getApiPassword(apiType, network, provider);
     const partyId = this.getPartyId(network, provider);
     const userId = this.getUserId(network, provider);
     
@@ -246,11 +240,35 @@ export class EnvLoader {
       return undefined;
     }
     
-    const auth: AuthConfig = {
-      grantType: 'client_credentials',
-      clientId: clientId || '',
-      ...(clientSecret && { clientSecret }),
-    };
+    // Determine grant type based on available credentials
+    let grantType: string;
+    let auth: AuthConfig;
+    
+    if (clientSecret) {
+      // Use client_credentials if client secret is available
+      grantType = 'client_credentials';
+      auth = {
+        grantType,
+        clientId: clientId || '',
+        clientSecret,
+      };
+    } else if (username && password) {
+      // Use password grant if username and password are available
+      grantType = 'password';
+      auth = {
+        grantType,
+        clientId: clientId || '',
+        username,
+        password,
+      };
+    } else {
+      // Fallback to client_credentials without secret (some providers may not require it)
+      grantType = 'client_credentials';
+      auth = {
+        grantType,
+        clientId: clientId || '',
+      };
+    }
     
     const apiConfig: ApiConfig = {
       apiUrl: apiUrl || '',
@@ -264,33 +282,5 @@ export class EnvLoader {
       apiConfig.userId = String(userId);
     }
     return apiConfig;
-  }
-
-  /**
-   * Validate that required configuration is present
-   */
-  public validateConfig(): void {
-    const config = this.loadConfig();
-    if (!config.authUrl) {
-      throw new ConfigurationError('Missing required authUrl configuration');
-    }
-    // Check if at least one API is configured
-    const configuredApis = Object.keys(config.apis || {}).filter(key => config.apis && config.apis[key as keyof typeof config.apis]);
-    if (configuredApis.length === 0) {
-      throw new ConfigurationError(
-        'No API configurations found. Please provide configuration for at least one API type.'
-      );
-    }
-    // Validate each configured API
-    for (const [apiType, apiConfig] of Object.entries(config.apis || {})) {
-      if (apiConfig) {
-        if (!apiConfig.apiUrl) {
-          throw new ConfigurationError(`Missing apiUrl for ${apiType}`);
-        }
-        if (!apiConfig.auth?.clientId) {
-          throw new ConfigurationError(`Missing clientId for ${apiType}`);
-        }
-      }
-    }
   }
 } 
