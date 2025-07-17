@@ -1,6 +1,14 @@
 import { createApiOperation } from '../../../../../core';
-import { GetPackageStatusParamsSchema, GetPackageStatusParams } from '../../../schemas/operations';
+import { z } from 'zod';
 import { GetPackageStatusResponse } from '../../../schemas/api';
+
+// Schema for the parameters
+export const GetPackageStatusParamsSchema = z.object({
+  /** Package ID to get status for */
+  packageId: z.string(),
+});
+
+export type GetPackageStatusParams = z.infer<typeof GetPackageStatusParamsSchema>;
 
 /**
  * @description Get the status of a specific package

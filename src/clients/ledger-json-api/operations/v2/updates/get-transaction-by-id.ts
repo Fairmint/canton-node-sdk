@@ -1,41 +1,15 @@
 import { createApiOperation } from '../../../../../core';
-import { GetTransactionByIdParamsSchema, GetTransactionByIdParams } from '../../../schemas/operations';
-import { GetTransactionResponse } from '../../../schemas/api';
+import { z } from 'zod';
+import type { paths } from '../../../../../generated/openapi-types';
 
-/**
- * @description Get transaction by id
- * @example
- * ```typescript
- * const transaction = await client.getTransactionById({
- *   updateId: 'transaction-123',
- *   transactionFormat: {
- *     eventFormat: {
- *       filtersByParty: {
- *         'party1': { cumulative: [] }
- *       },
- *       verbose: true
- *     },
- *     transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA'
- *   }
- * });
- * ```
- * @param updateId - ID of the transaction to fetch
- * @param transactionFormat - Transaction format for the request
- */
-export const GetTransactionById = createApiOperation<
-  GetTransactionByIdParams,
-  GetTransactionResponse
->({
-  paramsSchema: GetTransactionByIdParamsSchema,
+const endpoint = '/v2/updates/transaction-by-id' as const;
+
+export type GetTransactionByIdParams = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
+export type GetTransactionByIdResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
+
+export const GetTransactionById = createApiOperation<GetTransactionByIdParams, GetTransactionByIdResponse>({
+  paramsSchema: z.any(),
   method: 'POST',
-  buildUrl: (_params: GetTransactionByIdParams, apiUrl: string) => `${apiUrl}/v2/updates/transaction-by-id`,
-  buildRequestData: (params: GetTransactionByIdParams) => {
-    // Build request body
-    const request = {
-      updateId: params.updateId,
-      transactionFormat: params.transactionFormat,
-    };
-
-    return request;
-  },
+  buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
+  buildRequestData: (params) => params,
 }); 

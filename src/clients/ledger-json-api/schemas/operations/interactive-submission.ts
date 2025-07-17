@@ -57,7 +57,40 @@ export const InteractiveSubmissionUploadDarParamsSchema = z.object({
   darFile: z.any(), // Buffer or string
 });
 
+/**
+ * Parameters for interactive submission get preferred package version.
+ */
+export const InteractiveSubmissionGetPreferredPackageVersionParamsSchema = z.object({
+  /** Parties whose vetting state should be considered (optional). */
+  parties: z.array(z.string()).optional(),
+  /** Package name for which to resolve the preferred package. */
+  packageName: z.string(),
+  /** Vetting valid at timestamp (optional). */
+  vettingValidAt: z.string().optional(),
+  /** Synchronizer ID (optional). */
+  synchronizerId: z.string().optional(),
+});
+
+/**
+ * Parameters for interactive submission get preferred packages.
+ */
+export const InteractiveSubmissionGetPreferredPackagesParamsSchema = z.object({
+  /** Package vetting requirements. */
+  packageVettingRequirements: z.array(z.object({
+    /** Parties whose vetting state should be considered. */
+    parties: z.array(z.string()),
+    /** Package name for which to resolve the preferred package. */
+    packageName: z.string(),
+  })),
+  /** Synchronizer ID (optional). */
+  synchronizerId: z.string().optional(),
+  /** Vetting valid at timestamp (optional). */
+  vettingValidAt: z.string().optional(),
+});
+
 // Export types
 export type InteractiveSubmissionAllocatePartyParams = z.infer<typeof InteractiveSubmissionAllocatePartyParamsSchema>;
 export type InteractiveSubmissionCreateUserParams = z.infer<typeof InteractiveSubmissionCreateUserParamsSchema>;
-export type InteractiveSubmissionUploadDarParams = z.infer<typeof InteractiveSubmissionUploadDarParamsSchema>; 
+export type InteractiveSubmissionUploadDarParams = z.infer<typeof InteractiveSubmissionUploadDarParamsSchema>;
+export type InteractiveSubmissionGetPreferredPackageVersionParams = z.infer<typeof InteractiveSubmissionGetPreferredPackageVersionParamsSchema>;
+export type InteractiveSubmissionGetPreferredPackagesParams = z.infer<typeof InteractiveSubmissionGetPreferredPackagesParamsSchema>; 

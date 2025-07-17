@@ -1,20 +1,15 @@
 import { createApiOperation } from '../../../../../core';
-import { GetLedgerEndParamsSchema, GetLedgerEndParams } from '../../../schemas/operations';
-import { GetLedgerEndResponse } from '../../../schemas/api';
+import { z } from 'zod';
+import type { paths } from '../../../../../generated/openapi-types';
 
-/**
- * @description Get ledger end offset
- * @example
- * ```typescript
- * const ledgerEnd = await client.getLedgerEnd();
- * console.log(`Ledger end offset: ${ledgerEnd.offset}`);
- * ```
- */
-export const GetLedgerEnd = createApiOperation<
-  GetLedgerEndParams,
-  GetLedgerEndResponse
->({
-  paramsSchema: GetLedgerEndParamsSchema,
+const endpoint = '/v2/state/ledger-end' as const;
+
+export type GetLedgerEndParams = paths[typeof endpoint]['get']['parameters']['query'];
+export type GetLedgerEndResponse = paths[typeof endpoint]['get']['responses']['200']['content']['application/json'];
+
+export const GetLedgerEnd = createApiOperation<GetLedgerEndParams, GetLedgerEndResponse>({
+  paramsSchema: z.any(),
   method: 'GET',
-  buildUrl: (_params: GetLedgerEndParams, apiUrl: string) => `${apiUrl}/v2/state/ledger-end`,
+  buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
+  buildRequestData: () => ({}),
 }); 

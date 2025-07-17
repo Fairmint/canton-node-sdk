@@ -1,43 +1,15 @@
 import { createApiOperation } from '../../../../../core';
-import { GetUpdateByOffsetParamsSchema, GetUpdateByOffsetParams } from '../../../schemas/operations';
-import { GetUpdateResponse } from '../../../schemas/api';
+import { z } from 'zod';
+import type { paths } from '../../../../../generated/openapi-types';
 
-/**
- * @description Get update by offset
- * @example
- * ```typescript
- * const update = await client.getUpdateByOffset({
- *   offset: 1000,
- *   updateFormat: {
- *     includeTransactions: {
- *       eventFormat: {
- *         filtersByParty: {
- *           'party1': { cumulative: [] }
- *         },
- *         verbose: true
- *       },
- *       transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA'
- *     }
- *   }
- * });
- * ```
- * @param offset - Offset of the update being looked up
- * @param updateFormat - Update format for the request
- */
-export const GetUpdateByOffset = createApiOperation<
-  GetUpdateByOffsetParams,
-  GetUpdateResponse
->({
-  paramsSchema: GetUpdateByOffsetParamsSchema,
+const endpoint = '/v2/updates/update-by-offset' as const;
+
+export type GetUpdateByOffsetParams = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
+export type GetUpdateByOffsetResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
+
+export const GetUpdateByOffset = createApiOperation<GetUpdateByOffsetParams, GetUpdateByOffsetResponse>({
+  paramsSchema: z.any(),
   method: 'POST',
-  buildUrl: (_params: GetUpdateByOffsetParams, apiUrl: string) => `${apiUrl}/v2/updates/update-by-offset`,
-  buildRequestData: (params: GetUpdateByOffsetParams) => {
-    // Build request body
-    const request = {
-      offset: params.offset,
-      updateFormat: params.updateFormat,
-    };
-
-    return request;
-  },
+  buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
+  buildRequestData: (params) => params,
 }); 

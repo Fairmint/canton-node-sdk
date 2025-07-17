@@ -1,45 +1,38 @@
 import { createApiOperation } from '../../../../../core';
-import { CompletionsParamsSchema, CompletionsParams } from '../../../schemas/operations';
-import { CompletionStreamResponse } from '../../../schemas/api';
+import { z } from 'zod';
+import type { paths } from '../../../../../generated/openapi-types';
 
-/**
- * @description Query completions list (blocking call)
- * @example
- * ```typescript
- * const completions = await client.completions({
- *   userId: 'user123',
- *   parties: ['party1', 'party2'],
- *   beginExclusive: 1000,
- *   limit: 50,
- *   streamIdleTimeoutMs: 30000
- * });
- * ```
- * @param userId - User ID to filter completions for
- * @param parties - Parties whose data should be included
- * @param beginExclusive - Beginning offset for completions (optional)
- * @param limit - Maximum number of elements to return (optional)
- * @param streamIdleTimeoutMs - Timeout for stream completion (optional)
- */
+const endpoint = '/v2/commands/completions';
+
+export const CompletionsParamsSchema = z.object({
+  userId: z.string(),
+  parties: z.array(z.string()),
+  beginExclusive: z.number(),
+  limit: z.number().optional(),
+  streamIdleTimeoutMs: z.number().optional(),
+});
+
+export type CompletionsParams = z.infer<typeof CompletionsParamsSchema>;
+export type CompletionsRequest = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
+export type CompletionsResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
+
 export const Completions = createApiOperation<
   CompletionsParams,
-  CompletionStreamResponse[]
+  CompletionsResponse
 >({
   paramsSchema: CompletionsParamsSchema,
   method: 'POST',
-  buildUrl: (params: CompletionsParams, apiUrl: string) => {
-    const url = new URL(`${apiUrl}/v2/commands/completions`);
-    
+  buildUrl: (params, apiUrl) => {
+    const url = new URL(`${apiUrl}${endpoint}`);
     if (params.limit !== undefined) {
       url.searchParams.set('limit', params.limit.toString());
     }
-    
     if (params.streamIdleTimeoutMs !== undefined) {
       url.searchParams.set('stream_idle_timeout_ms', params.streamIdleTimeoutMs.toString());
     }
-    
     return url.toString();
   },
-  buildRequestData: (params: CompletionsParams) => {
+  buildRequestData: (params): CompletionsRequest => {
     return {
       userId: params.userId,
       parties: params.parties,

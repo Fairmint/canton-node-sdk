@@ -1,45 +1,26 @@
 import { createApiOperation } from '../../../../../core';
-import { GetTransactionTreeByIdParamsSchema, GetTransactionTreeByIdParams } from '../../../schemas/operations';
-import { GetTransactionTreeResponse } from '../../../schemas/api';
+import { z } from 'zod';
+import type { paths } from '../../../../../generated/openapi-types';
 
-/**
- * @description Get transaction tree by id
- * @example
- * ```typescript
- * const transactionTree = await client.getTransactionTreeById({
- *   updateId: 'update-123',
- *   parties: ['party1', 'party2']
- * });
- * ```
- * @param updateId - Update ID to fetch the transaction tree for
- * @param parties - Optional array of party IDs to filter transactions by
- */
+const endpoint = '/v2/updates/transaction-tree-by-id/{update-id}';
+
+export const GetTransactionTreeByIdParamsSchema = z.object({
+  updateId: z.string(),
+  verbose: z.boolean().optional(),
+});
+
+export type GetTransactionTreeByIdParams = z.infer<typeof GetTransactionTreeByIdParamsSchema>;
+export type GetTransactionTreeByIdResponse = paths[typeof endpoint]['get']['responses']['200']['content']['application/json'];
+
 export const GetTransactionTreeById = createApiOperation<
   GetTransactionTreeByIdParams,
-  GetTransactionTreeResponse
+  GetTransactionTreeByIdResponse
 >({
   paramsSchema: GetTransactionTreeByIdParamsSchema,
   method: 'GET',
-  buildUrl: (params, apiUrl, client) => {
-    const currentPartyId = client.getPartyId();
-    
-    const readParties = Array.from(
-      new Set([
-        currentPartyId,
-        ...(params.parties || []),
-      ])
-    );
-
-    const baseUrl = `${apiUrl}/v2/updates/transaction-tree-by-id/${params.updateId}`;
-    
-    if (readParties.length > 0) {
-      const queryParams = new URLSearchParams();
-      readParties.forEach(party => {
-        queryParams.append('parties', party);
-      });
-      return `${baseUrl}?${queryParams.toString()}`;
-    }
-    
-    return baseUrl;
+  buildUrl: (params, apiUrl) => {
+    const url = new URL(`${apiUrl}${endpoint.replace('{update-id}', params.updateId)}`);
+    if (params.verbose) url.searchParams.set('verbose', params.verbose.toString());
+    return url.toString();
   },
 }); 

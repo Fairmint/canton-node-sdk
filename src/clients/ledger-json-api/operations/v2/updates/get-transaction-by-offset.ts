@@ -1,40 +1,15 @@
 import { createApiOperation } from '../../../../../core';
-import { GetTransactionByOffsetParamsSchema, GetTransactionByOffsetParams } from '../../../schemas/operations';
-import { GetTransactionResponse } from '../../../schemas/api';
+import { z } from 'zod';
+import type { paths } from '../../../../../generated/openapi-types';
 
-/**
- * @description Get transaction by offset
- * @example
- * ```typescript
- * const transaction = await client.getTransactionByOffset({
- *   offset: 1000,
- *   transactionFormat: {
- *     eventFormat: {
- *       filtersByParty: {
- *         'party1': { cumulative: [] }
- *       },
- *       verbose: true
- *     },
- *     transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA'
- *   }
- * });
- * ```
- * @param offset - Offset of the transaction being looked up
- * @param transactionFormat - Transaction format for the request
- */
-export const GetTransactionByOffset = createApiOperation<
-  GetTransactionByOffsetParams,
-  GetTransactionResponse
->({
-  paramsSchema: GetTransactionByOffsetParamsSchema,
+const endpoint = '/v2/updates/transaction-by-offset' as const;
+
+export type GetTransactionByOffsetParams = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
+export type GetTransactionByOffsetResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
+
+export const GetTransactionByOffset = createApiOperation<GetTransactionByOffsetParams, GetTransactionByOffsetResponse>({
+  paramsSchema: z.any(),
   method: 'POST',
-  buildUrl: (_params: GetTransactionByOffsetParams, apiUrl: string) => `${apiUrl}/v2/updates/transaction-by-offset`,
-  buildRequestData: (params: GetTransactionByOffsetParams) => {
-    const request: GetTransactionByOffsetParams = {
-      offset: params.offset,
-      transactionFormat: params.transactionFormat,
-    };
-
-    return request;
-  },
+  buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
+  buildRequestData: (params) => params,
 }); 

@@ -1,41 +1,22 @@
 import { createApiOperation } from '../../../../../core';
-import { RevokeUserRightsParamsSchema, RevokeUserRightsParams } from '../../../schemas/operations';
-import { RevokeUserRightsResponse, RevokeUserRightsRequest } from '../../../schemas/api';
+import { z } from 'zod';
+import type { paths } from '../../../../../generated/openapi-types';
 
-/**
- * @description Revoke rights from a user
- * @example
- * ```typescript
- * const result = await client.revokeUserRights({
- *   userId: 'alice',
- *   rights: [
- *     { kind: { CanActAs: { party: 'Alice::1220' } } }
- *   ],
- *   identityProviderId: 'default'
- * });
- * console.log(`Revoked ${result.newlyRevokedRights.length} rights`);
- * ```
- */
-export const RevokeUserRights = createApiOperation<
-  RevokeUserRightsParams,
-  RevokeUserRightsResponse
->({
-  paramsSchema: RevokeUserRightsParamsSchema,
+const endpoint = '/v2/users/{user-id}/rights' as const;
+
+// The params type should include both path parameters and request body
+export type RevokeUserRightsParams = {
+  userId: string; // Path parameter
+} & paths[typeof endpoint]['patch']['requestBody']['content']['application/json'];
+
+export type RevokeUserRightsResponse = paths[typeof endpoint]['patch']['responses']['200']['content']['application/json'];
+
+export const RevokeUserRights = createApiOperation<RevokeUserRightsParams, RevokeUserRightsResponse>({
+  paramsSchema: z.any(),
   method: 'PATCH',
-  buildUrl: (params: RevokeUserRightsParams, apiUrl: string) => `${apiUrl}/v2/users/${params.userId}/rights`,
-  buildRequestData: (params: RevokeUserRightsParams): RevokeUserRightsRequest => {
-    const requestBody: RevokeUserRightsRequest = {
-      userId: params.userId,
-    };
-    
-    if (params.rights) {
-      requestBody.rights = params.rights;
-    }
-    
-    if (params.identityProviderId) {
-      requestBody.identityProviderId = params.identityProviderId;
-    }
-    
+  buildUrl: (params, apiUrl) => `${apiUrl}/v2/users/${params.userId}/rights`,
+  buildRequestData: (params) => {
+    const { userId, ...requestBody } = params;
     return requestBody;
   },
 }); 

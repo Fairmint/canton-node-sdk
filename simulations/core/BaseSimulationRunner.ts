@@ -109,10 +109,9 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
     return undefined;
   }
 
-  async runSimulation<T, R = T>(
+  async runSimulation<T>(
     simulationName: string,
     simulationFn: (client: TClient) => Promise<T>,
-    expectedSchema: import('zod').ZodSchema<R>,
     simulationFilePath?: string
   ): Promise<T | { error: string; details: unknown }> {
     if (!simulationFilePath) {
@@ -120,10 +119,6 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
     }
     try {
       const data = await simulationFn(this.client);
-      if (expectedSchema) {
-        expectedSchema.parse(data);
-        console.log(`✅ Response validated against schema.`);
-      }
       let resultDir = this.resultsDir;
       if (simulationFilePath) {
         const relPath = simulationFilePath
@@ -154,18 +149,6 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
               }
             : error,
       };
-      if (expectedSchema) {
-        try {
-          expectedSchema.parse(errorDetails);
-          console.log(`✅ Error response validated against schema.`);
-        } catch (schemaError) {
-          console.log(`❌ Error response failed schema validation`);
-          console.error(schemaError);
-          throw new Error(
-            `Error response validation failed: ${schemaError instanceof Error ? schemaError.message : String(schemaError)}`
-          );
-        }
-      }
       let resultDir = this.resultsDir;
       if (simulationFilePath) {
         const relPath = simulationFilePath

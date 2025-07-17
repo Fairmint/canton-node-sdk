@@ -128,6 +128,14 @@ class OperationDocGenerator {
     // Look for imports from schemas to understand parameter and response types
     const imports = this.extractImports(sourceFile);
 
+    // Check if this operation uses OpenAPI types (imports from generated/openapi-types)
+    const usesOpenApiTypes = sourceCode.includes('generated/openapi-types');
+
+    if (usesOpenApiTypes) {
+      // Extract response type from OpenAPI-based operations
+      this.extractOpenApiResponseType(sourceCode, operationInfo);
+    }
+
     // Handle specific operation types with known parameter structures
     if (operationInfo.name === 'CreateUser') {
       if (operationInfo.apiType === 'validator-api') {
@@ -335,105 +343,31 @@ class OperationDocGenerator {
     }
   }
 
-  // @ts-expect-error - Method preserved for future use
-  private async extractResponseSchema(
-    responseType: string,
-    apiType: 'ledger-json-api' | 'validator-api'
-  ): Promise<string> {
-    // Check cache first
-    if (this.schemaCache.has(responseType)) {
-      const cached = this.schemaCache.get(responseType);
-      if (cached) return cached;
-    }
-
-    // Look for the schema in the appropriate schemas directory
-    const schemasDir = path.join(
-      process.cwd(),
-      `src/clients/${apiType}/schemas`
+  private extractOpenApiResponseType(
+    sourceCode: string,
+    operationInfo: Partial<OperationInfo>
+  ): void {
+    // Look for response type definitions like: AsyncSubmitReassignmentResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
+    const responseTypeMatch = sourceCode.match(
+      /export\s+type\s+(\w+Response)\s*=/
     );
-    const apiDir = path.join(schemasDir, 'api');
-    let schemaFiles: string[] = [];
-    // Include all .ts files in api/ and in the parent schemas directory
-    if (fs.existsSync(apiDir)) {
-      schemaFiles = fs
-        .readdirSync(apiDir)
-        .filter(f => f.endsWith('.ts'))
-        .map(f => path.join('api', f));
-    }
-    // Add .ts files from the parent schemas directory
-    const parentSchemaFiles = fs
-      .readdirSync(schemasDir)
-      .filter(f => f.endsWith('.ts'))
-      .map(f => f);
-    schemaFiles.push(...parentSchemaFiles);
-
-    // Try both the raw responseType and responseType + 'Schema'
-    const candidates = [responseType, responseType + 'Schema'];
-    for (const candidate of candidates) {
-      for (const schemaFile of schemaFiles) {
-        const filePath = path.join(schemasDir, schemaFile);
-        if (fs.existsSync(filePath)) {
-          const schema = await this.findSchemaInFile(filePath, candidate);
-          if (schema) {
-            this.schemaCache.set(responseType, schema);
-            return schema;
-          }
-        }
+    if (responseTypeMatch && responseTypeMatch[1]) {
+      operationInfo.responseType = responseTypeMatch[1];
+      // For OpenAPI types, we'll use a generic response schema since the actual structure comes from the OpenAPI spec
+      operationInfo.responseSchema = `{ /* OpenAPI response type: ${responseTypeMatch[1]} */ }`;
+    } else {
+      // Look for OpenAPI types used directly in createApiOperation calls
+      // Pattern: paths['/path/to/endpoint']['method']['responses']['200']['content']['application/json']
+      const openApiResponseMatch = sourceCode.match(
+        /paths\[['"`][^'"`]+['"`]\]\[['"`]\w+['"`]\]\[['"`]responses['"`]\]\[['"`]\d+['"`]\]\[['"`]content['"`]\]\[['"`]application\/json['"`]\]/
+      );
+      if (openApiResponseMatch) {
+        // Extract the operation name and create a response type name
+        const operationName = operationInfo.name || 'UnknownOperation';
+        operationInfo.responseType = `${operationName}Response`;
+        operationInfo.responseSchema = `{ /* OpenAPI response type from paths */ }`;
       }
     }
-
-    // If not found, throw an error instead of returning the type name
-    throw new Error(
-      `Could not find or expand schema for response type: ${responseType}`
-    );
-  }
-
-  private async findSchemaInFile(
-    filePath: string,
-    responseType: string
-  ): Promise<string | null> {
-    if (!fs.existsSync(filePath)) return null;
-
-    const sourceCode = fs.readFileSync(filePath, 'utf-8');
-    const sourceFile = ts.createSourceFile(
-      filePath,
-      sourceCode,
-      ts.ScriptTarget.Latest,
-      true
-    );
-
-    let found = false;
-    let schemaDefinition: string | null = null;
-
-    // Build local schema map for this file
-    const localSchemaMap = this.buildLocalSchemaMap(filePath);
-
-    const visit = (node: ts.Node): void => {
-      if (
-        ts.isVariableStatement(node) &&
-        node.modifiers?.some(mod => mod.kind === ts.SyntaxKind.ExportKeyword)
-      ) {
-        for (const declaration of node.declarationList.declarations) {
-          if (
-            ts.isVariableDeclaration(declaration) &&
-            ts.isIdentifier(declaration.name) &&
-            declaration.name.text === responseType
-          ) {
-            found = true;
-            schemaDefinition = this.extractSchemaStructure(
-              declaration.initializer,
-              filePath,
-              localSchemaMap
-            );
-            return;
-          }
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-
-    visit(sourceFile);
-    return found ? schemaDefinition : null;
   }
 
   private extractSchemaStructure(

@@ -1,6 +1,16 @@
 import { createApiOperation } from '../../../../../core';
-import { GetUserParamsSchema, GetUserParams } from '../../../schemas/operations';
-import { GetUserResponse } from '../../../schemas/api';
+import { z } from 'zod';
+import type { paths } from '../../../../../generated/openapi-types';
+
+const endpoint = '/v2/users/{user-id}';
+
+export const GetUserParamsSchema = z.object({
+  userId: z.string(),
+  identityProviderId: z.string().optional(),
+});
+
+export type GetUserParams = z.infer<typeof GetUserParamsSchema>;
+export type GetUserResponse = paths[typeof endpoint]['get']['responses']['200']['content']['application/json'];
 
 /**
  * @description Get details for a specific user
@@ -16,14 +26,12 @@ export const GetUser = createApiOperation<
 >({
   paramsSchema: GetUserParamsSchema,
   method: 'GET',
-  buildUrl: (params: GetUserParams, apiUrl: string) => {
+  buildUrl: (params, apiUrl) => {
     const baseUrl = `${apiUrl}/v2/users/${params.userId}`;
     const queryParams = new URLSearchParams();
-    
     if (params.identityProviderId) {
       queryParams.append('identity-provider-id', params.identityProviderId);
     }
-
     const queryString = queryParams.toString();
     return queryString ? `${baseUrl}?${queryString}` : baseUrl;
   },

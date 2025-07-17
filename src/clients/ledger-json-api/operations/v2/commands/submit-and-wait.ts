@@ -1,65 +1,15 @@
 import { createApiOperation } from '../../../../../core';
-import { SubmitAndWaitParamsSchema, SubmitAndWaitParams } from '../../../schemas/operations';
-import { SubmitAndWaitResponse } from '../../../schemas/api';
+import { z } from 'zod';
+import type { paths } from '../../../../../generated/openapi-types';
 
-/**
- * @description Submit a batch of commands and wait for the completion details
- * @example
- * ```typescript
- * const result = await client.submitAndWait({
- *   commands: [createCommand, exerciseCommand],
- *   commandId: 'unique-command-id',
- *   actAs: ['party1', 'party2'],
- *   userId: 'user123'
- * });
- * ```
- * @param commands - Array of commands to submit
- * @param commandId - Unique identifier for the command
- * @param actAs - Parties on whose behalf the command should be executed
- * @param userId - User ID submitting the command (optional if using authentication)
- * @param readAs - Parties to read as (optional)
- * @param workflowId - Workflow ID (optional)
- * @param deduplicationPeriod - Deduplication period (optional)
- * @param minLedgerTimeAbs - Minimum ledger time absolute (optional)
- * @param minLedgerTimeRel - Minimum ledger time relative (optional)
- * @param submissionId - Submission ID (optional)
- * @param disclosedContracts - Disclosed contracts (optional)
- * @param synchronizerId - Synchronizer ID (optional)
- * @param packageIdSelectionPreference - Package ID selection preference (optional)
- * @param prefetchContractKeys - Prefetch contract keys (optional)
- */
-export const SubmitAndWait = createApiOperation<
-  SubmitAndWaitParams,
-  SubmitAndWaitResponse
->({
-  paramsSchema: SubmitAndWaitParamsSchema,
+const endpoint = '/v2/commands/submit-and-wait' as const;
+
+export type SubmitAndWaitParams = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
+export type SubmitAndWaitResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
+
+export const SubmitAndWait = createApiOperation<SubmitAndWaitParams, SubmitAndWaitResponse>({
+  paramsSchema: z.any(),
   method: 'POST',
-  buildUrl: (_params: SubmitAndWaitParams, apiUrl: string) => `${apiUrl}/v2/commands/submit-and-wait`,
-  buildRequestData: (params: SubmitAndWaitParams, client) => {
-    const currentPartyId = client.getPartyId();
-    
-    const readParties = Array.from(
-      new Set([
-        currentPartyId,
-        ...(params.readAs || []),
-      ])
-    );
-
-    return {
-      commands: params.commands,
-      commandId: params.commandId,
-      actAs: params.actAs,
-      userId: params.userId,
-      readAs: readParties,
-      workflowId: params.workflowId,
-      deduplicationPeriod: params.deduplicationPeriod,
-      minLedgerTimeAbs: params.minLedgerTimeAbs,
-      minLedgerTimeRel: params.minLedgerTimeRel,
-      submissionId: params.submissionId,
-      disclosedContracts: params.disclosedContracts,
-      synchronizerId: params.synchronizerId,
-      packageIdSelectionPreference: params.packageIdSelectionPreference,
-      prefetchContractKeys: params.prefetchContractKeys,
-    };
-  },
+  buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
+  buildRequestData: (params) => params,
 }); 

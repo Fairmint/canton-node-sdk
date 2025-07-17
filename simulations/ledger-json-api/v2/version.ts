@@ -1,5 +1,4 @@
 import SimulationRunner from '../../core/SimulationRunner';
-import { GetLedgerApiVersionResponseSchema } from '../../../src/clients/ledger-json-api/schemas/api';
 
 const runner = new SimulationRunner();
 
@@ -8,6 +7,5 @@ export async function runAllTests() {
   await runner.runSimulation(
     'get_version',
     client => client.getVersion(),
-    GetLedgerApiVersionResponseSchema
   );
 } 

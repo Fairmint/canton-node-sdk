@@ -25,12 +25,12 @@ build/src/clients/ledger-json-api/operations/v2/idps/post
 build/src/clients/ledger-json-api/operations/v2/index
 build/src/clients/ledger-json-api/operations/v2/interactive-submission/allocate-party
 build/src/clients/ledger-json-api/operations/v2/interactive-submission/create-user
+build/src/clients/ledger-json-api/operations/v2/interactive-submission/get-preferred-package-version
+build/src/clients/ledger-json-api/operations/v2/interactive-submission/get-preferred-packages
 build/src/clients/ledger-json-api/operations/v2/interactive-submission/index
 build/src/clients/ledger-json-api/operations/v2/interactive-submission/upload-dar
 build/src/clients/ledger-json-api/operations/v2/packages/get
 build/src/clients/ledger-json-api/operations/v2/packages/get-package-status
-build/src/clients/ledger-json-api/operations/v2/packages/get-preferred-package-version
-build/src/clients/ledger-json-api/operations/v2/packages/get-preferred-packages
 build/src/clients/ledger-json-api/operations/v2/packages/index
 build/src/clients/ledger-json-api/operations/v2/packages/post
 build/src/clients/ledger-json-api/operations/v2/parties/get

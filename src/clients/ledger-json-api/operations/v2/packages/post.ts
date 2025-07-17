@@ -1,6 +1,16 @@
-import { createApiOperation } from '../../../../../core';
-import { UploadDarFileParamsSchema, UploadDarFileParams } from '../../../schemas/operations';
+import { z } from 'zod';
 import { UploadDarFileResponse } from '../../../schemas/api';
+import { createApiOperation } from '../../../../../core';
+
+// Schema for the parameters  
+export const UploadDarFileParamsSchema = z.object({
+  /** DAR file content as a buffer or string */
+  darFile: z.union([z.instanceof(Buffer), z.string()]),
+  /** Optional submission ID for deduplication */
+  submissionId: z.string().optional(),
+});
+
+export type UploadDarFileParams = z.infer<typeof UploadDarFileParamsSchema>;
 
 /**
  * @description Upload a DAR file to the participant node
@@ -31,8 +41,11 @@ export const UploadDarFile = createApiOperation<
     const queryString = queryParams.toString();
     return queryString ? `${baseUrl}?${queryString}` : baseUrl;
   },
-  buildRequestData: (params: UploadDarFileParams) => {
-    // Return the DAR file content as the request body
+  buildRequestData: (params: UploadDarFileParams): string => {
+    // Convert to string if it's a Buffer
+    if (Buffer.isBuffer(params.darFile)) {
+      return params.darFile.toString('base64');
+    }
     return params.darFile;
   },
 }); 
