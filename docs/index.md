@@ -36,10 +36,8 @@ console.log(`Connected to Canton ${version.version}`);
 
 ## Documentation
 
-- **[Getting Started](/getting-started/)** - Installation and basic setup
+- **[Getting Started](/getting-started/)** - Installation, setup, and configuration
 - **[Features](/features/)** - Detailed capabilities overview
-- **[Configuration](/configuration/)** - Environment and client configuration
-- **[Error Handling](/error-handling/)** - Error types and handling patterns
 - **[Ledger JSON API Operations](/ledger-json-api-operations/)** - Complete Ledger JSON API reference
 - **[Validator API Operations](/validator-api-operations/)** - Complete Validator API reference
 
@@ -47,8 +45,3 @@ console.log(`Connected to Canton ${version.version}`);
 
 - Node.js >= 18.0.0
 - TypeScript (recommended)
-- GitHub Personal Access Token with `read:packages` scope
-
----
-
-_Built with ❤️ by the Fairmint team_
