@@ -76,6 +76,7 @@
         .nav-links {
             display: flex;
             gap: 32px;
+            align-items: center;
         }
         
         .nav a { 
@@ -253,27 +254,149 @@
             box-shadow: 0 4px 16px 0 rgba(0, 102, 255, 0.12);
         }
         
-        .operation-nav {
-            background: #f8fbff !important;
-            border: 1px solid #e6eaf0 !important;
-            border-radius: 8px !important;
-            padding: 16px !important;
-            margin-bottom: 24px !important;
-        }
-        
-        .operation-nav a {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            text-decoration: none;
+        /* Floating Navigation Toggle */
+        .nav-toggle {
+            background: #0066FF;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
             transition: all 0.2s;
-            margin: 2px;
         }
         
-        .operation-nav a:hover {
-            box-shadow: 0 2px 4px rgba(0, 102, 255, 0.15);
-            transform: translateY(-1px);
+        .nav-toggle:hover {
+            background: #3385ff;
+        }
+        
+        /* Floating Navigation Sidebar */
+        .floating-nav {
+            position: fixed;
+            top: 0;
+            right: -400px;
+            width: 400px;
+            height: 100vh;
+            background: #fff;
+            border-left: 1px solid #e6eaf0;
+            box-shadow: -4px 0 16px rgba(0, 102, 255, 0.1);
+            z-index: 1000;
+            overflow-y: auto;
+            transition: right 0.3s ease;
+            padding: 24px;
+        }
+        
+        .floating-nav.open {
+            right: 0;
+        }
+        
+        .floating-nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e6eaf0;
+        }
+        
+        .floating-nav-title {
+            font-weight: 600;
+            font-size: 18px;
+            color: #222;
+        }
+        
+        .floating-nav-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            transition: color 0.2s;
+        }
+        
+        .floating-nav-close:hover {
+            color: #0066FF;
+        }
+        
+        .floating-nav-section {
+            margin-bottom: 24px;
+        }
+        
+        .floating-nav-section-title {
+            font-weight: 500;
+            font-size: 14px;
+            color: #555;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .floating-nav-links {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .floating-nav-links a {
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            text-decoration: none;
+            color: #0066FF;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+        
+        .floating-nav-links a:hover {
+            background: #f8fbff;
+            border-color: #e6eaf0;
+        }
+        
+        .floating-nav-links a.active {
+            background: #0066FF;
+            color: white;
+            font-weight: 600;
+        }
+        
+        /* Overlay for mobile */
+        .nav-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        /* Hide large inline navigation on operation pages */
+        .operation-nav {
+            display: none !important;
+        }
+        
+        .footer {
+            margin-top: 80px;
+            padding: 40px 0;
+            border-top: 1px solid #e6eaf0;
+            text-align: center;
+            color: #666;
+        }
+        
+        .footer a {
+            color: #0066FF;
+            text-decoration: none;
+        }
+        
+        .footer a:hover {
+            text-decoration: underline;
         }
         
         @media (max-width: 768px) {
@@ -292,12 +415,9 @@
             pre {
                 padding: 12px;
             }
-            .operation-nav {
-                padding: 12px !important;
-            }
-            .operation-nav a {
-                font-size: 11px;
-                padding: 3px 6px;
+            .floating-nav {
+                width: 100%;
+                right: -100%;
             }
         }
     </style>
@@ -316,15 +436,65 @@
                     <a href="/">Home</a>
                     <a href="/ledger-json-api-operations/">Ledger API</a>
                     <a href="/validator-api-operations/">Validator API</a>
+                    <button class="nav-toggle" onclick="toggleNav()">Operations ↗</button>
                 </div>
             </div>
         </div>
     </nav>
     
+    <!-- Floating Navigation -->
+    <div class="nav-overlay" onclick="closeNav()"></div>
+    <div class="floating-nav" id="floatingNav">
+        <div class="floating-nav-header">
+            <div class="floating-nav-title">API Operations</div>
+            <button class="floating-nav-close" onclick="closeNav()">&times;</button>
+        </div>
+        
+        {% if page.url contains '/operations/' %}
+        <div class="floating-nav-section">
+            <div class="floating-nav-section-title">Quick Access</div>
+            <div class="floating-nav-links">
+                <a href="/ledger-json-api-operations/">← Ledger JSON API</a>
+                <a href="/validator-api-operations/">← Validator API</a>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- This will be populated by JavaScript if needed -->
+        <div id="dynamicNav"></div>
+    </div>
+    
     <div class="container">
         <div class="content">
             {{ content }}
         </div>
+        
+        <div class="footer">
+            <p>Built with ❤️ by the <a href="https://fairmint.co">Fairmint</a> team</p>
+        </div>
     </div>
+    
+    <script>
+        function toggleNav() {
+            const nav = document.getElementById('floatingNav');
+            const overlay = document.querySelector('.nav-overlay');
+            nav.classList.add('open');
+            overlay.classList.add('open');
+        }
+        
+        function closeNav() {
+            const nav = document.getElementById('floatingNav');
+            const overlay = document.querySelector('.nav-overlay');
+            nav.classList.remove('open');
+            overlay.classList.remove('open');
+        }
+        
+        // Close nav on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeNav();
+            }
+        });
+    </script>
 </body>
 </html> 

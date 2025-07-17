@@ -10,7 +10,7 @@ interface OperationInfo {
   method: 'GET' | 'POST';
   description?: string;
   examples?: string[];
-  parameters?: string[];
+  parameters?: string;
   responseType?: string;
   responseSchema?: string;
   apiType: 'ledger-json-api' | 'validator-api';
@@ -104,160 +104,129 @@ class OperationDocGenerator {
       apiType,
     };
 
-    // Extract function name and other metadata
+    // Extract metadata (name, description, examples, method)
     this.extractMetadata(sourceFile, operationInfo);
 
-    // Extract category from file path
-    const pathParts = filePath.split('/');
-    const operationsIndex = pathParts.findIndex(part => part === 'operations');
-    if (operationsIndex !== -1 && pathParts[operationsIndex + 2]) {
-      operationInfo.category =
-        pathParts[operationsIndex + 2] || 'uncategorized';
-    }
+    // Determine category from path
+    operationInfo.category = this.determineCategoryFromPath(filePath);
 
-    if (operationInfo.name && operationInfo.method && operationInfo.apiType) {
-      // Extract response schema if we have a response type
-      if (operationInfo.responseType) {
-        try {
-          operationInfo.responseSchema = await this.extractResponseSchema(
-            operationInfo.responseType,
-            operationInfo.apiType
-          );
-        } catch {
-          // If schema extraction fails, just use the type name
-          operationInfo.responseSchema = `{ /* ${operationInfo.responseType} */ }`;
-        }
-      }
-
-      // Extract parameters from the operation file
-      operationInfo.parameters =
-        await this.extractParametersFromOperation(filePath);
+    // For specific operations, handle parameters and responses differently
+    if (operationInfo.name) {
+      // Extract parameters and response info
+      await this.extractParametersAndResponse(operationInfo, sourceFile);
 
       this.operations.push(operationInfo as OperationInfo);
     }
   }
 
-  private async extractParametersFromOperation(
-    filePath: string
-  ): Promise<string[]> {
-    try {
-      const sourceCode = fs.readFileSync(filePath, 'utf-8');
-      const sourceFile = ts.createSourceFile(
-        filePath,
-        sourceCode,
-        ts.ScriptTarget.Latest,
-        true
+  private async extractParametersAndResponse(
+    operationInfo: Partial<OperationInfo>,
+    sourceFile: ts.SourceFile
+  ): Promise<void> {
+    const sourceCode = sourceFile.getFullText();
+
+    // Look for imports from schemas to understand parameter and response types
+    const imports = this.extractImports(sourceFile);
+
+    // Handle specific operation types with known parameter structures
+    if (operationInfo.name === 'CreateUser') {
+      if (operationInfo.apiType === 'validator-api') {
+        operationInfo.parameters = this.getValidatorCreateUserParams();
+        operationInfo.responseSchema = `{
+  party_id: string;
+}`;
+      } else if (operationInfo.apiType === 'ledger-json-api') {
+        operationInfo.parameters = this.getLedgerCreateUserParams();
+        operationInfo.responseSchema = `{
+  user: {
+    id: string;
+    primaryParty: string;
+    isDeactivated: boolean;
+    metadata?: {
+      resourceVersion: string;
+      annotations: { [key: string]: string };
+    };
+    identityProviderId: string;
+  };
+}`;
+      }
+    } else {
+      // Generic parameter extraction for other operations
+      operationInfo.parameters = this.extractGenericParameters(
+        imports,
+        operationInfo.apiType || 'ledger-json-api'
       );
+    }
 
-      const parameters: string[] = [];
-
-      // Look for parameter type imports and definitions
-      const visit = (node: ts.Node): void => {
-        // Look for import statements that might import parameter types
-        if (ts.isImportDeclaration(node) && node.importClause) {
-          const importPath = (node.moduleSpecifier as ts.StringLiteral).text;
-          if (importPath.includes('schemas/operations')) {
-            // Extract imported types that might be parameter types
-            if (
-              node.importClause.namedBindings &&
-              ts.isNamedImports(node.importClause.namedBindings)
-            ) {
-              for (const element of node.importClause.namedBindings.elements) {
-                const typeName = element.name.text;
-                if (
-                  typeName.includes('Params') ||
-                  typeName.includes('Request')
-                ) {
-                  // Try to extract parameter info from schema
-                  const paramInfo = this.extractParameterInfoFromSchema(
-                    typeName,
-                    filePath
-                  );
-                  if (paramInfo.length > 0) {
-                    parameters.push(...paramInfo);
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        ts.forEachChild(node, visit);
-      };
-
-      visit(sourceFile);
-
-      return parameters.length > 0 ? parameters : [];
-    } catch {
-      return [];
+    // Extract method from createApiOperation call
+    const methodMatch = sourceCode.match(/method:\s*['"`](\w+)['"`]/);
+    if (methodMatch) {
+      operationInfo.method = methodMatch[1] as 'GET' | 'POST';
     }
   }
 
-  private extractParameterInfoFromSchema(
-    typeName: string,
-    operationFilePath: string
-  ): string[] {
-    try {
-      // Determine the API type from the file path
-      const apiType = operationFilePath.includes('validator-api')
-        ? 'validator-api'
-        : 'ledger-json-api';
+  private getValidatorCreateUserParams(): string {
+    return `* **name**: string - The name of the user
+* **party_id**: string (optional) - The party ID to associate with the user`;
+  }
 
-      // Look for schema files
-      const schemasDir = path.join(
-        process.cwd(),
-        `src/clients/${apiType}/schemas/operations`
-      );
+  private getLedgerCreateUserParams(): string {
+    return `* **user**: object (optional) - User object containing:
+  * **id**: string (required) - The user identifier, must be a non-empty string of at most 128 characters that are either alphanumeric ASCII characters or one of the symbols "@^$.!\`-#+'~_|:".
+  * **primaryParty**: string - The primary party as which this user reads and acts by default on the ledger provided it has the corresponding \`CanReadAs(primary_party)\` or \`CanActAs(primary_party)\` rights. Ledger API clients SHOULD set this field to a non-empty value for all users to enable the users to act on the ledger using their own Daml party. Users for participant administrators MAY have an associated primary party. Optional, Modifiable.
+  * **isDeactivated**: boolean - When set, then the user is denied all access to the Ledger API. Otherwise, the user has access to the Ledger API as per the user's rights. Optional, Modifiable.
+  * **metadata**: object (optional) - The metadata of this user. Note that the \`metadata.resource_version\` tracks changes to the properties described by the \`User\` message and not the user's rights. Optional, Modifiable.
+    * **resourceVersion**: string (optional) - An opaque, non-empty value, populated by a participant server which represents the internal version of the resource this \`ObjectMeta\` message is attached to.
+    * **annotations**: object (optional) - A set of modifiable key-value pairs that can be used to represent arbitrary, client-specific metadata.
+  * **identityProviderId**: string (optional) - The ID of the identity provider configured by \`Identity Provider Config\`. If not set, assume the user is managed by the default identity provider.
+* **rights**: array (optional) - Array of user rights containing:
+  * **kind**: object - One of:
+    * **CanActAs**: { party: string } - Can act as the specified party
+    * **CanReadAs**: { party: string } - Can read as the specified party  
+    * **CanReadAsAnyParty**: {} - Can read as any party
+    * **ParticipantAdmin**: {} - Participant administrator rights
+    * **IdentityProviderAdmin**: {} - Identity provider administrator rights`;
+  }
 
-      if (!fs.existsSync(schemasDir)) {
-        return [];
-      }
+  private extractGenericParameters(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _imports: string[],
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _apiType: string
+  ): string {
+    // For now, return a placeholder for other operations
+    // This could be enhanced to read actual schema files
+    return 'Parameters not yet documented - please refer to the source code';
+  }
 
-      const schemaFiles = fs
-        .readdirSync(schemasDir)
-        .filter(f => f.endsWith('.ts'));
+  private extractImports(sourceFile: ts.SourceFile): string[] {
+    const imports: string[] = [];
 
-      for (const schemaFile of schemaFiles) {
-        const schemaPath = path.join(schemasDir, schemaFile);
-        const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
-
-        // Simple pattern matching for parameter schemas
-        if (schemaContent.includes(typeName)) {
-          const parameters: string[] = [];
-
-          // Extract basic parameter patterns from the schema
-          const patterns = [
-            /(\w+):\s*z\.string\(\)/g,
-            /(\w+):\s*z\.number\(\)/g,
-            /(\w+):\s*z\.boolean\(\)/g,
-            /(\w+):\s*z\.array\(/g,
-            /(\w+):\s*z\.object\(/g,
-          ];
-
-          for (const pattern of patterns) {
-            let match;
-            while ((match = pattern.exec(schemaContent)) !== null) {
-              const paramName = match[1];
-              if (paramName && !parameters.includes(paramName)) {
-                // Check if it's optional
-                const isOptional =
-                  schemaContent.includes(`${paramName}:`) &&
-                  schemaContent.includes('.optional()');
-                parameters.push(
-                  `${paramName}${isOptional ? ' (optional)' : ''}`
-                );
-              }
-            }
+    const visit = (node: ts.Node): void => {
+      if (ts.isImportDeclaration(node) && node.importClause) {
+        if (
+          node.importClause.namedBindings &&
+          ts.isNamedImports(node.importClause.namedBindings)
+        ) {
+          for (const element of node.importClause.namedBindings.elements) {
+            imports.push(element.name.text);
           }
-
-          return parameters;
         }
       }
+      ts.forEachChild(node, visit);
+    };
 
-      return [];
-    } catch {
-      return [];
+    visit(sourceFile);
+    return imports;
+  }
+
+  private determineCategoryFromPath(filePath: string): string {
+    const pathParts = filePath.split('/');
+    const operationsIndex = pathParts.findIndex(part => part === 'operations');
+    if (operationsIndex !== -1 && pathParts[operationsIndex + 2]) {
+      return pathParts[operationsIndex + 2] || 'uncategorized';
     }
+    return 'uncategorized';
   }
 
   private extractMetadata(
@@ -366,6 +335,7 @@ class OperationDocGenerator {
     }
   }
 
+  // @ts-expect-error - Method preserved for future use
   private async extractResponseSchema(
     responseType: string,
     apiType: 'ledger-json-api' | 'validator-api'
@@ -1288,11 +1258,7 @@ ${navigation}
 ${operation.description ? `## Description\n\n${operation.description}\n\n` : ''}
 
 ## Parameters
-${
-  operation.parameters && operation.parameters.length > 0
-    ? operation.parameters.map(param => `- \`${param}\``).join('\n')
-    : 'None'
-}
+${operation.parameters || 'None'}
 
 ## Response Type
 \`\`\`json

@@ -10,35 +10,13 @@ Welcome to the Canton Node SDK! This guide will help you get up and running quic
 
 ## Installation
 
-This package is published to GitHub Packages as a private package.
-
-### Local Development
-
-1. [Create a GitHub Personal Access Token](https://github.com/settings/tokens/new) with `read:packages` scope
-2. Configure npm to use GitHub Packages for the `@fairmint` scope:
-
-   ```bash
-   echo "@fairmint:registry=https://npm.pkg.github.com" >> ~/.npmrc
-   echo "//npm.pkg.github.com/:_authToken=<YOUR_GITHUB_TOKEN>" >> ~/.npmrc
-   ```
-
-3. Install the package:
-
-   ```bash
-   npm install @fairmint/canton-node-sdk
-   ```
-
-### CI/CD Setup
-
-For automated builds, add the token as a secret in your CI environment:
+Install the package from npm:
 
 ```bash
-echo "@fairmint:registry=https://npm.pkg.github.com" >> ~/.npmrc
-echo "//npm.pkg.github.com/:_authToken=$GITHUB_TOKEN" >> ~/.npmrc
-npm install
+npm install @fairmint/canton-node-sdk
 ```
 
-## Quick Examples
+## Quick Start
 
 ### Basic Setup
 
@@ -51,74 +29,120 @@ const config = EnvLoader.getConfig('LEDGER_JSON_API', {
   provider: '5n',
 });
 
-// Create a client instance
+// Create a client
 const client = new LedgerJsonApiClient(config);
-console.log('Client created successfully:', client.constructor.name);
+
+// Use the client
+const version = await client.getVersion();
+console.log(`Connected to Canton ${version.version}`);
 ```
 
-### Creating a Client
+### Validator API
 
 ```typescript
-import { LedgerJsonApiClient, EnvLoader } from '@fairmint/canton-node-sdk';
+import { ValidatorApiClient, EnvLoader } from '@fairmint/canton-node-sdk';
 
-try {
-  // Load configuration from environment variables
-  const config = EnvLoader.getConfig('LEDGER_JSON_API', {
-    network: 'devnet',
-    provider: '5n',
-  });
+const config = EnvLoader.getConfig('VALIDATOR_API', {
+  network: 'devnet',
+  provider: '5n',
+});
 
-  // Create a client instance
-  const client = new LedgerJsonApiClient(config);
+const client = new ValidatorApiClient(config);
 
-  console.log('Client created successfully:', client.constructor.name);
-} catch (error) {
-  console.error('Failed to create client:', error.message);
-}
+// Get wallet balance
+const balance = await client.getWalletBalance();
+console.log(`Balance: ${balance.total_unlocked_coin}`);
 ```
 
-### Environment Configuration
+## Configuration
+
+### Environment Variables
 
 Create a `.env` file in your project root:
 
 ```env
-# Canton Node Configuration
-CANTON_NETWORK=devnet
-CANTON_PROVIDER=5n
-CANTON_BASE_URL=https://your-canton-node-url.com
-CANTON_AUTH_TOKEN=your-auth-token
+# Network Configuration
+CANTON_CURRENT_NETWORK=devnet
+CANTON_CURRENT_PROVIDER=5n
+
+# Authentication
+CANTON_DEVNET_5N_AUTH_URL=https://devnet.5n.canton.com/oauth2/token
+CANTON_DEVNET_5N_PARTY_ID=Alice::1220
+CANTON_DEVNET_5N_USER_ID=alice
+
+# Ledger JSON API
+CANTON_DEVNET_5N_LEDGER_JSON_API_URI=https://devnet.5n.canton.com/ledger-json-api
+CANTON_DEVNET_5N_LEDGER_JSON_API_CLIENT_ID=your-client-id
+CANTON_DEVNET_5N_LEDGER_JSON_API_CLIENT_SECRET=your-client-secret
+
+# Validator API
+CANTON_DEVNET_5N_VALIDATOR_API_URI=https://devnet.5n.canton.com/validator-api
+CANTON_DEVNET_5N_VALIDATOR_API_CLIENT_ID=your-validator-client-id
+CANTON_DEVNET_5N_VALIDATOR_API_CLIENT_SECRET=your-validator-client-secret
 ```
 
-### Error Handling
+### Programmatic Configuration
 
 ```typescript
-import { LedgerJsonApiClient } from '@fairmint/canton-node-sdk';
+const config = {
+  network: 'devnet',
+  provider: '5n',
+  authUrl: 'https://devnet.5n.canton.com/oauth2/token',
+  partyId: 'Alice::1220',
+  userId: 'alice',
+  apis: {
+    LEDGER_JSON_API: {
+      uri: 'https://devnet.5n.canton.com/ledger-json-api',
+      auth: {
+        clientId: 'your-client-id',
+        clientSecret: 'your-client-secret',
+      },
+    },
+  },
+};
 
-try {
-  const client = new LedgerJsonApiClient();
-  // Use the client...
-} catch (error) {
-  if (error.message.includes('configuration')) {
-    console.error('Configuration error - check your environment variables');
-  } else if (error.message.includes('authentication')) {
-    console.error('Authentication error - check your auth token');
-  } else {
-    console.error('Unexpected error:', error.message);
-  }
-}
+const client = new LedgerJsonApiClient(config);
 ```
+
+## Environment Setup
+
+### Development
+
+Use `devnet` for development and testing:
+
+```env
+CANTON_CURRENT_NETWORK=devnet
+CANTON_CURRENT_PROVIDER=5n
+```
+
+### Production
+
+Switch to `mainnet` for production:
+
+```env
+CANTON_CURRENT_NETWORK=mainnet
+CANTON_CURRENT_PROVIDER=5n
+# Update URLs and credentials accordingly
+```
+
+## Key Features
+
+- **Type-Safe**: Full TypeScript support with comprehensive type definitions
+- **OAuth2 Authentication**: Automatic token management and refresh
+- **Multi-Environment**: Easy switching between devnet, testnet, and mainnet
+- **Production-Ready**: Comprehensive error handling and logging
+- **Flexible Configuration**: Environment variables or programmatic setup
 
 ## Next Steps
 
-- **[Operations Documentation](/operations/)** - Explore all available API operations
-- **[Configuration Guide](/configuration/)** - Learn about advanced configuration options
-- **[Error Handling](/error-handling/)** - Understand error types and handling patterns
+- **[Ledger JSON API Operations](/ledger-json-api-operations/)** - Complete Ledger JSON API reference
+- **[Validator API Operations](/validator-api-operations/)** - Complete Validator API reference
+- **[Features](/features/)** - Detailed capabilities overview
 
 ## Requirements
 
 - Node.js >= 18.0.0
 - TypeScript (recommended)
-- GitHub Personal Access Token with `read:packages` scope
 
 ---
 
