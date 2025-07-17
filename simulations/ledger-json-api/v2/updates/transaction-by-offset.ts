@@ -1,9 +1,4 @@
 import SimulationRunner from '../../../core/SimulationRunner';
-import { 
-  GetTransactionResponseActualSchema,
-  BadRequestErrorSchema,
-  NotFoundErrorSchema,
-} from '../../../../src/clients/ledger-json-api/schemas';
 import type { components } from '../../../../src/generated/openapi-types';
 
 const runner = new SimulationRunner();

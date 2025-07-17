@@ -67,7 +67,7 @@ import type { GetPartiesParams } from './operations/v2/parties/get';
 import type { GetParticipantIdParams, GetParticipantIdResponse } from './operations/v2/parties/get-participant-id';
 import type { GetPartyDetailsParams } from './schemas/operations';
 import type { AllocatePartyParams } from './operations/v2/parties/post';
-import type { AllocatePartyResponse, UpdatePartyDetailsResponse } from './schemas/api';
+import type { AllocatePartyResponse } from './schemas/api';
 import type { UpdatePartyDetailsParams } from './operations/v2/parties/update-party-details';
 
 /** Client for interacting with Canton's Ledger JSON API */
@@ -107,7 +107,7 @@ export class LedgerJsonApiClient extends BaseClient {
   public getParticipantId!: (params: GetParticipantIdParams) => Promise<GetParticipantIdResponse>;
   public getPartyDetails!: (params: GetPartyDetailsParams) => Promise<import('../../generated/openapi-types').paths['/v2/parties/{party}']['get']['responses']['200']['content']['application/json']>;
   public allocateParty!: (params: AllocatePartyParams) => Promise<AllocatePartyResponse>;
-  public updatePartyDetails!: (params: UpdatePartyDetailsParams) => Promise<UpdatePartyDetailsResponse>;
+  public updatePartyDetails!: (params: UpdatePartyDetailsParams) => Promise<import('../../generated/openapi-types').paths['/v2/parties/{party}']['patch']['responses']['200']['content']['application/json']>;
 
   /**
    * List all packages uploaded on the participant node

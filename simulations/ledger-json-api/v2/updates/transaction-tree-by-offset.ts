@@ -1,6 +1,5 @@
 import SimulationRunner from '../../../core/SimulationRunner';
 import type { paths } from '../../../../src/generated/openapi-types';
-import { z } from 'zod';
 
 const runner = new SimulationRunner();
 
