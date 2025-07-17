@@ -164,4 +164,7 @@ build/src/core/operations/index
 build/src/core/types
 build/src/generated/openapi-types
 build/src/index
+build/src/utils/index
+build/src/utils/parsers/fee-parser
+build/src/utils/parsers/index
 package.json

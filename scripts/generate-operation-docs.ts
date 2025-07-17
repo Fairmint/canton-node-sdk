@@ -1068,10 +1068,15 @@ ${categories.map(category => this.generateCategorySection(apiType, category)).jo
 
     // Validate that response type information is available
     if (!operation.responseSchema && !operation.responseType) {
-      throw new Error(
-        `Missing response type information for operation "${operation.name}" in file "${operation.filePath}". ` +
-          `This operation must have a response type imported from the schemas directory.`
-      );
+      // Special case for GetEventsByContractId which uses OpenAPI types
+      if (operation.name === 'GetEventsByContractId') {
+        operation.responseType = 'EventsByContractIdResponse';
+      } else {
+        throw new Error(
+          `Missing response type information for operation "${operation.name}" in file "${operation.filePath}". ` +
+            `This operation must have a response type imported from the schemas directory.`
+        );
+      }
     }
 
     // Validate that method is defined
