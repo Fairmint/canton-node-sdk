@@ -253,6 +253,29 @@
             box-shadow: 0 4px 16px 0 rgba(0, 102, 255, 0.12);
         }
         
+        .operation-nav {
+            background: #f8fbff !important;
+            border: 1px solid #e6eaf0 !important;
+            border-radius: 8px !important;
+            padding: 16px !important;
+            margin-bottom: 24px !important;
+        }
+        
+        .operation-nav a {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            text-decoration: none;
+            transition: all 0.2s;
+            margin: 2px;
+        }
+        
+        .operation-nav a:hover {
+            box-shadow: 0 2px 4px rgba(0, 102, 255, 0.15);
+            transform: translateY(-1px);
+        }
+        
         @media (max-width: 768px) {
             .container {
                 padding: 0 12px;
@@ -268,6 +291,13 @@
             }
             pre {
                 padding: 12px;
+            }
+            .operation-nav {
+                padding: 12px !important;
+            }
+            .operation-nav a {
+                font-size: 11px;
+                padding: 3px 6px;
             }
         }
     </style>
