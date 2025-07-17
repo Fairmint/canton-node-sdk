@@ -4,12 +4,44 @@ import type { paths } from '../../../../../generated/openapi-types';
 
 const endpoint = '/v2/updates/update-by-id' as const;
 
-export type GetUpdateByIdParams = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
+// Define the parameters that the operation accepts
+export type GetUpdateByIdParams = {
+  /** The ID of the update to fetch. */
+  updateId: string;
+  /** Parties to read as (optional). */
+  readAs: string[];
+};
+
 export type GetUpdateByIdResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
 export const GetUpdateById = createApiOperation<GetUpdateByIdParams, GetUpdateByIdResponse>({
-  paramsSchema: z.any(),
+  paramsSchema: z.object({
+    updateId: z.string().min(1, 'updateId must be a non-empty string'),
+    readAs: z.array(z.string()),
+  }),
   method: 'POST',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
-  buildRequestData: (params) => params,
+  buildRequestData: (params) => {
+    // Validate updateId parameter
+    if (!params.updateId || params.updateId === 'undefined' || params.updateId.trim() === '') {
+      throw new Error(
+        `Invalid updateId: "${params.updateId}". updateId must be a non-empty string.`
+      );
+    }
+
+    // Build the request body according to the API specification
+    return {
+      updateId: params.updateId,
+      updateFormat: {
+        includeTransactions: {
+          eventFormat: {
+            verbose: true,
+          },
+          transactionShape: 'TRANSACTION_SHAPE_UNSPECIFIED',
+        },
+      },
+      // Include requestingParties if readAs is provided
+      ...(params.readAs && params.readAs.length > 0 && { requestingParties: params.readAs }),
+    };
+  },
 }); 
