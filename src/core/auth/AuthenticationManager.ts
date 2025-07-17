@@ -119,9 +119,8 @@ export class AuthenticationManager {
       if (!this.authConfig.username) missingConfig.push('username');
       if (!this.authConfig.password) missingConfig.push('password');
     }
-    if (this.authConfig.grantType === 'client_credentials' && !this.authConfig.clientSecret) {
-      missingConfig.push('clientSecret');
-    }
+    // Note: client_credentials grant type may not always require client_secret
+    // Some providers allow client_credentials without secret for public clients
 
     if (missingConfig.length > 0) {
       throw new AuthenticationError(
