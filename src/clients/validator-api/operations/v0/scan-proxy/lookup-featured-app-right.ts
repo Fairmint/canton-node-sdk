@@ -17,8 +17,7 @@ export const LookupFeaturedAppRight = createApiOperation<
   paramsSchema: GetFeaturedAppRightParamsSchema,
   method: 'GET',
   buildUrl: (params, apiUrl: string) => {
-    const url = new URL(`${apiUrl}/api/validator/v0/scan-proxy/featured-app-right`);
-    if (params.partyId) url.searchParams.set('partyId', params.partyId);
+    const url = new URL(`${apiUrl}/api/validator/v0/scan-proxy/featured-apps/${params.partyId}`);
     return url.toString();
   },
 }); 
