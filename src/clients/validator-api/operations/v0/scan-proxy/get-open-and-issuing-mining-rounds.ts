@@ -16,5 +16,5 @@ export const GetOpenAndIssuingMiningRounds = createApiOperation<
 >({
   paramsSchema: z.void(),
   method: 'GET',
-  buildUrl: (_params: void, apiUrl: string) => `${apiUrl}/api/validator/v0/scan-proxy/mining-rounds`,
+  buildUrl: (_params: void, apiUrl: string) => `${apiUrl}/api/validator/v0/scan-proxy/open-and-issuing-mining-rounds`,
 }); 
