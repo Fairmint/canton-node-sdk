@@ -165,6 +165,10 @@ build/src/core/operations/index
 build/src/core/types
 build/src/generated/openapi-types
 build/src/index
+build/src/utils/amulet/disclosed-contracts
+build/src/utils/amulet/index
+build/src/utils/amulet/pre-approve-transfers
+build/src/utils/amulet/transfer-to-preapproved
 build/src/utils/index
 build/src/utils/parsers/fee-parser
 build/src/utils/parsers/index
