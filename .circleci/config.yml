@@ -20,6 +20,10 @@ jobs:
             - node_modules
             - package-lock.json
       - run:
+          name: Clone Splice
+          command: |
+            npm run artifacts:clone-splice
+      - run:
           name: Build
           command: |
             npm run build
