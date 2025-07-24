@@ -26,4 +26,7 @@ export * from './interactive-submission';
 export * from './commands';
 
 // State parameter schemas
-export * from './state'; 
+export * from './state';
+
+// Transfer instruction parameter schemas
+export * from './transfer-instruction'; 

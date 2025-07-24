@@ -8,4 +8,5 @@ export * from './authenticated-user';
 export * from './commands';
 export * from './state';
 export * from './idps';
-export * from './interactive-submission'; 
+export * from './interactive-submission';
+export * from './transfer-instruction'; 
