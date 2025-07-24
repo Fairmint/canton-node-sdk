@@ -1,6 +1,10 @@
+import { z } from 'zod';
 import { createApiOperation } from '../../../../../core';
-import { ExternalPartyBalanceResponse } from '../../../schemas/api';
-import { GetExternalPartyBalanceParamsSchema, GetExternalPartyBalanceParams } from '../../../schemas/operations';
+import { operations } from '../../../../../generated/apps/validator/src/main/openapi/validator-internal';
+
+const GetExternalPartyBalanceParamsSchema = z.object({
+  partyId: z.string(),
+});
 
 /**
  * @description Get external party balance information
@@ -11,10 +15,10 @@ import { GetExternalPartyBalanceParamsSchema, GetExternalPartyBalanceParams } fr
  * ```
  */
 export const GetExternalPartyBalance = createApiOperation<
-  GetExternalPartyBalanceParams,
-  ExternalPartyBalanceResponse
+  { partyId: string },
+  operations['getExternalPartyBalance']['responses']['200']['content']['application/json']
 >({
   paramsSchema: GetExternalPartyBalanceParamsSchema,
   method: 'GET',
-  buildUrl: (params, apiUrl: string) => `${apiUrl}/api/validator/v0/admin/parties/${params.partyId}/balance`,
+  buildUrl: (params, apiUrl: string) => `${apiUrl}/api/validator/v0/admin/external-party/balance?party_id=${params.partyId}`,
 }); 

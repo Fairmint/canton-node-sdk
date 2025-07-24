@@ -1,6 +1,6 @@
+import { z } from 'zod';
 import { createApiOperation } from '../../../../../../../core';
-import { TransferInstructionResultResponse } from '../../../../../schemas/api';
-import { CreateTokenStandardTransferParamsSchema, CreateTokenStandardTransferParams } from '../../../../../schemas/operations';
+import { operations } from '../../../../../../../generated/apps/wallet/src/main/openapi/wallet-internal';
 
 /**
  * @description Create a new token standard transfer to send tokens to another party
@@ -17,10 +17,16 @@ import { CreateTokenStandardTransferParamsSchema, CreateTokenStandardTransferPar
  * ```
  */
 export const CreateTokenStandardTransfer = createApiOperation<
-  CreateTokenStandardTransferParams,
-  TransferInstructionResultResponse
+  operations['createTokenStandardTransfer']['requestBody']['content']['application/json'],
+  operations['createTokenStandardTransfer']['responses']['200']['content']['application/json']
 >({
-  paramsSchema: CreateTokenStandardTransferParamsSchema,
+  paramsSchema: z.object({
+    receiver_party_id: z.string(),
+    amount: z.string(),
+    description: z.string(),
+    expires_at: z.number(),
+    tracking_id: z.string(),
+  }) as z.ZodType<operations['createTokenStandardTransfer']['requestBody']['content']['application/json']>,
   method: 'POST',
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/wallet/token-standard/transfers`,
   buildRequestData: (params) => params,

@@ -39,25 +39,27 @@ import { WithdrawTransferOffer } from './operations/v0/wallet/transfer-offers/wi
 // AUTO-GENERATED OPERATION IMPORTS END
 
 import { BaseClient, ClientConfig } from '../../core';
-import { AcceptTransferOfferParams, CreateBuyTrafficRequestParams, CreateTokenStandardTransferParams, CreateTransferOfferParams, CreateUserParams, GetAllocationCancelContextParams, GetAllocationFactoryParams, GetAllocationTransferContextParams, GetAllocationWithdrawContextParams, GetExternalPartyBalanceParams, GetFeaturedAppRightParams, GetInstrumentParams, GetMiningRoundDetailsParams, GetTransferFactoryParams, GetTransferInstructionAcceptContextParams, GetTransferInstructionRejectContextParams, GetTransferInstructionWithdrawContextParams, ListInstrumentsParams, LookupTransferCommandCounterByPartyParams, LookupTransferCommandStatusParams, RejectTransferOfferParams, WithdrawTransferOfferParams } from './schemas/operations';
-import { AcceptTransferOfferResponse, CreateBuyTrafficRequestResponse, CreateTransferOfferResponse, ExternalPartyBalanceResponse, GetAllocationCancelContextResponse, GetAllocationFactoryResponse, GetAllocationTransferContextResponse, GetAllocationWithdrawContextResponse, GetDsoPartyIdResponse, GetInstrumentResponse, GetMiningRoundDetailsResponse, GetOpenAndIssuingMiningRoundsResponse, GetRegistryInfoResponse, GetTransferFactoryResponse, GetTransferInstructionAcceptContextResponse, GetTransferInstructionRejectContextResponse, GetTransferInstructionWithdrawContextResponse, ListInstrumentsResponse, ListResponse, ListTokenStandardTransfersResponse, ListTransferOffersResponse, LookupFeaturedAppRightResponse, LookupTransferCommandCounterByPartyResponse, LookupTransferCommandStatusResponse, OnboardUserResponse, RegisterResponse, RejectTransferOfferResponse, TransferInstructionResultResponse, UserStatusResponse, WalletBalanceResponse, WithdrawTransferOfferResponse } from './schemas/api';
+import { AcceptTransferOfferParams, CreateBuyTrafficRequestParams, CreateTransferOfferParams, GetAllocationCancelContextParams, GetAllocationFactoryParams, GetAllocationTransferContextParams, GetAllocationWithdrawContextParams, GetFeaturedAppRightParams, GetInstrumentParams, GetMiningRoundDetailsParams, GetTransferFactoryParams, GetTransferInstructionAcceptContextParams, GetTransferInstructionRejectContextParams, GetTransferInstructionWithdrawContextParams, ListInstrumentsParams, LookupTransferCommandCounterByPartyParams, LookupTransferCommandStatusParams, RejectTransferOfferParams, WithdrawTransferOfferParams } from './schemas/operations';
+import { AcceptTransferOfferResponse, CreateBuyTrafficRequestResponse, CreateTransferOfferResponse, GetAllocationCancelContextResponse, GetAllocationFactoryResponse, GetAllocationTransferContextResponse, GetAllocationWithdrawContextResponse, GetInstrumentResponse, GetMiningRoundDetailsResponse, GetOpenAndIssuingMiningRoundsResponse, GetRegistryInfoResponse, GetTransferFactoryResponse, GetTransferInstructionAcceptContextResponse, GetTransferInstructionRejectContextResponse, GetTransferInstructionWithdrawContextResponse, ListInstrumentsResponse, ListTransferOffersResponse, LookupFeaturedAppRightResponse, LookupTransferCommandCounterByPartyResponse, LookupTransferCommandStatusResponse, RejectTransferOfferResponse, WithdrawTransferOfferResponse } from './schemas/api';
 import { operations as ansOperations } from '../../generated/apps/validator/src/main/openapi/ans-external';
 import { operations as scanProxyOperations } from '../../generated/apps/validator/src/main/openapi/scan-proxy';
+import { operations as validatorOperations } from '../../generated/apps/validator/src/main/openapi/validator-internal';
+import { operations as walletOperations } from '../../generated/apps/wallet/src/main/openapi/wallet-internal';
 
 
 /** Client for interacting with Canton's Validator API */
 export class ValidatorApiClient extends BaseClient {
   // AUTO-GENERATED METHODS START
-  public createUser!: (params: CreateUserParams) => Promise<OnboardUserResponse>;
-  public getExternalPartyBalance!: (params: GetExternalPartyBalanceParams) => Promise<ExternalPartyBalanceResponse>;
+  public createUser!: (params: validatorOperations['onboardUser']['requestBody']['content']['application/json']) => Promise<validatorOperations['onboardUser']['responses']['200']['content']['application/json']>;
+  public getExternalPartyBalance!: (params: { partyId: string }) => Promise<validatorOperations['getExternalPartyBalance']['responses']['200']['content']['application/json']>;
   public createAnsEntry!: (params: ansOperations['createAnsEntry']['requestBody']['content']['application/json']) => Promise<ansOperations['createAnsEntry']['responses']['200']['content']['application/json']>;
   public getAnsRules!: (params: scanProxyOperations['getAnsRules']['requestBody']['content']['application/json']) => Promise<scanProxyOperations['getAnsRules']['responses']['200']['content']['application/json']>;
   public listAnsEntriesProxy!: (params: void) => Promise<ansOperations['listAnsEntries']['responses']['200']['content']['application/json']>;
   public lookupAnsEntryByName!: (params: { name: string }) => Promise<scanProxyOperations['lookupAnsEntryByName']['responses']['200']['content']['application/json']>;
   public lookupAnsEntryByParty!: (params: { party: string }) => Promise<scanProxyOperations['lookupAnsEntryByParty']['responses']['200']['content']['application/json']>;
-  public registerNewUser!: (params: void) => Promise<RegisterResponse>;
+  public registerNewUser!: (params: void) => Promise<validatorOperations['register']['responses']['200']['content']['application/json']>;
   public getAmuletRules!: (params: void) => Promise<scanProxyOperations['getAmuletRules']['responses']['200']['content']['application/json']>;
-  public getDsoPartyId!: (params: void) => Promise<GetDsoPartyIdResponse>;
+  public getDsoPartyId!: (params: void) => Promise<scanProxyOperations['getDsoPartyId']['responses']['200']['content']['application/json']>;
   public getMiningRoundDetails!: (params: GetMiningRoundDetailsParams) => Promise<GetMiningRoundDetailsResponse>;
   public getOpenAndIssuingMiningRounds!: (params: void) => Promise<GetOpenAndIssuingMiningRoundsResponse>;
   public lookupFeaturedAppRight!: (params: GetFeaturedAppRightParams) => Promise<LookupFeaturedAppRightResponse>;
@@ -75,11 +77,11 @@ export class ValidatorApiClient extends BaseClient {
   public getTransferInstructionRejectContext!: (params: GetTransferInstructionRejectContextParams) => Promise<GetTransferInstructionRejectContextResponse>;
   public getTransferInstructionWithdrawContext!: (params: GetTransferInstructionWithdrawContextParams) => Promise<GetTransferInstructionWithdrawContextResponse>;
   public createBuyTrafficRequest!: (params: CreateBuyTrafficRequestParams) => Promise<CreateBuyTrafficRequestResponse>;
-  public getAmulets!: (params: void) => Promise<ListResponse>;
-  public getWalletBalance!: (params: void) => Promise<WalletBalanceResponse>;
-  public getUserStatus!: (params: void) => Promise<UserStatusResponse>;
-  public createTokenStandardTransfer!: (params: CreateTokenStandardTransferParams) => Promise<TransferInstructionResultResponse>;
-  public listTokenStandardTransfers!: (params: void) => Promise<ListTokenStandardTransfersResponse>;
+  public getAmulets!: (params: void) => Promise<walletOperations['list']['responses']['200']['content']['application/json']>;
+  public getWalletBalance!: (params: void) => Promise<walletOperations['getBalance']['responses']['200']['content']['application/json']>;
+  public getUserStatus!: (params: void) => Promise<walletOperations['userStatus']['responses']['200']['content']['application/json']>;
+  public createTokenStandardTransfer!: (params: walletOperations['createTokenStandardTransfer']['requestBody']['content']['application/json']) => Promise<walletOperations['createTokenStandardTransfer']['responses']['200']['content']['application/json']>;
+  public listTokenStandardTransfers!: (params: void) => Promise<walletOperations['listTokenStandardTransfers']['responses']['200']['content']['application/json']>;
   public acceptTransferOffer!: (params: AcceptTransferOfferParams) => Promise<AcceptTransferOfferResponse>;
   public createTransferOffer!: (params: CreateTransferOfferParams) => Promise<CreateTransferOfferResponse>;
   public listTransferOffers!: (params: void) => Promise<ListTransferOffersResponse>;
