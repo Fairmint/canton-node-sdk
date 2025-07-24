@@ -37,10 +37,7 @@ import { GetParticipantId } from './operations/v2/parties/get-participant-id';
 import { GetPartyDetails } from './operations/v2/parties/get-party-details';
 import { AllocateParty } from './operations/v2/parties/post';
 import { UpdatePartyDetails } from './operations/v2/parties/update-party-details';
-import { GetTransferFactory } from './operations/registry/transfer-instruction/v1/get-transfer-factory';
-import { GetTransferInstructionAcceptContext } from './operations/registry/transfer-instruction/v1/get-transfer-instruction-accept-context';
-import { GetTransferInstructionRejectContext } from './operations/registry/transfer-instruction/v1/get-transfer-instruction-reject-context';
-import { GetTransferInstructionWithdrawContext } from './operations/registry/transfer-instruction/v1/get-transfer-instruction-withdraw-context';
+
 
 // Import types from individual operation files
 import type { AsyncSubmitParams, AsyncSubmitResponse } from './operations/v2/commands/async/submit';
@@ -84,10 +81,7 @@ import type { GetPartyDetailsParams } from './schemas/operations';
 import type { AllocatePartyParams } from './operations/v2/parties/post';
 import type { AllocatePartyResponse } from './schemas/api';
 import type { UpdatePartyDetailsParams } from './operations/v2/parties/update-party-details';
-import type { GetTransferFactoryParams, GetTransferFactoryResponse } from './operations/registry/transfer-instruction/v1/get-transfer-factory';
-import type { GetTransferInstructionAcceptContextParams, GetTransferInstructionAcceptContextResponse } from './operations/registry/transfer-instruction/v1/get-transfer-instruction-accept-context';
-import type { GetTransferInstructionRejectContextParams, GetTransferInstructionRejectContextResponse } from './operations/registry/transfer-instruction/v1/get-transfer-instruction-reject-context';
-import type { GetTransferInstructionWithdrawContextParams, GetTransferInstructionWithdrawContextResponse } from './operations/registry/transfer-instruction/v1/get-transfer-instruction-withdraw-context';
+
 
 /** Client for interacting with Canton's Ledger JSON API */
 export class LedgerJsonApiClient extends BaseClient {
@@ -179,11 +173,7 @@ export class LedgerJsonApiClient extends BaseClient {
   public interactiveSubmissionGetPreferredPackageVersion!: (params: InteractiveSubmissionGetPreferredPackageVersionParams) => Promise<GetPreferredPackageVersionResponse>;
   public interactiveSubmissionGetPreferredPackages!: (params: InteractiveSubmissionGetPreferredPackagesParams) => Promise<GetPreferredPackagesResponse>;
 
-  // Transfer Instructions
-  public getTransferFactory!: (params: GetTransferFactoryParams) => Promise<GetTransferFactoryResponse>;
-  public getTransferInstructionAcceptContext!: (params: GetTransferInstructionAcceptContextParams) => Promise<GetTransferInstructionAcceptContextResponse>;
-  public getTransferInstructionRejectContext!: (params: GetTransferInstructionRejectContextParams) => Promise<GetTransferInstructionRejectContextResponse>;
-  public getTransferInstructionWithdrawContext!: (params: GetTransferInstructionWithdrawContextParams) => Promise<GetTransferInstructionWithdrawContextResponse>;
+
 
   constructor(clientConfig: ClientConfig) {
     super('LEDGER_JSON_API', clientConfig);
@@ -241,10 +231,6 @@ export class LedgerJsonApiClient extends BaseClient {
     this.interactiveSubmissionGetPreferredPackageVersion = (params) => new InteractiveSubmissionGetPreferredPackageVersion(this).execute(params);
     this.interactiveSubmissionGetPreferredPackages = (params) => new InteractiveSubmissionGetPreferredPackages(this).execute(params);
 
-    // Transfer Instructions
-    this.getTransferFactory = (params) => new GetTransferFactory(this).execute(params);
-    this.getTransferInstructionAcceptContext = (params) => new GetTransferInstructionAcceptContext(this).execute(params);
-    this.getTransferInstructionRejectContext = (params) => new GetTransferInstructionRejectContext(this).execute(params);
-    this.getTransferInstructionWithdrawContext = (params) => new GetTransferInstructionWithdrawContext(this).execute(params);
+
   }
 } 

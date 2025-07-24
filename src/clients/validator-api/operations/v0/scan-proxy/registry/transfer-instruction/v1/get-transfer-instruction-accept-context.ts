@@ -1,6 +1,6 @@
-import { createApiOperation } from '../../../../../../core';
+import { createApiOperation } from '../../../../../../../../core';
 import { z } from 'zod';
-import type { components } from '../../../../../../generated/token-standard/splice-api-token-transfer-instruction-v1/openapi/transfer-instruction-v1';
+import type { components } from '../../../../../../../../generated/token-standard/splice-api-token-transfer-instruction-v1/openapi/transfer-instruction-v1';
 
 // Schema for path parameters
 export const GetTransferInstructionAcceptContextParamsSchema = z.object({
@@ -30,7 +30,7 @@ export const GetTransferInstructionAcceptContext = createApiOperation<
   paramsSchema: GetTransferInstructionAcceptContextParamsSchema,
   method: 'POST',
   buildUrl: (params: GetTransferInstructionAcceptContextParams, apiUrl: string) => 
-    `${apiUrl}/registry/transfer-instruction/v1/${params.transferInstructionId}/choice-contexts/accept`,
+    `${apiUrl}/api/validator/v0/scan-proxy/registry/transfer-instruction/v1/${params.transferInstructionId}/choice-contexts/accept`,
   buildRequestData: (params: GetTransferInstructionAcceptContextParams): GetTransferInstructionAcceptContextRequest => ({
     ...(params.meta && { meta: params.meta }),
   }),

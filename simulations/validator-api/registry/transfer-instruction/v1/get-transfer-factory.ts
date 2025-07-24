@@ -1,6 +1,6 @@
-import SimulationRunner from '../../../../core/SimulationRunner';
+import ValidatorSimulationRunner from '../../../../core/ValidatorSimulationRunner';
 
-const runner = new SimulationRunner();
+const runner = new ValidatorSimulationRunner();
 
 export async function runAllTests() {
   await runner.runSimulation(

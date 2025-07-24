@@ -1,2 +1,1 @@
-export * from './v2';
-export * from './registry'; 
+export * from './v2'; 

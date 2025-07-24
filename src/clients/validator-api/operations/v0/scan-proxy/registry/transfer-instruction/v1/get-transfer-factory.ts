@@ -1,8 +1,8 @@
-import { createApiOperation } from '../../../../../../core';
+import { createApiOperation } from '../../../../../../../../core';
 import { z } from 'zod';
-import type { paths, components } from '../../../../../../generated/token-standard/splice-api-token-transfer-instruction-v1/openapi/transfer-instruction-v1';
+import type { paths, components } from '../../../../../../../../generated/token-standard/splice-api-token-transfer-instruction-v1/openapi/transfer-instruction-v1';
 
-const endpoint = '/registry/transfer-instruction/v1/transfer-factory';
+const endpoint = '/api/validator/v0/scan-proxy/registry/transfer-instruction/v1/transfer-factory';
 
 // Simple schema that matches the generated type exactly
 export const GetTransferFactoryParamsSchema = z.object({

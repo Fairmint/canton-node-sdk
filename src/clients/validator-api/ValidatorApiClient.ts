@@ -25,10 +25,18 @@ import { CreateTransferOffer } from './operations/v0/wallet/transfer-offers/crea
 import { ListTransferOffers } from './operations/v0/wallet/transfer-offers/list';
 import { RejectTransferOffer } from './operations/v0/wallet/transfer-offers/reject';
 import { WithdrawTransferOffer } from './operations/v0/wallet/transfer-offers/withdraw';
+import { GetTransferFactory } from './operations/v0/scan-proxy/registry/transfer-instruction/v1/get-transfer-factory';
+import { GetTransferInstructionAcceptContext } from './operations/v0/scan-proxy/registry/transfer-instruction/v1/get-transfer-instruction-accept-context';
+import { GetTransferInstructionRejectContext } from './operations/v0/scan-proxy/registry/transfer-instruction/v1/get-transfer-instruction-reject-context';
+import { GetTransferInstructionWithdrawContext } from './operations/v0/scan-proxy/registry/transfer-instruction/v1/get-transfer-instruction-withdraw-context';
 // AUTO-GENERATED OPERATION IMPORTS END
 
 import { BaseClient, ClientConfig } from '../../core';
 import { AcceptTransferOfferParams, CreateAnsEntryParams, CreateBuyTrafficRequestParams, CreateTokenStandardTransferParams, CreateTransferOfferParams, CreateUserParams, GetAnsRulesParams, GetExternalPartyBalanceParams, GetFeaturedAppRightParams, GetMiningRoundDetailsParams, LookupAnsEntryByNameParams, LookupAnsEntryByPartyParams, LookupTransferCommandCounterByPartyParams, LookupTransferCommandStatusParams, RejectTransferOfferParams, WithdrawTransferOfferParams } from './schemas/operations';
+import type { GetTransferFactoryParams, GetTransferFactoryResponse } from './operations/v0/scan-proxy/registry/transfer-instruction/v1/get-transfer-factory';
+import type { GetTransferInstructionAcceptContextParams, GetTransferInstructionAcceptContextResponse } from './operations/v0/scan-proxy/registry/transfer-instruction/v1/get-transfer-instruction-accept-context';
+import type { GetTransferInstructionRejectContextParams, GetTransferInstructionRejectContextResponse } from './operations/v0/scan-proxy/registry/transfer-instruction/v1/get-transfer-instruction-reject-context';
+import type { GetTransferInstructionWithdrawContextParams, GetTransferInstructionWithdrawContextResponse } from './operations/v0/scan-proxy/registry/transfer-instruction/v1/get-transfer-instruction-withdraw-context';
 import { AcceptTransferOfferResponse, CreateAnsEntryResponse, CreateBuyTrafficRequestResponse, CreateTransferOfferResponse, ExternalPartyBalanceResponse, GetAmuletRulesResponse, GetAnsRulesResponse, GetDsoPartyIdResponse, GetMiningRoundDetailsResponse, GetOpenAndIssuingMiningRoundsResponse, ListAnsEntriesProxyResponse, ListResponse, ListTokenStandardTransfersResponse, ListTransferOffersResponse, LookupAnsEntryByNameResponse, LookupAnsEntryByPartyResponse, LookupFeaturedAppRightResponse, LookupTransferCommandCounterByPartyResponse, LookupTransferCommandStatusResponse, OnboardUserResponse, RegisterResponse, RejectTransferOfferResponse, TransferInstructionResultResponse, UserStatusResponse, WalletBalanceResponse, WithdrawTransferOfferResponse } from './schemas/api';
 
 /** Client for interacting with Canton's Validator API */
@@ -60,6 +68,10 @@ export class ValidatorApiClient extends BaseClient {
   public listTransferOffers!: (params: void) => Promise<ListTransferOffersResponse>;
   public rejectTransferOffer!: (params: RejectTransferOfferParams) => Promise<RejectTransferOfferResponse>;
   public withdrawTransferOffer!: (params: WithdrawTransferOfferParams) => Promise<WithdrawTransferOfferResponse>;
+  public getTransferFactory!: (params: GetTransferFactoryParams) => Promise<GetTransferFactoryResponse>;
+  public getTransferInstructionAcceptContext!: (params: GetTransferInstructionAcceptContextParams) => Promise<GetTransferInstructionAcceptContextResponse>;
+  public getTransferInstructionRejectContext!: (params: GetTransferInstructionRejectContextParams) => Promise<GetTransferInstructionRejectContextResponse>;
+  public getTransferInstructionWithdrawContext!: (params: GetTransferInstructionWithdrawContextParams) => Promise<GetTransferInstructionWithdrawContextResponse>;
   // AUTO-GENERATED METHODS END
 
   constructor(clientConfig: ClientConfig) {
@@ -105,6 +117,10 @@ export class ValidatorApiClient extends BaseClient {
     this.listTransferOffers = () => new ListTransferOffers(this).execute();
     this.rejectTransferOffer = (params) => new RejectTransferOffer(this).execute(params);
     this.withdrawTransferOffer = (params) => new WithdrawTransferOffer(this).execute(params);
+    this.getTransferFactory = (params) => new GetTransferFactory(this).execute(params);
+    this.getTransferInstructionAcceptContext = (params) => new GetTransferInstructionAcceptContext(this).execute(params);
+    this.getTransferInstructionRejectContext = (params) => new GetTransferInstructionRejectContext(this).execute(params);
+    this.getTransferInstructionWithdrawContext = (params) => new GetTransferInstructionWithdrawContext(this).execute(params);
     // AUTO-GENERATED METHOD IMPLEMENTATIONS END
   }
 } 
