@@ -37,10 +37,10 @@ import { GetParticipantId } from './operations/v2/parties/get-participant-id';
 import { GetPartyDetails } from './operations/v2/parties/get-party-details';
 import { AllocateParty } from './operations/v2/parties/post';
 import { UpdatePartyDetails } from './operations/v2/parties/update-party-details';
-import { GetTransferFactory } from './operations/v2/transfer-instruction/get-transfer-factory';
-import { GetTransferInstructionAcceptContext } from './operations/v2/transfer-instruction/get-transfer-instruction-accept-context';
-import { GetTransferInstructionRejectContext } from './operations/v2/transfer-instruction/get-transfer-instruction-reject-context';
-import { GetTransferInstructionWithdrawContext } from './operations/v2/transfer-instruction/get-transfer-instruction-withdraw-context';
+import { GetTransferFactory } from './operations/registry/transfer-instruction/v1/get-transfer-factory';
+import { GetTransferInstructionAcceptContext } from './operations/registry/transfer-instruction/v1/get-transfer-instruction-accept-context';
+import { GetTransferInstructionRejectContext } from './operations/registry/transfer-instruction/v1/get-transfer-instruction-reject-context';
+import { GetTransferInstructionWithdrawContext } from './operations/registry/transfer-instruction/v1/get-transfer-instruction-withdraw-context';
 
 // Import types from individual operation files
 import type { AsyncSubmitParams, AsyncSubmitResponse } from './operations/v2/commands/async/submit';
@@ -84,11 +84,10 @@ import type { GetPartyDetailsParams } from './schemas/operations';
 import type { AllocatePartyParams } from './operations/v2/parties/post';
 import type { AllocatePartyResponse } from './schemas/api';
 import type { UpdatePartyDetailsParams } from './operations/v2/parties/update-party-details';
-import type { GetTransferFactoryParams } from './schemas/operations';
-import type { GetTransferInstructionAcceptContextParams } from './schemas/operations';
-import type { GetTransferInstructionRejectContextParams } from './schemas/operations';
-import type { GetTransferInstructionWithdrawContextParams } from './schemas/operations';
-import type { GetTransferFactoryResponse, GetTransferInstructionAcceptContextResponse, GetTransferInstructionRejectContextResponse, GetTransferInstructionWithdrawContextResponse } from './schemas/api/transfer-instruction';
+import type { GetTransferFactoryParams, GetTransferFactoryResponse } from './operations/registry/transfer-instruction/v1/get-transfer-factory';
+import type { GetTransferInstructionAcceptContextParams, GetTransferInstructionAcceptContextResponse } from './operations/registry/transfer-instruction/v1/get-transfer-instruction-accept-context';
+import type { GetTransferInstructionRejectContextParams, GetTransferInstructionRejectContextResponse } from './operations/registry/transfer-instruction/v1/get-transfer-instruction-reject-context';
+import type { GetTransferInstructionWithdrawContextParams, GetTransferInstructionWithdrawContextResponse } from './operations/registry/transfer-instruction/v1/get-transfer-instruction-withdraw-context';
 
 /** Client for interacting with Canton's Ledger JSON API */
 export class LedgerJsonApiClient extends BaseClient {
@@ -129,11 +128,11 @@ export class LedgerJsonApiClient extends BaseClient {
   public updateUser!: (params: UpdateUserParams) => Promise<UpdateUserResponse>;
 
   // Parties
-  public getParties!: (params: GetPartiesParams) => Promise<import('../../generated/openapi-types').paths['/v2/parties']['get']['responses']['200']['content']['application/json']>;
+  public getParties!: (params: GetPartiesParams) => Promise<import('../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi').paths['/v2/parties']['get']['responses']['200']['content']['application/json']>;
   public getParticipantId!: (params: GetParticipantIdParams) => Promise<GetParticipantIdResponse>;
-  public getPartyDetails!: (params: GetPartyDetailsParams) => Promise<import('../../generated/openapi-types').paths['/v2/parties/{party}']['get']['responses']['200']['content']['application/json']>;
+  public getPartyDetails!: (params: GetPartyDetailsParams) => Promise<import('../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi').paths['/v2/parties/{party}']['get']['responses']['200']['content']['application/json']>;
   public allocateParty!: (params: AllocatePartyParams) => Promise<AllocatePartyResponse>;
-  public updatePartyDetails!: (params: UpdatePartyDetailsParams) => Promise<import('../../generated/openapi-types').paths['/v2/parties/{party}']['patch']['responses']['200']['content']['application/json']>;
+  public updatePartyDetails!: (params: UpdatePartyDetailsParams) => Promise<import('../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi').paths['/v2/parties/{party}']['patch']['responses']['200']['content']['application/json']>;
 
   /**
    * List all packages uploaded on the participant node
@@ -145,7 +144,7 @@ export class LedgerJsonApiClient extends BaseClient {
    * console.log(`Available packages: ${packages.packageIds.join(', ')}`);
    * ```
    */
-  public listPackages!: () => Promise<import('../../generated/openapi-types').paths['/v2/packages']['get']['responses']['200']['content']['application/json']>;
+  public listPackages!: () => Promise<import('../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi').paths['/v2/packages']['get']['responses']['200']['content']['application/json']>;
 
   /**
    * Upload a DAR file to the participant node
@@ -171,7 +170,7 @@ export class LedgerJsonApiClient extends BaseClient {
    * console.log(`Participant version: ${version.version}`);
    * ```
    */
-  public getVersion!: () => Promise<import('../../generated/openapi-types').paths['/v2/version']['get']['responses']['200']['content']['application/json']>;
+  public getVersion!: () => Promise<import('../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi').paths['/v2/version']['get']['responses']['200']['content']['application/json']>;
 
   // Interactive Submission
   public interactiveSubmissionAllocateParty!: (params: InteractiveSubmissionAllocatePartyParams) => Promise<InteractiveSubmissionAllocatePartyResponse>;

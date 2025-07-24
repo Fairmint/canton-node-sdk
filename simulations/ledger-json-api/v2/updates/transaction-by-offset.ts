@@ -1,5 +1,5 @@
 import SimulationRunner from '../../../core/SimulationRunner';
-import type { components } from '../../../../src/generated/openapi-types';
+import type { components } from '../../../../src/generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 
 const runner = new SimulationRunner();
 

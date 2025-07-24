@@ -40,5 +40,4 @@ export * from './interactive-submission';
 // Command response schemas
 export * from './command-responses';
 
-// Transfer instruction schemas
-export * from './transfer-instruction'; 
+ 

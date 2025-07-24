@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { z } from 'zod';
-import type { paths } from '../../../../../generated/openapi-types';
+import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 
 const endpoint = '/v2/parties';
 

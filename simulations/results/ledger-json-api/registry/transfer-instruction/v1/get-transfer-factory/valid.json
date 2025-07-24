@@ -1,0 +1,17 @@
+{
+  "error": "HTTP 404",
+  "details": {
+    "name": "ApiError",
+    "message": "HTTP 404",
+    "stack": "PLACEHOLDER_STACK_TRACE",
+    "code": "API_ERROR",
+    "status": 404,
+    "statusText": "Not Found",
+    "response": {
+      "errors": [
+        "HttpMethod(POST), uri: http://ledger-api.validator.devnet.transfer-agent.xyz/registry/transfer-instruction/v1/transfer-factory"
+      ],
+      "status": 404
+    }
+  }
+}

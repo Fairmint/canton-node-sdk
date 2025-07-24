@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { GetPartyDetailsParamsSchema, GetPartyDetailsParams } from '../../../schemas/operations';
-import type { paths } from '../../../../../generated/openapi-types';
+import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 
 /**
  * @description Get party details for a specific party
