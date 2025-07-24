@@ -60,7 +60,7 @@ node_modules/
 *.tgz
 
 # Auto-generated artifacts
-artifact/
+artifacts/
 
 # Yarn Integrity file
 .yarn-integrity 
