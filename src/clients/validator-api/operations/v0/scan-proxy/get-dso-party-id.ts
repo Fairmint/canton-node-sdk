@@ -1,6 +1,6 @@
-import { createApiOperation } from '../../../../../core';
-import { GetDsoPartyIdResponse } from '../../../schemas/api';
 import { z } from 'zod';
+import { createApiOperation } from '../../../../../core';
+import { operations } from '../../../../../generated/apps/validator/src/main/openapi/scan-proxy';
 
 /**
  * @description Get the DSO party ID
@@ -12,7 +12,7 @@ import { z } from 'zod';
  */
 export const GetDsoPartyId = createApiOperation<
   void,
-  GetDsoPartyIdResponse
+  operations['getDsoPartyId']['responses']['200']['content']['application/json']
 >({
   paramsSchema: z.void(),
   method: 'GET',

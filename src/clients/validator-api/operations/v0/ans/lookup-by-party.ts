@@ -1,6 +1,10 @@
+import { z } from 'zod';
 import { createApiOperation } from '../../../../../core';
-import { LookupAnsEntryByPartyResponse } from '../../../schemas/api';
-import { LookupAnsEntryByPartyParamsSchema, LookupAnsEntryByPartyParams } from '../../../schemas/operations';
+import { operations } from '../../../../../generated/apps/validator/src/main/openapi/scan-proxy';
+
+const LookupAnsEntryByPartyParamsSchema = z.object({
+  party: z.string(),
+});
 
 /**
  * @description Lookup ANS entry by party
@@ -11,10 +15,10 @@ import { LookupAnsEntryByPartyParamsSchema, LookupAnsEntryByPartyParams } from '
  * ```
  */
 export const LookupAnsEntryByParty = createApiOperation<
-  LookupAnsEntryByPartyParams,
-  LookupAnsEntryByPartyResponse
+  { party: string },
+  operations['lookupAnsEntryByParty']['responses']['200']['content']['application/json']
 >({
   paramsSchema: LookupAnsEntryByPartyParamsSchema,
   method: 'GET',
-  buildUrl: (params, apiUrl: string) => `${apiUrl}/api/validator/v0/ans/entries/party/${params.party}`,
+  buildUrl: (params, apiUrl: string) => `${apiUrl}/api/validator/v0/scan-proxy/ans-entries/by-party/${params.party}`,
 }); 

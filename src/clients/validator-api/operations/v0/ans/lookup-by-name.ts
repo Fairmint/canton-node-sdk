@@ -1,6 +1,10 @@
+import { z } from 'zod';
 import { createApiOperation } from '../../../../../core';
-import { LookupAnsEntryByNameResponse } from '../../../schemas/api';
-import { LookupAnsEntryByNameParamsSchema, LookupAnsEntryByNameParams } from '../../../schemas/operations';
+import { operations } from '../../../../../generated/apps/validator/src/main/openapi/scan-proxy';
+
+const LookupAnsEntryByNameParamsSchema = z.object({
+  name: z.string(),
+});
 
 /**
  * @description Lookup ANS entry by name
@@ -11,10 +15,10 @@ import { LookupAnsEntryByNameParamsSchema, LookupAnsEntryByNameParams } from '..
  * ```
  */
 export const LookupAnsEntryByName = createApiOperation<
-  LookupAnsEntryByNameParams,
-  LookupAnsEntryByNameResponse
+  { name: string },
+  operations['lookupAnsEntryByName']['responses']['200']['content']['application/json']
 >({
   paramsSchema: LookupAnsEntryByNameParamsSchema,
   method: 'GET',
-  buildUrl: (params, apiUrl: string) => `${apiUrl}/api/validator/v0/ans/entries/${params.name}`,
+  buildUrl: (params, apiUrl: string) => `${apiUrl}/api/validator/v0/scan-proxy/ans-entries/by-name/${params.name}`,
 }); 

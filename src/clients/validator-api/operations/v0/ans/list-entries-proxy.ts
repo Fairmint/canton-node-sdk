@@ -1,23 +1,20 @@
-import { createApiOperation } from '../../../../../core';
-import { ListAnsEntriesProxyResponse } from '../../../schemas/api';
 import { z } from 'zod';
+import { createApiOperation } from '../../../../../core';
+import { operations } from '../../../../../generated/apps/validator/src/main/openapi/ans-external';
 
 /**
- * @description List ANS entries via proxy with optional filtering
+ * @description List ANS entries
  * @example
  * ```typescript
- * const entries = await client.listAnsEntriesProxy({ 
- *   namePrefix: 'my', 
- *   pageSize: 50 
- * });
+ * const entries = await client.listAnsEntries();
  * console.log(`Found ${entries.entries.length} entries`);
  * ```
  */
-export const ListAnsEntriesProxy = createApiOperation<
+export const ListAnsEntries = createApiOperation<
   void,
-  ListAnsEntriesProxyResponse
+  operations['listAnsEntries']['responses']['200']['content']['application/json']
 >({
   paramsSchema: z.void(),
   method: 'GET',
-  buildUrl: (_params: void, apiUrl: string) => `${apiUrl}/api/validator/v0/ans/entries/proxy`,
+  buildUrl: (_params: void, apiUrl: string) => `${apiUrl}/api/validator/v0/entry/all`,
 }); 

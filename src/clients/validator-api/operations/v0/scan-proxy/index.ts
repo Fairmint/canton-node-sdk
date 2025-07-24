@@ -4,4 +4,5 @@ export * from './get-mining-round-details';
 export * from './get-amulet-rules';
 export * from './lookup-transfer-command-counter-by-party';
 export * from './lookup-transfer-command-status';
-export * from './lookup-featured-app-right'; 
+export * from './lookup-featured-app-right';
+export * from './registry'; 

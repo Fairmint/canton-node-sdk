@@ -1,20 +1,30 @@
+import { z } from 'zod';
 import { createApiOperation } from '../../../../../core';
-import { GetAnsRulesResponse } from '../../../schemas/api';
-import { GetAnsRulesParamsSchema, GetAnsRulesParams } from '../../../schemas/operations';
+import { operations } from '../../../../../generated/apps/validator/src/main/openapi/scan-proxy';
+
+// Create Zod schema for the request parameters
+const GetAnsRulesParamsSchema = z.object({
+  cached_ans_rules_contract_id: z.string().optional(),
+  cached_ans_rules_domain_id: z.string().optional(),
+});
 
 /**
- * @description Get ANS rules for a specific name
+ * @description Get ANS rules
  * @example
  * ```typescript
- * const rules = await client.getAnsRules({ name: 'my-app' });
- * console.log(`Rules: ${rules.rules}`);
+ * const rules = await client.getAnsRules({ 
+ *   cached_ans_rules_contract_id: 'contract123',
+ *   cached_ans_rules_domain_id: 'domain123'
+ * });
+ * console.log(`Rules: ${rules.ans_rules_update}`);
  * ```
  */
 export const GetAnsRules = createApiOperation<
-  GetAnsRulesParams,
-  GetAnsRulesResponse
+  operations['getAnsRules']['requestBody']['content']['application/json'],
+  operations['getAnsRules']['responses']['200']['content']['application/json']
 >({
-  paramsSchema: GetAnsRulesParamsSchema,
-  method: 'GET',
-  buildUrl: (params, apiUrl: string) => `${apiUrl}/api/validator/v0/ans/rules/${params.name}`,
+  paramsSchema: GetAnsRulesParamsSchema as any,
+  method: 'POST',
+  buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/scan-proxy/ans-rules`,
+  buildRequestData: (params) => params,
 }); 

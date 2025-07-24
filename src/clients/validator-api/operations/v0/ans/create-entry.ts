@@ -1,6 +1,12 @@
+import { z } from 'zod';
 import { createApiOperation } from '../../../../../core';
-import { CreateAnsEntryResponse } from '../../../schemas/api';
-import { CreateAnsEntryParamsSchema, CreateAnsEntryParams } from '../../../schemas/operations';
+import { operations } from '../../../../../generated/apps/validator/src/main/openapi/ans-external';
+
+const CreateAnsEntryParamsSchema = z.object({
+  name: z.string(),
+  url: z.string(),
+  description: z.string(),
+});
 
 /**
  * @description Create a new ANS entry
@@ -15,11 +21,11 @@ import { CreateAnsEntryParamsSchema, CreateAnsEntryParams } from '../../../schem
  * ```
  */
 export const CreateAnsEntry = createApiOperation<
-  CreateAnsEntryParams,
-  CreateAnsEntryResponse
+  operations['createAnsEntry']['requestBody']['content']['application/json'],
+  operations['createAnsEntry']['responses']['200']['content']['application/json']
 >({
   paramsSchema: CreateAnsEntryParamsSchema,
   method: 'POST',
-  buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/ans/entries`,
+  buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/entry/create`,
   buildRequestData: (params) => params,
 }); 
