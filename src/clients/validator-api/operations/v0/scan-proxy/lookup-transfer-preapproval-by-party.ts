@@ -1,5 +1,5 @@
 import { createApiOperation } from '../../../../../core';
-import { operations as scanProxyOperations } from '../../../../../generated/apps/validator/src/main/openapi/scan-proxy';
+import { LookupTransferPreapprovalByPartyResponse } from '../../../schemas/api';
 import { GetTransferPreapprovalsByPartyParamsSchema, GetTransferPreapprovalsByPartyParams } from '../../../schemas/operations';
 
 /**
@@ -12,7 +12,7 @@ import { GetTransferPreapprovalsByPartyParamsSchema, GetTransferPreapprovalsByPa
  */
 export const LookupTransferPreapprovalByParty = createApiOperation<
   GetTransferPreapprovalsByPartyParams,
-  scanProxyOperations['lookupTransferPreapprovalByParty']['responses']['200']['content']['application/json']
+  LookupTransferPreapprovalByPartyResponse
 >({
   paramsSchema: GetTransferPreapprovalsByPartyParamsSchema,
   method: 'GET',

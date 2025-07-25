@@ -66,6 +66,16 @@ export const LookupTransferCommandStatusResponseSchema = z.object({
 export type LookupTransferCommandCounterByPartyResponse = z.infer<typeof LookupTransferCommandCounterByPartyResponseSchema>;
 export type LookupTransferCommandStatusResponse = z.infer<typeof LookupTransferCommandStatusResponseSchema>;
 
+// Transfer Preapproval Schema
+export const LookupTransferPreapprovalByPartyResponseSchema = z.object({
+  transfer_preapproval: z.object({
+    contract: z.any(),
+    domain_id: z.string(),
+  }),
+});
+
+export type LookupTransferPreapprovalByPartyResponse = z.infer<typeof LookupTransferPreapprovalByPartyResponseSchema>;
+
 // Featured App Right Schema
 export const LookupFeaturedAppRightResponseSchema = z.object({
   featured_app_right: z.any(),
