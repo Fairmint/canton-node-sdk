@@ -8,6 +8,12 @@ export const GetMiningRoundByContractIdParamsSchema = z.object({
   contractId: z.string(),
 });
 
+// Member Traffic Status Parameters
+export const GetMemberTrafficStatusParamsSchema = z.object({
+  domainId: z.string(),
+  memberId: z.string(),
+});
+
 // Transfer Command Parameters
 export const LookupTransferCommandCounterByPartyParamsSchema = z.object({
   party: z.string(),
@@ -71,6 +77,7 @@ export const GetTransferInstructionWithdrawContextParamsSchema = z.object({
 
 export type GetMiningRoundDetailsParams = z.infer<typeof GetMiningRoundDetailsParamsSchema>;
 export type GetMiningRoundByContractIdParams = z.infer<typeof GetMiningRoundByContractIdParamsSchema>;
+export type GetMemberTrafficStatusParams = z.infer<typeof GetMemberTrafficStatusParamsSchema>;
 export type LookupTransferCommandCounterByPartyParams = z.infer<typeof LookupTransferCommandCounterByPartyParamsSchema>;
 export type LookupTransferCommandStatusParams = z.infer<typeof LookupTransferCommandStatusParamsSchema>;
 export type GetFeaturedAppRightParams = z.infer<typeof GetFeaturedAppRightParamsSchema>;

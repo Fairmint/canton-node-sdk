@@ -7,6 +7,21 @@ export const GetDsoPartyIdResponseSchema = z.object({
 
 export type GetDsoPartyIdResponse = z.infer<typeof GetDsoPartyIdResponseSchema>;
 
+// Member Traffic Status Response
+export const GetMemberTrafficStatusResponseSchema = z.object({
+  traffic_status: z.object({
+    actual: z.object({
+      total_consumed: z.number(),
+      total_limit: z.number(),
+    }),
+    target: z.object({
+      total_purchased: z.number(),
+    }),
+  }),
+});
+
+export type GetMemberTrafficStatusResponse = z.infer<typeof GetMemberTrafficStatusResponseSchema>;
+
 // Mining Rounds Schemas
 export const GetOpenAndIssuingMiningRoundsResponseSchema = z.object({
   open_mining_rounds: z.array(z.any()),
