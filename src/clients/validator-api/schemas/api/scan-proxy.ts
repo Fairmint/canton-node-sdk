@@ -56,4 +56,75 @@ export const LookupFeaturedAppRightResponseSchema = z.object({
   featured_app_right: z.any(),
 });
 
-export type LookupFeaturedAppRightResponse = z.infer<typeof LookupFeaturedAppRightResponseSchema>; 
+export type LookupFeaturedAppRightResponse = z.infer<typeof LookupFeaturedAppRightResponseSchema>;
+
+// Token Standard Registry Response Schemas
+export const GetRegistryInfoResponseSchema = z.object({
+  adminId: z.string(),
+  supportedApis: z.record(z.number()),
+});
+
+export const InstrumentSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  symbol: z.string(),
+  totalSupply: z.string().optional(),
+  totalSupplyAsOf: z.string().optional(),
+  decimals: z.number(),
+  supportedApis: z.record(z.number()),
+});
+
+export const ListInstrumentsResponseSchema = z.object({
+  instruments: z.array(InstrumentSchema),
+  nextPageToken: z.string().optional(),
+});
+
+export const GetInstrumentResponseSchema = InstrumentSchema;
+
+export const ChoiceContextSchema = z.object({
+  choiceContextData: z.record(z.never()),
+  disclosedContracts: z.array(z.object({
+    templateId: z.string(),
+    contractId: z.string(),
+    createdEventBlob: z.string(),
+    synchronizerId: z.string(),
+    debugPackageName: z.string().optional(),
+    debugPayload: z.record(z.never()).optional(),
+    debugCreatedAt: z.string().optional(),
+  })),
+});
+
+export const GetAllocationFactoryResponseSchema = z.object({
+  factoryId: z.string(),
+  choiceContext: ChoiceContextSchema,
+});
+
+export const GetAllocationTransferContextResponseSchema = ChoiceContextSchema;
+export const GetAllocationWithdrawContextResponseSchema = ChoiceContextSchema;
+export const GetAllocationCancelContextResponseSchema = ChoiceContextSchema;
+
+export const TransferFactoryWithChoiceContextSchema = z.object({
+  factoryId: z.string(),
+  transferKind: z.enum(['self', 'direct', 'offer']),
+  choiceContext: ChoiceContextSchema,
+});
+
+export const GetTransferFactoryResponseSchema = TransferFactoryWithChoiceContextSchema;
+export const GetTransferInstructionAcceptContextResponseSchema = ChoiceContextSchema;
+export const GetTransferInstructionRejectContextResponseSchema = ChoiceContextSchema;
+export const GetTransferInstructionWithdrawContextResponseSchema = ChoiceContextSchema;
+
+export type GetRegistryInfoResponse = z.infer<typeof GetRegistryInfoResponseSchema>;
+export type Instrument = z.infer<typeof InstrumentSchema>;
+export type ListInstrumentsResponse = z.infer<typeof ListInstrumentsResponseSchema>;
+export type GetInstrumentResponse = z.infer<typeof GetInstrumentResponseSchema>;
+export type ChoiceContext = z.infer<typeof ChoiceContextSchema>;
+export type GetAllocationFactoryResponse = z.infer<typeof GetAllocationFactoryResponseSchema>;
+export type GetAllocationTransferContextResponse = z.infer<typeof GetAllocationTransferContextResponseSchema>;
+export type GetAllocationWithdrawContextResponse = z.infer<typeof GetAllocationWithdrawContextResponseSchema>;
+export type GetAllocationCancelContextResponse = z.infer<typeof GetAllocationCancelContextResponseSchema>;
+export type TransferFactoryWithChoiceContext = z.infer<typeof TransferFactoryWithChoiceContextSchema>;
+export type GetTransferFactoryResponse = z.infer<typeof GetTransferFactoryResponseSchema>;
+export type GetTransferInstructionAcceptContextResponse = z.infer<typeof GetTransferInstructionAcceptContextResponseSchema>;
+export type GetTransferInstructionRejectContextResponse = z.infer<typeof GetTransferInstructionRejectContextResponseSchema>;
+export type GetTransferInstructionWithdrawContextResponse = z.infer<typeof GetTransferInstructionWithdrawContextResponseSchema>; 

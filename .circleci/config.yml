@@ -20,13 +20,17 @@ jobs:
             - node_modules
             - package-lock.json
       - run:
+          name: Clone Splice
+          command: |
+            npm run artifacts:clone-splice
+      - run:
           name: Build
           command: |
             npm run build
       - run:
           name: Generate NPM Manifest
           command: |
-            npm run artifact:manifest
+            npm run artifacts:manifest
       - run:
           name: Lint
           command: |

@@ -1,6 +1,6 @@
+import { z } from 'zod';
 import { createApiOperation } from '../../../../../core';
-import { OnboardUserResponse } from '../../../schemas/api';
-import { CreateUserParamsSchema, CreateUserParams } from '../../../schemas/operations';
+import { operations } from '../../../../../generated/apps/validator/src/main/openapi/validator-internal';
 
 /**
  * @description Create a new user in the system
@@ -14,10 +14,13 @@ import { CreateUserParamsSchema, CreateUserParams } from '../../../schemas/opera
  * ```
  */
 export const CreateUser = createApiOperation<
-  CreateUserParams,
-  OnboardUserResponse
+  operations['onboardUser']['requestBody']['content']['application/json'],
+  operations['onboardUser']['responses']['200']['content']['application/json']
 >({
-  paramsSchema: CreateUserParamsSchema,
+  paramsSchema: z.object({
+    name: z.string(),
+    party_id: z.string().optional(),
+  }) as z.ZodType<operations['onboardUser']['requestBody']['content']['application/json']>,
   method: 'POST',
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/admin/users`,
   buildRequestData: (params) => params,

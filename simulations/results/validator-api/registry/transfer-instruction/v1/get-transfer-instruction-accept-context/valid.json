@@ -1,0 +1,14 @@
+{
+  "error": "HTTP 502",
+  "details": {
+    "name": "ApiError",
+    "message": "HTTP 502",
+    "stack": "PLACEHOLDER_STACK_TRACE",
+    "code": "API_ERROR",
+    "status": 502,
+    "statusText": "Bad Gateway",
+    "response": {
+      "error": "Failed to reach consensus from 11 Scan nodes, requiring 6 matching responses."
+    }
+  }
+}

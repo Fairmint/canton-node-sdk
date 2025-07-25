@@ -38,6 +38,7 @@ import { GetPartyDetails } from './operations/v2/parties/get-party-details';
 import { AllocateParty } from './operations/v2/parties/post';
 import { UpdatePartyDetails } from './operations/v2/parties/update-party-details';
 
+
 // Import types from individual operation files
 import type { AsyncSubmitParams, AsyncSubmitResponse } from './operations/v2/commands/async/submit';
 import type { AsyncSubmitReassignmentParams, AsyncSubmitReassignmentResponse } from './operations/v2/commands/async/submit-reassignment';
@@ -81,6 +82,7 @@ import type { AllocatePartyParams } from './operations/v2/parties/post';
 import type { AllocatePartyResponse } from './schemas/api';
 import type { UpdatePartyDetailsParams } from './operations/v2/parties/update-party-details';
 
+
 /** Client for interacting with Canton's Ledger JSON API */
 export class LedgerJsonApiClient extends BaseClient {
   // Commands
@@ -120,11 +122,11 @@ export class LedgerJsonApiClient extends BaseClient {
   public updateUser!: (params: UpdateUserParams) => Promise<UpdateUserResponse>;
 
   // Parties
-  public getParties!: (params: GetPartiesParams) => Promise<import('../../generated/openapi-types').paths['/v2/parties']['get']['responses']['200']['content']['application/json']>;
+  public getParties!: (params: GetPartiesParams) => Promise<import('../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi').paths['/v2/parties']['get']['responses']['200']['content']['application/json']>;
   public getParticipantId!: (params: GetParticipantIdParams) => Promise<GetParticipantIdResponse>;
-  public getPartyDetails!: (params: GetPartyDetailsParams) => Promise<import('../../generated/openapi-types').paths['/v2/parties/{party}']['get']['responses']['200']['content']['application/json']>;
+  public getPartyDetails!: (params: GetPartyDetailsParams) => Promise<import('../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi').paths['/v2/parties/{party}']['get']['responses']['200']['content']['application/json']>;
   public allocateParty!: (params: AllocatePartyParams) => Promise<AllocatePartyResponse>;
-  public updatePartyDetails!: (params: UpdatePartyDetailsParams) => Promise<import('../../generated/openapi-types').paths['/v2/parties/{party}']['patch']['responses']['200']['content']['application/json']>;
+  public updatePartyDetails!: (params: UpdatePartyDetailsParams) => Promise<import('../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi').paths['/v2/parties/{party}']['patch']['responses']['200']['content']['application/json']>;
 
   /**
    * List all packages uploaded on the participant node
@@ -136,7 +138,7 @@ export class LedgerJsonApiClient extends BaseClient {
    * console.log(`Available packages: ${packages.packageIds.join(', ')}`);
    * ```
    */
-  public listPackages!: () => Promise<import('../../generated/openapi-types').paths['/v2/packages']['get']['responses']['200']['content']['application/json']>;
+  public listPackages!: () => Promise<import('../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi').paths['/v2/packages']['get']['responses']['200']['content']['application/json']>;
 
   /**
    * Upload a DAR file to the participant node
@@ -162,7 +164,7 @@ export class LedgerJsonApiClient extends BaseClient {
    * console.log(`Participant version: ${version.version}`);
    * ```
    */
-  public getVersion!: () => Promise<import('../../generated/openapi-types').paths['/v2/version']['get']['responses']['200']['content']['application/json']>;
+  public getVersion!: () => Promise<import('../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi').paths['/v2/version']['get']['responses']['200']['content']['application/json']>;
 
   // Interactive Submission
   public interactiveSubmissionAllocateParty!: (params: InteractiveSubmissionAllocatePartyParams) => Promise<InteractiveSubmissionAllocatePartyResponse>;
@@ -170,6 +172,8 @@ export class LedgerJsonApiClient extends BaseClient {
   public interactiveSubmissionUploadDar!: (params: InteractiveSubmissionUploadDarParams) => Promise<InteractiveSubmissionUploadDarResponse>;
   public interactiveSubmissionGetPreferredPackageVersion!: (params: InteractiveSubmissionGetPreferredPackageVersionParams) => Promise<GetPreferredPackageVersionResponse>;
   public interactiveSubmissionGetPreferredPackages!: (params: InteractiveSubmissionGetPreferredPackagesParams) => Promise<GetPreferredPackagesResponse>;
+
+
 
   constructor(clientConfig: ClientConfig) {
     super('LEDGER_JSON_API', clientConfig);
@@ -226,5 +230,7 @@ export class LedgerJsonApiClient extends BaseClient {
     this.interactiveSubmissionUploadDar = (params) => new InteractiveSubmissionUploadDar(this).execute(params);
     this.interactiveSubmissionGetPreferredPackageVersion = (params) => new InteractiveSubmissionGetPreferredPackageVersion(this).execute(params);
     this.interactiveSubmissionGetPreferredPackages = (params) => new InteractiveSubmissionGetPreferredPackages(this).execute(params);
+
+
   }
 } 

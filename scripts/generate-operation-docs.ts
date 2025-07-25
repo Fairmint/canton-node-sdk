@@ -128,8 +128,8 @@ class OperationDocGenerator {
     // Look for imports from schemas to understand parameter and response types
     const imports = this.extractImports(sourceFile);
 
-    // Check if this operation uses OpenAPI types (imports from generated/openapi-types)
-    const usesOpenApiTypes = sourceCode.includes('generated/openapi-types');
+    // Check if this operation uses OpenAPI types (imports from generated paths)
+    const usesOpenApiTypes = sourceCode.includes('generated/') && sourceCode.includes('openapi');
 
     if (usesOpenApiTypes) {
       // Extract response type from OpenAPI-based operations
@@ -366,6 +366,17 @@ class OperationDocGenerator {
         const operationName = operationInfo.name || 'UnknownOperation';
         operationInfo.responseType = `${operationName}Response`;
         operationInfo.responseSchema = `{ /* OpenAPI response type from paths */ }`;
+      } else {
+        // Look for validator API operations pattern: operations['operationName']['responses']['200']['content']['application/json']
+        const validatorApiResponseMatch = sourceCode.match(
+          /operations\[['"`]([^'"`]+)['"`]\]\[['"`]responses['"`]\]\[['"`]\d+['"`]\]\[['"`]content['"`]\]\[['"`]application\/json['"`]\]/
+        );
+        if (validatorApiResponseMatch) {
+          // Extract the operation name and create a response type name
+          const operationName = operationInfo.name || 'UnknownOperation';
+          operationInfo.responseType = `${operationName}Response`;
+          operationInfo.responseSchema = `{ /* OpenAPI response type from operations */ }`;
+        }
       }
     }
   }

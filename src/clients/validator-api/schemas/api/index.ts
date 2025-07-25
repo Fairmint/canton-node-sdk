@@ -5,7 +5,4 @@ export * from './wallet';
 export * from './ans';
 
 // Scan proxy schemas
-export * from './scan-proxy';
-
-// Admin schemas
-export * from './admin'; 
+export * from './scan-proxy'; 

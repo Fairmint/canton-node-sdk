@@ -1,6 +1,6 @@
-import { createApiOperation } from '../../../../../core';
-import { UserStatusResponse } from '../../../schemas/api';
 import { z } from 'zod';
+import { createApiOperation } from '../../../../../core';
+import { operations } from '../../../../../generated/apps/wallet/src/main/openapi/wallet-internal';
 
 /**
  * @description Get the current user status including onboarding and wallet installation status
@@ -12,7 +12,7 @@ import { z } from 'zod';
  */
 export const GetUserStatus = createApiOperation<
   void,
-  UserStatusResponse
+  operations['userStatus']['responses']['200']['content']['application/json']
 >({
   paramsSchema: z.void(),
   method: 'GET',

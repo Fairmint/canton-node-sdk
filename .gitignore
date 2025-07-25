@@ -68,6 +68,7 @@ CHANGELOG.md
 docs/_generated/
 docs/_operations/
 docs/_site/
+artifacts/splice/
 
 # Local only
 wip/

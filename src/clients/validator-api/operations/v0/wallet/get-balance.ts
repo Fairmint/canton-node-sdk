@@ -1,6 +1,6 @@
-import { createApiOperation } from '../../../../../core';
-import { WalletBalanceResponse } from '../../../schemas/api';
 import { z } from 'zod';
+import { createApiOperation } from '../../../../../core';
+import { operations } from '../../../../../generated/apps/wallet/src/main/openapi/wallet-internal';
 
 /**
  * @description Get the current wallet balance including unlocked and locked quantities
@@ -12,7 +12,7 @@ import { z } from 'zod';
  */
 export const GetWalletBalance = createApiOperation<
   void,
-  WalletBalanceResponse
+  operations['getBalance']['responses']['200']['content']['application/json']
 >({
   paramsSchema: z.void(),
   method: 'GET',

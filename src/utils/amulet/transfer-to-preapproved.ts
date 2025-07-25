@@ -148,7 +148,7 @@ export async function transferToPreapproved(
 
   return {
     contractId: params.transferPreapprovalContractId,
-    domainId: amuletRules.amulet_rules.domain_id,
+    domainId: amuletRules.amulet_rules.domain_id || '',
     transferResult: result
   };
 } 

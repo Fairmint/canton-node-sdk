@@ -1,6 +1,6 @@
-import { createApiOperation } from '../../../../../../../core';
-import { ListTokenStandardTransfersResponse } from '../../../../../schemas/api';
 import { z } from 'zod';
+import { createApiOperation } from '../../../../../../../core';
+import { operations } from '../../../../../../../generated/apps/wallet/src/main/openapi/wallet-internal';
 
 /**
  * @description List all token standard transfers for the current user
@@ -12,7 +12,7 @@ import { z } from 'zod';
  */
 export const ListTokenStandardTransfers = createApiOperation<
   void,
-  ListTokenStandardTransfersResponse
+  operations['listTokenStandardTransfers']['responses']['200']['content']['application/json']
 >({
   paramsSchema: z.void(),
   method: 'GET',

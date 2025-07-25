@@ -1,6 +1,6 @@
 import { BaseClient, createApiOperation } from '../../../../../core';
 import { z } from 'zod';
-import type { paths } from '../../../../../generated/openapi-types';
+import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 import { AllocatePartyResponse } from '../../../schemas/api';
 
 // Type aliases for better readability and to avoid repetition

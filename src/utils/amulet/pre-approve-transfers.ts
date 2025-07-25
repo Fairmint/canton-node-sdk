@@ -74,7 +74,7 @@ export async function preApproveTransfers(
     amuletRules: createContractInfo(
       amuletRules.amulet_rules.contract.contract_id,
       amuletRules.amulet_rules.contract.created_event_blob,
-      amuletRules.amulet_rules.domain_id,
+      amuletRules.amulet_rules.domain_id || '',
       amuletRules.amulet_rules.contract.template_id
     ),
     openMiningRound: createContractInfo(
@@ -153,7 +153,7 @@ export async function preApproveTransfers(
 
   return {
     contractId,
-    domainId: amuletRules.amulet_rules.domain_id,
+    domainId: amuletRules.amulet_rules.domain_id || '',
     amuletPaid: '0' // This would be extracted from the transfer result
   };
 } 

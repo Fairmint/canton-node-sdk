@@ -1,6 +1,6 @@
-import { createApiOperation } from '../../../../core';
-import { RegisterResponse } from '../../schemas/api';
 import { z } from 'zod';
+import { createApiOperation } from '../../../../core';
+import { operations } from '../../../../generated/apps/validator/src/main/openapi/validator-internal';
 
 /**
  * @description Register a new user to the validator API (one-time operation)
@@ -12,7 +12,7 @@ import { z } from 'zod';
  */
 export const RegisterNewUser = createApiOperation<
   void,
-  RegisterResponse
+  operations['register']['responses']['200']['content']['application/json']
 >({
   paramsSchema: z.void(),
   method: 'POST',
