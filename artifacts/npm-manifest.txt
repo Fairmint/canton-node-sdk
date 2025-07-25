@@ -119,6 +119,7 @@ build/src/clients/validator-api/operations/v0/scan-proxy/index
 build/src/clients/validator-api/operations/v0/scan-proxy/lookup-featured-app-right
 build/src/clients/validator-api/operations/v0/scan-proxy/lookup-transfer-command-counter-by-party
 build/src/clients/validator-api/operations/v0/scan-proxy/lookup-transfer-command-status
+build/src/clients/validator-api/operations/v0/scan-proxy/lookup-transfer-preapproval-by-party
 build/src/clients/validator-api/operations/v0/scan-proxy/registry/allocation-instruction/index
 build/src/clients/validator-api/operations/v0/scan-proxy/registry/allocation-instruction/v1/get-allocation-factory
 build/src/clients/validator-api/operations/v0/scan-proxy/registry/allocation-instruction/v1/index

@@ -6,4 +6,5 @@ export * from './get-member-traffic-status';
 export * from './lookup-transfer-command-counter-by-party';
 export * from './lookup-transfer-command-status';
 export * from './lookup-featured-app-right';
+export * from './lookup-transfer-preapproval-by-party';
 export * from './registry'; 
