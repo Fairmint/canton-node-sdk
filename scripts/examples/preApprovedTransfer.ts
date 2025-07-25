@@ -170,7 +170,11 @@ async function main(): Promise<void> {
 
       // Use the first amulet contract for the receiver
       const receiverAmuletContractId =
-        receiverAmulets.amulets[0].contract.contract.contract_id;
+        receiverAmulets.amulets[0]?.contract?.contract?.contract_id;
+      if (!receiverAmuletContractId) {
+        console.error('❌ No valid amulet contract found for receiver');
+        process.exit(1);
+      }
       console.log(`✅ Using amulet contract: ${receiverAmuletContractId}`);
 
       // Get contract details for disclosed contracts
@@ -207,7 +211,7 @@ async function main(): Promise<void> {
             amuletRules: {
               createdEventBlob:
                 amuletRules.amulet_rules.contract.created_event_blob,
-              synchronizerId: amuletRules.amulet_rules.domain_id,
+              synchronizerId: amuletRules.amulet_rules.domain_id!,
             },
             openMiningRound: {
               createdEventBlob:
@@ -238,7 +242,11 @@ async function main(): Promise<void> {
       }
 
       const senderAmuletContractId =
-        senderAmulets.amulets[0].contract.contract.contract_id;
+        senderAmulets.amulets[0]?.contract?.contract?.contract_id;
+      if (!senderAmuletContractId) {
+        console.error('❌ No valid amulet contract found for sender');
+        process.exit(1);
+      }
       console.log(`✅ Using sender amulet contract: ${senderAmuletContractId}`);
 
       // Step 2: Transfer coins from sender to receiver
