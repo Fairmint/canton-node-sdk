@@ -14,6 +14,7 @@ import { GetOpenAndIssuingMiningRounds } from './operations/v0/scan-proxy/get-op
 import { LookupFeaturedAppRight } from './operations/v0/scan-proxy/lookup-featured-app-right';
 import { LookupTransferCommandCounterByParty } from './operations/v0/scan-proxy/lookup-transfer-command-counter-by-party';
 import { LookupTransferCommandStatus } from './operations/v0/scan-proxy/lookup-transfer-command-status';
+import { LookupTransferPreapprovalByParty } from './operations/v0/scan-proxy/lookup-transfer-preapproval-by-party';
 import { GetAllocationFactory } from './operations/v0/scan-proxy/registry/allocation-instruction/v1/get-allocation-factory';
 import { GetAllocationCancelContext } from './operations/v0/scan-proxy/registry/allocations/v1/get-allocation-cancel-context';
 import { GetAllocationTransferContext } from './operations/v0/scan-proxy/registry/allocations/v1/get-allocation-transfer-context';
@@ -39,7 +40,7 @@ import { WithdrawTransferOffer } from './operations/v0/wallet/transfer-offers/wi
 // AUTO-GENERATED OPERATION IMPORTS END
 
 import { BaseClient, ClientConfig } from '../../core';
-import { AcceptTransferOfferParams, CreateBuyTrafficRequestParams, CreateTransferOfferParams, GetAllocationCancelContextParams, GetAllocationFactoryParams, GetAllocationTransferContextParams, GetAllocationWithdrawContextParams, GetFeaturedAppRightParams, GetInstrumentParams, GetMiningRoundDetailsParams, GetTransferFactoryParams, GetTransferInstructionAcceptContextParams, GetTransferInstructionRejectContextParams, GetTransferInstructionWithdrawContextParams, ListInstrumentsParams, LookupTransferCommandCounterByPartyParams, LookupTransferCommandStatusParams, RejectTransferOfferParams, WithdrawTransferOfferParams } from './schemas/operations';
+import { AcceptTransferOfferParams, CreateBuyTrafficRequestParams, CreateTransferOfferParams, GetAllocationCancelContextParams, GetAllocationFactoryParams, GetAllocationTransferContextParams, GetAllocationWithdrawContextParams, GetFeaturedAppRightParams, GetInstrumentParams, GetMiningRoundDetailsParams, GetTransferFactoryParams, GetTransferInstructionAcceptContextParams, GetTransferInstructionRejectContextParams, GetTransferInstructionWithdrawContextParams, GetTransferPreapprovalsByPartyParams, ListInstrumentsParams, LookupTransferCommandCounterByPartyParams, LookupTransferCommandStatusParams, RejectTransferOfferParams, WithdrawTransferOfferParams } from './schemas/operations';
 import { AcceptTransferOfferResponse, CreateBuyTrafficRequestResponse, CreateTransferOfferResponse, GetAllocationCancelContextResponse, GetAllocationFactoryResponse, GetAllocationTransferContextResponse, GetAllocationWithdrawContextResponse, GetInstrumentResponse, GetMiningRoundDetailsResponse, GetOpenAndIssuingMiningRoundsResponse, GetRegistryInfoResponse, GetTransferFactoryResponse, GetTransferInstructionAcceptContextResponse, GetTransferInstructionRejectContextResponse, GetTransferInstructionWithdrawContextResponse, ListInstrumentsResponse, ListTransferOffersResponse, LookupFeaturedAppRightResponse, LookupTransferCommandCounterByPartyResponse, LookupTransferCommandStatusResponse, RejectTransferOfferResponse, WithdrawTransferOfferResponse } from './schemas/api';
 import { operations as ansOperations } from '../../generated/apps/validator/src/main/openapi/ans-external';
 import { operations as scanProxyOperations } from '../../generated/apps/validator/src/main/openapi/scan-proxy';
@@ -65,6 +66,7 @@ export class ValidatorApiClient extends BaseClient {
   public lookupFeaturedAppRight!: (params: GetFeaturedAppRightParams) => Promise<LookupFeaturedAppRightResponse>;
   public lookupTransferCommandCounterByParty!: (params: LookupTransferCommandCounterByPartyParams) => Promise<LookupTransferCommandCounterByPartyResponse>;
   public lookupTransferCommandStatus!: (params: LookupTransferCommandStatusParams) => Promise<LookupTransferCommandStatusResponse>;
+  public lookupTransferPreapprovalByParty!: (params: GetTransferPreapprovalsByPartyParams) => Promise<scanProxyOperations['lookupTransferPreapprovalByParty']['responses']['200']['content']['application/json']>;
   public getAllocationFactory!: (params: GetAllocationFactoryParams) => Promise<GetAllocationFactoryResponse>;
   public getAllocationCancelContext!: (params: GetAllocationCancelContextParams) => Promise<GetAllocationCancelContextResponse>;
   public getAllocationTransferContext!: (params: GetAllocationTransferContextParams) => Promise<GetAllocationTransferContextResponse>;
@@ -121,6 +123,7 @@ export class ValidatorApiClient extends BaseClient {
     this.lookupFeaturedAppRight = (params) => new LookupFeaturedAppRight(this).execute(params);
     this.lookupTransferCommandCounterByParty = (params) => new LookupTransferCommandCounterByParty(this).execute(params);
     this.lookupTransferCommandStatus = (params) => new LookupTransferCommandStatus(this).execute(params);
+    this.lookupTransferPreapprovalByParty = (params) => new LookupTransferPreapprovalByParty(this).execute(params);
     this.getAllocationFactory = (params) => new GetAllocationFactory(this).execute(params);
     this.getAllocationCancelContext = (params) => new GetAllocationCancelContext(this).execute(params);
     this.getAllocationTransferContext = (params) => new GetAllocationTransferContext(this).execute(params);
