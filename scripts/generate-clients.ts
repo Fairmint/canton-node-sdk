@@ -21,8 +21,8 @@ interface ClientConfig {
 const CLIENTS: ClientConfig[] = [
   {
     name: 'LedgerJsonApiClient',
-    templatePath: '../src/clients/ledger-json-api/LedgerJsonApiClient.template.ts',
-    outputPath: '../src/clients/ledger-json-api/LedgerJsonApiClient.ts',
+    templatePath: '../src/clients/ClientTemplate.ts',
+    outputPath: '../src/clients/ledger-json-api/LedgerJsonApiClient.generated.ts',
     operationsDir: '../src/clients/ledger-json-api/operations/v2',
     clientType: 'LEDGER_JSON_API',
     clientDescription: 'Ledger JSON API',
@@ -34,8 +34,8 @@ const CLIENTS: ClientConfig[] = [
   },
   {
     name: 'ValidatorApiClient',
-    templatePath: '../src/clients/validator-api/ValidatorApiClient.template.ts',
-    outputPath: '../src/clients/validator-api/ValidatorApiClient.ts',
+    templatePath: '../src/clients/ClientTemplate.ts',
+    outputPath: '../src/clients/validator-api/ValidatorApiClient.generated.ts',
     operationsDir: '../src/clients/validator-api/operations/v0',
     clientType: 'VALIDATOR_API',
     clientDescription: 'Validator API',
@@ -59,6 +59,7 @@ interface OperationInfo {
   responseType: string;
   importPath: string;
   file: string;
+  jsdoc?: string | null;
 }
 
 // Recursively get all .ts files in a directory
@@ -77,6 +78,14 @@ function getAllTsFiles(dir: string): string[] {
   return results;
 }
 
+// Extract JSDoc from file content
+function extractJSDoc(fileContent: string): string | null {
+  // Match JSDoc comment before the export
+  const jsdocRegex = /\/\*\*([\s\S]*?)\*\/\s*export const/;
+  const match = jsdocRegex.exec(fileContent);
+  return match ? `/**${match[1]}*/` : null;
+}
+
 // Extract operation info from a file
 function extractOperationInfo(
   fileContent: string,
@@ -88,12 +97,15 @@ function extractOperationInfo(
   const match = regex.exec(fileContent);
   if (!match || !match[1] || !match[2] || !match[3]) return null;
 
+  const jsdoc = extractJSDoc(fileContent);
+
   return {
     operationName: match[1],
     paramsType: match[2],
     responseType: match[3],
     importPath: '',
     file,
+    jsdoc,
   };
 }
 
@@ -112,6 +124,7 @@ function operationNameToMethodName(operationName: string): string {
 // Generate operation imports
 function generateOperationImports(ops: OperationInfo[]): string {
   return ops
+    .filter(op => op.operationName !== 'GetVersion') // GetVersion uses require() instead
     .map(op => `import { ${op.operationName} } from '${op.importPath}';`)
     .join('\n');
 }
@@ -178,14 +191,19 @@ function generateTypeImports(ops: OperationInfo[], client: ClientConfig): string
 }
 
 // Generate method declarations
-function generateMethodDeclarations(ops: OperationInfo[]): string {
+function generateMethodDeclarations(ops: OperationInfo[], includeJsDoc = true): string {
   return ops
     .map(op => {
       const methodName = operationNameToMethodName(op.operationName);
       const paramsType = op.paramsType === 'void' ? 'void' : op.paramsType;
-      return `  public ${methodName}!: (params: ${paramsType}) => Promise<${op.responseType}>;`;
+      const declaration = `  public ${methodName}!: (params: ${paramsType}) => Promise<${op.responseType}>;`;
+      
+      if (includeJsDoc && op.jsdoc) {
+        return `  ${op.jsdoc}\n${declaration}`;
+      }
+      return declaration;
     })
-    .join('\n');
+    .join('\n\n');
 }
 
 // Generate method implementations
@@ -195,6 +213,12 @@ function generateMethodImplementations(ops: OperationInfo[]): string {
       const methodName = operationNameToMethodName(op.operationName);
       const params = op.paramsType === 'void' ? '' : 'params';
       const paramsPass = op.paramsType === 'void' ? '()' : '(params)';
+      
+      // Special handling for GetVersion which needs require()
+      if (op.operationName === 'GetVersion') {
+        return `    this.${methodName} = () => new (require('${op.importPath}').GetVersion)(this).execute();`;
+      }
+      
       return `    this.${methodName} = ${params ? '(params)' : '()'} => new ${op.operationName}(this).execute${paramsPass};`;
     })
     .join('\n');
@@ -303,40 +327,78 @@ function processClient(client: ClientConfig): void {
     // Handle categorized template for LedgerJsonApiClient
     const categorized = categorizeOperations(operations);
     
-    // Special handling for certain operations
-    const specialOps = ['ListPackages', 'UploadDarFile', 'GetVersion'];
-    const regularOps = operations.filter(op => !specialOps.includes(op.operationName));
+    // Generate categorized method declarations with proper formatting
+    const categoryDeclarations: string[] = [];
     
-    // Import the special operations
-    let specialImports = '';
-    operations.forEach(op => {
-      if (op.operationName === 'ListPackages') {
-        specialImports += `import { ListPackages } from '${op.importPath}';\n`;
-      } else if (op.operationName === 'UploadDarFile') {
-        specialImports += `import { UploadDarFile } from '${op.importPath}';\nimport type { UploadDarFileParams } from '${op.importPath}';\nimport type { UploadDarFileResponse } from './schemas/api';\n`;
-      }
-    });
+    if (categorized.commands.length > 0) {
+      categoryDeclarations.push('  // Commands\n' + generateMethodDeclarations(categorized.commands));
+    }
+    if (categorized.events.length > 0) {
+      categoryDeclarations.push('  // Events\n' + generateMethodDeclarations(categorized.events));
+    }
+    if (categorized.updates.length > 0) {
+      categoryDeclarations.push('  // Updates\n' + generateMethodDeclarations(categorized.updates));
+    }
+    if (categorized.state.length > 0) {
+      categoryDeclarations.push('  // State\n' + generateMethodDeclarations(categorized.state));
+    }
+    if (categorized.users.length > 0) {
+      categoryDeclarations.push('  // Users\n' + generateMethodDeclarations(categorized.users));
+    }
+    if (categorized.parties.length > 0) {
+      categoryDeclarations.push('  // Parties\n' + generateMethodDeclarations(categorized.parties));
+    }
+    if (categorized.packages.length > 0) {
+      categoryDeclarations.push('  // Packages\n' + generateMethodDeclarations(categorized.packages));
+    }
+    if (categorized.version.length > 0) {
+      categoryDeclarations.push('  // Version\n' + generateMethodDeclarations(categorized.version));
+    }
+    if (categorized['interactive-submission'].length > 0) {
+      categoryDeclarations.push('  // Interactive Submission\n' + generateMethodDeclarations(categorized['interactive-submission']));
+    }
     
-    template = template.replace('{{OPERATION_IMPORTS}}', generateOperationImports(regularOps) + '\n' + specialImports);
+    // Generate categorized implementations
+    const categoryImplementations: string[] = [];
+    
+    if (categorized.commands.length > 0) {
+      categoryImplementations.push('    // Commands\n' + generateMethodImplementations(categorized.commands));
+    }
+    if (categorized.events.length > 0) {
+      categoryImplementations.push('    // Events\n' + generateMethodImplementations(categorized.events));
+    }
+    if (categorized.updates.length > 0) {
+      categoryImplementations.push('    // Updates\n' + generateMethodImplementations(categorized.updates));
+    }
+    if (categorized.state.length > 0) {
+      categoryImplementations.push('    // State\n' + generateMethodImplementations(categorized.state));
+    }
+    if (categorized.users.length > 0) {
+      categoryImplementations.push('    // Users\n' + generateMethodImplementations(categorized.users));
+    }
+    if (categorized.parties.length > 0) {
+      categoryImplementations.push('    // Parties\n' + generateMethodImplementations(categorized.parties));
+    }
+    if (categorized.packages.length > 0) {
+      categoryImplementations.push('    // Packages\n' + generateMethodImplementations(categorized.packages));
+    }
+    if (categorized.version.length > 0) {
+      categoryImplementations.push('    // Version\n' + generateMethodImplementations(categorized.version));
+    }
+    if (categorized['interactive-submission'].length > 0) {
+      categoryImplementations.push('    // Interactive Submission\n' + generateMethodImplementations(categorized['interactive-submission']));
+    }
+    
+    template = template.replace('{{BASE_IMPORT_PATH}}', client.baseImportPath);
+    template = template.replace('{{OPERATION_IMPORTS}}', operationImports);
     template = template.replace('{{TYPE_IMPORTS}}', typeImports);
-    
-    // Generate methods by category
-    template = template.replace('{{COMMAND_METHODS}}', generateMethodDeclarations(categorized.commands));
-    template = template.replace('{{EVENT_METHODS}}', generateMethodDeclarations(categorized.events));
-    template = template.replace('{{UPDATE_METHODS}}', generateMethodDeclarations(categorized.updates));
-    template = template.replace('{{STATE_METHODS}}', generateMethodDeclarations(categorized.state));
-    template = template.replace('{{USER_METHODS}}', generateMethodDeclarations(categorized.users));
-    template = template.replace('{{PARTY_METHODS}}', generateMethodDeclarations(categorized.parties));
-    template = template.replace('{{INTERACTIVE_SUBMISSION_METHODS}}', generateMethodDeclarations(categorized['interactive-submission']));
-    
-    // Generate implementations by category
-    template = template.replace('{{COMMAND_IMPLEMENTATIONS}}', generateMethodImplementations(categorized.commands));
-    template = template.replace('{{EVENT_IMPLEMENTATIONS}}', generateMethodImplementations(categorized.events));
-    template = template.replace('{{UPDATE_IMPLEMENTATIONS}}', generateMethodImplementations(categorized.updates));
-    template = template.replace('{{STATE_IMPLEMENTATIONS}}', generateMethodImplementations(categorized.state));
-    template = template.replace('{{USER_IMPLEMENTATIONS}}', generateMethodImplementations(categorized.users));
-    template = template.replace('{{PARTY_IMPLEMENTATIONS}}', generateMethodImplementations(categorized.parties));
-    template = template.replace('{{INTERACTIVE_SUBMISSION_IMPLEMENTATIONS}}', generateMethodImplementations(categorized['interactive-submission']));
+    template = template.replace('{{CUSTOM_IMPORTS}}', customImports);
+    template = template.replace('{{CLIENT_DESCRIPTION}}', client.clientDescription);
+    template = template.replace('{{CLIENT_CLASS_NAME}}', client.className);
+    template = template.replace('{{CLIENT_TYPE}}', client.clientType);
+    template = template.replace('{{METHOD_DECLARATIONS}}', categoryDeclarations.join('\n\n'));
+    template = template.replace('{{CONSTRUCTOR_BODY}}', categoryImplementations.join('\n\n'));
+    template = template.replace('{{INITIALIZATION_METHOD}}', '');
   } else {
     // Standard template replacements
     template = template.replace('{{BASE_IMPORT_PATH}}', client.baseImportPath);

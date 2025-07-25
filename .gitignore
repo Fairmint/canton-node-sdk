@@ -69,8 +69,7 @@ docs/_generated/
 docs/_operations/
 docs/_site/
 artifacts/splice/
-src/clients/ledger-json-api/LedgerJsonApiClient.ts
-src/clients/validator-api/ValidatorApiClient.ts
+*.generated.*
 
 # Local only
 wip/
