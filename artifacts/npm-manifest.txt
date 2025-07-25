@@ -112,6 +112,7 @@ build/src/clients/validator-api/operations/v0/index
 build/src/clients/validator-api/operations/v0/register
 build/src/clients/validator-api/operations/v0/scan-proxy/get-amulet-rules
 build/src/clients/validator-api/operations/v0/scan-proxy/get-dso-party-id
+build/src/clients/validator-api/operations/v0/scan-proxy/get-member-traffic-status
 build/src/clients/validator-api/operations/v0/scan-proxy/get-mining-round-details
 build/src/clients/validator-api/operations/v0/scan-proxy/get-open-and-issuing-mining-rounds
 build/src/clients/validator-api/operations/v0/scan-proxy/index
