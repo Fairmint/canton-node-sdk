@@ -11,7 +11,7 @@ export const TraceContextSchema = z.object({
   /** Parent span ID (optional). */
   parentSpanId: z.string().optional(),
   /** Additional trace metadata. */
-  metadata: z.record(z.string()).optional(),
+  metadata: z.record(z.string(), z.string()).optional(),
 });
 
 /**
@@ -20,6 +20,7 @@ export const TraceContextSchema = z.object({
 export const FilterSchema = z.object({
   /** Template or interface filters. */
   filtersByParty: z.record(
+    z.string(),
     z.object({
       /** List of template or interface filters for this party. */
       cumulative: z.array(z.string()),
@@ -65,7 +66,7 @@ export const PrefetchContractKeySchema = z.object({
   /** Template ID. */
   templateId: z.string(),
   /** Contract key. */
-  contractKey: z.record(z.any()),
+  contractKey: z.record(z.string(), z.any()),
 });
 
 /**
@@ -123,7 +124,7 @@ export const DurationSchema = z.object({
   /** Unknown fields. */
   unknownFields: z.object({
     /** Fields object. */
-    fields: z.record(z.any()),
+    fields: z.record(z.string(), z.any()),
   }),
 });
 

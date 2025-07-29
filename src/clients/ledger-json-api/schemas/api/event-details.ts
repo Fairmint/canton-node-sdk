@@ -121,7 +121,7 @@ export const StatusDetailsSchema = z.object({
   /** Error message. */
   message: z.string(),
   /** Additional error details. */
-  details: z.record(z.any()).optional(),
+  details: z.record(z.string(), z.any()).optional(),
 });
 
 // Export types

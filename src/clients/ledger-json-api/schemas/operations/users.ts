@@ -28,7 +28,7 @@ export const CreateUserParamsSchema = z.object({
       /** Resource version for concurrent change detection. */
       resourceVersion: z.string(),
       /** Annotations for the resource. */
-      annotations: z.record(z.string()),
+      annotations: z.record(z.string(), z.string()),
     }).optional(),
     /** Identity provider ID (optional). */
     identityProviderId: z.string().optional(),
@@ -84,7 +84,7 @@ export const UpdateUserParamsSchema = z.object({
       /** Resource version for concurrent change detection. */
       resourceVersion: z.string(),
       /** Annotations for the resource. */
-      annotations: z.record(z.string()),
+      annotations: z.record(z.string(), z.string()),
     }).optional(),
     /** Identity provider ID (optional). */
     identityProviderId: z.string().optional(),

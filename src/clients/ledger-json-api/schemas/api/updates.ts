@@ -68,7 +68,7 @@ export const JsTransactionTreeSchema = z.object({
   /** Offset of the transaction in the ledger stream. */
   offset: z.number(),
   /** Map of event node IDs to tree events. */
-  eventsById: z.record(TreeEventSchema),
+  eventsById: z.record(z.string(), TreeEventSchema),
   /** Record time of the transaction. */
   recordTime: z.string(),
 });

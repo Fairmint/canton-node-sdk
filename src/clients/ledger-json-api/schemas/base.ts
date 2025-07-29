@@ -5,12 +5,13 @@ import { z } from 'zod';
  * Used for contract arguments and choice arguments.
  */
 export const RecordSchema = z.record(
+  z.string(),
   z.union([
     z.string(),
     z.number(),
     z.boolean(),
     z.null(),
-    z.record(z.any()), // Allow nested objects
+    z.record(z.string(), z.any()), // Allow nested objects
     z.array(z.any()), // Allow arrays
   ])
 ); 

@@ -14,7 +14,7 @@ export const TransactionTreeSchema = z
     /** Offset of the transaction in the ledger stream. */
     offset: z.number(),
     /** Map of event node IDs to tree events. */
-    eventsById: z.record(TreeEventSchema),
+    eventsById: z.record(z.string(), TreeEventSchema),
     /** Record time of the transaction (ISO 8601). */
     recordTime: z.string(),
     /** Synchronizer ID for the transaction. */

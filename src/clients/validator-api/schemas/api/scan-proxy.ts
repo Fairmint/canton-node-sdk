@@ -86,7 +86,7 @@ export type LookupFeaturedAppRightResponse = z.infer<typeof LookupFeaturedAppRig
 // Token Standard Registry Response Schemas
 export const GetRegistryInfoResponseSchema = z.object({
   adminId: z.string(),
-  supportedApis: z.record(z.number()),
+  supportedApis: z.record(z.string(), z.number()),
 });
 
 export const InstrumentSchema = z.object({
@@ -96,7 +96,7 @@ export const InstrumentSchema = z.object({
   totalSupply: z.string().optional(),
   totalSupplyAsOf: z.string().optional(),
   decimals: z.number(),
-  supportedApis: z.record(z.number()),
+  supportedApis: z.record(z.string(), z.number()),
 });
 
 export const ListInstrumentsResponseSchema = z.object({
@@ -107,14 +107,14 @@ export const ListInstrumentsResponseSchema = z.object({
 export const GetInstrumentResponseSchema = InstrumentSchema;
 
 export const ChoiceContextSchema = z.object({
-  choiceContextData: z.record(z.never()),
+  choiceContextData: z.record(z.string(), z.never()),
   disclosedContracts: z.array(z.object({
     templateId: z.string(),
     contractId: z.string(),
     createdEventBlob: z.string(),
     synchronizerId: z.string(),
     debugPackageName: z.string().optional(),
-    debugPayload: z.record(z.never()).optional(),
+    debugPayload: z.record(z.string(), z.never()).optional(),
     debugCreatedAt: z.string().optional(),
   })),
 });

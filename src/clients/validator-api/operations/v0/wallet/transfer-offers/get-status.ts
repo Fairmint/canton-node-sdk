@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { createApiOperation } from '../../../../../../core';
 import { GetTransferOfferStatusResponse } from '../../../../schemas/api';
 import { GetTransferOfferStatusParamsSchema } from '../../../../schemas/operations';
@@ -11,7 +12,7 @@ import { GetTransferOfferStatusParamsSchema } from '../../../../schemas/operatio
  * ```
  */
 export const GetTransferOfferStatus = createApiOperation<
-  typeof GetTransferOfferStatusParamsSchema._type,
+  z.infer<typeof GetTransferOfferStatusParamsSchema>,
   GetTransferOfferStatusResponse
 >({
   paramsSchema: GetTransferOfferStatusParamsSchema,
