@@ -1,6 +1,7 @@
 import { LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { ValidatorApiClient } from '../../clients/validator-api';
 import { ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/commands';
+import { getCurrentMiningRoundContext } from './mining-rounds';
 
 export interface TransferToPreapprovedParams {
   /** Party ID sending the transfer */
@@ -45,17 +46,16 @@ export async function transferToPreapproved(
   params: TransferToPreapprovedParams
 ): Promise<TransferToPreapprovedResult> {
   // Get network information
-  const [amuletRules, miningRounds, featuredAppRight] = await Promise.all([
+  const [amuletRules, miningRoundContext, featuredAppRight] = await Promise.all([
     validatorClient.getAmuletRules(),
-    validatorClient.getOpenAndIssuingMiningRounds(),
+    getCurrentMiningRoundContext(validatorClient),
     validatorClient.lookupFeaturedAppRight({ partyId: params.senderPartyId })
   ]);
 
-  // Get the first open mining round contract ID
-  const openMiningRoundContractId = miningRounds.open_mining_rounds[0]?.contract?.contract_id;
-  if (!openMiningRoundContractId) {
-    throw new Error('No open mining rounds available');
-  }
+  const {
+    openMiningRound: openMiningRoundContractId,
+    issuingMiningRounds,
+  } = miningRoundContext;
 
   // Create the transfer command using TransferPreapproval_Send
   const transferCommand: ExerciseCommand = {
@@ -68,10 +68,7 @@ export async function transferToPreapproved(
           amuletRules: amuletRules.amulet_rules.contract.contract_id,
           context: {
             openMiningRound: openMiningRoundContractId,
-            issuingMiningRounds: miningRounds.issuing_mining_rounds.map(round => ({
-              round: round.round_number,
-              contractId: round.contract_id
-            })),
+            issuingMiningRounds,
             validatorRights: [],
             featuredAppRight: featuredAppRight.featured_app_right?.contract_id || null
           }
@@ -112,7 +109,7 @@ export async function transferToPreapproved(
     // Add issuing mining rounds contracts
     if (params.contractDetails.issuingMiningRounds) {
       params.contractDetails.issuingMiningRounds.forEach((details, index) => {
-        const contractId = miningRounds.issuing_mining_rounds[index]?.contract_id;
+        const contractId = issuingMiningRounds[index]?.contractId;
         if (contractId) {
           disclosedContracts!.push({
             contractId,
