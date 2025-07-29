@@ -60,7 +60,7 @@ export async function transferToPreapproved(
   // Create the transfer command using TransferPreapproval_Send
   const transferCommand: ExerciseCommand = {
     ExerciseCommand: {
-      templateId: amuletRules.amulet_rules.contract.template_id,
+      templateId: '#splice-amulet:Splice.AmuletRules:TransferPreapproval',
       contractId: params.transferPreapprovalContractId,
       choice: 'TransferPreapproval_Send',
       choiceArgument: {
