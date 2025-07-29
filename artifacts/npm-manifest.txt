@@ -190,6 +190,7 @@ build/src/generated/token-standard/splice-api-token-transfer-instruction-v1/open
 build/src/index
 build/src/utils/amulet/disclosed-contracts
 build/src/utils/amulet/index
+build/src/utils/amulet/mining-rounds
 build/src/utils/amulet/pre-approve-transfers
 build/src/utils/amulet/transfer-to-preapproved
 build/src/utils/index
