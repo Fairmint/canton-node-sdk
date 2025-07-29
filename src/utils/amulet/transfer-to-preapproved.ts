@@ -52,7 +52,7 @@ export async function transferToPreapproved(
   ]);
 
   // Get the first open mining round contract ID
-  const openMiningRoundContractId = miningRounds.open_mining_rounds[0]?.contract_id;
+  const openMiningRoundContractId = miningRounds.open_mining_rounds[0]?.contract?.contract_id;
   if (!openMiningRoundContractId) {
     throw new Error('No open mining rounds available');
   }
