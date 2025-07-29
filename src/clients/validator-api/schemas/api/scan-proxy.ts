@@ -7,6 +7,21 @@ export const GetDsoPartyIdResponseSchema = z.object({
 
 export type GetDsoPartyIdResponse = z.infer<typeof GetDsoPartyIdResponseSchema>;
 
+// Member Traffic Status Response
+export const GetMemberTrafficStatusResponseSchema = z.object({
+  traffic_status: z.object({
+    actual: z.object({
+      total_consumed: z.number(),
+      total_limit: z.number(),
+    }),
+    target: z.object({
+      total_purchased: z.number(),
+    }),
+  }),
+});
+
+export type GetMemberTrafficStatusResponse = z.infer<typeof GetMemberTrafficStatusResponseSchema>;
+
 // Mining Rounds Schemas
 export const GetOpenAndIssuingMiningRoundsResponseSchema = z.object({
   open_mining_rounds: z.array(z.any()),
@@ -51,6 +66,16 @@ export const LookupTransferCommandStatusResponseSchema = z.object({
 export type LookupTransferCommandCounterByPartyResponse = z.infer<typeof LookupTransferCommandCounterByPartyResponseSchema>;
 export type LookupTransferCommandStatusResponse = z.infer<typeof LookupTransferCommandStatusResponseSchema>;
 
+// Transfer Preapproval Schema
+export const LookupTransferPreapprovalByPartyResponseSchema = z.object({
+  transfer_preapproval: z.object({
+    contract: z.any(),
+    domain_id: z.string(),
+  }),
+});
+
+export type LookupTransferPreapprovalByPartyResponse = z.infer<typeof LookupTransferPreapprovalByPartyResponseSchema>;
+
 // Featured App Right Schema
 export const LookupFeaturedAppRightResponseSchema = z.object({
   featured_app_right: z.any(),
@@ -61,7 +86,7 @@ export type LookupFeaturedAppRightResponse = z.infer<typeof LookupFeaturedAppRig
 // Token Standard Registry Response Schemas
 export const GetRegistryInfoResponseSchema = z.object({
   adminId: z.string(),
-  supportedApis: z.record(z.number()),
+  supportedApis: z.record(z.string(), z.number()),
 });
 
 export const InstrumentSchema = z.object({
@@ -71,7 +96,7 @@ export const InstrumentSchema = z.object({
   totalSupply: z.string().optional(),
   totalSupplyAsOf: z.string().optional(),
   decimals: z.number(),
-  supportedApis: z.record(z.number()),
+  supportedApis: z.record(z.string(), z.number()),
 });
 
 export const ListInstrumentsResponseSchema = z.object({
@@ -82,14 +107,14 @@ export const ListInstrumentsResponseSchema = z.object({
 export const GetInstrumentResponseSchema = InstrumentSchema;
 
 export const ChoiceContextSchema = z.object({
-  choiceContextData: z.record(z.never()),
+  choiceContextData: z.record(z.string(), z.never()),
   disclosedContracts: z.array(z.object({
     templateId: z.string(),
     contractId: z.string(),
     createdEventBlob: z.string(),
     synchronizerId: z.string(),
     debugPackageName: z.string().optional(),
-    debugPayload: z.record(z.never()).optional(),
+    debugPayload: z.record(z.string(), z.never()).optional(),
     debugCreatedAt: z.string().optional(),
   })),
 });

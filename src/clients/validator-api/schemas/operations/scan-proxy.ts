@@ -8,6 +8,12 @@ export const GetMiningRoundByContractIdParamsSchema = z.object({
   contractId: z.string(),
 });
 
+// Member Traffic Status Parameters
+export const GetMemberTrafficStatusParamsSchema = z.object({
+  domainId: z.string(),
+  memberId: z.string(),
+});
+
 // Transfer Command Parameters
 export const LookupTransferCommandCounterByPartyParamsSchema = z.object({
   party: z.string(),
@@ -37,40 +43,41 @@ export const GetInstrumentParamsSchema = z.object({
   instrumentId: z.string(),
 });
 export const GetAllocationFactoryParamsSchema = z.object({
-  choiceArguments: z.record(z.never()),
+  choiceArguments: z.record(z.string(), z.never()),
   excludeDebugFields: z.boolean(),
 });
 export const GetAllocationTransferContextParamsSchema = z.object({
   allocationId: z.string(),
-  meta: z.record(z.string()).optional(),
+  meta: z.record(z.string(), z.string()).optional(),
 });
 export const GetAllocationWithdrawContextParamsSchema = z.object({
   allocationId: z.string(),
-  meta: z.record(z.string()).optional(),
+  meta: z.record(z.string(), z.string()).optional(),
 });
 export const GetAllocationCancelContextParamsSchema = z.object({
   allocationId: z.string(),
-  meta: z.record(z.string()).optional(),
+  meta: z.record(z.string(), z.string()).optional(),
 });
 export const GetTransferFactoryParamsSchema = z.object({
-  choiceArguments: z.record(z.never()),
+  choiceArguments: z.record(z.string(), z.never()),
   excludeDebugFields: z.boolean(),
 });
 export const GetTransferInstructionAcceptContextParamsSchema = z.object({
   transferInstructionId: z.string(),
-  meta: z.record(z.string()).optional(),
+  meta: z.record(z.string(), z.string()).optional(),
 });
 export const GetTransferInstructionRejectContextParamsSchema = z.object({
   transferInstructionId: z.string(),
-  meta: z.record(z.string()).optional(),
+  meta: z.record(z.string(), z.string()).optional(),
 });
 export const GetTransferInstructionWithdrawContextParamsSchema = z.object({
   transferInstructionId: z.string(),
-  meta: z.record(z.string()).optional(),
+  meta: z.record(z.string(), z.string()).optional(),
 });
 
 export type GetMiningRoundDetailsParams = z.infer<typeof GetMiningRoundDetailsParamsSchema>;
 export type GetMiningRoundByContractIdParams = z.infer<typeof GetMiningRoundByContractIdParamsSchema>;
+export type GetMemberTrafficStatusParams = z.infer<typeof GetMemberTrafficStatusParamsSchema>;
 export type LookupTransferCommandCounterByPartyParams = z.infer<typeof LookupTransferCommandCounterByPartyParamsSchema>;
 export type LookupTransferCommandStatusParams = z.infer<typeof LookupTransferCommandStatusParamsSchema>;
 export type GetFeaturedAppRightParams = z.infer<typeof GetFeaturedAppRightParamsSchema>;

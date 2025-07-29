@@ -135,6 +135,7 @@ export const EventFormatSchema = z
      * Map of party IDs to their event filters. Each key is a party, and the value specifies which events to include for that party.
      */
     filtersByParty: z.record(
+      z.string(),
       z
         .object({
           /**

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { createApiOperation } from '../../../../../../core';
 import { GetBuyTrafficRequestStatusResponse } from '../../../../schemas/api';
 import { GetBuyTrafficRequestStatusParamsSchema } from '../../../../schemas/operations';
@@ -11,7 +12,7 @@ import { GetBuyTrafficRequestStatusParamsSchema } from '../../../../schemas/oper
  * ```
  */
 export const GetBuyTrafficRequestStatus = createApiOperation<
-  typeof GetBuyTrafficRequestStatusParamsSchema._type,
+  z.infer<typeof GetBuyTrafficRequestStatusParamsSchema>,
   GetBuyTrafficRequestStatusResponse
 >({
   paramsSchema: GetBuyTrafficRequestStatusParamsSchema,

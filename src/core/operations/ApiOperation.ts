@@ -18,7 +18,7 @@ export abstract class ApiOperation<Params, Response> {
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError(
-          `Parameter validation failed: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`
+          `Parameter validation failed: ${error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`
         );
       }
       throw error;

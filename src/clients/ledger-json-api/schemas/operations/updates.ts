@@ -45,7 +45,7 @@ export type FiltersForAnyParty = z.infer<typeof FiltersForAnyPartySchema>;
  * Defines how events are filtered and formatted in request parameters.
  */
 export const OperationEventFormatSchema = z.object({
-  filtersByParty: z.record(z.object({
+  filtersByParty: z.record(z.string(), z.object({
     cumulative: z.array(CumulativeFilterSchema),
   })),
   filtersForAnyParty: FiltersForAnyPartySchema,
@@ -116,7 +116,7 @@ export const GetUpdatesParamsSchema = z.object({
       transactionShape: TransactionShapeSchema,
     }).optional(),
     includeReassignments: z.object({
-      filtersByParty: z.record(z.object({
+      filtersByParty: z.record(z.string(), z.object({
         cumulative: z.array(CumulativeFilterSchema),
       })),
       filtersForAnyParty: FiltersForAnyPartySchema,
@@ -162,7 +162,7 @@ export const GetUpdateByOffsetParamsSchema = z.object({
       transactionShape: TransactionShapeSchema,
     }).optional(),
     includeReassignments: z.object({
-      filtersByParty: z.record(z.object({
+      filtersByParty: z.record(z.string(), z.object({
         cumulative: z.array(CumulativeFilterSchema),
       })),
       filtersForAnyParty: FiltersForAnyPartySchema,

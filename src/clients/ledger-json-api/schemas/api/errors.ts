@@ -211,7 +211,7 @@ export const JsCantonErrorSchema = z.object({
   /** Error message. */
   message: z.string(),
   /** Error details (optional). */
-  details: z.record(z.any()).optional(),
+  details: z.record(z.string(), z.any()).optional(),
 });
 
 /**
@@ -223,7 +223,7 @@ export const JsErrorSchema = z.object({
   /** Error message. */
   message: z.string(),
   /** Error details (optional). */
-  details: z.record(z.any()).optional(),
+  details: z.record(z.string(), z.any()).optional(),
 });
 
 // Export types
