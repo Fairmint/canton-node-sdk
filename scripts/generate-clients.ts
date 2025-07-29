@@ -13,7 +13,6 @@ interface ClientConfig {
   className: string;
   baseImportPath: string;
   hasInitializationMethod: boolean;
-  customImports?: string[];
   schemasImportPath?: string;
   useCategorizedTemplate?: boolean;
 }
@@ -21,7 +20,7 @@ interface ClientConfig {
 const CLIENTS: ClientConfig[] = [
   {
     name: 'LedgerJsonApiClient',
-    templatePath: '../src/clients/ClientTemplate.ts',
+    templatePath: '../src/clients/Client.template.ts',
     outputPath: '../src/clients/ledger-json-api/LedgerJsonApiClient.generated.ts',
     operationsDir: '../src/clients/ledger-json-api/operations/v2',
     clientType: 'LEDGER_JSON_API',
@@ -34,7 +33,7 @@ const CLIENTS: ClientConfig[] = [
   },
   {
     name: 'ValidatorApiClient',
-    templatePath: '../src/clients/ClientTemplate.ts',
+    templatePath: '../src/clients/Client.template.ts',
     outputPath: '../src/clients/validator-api/ValidatorApiClient.generated.ts',
     operationsDir: '../src/clients/validator-api/operations/v0',
     clientType: 'VALIDATOR_API',
@@ -43,12 +42,6 @@ const CLIENTS: ClientConfig[] = [
     baseImportPath: '../../core',
     hasInitializationMethod: true,
     schemasImportPath: './schemas',
-    customImports: [
-      "import { operations as ansOperations } from '../../generated/apps/validator/src/main/openapi/ans-external';",
-      "import { operations as scanProxyOperations } from '../../generated/apps/validator/src/main/openapi/scan-proxy';",
-      "import { operations as validatorOperations } from '../../generated/apps/validator/src/main/openapi/validator-internal';",
-      "import { operations as walletOperations } from '../../generated/apps/wallet/src/main/openapi/wallet-internal';",
-    ],
   },
 ];
 
@@ -80,10 +73,30 @@ function getAllTsFiles(dir: string): string[] {
 
 // Extract JSDoc from file content
 function extractJSDoc(fileContent: string): string | null {
-  // Match JSDoc comment before the export
-  const jsdocRegex = /\/\*\*([\s\S]*?)\*\/\s*export const/;
+  // Match JSDoc comment that is immediately before the export const statement
+  // and contains only JSDoc content, not schema definitions
+  const jsdocRegex = /\/\*\*([\s\S]*?)\*\/\s*export const (\w+) = createApiOperation/;
   const match = jsdocRegex.exec(fileContent);
-  return match ? `/**${match[1]}*/` : null;
+  if (!match) return null;
+  
+  const jsdocContent = match[1];
+  
+  // Filter out any schema definitions or other code from the JSDoc
+  // Only keep actual JSDoc comments (lines starting with * or @)
+  const lines = jsdocContent.split('\n');
+  const filteredLines = lines.filter(line => {
+    const trimmed = line.trim();
+    return trimmed.startsWith('*') || trimmed.startsWith('@') || trimmed === '';
+  });
+  
+  const cleanJsdoc = filteredLines.join('\n');
+  
+  // Only return if we have actual JSDoc content
+  if (cleanJsdoc.trim() && !cleanJsdoc.includes('z.string()') && !cleanJsdoc.includes('z.object(')) {
+    return `/**${cleanJsdoc}*/`;
+  }
+  
+  return null;
 }
 
 // Extract operation info from a file
@@ -92,17 +105,19 @@ function extractOperationInfo(
   file: string
 ): OperationInfo | null {
   // Matches: export const OperationName = createApiOperation<Params, Response>({...})
+  // Handle complex type names that may contain brackets, dots, quotes, etc.
   const regex =
-    /export const (\w+) = createApiOperation<\s*([\w]+),\s*([\w]+)\s*>/s;
+    /export const (\w+) = createApiOperation<\s*([^,]+),\s*([^>]+)\s*>/s;
   const match = regex.exec(fileContent);
   if (!match || !match[1] || !match[2] || !match[3]) return null;
 
+  // Only extract the first operation export per file
   const jsdoc = extractJSDoc(fileContent);
 
   return {
     operationName: match[1],
-    paramsType: match[2],
-    responseType: match[3],
+    paramsType: match[2].trim(),
+    responseType: match[3].trim(),
     importPath: '',
     file,
     jsdoc,
@@ -124,6 +139,7 @@ function operationNameToMethodName(operationName: string): string {
 // Generate operation imports
 function generateOperationImports(ops: OperationInfo[]): string {
   return ops
+    .filter(op => op.operationName && op.paramsType && op.responseType) // Only include valid operations
     .filter(op => op.operationName !== 'GetVersion') // GetVersion uses require() instead
     .map(op => `import { ${op.operationName} } from '${op.importPath}';`)
     .join('\n');
@@ -133,28 +149,7 @@ function generateOperationImports(ops: OperationInfo[]): string {
 function generateTypeImports(ops: OperationInfo[], client: ClientConfig): string {
   const imports: string[] = [];
   
-  // Collect type imports from individual operation files
-  const typeImports = new Map<string, Set<string>>();
-  
-  ops.forEach(op => {
-    const fileContent = fs.readFileSync(op.file, 'utf8');
-    
-    // Extract export statements for params and response types
-    const exportRegex = /export\s+(?:type|interface)\s+(\w+)/g;
-    let match;
-    while ((match = exportRegex.exec(fileContent)) !== null) {
-      const typeName = match[1];
-      if (typeName === op.paramsType || typeName === op.responseType) {
-        const importPath = relativeImportPath(
-          path.join(__dirname, client.outputPath),
-          op.file
-        );
-        imports.push(`import type { ${typeName} } from '${importPath}';`);
-      }
-    }
-  });
-
-  // For client types that are imported from schemas
+  // First, collect all types that are imported from schemas
   const schemaParamTypes = new Set<string>();
   const schemaResponseTypes = new Set<string>();
   
@@ -164,7 +159,8 @@ function generateTypeImports(ops: OperationInfo[], client: ClientConfig): string
     // Check if types are imported from schemas
     if (fileContent.includes(`} from '../schemas/operations'`) || 
         fileContent.includes(`} from '../../schemas/operations'`) ||
-        fileContent.includes(`} from '../../../schemas/operations'`)) {
+        fileContent.includes(`} from '../../../schemas/operations'`) ||
+        fileContent.includes(`} from '../../../../schemas/operations'`)) {
       if (op.paramsType !== 'void' && !fileContent.includes(`export type ${op.paramsType}`)) {
         schemaParamTypes.add(op.paramsType);
       }
@@ -172,19 +168,61 @@ function generateTypeImports(ops: OperationInfo[], client: ClientConfig): string
     
     if (fileContent.includes(`} from '../schemas/api'`) || 
         fileContent.includes(`} from '../../schemas/api'`) ||
-        fileContent.includes(`} from '../../../schemas/api'`)) {
+        fileContent.includes(`} from '../../../schemas/api'`) ||
+        fileContent.includes(`} from '../../../../schemas/api'`)) {
       if (!fileContent.includes(`export type ${op.responseType}`)) {
         schemaResponseTypes.add(op.responseType);
       }
     }
   });
+  
+  // Then, collect type imports from individual operation files
+  // Always import types that are defined in operation files, regardless of schema imports
+  ops.forEach(op => {
+    const fileContent = fs.readFileSync(op.file, 'utf8');
+    
+    // Extract export statements for params and response types (only types, not schemas)
+    const exportRegex = /export\s+type\s+(\w+)/g;
+    let match;
+    while ((match = exportRegex.exec(fileContent)) !== null) {
+      const typeName = match[1];
+      if (typeName === op.paramsType || typeName === op.responseType) {
+        // Only import if not already imported from schemas and if it's a simple type name
+        if (!schemaParamTypes.has(typeName) && !schemaResponseTypes.has(typeName) && 
+            /^\w+$/.test(typeName)) { // Only simple word-based type names
+          const importPath = relativeImportPath(
+            path.join(__dirname, client.outputPath),
+            op.file
+          );
+          imports.push(`import type { ${typeName} } from '${importPath}';`);
+        }
+      }
+    }
+  });
 
+  // Add schema imports
   if (schemaParamTypes.size > 0 && client.schemasImportPath) {
-    imports.push(`import { ${Array.from(schemaParamTypes).sort().join(', ')} } from '${client.schemasImportPath}/operations';`);
+    const simpleParamTypes = Array.from(schemaParamTypes).filter(type => /^\w+$/.test(type)).sort();
+    if (simpleParamTypes.length > 0) {
+      imports.push(`import { ${simpleParamTypes.join(', ')} } from '${client.schemasImportPath}/operations';`);
+    }
   }
   
   if (schemaResponseTypes.size > 0 && client.schemasImportPath) {
-    imports.push(`import { ${Array.from(schemaResponseTypes).sort().join(', ')} } from '${client.schemasImportPath}/api';`);
+    const simpleResponseTypes = Array.from(schemaResponseTypes).filter(type => /^\w+$/.test(type)).sort();
+    if (simpleResponseTypes.length > 0) {
+      imports.push(`import { ${simpleResponseTypes.join(', ')} } from '${client.schemasImportPath}/api';`);
+    }
+  }
+
+  // Add imports for complex types that are commonly used
+  if (client.name === 'LedgerJsonApiClient') {
+    imports.push(`import type { paths } from '../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';`);
+  } else if (client.name === 'ValidatorApiClient') {
+    imports.push(`import type { operations } from '../../generated/apps/validator/src/main/openapi/scan-proxy';`);
+    imports.push(`import type { operations as ansOperations } from '../../generated/apps/validator/src/main/openapi/ans-external';`);
+    imports.push(`import type { operations as walletOperations } from '../../generated/apps/wallet/src/main/openapi/wallet-external';`);
+    imports.push(`import type { operations as validatorOperations } from '../../generated/apps/validator/src/main/openapi/validator-internal';`);
   }
 
   return imports.join('\n');
@@ -192,12 +230,13 @@ function generateTypeImports(ops: OperationInfo[], client: ClientConfig): string
 
 // Generate method declarations
 function generateMethodDeclarations(ops: OperationInfo[], includeJsDoc = true): string {
+  // Only include operations that have a valid operationName (i.e., those that match createApiOperation)
   return ops
+    .filter(op => op.operationName && op.paramsType && op.responseType)
     .map(op => {
       const methodName = operationNameToMethodName(op.operationName);
       const paramsType = op.paramsType === 'void' ? 'void' : op.paramsType;
       const declaration = `  public ${methodName}!: (params: ${paramsType}) => Promise<${op.responseType}>;`;
-      
       if (includeJsDoc && op.jsdoc) {
         return `  ${op.jsdoc}\n${declaration}`;
       }
@@ -209,6 +248,7 @@ function generateMethodDeclarations(ops: OperationInfo[], includeJsDoc = true): 
 // Generate method implementations
 function generateMethodImplementations(ops: OperationInfo[]): string {
   return ops
+    .filter(op => op.operationName && op.paramsType && op.responseType) // Only include valid operations
     .map(op => {
       const methodName = operationNameToMethodName(op.operationName);
       const params = op.paramsType === 'void' ? '' : 'params';
@@ -254,6 +294,8 @@ function categorizeOperations(operations: OperationInfo[]): Record<string, Opera
     parties: [],
     packages: [],
     'interactive-submission': [],
+    'authenticated-user': [],
+    idps: [],
     version: [],
     other: [],
   };
@@ -279,6 +321,10 @@ function categorizeOperations(operations: OperationInfo[]): Record<string, Opera
       categories.packages.push(op);
     } else if (pathParts.includes('interactive-submission')) {
       categories['interactive-submission'].push(op);
+    } else if (pathParts.includes('authenticated-user')) {
+      categories['authenticated-user'].push(op);
+    } else if (pathParts.includes('idps')) {
+      categories.idps.push(op);
     } else if (pathParts.includes('version')) {
       categories.version.push(op);
     } else {
@@ -306,21 +352,22 @@ function processClient(client: ClientConfig): void {
       const content = fs.readFileSync(file, 'utf8');
       const info = extractOperationInfo(content, file);
       if (!info) return null;
-      
       info.importPath = relativeImportPath(
         path.join(__dirname, client.outputPath),
         file
       );
       return info;
     })
-    .filter(Boolean) as OperationInfo[];
+    .filter(
+      (op): op is OperationInfo =>
+        !!op && op.operationName && op.paramsType && op.responseType
+    );
 
   // 3. Generate sections
   const operationImports = generateOperationImports(operations);
   const typeImports = generateTypeImports(operations, client);
   const methodDeclarations = generateMethodDeclarations(operations);
   const methodImplementations = generateMethodImplementations(operations);
-  const customImports = client.customImports ? client.customImports.join('\n') : '';
 
   // 4. Replace placeholders
   if (client.useCategorizedTemplate) {
@@ -357,6 +404,12 @@ function processClient(client: ClientConfig): void {
     if (categorized['interactive-submission'].length > 0) {
       categoryDeclarations.push('  // Interactive Submission\n' + generateMethodDeclarations(categorized['interactive-submission']));
     }
+    if (categorized['authenticated-user'].length > 0) {
+      categoryDeclarations.push('  // Authenticated User\n' + generateMethodDeclarations(categorized['authenticated-user']));
+    }
+    if (categorized.idps.length > 0) {
+      categoryDeclarations.push('  // IDPs\n' + generateMethodDeclarations(categorized.idps));
+    }
     
     // Generate categorized implementations
     const categoryImplementations: string[] = [];
@@ -388,11 +441,17 @@ function processClient(client: ClientConfig): void {
     if (categorized['interactive-submission'].length > 0) {
       categoryImplementations.push('    // Interactive Submission\n' + generateMethodImplementations(categorized['interactive-submission']));
     }
+    if (categorized['authenticated-user'].length > 0) {
+      categoryImplementations.push('    // Authenticated User\n' + generateMethodImplementations(categorized['authenticated-user']));
+    }
+    if (categorized.idps.length > 0) {
+      categoryImplementations.push('    // IDPs\n' + generateMethodImplementations(categorized.idps));
+    }
     
     template = template.replace('{{BASE_IMPORT_PATH}}', client.baseImportPath);
     template = template.replace('{{OPERATION_IMPORTS}}', operationImports);
     template = template.replace('{{TYPE_IMPORTS}}', typeImports);
-    template = template.replace('{{CUSTOM_IMPORTS}}', customImports);
+    template = template.replace('{{CUSTOM_IMPORTS}}', '');
     template = template.replace('{{CLIENT_DESCRIPTION}}', client.clientDescription);
     template = template.replace('{{CLIENT_CLASS_NAME}}', client.className);
     template = template.replace('{{CLIENT_TYPE}}', client.clientType);
@@ -404,7 +463,7 @@ function processClient(client: ClientConfig): void {
     template = template.replace('{{BASE_IMPORT_PATH}}', client.baseImportPath);
     template = template.replace('{{OPERATION_IMPORTS}}', operationImports);
     template = template.replace('{{TYPE_IMPORTS}}', typeImports);
-    template = template.replace('{{CUSTOM_IMPORTS}}', customImports);
+    template = template.replace('{{CUSTOM_IMPORTS}}', '');
     template = template.replace('{{CLIENT_DESCRIPTION}}', client.clientDescription);
     template = template.replace('{{CLIENT_CLASS_NAME}}', client.className);
     template = template.replace('{{CLIENT_TYPE}}', client.clientType);
