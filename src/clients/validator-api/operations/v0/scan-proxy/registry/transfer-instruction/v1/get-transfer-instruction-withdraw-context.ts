@@ -5,7 +5,7 @@ import type { components } from '../../../../../../../../generated/token-standar
 // Schema for path parameters
 export const GetTransferInstructionWithdrawContextParamsSchema = z.object({
   transferInstructionId: z.string(),
-  meta: z.record(z.string()).optional(),
+  meta: z.record(z.string(), z.string()).optional(),
 });
 
 export type GetTransferInstructionWithdrawContextParams = z.infer<typeof GetTransferInstructionWithdrawContextParamsSchema>;

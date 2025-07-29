@@ -7,7 +7,7 @@ const endpoint = '/api/validator/v0/scan-proxy/registry/allocations/v1';
 
 export const GetAllocationWithdrawContextParamsSchema = z.object({
   allocationId: z.string(),
-  meta: z.record(z.string()).optional(),
+  meta: z.record(z.string(), z.string()).optional(),
 });
 
 export type GetAllocationWithdrawContextParams = z.infer<typeof GetAllocationWithdrawContextParamsSchema>;

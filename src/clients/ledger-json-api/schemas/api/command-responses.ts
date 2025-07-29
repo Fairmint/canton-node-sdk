@@ -24,7 +24,7 @@ export const JsSubmitAndWaitForTransactionTreeResponseSchema = z.object({
     /** Offset of the transaction in the ledger stream. */
     offset: z.number(),
     /** Map of event node IDs to tree events. */
-    eventsById: z.record(z.any()),
+    eventsById: z.record(z.string(), z.any()),
     /** Record time of the transaction. */
     recordTime: z.string(),
   }),
