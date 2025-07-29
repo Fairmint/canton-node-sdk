@@ -2,6 +2,7 @@ import { LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { ValidatorApiClient } from '../../clients/validator-api';
 import { ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/commands';
 import { buildAmuletDisclosedContracts, createContractInfo } from './disclosed-contracts';
+import { getCurrentMiningRoundContext } from './mining-rounds';
 
 export interface PreApproveTransfersParams {
   /** Party ID to enable pre-approved transfers for (receiver) */
@@ -46,26 +47,23 @@ export async function preApproveTransfers(
   console.log('🔍 Fetching network information...');
   
   // Get network information
-  const [amuletRules, dsoPartyId, miningRounds, featuredAppRight] = await Promise.all([
+  const [amuletRules, dsoPartyId, miningRoundContext, featuredAppRight] = await Promise.all([
     validatorClient.getAmuletRules(),
     validatorClient.getDsoPartyId(),
-    validatorClient.getOpenAndIssuingMiningRounds(),
+    getCurrentMiningRoundContext(validatorClient),
     validatorClient.lookupFeaturedAppRight({ partyId: params.providerPartyId })
   ]);
 
   console.log('📊 Network information fetched:');
   console.log(`   Amulet Rules Contract ID: ${amuletRules.amulet_rules.contract.contract_id}`);
   console.log(`   DSO Party ID: ${dsoPartyId.dso_party_id}`);
-  console.log(`   Open Mining Rounds: ${miningRounds.open_mining_rounds.length}`);
-  console.log(`   Issuing Mining Rounds: ${miningRounds.issuing_mining_rounds.length}`);
+  console.log(`   Open Mining Rounds: 1`);
+  console.log(`   Issuing Mining Rounds: ${miningRoundContext.issuingMiningRounds.length}`);
   console.log(`   Featured App Right: ${featuredAppRight.featured_app_right ? 'Found' : 'Not found'}`);
 
-  // Get the first open mining round contract ID
-  const openMiningRoundContractId = miningRounds.open_mining_rounds[0]?.contract?.contract_id;
-  if (!openMiningRoundContractId) {
-    console.error('❌ No open mining rounds found. Available rounds:', JSON.stringify(miningRounds, null, 2));
-    throw new Error('No open mining rounds available');
-  }
+  // Derive current mining round context (handles opensAt logic)
+  const { openMiningRound: openMiningRoundContractId, openMiningRoundContract } =
+    miningRoundContext;
 
   console.log(`✅ Using open mining round: ${openMiningRoundContractId}`);
 
@@ -78,10 +76,10 @@ export async function preApproveTransfers(
       amuletRules.amulet_rules.contract.template_id
     ),
     openMiningRound: createContractInfo(
-      openMiningRoundContractId,
-      miningRounds.open_mining_rounds[0]?.contract?.created_event_blob || '',
-      miningRounds.open_mining_rounds[0]?.domain_id || '',
-      miningRounds.open_mining_rounds[0]?.contract?.template_id
+      openMiningRoundContract.contractId,
+      openMiningRoundContract.createdEventBlob,
+      openMiningRoundContract.synchronizerId,
+      openMiningRoundContract.templateId
     ),
   };
 
