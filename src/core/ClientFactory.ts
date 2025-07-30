@@ -1,12 +1,12 @@
 import { ApiType, ClientConfig } from './types';
-import { BaseClient } from './BaseClient';
+import { BaseClient, SimpleBaseClient } from './BaseClient';
 import { ConfigurationError } from './errors';
 
 /** Factory for creating and managing API client instances */
 export class ClientFactory {
   private static clientRegistry: Map<
     ApiType,
-    new (config: ClientConfig) => BaseClient
+    new (config: ClientConfig) => BaseClient | SimpleBaseClient
   > = new Map();
 
   /**
@@ -14,7 +14,7 @@ export class ClientFactory {
    */
   public static registerClient(
     apiType: ApiType,
-    clientClass: new (config: ClientConfig) => BaseClient
+    clientClass: new (config: ClientConfig) => BaseClient | SimpleBaseClient
   ): void {
     this.clientRegistry.set(apiType, clientClass);
   }
@@ -25,7 +25,7 @@ export class ClientFactory {
   public static createClient(
     apiType: ApiType,
     config: ClientConfig
-  ): BaseClient {
+  ): BaseClient | SimpleBaseClient {
     const ClientClass = this.clientRegistry.get(apiType);
 
     if (!ClientClass) {

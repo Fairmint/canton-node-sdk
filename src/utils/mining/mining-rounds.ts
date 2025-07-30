@@ -65,4 +65,19 @@ export async function getCurrentMiningRoundContext(
     openMiningRoundContract,
     issuingMiningRounds,
   };
+}
+
+/**
+ * Gets the domain ID from the current mining round context.
+ * This is useful for operations that need to automatically determine the domain ID.
+ *
+ * @param validatorClient - Validator API client for getting mining round information
+ * @returns Promise resolving to the domain ID string
+ * @throws Error if no mining round satisfies the criteria
+ */
+export async function getCurrentMiningRoundDomainId(
+  validatorClient: ValidatorApiClient
+): Promise<string> {
+  const miningRoundContext = await getCurrentMiningRoundContext(validatorClient);
+  return miningRoundContext.openMiningRoundContract.synchronizerId;
 } 

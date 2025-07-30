@@ -4,6 +4,7 @@ import {
   ClientConfig,
   NetworkType,
   ProviderType,
+  LighthouseApiConfig,
 } from './types';
 import { AuthenticationManager } from './auth/AuthenticationManager';
 import { HttpClient } from './http/HttpClient';
@@ -30,7 +31,9 @@ export abstract class BaseClient {
 
     // Build provider configuration from the provided config
     this.config = {
-      providerName: `${config.provider}_${config.network}`,
+      providerName: config.provider
+        ? `${config.provider}_${config.network}`
+        : config.network,
       authUrl: config.authUrl || '',
       apis: {
         [apiType]: config.apis[apiType]!,
@@ -158,7 +161,7 @@ export abstract class BaseClient {
     return this.clientConfig.network;
   }
 
-  public getProvider(): ProviderType {
+  public getProvider(): ProviderType | undefined {
     return this.clientConfig.provider;
   }
 
@@ -168,6 +171,92 @@ export abstract class BaseClient {
 
   public getAuthUrl(): string {
     return this.config.authUrl;
+  }
+
+  public getApiType(): ApiType {
+    return this.apiType;
+  }
+}
+
+/** Simplified base class for APIs that don't require authentication or provider configuration */
+export abstract class SimpleBaseClient {
+  protected apiType: ApiType;
+  protected clientConfig: ClientConfig;
+  protected httpClient: HttpClient;
+  protected apiConfig: LighthouseApiConfig;
+
+  constructor(apiType: ApiType, config: ClientConfig) {
+    this.apiType = apiType;
+    this.clientConfig = config;
+
+    // Validate that the required API configuration is present
+    if (!config.apis || !config.apis[apiType]) {
+      throw new ConfigurationError(
+        `API configuration not found for ${apiType}`
+      );
+    }
+
+    // Get the API config
+    const apiConfig = config.apis[apiType];
+    if (!apiConfig) {
+      throw new ConfigurationError(
+        `API configuration not found for ${this.apiType}`
+      );
+    }
+
+    // For Lighthouse API, we expect LighthouseApiConfig
+    if (apiType === 'LIGHTHOUSE_API') {
+      this.apiConfig = apiConfig as LighthouseApiConfig;
+    } else {
+      throw new ConfigurationError(
+        `Invalid API type for SimpleBaseClient: ${apiType}`
+      );
+    }
+
+    // Initialize HTTP client with logger
+    this.httpClient = new HttpClient(this.clientConfig.logger);
+  }
+
+  public async makeGetRequest<T>(
+    url: string,
+    config: { contentType?: string } = {}
+  ): Promise<T> {
+    return this.httpClient.makeGetRequest<T>(url, config);
+  }
+
+  public async makePostRequest<T>(
+    url: string,
+    data: unknown,
+    config: { contentType?: string } = {}
+  ): Promise<T> {
+    return this.httpClient.makePostRequest<T>(url, data, config);
+  }
+
+  public async makeDeleteRequest<T>(
+    url: string,
+    config: { contentType?: string } = {}
+  ): Promise<T> {
+    return this.httpClient.makeDeleteRequest<T>(url, config);
+  }
+
+  public async makePatchRequest<T>(
+    url: string,
+    data: unknown,
+    config: { contentType?: string } = {}
+  ): Promise<T> {
+    return this.httpClient.makePatchRequest<T>(url, data, config);
+  }
+
+  public getApiUrl(): string {
+    return this.apiConfig.apiUrl;
+  }
+
+  public getPartyId(): string {
+    return this.clientConfig.partyId || '';
+  }
+
+  public getNetwork(): NetworkType {
+    return this.clientConfig.network;
   }
 
   public getApiType(): ApiType {

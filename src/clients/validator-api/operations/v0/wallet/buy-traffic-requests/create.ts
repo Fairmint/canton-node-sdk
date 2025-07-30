@@ -38,7 +38,7 @@ export const CreateBuyTrafficRequest = createApiOperation<
     const tracking_id = `buy-traffic-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     // Set expiration to 1 hour from now
-    const expires_at = Date.now() + 3600000; // 1 hour in milliseconds
+    const expires_at = Date.now() * 1000 + 3600000000; // 1 hour in microseconds
     
     return {
       receiving_validator_party_id,

@@ -10,8 +10,8 @@ export const GetMiningRoundByContractIdParamsSchema = z.object({
 
 // Member Traffic Status Parameters
 export const GetMemberTrafficStatusParamsSchema = z.object({
-  domainId: z.string(),
-  memberId: z.string(),
+  domainId: z.string().optional(),
+  memberId: z.string().optional(),
 });
 
 // Transfer Command Parameters
