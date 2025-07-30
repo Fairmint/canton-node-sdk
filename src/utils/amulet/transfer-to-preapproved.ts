@@ -117,7 +117,6 @@ export async function transferToPreapproved(
   };
 
   if (featuredAppRight.featured_app_right) {
-    console.log('=== ADDING FEATURED APP RIGHT TO DISCLOSED CONTRACTS ===');
     const featuredAppRightContractInfo = createContractInfo(
       featuredAppRight.featured_app_right.contract_id,
       featuredAppRight.featured_app_right.created_event_blob,
@@ -125,24 +124,16 @@ export async function transferToPreapproved(
       featuredAppRight.featured_app_right.template_id
     );
     
-    console.log('Featured app right contract info for disclosure:', JSON.stringify(featuredAppRightContractInfo, null, 2));
     disclosedContractsParams.featuredAppRight = featuredAppRightContractInfo;
-  } else {
-    console.log('WARNING: No featured app right to add to disclosed contracts');
   }
 
   if (transferPreapprovalContractInfo) {
-    console.log('Adding transfer preapproval to additional contracts');
     disclosedContractsParams.additionalContracts = [transferPreapprovalContractInfo];
   }
 
-  console.log('Final disclosed contracts params:', JSON.stringify(disclosedContractsParams, null, 2));
-
   const disclosedContracts = buildAmuletDisclosedContracts(disclosedContractsParams);
-  console.log('Built disclosed contracts:', JSON.stringify(disclosedContracts, null, 2));
 
   // Submit the command
-  console.log('=== SUBMITTING COMMAND ===');
   const submitParams: any = {
     commands: [transferCommand],
     commandId: `transfer-preapproved-${Date.now()}`,
@@ -150,21 +141,13 @@ export async function transferToPreapproved(
     disclosedContracts,
   };
 
-  console.log('Submit params:', JSON.stringify(submitParams, null, 2));
-
   const result = await ledgerClient.submitAndWaitForTransactionTree(submitParams);
-  console.log('=== COMMAND RESULT ===');
-  console.log('Transaction result:', JSON.stringify(result, null, 2));
 
   const finalResult = {
     contractId: params.transferPreapproval.contractId,
     domainId: amuletRules.amulet_rules.domain_id,
     transferResult: result,
   };
-
-  console.log('=== FINAL RESULT ===');
-  console.log('Final result:', JSON.stringify(finalResult, null, 2));
-  console.log('=== TRANSFER TO PREAPPROVED DEBUG END ===');
 
   return finalResult;
 }
