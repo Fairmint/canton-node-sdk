@@ -87,7 +87,7 @@ export async function preApproveTransfers(
     disclosedContractsParams.featuredAppRight = createContractInfo(
       featuredAppRight.featured_app_right.contract_id,
       featuredAppRight.featured_app_right.created_event_blob,
-      featuredAppRight.featured_app_right.domain_id,
+      amuletRules.amulet_rules.domain_id || '',
       featuredAppRight.featured_app_right.template_id
     );
   }

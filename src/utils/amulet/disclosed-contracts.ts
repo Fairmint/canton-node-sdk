@@ -4,7 +4,7 @@ export interface ContractInfo {
   /** Contract ID */
   contractId: string;
   /** Template ID (optional) */
-  templateId?: string | undefined;
+  templateId: string;
   /** Created event blob */
   createdEventBlob: string;
   /** Synchronizer ID */
@@ -103,11 +103,24 @@ export function createContractInfo(
   contractId: string,
   createdEventBlob: string,
   synchronizerId: string,
-  templateId?: string
+  templateId: string
 ): ContractInfo {
+  if (!contractId || contractId.trim() === '') {
+    throw new Error('Contract ID is required');
+  }
+  if (!createdEventBlob || createdEventBlob.trim() === '') {
+    throw new Error('Created event blob is required'); 
+  }
+  if (!synchronizerId || synchronizerId.trim() === '') {
+    throw new Error('Synchronizer ID is required');
+  }
+  if (!templateId || templateId.trim() === '') {
+    throw new Error('Template ID is required');
+  }
+
   return {
     contractId,
-    ...(templateId && { templateId }),
+    templateId,
     createdEventBlob,
     synchronizerId,
   };

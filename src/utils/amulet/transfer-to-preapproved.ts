@@ -18,6 +18,8 @@ export interface TransferPreapprovalInfo {
 export interface TransferToPreapprovedParams {
   /** Party ID sending the transfer */
   senderPartyId: string;
+  /** Recipient party ID */
+  recipientPartyId: string;
   /** TransferPreapproval contract information (required for disclosure) */
   transferPreapproval: TransferPreapprovalInfo;
   /** Amount to transfer */
@@ -54,12 +56,18 @@ export async function transferToPreapproved(
   const [amuletRules, miningRoundContext, featuredAppRight] = await Promise.all([
     validatorClient.getAmuletRules(),
     getCurrentMiningRoundContext(validatorClient),
-    validatorClient.lookupFeaturedAppRight({ partyId: params.senderPartyId })
+    validatorClient.lookupFeaturedAppRight({ partyId: params.recipientPartyId })
   ]);
 
   const {
     openMiningRound: openMiningRoundContractId,
   } = miningRoundContext;
+
+  if(!featuredAppRight.featured_app_right?.contract_id) {
+    throw new Error('No featured app right found');
+  }
+
+  const featuredAppRightContractId = featuredAppRight.featured_app_right.contract_id;
 
   // Create the transfer command using TransferPreapproval_Send
   const transferCommand: ExerciseCommand = {
@@ -74,7 +82,7 @@ export async function transferToPreapproved(
             openMiningRound: openMiningRoundContractId,
             issuingMiningRounds: [],
             validatorRights: [],
-            featuredAppRight: featuredAppRight.featured_app_right?.contract_id || null
+            featuredAppRight: featuredAppRightContractId
           }
         },
         inputs: params.inputs,
@@ -86,7 +94,6 @@ export async function transferToPreapproved(
   };
 
   // Build disclosed contracts (TransferPreapproval contract details are provided explicitly)
-
   const transferPreapprovalContractInfo = createContractInfo(
     params.transferPreapproval.contractId,
     params.transferPreapproval.createdEventBlob,
@@ -94,24 +101,30 @@ export async function transferToPreapproved(
     params.transferPreapproval.templateId,
   );
 
+  if(!amuletRules.amulet_rules.domain_id) {
+    throw new Error('Amulet rules domain ID is required');
+  }
+
   // Build the full disclosed contracts list
   const disclosedContractsParams: any = {
     amuletRules: createContractInfo(
       amuletRules.amulet_rules.contract.contract_id,
       amuletRules.amulet_rules.contract.created_event_blob,
-      amuletRules.amulet_rules.domain_id || '',
+      amuletRules.amulet_rules.domain_id,
       amuletRules.amulet_rules.contract.template_id
     ),
     openMiningRound: miningRoundContext.openMiningRoundContract,
   };
 
   if (featuredAppRight.featured_app_right) {
-    disclosedContractsParams.featuredAppRight = createContractInfo(
+    const featuredAppRightContractInfo = createContractInfo(
       featuredAppRight.featured_app_right.contract_id,
       featuredAppRight.featured_app_right.created_event_blob,
-      featuredAppRight.featured_app_right.domain_id,
+      amuletRules.amulet_rules.domain_id,
       featuredAppRight.featured_app_right.template_id
     );
+    
+    disclosedContractsParams.featuredAppRight = featuredAppRightContractInfo;
   }
 
   if (transferPreapprovalContractInfo) {
@@ -130,9 +143,11 @@ export async function transferToPreapproved(
 
   const result = await ledgerClient.submitAndWaitForTransactionTree(submitParams);
 
-  return {
+  const finalResult = {
     contractId: params.transferPreapproval.contractId,
-    domainId: amuletRules.amulet_rules.domain_id || '',
+    domainId: amuletRules.amulet_rules.domain_id,
     transferResult: result,
   };
+
+  return finalResult;
 }
