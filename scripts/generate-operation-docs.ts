@@ -129,7 +129,8 @@ class OperationDocGenerator {
     const imports = this.extractImports(sourceFile);
 
     // Check if this operation uses OpenAPI types (imports from generated paths)
-    const usesOpenApiTypes = sourceCode.includes('generated/') && sourceCode.includes('openapi');
+    const usesOpenApiTypes =
+      sourceCode.includes('generated/') && sourceCode.includes('openapi');
 
     if (usesOpenApiTypes) {
       // Extract response type from OpenAPI-based operations
