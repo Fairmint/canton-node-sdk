@@ -25,7 +25,7 @@ export const LookupTransferCommandStatusParamsSchema = z.object({
 
 // Featured App Right Parameters
 export const GetFeaturedAppRightParamsSchema = z.object({
-  partyId: z.string().optional(),
+  partyId: z.string(),
 });
 
 // Transfer Preapproval Parameters

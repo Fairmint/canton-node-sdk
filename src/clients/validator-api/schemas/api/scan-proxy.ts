@@ -76,13 +76,6 @@ export const LookupTransferPreapprovalByPartyResponseSchema = z.object({
 
 export type LookupTransferPreapprovalByPartyResponse = z.infer<typeof LookupTransferPreapprovalByPartyResponseSchema>;
 
-// Featured App Right Schema
-export const LookupFeaturedAppRightResponseSchema = z.object({
-  featured_app_right: z.any(),
-});
-
-export type LookupFeaturedAppRightResponse = z.infer<typeof LookupFeaturedAppRightResponseSchema>;
-
 // Token Standard Registry Response Schemas
 export const GetRegistryInfoResponseSchema = z.object({
   adminId: z.string(),

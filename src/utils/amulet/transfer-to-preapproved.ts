@@ -18,6 +18,8 @@ export interface TransferPreapprovalInfo {
 export interface TransferToPreapprovedParams {
   /** Party ID sending the transfer */
   senderPartyId: string;
+  /** Recipient party ID */
+  recipientPartyId: string;
   /** TransferPreapproval contract information (required for disclosure) */
   transferPreapproval: TransferPreapprovalInfo;
   /** Amount to transfer */
@@ -50,16 +52,45 @@ export async function transferToPreapproved(
   validatorClient: ValidatorApiClient,
   params: TransferToPreapprovedParams
 ): Promise<TransferToPreapprovedResult> {
+  console.log('=== TRANSFER TO PREAPPROVED DEBUG START ===');
+  console.log('Input params:', JSON.stringify(params, null, 2));
+  
   // Get network information
+  console.log('Fetching network information...');
   const [amuletRules, miningRoundContext, featuredAppRight] = await Promise.all([
     validatorClient.getAmuletRules(),
     getCurrentMiningRoundContext(validatorClient),
-    validatorClient.lookupFeaturedAppRight({ partyId: ledgerClient.getPartyId() })
+    validatorClient.lookupFeaturedAppRight({ partyId: params.recipientPartyId })
   ]);
+
+  console.log('=== FEATURED APP RIGHT DEBUG ===');
+  console.log('Raw featured app right response:', JSON.stringify(featuredAppRight, null, 2));
+  console.log('Featured app right exists:', !!featuredAppRight.featured_app_right);
+  
+  if (featuredAppRight.featured_app_right) {
+    console.log('Featured app right contract ID:', featuredAppRight.featured_app_right.contract_id);
+    console.log('Featured app right template ID:', featuredAppRight.featured_app_right.template_id);
+    console.log('Featured app right created event blob length:', featuredAppRight.featured_app_right.created_event_blob?.length || 0);
+  } else {
+    console.log('WARNING: No featured app right found in response');
+  }
 
   const {
     openMiningRound: openMiningRoundContractId,
   } = miningRoundContext;
+
+  console.log('=== VALIDATION CHECKS ===');
+  console.log('Open mining round contract ID:', openMiningRoundContractId);
+  console.log('Featured app right contract ID for validation:', featuredAppRight.featured_app_right?.contract_id);
+
+  if(!featuredAppRight.featured_app_right?.contract_id) {
+    console.error('ERROR: No featured app right contract ID found - throwing error');
+    throw new Error('No featured app right found');
+  }
+
+  console.log('=== BUILDING TRANSFER COMMAND ===');
+  const featuredAppRightContractId = featuredAppRight.featured_app_right.contract_id;
+  console.log('Using featured app right contract ID in command:', featuredAppRightContractId);
 
   // Create the transfer command using TransferPreapproval_Send
   const transferCommand: ExerciseCommand = {
@@ -74,7 +105,7 @@ export async function transferToPreapproved(
             openMiningRound: openMiningRoundContractId,
             issuingMiningRounds: [],
             validatorRights: [],
-            featuredAppRight: featuredAppRight.featured_app_right?.contract_id || null
+            featuredAppRight: featuredAppRightContractId
           }
         },
         inputs: params.inputs,
@@ -85,7 +116,11 @@ export async function transferToPreapproved(
     }
   };
 
+  console.log('=== TRANSFER COMMAND DEBUG ===');
+  console.log('Transfer command choice argument context:', JSON.stringify(transferCommand.ExerciseCommand.choiceArgument['context'], null, 2));
+
   // Build disclosed contracts (TransferPreapproval contract details are provided explicitly)
+  console.log('=== BUILDING DISCLOSED CONTRACTS ===');
 
   const transferPreapprovalContractInfo = createContractInfo(
     params.transferPreapproval.contractId,
@@ -94,33 +129,56 @@ export async function transferToPreapproved(
     params.transferPreapproval.templateId,
   );
 
+  console.log('Transfer preapproval contract info:', JSON.stringify(transferPreapprovalContractInfo, null, 2));
+
+  if(!amuletRules.amulet_rules.domain_id) {
+    console.error(amuletRules.amulet_rules);
+    throw new Error('Amulet rules domain ID is required');
+  }
+
   // Build the full disclosed contracts list
   const disclosedContractsParams: any = {
     amuletRules: createContractInfo(
       amuletRules.amulet_rules.contract.contract_id,
       amuletRules.amulet_rules.contract.created_event_blob,
-      amuletRules.amulet_rules.domain_id || '',
+      amuletRules.amulet_rules.domain_id,
       amuletRules.amulet_rules.contract.template_id
     ),
     openMiningRound: miningRoundContext.openMiningRoundContract,
   };
 
+  console.log('Base disclosed contracts params:', {
+    amuletRules: disclosedContractsParams.amuletRules,
+    openMiningRound: disclosedContractsParams.openMiningRound
+  });
+
   if (featuredAppRight.featured_app_right) {
-    disclosedContractsParams.featuredAppRight = createContractInfo(
+    console.log('=== ADDING FEATURED APP RIGHT TO DISCLOSED CONTRACTS ===');
+    const featuredAppRightContractInfo = createContractInfo(
       featuredAppRight.featured_app_right.contract_id,
       featuredAppRight.featured_app_right.created_event_blob,
-      featuredAppRight.featured_app_right.domain_id,
+      amuletRules.amulet_rules.domain_id,
       featuredAppRight.featured_app_right.template_id
     );
+    
+    console.log('Featured app right contract info for disclosure:', JSON.stringify(featuredAppRightContractInfo, null, 2));
+    disclosedContractsParams.featuredAppRight = featuredAppRightContractInfo;
+  } else {
+    console.log('WARNING: No featured app right to add to disclosed contracts');
   }
 
   if (transferPreapprovalContractInfo) {
+    console.log('Adding transfer preapproval to additional contracts');
     disclosedContractsParams.additionalContracts = [transferPreapprovalContractInfo];
   }
 
+  console.log('Final disclosed contracts params:', JSON.stringify(disclosedContractsParams, null, 2));
+
   const disclosedContracts = buildAmuletDisclosedContracts(disclosedContractsParams);
+  console.log('Built disclosed contracts:', JSON.stringify(disclosedContracts, null, 2));
 
   // Submit the command
+  console.log('=== SUBMITTING COMMAND ===');
   const submitParams: any = {
     commands: [transferCommand],
     commandId: `transfer-preapproved-${Date.now()}`,
@@ -128,11 +186,21 @@ export async function transferToPreapproved(
     disclosedContracts,
   };
 
-  const result = await ledgerClient.submitAndWaitForTransactionTree(submitParams);
+  console.log('Submit params:', JSON.stringify(submitParams, null, 2));
 
-  return {
+  const result = await ledgerClient.submitAndWaitForTransactionTree(submitParams);
+  console.log('=== COMMAND RESULT ===');
+  console.log('Transaction result:', JSON.stringify(result, null, 2));
+
+  const finalResult = {
     contractId: params.transferPreapproval.contractId,
-    domainId: amuletRules.amulet_rules.domain_id || '',
+    domainId: amuletRules.amulet_rules.domain_id,
     transferResult: result,
   };
+
+  console.log('=== FINAL RESULT ===');
+  console.log('Final result:', JSON.stringify(finalResult, null, 2));
+  console.log('=== TRANSFER TO PREAPPROVED DEBUG END ===');
+
+  return finalResult;
 }
