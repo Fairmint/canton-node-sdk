@@ -5,7 +5,9 @@ import type { paths } from '../../../../../generated/canton/community/ledger/led
 const endpoint = '/v2/events/events-by-contract-id';
 
 export const EventsByContractIdParamsSchema = z.object({
+  /** @description The contract id being queried. */
   contractId: z.string(),
+  /** @description The parties that have read rights on the contract. */
   readAs: z.array(z.string()).optional(),
 });
 
