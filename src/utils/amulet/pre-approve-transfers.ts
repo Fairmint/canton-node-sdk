@@ -1,8 +1,8 @@
 import { LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { ValidatorApiClient } from '../../clients/validator-api';
 import { ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/commands';
-import { buildAmuletDisclosedContracts, createContractInfo } from './disclosed-contracts';
-import { getCurrentMiningRoundContext } from './mining-rounds';
+import { buildAmuletDisclosedContracts, createContractInfo } from '../contracts/disclosed-contracts';
+import { getCurrentMiningRoundContext } from '../mining/mining-rounds';
 
 export interface PreApproveTransfersParams {
   /** Party ID to enable pre-approved transfers for (receiver) */

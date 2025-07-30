@@ -1,5 +1,5 @@
 import { GetOpenAndIssuingMiningRoundsResponse } from '../../clients/validator-api/schemas/api';
-import { ContractInfo } from './disclosed-contracts';
+import { ContractInfo } from '../contracts/disclosed-contracts';
 import { ValidatorApiClient } from '../../clients/validator-api';
 
 /**
