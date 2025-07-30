@@ -54,7 +54,7 @@ export async function transferToPreapproved(
   const [amuletRules, miningRoundContext, featuredAppRight] = await Promise.all([
     validatorClient.getAmuletRules(),
     getCurrentMiningRoundContext(validatorClient),
-    validatorClient.lookupFeaturedAppRight({ partyId: params.senderPartyId })
+    validatorClient.lookupFeaturedAppRight({ partyId: ledgerClient.getPartyId() })
   ]);
 
   const {
