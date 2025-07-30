@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { 
   CreateTransferOfferRequestSchema,
-  CreateBuyTrafficRequestSchema,
   TransferPreapprovalSendRequestSchema
 } from '../api/wallet';
 
@@ -21,7 +20,9 @@ export const WithdrawTransferOfferParamsSchema = z.object({
 });
 
 // Buy Traffic Request Parameters
-export const CreateBuyTrafficRequestParamsSchema = CreateBuyTrafficRequestSchema;
+export const CreateBuyTrafficRequestParamsSchema = z.object({
+  traffic_amount: z.number(),
+});
 export const GetBuyTrafficRequestStatusParamsSchema = z.object({
   trackingId: z.string(),
 });
