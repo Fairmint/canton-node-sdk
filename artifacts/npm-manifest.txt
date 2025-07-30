@@ -95,6 +95,10 @@ build/src/clients/ledger-json-api/schemas/operations/parties
 build/src/clients/ledger-json-api/schemas/operations/state
 build/src/clients/ledger-json-api/schemas/operations/updates
 build/src/clients/ledger-json-api/schemas/operations/users
+build/src/clients/lighthouse-api/LighthouseApiClient
+build/src/clients/lighthouse-api/index
+build/src/clients/lighthouse-api/operations/get-transfer-agent
+build/src/clients/lighthouse-api/types
 build/src/clients/register
 build/src/clients/validator-api/ValidatorApiClient
 build/src/clients/validator-api/index
@@ -191,6 +195,7 @@ build/src/index
 build/src/utils/amulet/index
 build/src/utils/amulet/pre-approve-transfers
 build/src/utils/amulet/transfer-to-preapproved
+build/src/utils/contracts/contract-monitor
 build/src/utils/contracts/disclosed-contracts
 build/src/utils/contracts/index
 build/src/utils/index

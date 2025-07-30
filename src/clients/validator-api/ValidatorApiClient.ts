@@ -10,6 +10,7 @@ import { RegisterNewUser } from './operations/v0/register';
 import { GetAmuletRules } from './operations/v0/scan-proxy/get-amulet-rules';
 import { GetDsoPartyId } from './operations/v0/scan-proxy/get-dso-party-id';
 import { GetMiningRoundDetails } from './operations/v0/scan-proxy/get-mining-round-details';
+import { GetMemberTrafficStatus } from './operations/v0/scan-proxy/get-member-traffic-status';
 import { GetOpenAndIssuingMiningRounds } from './operations/v0/scan-proxy/get-open-and-issuing-mining-rounds';
 import { LookupFeaturedAppRight, LookupFeaturedAppRightResponse } from './operations/v0/scan-proxy/lookup-featured-app-right';
 import { LookupTransferCommandCounterByParty } from './operations/v0/scan-proxy/lookup-transfer-command-counter-by-party';
@@ -40,8 +41,8 @@ import { WithdrawTransferOffer } from './operations/v0/wallet/transfer-offers/wi
 // AUTO-GENERATED OPERATION IMPORTS END
 
 import { BaseClient, ClientConfig } from '../../core';
-import { AcceptTransferOfferParams, CreateBuyTrafficRequestParams, CreateTransferOfferParams, GetAllocationCancelContextParams, GetAllocationFactoryParams, GetAllocationTransferContextParams, GetAllocationWithdrawContextParams, GetFeaturedAppRightParams, GetInstrumentParams, GetMiningRoundDetailsParams, GetTransferFactoryParams, GetTransferInstructionAcceptContextParams, GetTransferInstructionRejectContextParams, GetTransferInstructionWithdrawContextParams, GetTransferPreapprovalsByPartyParams, ListInstrumentsParams, LookupTransferCommandCounterByPartyParams, LookupTransferCommandStatusParams, RejectTransferOfferParams, WithdrawTransferOfferParams } from './schemas/operations';
-import { AcceptTransferOfferResponse, CreateBuyTrafficRequestResponse, CreateTransferOfferResponse, GetAllocationCancelContextResponse, GetAllocationFactoryResponse, GetAllocationTransferContextResponse, GetAllocationWithdrawContextResponse, GetInstrumentResponse, GetMiningRoundDetailsResponse, GetOpenAndIssuingMiningRoundsResponse, GetRegistryInfoResponse, GetTransferFactoryResponse, GetTransferInstructionAcceptContextResponse, GetTransferInstructionRejectContextResponse, GetTransferInstructionWithdrawContextResponse, ListInstrumentsResponse, ListTransferOffersResponse,  LookupTransferCommandCounterByPartyResponse, LookupTransferCommandStatusResponse, LookupTransferPreapprovalByPartyResponse, RejectTransferOfferResponse, WithdrawTransferOfferResponse } from './schemas/api';
+import { AcceptTransferOfferParams, CreateBuyTrafficRequestParams, CreateTransferOfferParams, GetAllocationCancelContextParams, GetAllocationFactoryParams, GetAllocationTransferContextParams, GetAllocationWithdrawContextParams, GetFeaturedAppRightParams, GetInstrumentParams, GetMemberTrafficStatusParams, GetMiningRoundDetailsParams, GetTransferFactoryParams, GetTransferInstructionAcceptContextParams, GetTransferInstructionRejectContextParams, GetTransferInstructionWithdrawContextParams, GetTransferPreapprovalsByPartyParams, ListInstrumentsParams, LookupTransferCommandCounterByPartyParams, LookupTransferCommandStatusParams, RejectTransferOfferParams, WithdrawTransferOfferParams } from './schemas/operations';
+import { AcceptTransferOfferResponse, CreateBuyTrafficRequestResponse, CreateTransferOfferResponse, GetAllocationCancelContextResponse, GetAllocationFactoryResponse, GetAllocationTransferContextResponse, GetAllocationWithdrawContextResponse, GetInstrumentResponse, GetMemberTrafficStatusResponse, GetMiningRoundDetailsResponse, GetOpenAndIssuingMiningRoundsResponse, GetRegistryInfoResponse, GetTransferFactoryResponse, GetTransferInstructionAcceptContextResponse, GetTransferInstructionRejectContextResponse, GetTransferInstructionWithdrawContextResponse, ListInstrumentsResponse, ListTransferOffersResponse,  LookupTransferCommandCounterByPartyResponse, LookupTransferCommandStatusResponse, LookupTransferPreapprovalByPartyResponse, RejectTransferOfferResponse, WithdrawTransferOfferResponse } from './schemas/api';
 import { operations as ansOperations } from '../../generated/apps/validator/src/main/openapi/ans-external';
 import { operations as scanProxyOperations } from '../../generated/apps/validator/src/main/openapi/scan-proxy';
 import { operations as validatorOperations } from '../../generated/apps/validator/src/main/openapi/validator-internal';
@@ -61,6 +62,7 @@ export class ValidatorApiClient extends BaseClient {
   public registerNewUser!: (params: void) => Promise<validatorOperations['register']['responses']['200']['content']['application/json']>;
   public getAmuletRules!: (params: void) => Promise<scanProxyOperations['getAmuletRules']['responses']['200']['content']['application/json']>;
   public getDsoPartyId!: (params: void) => Promise<scanProxyOperations['getDsoPartyId']['responses']['200']['content']['application/json']>;
+  public getMemberTrafficStatus!: (params: GetMemberTrafficStatusParams) => Promise<GetMemberTrafficStatusResponse>;
   public getMiningRoundDetails!: (params: GetMiningRoundDetailsParams) => Promise<GetMiningRoundDetailsResponse>;
   public getOpenAndIssuingMiningRounds!: (params: void) => Promise<GetOpenAndIssuingMiningRoundsResponse>;
   public lookupFeaturedAppRight!: (params: GetFeaturedAppRightParams) => Promise<LookupFeaturedAppRightResponse>;
@@ -118,6 +120,7 @@ export class ValidatorApiClient extends BaseClient {
     this.registerNewUser = () => new RegisterNewUser(this).execute();
     this.getAmuletRules = () => new GetAmuletRules(this).execute();
     this.getDsoPartyId = () => new GetDsoPartyId(this).execute();
+    this.getMemberTrafficStatus = (params) => new GetMemberTrafficStatus(this).execute(params);
     this.getMiningRoundDetails = (params) => new GetMiningRoundDetails(this).execute(params);
     this.getOpenAndIssuingMiningRounds = () => new GetOpenAndIssuingMiningRounds(this).execute();
     this.lookupFeaturedAppRight = (params) => new LookupFeaturedAppRight(this).execute(params);

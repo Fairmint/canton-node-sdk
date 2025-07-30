@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BaseClient } from '../BaseClient';
+import { BaseClient, SimpleBaseClient } from '../BaseClient';
 import { RequestConfig } from '../types';
 import { ValidationError } from '../errors';
 
@@ -69,5 +69,66 @@ export abstract class ApiOperation<Params, Response> {
 
   public buildPartyList(additionalParties: string[] = []): string[] {
     return this.client.buildPartyList(additionalParties);
+  }
+}
+
+/** Abstract base class for simple API operations that don't require authentication */
+export abstract class SimpleApiOperation<Params, Response> {
+  constructor(public client: SimpleBaseClient) {}
+
+  abstract execute(params: Params): Promise<Response>;
+
+  public validateParams<T>(
+    params: T,
+    schema: z.ZodSchema<T>
+  ): T {
+    try {
+      return schema.parse(params);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(
+          `Parameter validation failed: ${error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`
+        );
+      }
+      throw error;
+    }
+  }
+
+  public async makeGetRequest<T>(
+    url: string,
+    config: { contentType?: string } = {}
+  ): Promise<T> {
+    return this.client.makeGetRequest<T>(url, config);
+  }
+
+  public async makePostRequest<T>(
+    url: string,
+    data: unknown,
+    config: { contentType?: string } = {}
+  ): Promise<T> {
+    return this.client.makePostRequest<T>(url, data, config);
+  }
+
+  public async makeDeleteRequest<T>(
+    url: string,
+    config: { contentType?: string } = {}
+  ): Promise<T> {
+    return this.client.makeDeleteRequest<T>(url, config);
+  }
+
+  public async makePatchRequest<T>(
+    url: string,
+    data: unknown,
+    config: { contentType?: string } = {}
+  ): Promise<T> {
+    return this.client.makePatchRequest<T>(url, data, config);
+  }
+
+  public getPartyId(): string {
+    return this.client.getPartyId();
+  }
+
+  public getApiUrl(): string {
+    return this.client.getApiUrl();
   }
 } 

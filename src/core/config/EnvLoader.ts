@@ -1,7 +1,7 @@
 import { config } from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
-import { NetworkType, ProviderType, ClientConfig, ApiConfig, AuthConfig } from '../types';
+import { NetworkType, ProviderType, ClientConfig, ApiConfig, AuthConfig, LighthouseApiConfig } from '../types';
 import { ConfigurationError } from '../errors';
 
 // Load environment variables with fallback to parent directory
@@ -62,28 +62,53 @@ export class EnvLoader {
   public static getConfig(apiType: string, options?: { network?: NetworkType; provider?: ProviderType }): ClientConfig {
     const envLoader = EnvLoader.getInstance();
     const network = options?.network || envLoader.getCurrentNetwork();
-    const provider = options?.provider || envLoader.getCurrentProvider();
-    const authUrl = envLoader.getAuthUrl(network, provider);
-
-    // Get API-specific configuration
-    const apiConfig = envLoader.loadApiConfig(apiType, network, provider);
-    if (!apiConfig) {
-      throw new ConfigurationError(
-        `Missing required environment variables for ${apiType}. ` +
-        `Required: CANTON_${network.toUpperCase()}_${provider.toUpperCase()}_${apiType.toUpperCase()}_URI, ` +
-        `CANTON_${network.toUpperCase()}_${provider.toUpperCase()}_${apiType.toUpperCase()}_CLIENT_ID, ` +
-        `and either CLIENT_SECRET (for client_credentials) or USERNAME/PASSWORD (for password grant)`
-      );
+    
+    // For Lighthouse API, provider is optional
+    let provider: ProviderType | undefined;
+    let authUrl: string | undefined;
+    
+    if (apiType === 'LIGHTHOUSE_API') {
+      // Lighthouse API doesn't require provider or auth URL
+    } else {
+      provider = options?.provider || envLoader.getCurrentProvider();
+      authUrl = envLoader.getAuthUrl(network, provider);
     }
 
-    return {
+    // Get API-specific configuration
+    const apiConfig = envLoader.loadApiConfig(apiType, network, provider || undefined);
+    if (!apiConfig) {
+      if (apiType === 'LIGHTHOUSE_API') {
+        throw new ConfigurationError(
+          `Missing required environment variable for ${apiType}. ` +
+          `Required: CANTON_${network.toUpperCase()}_${apiType.toUpperCase()}_URI`
+        );
+      } else {
+        const providerStr = provider ? provider.toUpperCase() : 'PROVIDER';
+        throw new ConfigurationError(
+          `Missing required environment variables for ${apiType}. ` +
+          `Required: CANTON_${network.toUpperCase()}_${providerStr}_${apiType.toUpperCase()}_URI, ` +
+          `CANTON_${network.toUpperCase()}_${providerStr}_${apiType.toUpperCase()}_CLIENT_ID, ` +
+          `and either CLIENT_SECRET (for client_credentials) or USERNAME/PASSWORD (for password grant)`
+        );
+      }
+    }
+
+    const config: ClientConfig = {
       network,
-      provider,
-      authUrl,
       apis: {
         [apiType]: apiConfig,
       },
     };
+    
+    // Only add provider and authUrl if they exist
+    if (provider) {
+      config.provider = provider;
+    }
+    if (authUrl) {
+      config.authUrl = authUrl;
+    }
+    
+    return config;
   }
 
 
@@ -125,8 +150,15 @@ export class EnvLoader {
 
   public getApiUri(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {
     const targetNetwork = network || this.getCurrentNetwork();
-    const targetProvider = provider || this.getCurrentProvider();
 
+    // Special case for APIs that don't require provider-specific configuration
+    if (apiType === 'LIGHTHOUSE_API') {
+      const envKey = `CANTON_${targetNetwork.toUpperCase()}_${apiType.toUpperCase()}_URI`;
+      const uri = this.env[envKey];
+      return uri;
+    }
+
+    const targetProvider = provider || this.getCurrentProvider();
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_URI`;
     const uri = this.env[envKey];
 
@@ -227,8 +259,29 @@ export class EnvLoader {
     return managedParties.split(',').map(party => party.trim()).filter(party => party.length > 0);
   }
 
-  private loadApiConfig(apiType: string, network: NetworkType, provider: ProviderType): ApiConfig | undefined {
+  private loadApiConfig(apiType: string, network: NetworkType, provider?: ProviderType): ApiConfig | LighthouseApiConfig | undefined {
     const apiUrl = this.getApiUri(apiType, network, provider);
+    
+    // Special case for APIs that don't require authentication
+    if (apiType === 'LIGHTHOUSE_API') {
+      if (!apiUrl) {
+        return undefined;
+      }
+      
+      const lighthouseConfig: LighthouseApiConfig = {
+        apiUrl,
+      };
+      
+      // Lighthouse API doesn't require party ID at client level
+      // Party ID will be provided in individual API calls
+      
+      return lighthouseConfig;
+    }
+    
+    if (!provider) {
+      return undefined; // Non-Lighthouse APIs require a provider
+    }
+    
     const clientId = this.getApiClientId(apiType, network, provider);
     const clientSecret = this.getApiClientSecret(apiType, network, provider);
     const username = this.getApiUsername(apiType, network, provider);

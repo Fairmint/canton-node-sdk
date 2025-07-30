@@ -8,5 +8,9 @@ ClientFactory.registerClient('LEDGER_JSON_API', LedgerJsonApiClient);
 import { ValidatorApiClient } from './validator-api/ValidatorApiClient';
 ClientFactory.registerClient('VALIDATOR_API', ValidatorApiClient);
 
+// Register the Lighthouse API client
+import { LighthouseApiClient } from './lighthouse-api/LighthouseApiClient';
+ClientFactory.registerClient('LIGHTHOUSE_API', LighthouseApiClient);
+
 // Export the factory for convenience
 export { ClientFactory };
