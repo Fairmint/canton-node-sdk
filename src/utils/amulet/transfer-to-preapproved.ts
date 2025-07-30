@@ -4,26 +4,28 @@ import { ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/comma
 import { getCurrentMiningRoundContext } from './mining-rounds';
 import { buildAmuletDisclosedContracts, createContractInfo } from './disclosed-contracts';
 
+export interface TransferPreapprovalInfo {
+  /** Contract ID of the TransferPreapproval contract */
+  contractId: string;
+  /** Template ID of the TransferPreapproval contract */
+  templateId: string;
+  /** Created event blob of the TransferPreapproval contract */
+  createdEventBlob: string;
+  /** Synchronizer ID where the TransferPreapproval contract resides */
+  synchronizerId: string;
+}
+
 export interface TransferToPreapprovedParams {
   /** Party ID sending the transfer */
   senderPartyId: string;
-  /** TransferPreapproval contract ID to use for the transfer */
-  transferPreapprovalContractId: string;
+  /** TransferPreapproval contract information (required for disclosure) */
+  transferPreapproval: TransferPreapprovalInfo;
   /** Amount to transfer */
   amount: string;
   /** Optional description for the transfer */
   description?: string;
   /** Amulet inputs to transfer */
   inputs: Array<{ tag: 'InputAmulet'; value: string }>;
-  /** Contract details for disclosed contracts (optional - will be fetched if not provided) */
-  contractDetails?: {
-    amuletRules?: { createdEventBlob: string; synchronizerId: string };
-    openMiningRound?: { createdEventBlob: string; synchronizerId: string };
-    issuingMiningRounds?: Array<{ createdEventBlob: string; synchronizerId: string }>;
-    featuredAppRight?: { createdEventBlob: string; synchronizerId: string };
-    /** TransferPreapproval contract details (optional) */
-    transferPreapproval?: { createdEventBlob: string; synchronizerId: string };
-  };
 }
 
 export interface TransferToPreapprovedResult {
@@ -63,7 +65,7 @@ export async function transferToPreapproved(
   const transferCommand: ExerciseCommand = {
     ExerciseCommand: {
       templateId: '#splice-amulet:Splice.AmuletRules:TransferPreapproval',
-      contractId: params.transferPreapprovalContractId,
+      contractId: params.transferPreapproval.contractId,
       choice: 'TransferPreapproval_Send',
       choiceArgument: {
         context: {
@@ -83,40 +85,14 @@ export async function transferToPreapproved(
     }
   };
 
-  // Build disclosed contracts – always disclose required contracts, falling back to network lookups when
-  // explicit contractDetails are not provided.
+  // Build disclosed contracts (TransferPreapproval contract details are provided explicitly)
 
-  // Determine TransferPreapproval contract info (createdEventBlob & synchronizerId)
-  let transferPreapprovalContractInfo;
-
-  if (params.contractDetails?.transferPreapproval) {
-    transferPreapprovalContractInfo = createContractInfo(
-      params.transferPreapprovalContractId,
-      params.contractDetails.transferPreapproval.createdEventBlob,
-      params.contractDetails.transferPreapproval.synchronizerId
-    );
-  } else {
-    try {
-      const preapprovalEvents = await ledgerClient.getEventsByContractId({
-        contractId: params.transferPreapprovalContractId,
-      } as any);
-
-      const createdEventBlob = preapprovalEvents?.created?.createdEvent?.createdEventBlob;
-      const synchronizerId = preapprovalEvents?.created?.synchronizerId;
-      const templateId = preapprovalEvents?.created?.createdEvent?.templateId;
-
-      if (createdEventBlob && synchronizerId) {
-        transferPreapprovalContractInfo = createContractInfo(
-          params.transferPreapprovalContractId,
-          createdEventBlob,
-          synchronizerId,
-          templateId
-        );
-      }
-    } catch {
-      // Ignore fetch errors – the contract may be on the same synchronizer and not require disclosure
-    }
-  }
+  const transferPreapprovalContractInfo = createContractInfo(
+    params.transferPreapproval.contractId,
+    params.transferPreapproval.createdEventBlob,
+    params.transferPreapproval.synchronizerId,
+    params.transferPreapproval.templateId,
+  );
 
   // Build the full disclosed contracts list
   const disclosedContractsParams: any = {
@@ -155,7 +131,7 @@ export async function transferToPreapproved(
   const result = await ledgerClient.submitAndWaitForTransactionTree(submitParams);
 
   return {
-    contractId: params.transferPreapprovalContractId,
+    contractId: params.transferPreapproval.contractId,
     domainId: amuletRules.amulet_rules.domain_id || '',
     transferResult: result,
   };
