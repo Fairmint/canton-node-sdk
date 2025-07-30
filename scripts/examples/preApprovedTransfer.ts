@@ -253,12 +253,25 @@ async function main(): Promise<void> {
       console.log(
         '\n💸 Step 2: Transferring coins to pre-approved receiver...'
       );
+      // Fetch the created event details for the TransferPreapproval contract so we can disclose it
+      const preapprovalEvents = await ledgerClient.getEventsByContractId({
+        contractId: preapprovalResult.contractId,
+      } as any);
+
       const transferResult = await transferToPreapproved(
         ledgerClient,
         validatorClient,
         {
           senderPartyId,
-          transferPreapprovalContractId: preapprovalResult.contractId,
+          transferPreapproval: {
+            contractId: preapprovalResult.contractId,
+            templateId:
+              preapprovalEvents?.created?.createdEvent?.templateId ||
+              '#splice-amulet:Splice.AmuletRules:TransferPreapproval',
+            createdEventBlob:
+              preapprovalEvents?.created?.createdEvent?.createdEventBlob || '',
+            synchronizerId: preapprovalEvents?.created?.synchronizerId || '',
+          },
           amount,
           description: 'Example transfer to pre-approved party',
           inputs: [
