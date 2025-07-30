@@ -68,7 +68,7 @@ export async function transferToPreapproved(
           amuletRules: amuletRules.amulet_rules.contract.contract_id,
           context: {
             openMiningRound: openMiningRoundContractId,
-            issuingMiningRounds,
+            issuingMiningRounds: [],
             validatorRights: [],
             featuredAppRight: featuredAppRight.featured_app_right?.contract_id || null
           }
