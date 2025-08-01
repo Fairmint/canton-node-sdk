@@ -3,6 +3,7 @@ import { ValidatorApiClient } from '../../clients/validator-api';
 import { ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/commands';
 import { getCurrentMiningRoundContext } from '../mining/mining-rounds';
 import { buildAmuletDisclosedContracts, createContractInfo } from '../contracts/disclosed-contracts';
+import { getAmuletsForTransfer } from './get-amulets-for-transfer';
 
 export interface TransferPreapprovalInfo {
   /** Contract ID of the TransferPreapproval contract */
@@ -26,8 +27,6 @@ export interface TransferToPreapprovedParams {
   amount: string;
   /** Optional description for the transfer */
   description?: string;
-  /** Amulet inputs to transfer */
-  inputs: Array<{ tag: 'InputAmulet'; value: string }>;
 }
 
 export interface TransferToPreapprovedResult {
@@ -69,6 +68,25 @@ export async function transferToPreapproved(
 
   const featuredAppRightContractId = featuredAppRight.featured_app_right.contract_id;
 
+  // Get amulet inputs for the sender party
+  console.log('🔍 Fetching amulet inputs for sender party...');
+  const amulets = await getAmuletsForTransfer({
+    jsonApiClient: ledgerClient,
+    readAs: [params.senderPartyId]
+  });
+
+  if (amulets.length === 0) {
+    throw new Error(`No unlocked amulets found for sender party ${params.senderPartyId}`);
+  }
+
+  // Convert amulets to input format
+  const inputs = amulets.map(amulet => ({
+    tag: 'InputAmulet' as const,
+    value: amulet.contractId
+  }));
+
+  console.log(`📦 Found ${amulets.length} amulets for transfer`);
+
   // Create the transfer command using TransferPreapproval_Send
   const transferCommand: ExerciseCommand = {
     ExerciseCommand: {
@@ -85,7 +103,7 @@ export async function transferToPreapproved(
             featuredAppRight: featuredAppRightContractId
           }
         },
-        inputs: params.inputs,
+        inputs,
         amount: params.amount,
         sender: params.senderPartyId,
         description: params.description || null
