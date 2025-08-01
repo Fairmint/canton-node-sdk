@@ -140,9 +140,9 @@ export class EnvLoader {
       return this.options.currentProvider;
     }
     const value = this.env['CANTON_CURRENT_PROVIDER']?.toLowerCase();
-    if (!value || !['intellect', '5n'].includes(value)) {
+    if (!value) {
       throw new ConfigurationError(
-        'Missing or invalid CANTON_CURRENT_PROVIDER. Must be "intellect" or "5n"'
+        'Missing or invalid CANTON_CURRENT_PROVIDER'
       );
     }
     return value as ProviderType;

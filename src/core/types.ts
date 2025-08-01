@@ -1,5 +1,5 @@
 export type NetworkType = 'devnet' | 'testnet' | 'mainnet';
-export type ProviderType = 'intellect' | '5n';
+export type ProviderType = string;
 
 export type ApiType =
   | 'LEDGER_JSON_API'
