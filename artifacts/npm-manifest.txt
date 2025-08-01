@@ -192,6 +192,7 @@ build/src/generated/token-standard/splice-api-token-allocation-v1/openapi/alloca
 build/src/generated/token-standard/splice-api-token-metadata-v1/openapi/token-metadata-v1
 build/src/generated/token-standard/splice-api-token-transfer-instruction-v1/openapi/transfer-instruction-v1
 build/src/index
+build/src/utils/amulet/get-amulets-for-transfer
 build/src/utils/amulet/index
 build/src/utils/amulet/pre-approve-transfers
 build/src/utils/amulet/transfer-to-preapproved
