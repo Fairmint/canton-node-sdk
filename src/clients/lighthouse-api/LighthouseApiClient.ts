@@ -10,7 +10,7 @@ export class LighthouseApiClient extends SimpleBaseClient {
   // Transfer Agent
   public getTransferAgent!: (params: GetTransferAgentParams) => Promise<GetTransferAgentResponse>;
 
-  constructor(clientConfig: ClientConfig) {
+  constructor(clientConfig?: ClientConfig) {
     super('LIGHTHOUSE_API', clientConfig);
 
     // Initialize operations

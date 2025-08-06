@@ -195,19 +195,27 @@ export abstract class SimpleBaseClient {
   protected httpClient: HttpClient;
   protected apiConfig: LighthouseApiConfig;
 
-  constructor(apiType: ApiType, config: ClientConfig) {
+  constructor(apiType: ApiType, config?: ClientConfig) {
     this.apiType = apiType;
-    this.clientConfig = config;
+
+    // If no config provided, use default configuration with EnvLoader and FileLogger
+    this.clientConfig =
+      config ||
+      ((): ClientConfig => {
+        const defaultConfig = EnvLoader.getConfig(apiType);
+        defaultConfig.logger = new FileLogger();
+        return defaultConfig;
+      })();
 
     // Validate that the required API configuration is present
-    if (!config.apis || !config.apis[apiType]) {
+    if (!this.clientConfig.apis || !this.clientConfig.apis[apiType]) {
       throw new ConfigurationError(
         `API configuration not found for ${apiType}`
       );
     }
 
     // Get the API config
-    const apiConfig = config.apis[apiType];
+    const apiConfig = this.clientConfig.apis[apiType];
     if (!apiConfig) {
       throw new ConfigurationError(
         `API configuration not found for ${this.apiType}`
