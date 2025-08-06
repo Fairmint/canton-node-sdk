@@ -93,7 +93,7 @@ export class ValidatorApiClient extends BaseClient {
   public withdrawTransferOffer!: (params: WithdrawTransferOfferParams) => Promise<WithdrawTransferOfferResponse>;
   // AUTO-GENERATED METHODS END
 
-  constructor(clientConfig: ClientConfig) {
+  constructor(clientConfig?: ClientConfig) {
     super('VALIDATOR_API', clientConfig);
     this.initializeMethods();
   }
