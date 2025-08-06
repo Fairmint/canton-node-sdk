@@ -9,6 +9,8 @@ import {
 import { AuthenticationManager } from './auth/AuthenticationManager';
 import { HttpClient } from './http/HttpClient';
 import { ConfigurationError } from './errors';
+import { EnvLoader } from './config/EnvLoader';
+import { FileLogger } from './logging/FileLogger';
 
 /** Abstract base class providing common functionality for all API clients */
 export abstract class BaseClient {
@@ -18,12 +20,20 @@ export abstract class BaseClient {
   protected authManager: AuthenticationManager;
   protected httpClient: HttpClient;
 
-  constructor(apiType: ApiType, config: ClientConfig) {
+  constructor(apiType: ApiType, config?: ClientConfig) {
     this.apiType = apiType;
-    this.clientConfig = config;
+
+    // If no config provided, use default configuration with EnvLoader and FileLogger
+    this.clientConfig =
+      config ||
+      ((): ClientConfig => {
+        const defaultConfig = EnvLoader.getConfig(apiType);
+        defaultConfig.logger = new FileLogger();
+        return defaultConfig;
+      })();
 
     // Validate that the required API configuration is present
-    if (!config.apis || !config.apis[apiType]) {
+    if (!this.clientConfig.apis || !this.clientConfig.apis[apiType]) {
       throw new ConfigurationError(
         `API configuration not found for ${apiType}`
       );
@@ -31,12 +41,12 @@ export abstract class BaseClient {
 
     // Build provider configuration from the provided config
     this.config = {
-      providerName: config.provider
-        ? `${config.provider}_${config.network}`
-        : config.network,
-      authUrl: config.authUrl || '',
+      providerName: this.clientConfig.provider
+        ? `${this.clientConfig.provider}_${this.clientConfig.network}`
+        : this.clientConfig.network,
+      authUrl: this.clientConfig.authUrl || '',
       apis: {
-        [apiType]: config.apis[apiType]!,
+        [apiType]: this.clientConfig.apis[apiType]!,
       },
     };
 
@@ -185,19 +195,27 @@ export abstract class SimpleBaseClient {
   protected httpClient: HttpClient;
   protected apiConfig: LighthouseApiConfig;
 
-  constructor(apiType: ApiType, config: ClientConfig) {
+  constructor(apiType: ApiType, config?: ClientConfig) {
     this.apiType = apiType;
-    this.clientConfig = config;
+
+    // If no config provided, use default configuration with EnvLoader and FileLogger
+    this.clientConfig =
+      config ||
+      ((): ClientConfig => {
+        const defaultConfig = EnvLoader.getConfig(apiType);
+        defaultConfig.logger = new FileLogger();
+        return defaultConfig;
+      })();
 
     // Validate that the required API configuration is present
-    if (!config.apis || !config.apis[apiType]) {
+    if (!this.clientConfig.apis || !this.clientConfig.apis[apiType]) {
       throw new ConfigurationError(
         `API configuration not found for ${apiType}`
       );
     }
 
     // Get the API config
-    const apiConfig = config.apis[apiType];
+    const apiConfig = this.clientConfig.apis[apiType];
     if (!apiConfig) {
       throw new ConfigurationError(
         `API configuration not found for ${this.apiType}`

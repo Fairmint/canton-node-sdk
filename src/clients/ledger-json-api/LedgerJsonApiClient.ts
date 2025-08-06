@@ -175,7 +175,7 @@ export class LedgerJsonApiClient extends BaseClient {
 
 
 
-  constructor(clientConfig: ClientConfig) {
+  constructor(clientConfig?: ClientConfig) {
     super('LEDGER_JSON_API', clientConfig);
     
     // Commands
