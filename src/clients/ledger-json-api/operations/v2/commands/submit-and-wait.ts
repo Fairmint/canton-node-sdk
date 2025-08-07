@@ -4,12 +4,26 @@ import type { paths } from '../../../../../generated/canton/community/ledger/led
 
 const endpoint = '/v2/commands/submit-and-wait' as const;
 
-export type SubmitAndWaitParams = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
+// Base type from OpenAPI
+type BaseSubmitAndWaitParams = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
+
+// Extended type with optional commandId and actAs
+export type SubmitAndWaitParams = Omit<BaseSubmitAndWaitParams, 'commandId' | 'actAs'> & {
+  commandId?: string;
+  actAs?: string[];
+};
+
 export type SubmitAndWaitResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
 export const SubmitAndWait = createApiOperation<SubmitAndWaitParams, SubmitAndWaitResponse>({
   paramsSchema: z.any(),
   method: 'POST',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
-  buildRequestData: (params) => params,
+  buildRequestData: (params, client) => {
+    return {
+      ...params,
+      commandId: params.commandId || `submit-and-wait-${Date.now()}`,
+      actAs: params.actAs || [client.getPartyId()],
+    };
+  },
 }); 

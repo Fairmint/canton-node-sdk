@@ -4,12 +4,26 @@ import type { paths } from '../../../../../generated/canton/community/ledger/led
 
 const endpoint = '/v2/commands/submit-and-wait-for-transaction' as const;
 
-export type SubmitAndWaitForTransactionParams = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
+// Base type from OpenAPI
+type BaseSubmitAndWaitForTransactionParams = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
+
+// Extended type with optional commandId and actAs
+export type SubmitAndWaitForTransactionParams = Omit<BaseSubmitAndWaitForTransactionParams, 'commandId' | 'actAs'> & {
+  commandId?: string;
+  actAs?: string[];
+};
+
 export type SubmitAndWaitForTransactionResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
 export const SubmitAndWaitForTransaction = createApiOperation<SubmitAndWaitForTransactionParams, SubmitAndWaitForTransactionResponse>({
   paramsSchema: z.any(),
   method: 'POST',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
-  buildRequestData: (params) => params,
+  buildRequestData: (params, client) => {
+    return {
+      ...params,
+      commandId: params.commandId || `submit-and-wait-for-transaction-${Date.now()}`,
+      actAs: params.actAs || [client.getPartyId()],
+    };
+  },
 }); 
