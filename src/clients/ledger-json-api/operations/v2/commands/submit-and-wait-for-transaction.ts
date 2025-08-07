@@ -8,9 +8,11 @@ const endpoint = '/v2/commands/submit-and-wait-for-transaction' as const;
 type BaseSubmitAndWaitForTransactionParams = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
 
 // Extended type with optional commandId and actAs
-export type SubmitAndWaitForTransactionParams = Omit<BaseSubmitAndWaitForTransactionParams, 'commandId' | 'actAs'> & {
-  commandId?: string;
-  actAs?: string[];
+export type SubmitAndWaitForTransactionParams = Omit<BaseSubmitAndWaitForTransactionParams, 'commands'> & {
+  commands: Omit<BaseSubmitAndWaitForTransactionParams['commands'], 'commandId' | 'actAs'> & {
+    commandId?: string;
+    actAs?: string[];
+  };
 };
 
 export type SubmitAndWaitForTransactionResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
@@ -21,9 +23,12 @@ export const SubmitAndWaitForTransaction = createApiOperation<SubmitAndWaitForTr
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
   buildRequestData: (params, client) => {
     return {
-      ...params,
-      commandId: params.commandId || `submit-and-wait-for-transaction-${Date.now()}`,
-      actAs: params.actAs || [client.getPartyId()],
+      commands: {
+        ...params.commands,
+        commandId: params.commands.commandId || `submit-and-wait-for-transaction-${Date.now()}`,
+        actAs: params.commands.actAs || [client.getPartyId()],
+      },
+      transactionFormat: params.transactionFormat,
     };
   },
 }); 
