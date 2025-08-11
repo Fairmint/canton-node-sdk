@@ -193,6 +193,7 @@ build/src/generated/token-standard/splice-api-token-transfer-instruction-v1/open
 build/src/index
 build/src/utils/amulet/get-amulets-for-transfer
 build/src/utils/amulet/index
+build/src/utils/amulet/offers
 build/src/utils/amulet/pre-approve-transfers
 build/src/utils/amulet/transfer-to-preapproved
 build/src/utils/contracts/contract-monitor
@@ -203,4 +204,6 @@ build/src/utils/mining/index
 build/src/utils/mining/mining-rounds
 build/src/utils/parsers/fee-parser
 build/src/utils/parsers/index
+build/src/utils/party/createParty
+build/src/utils/party/index
 package.json
