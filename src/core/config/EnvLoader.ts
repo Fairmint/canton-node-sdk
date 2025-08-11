@@ -170,6 +170,26 @@ export class EnvLoader {
       }
     }
     
+    // Add template and contract IDs to the summary
+    const walletTemplateKey = `WALLET_TEMPLATE_ID_${network.toUpperCase()}`;
+    const preapprovalTemplateKey = `PREAPPROVAL_TEMPLATE_ID_${network.toUpperCase()}`;
+    const amuletRulesContractKey = `AMULET_RULES_CONTRACT_ID_${network.toUpperCase()}`;
+    
+    envVars[walletTemplateKey] = envLoader.env[walletTemplateKey];
+    envVars[preapprovalTemplateKey] = envLoader.env[preapprovalTemplateKey];
+    envVars[amuletRulesContractKey] = envLoader.env[amuletRulesContractKey];
+    
+    // Check for missing template and contract variables
+    if (!envVars[walletTemplateKey]) {
+      missingVars.push(walletTemplateKey);
+    }
+    if (!envVars[preapprovalTemplateKey]) {
+      missingVars.push(preapprovalTemplateKey);
+    }
+    if (!envVars[amuletRulesContractKey]) {
+      missingVars.push(amuletRulesContractKey);
+    }
+    
     return {
       network,
       provider,
@@ -323,6 +343,42 @@ export class EnvLoader {
     }
 
     return managedParties.split(',').map(party => party.trim()).filter(party => party.length > 0);
+  }
+
+  public getWalletTemplateId(network?: NetworkType): string {
+    const targetNetwork = network || this.getCurrentNetwork();
+    const envKey = `WALLET_TEMPLATE_ID_${targetNetwork.toUpperCase()}`;
+    const templateId = this.env[envKey];
+
+    if (!templateId) {
+      throw new ConfigurationError(`Missing required environment variable: ${envKey}`);
+    }
+
+    return templateId;
+  }
+
+  public getPreapprovalTemplateId(network?: NetworkType): string {
+    const targetNetwork = network || this.getCurrentNetwork();
+    const envKey = `PREAPPROVAL_TEMPLATE_ID_${targetNetwork.toUpperCase()}`;
+    const templateId = this.env[envKey];
+
+    if (!templateId) {
+      throw new ConfigurationError(`Missing required environment variable: ${envKey}`);
+    }
+
+    return templateId;
+  }
+
+  public getAmuletRulesContractId(network?: NetworkType): string {
+    const targetNetwork = network || this.getCurrentNetwork();
+    const envKey = `AMULET_RULES_CONTRACT_ID_${targetNetwork.toUpperCase()}`;
+    const contractId = this.env[envKey];
+
+    if (!contractId) {
+      throw new ConfigurationError(`Missing required environment variable: ${envKey}`);
+    }
+
+    return contractId;
   }
 
   private loadApiConfig(apiType: string, network: NetworkType, provider?: ProviderType): ApiConfig | LighthouseApiConfig | undefined {
