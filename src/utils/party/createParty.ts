@@ -32,6 +32,9 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
   const { ledgerClient, validatorClient } = options;
   
   const amountNum = parseFloat(options.amount);
+  if (isNaN(amountNum) || amountNum < 0) {
+    throw new Error(`Invalid amount: "${options.amount}". Amount must be a valid non-negative number.`);
+  }
 
   console.log(`Creating party ${options.partyName} with ${options.amount} funding...`);
 
