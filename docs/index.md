@@ -38,6 +38,7 @@ console.log(`Connected to Canton ${version.version}`);
 
 - **[Getting Started](/getting-started/)** - Installation, setup, and configuration
 - **[Features](/features/)** - Detailed capabilities overview
+- **[Utility Functions](/utils/)** - Helper functions for common operations
 - **[Ledger JSON API Operations](/ledger-json-api-operations/)** - Complete Ledger JSON API reference
 - **[Validator API Operations](/validator-api-operations/)** - Complete Validator API reference
 
