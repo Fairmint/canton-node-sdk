@@ -171,13 +171,15 @@ export class EnvLoader {
     }
     
     // Add template and contract IDs to the summary
-    const walletTemplateKey = `WALLET_TEMPLATE_ID_${network.toUpperCase()}`;
-    const preapprovalTemplateKey = `PREAPPROVAL_TEMPLATE_ID_${network.toUpperCase()}`;
-    const amuletRulesContractKey = `AMULET_RULES_CONTRACT_ID_${network.toUpperCase()}`;
+    const walletTemplateKey = `CANTON_WALLET_TEMPLATE_ID_${network.toUpperCase()}`;
+    const preapprovalTemplateKey = `CANTON_PREAPPROVAL_TEMPLATE_ID_${network.toUpperCase()}`;
+    const amuletRulesContractKey = `CANTON_AMULET_RULES_CONTRACT_ID_${network.toUpperCase()}`;
+    const validatorWalletAppInstallContractKey = `CANTON_VALIDATOR_WALLET_APP_INSTALL_CONTRACT_ID_${network.toUpperCase()}`;
     
     envVars[walletTemplateKey] = envLoader.env[walletTemplateKey];
     envVars[preapprovalTemplateKey] = envLoader.env[preapprovalTemplateKey];
     envVars[amuletRulesContractKey] = envLoader.env[amuletRulesContractKey];
+    envVars[validatorWalletAppInstallContractKey] = envLoader.env[validatorWalletAppInstallContractKey];
     
     // Check for missing template and contract variables
     if (!envVars[walletTemplateKey]) {
@@ -188,6 +190,9 @@ export class EnvLoader {
     }
     if (!envVars[amuletRulesContractKey]) {
       missingVars.push(amuletRulesContractKey);
+    }
+    if (!envVars[validatorWalletAppInstallContractKey]) {
+      missingVars.push(validatorWalletAppInstallContractKey);
     }
     
     return {
@@ -347,7 +352,7 @@ export class EnvLoader {
 
   public getWalletTemplateId(network?: NetworkType): string {
     const targetNetwork = network || this.getCurrentNetwork();
-    const envKey = `WALLET_TEMPLATE_ID_${targetNetwork.toUpperCase()}`;
+    const envKey = `CANTON_WALLET_TEMPLATE_ID_${targetNetwork.toUpperCase()}`;
     const templateId = this.env[envKey];
 
     if (!templateId) {
@@ -359,7 +364,7 @@ export class EnvLoader {
 
   public getPreapprovalTemplateId(network?: NetworkType): string {
     const targetNetwork = network || this.getCurrentNetwork();
-    const envKey = `PREAPPROVAL_TEMPLATE_ID_${targetNetwork.toUpperCase()}`;
+    const envKey = `CANTON_PREAPPROVAL_TEMPLATE_ID_${targetNetwork.toUpperCase()}`;
     const templateId = this.env[envKey];
 
     if (!templateId) {
@@ -371,7 +376,19 @@ export class EnvLoader {
 
   public getAmuletRulesContractId(network?: NetworkType): string {
     const targetNetwork = network || this.getCurrentNetwork();
-    const envKey = `AMULET_RULES_CONTRACT_ID_${targetNetwork.toUpperCase()}`;
+    const envKey = `CANTON_AMULET_RULES_CONTRACT_ID_${targetNetwork.toUpperCase()}`;
+    const contractId = this.env[envKey];
+
+    if (!contractId) {
+      throw new ConfigurationError(`Missing required environment variable: ${envKey}`);
+    }
+
+    return contractId;
+  }
+
+  public getValidatorWalletAppInstallContractId(network?: NetworkType): string {
+    const targetNetwork = network || this.getCurrentNetwork();
+    const envKey = `CANTON_VALIDATOR_WALLET_APP_INSTALL_CONTRACT_ID_${targetNetwork.toUpperCase()}`;
     const contractId = this.env[envKey];
 
     if (!contractId) {
