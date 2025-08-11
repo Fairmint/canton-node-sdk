@@ -1,24 +1,30 @@
-import { LedgerJsonApiClient } from '../../src/clients/ledger-json-api/LedgerJsonApiClient';
-import { MockBaseClient } from './mockBaseClient';
+import { BaseClient } from '../../src/core/BaseClient';
+import { MockHttpClient } from './mockHttpClient';
 import { MockHttpRequest } from './mockHttpClient';
 import { ClientConfig } from '../../src/core/types';
 
-export class MockLedgerJsonApiClient extends LedgerJsonApiClient {
-  public mockBaseClient: MockBaseClient;
+export class MockLedgerJsonApiClient extends BaseClient {
+  private mockHttpClient: MockHttpClient;
 
   constructor(config?: ClientConfig) {
-    super(config);
-
-    // Replace the base client with our mock
-    this.mockBaseClient = new MockBaseClient('LEDGER_JSON_API', config);
+    super('LEDGER_JSON_API', config);
+    this.mockHttpClient = new MockHttpClient();
+    // Replace the httpClient with our mock
+    (this as unknown as { httpClient: MockHttpClient }).httpClient =
+      this.mockHttpClient;
   }
 
-  // Override the HTTP methods to use our mock base client
+  // Override authenticate to return a mock token
+  public override async authenticate(): Promise<string> {
+    return 'mock-token-12345';
+  }
+
+  // Override the HTTP methods to use our mock HTTP client
   public override async makeGetRequest<T>(
     url: string,
     config: { contentType?: string; includeBearerToken?: boolean } = {}
   ): Promise<T> {
-    return this.mockBaseClient.makeGetRequest<T>(url, config);
+    return this.mockHttpClient.makeGetRequest<T>(url, config);
   }
 
   public override async makePostRequest<T>(
@@ -26,14 +32,14 @@ export class MockLedgerJsonApiClient extends LedgerJsonApiClient {
     data: unknown,
     config: { contentType?: string; includeBearerToken?: boolean } = {}
   ): Promise<T> {
-    return this.mockBaseClient.makePostRequest<T>(url, data, config);
+    return this.mockHttpClient.makePostRequest<T>(url, data, config);
   }
 
   public override async makeDeleteRequest<T>(
     url: string,
     config: { contentType?: string; includeBearerToken?: boolean } = {}
   ): Promise<T> {
-    return this.mockBaseClient.makeDeleteRequest<T>(url, config);
+    return this.mockHttpClient.makeDeleteRequest<T>(url, config);
   }
 
   public override async makePatchRequest<T>(
@@ -41,46 +47,41 @@ export class MockLedgerJsonApiClient extends LedgerJsonApiClient {
     data: unknown,
     config: { contentType?: string; includeBearerToken?: boolean } = {}
   ): Promise<T> {
-    return this.mockBaseClient.makePatchRequest<T>(url, data, config);
-  }
-
-  // Override the base client getter to return our mock
-  public getBaseClient(): MockBaseClient {
-    return this.mockBaseClient;
+    return this.mockHttpClient.makePatchRequest<T>(url, data, config);
   }
 
   // Helper method to set mock responses
   public setMockResponse(url: string, response: unknown): void {
-    this.mockBaseClient.setMockResponse(url, response);
+    this.mockHttpClient.setMockResponse(url, response);
   }
 
   // Helper method to set mock errors
   public setMockError(url: string, error: Error): void {
-    this.mockBaseClient.setMockError(url, error);
+    this.mockHttpClient.setMockError(url, error);
   }
 
   // Helper method to clear all mocks
   public clearMocks(): void {
-    this.mockBaseClient.clearMocks();
+    this.mockHttpClient.clearMocks();
   }
 
   // Helper method to get all requests
   public getRequests(): MockHttpRequest[] {
-    return this.mockBaseClient.getRequests();
+    return this.mockHttpClient.getRequests();
   }
 
   // Helper method to get the last request
   public getLastRequest(): MockHttpRequest | undefined {
-    return this.mockBaseClient.getLastRequest();
+    return this.mockHttpClient.getLastRequest();
   }
 
   // Helper method to get requests by method
   public getRequestsByMethod(method: string): MockHttpRequest[] {
-    return this.mockBaseClient.getRequestsByMethod(method);
+    return this.mockHttpClient.getRequestsByMethod(method);
   }
 
   // Helper method to get requests by URL
   public getRequestsByUrl(url: string): MockHttpRequest[] {
-    return this.mockBaseClient.getRequestsByUrl(url);
+    return this.mockHttpClient.getRequestsByUrl(url);
   }
 }

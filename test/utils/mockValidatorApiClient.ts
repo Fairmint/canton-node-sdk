@@ -10,7 +10,8 @@ export class MockValidatorApiClient extends BaseClient {
     super('VALIDATOR_API', config);
     this.mockHttpClient = new MockHttpClient();
     // Replace the httpClient with our mock
-    (this as any).httpClient = this.mockHttpClient;
+    (this as unknown as { httpClient: MockHttpClient }).httpClient =
+      this.mockHttpClient;
   }
 
   // Override authenticate to return a mock token

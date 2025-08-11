@@ -1,2 +1,2 @@
-export { LighthouseApiClient } from './LighthouseApiClient';
+export { LighthouseApiClient } from './LighthouseApiClient.generated';
 export * from './types'; 

@@ -1,7 +1,7 @@
 import { createApiOperation } from '../../../../../core';
 import { z } from 'zod';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
-import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient';
+import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
 import { GetActiveContractsParamsSchema } from '../../../schemas/operations';
 
 const endpoint = '/v2/state/active-contracts' as const;

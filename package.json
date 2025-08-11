@@ -9,8 +9,8 @@
   },
   "scripts": {
     "build": "npm run build:core && npm run build:lint",
-    "build:core": "npm run build:core:generate-client-methods && npm run generate:openapi-types && tsc",
-    "build:core:generate-client-methods": "tsx scripts/generate-client-methods.ts",
+    "build:core": "npm run generate:openapi-types && npm run build:core:generate-client-methods && tsc",
+    "build:core:generate-client-methods": "tsx scripts/generate-all-client-methods.ts",
     "generate:openapi-types": "find artifacts/splice -name '*.yaml' -exec sh -c 'relative_path=\"$(echo \"$1\" | sed \"s|^artifacts/splice/||\" | sed \"s|\\.yaml$|.ts|\")\"; output_file=\"src/generated/$relative_path\"; mkdir -p \"$(dirname \"$output_file\")\"; npx openapi-typescript \"$1\" -o \"$output_file\"' _ {} \\;",
     "build:lint": "tsc -p tsconfig.lint.json",
     "test": "jest",

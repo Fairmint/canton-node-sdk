@@ -25,7 +25,6 @@ export const GetTransferAgent = createSimpleApiOperation<
   buildUrl: (params: GetTransferAgentParams, apiUrl: string) => {
 
     const url = `${apiUrl}/validators/${encodeURIComponent(params.partyId)}`;
-    console.log('GetTransferAgent url: ', url);
     return url;
   },
 }); 
