@@ -10,8 +10,6 @@ export class MockBaseClient extends BaseClient {
 
     // Replace the HTTP client with our mock
     this.mockHttpClient = new MockHttpClient();
-    (this as unknown as { httpClient: MockHttpClient }).httpClient =
-      this.mockHttpClient;
   }
 
   // Override the authenticate method to avoid real HTTP calls
@@ -55,43 +53,33 @@ export class MockBaseClient extends BaseClient {
     return this.mockHttpClient.makePatchRequest<T>(url, data, config);
   }
 
-  // Override the HTTP client getter to return our mock
-  public getHttpClient(): MockHttpClient {
-    return this.mockHttpClient;
-  }
-
-  // Helper method to set mock responses
+  // Mock client specific methods
   public setMockResponse(url: string, response: unknown): void {
     this.mockHttpClient.setMockResponse(url, response);
   }
 
-  // Helper method to set mock errors
   public setMockError(url: string, error: Error): void {
     this.mockHttpClient.setMockError(url, error);
   }
 
-  // Helper method to clear all mocks
-  public clearMocks(): void {
-    this.mockHttpClient.clearMocks();
-  }
-
-  // Helper method to get all requests
   public getRequests(): MockHttpRequest[] {
     return this.mockHttpClient.getRequests();
   }
 
-  // Helper method to get the last request
   public getLastRequest(): MockHttpRequest | undefined {
-    return this.mockHttpClient.getLastRequest();
+    const requests = this.mockHttpClient.getRequests();
+    return requests[requests.length - 1];
   }
 
-  // Helper method to get requests by method
   public getRequestsByMethod(method: string): MockHttpRequest[] {
-    return this.mockHttpClient.getRequestsByMethod(method);
+    return this.mockHttpClient.getRequests().filter(req => req.method === method);
   }
 
-  // Helper method to get requests by URL
   public getRequestsByUrl(url: string): MockHttpRequest[] {
-    return this.mockHttpClient.getRequestsByUrl(url);
+    return this.mockHttpClient.getRequests().filter(req => req.url === url);
+  }
+
+  public clearMocks(): void {
+    this.mockHttpClient.clearMocks();
   }
 }
