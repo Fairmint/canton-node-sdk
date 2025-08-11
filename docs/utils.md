@@ -32,10 +32,16 @@ This documentation covers all utility functions available in the SDK, organized 
 
 ```typescript
 import { createParty } from '@fairmint/canton-node-sdk';
+import { LedgerJsonApiClient } from '@fairmint/canton-node-sdk';
+import { ValidatorApiClient } from '@fairmint/canton-node-sdk';
+
+// Initialize your clients
+const ledgerClient = new LedgerJsonApiClient(/* your config */);
+const validatorClient = new ValidatorApiClient(/* your config */);
 
 const result = await createParty({
-  network: 'devnet',
-  provider: '5n',
+  ledgerClient,
+  validatorClient,
   partyName: 'Alice',
   amount: '100.0',
 });

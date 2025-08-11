@@ -10,10 +10,16 @@ Creates a party on the specified network with optional funding.
 
 ```typescript
 import { createParty } from '@fairmint/canton-node-sdk';
+import { LedgerJsonApiClient } from '@fairmint/canton-node-sdk';
+import { ValidatorApiClient } from '@fairmint/canton-node-sdk';
+
+// Initialize your clients
+const ledgerClient = new LedgerJsonApiClient(/* your config */);
+const validatorClient = new ValidatorApiClient(/* your config */);
 
 const result = await createParty({
-  network: 'devnet',
-  provider: 'intellect',
+  ledgerClient,
+  validatorClient,
   partyName: 'alice123',
   amount: '100'
 });
@@ -24,8 +30,8 @@ console.log('Preapproval contract:', result.preapprovalContractId);
 
 ### Parameters
 
-- `network`: The network to create the party on (`'devnet' | 'testnet' | 'mainnet'`)
-- `provider`: The provider to use for party creation
+- `ledgerClient`: Ledger JSON API client instance
+- `validatorClient`: Validator API client instance
 - `partyName`: Party name to use for creation
 - `amount`: Amount to fund the party with (use '0' for no funding)
 

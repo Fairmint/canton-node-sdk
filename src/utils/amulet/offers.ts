@@ -61,7 +61,8 @@ export async function createTransferOffer(params: CreateTransferOfferParams): Pr
 
   const transferOfferEvent = transferOfferCid.transactionTree.eventsById['1'];
   if (!('CreatedTreeEvent' in transferOfferEvent)) {
-    throw new Error('Expected CreatedTreeEvent but got different event type');
+    console.log('Unexpected event type received:', transferOfferEvent);
+    throw new Error(`Expected CreatedTreeEvent but got ${Object.keys(transferOfferEvent)[0]}`);
   }
   
   return transferOfferEvent.CreatedTreeEvent.value.contractId;
