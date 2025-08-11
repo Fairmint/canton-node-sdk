@@ -171,23 +171,13 @@ export class EnvLoader {
     }
     
     // Add template and contract IDs to the summary
-    const walletTemplateKey = `CANTON_WALLET_TEMPLATE_ID_${network.toUpperCase()}`;
-    const preapprovalTemplateKey = `CANTON_PREAPPROVAL_TEMPLATE_ID_${network.toUpperCase()}`;
     const amuletRulesContractKey = `CANTON_AMULET_RULES_CONTRACT_ID_${network.toUpperCase()}`;
     const validatorWalletAppInstallContractKey = `CANTON_VALIDATOR_WALLET_APP_INSTALL_CONTRACT_ID_${network.toUpperCase()}`;
     
-    envVars[walletTemplateKey] = envLoader.env[walletTemplateKey];
-    envVars[preapprovalTemplateKey] = envLoader.env[preapprovalTemplateKey];
     envVars[amuletRulesContractKey] = envLoader.env[amuletRulesContractKey];
     envVars[validatorWalletAppInstallContractKey] = envLoader.env[validatorWalletAppInstallContractKey];
     
     // Check for missing template and contract variables
-    if (!envVars[walletTemplateKey]) {
-      missingVars.push(walletTemplateKey);
-    }
-    if (!envVars[preapprovalTemplateKey]) {
-      missingVars.push(preapprovalTemplateKey);
-    }
     if (!envVars[amuletRulesContractKey]) {
       missingVars.push(amuletRulesContractKey);
     }
@@ -348,30 +338,6 @@ export class EnvLoader {
     }
 
     return managedParties.split(',').map(party => party.trim()).filter(party => party.length > 0);
-  }
-
-  public getWalletTemplateId(network?: NetworkType): string {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const envKey = `CANTON_WALLET_TEMPLATE_ID_${targetNetwork.toUpperCase()}`;
-    const templateId = this.env[envKey];
-
-    if (!templateId) {
-      throw new ConfigurationError(`Missing required environment variable: ${envKey}`);
-    }
-
-    return templateId;
-  }
-
-  public getPreapprovalTemplateId(network?: NetworkType): string {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const envKey = `CANTON_PREAPPROVAL_TEMPLATE_ID_${targetNetwork.toUpperCase()}`;
-    const templateId = this.env[envKey];
-
-    if (!templateId) {
-      throw new ConfigurationError(`Missing required environment variable: ${envKey}`);
-    }
-
-    return templateId;
   }
 
   public getAmuletRulesContractId(network?: NetworkType): string {

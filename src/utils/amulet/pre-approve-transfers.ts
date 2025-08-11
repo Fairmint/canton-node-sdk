@@ -8,8 +8,8 @@ import { getAmuletsForTransfer } from './get-amulets-for-transfer';
 export interface PreApproveTransfersParams {
   /** Party ID to enable pre-approved transfers for (receiver) */
   receiverPartyId: string;
-  /** When the pre-approval expires */
-  expiresAt: Date;
+  /** When the pre-approval expires (defaults to 1 day from now) */
+  expiresAt?: Date;
   /** Contract details for disclosed contracts (optional - will be fetched if not provided) */
   contractDetails?: {
     amuletRules?: { createdEventBlob: string; synchronizerId: string };
@@ -41,6 +41,9 @@ export async function preApproveTransfers(
   validatorClient: ValidatorApiClient,
   params: PreApproveTransfersParams
 ): Promise<PreApproveTransfersResult> {
+  // Set default expiration to 1 day from now if not provided
+  const expiresAt = params.expiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000);
+  
   console.log('🔍 Fetching network information...');
   
   // Get network information
@@ -131,7 +134,7 @@ export async function preApproveTransfers(
         inputs,
         receiver: params.receiverPartyId,
         provider: params.receiverPartyId,
-        expiresAt: params.expiresAt.toISOString()
+        expiresAt: expiresAt.toISOString()
       }
     }
   };

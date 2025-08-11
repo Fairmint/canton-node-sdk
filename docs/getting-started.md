@@ -135,6 +135,7 @@ CANTON_CURRENT_PROVIDER=5n
 
 ## Next Steps
 
+- **[Utility Functions](/utils/)** - Helper functions for common operations
 - **[Ledger JSON API Operations](/ledger-json-api-operations/)** - Complete Ledger JSON API reference
 - **[Validator API Operations](/validator-api-operations/)** - Complete Validator API reference
 - **[Features](/features/)** - Detailed capabilities overview
