@@ -5,5 +5,4 @@ export * from './auth';
 export * from './http';
 export * from './logging';
 export * from './BaseClient';
-export * from './ClientFactory';
 export * from './operations';

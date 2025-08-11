@@ -1,4 +1,4 @@
-import { LedgerJsonApiClient } from '../../src/clients/ledger-json-api/LedgerJsonApiClient';
+import { LedgerJsonApiClient } from '../../src/clients/ledger-json-api';
 import { BaseSimulationRunner } from './BaseSimulationRunner';
 import { ClientConfig } from '../../src/core/types';
 

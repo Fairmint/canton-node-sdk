@@ -29,9 +29,9 @@ After making code changes, always run: `npm run lint && npm run build && npm tes
 
 This is a TypeScript SDK for interacting with Canton blockchain nodes. It uses several key architectural patterns:
 
-### Factory Pattern
-- `ClientFactory` manages API client creation and registration
-- Clients are registered in `src/index.ts` and instantiated via the factory
+### Client Architecture
+- Clients are exported directly from `src/clients/register.ts`
+- Direct instantiation: `new LedgerJsonApiClient(config)`
 - Type-safe client instantiation with automatic configuration
 
 ### Base Client Hierarchy
@@ -101,7 +101,7 @@ The project uses very strict TypeScript settings:
 2. Run `npm run generate:openapi` to generate types
 3. Create client class extending `BaseClient` or `SimpleBaseClient`
 4. Implement operations in `operations/` subdirectory
-5. Register client in `ClientFactory` (src/index.ts)
+5. Export client from `src/clients/register.ts`
 6. Add appropriate environment variable configuration
 
 ### Environment Variables

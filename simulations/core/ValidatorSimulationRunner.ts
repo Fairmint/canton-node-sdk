@@ -1,4 +1,4 @@
-import { ValidatorApiClient } from '../../src/clients/validator-api/ValidatorApiClient';
+import { ValidatorApiClient } from '../../src/clients/validator-api';
 import { BaseSimulationRunner } from './BaseSimulationRunner';
 import { ClientConfig } from '../../src/core/types';
 
