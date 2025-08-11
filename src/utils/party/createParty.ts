@@ -65,6 +65,10 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
     acceptingPartyId: result.partyId,
   });
 
+  // Wait 30 seconds for transfer to settle
+  console.log('Waiting 30 seconds for transfer to be settled by wallet automation...');
+  await new Promise(resolve => setTimeout(resolve, 30000));
+
   // Create transfer preapproval
   const preapprovalResult = await preApproveTransfers(ledgerClient, validatorClient, {
     receiverPartyId: result.partyId,
