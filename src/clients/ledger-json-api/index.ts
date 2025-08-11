@@ -1,1 +1,1 @@
-export { LedgerJsonApiClient } from './LedgerJsonApiClient'; 
+export { LedgerJsonApiClient } from './LedgerJsonApiClient.generated'; 

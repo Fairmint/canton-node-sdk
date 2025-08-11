@@ -1,9 +1,9 @@
-import { ClientFactory } from '../src';
 import { LighthouseApiClient } from '../src/clients/lighthouse-api';
+import { ClientConfig } from '../src/core';
 
 describe('LighthouseApiClient', () => {
   it('should create a client with simplified configuration', () => {
-    const config = {
+    const config: ClientConfig = {
       network: 'mainnet' as const,
       apis: {
         LIGHTHOUSE_API: {
@@ -12,7 +12,7 @@ describe('LighthouseApiClient', () => {
       },
     };
 
-    const client = ClientFactory.createClient('LIGHTHOUSE_API', config);
+    const client = new LighthouseApiClient(config);
 
     expect(client).toBeInstanceOf(LighthouseApiClient);
     expect(client.getApiUrl()).toBe('https://lighthouse.fivenorth.io/api');
@@ -20,7 +20,7 @@ describe('LighthouseApiClient', () => {
   });
 
   it('should create a client without provider configuration', () => {
-    const config = {
+    const config: ClientConfig = {
       network: 'mainnet' as const,
       apis: {
         LIGHTHOUSE_API: {
@@ -29,9 +29,24 @@ describe('LighthouseApiClient', () => {
       },
     };
 
-    const client = ClientFactory.createClient('LIGHTHOUSE_API', config);
+    const client = new LighthouseApiClient(config);
 
     expect(client).toBeInstanceOf(LighthouseApiClient);
     expect(client.getApiUrl()).toBe('https://lighthouse.fivenorth.io/api');
+  });
+
+  it('should have the getTransferAgent method', () => {
+    const config: ClientConfig = {
+      network: 'mainnet' as const,
+      apis: {
+        LIGHTHOUSE_API: {
+          apiUrl: 'https://lighthouse.fivenorth.io/api',
+        },
+      },
+    };
+
+    const client = new LighthouseApiClient(config);
+
+    expect(typeof client.getTransferAgent).toBe('function');
   });
 });

@@ -69,6 +69,7 @@ docs/_generated/
 docs/_operations/
 docs/_site/
 artifacts/splice/
+*.generated.ts
 
 # Local only
 wip/

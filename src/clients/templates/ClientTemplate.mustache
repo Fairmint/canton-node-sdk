@@ -1,0 +1,37 @@
+import { {{baseClientClass}}, ClientConfig } from '../../core';
+
+// AUTO-GENERATED OPERATION IMPORTS START
+{{operationImports}}
+// AUTO-GENERATED OPERATION IMPORTS END
+
+// AUTO-GENERATED TYPE IMPORTS START
+{{typeImports}}
+// AUTO-GENERATED TYPE IMPORTS END
+
+/** Client for interacting with {{clientDescription}} */
+export class {{clientClassName}} extends {{baseClientClass}} {
+  // AUTO-GENERATED METHODS START
+{{methodDeclarations}}
+  // AUTO-GENERATED METHODS END
+
+  constructor(clientConfig?: ClientConfig) {
+    super('{{clientConstant}}', clientConfig);
+    this.initializeMethods();
+  }
+
+  /**
+   * Initializes method implementations by binding them to operation classes.
+   * This is required because TypeScript declarations (above) only provide type safety,
+   * but don't create the actual runtime method implementations.
+   * 
+   * Auto-generation happens via `yarn generate-client-methods` which:
+   * 1. Scans operation files for `createApiOperation` usage
+   * 2. Generates imports, method declarations, and implementations
+   * 3. Replaces content between codegen markers
+   */
+  private initializeMethods(): void {
+    // AUTO-GENERATED METHOD IMPLEMENTATIONS START
+{{methodImplementations}}
+    // AUTO-GENERATED METHOD IMPLEMENTATIONS END
+  }
+} 
