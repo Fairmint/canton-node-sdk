@@ -31,7 +31,7 @@ describe('AsyncSubmit Operation', () => {
         commandId: 'cmd-123',
         status: 'Submitted',
       };
-      const expectedUrl = `${mockApiUrls.LEDGER_JSON_API}/v2/commands/submit`;
+      const expectedUrl = `${mockApiUrls.LEDGER_JSON_API}/v2/commands/async/submit`;
       
       mockClient.setMockResponse(expectedUrl, mockResponse);
 
@@ -76,7 +76,7 @@ describe('AsyncSubmit Operation', () => {
         commandId: 'cmd-456',
         status: 'Submitted',
       };
-      const expectedUrl = `${mockApiUrls.LEDGER_JSON_API}/v2/commands/submit`;
+      const expectedUrl = `${mockApiUrls.LEDGER_JSON_API}/v2/commands/async/submit`;
       
       mockClient.setMockResponse(expectedUrl, mockResponse);
 
@@ -106,7 +106,7 @@ describe('AsyncSubmit Operation', () => {
         readAs: ['party1'],
         actAs: ['party1'],
       };
-      const expectedUrl = `${mockApiUrls.LEDGER_JSON_API}/v2/commands/submit`;
+      const expectedUrl = `${mockApiUrls.LEDGER_JSON_API}/v2/commands/async/submit`;
       const networkError = new Error('Network error');
       
       mockClient.setMockError(expectedUrl, networkError);
@@ -131,7 +131,7 @@ describe('AsyncSubmit Operation', () => {
         readAs: ['party1'],
         actAs: ['party1'],
       } as any;
-      const expectedUrl = `${mockApiUrls.LEDGER_JSON_API}/v2/commands/submit`;
+      const expectedUrl = `${mockApiUrls.LEDGER_JSON_API}/v2/commands/async/submit`;
       const validationError = new Error('Command validation failed');
       
       mockClient.setMockError(expectedUrl, validationError);
@@ -160,7 +160,7 @@ describe('AsyncSubmit Operation', () => {
         commandId: 'cmd-valid',
         status: 'Submitted',
       };
-      const expectedUrl = `${mockApiUrls.LEDGER_JSON_API}/v2/commands/submit`;
+      const expectedUrl = `${mockApiUrls.LEDGER_JSON_API}/v2/commands/async/submit`;
       
       mockClient.setMockResponse(expectedUrl, mockResponse);
 
@@ -194,7 +194,7 @@ describe('AsyncSubmit Operation', () => {
         commandId: 'cmd-mixed',
         status: 'Submitted',
       };
-      const expectedUrl = `${mockApiUrls.LEDGER_JSON_API}/v2/commands/submit`;
+      const expectedUrl = `${mockApiUrls.LEDGER_JSON_API}/v2/commands/async/submit`;
       
       mockClient.setMockResponse(expectedUrl, mockResponse);
 

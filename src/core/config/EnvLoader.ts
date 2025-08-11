@@ -61,20 +61,27 @@ export class EnvLoader {
    */
   public static getConfig(apiType: string, options?: { network?: NetworkType; provider?: ProviderType }): ClientConfig {
     const envLoader = EnvLoader.getInstance();
+    
+    // Determine which values to use - prioritize options over environment
     const network = options?.network || envLoader.getCurrentNetwork();
+    const provider = options?.provider || envLoader.getCurrentProvider();
     
     // For Lighthouse API, provider is optional
-    let provider: ProviderType | undefined;
     let authUrl: string | undefined;
     
     if (apiType === 'LIGHTHOUSE_API') {
       // Lighthouse API doesn't require provider or auth URL
     } else {
-      provider = options?.provider || envLoader.getCurrentProvider();
+      // Non-Lighthouse APIs require both network and provider
+      if (!provider) {
+        throw new ConfigurationError(
+          `Provider is required for ${apiType}. Either specify it in options or set CANTON_CURRENT_PROVIDER in environment.`
+        );
+      }
       authUrl = envLoader.getAuthUrl(network, provider);
     }
 
-    // Get API-specific configuration
+    // Get API-specific configuration using the determined network and provider
     const apiConfig = envLoader.loadApiConfig(apiType, network, provider || undefined);
     if (!apiConfig) {
       if (apiType === 'LIGHTHOUSE_API') {
@@ -111,6 +118,65 @@ export class EnvLoader {
     return config;
   }
 
+  /**
+   * Get a summary of the environment variables being used for a specific configuration
+   * This is useful for debugging configuration issues
+   */
+  public static getConfigSummary(apiType: string, options?: { network?: NetworkType; provider?: ProviderType }): {
+    network: NetworkType;
+    provider?: ProviderType;
+    envVars: Record<string, string | undefined>;
+    missingVars: string[];
+  } {
+    const envLoader = EnvLoader.getInstance();
+    const network = options?.network || envLoader.getCurrentNetwork();
+    const provider = options?.provider || envLoader.getCurrentProvider();
+    
+    const envVars: Record<string, string | undefined> = {};
+    const missingVars: string[] = [];
+    
+    // Collect all relevant environment variables
+    if (apiType === 'LIGHTHOUSE_API') {
+      const uriKey = `CANTON_${network.toUpperCase()}_${apiType.toUpperCase()}_URI`;
+      envVars[uriKey] = envLoader.env[uriKey];
+      if (!envVars[uriKey]) {
+        missingVars.push(uriKey);
+      }
+    } else if (provider) {
+      // Non-Lighthouse APIs
+      const baseKey = `CANTON_${network.toUpperCase()}_${provider.toUpperCase()}`;
+      
+      // API-specific variables
+      envVars[`${baseKey}_${apiType.toUpperCase()}_URI`] = envLoader.env[`${baseKey}_${apiType.toUpperCase()}_URI`];
+      envVars[`${baseKey}_${apiType.toUpperCase()}_CLIENT_ID`] = envLoader.env[`${baseKey}_${apiType.toUpperCase()}_CLIENT_ID`];
+      envVars[`${baseKey}_${apiType.toUpperCase()}_CLIENT_SECRET`] = envLoader.env[`${baseKey}_${apiType.toUpperCase()}_CLIENT_SECRET`];
+      envVars[`${baseKey}_${apiType.toUpperCase()}_USERNAME`] = envLoader.env[`${baseKey}_${apiType.toUpperCase()}_USERNAME`];
+      envVars[`${baseKey}_${apiType.toUpperCase()}_PASSWORD`] = envLoader.env[`${baseKey}_${apiType.toUpperCase()}_PASSWORD`];
+      
+      // Common variables
+      envVars[`${baseKey}_AUTH_URL`] = envLoader.env[`${baseKey}_AUTH_URL`];
+      envVars[`${baseKey}_PARTY_ID`] = envLoader.env[`${baseKey}_PARTY_ID`];
+      envVars[`${baseKey}_USER_ID`] = envLoader.env[`${baseKey}_USER_ID`];
+      
+      // Check for missing required variables
+      if (!envVars[`${baseKey}_${apiType.toUpperCase()}_URI`]) {
+        missingVars.push(`${baseKey}_${apiType.toUpperCase()}_URI`);
+      }
+      if (!envVars[`${baseKey}_${apiType.toUpperCase()}_CLIENT_ID`]) {
+        missingVars.push(`${baseKey}_${apiType.toUpperCase()}_CLIENT_ID`);
+      }
+      if (!envVars[`${baseKey}_AUTH_URL`]) {
+        missingVars.push(`${baseKey}_AUTH_URL`);
+      }
+    }
+    
+    return {
+      network,
+      provider,
+      envVars,
+      missingVars,
+    };
+  }
 
   public getNodeEnv(): 'development' | 'production' | 'test' {
     const value = this.env['NODE_ENV'] || 'development';
