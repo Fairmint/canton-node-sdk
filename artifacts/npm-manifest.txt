@@ -197,7 +197,6 @@ build/src/utils/amulet/offers
 build/src/utils/amulet/pre-approve-transfers
 build/src/utils/amulet/transfer-to-preapproved
 build/src/utils/contracts/contract-monitor
-build/src/utils/contracts/disclosed-contracts
 build/src/utils/contracts/index
 build/src/utils/index
 build/src/utils/mining/index
