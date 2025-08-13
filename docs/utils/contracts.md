@@ -27,23 +27,6 @@ import { waitForContractToBeArchived } from '@fairmint/canton-node-sdk';
 // TODO: Add example usage
 ```
 
-### disclosed-contracts
-
-Helper function to create ContractInfo from API responses
-
-**Parameters:** `contractId: string, createdEventBlob: string, synchronizerId: string, templateId: string`
-
-**Returns:** `ContractInfo`
-
-**Exports:** `buildAmuletDisclosedContracts`, `createContractInfo`
-
-**Example:**
-```typescript
-import { buildAmuletDisclosedContracts } from '@fairmint/canton-node-sdk';
-
-// TODO: Add example usage
-```
-
 ---
 
 _Generated from [https://github.com/Fairmint/canton-node-sdk](https://github.com/Fairmint/canton-node-sdk) v0.0.1_
