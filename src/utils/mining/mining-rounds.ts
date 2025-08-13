@@ -131,7 +131,7 @@ export async function getCurrentMiningRoundDomainId(
 export async function waitForRoundChange(
   validatorClient: ValidatorApiClient,
   initialRoundNumber: number,
-  maxWaitTime: number = 10 * 60 * 1000 // 10 minutes default
+  maxWaitTime: number = 15 * 60 * 1000 // 15 minutes default
 ): Promise<void> {
   const startTime = Date.now();
   const checkInterval = 20000; // Check every 20 seconds
