@@ -1,7 +1,6 @@
 import { LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { ValidatorApiClient } from '../../clients/validator-api';
-import { ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/commands';
-import { buildAmuletDisclosedContracts, createContractInfo } from '../contracts/disclosed-contracts';
+import { ExerciseCommand, DisclosedContract } from '../../clients/ledger-json-api/schemas/api/commands';
 import { getCurrentMiningRoundContext } from '../mining/mining-rounds';
 import { getAmuletsForTransfer } from './get-amulets-for-transfer';
 
@@ -67,32 +66,33 @@ export async function preApproveTransfers(
 
   console.log(`✅ Using open mining round: ${openMiningRoundContractId}`);
 
-  // Build disclosed contracts
-  const disclosedContractsParams: any = {
-    amuletRules: createContractInfo(
-      amuletRules.amulet_rules.contract.contract_id,
-      amuletRules.amulet_rules.contract.created_event_blob,
-      amuletRules.amulet_rules.domain_id || '',
-      amuletRules.amulet_rules.contract.template_id
-    ),
-    openMiningRound: createContractInfo(
-      openMiningRoundContract.contractId,
-      openMiningRoundContract.createdEventBlob,
-      openMiningRoundContract.synchronizerId,
-      openMiningRoundContract.templateId
-    ),
-  };
+  // Build disclosed contracts array directly
+  const disclosedContracts: DisclosedContract[] = [
+    // AmuletRules contract (required)
+    {
+      contractId: amuletRules.amulet_rules.contract.contract_id,
+      templateId: amuletRules.amulet_rules.contract.template_id,
+      createdEventBlob: amuletRules.amulet_rules.contract.created_event_blob,
+      synchronizerId: amuletRules.amulet_rules.domain_id || '',
+    },
+    // Open mining round contract
+    {
+      contractId: openMiningRoundContract.contractId,
+      templateId: openMiningRoundContract.templateId,
+      createdEventBlob: openMiningRoundContract.createdEventBlob,
+      synchronizerId: openMiningRoundContract.synchronizerId,
+    }
+  ];
 
+  // Add featured app right contract if found
   if (featuredAppRight.featured_app_right) {
-    disclosedContractsParams.featuredAppRight = createContractInfo(
-      featuredAppRight.featured_app_right.contract_id,
-      featuredAppRight.featured_app_right.created_event_blob,
-      amuletRules.amulet_rules.domain_id || '',
-      featuredAppRight.featured_app_right.template_id
-    );
+    disclosedContracts.push({
+      contractId: featuredAppRight.featured_app_right.contract_id,
+      templateId: featuredAppRight.featured_app_right.template_id,
+      createdEventBlob: featuredAppRight.featured_app_right.created_event_blob,
+      synchronizerId: amuletRules.amulet_rules.domain_id || '',
+    });
   }
-
-  const disclosedContracts = buildAmuletDisclosedContracts(disclosedContractsParams);
 
   console.log(`📋 Built ${disclosedContracts.length} disclosed contracts`);
 
