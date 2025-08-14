@@ -41,7 +41,13 @@ export const GetEventsByContractId = createApiOperation<
       eventFormat: {
         verbose: true,
         filtersByParty: Object.fromEntries(
-          readParties.map(party => [party, { cumulative: [] }])
+          readParties.map(party => [party, { cumulative: [{"identifierFilter":
+                     {"WildcardFilter":
+                         {"value":
+                             {"includeCreatedEventBlob":true}
+                             }
+                         }
+                     }] }])
         ),
       },
     };
