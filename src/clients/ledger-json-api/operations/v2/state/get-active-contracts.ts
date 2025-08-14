@@ -24,6 +24,7 @@ export const GetActiveContracts = createApiOperation<GetActiveContractsCustomPar
       return {
         ...params,
         activeAtOffset: ledgerEnd.offset,
+        
       };
     }
     return params;
