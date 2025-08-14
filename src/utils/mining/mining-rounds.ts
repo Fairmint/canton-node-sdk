@@ -10,6 +10,25 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * Extract round number from a mining round object
+ */
+function getRoundNumber(miningRound: any): number {
+  try {
+    // Try to get round number from various possible locations
+    return (
+      miningRound.round_number ||
+      miningRound.roundNumber ||
+      (miningRound.contract?.payload?.roundNumber as number) ||
+      (miningRound.contract?.payload?.round_number as number) ||
+      parseInt(miningRound.contract?.payload?.round?.number || '0') ||
+      0
+    );
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Find the latest mining round from a list of open mining rounds
  */
 function findLatestMiningRound(openMiningRounds: any[]): any {
@@ -21,24 +40,6 @@ function findLatestMiningRound(openMiningRounds: any[]): any {
     const roundB = getRoundNumber(b);
     return roundB - roundA;
   })[0];
-}
-
-/**
- * Extract round number from a mining round object
- */
-function getRoundNumber(miningRound: any): number {
-  try {
-    // Try to get round number from various possible locations
-    return (
-      miningRound.round_number ||
-      miningRound.roundNumber ||
-      (miningRound.contract?.payload?.roundNumber as number) ||
-      (miningRound.contract?.payload?.round_number as number) ||
-      0
-    );
-  } catch {
-    return 0;
-  }
 }
 
 /**
@@ -122,19 +123,52 @@ export async function getCurrentMiningRoundDomainId(
 } 
 
 /**
+ * Gets the current mining round number by fetching the latest open mining round
+ * @param validatorClient Validator API client to fetch round information
+ * @returns Promise resolving to the current round number
+ * @throws Error if no open mining rounds are found
+ */
+export async function getCurrentRoundNumber(
+  validatorClient: ValidatorApiClient
+): Promise<number> {
+  try {
+    const miningRoundsResponse =
+      await validatorClient.getOpenAndIssuingMiningRounds();
+    const currentOpenMiningRounds = miningRoundsResponse.open_mining_rounds;
+
+    if (currentOpenMiningRounds.length === 0) {
+      throw new Error('No open mining rounds found');
+    }
+
+    const latestRound = findLatestMiningRound(currentOpenMiningRounds);
+    if (!latestRound) {
+      throw new Error('No valid mining rounds found');
+    }
+
+    return getRoundNumber(latestRound);
+  } catch (error) {
+    console.error(
+      '❌ Failed to get current round number:',
+      error instanceof Error ? error.message : 'Unknown error'
+    );
+    throw error;
+  }
+}
+
+/**
  * Wait until the mining round has actually changed, confirming the change
  * @param validatorClient Validator API client to fetch round information
- * @param initialRoundNumber The round number when we started waiting
- * @param maxWaitTime Maximum time to wait in milliseconds (default: 10 minutes)
+ * @param maxWaitTime Maximum time to wait in milliseconds (default: 20 minutes)
  * @returns Promise that resolves when the round has changed
  */
 export async function waitForRoundChange(
   validatorClient: ValidatorApiClient,
-  initialRoundNumber: number,
-  maxWaitTime: number = 15 * 60 * 1000 // 15 minutes default
+  maxWaitTime: number = 20 * 60 * 1000 // 20 minutes default
 ): Promise<void> {
   const startTime = Date.now();
   const checkInterval = 20000; // Check every 20 seconds
+
+  const initialRoundNumber = await getCurrentRoundNumber(validatorClient);
 
   console.log(
     `🔄 Waiting for mining round to change from ${initialRoundNumber}...`
@@ -177,6 +211,7 @@ export async function waitForRoundChange(
     }
   }
 
+  console.log('❌ Timeout exceeded');
   throw new Error(
     `Timeout waiting for mining round to change from ${initialRoundNumber} after ${maxWaitTime / 1000} seconds`
   );
