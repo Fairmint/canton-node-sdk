@@ -1,14 +1,14 @@
 {
-  "error": "HTTP 502",
+  "error": "HTTP 400",
   "details": {
     "name": "ApiError",
-    "message": "HTTP 502",
+    "message": "HTTP 400",
     "stack": "PLACEHOLDER_STACK_TRACE",
     "code": "API_ERROR",
-    "status": 502,
-    "statusText": "Bad Gateway",
+    "status": 400,
+    "statusText": "Bad Request",
     "response": {
-      "error": "Failed to reach consensus from 11 Scan nodes, requiring 6 matching responses."
+      "error": "Field `choiceArguments` does not contain a valid `TransferFactory_Transfer`: com.daml.ledger.javaapi.data.codegen.json.JsonLfDecoder$Error: Missing field expectedAdmin at line: 1, column: 2"
     }
   }
 }
