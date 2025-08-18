@@ -1,14 +1,14 @@
 {
-  "error": "HTTP 502",
+  "error": "HTTP 404",
   "details": {
     "name": "ApiError",
-    "message": "HTTP 502",
+    "message": "HTTP 404",
     "stack": "PLACEHOLDER_STACK_TRACE",
     "code": "API_ERROR",
-    "status": 502,
-    "statusText": "Bad Gateway",
+    "status": 404,
+    "statusText": "Not Found",
     "response": {
-      "error": "Failed to reach consensus from 11 Scan nodes, requiring 6 matching responses."
+      "error": "AmuletTransferInstruction 'contract-id-here' not found."
     }
   }
 }
