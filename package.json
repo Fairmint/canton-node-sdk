@@ -54,9 +54,9 @@
   "homepage": "https://sdk.canton.fairmint.com/",
   "devDependencies": {
     "@types/jest": "30.0.0",
-    "@types/node": "24.2.1",
-    "@typescript-eslint/eslint-plugin": "8.38.0",
-    "@typescript-eslint/parser": "8.39.1",
+    "@types/node": "24.3.0",
+    "@typescript-eslint/eslint-plugin": "8.40.0",
+    "@typescript-eslint/parser": "8.40.0",
     "eslint": "9.33.0",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-import": "2.32.0",
@@ -68,7 +68,7 @@
     "prettier": "3.6.2",
     "ts-jest": "29.4.1",
     "tsx": "4.20.4",
-    "typescript": "5.8.3"
+    "typescript": "5.9.2"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -78,7 +78,7 @@
     "dotenv": "17.2.1",
     "glob": "^11.0.3",
     "openapi-fetch": "^0.14.0",
-    "openapi-typescript": "^7.8.0",
+    "openapi-typescript": "7.9.1",
     "zod": "4.0.17"
   }
 }
