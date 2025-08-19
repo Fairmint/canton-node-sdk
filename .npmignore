@@ -75,3 +75,7 @@ docs/
 .cursorrules
 .github/
 .prettierrc
+
+# Include the generated operations (which are under a test directory)
+# !build/**/src/test/**
+!build/src/generated/canton/community/**
