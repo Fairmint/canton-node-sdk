@@ -187,7 +187,6 @@ build/src/core/operations/ApiOperationFactory
 build/src/core/operations/index
 build/src/core/types
 build/src/generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi
-build/src/generated/openapi-types
 build/src/generated/token-standard/splice-api-token-allocation-instruction-v1/openapi/allocation-instruction-v1
 build/src/generated/token-standard/splice-api-token-allocation-v1/openapi/allocation-v1
 build/src/generated/token-standard/splice-api-token-metadata-v1/openapi/token-metadata-v1
