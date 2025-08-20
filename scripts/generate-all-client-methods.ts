@@ -96,8 +96,12 @@ function generateMethodDeclarations(
   return ops
     .map(op => {
       const methodName = operationNameToMethodName(op.operationName);
-      const paramsType = op.paramsType === 'void' ? 'void' : 'any';
-      return `  public ${methodName}!: (params: ${paramsType}) => Promise<any>;`;
+      const methodParamsType = `Parameters<InstanceType<typeof ${op.operationName}>['execute']>[0]`;
+      const methodReturnType = `ReturnType<InstanceType<typeof ${op.operationName}>['execute']>`;
+      if (op.paramsType === 'void') {
+        return `  public ${methodName}!: () => ${methodReturnType};`;
+      }
+      return `  public ${methodName}!: (params: ${methodParamsType}) => ${methodReturnType};`;
     })
     .join('\n');
 }
