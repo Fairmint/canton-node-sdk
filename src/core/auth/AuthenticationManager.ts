@@ -2,6 +2,7 @@ import axios from 'axios';
 import { URLSearchParams } from 'url';
 import { AuthConfig } from '../types';
 import { AuthenticationError, ApiError } from '../errors';
+import { Logger } from '../logging';
 
 export interface AuthResponse {
   access_token: string;
@@ -17,7 +18,8 @@ export class AuthenticationManager {
 
   constructor(
     private authUrl: string,
-    private authConfig: AuthConfig
+    private authConfig: AuthConfig,
+    private logger?: Logger
   ) {}
 
   public async authenticate(): Promise<string> {
@@ -55,14 +57,21 @@ export class AuthenticationManager {
       formData.append('password', this.authConfig.password);
     }
 
+    const url = this.authUrl + '/';
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+
+    // Build a log-friendly representation of the request body
+    const requestBody: Record<string, string> = {};
+    for (const [key, value] of formData.entries()) {
+      requestBody[key] = value;
+    }
+
     try {
       const response = await axios.post<AuthResponse>(
-        this.authUrl + '/',
+        url,
         formData.toString(),
         {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
+          headers,
         }
       );
 
@@ -79,8 +88,19 @@ export class AuthenticationManager {
         this.tokenExpiry = Date.now() + (response.data.expires_in * 1000);
       }
 
+      // Log success
+      if (this.logger) {
+        await this.logger.logRequestResponse(url, { method: 'POST', headers, data: requestBody }, response.data);
+      }
+
       return this.bearerToken;
     } catch (error) {
+      // Log failure with context
+      if (this.logger) {
+        const errorPayload = axios.isAxiosError(error) ? (error.response?.data || error.message) : (error instanceof Error ? error.message : String(error));
+        await this.logger.logRequestResponse(url, { method: 'POST', headers, data: requestBody }, errorPayload);
+      }
+
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
         const statusText = error.response?.statusText;
@@ -89,12 +109,14 @@ export class AuthenticationManager {
           : error.message;
 
         throw new ApiError(
-          `Authentication failed with status ${status} ${statusText}: ${errorData}`
+          `Authentication failed for URL ${url} with status ${status} ${statusText}: ${errorData}`,
+          status,
+          statusText
         );
       }
 
       throw new AuthenticationError(
-        `Authentication failed: ${error instanceof Error ? error.message : String(error)}`
+        `Authentication failed for URL ${url}: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }

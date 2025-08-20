@@ -60,7 +60,8 @@ export abstract class BaseClient {
 
     this.authManager = new AuthenticationManager(
       this.config.authUrl,
-      apiConfig.auth
+      apiConfig.auth,
+      this.clientConfig.logger
     );
 
     // Initialize HTTP client with logger
