@@ -49,7 +49,7 @@ export const SubmitAndWaitForTransactionTree = createApiOperation<SubmitAndWaitF
   buildRequestData: (params, client) => {
     return {
       ...params,
-      commandId: params.commandId || `submit-and-wait-for-transaction-tree-${Date.now()}`,
+      commandId: params.commandId || `submit-and-wait-for-transaction-tree-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
       actAs: params.actAs || [client.getPartyId()],
     };
   },

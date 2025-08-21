@@ -22,7 +22,7 @@ export const AsyncSubmit = createApiOperation<AsyncSubmitParams, AsyncSubmitResp
   buildRequestData: (params, client) => {
     return {
       ...params,
-      commandId: params.commandId || `async-submit-${Date.now()}`,
+      commandId: params.commandId || `async-submit-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
       actAs: params.actAs || [client.getPartyId()],
     };
   },
