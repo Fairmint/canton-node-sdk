@@ -22,7 +22,7 @@ export const SubmitAndWait = createApiOperation<SubmitAndWaitParams, SubmitAndWa
   buildRequestData: (params, client) => {
     return {
       ...params,
-      commandId: params.commandId || `submit-and-wait-${Date.now()}`,
+      commandId: params.commandId || `submit-and-wait-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
       actAs: params.actAs || [client.getPartyId()],
     };
   },
