@@ -206,4 +206,6 @@ build/src/utils/parsers/fee-parser
 build/src/utils/parsers/index
 build/src/utils/party/createParty
 build/src/utils/party/index
+build/src/utils/transactions/find-created-event
+build/src/utils/transactions/index
 package.json
