@@ -17,19 +17,28 @@ export const GetActiveContracts = createApiOperation<GetActiveContractsCustomPar
   method: 'POST',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
   buildRequestData: async (params, client) => {
-    if (params.verbose === undefined) {
-      params.verbose = true;
-    }
-    
-    // If activeAtOffset is not specified, default to ledger end offset
-    if (params.activeAtOffset === undefined) {
+    const requestVerbose = params.verbose === undefined ? true : params.verbose;
+
+    // Determine activeAtOffset (default to ledger end if not specified)
+    let activeAtOffset = params.activeAtOffset;
+    if (activeAtOffset === undefined) {
       const ledgerClient = client as LedgerJsonApiClient;
       const ledgerEnd = await ledgerClient.getLedgerEnd({});
-      return {
-        ...params,
-        activeAtOffset: ledgerEnd.offset,
-      };
+      activeAtOffset = ledgerEnd.offset;
     }
-    return params;
+
+    // If parties provided, map to filter.filtersByParty with empty objects
+    const filtersByParty = params.parties && params.parties.length > 0
+      ? Object.fromEntries(Array.from(new Set(params.parties)).map((party) => [party, {}]))
+      : undefined;
+
+    // Build and return the request body explicitly
+    return {
+      filter: filtersByParty ? { filtersByParty } : undefined,
+      verbose: requestVerbose,
+      activeAtOffset,
+      limit: params.limit,
+      streamIdleTimeoutMs: params.streamIdleTimeoutMs,
+    };
   },
 }); 
