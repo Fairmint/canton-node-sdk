@@ -1,5 +1,5 @@
 import SimulationRunner from '../../../core/SimulationRunner';
-import type { components } from '../../../../src/generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
+import type { TransactionFormat } from '../../../../src/clients/ledger-json-api/schemas/operations/updates';
 
 const runner = new SimulationRunner();
 
@@ -10,7 +10,7 @@ const TEST_OFFSETS = {
 } as const;
 
 export async function runAllTests() {
-  const DEFAULT_TRANSACTION_FORMAT: components['schemas']['TransactionFormat'] = {
+  const DEFAULT_TRANSACTION_FORMAT: TransactionFormat = {
     eventFormat: {
       filtersByParty: {
         'TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34': { 

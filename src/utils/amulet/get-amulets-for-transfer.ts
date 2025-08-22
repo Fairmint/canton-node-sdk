@@ -33,8 +33,6 @@ export async function getAmuletsForTransfer(
 
 	const activeContracts = await jsonApiClient.getActiveContracts({
 		parties: [senderParty],
-		verbose: true,
-		activeAtOffset: (await jsonApiClient.getLedgerEnd(undefined)).offset,
 	});
 
 	const allAmulets: any[] = [];

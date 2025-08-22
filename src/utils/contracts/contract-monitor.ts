@@ -47,8 +47,6 @@ export async function waitForContractToBeArchived(
 			}
 			const activeContracts = await ledgerJsonApiClient.getActiveContracts({
 				parties: [partyId],
-				verbose: true,
-				activeAtOffset: (await ledgerJsonApiClient.getLedgerEnd(undefined)).offset,
 			});
 			
 			// Check if our contract is still in the active contracts list
