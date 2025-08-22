@@ -1,22 +1,20 @@
 import { createApiOperation } from '../../../../../core';
 import { z } from 'zod';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
+import { SubmitAndWaitParamsSchema } from '../../../schemas/operations';
 
 const endpoint = '/v2/commands/submit-and-wait' as const;
 
 // Base type from OpenAPI
-type BaseSubmitAndWaitParams = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
+// type BaseSubmitAndWaitParams = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
 
 // Extended type with optional commandId and actAs
-export type SubmitAndWaitParams = Omit<BaseSubmitAndWaitParams, 'commandId' | 'actAs'> & {
-  commandId?: string;
-  actAs?: string[];
-};
+export type SubmitAndWaitParams = z.infer<typeof SubmitAndWaitParamsSchema>;
 
 export type SubmitAndWaitResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
 export const SubmitAndWait = createApiOperation<SubmitAndWaitParams, SubmitAndWaitResponse>({
-  paramsSchema: z.any(),
+  paramsSchema: SubmitAndWaitParamsSchema,
   method: 'POST',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
   buildRequestData: (params, client) => {

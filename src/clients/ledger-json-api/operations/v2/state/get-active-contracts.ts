@@ -13,18 +13,21 @@ export type GetActiveContractsResponse = paths[typeof endpoint]['post']['respons
 export type GetActiveContractsCustomParams = z.infer<typeof GetActiveContractsParamsSchema>;
 
 export const GetActiveContracts = createApiOperation<GetActiveContractsCustomParams, GetActiveContractsResponse>({
-  paramsSchema: z.any(),
+  paramsSchema: GetActiveContractsParamsSchema,
   method: 'POST',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
   buildRequestData: async (params, client) => {
+    if (params.verbose === undefined) {
+      params.verbose = true;
+    }
+    
     // If activeAtOffset is not specified, default to ledger end offset
     if (params.activeAtOffset === undefined) {
       const ledgerClient = client as LedgerJsonApiClient;
-      const ledgerEnd = await ledgerClient.getLedgerEnd(undefined);
+      const ledgerEnd = await ledgerClient.getLedgerEnd({});
       return {
         ...params,
         activeAtOffset: ledgerEnd.offset,
-        
       };
     }
     return params;
