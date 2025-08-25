@@ -15,7 +15,8 @@ export class HttpClient {
 
   public async makeGetRequest<T>(
     url: string,
-    config: RequestConfig = {}
+    config: RequestConfig = {},
+    _isRetry = false
   ): Promise<T> {
     try {
       const headers = await this.buildHeaders(config);
@@ -24,6 +25,16 @@ export class HttpClient {
       await this.logRequestResponse(url, { method: 'GET', headers }, response.data);
       return response.data;
     } catch (error) {
+      // Attempt one automatic retry for transient errors
+      if (!_isRetry && this.isRetryableError(error)) {
+        await this.logRequestResponse(
+          url,
+          { method: 'GET', retry: true },
+          `Retrying after error: ${axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)}`
+        );
+        return this.makeGetRequest(url, config, true);
+      }
+
       // Log the error response before throwing
       if (axios.isAxiosError(error)) {
         await this.logRequestResponse(url, { method: 'GET' }, error.response?.data || error.message);
@@ -35,7 +46,8 @@ export class HttpClient {
   public async makePostRequest<T>(
     url: string,
     data: unknown,
-    config: RequestConfig = {}
+    config: RequestConfig = {},
+    _isRetry = false
   ): Promise<T> {
     try {
       const headers = await this.buildHeaders(config);
@@ -44,6 +56,15 @@ export class HttpClient {
       await this.logRequestResponse(url, { method: 'POST', headers, data }, response.data);
       return response.data;
     } catch (error) {
+      if (!_isRetry && this.isRetryableError(error)) {
+        await this.logRequestResponse(
+          url,
+          { method: 'POST', retry: true, data },
+          `Retrying after error: ${axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)}`
+        );
+        return this.makePostRequest(url, data, config, true);
+      }
+
       // Log the error response before throwing
       if (axios.isAxiosError(error)) {
         await this.logRequestResponse(url, { method: 'POST', data }, error.response?.data || error.message);
@@ -54,7 +75,8 @@ export class HttpClient {
 
   public async makeDeleteRequest<T>(
     url: string,
-    config: RequestConfig = {}
+    config: RequestConfig = {},
+    _isRetry = false
   ): Promise<T> {
     try {
       const headers = await this.buildHeaders(config);
@@ -63,6 +85,15 @@ export class HttpClient {
       await this.logRequestResponse(url, { method: 'DELETE', headers }, response.data);
       return response.data;
     } catch (error) {
+      if (!_isRetry && this.isRetryableError(error)) {
+        await this.logRequestResponse(
+          url,
+          { method: 'DELETE', retry: true },
+          `Retrying after error: ${axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)}`
+        );
+        return this.makeDeleteRequest(url, config, true);
+      }
+
       // Log the error response before throwing
       if (axios.isAxiosError(error)) {
         await this.logRequestResponse(url, { method: 'DELETE' }, error.response?.data || error.message);
@@ -74,7 +105,8 @@ export class HttpClient {
   public async makePatchRequest<T>(
     url: string,
     data: unknown,
-    config: RequestConfig = {}
+    config: RequestConfig = {},
+    _isRetry = false
   ): Promise<T> {
     try {
       const headers = await this.buildHeaders(config);
@@ -83,6 +115,15 @@ export class HttpClient {
       await this.logRequestResponse(url, { method: 'PATCH', headers, data }, response.data);
       return response.data;
     } catch (error) {
+      if (!_isRetry && this.isRetryableError(error)) {
+        await this.logRequestResponse(
+          url,
+          { method: 'PATCH', retry: true, data },
+          `Retrying after error: ${axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)}`
+        );
+        return this.makePatchRequest(url, data, config, true);
+      }
+
       // Log the error response before throwing
       if (axios.isAxiosError(error)) {
         await this.logRequestResponse(url, { method: 'PATCH', data }, error.response?.data || error.message);
@@ -139,5 +180,16 @@ export class HttpClient {
     return new NetworkError(
       `Request failed: ${error instanceof Error ? error.message : String(error)}`
     );
+  }
+
+  /** Determines whether a request error is retryable (HTTP 5xx or network error) */
+  private isRetryableError(error: unknown): boolean {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      // Retry on 5xx server errors and undefined status (network error)
+      return status === undefined || (status >= 500 && status < 600);
+    }
+    // Only retry non-Axios errors that are instances of NetworkError
+    return error instanceof NetworkError;
   }
 } 
