@@ -6,3 +6,4 @@ export * from './http';
 export * from './logging';
 export * from './BaseClient';
 export * from './operations';
+export * from './ws';

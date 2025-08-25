@@ -13,20 +13,30 @@ function ensureDirectoryExists(filePath: string): void {
 }
 
 function generateForFile(yamlPath: string): void {
-  const relativePath = yamlPath.replace(/^artifacts\/splice\//, '').replace(/\.yaml$/, '.ts');
+  const relativePath = yamlPath
+    .replace(/^artifacts\/splice\//, '')
+    .replace(/\.yaml$/, '.ts');
   const outputPath = path.join('src/generated', relativePath);
   ensureDirectoryExists(outputPath);
   console.log(`🧬 Generating types for ${yamlPath} -> ${outputPath}`);
-  execSync(`npx openapi-typescript "${yamlPath}" -o "${outputPath}"`, { stdio: 'inherit' });
+  execSync(`npx openapi-typescript "${yamlPath}" -o "${outputPath}"`, {
+    stdio: 'inherit',
+  });
 }
 
 function main(): void {
   console.log('🔎 Scanning for OpenAPI YAML files...');
-  const openapiUnderDir = glob.sync('artifacts/splice/**/openapi/**/*.yaml', { nodir: true });
-  const openapiRootFiles = glob.sync('artifacts/splice/**/openapi.yaml', { nodir: true });
+  const openapiUnderDir = glob.sync('artifacts/splice/**/openapi/**/*.yaml', {
+    nodir: true,
+  });
+  const openapiRootFiles = glob.sync('artifacts/splice/**/openapi.yaml', {
+    nodir: true,
+  });
 
   // Merge and de-duplicate
-  const allFiles = Array.from(new Set([...openapiUnderDir, ...openapiRootFiles]));
+  const allFiles = Array.from(
+    new Set([...openapiUnderDir, ...openapiRootFiles])
+  );
 
   if (allFiles.length === 0) {
     console.log('⚠️  No OpenAPI files found.');
@@ -41,4 +51,4 @@ function main(): void {
   console.log('✅ OpenAPI type generation complete.');
 }
 
-main(); 
+main();
