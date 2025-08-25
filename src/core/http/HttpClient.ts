@@ -27,7 +27,11 @@ export class HttpClient {
     } catch (error) {
       // Attempt one automatic retry for transient errors
       if (!_isRetry && this.isRetryableError(error)) {
-        // Optionally, add custom retry logging here if desired
+        await this.logRequestResponse(
+          url,
+          { method: 'GET', retry: true },
+          `Retrying after error: ${axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)}`
+        );
         return this.makeGetRequest(url, config, true);
       }
 
@@ -53,6 +57,11 @@ export class HttpClient {
       return response.data;
     } catch (error) {
       if (!_isRetry && this.isRetryableError(error)) {
+        await this.logRequestResponse(
+          url,
+          { method: 'POST', retry: true, data },
+          `Retrying after error: ${axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)}`
+        );
         return this.makePostRequest(url, data, config, true);
       }
 
@@ -77,6 +86,11 @@ export class HttpClient {
       return response.data;
     } catch (error) {
       if (!_isRetry && this.isRetryableError(error)) {
+        await this.logRequestResponse(
+          url,
+          { method: 'DELETE', retry: true },
+          `Retrying after error: ${axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)}`
+        );
         return this.makeDeleteRequest(url, config, true);
       }
 
@@ -102,6 +116,11 @@ export class HttpClient {
       return response.data;
     } catch (error) {
       if (!_isRetry && this.isRetryableError(error)) {
+        await this.logRequestResponse(
+          url,
+          { method: 'PATCH', retry: true, data },
+          `Retrying after error: ${axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)}`
+        );
         return this.makePatchRequest(url, data, config, true);
       }
 
