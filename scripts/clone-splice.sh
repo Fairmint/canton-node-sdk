@@ -36,6 +36,14 @@ find . -name 'openapi.yaml' ! -path '*/examples/*' | while read -r file; do
     cp "$file" "$target_dir/"
 done
 
+# Copy asyncapi.yaml files
+echo "Copying asyncapi.yaml files..."
+find . -name 'asyncapi.yaml' ! -path '*/examples/*' | while read -r file; do
+    target_dir="$PROJECT_ROOT/artifacts/splice/$(dirname "$file")"
+    mkdir -p "$target_dir"
+    cp "$file" "$target_dir/"
+done
+
 # Clean up
 echo "Cleaning up..."
 cd "$PROJECT_ROOT"
