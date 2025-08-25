@@ -189,7 +189,7 @@ export class HttpClient {
       // Retry on 5xx server errors and undefined status (network error)
       return status === undefined || (status >= 500 && status < 600);
     }
-    // Non-Axios errors are likely network-related; allow retry
-    return true;
+    // Only retry non-Axios errors that are instances of NetworkError
+    return error instanceof NetworkError;
   }
 } 
