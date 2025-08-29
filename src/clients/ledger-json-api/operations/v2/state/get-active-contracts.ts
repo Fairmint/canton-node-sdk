@@ -15,7 +15,20 @@ export type GetActiveContractsCustomParams = z.infer<typeof GetActiveContractsPa
 export const GetActiveContracts = createApiOperation<GetActiveContractsCustomParams, GetActiveContractsResponse>({
   paramsSchema: GetActiveContractsParamsSchema,
   method: 'POST',
-  buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
+  buildUrl: (params, apiUrl) => {
+    const baseUrl = `${apiUrl}${endpoint}`;
+    const queryParams = new URLSearchParams();
+
+    if (params.limit !== undefined) {
+      queryParams.append('limit', params.limit.toString());
+    }
+    if (params.streamIdleTimeoutMs !== undefined) {
+      queryParams.append('stream_idle_timeout_ms', params.streamIdleTimeoutMs.toString());
+    }
+
+    const queryString = queryParams.toString();
+    return queryString ? `${baseUrl}?${queryString}` : baseUrl;
+  },
   buildRequestData: async (params, client) => {
     const requestVerbose = params.verbose === undefined ? true : params.verbose;
 
@@ -37,8 +50,6 @@ export const GetActiveContracts = createApiOperation<GetActiveContractsCustomPar
       filter: filtersByParty ? { filtersByParty } : undefined,
       verbose: requestVerbose,
       activeAtOffset,
-      limit: params.limit,
-      streamIdleTimeoutMs: params.streamIdleTimeoutMs,
     };
   },
 }); 
