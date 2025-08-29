@@ -40,14 +40,60 @@ export const GetActiveContracts = createApiOperation<GetActiveContractsCustomPar
       activeAtOffset = ledgerEnd.offset;
     }
 
-    // If parties provided, map to filter.filtersByParty with empty objects
-    const filtersByParty = params.parties && params.parties.length > 0
-      ? Object.fromEntries(Array.from(new Set(params.parties)).map((party) => [party, {}]))
-      : undefined;
+    // Build filter structure based on parties and template IDs
+    let filter: any = undefined;
+
+    if (params.parties && params.parties.length > 0) {
+      const uniqueParties = Array.from(new Set(params.parties));
+      const filtersByParty: Record<string, any> = {};
+
+      for (const party of uniqueParties) {
+        let partyFilter: any = {};
+
+        if (params.templateIds && params.templateIds.length > 0) {
+          // Create template filters for this party
+          const cumulative = params.templateIds.map(templateId => ({
+            identifierFilter: {
+              TemplateFilter: {
+                value: {
+                  templateId,
+                  includeCreatedEventBlob: false
+                }
+              }
+            }
+          }));
+
+          partyFilter = { cumulative };
+        } else {
+          // No template filters specified, use empty filter (wildcard)
+          partyFilter = {};
+        }
+
+        filtersByParty[party] = partyFilter;
+      }
+
+      filter = { filtersByParty };
+    } else if (params.templateIds && params.templateIds.length > 0) {
+      // Template filters for any party
+      const cumulative = params.templateIds.map(templateId => ({
+        identifierFilter: {
+          TemplateFilter: {
+            value: {
+              templateId,
+              includeCreatedEventBlob: false
+            }
+          }
+        }
+      }));
+
+      filter = {
+        filtersForAnyParty: { cumulative }
+      };
+    }
 
     // Build and return the request body explicitly
     return {
-      filter: filtersByParty ? { filtersByParty } : undefined,
+      filter,
       verbose: requestVerbose,
       activeAtOffset,
     };

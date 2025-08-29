@@ -13,6 +13,8 @@ export const GetActiveContractsParamsSchema = z.object({
   streamIdleTimeoutMs: z.number().optional(),
   /** Parties to filter by (optional). */
   parties: z.array(z.string()).optional(),
+  /** Template IDs to filter by (optional). If specified, only contracts of these templates will be returned. */
+  templateIds: z.array(z.string()).optional(),
   /** Whether to include verbose information (optional). */
   verbose: z.boolean().optional(),
 });
