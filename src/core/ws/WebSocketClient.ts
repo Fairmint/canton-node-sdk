@@ -35,19 +35,30 @@ export class WebSocketClient {
 		
 		// Use standard WebSocket auth pattern:
 		// - JWT in Authorization header
-		// - Application protocol in subprotocol
-		const protocols: string[] = ['daml-ledger-api'];
+		// - Application protocol in subprotocol (daml.ws.auth)
+		const protocols: string[] = ['daml.ws.auth'];
 
 		const socket = new WebSocket(wsUrl, protocols, {
 			handshakeTimeout: 30000,
 			headers: token ? { 'Authorization': `Bearer ${token}` } : undefined,
 		});
 
+		const logger = this.client.getLogger();
+		const log = async (event: string, payload: unknown) => {
+			if (logger) {
+				await logger.logRequestResponse(wsUrl, { event, requestMessage }, payload);
+			}
+		};
+
+		await log('connect', { headers: token ? { Authorization: '[REDACTED]' } : undefined, protocols });
+
 		socket.on('open', () => {
 			try {
 				socket.send(JSON.stringify(requestMessage));
+				log('send', requestMessage);
 				if (handlers.onOpen) handlers.onOpen();
 			} catch (err) {
+				log('send_error', err instanceof Error ? { message: err.message } : String(err));
 				if (handlers.onError) handlers.onError(err as Error);
 				socket.close();
 			}
@@ -56,17 +67,21 @@ export class WebSocketClient {
 		socket.on('message', (data: RawData) => {
 			try {
 				const parsed = JSON.parse(data.toString());
+				log('message', parsed);
 				handlers.onMessage(parsed as InboundMessage);
 			} catch (err) {
+				log('parse_error', { raw: data.toString(), error: err instanceof Error ? err.message : String(err) });
 				if (handlers.onError) handlers.onError(err as Error);
 			}
 		});
 
 		socket.on('error', (err: Error) => {
+			log('socket_error', { message: err.message });
 			if (handlers.onError) handlers.onError(err);
 		});
 
 		socket.on('close', (code: number, reason: Buffer) => {
+			log('close', { code, reason: reason.toString() });
 			if (handlers.onClose) handlers.onClose(code, reason.toString());
 		});
 

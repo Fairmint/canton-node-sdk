@@ -18,7 +18,7 @@ export const SubscribeToActiveContracts = createWebSocketOperation<ActiveContrac
 	buildRequestMessage: (params, client) => {
 		return {
 			filter: undefined,
-			verbose: params.eventFormat ? undefined : params.verbose ?? true,
+			verbose: params.eventFormat ? undefined : params.verbose ?? false,
 			activeAtOffset: params.activeAtOffset,
 			eventFormat: params.eventFormat ?? {
 				filtersByParty: Object.fromEntries((params.parties && params.parties.length > 0 ? params.parties : client.buildPartyList()).map(p => [p, { cumulative: [] }])),

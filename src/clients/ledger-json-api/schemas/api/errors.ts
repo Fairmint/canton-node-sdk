@@ -241,3 +241,22 @@ export type JsErrorCodeKind = z.infer<typeof JsErrorCodeKindSchema>;
 export type JsErrorCode = z.infer<typeof JsErrorCodeSchema>;
 export type JsCantonError = z.infer<typeof JsCantonErrorSchema>;
 export type JsError = z.infer<typeof JsErrorSchema>; 
+
+/**
+ * WebSocket Canton error details (per AsyncAPI schema for WS endpoints).
+ * Note: WS errors differ from REST errors and include fields like `cause` and string `code`.
+ */
+export const WsCantonErrorSchema = z.object({
+  code: z.string(),
+  cause: z.string(),
+  correlationId: z.string().nullable().optional(),
+  traceId: z.string().nullable().optional(),
+  context: z.record(z.string(), z.unknown()).nullable().optional(),
+  resources: z.array(z.tuple([z.string(), z.string()])).nullable().optional(),
+  errorCategory: z.number().int(),
+  grpcCodeValue: z.number().int().nullable().optional(),
+  retryInfo: z.string().nullable().optional(),
+  definiteAnswer: z.boolean().nullable().optional(),
+});
+
+export type WsCantonError = z.infer<typeof WsCantonErrorSchema>;

@@ -43,8 +43,25 @@ export const CompletionSchema = z.object({
     actAs: z.array(z.string()).optional(),
     /** Submission ID (optional). */
     submissionId: z.string().optional(),
-    /** Deduplication period. */
-    deduplicationPeriod: DeduplicationPeriodSchema,
+    /** Deduplication period (optional; WS may use multiple shapes). */
+    deduplicationPeriod: z.union([
+      // Standard REST/JS shapes
+      DeduplicationPeriodSchema,
+      // WS variants with nested value wrappers or primitives
+      z.object({ DeduplicationOffset: z.object({ value: z.object({ offset: z.number() }) }) }),
+      z.object({ DeduplicationOffset: z.object({ value: z.number() }) }),
+      z.object({ DeduplicationOffset: z.object({ offset: z.number() }) }),
+      z.object({ DeduplicationOffset: z.number() }),
+      z.object({ DeduplicationOffset: z.string() }),
+      z.object({ DeduplicationDuration: z.object({ value: z.object({ seconds: z.number() }) }) }),
+      z.object({ DeduplicationDuration: z.object({ value: z.number() }) }),
+      z.object({ DeduplicationDuration: z.object({ seconds: z.number() }) }),
+      z.object({ DeduplicationDuration: z.number() }),
+      z.object({ DeduplicationDuration: z.string() }),
+      // Sometimes an explicit Empty or empty object
+      z.object({ Empty: z.object({}).strict() }),
+      z.object({}).strict(),
+    ]).optional().nullable(),
     /** Trace context (optional). */
     traceContext: TraceContextSchema.optional(),
     /** Offset for resuming the stream. */

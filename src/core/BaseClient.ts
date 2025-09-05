@@ -126,6 +126,10 @@ export abstract class BaseClient {
     return this.httpClient.makePatchRequest<T>(url, data, config);
   }
 
+  public getLogger(): import('./logging').Logger | undefined {
+    return this.clientConfig.logger;
+  }
+
   public getApiUrl(): string {
     const apiConfig = this.config.apis[this.apiType];
     return apiConfig?.apiUrl || '';
