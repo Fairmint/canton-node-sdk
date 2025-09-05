@@ -4,6 +4,7 @@ import { GetUpdatesParamsSchema } from '../../../schemas/operations/updates';
 import { JsCantonErrorSchema, WsCantonErrorSchema } from '../../../schemas/api/errors';
 import { JsUpdateSchema, WsUpdateSchema } from '../../../schemas/api/updates';
 import { normalizeUpdateFormat, buildWsRequestFilterAndVerbose } from './utils/format-normalizers';
+import { WebSocketErrorUtils } from '../../../../../core/ws/WebSocketErrorUtils';
 
 const path = '/v2/updates/flats' as const;
 
@@ -27,11 +28,15 @@ export const SubscribeToFlats = createWebSocketOperation<UpdatesFlatsWsParams, u
 		};
 	},
 	transformInbound: (msg) => {
-		return z.union([
-			z.object({ update: JsUpdateSchema }),
-			z.object({ update: WsUpdateSchema }),
-			JsCantonErrorSchema,
-			WsCantonErrorSchema,
-		]).parse(msg) as UpdatesFlatsWsMessage;
+		return WebSocketErrorUtils.parseUnion(
+			msg,
+			z.union([
+				z.object({ update: JsUpdateSchema }),
+				z.object({ update: WsUpdateSchema }),
+				JsCantonErrorSchema,
+				WsCantonErrorSchema,
+			]),
+			'SubscribeToFlats'
+		);
 	},
 }); 

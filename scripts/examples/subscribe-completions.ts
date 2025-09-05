@@ -16,12 +16,13 @@ async function main(): Promise<void> {
     },
     {
       onOpen: () => console.log('Completions stream opened'),
-      onMessage: (msg) => console.log(JSON.stringify(msg)),
-      onError: (err) => {
+      onMessage: msg => console.log(JSON.stringify(msg)),
+      onError: err => {
         console.error('Stream error:', err);
         process.exit(1);
       },
-      onClose: (code, reason) => console.log(`Stream closed: ${code} ${reason}`),
+      onClose: (code, reason) =>
+        console.log(`Stream closed: ${code} ${reason}`),
     }
   );
 
@@ -33,9 +34,7 @@ async function main(): Promise<void> {
   }, 120000);
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error(err);
   process.exit(1);
 });
-
-

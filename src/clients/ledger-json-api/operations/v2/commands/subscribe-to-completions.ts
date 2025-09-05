@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createWebSocketOperation } from '../../../../../core/operations/WebSocketOperationFactory';
 import { CompletionStreamRequestSchema, CompletionStreamResponseSchema, CompletionStreamRequest, CompletionStreamResponse } from '../../../schemas/api/completions';
 import { JsCantonErrorSchema, WsCantonErrorSchema } from '../../../schemas/api/errors';
+import { WebSocketErrorUtils } from '../../../../../core/ws/WebSocketErrorUtils';
 
 const path = '/v2/commands/completions' as const;
 
@@ -23,10 +24,14 @@ export const SubscribeToCompletions = createWebSocketOperation<CompletionsWsPara
 		};
 	},
 	transformInbound: (msg) => {
-		return z.union([
-			CompletionStreamResponseSchema,
-			JsCantonErrorSchema,
-			WsCantonErrorSchema,
-		]).parse(msg) as CompletionsWsMessage;
+		return WebSocketErrorUtils.parseUnion(
+			msg,
+			z.union([
+				CompletionStreamResponseSchema,
+				JsCantonErrorSchema,
+				WsCantonErrorSchema,
+			]),
+			'SubscribeToCompletions'
+		);
 	},
 }); 

@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { LedgerJsonApiClient } from '../../src';
+import type { JsGetActiveContractsResponseItem } from '../../src/clients/ledger-json-api/schemas';
 
 async function main(): Promise<void> {
   const client = new LedgerJsonApiClient();
@@ -28,8 +29,9 @@ async function main(): Promise<void> {
           typeof msg === 'object' &&
           msg !== null &&
           'contractEntry' in msg &&
-          (msg as any).contractEntry &&
-          'JsActiveContract' in (msg as any).contractEntry
+          (msg as JsGetActiveContractsResponseItem).contractEntry &&
+          'JsActiveContract' in
+            (msg as JsGetActiveContractsResponseItem).contractEntry
         ) {
           activeContractsFound += 1;
         }
@@ -60,5 +62,3 @@ main().catch(err => {
   console.error(err);
   process.exit(1);
 });
-
-

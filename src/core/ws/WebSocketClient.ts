@@ -1,8 +1,11 @@
 import WebSocket, { RawData } from 'ws';
 import { BaseClient } from '../BaseClient';
+import { WebSocketErrorUtils } from './WebSocketErrorUtils';
 
 export interface WebSocketSubscription {
 	close: () => void;
+	isConnected: () => boolean;
+	getConnectionState: () => number;
 }
 
 export interface WebSocketHandlers<Message, ErrorMessage = unknown> {
@@ -52,41 +55,50 @@ export class WebSocketClient {
 
 		await log('connect', { headers: token ? { Authorization: '[REDACTED]' } : undefined, protocols });
 
-		socket.on('open', () => {
+		socket.on('open', async () => {
 			try {
 				socket.send(JSON.stringify(requestMessage));
-				log('send', requestMessage);
+				await log('send', requestMessage);
 				if (handlers.onOpen) handlers.onOpen();
 			} catch (err) {
-				log('send_error', err instanceof Error ? { message: err.message } : String(err));
+				await log('send_error', err instanceof Error ? { message: err.message } : String(err));
 				if (handlers.onError) handlers.onError(err as Error);
 				socket.close();
 			}
 		});
 
-		socket.on('message', (data: RawData) => {
+		socket.on('message', async (data: RawData) => {
 			try {
-				const parsed = JSON.parse(data.toString());
-				log('message', parsed);
+				const parsed = WebSocketErrorUtils.safeJsonParse(data.toString(), 'WebSocket message');
+				await log('message', parsed);
 				handlers.onMessage(parsed as InboundMessage);
 			} catch (err) {
-				log('parse_error', { raw: data.toString(), error: err instanceof Error ? err.message : String(err) });
+				await log('parse_error', { raw: data.toString(), error: err instanceof Error ? err.message : String(err) });
+				// Close connection on JSON parse failure to prevent inconsistent state
+				socket.close(1003, 'Invalid JSON received');
 				if (handlers.onError) handlers.onError(err as Error);
 			}
 		});
 
-		socket.on('error', (err: Error) => {
-			log('socket_error', { message: err.message });
+		socket.on('error', async (err: Error) => {
+			await log('socket_error', { message: err.message });
 			if (handlers.onError) handlers.onError(err);
 		});
 
-		socket.on('close', (code: number, reason: Buffer) => {
-			log('close', { code, reason: reason.toString() });
+		socket.on('close', async (code: number, reason: Buffer) => {
+			await log('close', { code, reason: reason.toString() });
 			if (handlers.onClose) handlers.onClose(code, reason.toString());
 		});
 
+
 		return {
-			close: () => socket.close(),
+			close: () => {
+				// Remove all event listeners to prevent memory leaks
+				socket.removeAllListeners();
+				socket.close();
+			},
+			isConnected: () => socket.readyState === WebSocket.OPEN,
+			getConnectionState: () => socket.readyState,
 		};
 	}
 

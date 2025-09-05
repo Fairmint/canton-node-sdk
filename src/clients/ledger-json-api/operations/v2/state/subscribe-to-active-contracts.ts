@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createWebSocketOperation } from '../../../../../core/operations/WebSocketOperationFactory';
 import { GetActiveContractsRequestSchema, JsGetActiveContractsResponseItemSchema } from '../../../schemas/api/state';
 import { JsCantonErrorSchema } from '../../../schemas/api/errors';
+import { WebSocketErrorUtils } from '../../../../../core/ws/WebSocketErrorUtils';
 
 const path = '/v2/state/active-contracts' as const;
 
@@ -27,10 +28,13 @@ export const SubscribeToActiveContracts = createWebSocketOperation<ActiveContrac
 		};
 	},
 	transformInbound: (msg) => {
-		try {
-			return JsGetActiveContractsResponseItemSchema.parse(msg) as ActiveContractsWsMessage;
-		} catch {
-			return JsCantonErrorSchema.parse(msg) as ActiveContractsWsMessage;
-		}
+		return WebSocketErrorUtils.parseUnion(
+			msg,
+			z.union([
+				JsGetActiveContractsResponseItemSchema,
+				JsCantonErrorSchema,
+			]),
+			'SubscribeToActiveContracts'
+		);
 	},
 }); 

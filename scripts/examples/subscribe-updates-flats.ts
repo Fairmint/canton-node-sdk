@@ -38,7 +38,8 @@ async function main(): Promise<void> {
         console.error('Stream error:', err);
         process.exit(1);
       },
-      onClose: (code, reason) => console.log(`Stream closed: ${code} ${reason}`),
+      onClose: (code, reason) =>
+        console.log(`Stream closed: ${code} ${reason}`),
     }
   );
 
@@ -54,5 +55,3 @@ main().catch(err => {
   console.error(err);
   process.exit(1);
 });
-
-

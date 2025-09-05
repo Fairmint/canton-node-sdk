@@ -4,6 +4,7 @@ import { GetUpdatesParamsSchema } from '../../../schemas/operations/updates';
 import { JsCantonErrorSchema, WsCantonErrorSchema } from '../../../schemas/api/errors';
 import { JsTransactionTreeSchema, WsUpdateTreesSchema } from '../../../schemas/api/updates';
 import { buildWsRequestFilterAndVerbose } from './utils/format-normalizers';
+import { WebSocketErrorUtils } from '../../../../../core/ws/WebSocketErrorUtils';
 
 const path = '/v2/updates/trees' as const;
 
@@ -25,11 +26,15 @@ export const SubscribeToTrees = createWebSocketOperation<UpdatesTreesWsParams, u
 		};
 	},
 	transformInbound: (msg) => {
-		return z.union([
-			z.object({ update: z.object({ JsTransactionTree: JsTransactionTreeSchema }) }),
-			z.object({ update: WsUpdateTreesSchema }),
-			JsCantonErrorSchema,
-			WsCantonErrorSchema,
-		]).parse(msg) as UpdatesTreesWsMessage;
+		return WebSocketErrorUtils.parseUnion(
+			msg,
+			z.union([
+				z.object({ update: z.object({ JsTransactionTree: JsTransactionTreeSchema }) }),
+				z.object({ update: WsUpdateTreesSchema }),
+				JsCantonErrorSchema,
+				WsCantonErrorSchema,
+			]),
+			'SubscribeToTrees'
+		);
 	},
 }); 
