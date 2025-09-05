@@ -7,7 +7,7 @@ import * as ts from 'typescript';
 interface OperationInfo {
   name: string;
   filePath: string;
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'WebSocket';
   description?: string;
   examples?: string[];
   parameters?: string;
@@ -170,7 +170,7 @@ class OperationDocGenerator {
     // Extract method from createApiOperation call
     const methodMatch = sourceCode.match(/method:\s*['"`](\w+)['"`]/);
     if (methodMatch) {
-      operationInfo.method = methodMatch[1] as 'GET' | 'POST';
+      operationInfo.method = methodMatch[1] as 'GET' | 'POST' | 'WebSocket';
     }
   }
 
@@ -306,11 +306,21 @@ class OperationDocGenerator {
                 propName === 'method' &&
                 ts.isStringLiteral(prop.initializer)
               ) {
-                operationInfo.method = prop.initializer.text as 'GET' | 'POST';
+                operationInfo.method = prop.initializer.text as 'GET' | 'POST' | 'WebSocket';
               }
             }
           }
         }
+      }
+
+      // Look for createWebSocketOperation calls
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'createWebSocketOperation'
+      ) {
+        // Mark this as a WebSocket operation
+        operationInfo.method = 'WebSocket' as any;
       }
 
       // Look for type imports to extract response type
@@ -1142,6 +1152,13 @@ ${categories.map(category => this.generateCategorySection(apiType, category)).jo
       // Special case for GetEventsByContractId which uses OpenAPI types
       if (operation.name === 'GetEventsByContractId') {
         operation.responseType = 'EventsByContractIdResponse';
+      } else if (operation.method === 'WebSocket') {
+        // For WebSocket operations, set a generic response type
+        operation.responseType = 'WebSocketMessage';
+        operation.responseSchema = `{
+  // WebSocket message type - actual structure depends on the specific operation
+  // This could be an update, completion, or error message
+}`;
       } else {
         throw new Error(
           `Missing response type information for operation "${operation.name}" in file "${operation.filePath}". ` +
@@ -1236,7 +1253,28 @@ const config = EnvLoader.getConfig('${operation.apiType === 'ledger-json-api' ? 
 const client = new ${operation.apiType === 'ledger-json-api' ? 'LedgerJsonApiClient' : 'ValidatorApiClient'}(config);
 
 ${
-  uniqueExamples.length > 0
+  operation.method === 'WebSocket'
+    ? `// WebSocket operation - use subscribe method
+const subscription = await client.${operation.name.toLowerCase()}.subscribe(
+  {
+    // Add your parameters here
+  },
+  {
+    onMessage: (message) => {
+      console.log('Received message:', message);
+    },
+    onError: (error) => {
+      console.error('WebSocket error:', error);
+    },
+    onClose: () => {
+      console.log('WebSocket connection closed');
+    }
+  }
+);
+
+// To close the subscription
+subscription.close();`
+    : uniqueExamples.length > 0
     ? uniqueExamples[0]
     : `// Example usage for ${operation.name}`
 }
