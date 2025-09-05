@@ -7,6 +7,7 @@ import {
 } from './event-details';
 import { EventFormatSchema, TreeEventSchema } from './events';
 import { TraceContextSchema } from '../common';
+import { OffsetCheckpointSchema } from './completions';
 import { JsCommandsSchema } from './commands';
 
 /**
@@ -79,6 +80,23 @@ export const JsTransactionTreeSchema = z.object({
 export const JsUpdateSchema = z.union([
   z.object({ JsTransaction: JsTransactionSchema }),
   z.object({ JsTransactionTree: JsTransactionTreeSchema }),
+  z.object({ OffsetCheckpoint: OffsetCheckpointSchema }),
+]);
+
+/**
+ * WebSocket update wrappers (per AsyncAPI) - relaxed typing to accept server payloads.
+ */
+export const WsUpdateSchema = z.union([
+  z.object({ OffsetCheckpoint: z.any() }),
+  z.object({ Reassignment: z.any() }),
+  z.object({ TopologyTransaction: z.any() }),
+  z.object({ Transaction: z.any() }),
+]);
+
+export const WsUpdateTreesSchema = z.union([
+  z.object({ OffsetCheckpoint: z.any() }),
+  z.object({ Reassignment: z.any() }),
+  z.object({ TransactionTree: z.any() }),
 ]);
 
 /**
@@ -207,6 +225,8 @@ export type JsUpdateEvent = z.infer<typeof JsUpdateEventSchema>;
 export type JsTransaction = z.infer<typeof JsTransactionSchema>;
 export type JsTransactionTree = z.infer<typeof JsTransactionTreeSchema>;
 export type JsUpdate = z.infer<typeof JsUpdateSchema>;
+export type WsUpdate = z.infer<typeof WsUpdateSchema>;
+export type WsUpdateTrees = z.infer<typeof WsUpdateTreesSchema>;
 export type UpdateStreamRequest = z.infer<typeof UpdateStreamRequestSchema>;
 export type UpdateStreamResponse = z.infer<typeof UpdateStreamResponseSchema>;
 export type JsSubmitAndWaitForTransactionRequest = z.infer<typeof JsSubmitAndWaitForTransactionRequestSchema>;

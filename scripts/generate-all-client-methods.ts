@@ -65,23 +65,41 @@ function getAllTsFiles(dir: string): string[] {
   return results;
 }
 
-// Extract operation info from a file
-function extractOperationInfo(
-  fileContent: string
-): { operationName: string; paramsType: string; responseType: string } | null {
-  // Matches: export const OperationName = createApiOperation<Params, Response>({...})
-  // or export const OperationName = createSimpleApiOperation<Params, Response>({...})
-  // Handles multiline exports with type parameters on separate lines
-  const regex =
-    /export const (\w+) = create(?:Simple)?ApiOperation<\s*([^,]+),\s*([^>]+)\s*>/s;
-  const match = regex.exec(fileContent);
-  if (!match || !match[1] || !match[2] || !match[3]) return null;
+type OperationInfo =
+  | { kind: 'api'; operationName: string; paramsType: string; responseType: string }
+  | { kind: 'ws'; operationName: string; paramsType: string; requestType: string; messageType: string };
 
-  return {
-    operationName: match[1],
-    paramsType: match[2].trim(),
-    responseType: match[3].trim(),
-  };
+// Extract operation info from a file (supports REST and WebSocket operations)
+function extractOperationInfo(fileContent: string): OperationInfo | null {
+  // REST operations: createApiOperation or createSimpleApiOperation
+  const apiRegex = /export const (\w+) = create(?:Simple)?ApiOperation<\s*([^,]+),\s*([^>]+)\s*>/s;
+  const apiMatch = apiRegex.exec(fileContent);
+  if (apiMatch && apiMatch[1] && apiMatch[2] && apiMatch[3]) {
+    return {
+      kind: 'api',
+      operationName: apiMatch[1],
+      paramsType: apiMatch[2].trim(),
+      responseType: apiMatch[3].trim(),
+    };
+  }
+
+  // WebSocket operations: createWebSocketOperation<Params, RequestMessage, InboundMessage>
+  // Note: Generic types can contain nested angle brackets (e.g., z.infer<...>),
+  // which are hard to parse reliably with a simple regex. We only need the
+  // operation name for generation, so match by name and ignore generic details.
+  const wsNameRegex = /export const (\w+)\s*=\s*createWebSocketOperation</s;
+  const wsNameMatch = wsNameRegex.exec(fileContent);
+  if (wsNameMatch && wsNameMatch[1]) {
+    return {
+      kind: 'ws',
+      operationName: wsNameMatch[1],
+      paramsType: 'unknown',
+      requestType: 'unknown',
+      messageType: 'unknown',
+    };
+  }
+
+  return null;
 }
 
 function relativeImportPath(from: string, to: string): string {
@@ -91,29 +109,40 @@ function relativeImportPath(from: string, to: string): string {
 }
 
 function generateMethodDeclarations(
-  ops: { operationName: string; paramsType: string; responseType: string }[]
+  ops: (OperationInfo & { importPath: string })[]
 ): string {
   return ops
     .map(op => {
       const methodName = operationNameToMethodName(op.operationName);
-      const methodParamsType = `Parameters<InstanceType<typeof ${op.operationName}>['execute']>[0]`;
-      const methodReturnType = `ReturnType<InstanceType<typeof ${op.operationName}>['execute']>`;
-      if (op.paramsType === 'void') {
-        return `  public ${methodName}!: () => ${methodReturnType};`;
+      if (op.kind === 'api') {
+        const methodParamsType = `Parameters<InstanceType<typeof ${op.operationName}>['execute']>[0]`;
+        const methodReturnType = `ReturnType<InstanceType<typeof ${op.operationName}>['execute']>`;
+        if (op.paramsType === 'void') {
+          return `  public ${methodName}!: () => ${methodReturnType};`;
+        }
+        return `  public ${methodName}!: (params: ${methodParamsType}) => ${methodReturnType};`;
+      } else {
+        // WebSocket subscribe methods
+        const paramsType = `Parameters<InstanceType<typeof ${op.operationName}>['subscribe']>[0]`;
+        const messageType = `Parameters<Parameters<InstanceType<typeof ${op.operationName}>['subscribe']>[1]['onMessage']>[0]`;
+        return `  public ${methodName}!: (params: ${paramsType}, handlers: WebSocketHandlers<${messageType}>) => Promise<WebSocketSubscription>;`;
       }
-      return `  public ${methodName}!: (params: ${methodParamsType}) => ${methodReturnType};`;
     })
     .join('\n');
 }
 
 function generateMethodImplementations(
-  ops: { operationName: string; paramsType: string; responseType: string }[]
+  ops: (OperationInfo & { importPath: string })[]
 ): string {
   return ops
     .map(op => {
       const methodName = operationNameToMethodName(op.operationName);
-      const params = op.paramsType === 'void' ? '' : 'params';
-      return `    this.${methodName} = (${params}) => new ${op.operationName}(this).execute(${params});`;
+      if (op.kind === 'api') {
+        const params = op.paramsType === 'void' ? '' : 'params';
+        return `    this.${methodName} = (${params}) => new ${op.operationName}(this).execute(${params});`;
+      } else {
+        return `    this.${methodName} = (params, handlers) => new ${op.operationName}(this).subscribe(params as any, handlers as any);`;
+      }
     })
     .join('\n');
 }
@@ -147,12 +176,7 @@ function generateClientFile(clientConfig: ClientConfig): void {
         importPath: relativeImportPath(clientFile, file),
       };
     })
-    .filter(Boolean) as {
-    operationName: string;
-    paramsType: string;
-    responseType: string;
-    importPath: string;
-  }[];
+    .filter(Boolean) as (OperationInfo & { importPath: string })[];
 
   if (allOps.length === 0) {
     console.warn(`No operations found for ${name} in ${operationsDir}`);
@@ -178,8 +202,12 @@ function generateClientFile(clientConfig: ClientConfig): void {
         ? 'VALIDATOR_API'
         : 'LIGHTHOUSE_API';
 
+  const needsWsImports = allOps.some(op => op.kind === 'ws');
+  const wsImports = needsWsImports ? `\nimport { WebSocketHandlers, WebSocketSubscription } from '../../core/ws';` : '';
+
   const content = `import { ${baseClassImport}, ClientConfig } from '${baseClassPath}';
 ${opImports}
+${wsImports}
 
 /** Client for interacting with Canton's ${name.replace('Client', '')} */
 export class ${name} extends ${baseClass} {

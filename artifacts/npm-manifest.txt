@@ -15,6 +15,7 @@ build/src/clients/ledger-json-api/operations/v2/commands/submit-and-wait
 build/src/clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-reassignment
 build/src/clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction
 build/src/clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction-tree
+build/src/clients/ledger-json-api/operations/v2/commands/subscribe-to-completions
 build/src/clients/ledger-json-api/operations/v2/events/get-events-by-contract-id
 build/src/clients/ledger-json-api/operations/v2/events/index
 build/src/clients/ledger-json-api/operations/v2/idps/delete-idp
@@ -45,6 +46,7 @@ build/src/clients/ledger-json-api/operations/v2/state/get-connected-synchronizer
 build/src/clients/ledger-json-api/operations/v2/state/get-latest-pruned-offsets
 build/src/clients/ledger-json-api/operations/v2/state/get-ledger-end
 build/src/clients/ledger-json-api/operations/v2/state/index
+build/src/clients/ledger-json-api/operations/v2/state/subscribe-to-active-contracts
 build/src/clients/ledger-json-api/operations/v2/updates/get-flats
 build/src/clients/ledger-json-api/operations/v2/updates/get-transaction-by-id
 build/src/clients/ledger-json-api/operations/v2/updates/get-transaction-by-offset
@@ -54,6 +56,9 @@ build/src/clients/ledger-json-api/operations/v2/updates/get-trees
 build/src/clients/ledger-json-api/operations/v2/updates/get-update-by-id
 build/src/clients/ledger-json-api/operations/v2/updates/get-update-by-offset
 build/src/clients/ledger-json-api/operations/v2/updates/index
+build/src/clients/ledger-json-api/operations/v2/updates/subscribe-to-flats
+build/src/clients/ledger-json-api/operations/v2/updates/subscribe-to-trees
+build/src/clients/ledger-json-api/operations/v2/updates/utils/format-normalizers
 build/src/clients/ledger-json-api/operations/v2/users/create-user
 build/src/clients/ledger-json-api/operations/v2/users/delete-user
 build/src/clients/ledger-json-api/operations/v2/users/get-user
@@ -184,8 +189,12 @@ build/src/core/logging/Logger
 build/src/core/logging/index
 build/src/core/operations/ApiOperation
 build/src/core/operations/ApiOperationFactory
+build/src/core/operations/WebSocketOperationFactory
 build/src/core/operations/index
 build/src/core/types
+build/src/core/ws/WebSocketClient
+build/src/core/ws/WebSocketErrorUtils
+build/src/core/ws/index
 build/src/generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi
 build/src/generated/token-standard/splice-api-token-allocation-instruction-v1/openapi/allocation-instruction-v1
 build/src/generated/token-standard/splice-api-token-allocation-v1/openapi/allocation-v1

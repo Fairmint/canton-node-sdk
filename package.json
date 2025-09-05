@@ -9,9 +9,9 @@
   },
   "scripts": {
     "build": "npm run build:core && npm run build:lint",
-    "build:core": "npm run generate:openapi-types && npm run build:core:generate-client-methods && tsc",
+    "build:core": "npm run generate:openapi-types && npm run build:core:generate-client-methods && tsc", 
     "build:core:generate-client-methods": "tsx scripts/generate-all-client-methods.ts",
-    "generate:openapi-types": "find artifacts/splice -name '*.yaml' -exec sh -c 'relative_path=\"$(echo \"$1\" | sed \"s|^artifacts/splice/||\" | sed \"s|\\.yaml$|.ts|\")\"; output_file=\"src/generated/$relative_path\"; mkdir -p \"$(dirname \"$output_file\")\"; npx openapi-typescript \"$1\" -o \"$output_file\"' _ {} \\;",
+    "generate:openapi-types": "tsx scripts/generate-openapi-types.ts",
     "build:lint": "tsc -p tsconfig.lint.json",
     "simulate": "tsx --tsconfig tsconfig.lint.json scripts/run-simulations.ts",
     "simulate:events": "tsx --tsconfig tsconfig.lint.json scripts/run-events-simulation.ts",
@@ -68,7 +68,8 @@
     "prettier": "3.6.2",
     "ts-jest": "29.4.1",
     "tsx": "4.20.5",
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "@types/ws": "8.5.12"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -79,6 +80,7 @@
     "glob": "^11.0.3",
     "openapi-fetch": "^0.14.0",
     "openapi-typescript": "7.9.1",
-    "zod": "4.1.5"
+    "zod": "4.1.5",
+    "ws": "8.18.0"
   }
 }
