@@ -16,6 +16,7 @@
     "simulate": "tsx --tsconfig tsconfig.lint.json scripts/run-simulations.ts",
     "simulate:events": "tsx --tsconfig tsconfig.lint.json scripts/run-events-simulation.ts",
     "test": "jest",
+    "test:localnet": "RUN_LOCALNET_TESTS=1 jest test/integration/localnet.version.test.ts",
     "test:watch": "jest --watch",
     "lint:eslint": "eslint src/**/*.ts scripts/**/*.ts simulations/**/*.ts --fix",
     "lint:eslint:check": "eslint src/**/*.ts scripts/**/*.ts simulations/**/*.ts",
