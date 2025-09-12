@@ -17,4 +17,6 @@ export const GetVersion = createApiOperation<
   paramsSchema: z.void(),
   method: 'GET',
   buildUrl: (_params: void, apiUrl: string) => `${apiUrl}/v2/version`,
+  // Version endpoint should be accessible without authentication
+  requestConfig: { includeBearerToken: false },
 }); 
