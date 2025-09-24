@@ -69,7 +69,7 @@
     "ts-jest": "29.4.1",
     "tsx": "4.20.5",
     "typescript": "5.9.2",
-    "@types/ws": "8.5.12"
+    "@types/ws": "8.18.1"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -81,6 +81,6 @@
     "openapi-fetch": "^0.14.0",
     "openapi-typescript": "7.9.1",
     "zod": "4.1.5",
-    "ws": "8.18.0"
+    "ws": "8.18.3"
   }
 }
