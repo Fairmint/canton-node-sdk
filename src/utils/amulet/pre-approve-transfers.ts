@@ -134,12 +134,13 @@ export async function preApproveTransfers(
         inputs,
         receiver: params.receiverPartyId,
         provider: params.receiverPartyId,
-        expiresAt: expiresAt.toISOString()
+        expiresAt: expiresAt.toISOString(),
+        expectedDso: dsoPartyId.dso_party_id
       }
     }
   };
 
-  console.log('📝 Created exercise command for TransferPreapproval');
+  console.log('📝 Created exercise command for TransferPreapproval', createCommand);
 
   // Submit the command
   const submitParams: any = {

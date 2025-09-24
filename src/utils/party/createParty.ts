@@ -57,6 +57,7 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
     amount: options.amount,
     description: `Welcome transfer for ${options.partyName}`,
   });
+  console.log(`Transfer offer contract ID: ${transferOfferContractId}`);
 
   // Accept transfer offer
   const acceptTransferOfferResult = await acceptTransferOffer({
@@ -64,6 +65,7 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
     transferOfferContractId,
     acceptingPartyId: result.partyId,
   });
+  console.log(`Accept transfer offer result: ${acceptTransferOfferResult}`);
 
   // Wait 30 seconds for transfer to settle
   console.log(`Waiting 30 seconds for transfer to be settled by wallet automation... Update ID: ${acceptTransferOfferResult.transactionTree.updateId}`);
@@ -75,6 +77,7 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
   });
   
   result.preapprovalContractId = preapprovalResult.contractId;
+  console.log(`Preapproval contract ID: ${preapprovalResult.contractId}`);
 
   console.log('Party created successfully!');
   return result;
