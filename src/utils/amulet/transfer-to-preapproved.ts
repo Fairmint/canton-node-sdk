@@ -4,17 +4,6 @@ import { ExerciseCommand, DisclosedContract } from '../../clients/ledger-json-ap
 import { getCurrentMiningRoundContext } from '../mining/mining-rounds';
 import { getAmuletsForTransfer } from './get-amulets-for-transfer';
 
-export interface TransferPreapprovalInfo {
-  /** Contract ID of the TransferPreapproval contract */
-  contractId: string;
-  /** Template ID of the TransferPreapproval contract */
-  templateId: string;
-  /** Created event blob of the TransferPreapproval contract */
-  createdEventBlob: string;
-  /** Synchronizer ID where the TransferPreapproval contract resides */
-  synchronizerId: string;
-}
-
 export interface TransferRequest {
   /** Recipient party ID */
   recipientPartyId: string;
