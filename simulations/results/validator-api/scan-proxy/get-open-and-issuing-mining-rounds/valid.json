@@ -1,0 +1,267 @@
+{
+  "open_mining_rounds": [
+    {
+      "contract": {
+        "template_id": "6e9fc50fb94e56751b49f09ba2dc84da53a9d7cff08115ebb4f6b7a12d0c990c:Splice.Round:OpenMiningRound",
+        "contract_id": "009918b6ce2267312d19b971cab373a417a782aa1ab4c5ce2c621b392dd82ef468ca111220c05d2461a6592b51975e7d57c17757022afa66f024722e2962a78e8170804488",
+        "payload": {
+          "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+          "tickDuration": {
+            "microseconds": "600000000"
+          },
+          "issuingFor": {
+            "microseconds": "7570800000000"
+          },
+          "amuletPrice": "0.095",
+          "issuanceConfig": {
+            "validatorRewardPercentage": "0.05",
+            "unfeaturedAppRewardCap": "0.6",
+            "appRewardPercentage": "0.15",
+            "featuredAppRewardCap": "20000.0",
+            "amuletToIssuePerYear": "40000000000.0",
+            "validatorRewardCap": "0.2",
+            "optValidatorFaucetCap": "570.0"
+          },
+          "opensAt": "2025-09-30T13:16:32.527190Z",
+          "transferConfigUsd": {
+            "holdingFee": {
+              "rate": "0.0000190259"
+            },
+            "extraFeaturedAppRewardAmount": "1.0",
+            "maxNumInputs": "100",
+            "lockHolderFee": {
+              "fee": "0.005"
+            },
+            "createFee": {
+              "fee": "0.03"
+            },
+            "maxNumLockHolders": "50",
+            "transferFee": {
+              "initialRate": "0.01",
+              "steps": [
+                {
+                  "_1": "100.0",
+                  "_2": "0.001"
+                },
+                {
+                  "_1": "1000.0",
+                  "_2": "0.0001"
+                },
+                {
+                  "_1": "1000000.0",
+                  "_2": "0.00001"
+                }
+              ]
+            },
+            "maxNumOutputs": "100"
+          },
+          "targetClosesAt": "2025-09-30T13:36:32.527190Z",
+          "round": {
+            "number": "12618"
+          }
+        },
+        "created_event_blob": "CgMyLjESpAcKRQCZGLbOImcxLRm5ccqzc6QXp4KqGrTFzixiGzkt2C70aMoREiDAXSRhplkrUZdefVfBd1cCKvpm8CRyLilip46BcIBEiBINc3BsaWNlLWFtdWxldBpiCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGg9PcGVuTWluaW5nUm91bmQi5wRq5AQKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBiUxQEKEAoOMgwwLjA5NTAwMDAwMDAKCwoJKVZ3io8EQAYACgsKCSlWAxHXBEAGAAoQCg5qDAoKCggYgPDB7da4AwqbAgqYAmqVAgoWChRqEgoQCg4yDDAuMDMwMDAwMDAwMAoWChRqEgoQCg4yDDAuMDAwMDE5MDI1OQqkAQqhAWqeAQoQCg4yDDAuMDEwMDAwMDAwMAqJAQqGAVqDAQooaiYKEgoQMg4xMDAuMDAwMDAwMDAwMAoQCg4yDDAuMDAxMDAwMDAwMAopaicKEwoRMg8xMDAwLjAwMDAwMDAwMDAKEAoOMgwwLjAwMDEwMDAwMDAKLGoqChYKFDISMTAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wMDAwMTAwMDAwChYKFGoSChAKDjIMMC4wMDUwMDAwMDAwChAKDjIMMS4wMDAwMDAwMDAwCgUKAxjIAQoFCgMYyAEKBAoCGGQKmAEKlQFqkgEKGgoYMhY0MDAwMDAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wNTAwMDAwMDAwChAKDjIMMC4xNTAwMDAwMDAwChAKDjIMMC4yMDAwMDAwMDAwChQKEjIQMjAwMDAuMDAwMDAwMDAwMAoQCg4yDDAuNjAwMDAwMDAwMAoWChRSEgoQMg41NzAuMDAwMDAwMDAwMAoOCgxqCgoICgYYgJiavAQqSURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWE5VjHHawRABgBCKgomCiQIARIgttpcz7rCWRaJe7bslZZI+yEiIPSjy1bec6nDDMHVW8kQHg==",
+        "created_at": "2025-09-30T13:06:32.527190Z"
+      },
+      "domain_id": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
+    },
+    {
+      "contract": {
+        "template_id": "6e9fc50fb94e56751b49f09ba2dc84da53a9d7cff08115ebb4f6b7a12d0c990c:Splice.Round:OpenMiningRound",
+        "contract_id": "004ebf72b04c2570fddb9e704e1c60cae082aa690e9defdc80fce8c432d31ce774ca1112205c863962a5b434e329026455a35f4467f0cfc7a481823ca74fc18ab0a79e71e8",
+        "payload": {
+          "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+          "tickDuration": {
+            "microseconds": "600000000"
+          },
+          "issuingFor": {
+            "microseconds": "7571400000000"
+          },
+          "amuletPrice": "0.095",
+          "issuanceConfig": {
+            "validatorRewardPercentage": "0.05",
+            "unfeaturedAppRewardCap": "0.6",
+            "appRewardPercentage": "0.15",
+            "featuredAppRewardCap": "20000.0",
+            "amuletToIssuePerYear": "40000000000.0",
+            "validatorRewardCap": "0.2",
+            "optValidatorFaucetCap": "570.0"
+          },
+          "opensAt": "2025-09-30T13:27:23.923587Z",
+          "transferConfigUsd": {
+            "holdingFee": {
+              "rate": "0.0000190259"
+            },
+            "extraFeaturedAppRewardAmount": "1.0",
+            "maxNumInputs": "100",
+            "lockHolderFee": {
+              "fee": "0.005"
+            },
+            "createFee": {
+              "fee": "0.03"
+            },
+            "maxNumLockHolders": "50",
+            "transferFee": {
+              "initialRate": "0.01",
+              "steps": [
+                {
+                  "_1": "100.0",
+                  "_2": "0.001"
+                },
+                {
+                  "_1": "1000.0",
+                  "_2": "0.0001"
+                },
+                {
+                  "_1": "1000000.0",
+                  "_2": "0.00001"
+                }
+              ]
+            },
+            "maxNumOutputs": "100"
+          },
+          "targetClosesAt": "2025-09-30T13:47:23.923587Z",
+          "round": {
+            "number": "12619"
+          }
+        },
+        "created_event_blob": "CgMyLjESpAcKRQBOv3KwTCVw/duecE4cYMrggqppDp3v3ID86MQy0xzndMoREiBchjlipbQ04ykCZFWjX0Rn8M/HpIGCPKdPwYqwp55x6BINc3BsaWNlLWFtdWxldBpiCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGg9PcGVuTWluaW5nUm91bmQi5wRq5AQKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBiWxQEKEAoOMgwwLjA5NTAwMDAwMDAKCwoJKYP8XbYEQAYACgsKCSmDiOT9BEAGAAoQCg5qDAoKCggYgIjcqdu4AwqbAgqYAmqVAgoWChRqEgoQCg4yDDAuMDMwMDAwMDAwMAoWChRqEgoQCg4yDDAuMDAwMDE5MDI1OQqkAQqhAWqeAQoQCg4yDDAuMDEwMDAwMDAwMAqJAQqGAVqDAQooaiYKEgoQMg4xMDAuMDAwMDAwMDAwMAoQCg4yDDAuMDAxMDAwMDAwMAopaicKEwoRMg8xMDAwLjAwMDAwMDAwMDAKEAoOMgwwLjAwMDEwMDAwMDAKLGoqChYKFDISMTAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wMDAwMTAwMDAwChYKFGoSChAKDjIMMC4wMDUwMDAwMDAwChAKDjIMMS4wMDAwMDAwMDAwCgUKAxjIAQoFCgMYyAEKBAoCGGQKmAEKlQFqkgEKGgoYMhY0MDAwMDAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wNTAwMDAwMDAwChAKDjIMMC4xNTAwMDAwMDAwChAKDjIMMC4yMDAwMDAwMDAwChQKEjIQMjAwMDAuMDAwMDAwMDAwMAoQCg4yDDAuNjAwMDAwMDAwMAoWChRSEgoQMg41NzAuMDAwMDAwMDAwMAoOCgxqCgoICgYYgJiavAQqSURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWE5g7aakgRABgBCKgomCiQIARIga7V2vyDvL5rb+U1bge2y2I0foHOMcknkCyyf+S/S96oQHg==",
+        "created_at": "2025-09-30T13:17:23.923587Z"
+      },
+      "domain_id": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
+    },
+    {
+      "contract": {
+        "template_id": "6e9fc50fb94e56751b49f09ba2dc84da53a9d7cff08115ebb4f6b7a12d0c990c:Splice.Round:OpenMiningRound",
+        "contract_id": "00a075a9cc50ca955e731822d745bc04be1197ce8961cf33373fdec685cef822cdca111220eb01c61dde88a37cad4e60731804b92159fd97d0312439f51790edd618acad56",
+        "payload": {
+          "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+          "tickDuration": {
+            "microseconds": "600000000"
+          },
+          "issuingFor": {
+            "microseconds": "7572000000000"
+          },
+          "amuletPrice": "0.095",
+          "issuanceConfig": {
+            "validatorRewardPercentage": "0.05",
+            "unfeaturedAppRewardCap": "0.6",
+            "appRewardPercentage": "0.15",
+            "featuredAppRewardCap": "20000.0",
+            "amuletToIssuePerYear": "40000000000.0",
+            "validatorRewardCap": "0.2",
+            "optValidatorFaucetCap": "570.0"
+          },
+          "opensAt": "2025-09-30T13:37:35.489427Z",
+          "transferConfigUsd": {
+            "holdingFee": {
+              "rate": "0.0000190259"
+            },
+            "extraFeaturedAppRewardAmount": "1.0",
+            "maxNumInputs": "100",
+            "lockHolderFee": {
+              "fee": "0.005"
+            },
+            "createFee": {
+              "fee": "0.03"
+            },
+            "maxNumLockHolders": "50",
+            "transferFee": {
+              "initialRate": "0.01",
+              "steps": [
+                {
+                  "_1": "100.0",
+                  "_2": "0.001"
+                },
+                {
+                  "_1": "1000.0",
+                  "_2": "0.0001"
+                },
+                {
+                  "_1": "1000000.0",
+                  "_2": "0.00001"
+                }
+              ]
+            },
+            "maxNumOutputs": "100"
+          },
+          "targetClosesAt": "2025-09-30T13:57:35.489427Z",
+          "round": {
+            "number": "12620"
+          }
+        },
+        "created_event_blob": "CgMyLjESpAcKRQCgdanMUMqVXnMYItdFvAS+EZfOiWHPMzc/3saFzvgizcoREiDrAcYd3oijfK1OYHMYBLkhWf2X0DEkOfUXkO3WGKytVhINc3BsaWNlLWFtdWxldBpiCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGg9PcGVuTWluaW5nUm91bmQi5wRq5AQKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBiYxQEKEAoOMgwwLjA5NTAwMDAwMDAKCwoJKZO90doEQAYACgsKCSmTSVgiBUAGAAoQCg5qDAoKCggYgKD25d+4AwqbAgqYAmqVAgoWChRqEgoQCg4yDDAuMDMwMDAwMDAwMAoWChRqEgoQCg4yDDAuMDAwMDE5MDI1OQqkAQqhAWqeAQoQCg4yDDAuMDEwMDAwMDAwMAqJAQqGAVqDAQooaiYKEgoQMg4xMDAuMDAwMDAwMDAwMAoQCg4yDDAuMDAxMDAwMDAwMAopaicKEwoRMg8xMDAwLjAwMDAwMDAwMDAKEAoOMgwwLjAwMDEwMDAwMDAKLGoqChYKFDISMTAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wMDAwMTAwMDAwChYKFGoSChAKDjIMMC4wMDUwMDAwMDAwChAKDjIMMS4wMDAwMDAwMDAwCgUKAxjIAQoFCgMYyAEKBAoCGGQKmAEKlQFqkgEKGgoYMhY0MDAwMDAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wNTAwMDAwMDAwChAKDjIMMC4xNTAwMDAwMDAwChAKDjIMMC4yMDAwMDAwMDAwChQKEjIQMjAwMDAuMDAwMDAwMDAwMAoQCg4yDDAuNjAwMDAwMDAwMAoWChRSEgoQMg41NzAuMDAwMDAwMDAwMAoOCgxqCgoICgYYgJiavAQqSURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWE5k3cOtwRABgBCKgomCiQIARIgQe2y/KjsazDPdHfZ5iirgSUbRYbgG2e0BvT7ZgLkKKoQHg==",
+        "created_at": "2025-09-30T13:27:35.489427Z"
+      },
+      "domain_id": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
+    }
+  ],
+  "issuing_mining_rounds": [
+    {
+      "contract": {
+        "template_id": "6e9fc50fb94e56751b49f09ba2dc84da53a9d7cff08115ebb4f6b7a12d0c990c:Splice.Round:IssuingMiningRound",
+        "contract_id": "00d475c90775e23a69ae4ccb0e2eb77296e006128e32877e333bb4e9387e435e29ca111220838595ad7be474b36563e7e087cbbe5d5c4c6afbcae539ca0278c2530604cf8b",
+        "payload": {
+          "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+          "optIssuancePerValidatorFaucetCoupon": "118.0480179451",
+          "issuancePerFeaturedAppRewardCoupon": "29.5303443854",
+          "opensAt": "2025-09-30T13:17:11.704782Z",
+          "issuancePerSvRewardCoupon": "0.301400003",
+          "targetClosesAt": "2025-09-30T13:37:11.704782Z",
+          "issuancePerUnfeaturedAppRewardCoupon": "0.6",
+          "round": {
+            "number": "12615"
+          },
+          "issuancePerValidatorRewardCoupon": "0.2"
+        },
+        "created_event_blob": "CgMyLjESmwQKRQDUdckHdeI6aa5Myw4ut3KW4AYSjjKHfjM7tOk4fkNeKcoREiCDhZWte+R0s2Vj5+CHy75dXExq+8rlOcoCeMJTBgTPixINc3BsaWNlLWFtdWxldBplCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGhJJc3N1aW5nTWluaW5nUm91bmQi2wFq2AEKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBiOxQEKEAoOMgwwLjIwMDAwMDAwMDAKEQoPMg0yOS41MzAzNDQzODU0ChAKDjIMMC42MDAwMDAwMDAwChAKDjIMMC4zMDE0MDAwMDMwCgsKCSnOROCRBEAGAAoLCgkpztBm2QRABgAKFgoUUhIKEDIOMTE4LjA0ODAxNzk0NTEqSURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWE5zv4cbgRABgBCKgomCiQIARIgLLSuJVOLri5jpKLIHuo+OMXjZel6BOp8n/17pk2jpLAQHg==",
+        "created_at": "2025-09-30T13:07:11.704782Z"
+      },
+      "domain_id": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
+    },
+    {
+      "contract": {
+        "template_id": "6e9fc50fb94e56751b49f09ba2dc84da53a9d7cff08115ebb4f6b7a12d0c990c:Splice.Round:IssuingMiningRound",
+        "contract_id": "0099c91fbd213f8829cf6c755b31ff36a779ff0ea9be44720b7c990a68de166c72ca11122009ae733d136387238a95927612985730ac7c8f88e34d734d52befed550df22c6",
+        "payload": {
+          "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+          "optIssuancePerValidatorFaucetCoupon": "118.5972805537",
+          "issuancePerFeaturedAppRewardCoupon": "29.3893276525",
+          "opensAt": "2025-09-30T13:28:36.228888Z",
+          "issuancePerSvRewardCoupon": "0.301400003",
+          "targetClosesAt": "2025-09-30T13:48:36.228888Z",
+          "issuancePerUnfeaturedAppRewardCoupon": "0.6",
+          "round": {
+            "number": "12616"
+          },
+          "issuancePerValidatorRewardCoupon": "0.2"
+        },
+        "created_event_blob": "CgMyLjESmwQKRQCZyR+9IT+IKc9sdVsx/zanef8Oqb5Ecgt8mQpo3hZscsoREiAJrnM9E2OHI4qVknYSmFcwrHyPiONNc01Svv7VUN8ixhINc3BsaWNlLWFtdWxldBplCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGhJJc3N1aW5nTWluaW5nUm91bmQi2wFq2AEKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBiQxQEKEAoOMgwwLjIwMDAwMDAwMDAKEQoPMg0yOS4zODkzMjc2NTI1ChAKDjIMMC42MDAwMDAwMDAwChAKDjIMMC4zMDE0MDAwMDMwCgsKCSkYR626BEAGAAoLCgkpGNMzAgVABgAKFgoUUhIKEDIOMTE4LjU5NzI4MDU1MzcqSURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWE5GAHqlgRABgBCKgomCiQIARIgxRLl7vJlA1ZgipTTao4u1kpk0LEHYihb4zOrlhdNevkQHg==",
+        "created_at": "2025-09-30T13:18:36.228888Z"
+      },
+      "domain_id": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
+    },
+    {
+      "contract": {
+        "template_id": "6e9fc50fb94e56751b49f09ba2dc84da53a9d7cff08115ebb4f6b7a12d0c990c:Splice.Round:IssuingMiningRound",
+        "contract_id": "0058b657b287925c000b82868cb076b9f8c264655bd58a294eecdb147c3546aef4ca111220cf02bbbcb039f8ca5fd6df969cbb1960b4c2aa910897fb73266e915036057e71",
+        "payload": {
+          "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+          "optIssuancePerValidatorFaucetCoupon": "118.1219728788",
+          "issuancePerFeaturedAppRewardCoupon": "30.7737593669",
+          "opensAt": "2025-09-30T13:38:06.662533Z",
+          "issuancePerSvRewardCoupon": "0.301400003",
+          "targetClosesAt": "2025-09-30T13:58:06.662533Z",
+          "issuancePerUnfeaturedAppRewardCoupon": "0.6",
+          "round": {
+            "number": "12617"
+          },
+          "issuancePerValidatorRewardCoupon": "0.2"
+        },
+        "created_event_blob": "CgMyLjESmwQKRQBYtleyh5JcAAuChoywdrn4wmRlW9WKKU7s2xR8NUau9MoREiDPAru8sDn4yl/W35acuxlgtMKqkQiX+3MmbpFQNgV+cRINc3BsaWNlLWFtdWxldBplCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGhJJc3N1aW5nTWluaW5nUm91bmQi2wFq2AEKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBiSxQEKEAoOMgwwLjIwMDAwMDAwMDAKEQoPMg0zMC43NzM3NTkzNjY5ChAKDjIMMC42MDAwMDAwMDAwChAKDjIMMC4zMDE0MDAwMDMwCgsKCSmFZ63cBEAGAAoLCgkphfMzJAVABgAKFgoUUhIKEDIOMTE4LjEyMTk3Mjg3ODgqSURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWE5hSHquARABgBCKgomCiQIARIgWx+zy2rxrSOduYcr+ZneDa/UUgtvAzjYcP2Wc85F0bwQHg==",
+        "created_at": "2025-09-30T13:28:06.662533Z"
+      },
+      "domain_id": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
+    }
+  ]
+}
