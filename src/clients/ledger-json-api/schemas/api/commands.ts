@@ -51,8 +51,8 @@ export const CommandSchema = z.union([
 
 export const DisclosedContractSchema = z
   .object({
-    /** Template ID of the disclosed contract (optional). */
-    templateId: z.string().optional(),
+    /** Template ID of the disclosed contract. */
+    templateId: z.string(),
     /** Contract ID of the disclosed contract. */
     contractId: z.string(),
     /** Serialized event blob for the disclosed contract. */
