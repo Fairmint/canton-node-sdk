@@ -29,7 +29,9 @@ export function findCreatedEventByTemplateId(
 	response: SubmitAndWaitForTransactionTreeResponse,
 	expectedTemplateId: string
 ): CreatedTreeEventWrapper | undefined {
-	const eventsById = (response.transactionTree?.eventsById ?? {}) as Record<string, unknown>;
+	// Handle both direct structure and nested transaction structure
+	const transactionTree = response.transactionTree as any;
+	const eventsById = (transactionTree?.eventsById ?? transactionTree?.transaction?.eventsById ?? {}) as Record<string, unknown>;
 	
 	// Extract the part after the first ':' from the expected template ID
 	const expectedTemplateIdSuffix = expectedTemplateId.includes(':') 
