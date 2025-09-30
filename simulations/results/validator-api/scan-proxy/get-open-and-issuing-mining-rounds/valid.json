@@ -3,14 +3,14 @@
     {
       "contract": {
         "template_id": "6e9fc50fb94e56751b49f09ba2dc84da53a9d7cff08115ebb4f6b7a12d0c990c:Splice.Round:OpenMiningRound",
-        "contract_id": "008ea283ddcae4b8c2e35ac912adb6a03d329b821bb13fd037bb37d022063462d6ca1112206b03343a318906ffebdbc950e3cd6d6ca47325548c9a2bf1a8e31258e311723c",
+        "contract_id": "00f2245cc158a8568d85c5154347c9f8f6ad1cae2a21e0572e11493db3cab3a4cbca1112200fbead7eb478af0196191f07b0f263e713740c406848acf9c57a01b9e112c1ac",
         "payload": {
           "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
           "tickDuration": {
             "microseconds": "600000000"
           },
           "issuingFor": {
-            "microseconds": "7578000000000"
+            "microseconds": "7582800000000"
           },
           "amuletPrice": "0.095",
           "issuanceConfig": {
@@ -22,7 +22,7 @@
             "validatorRewardCap": "0.2",
             "optValidatorFaucetCap": "570.0"
           },
-          "opensAt": "2025-09-30T15:19:58.128432Z",
+          "opensAt": "2025-09-30T16:42:04.923487Z",
           "transferConfigUsd": {
             "holdingFee": {
               "rate": "0.0000190259"
@@ -55,27 +55,27 @@
             },
             "maxNumOutputs": "100"
           },
-          "targetClosesAt": "2025-09-30T15:39:58.128432Z",
+          "targetClosesAt": "2025-09-30T17:02:04.923487Z",
           "round": {
-            "number": "12630"
+            "number": "12638"
           }
         },
-        "created_event_blob": "CgMyLjESpAcKRQCOooPdyuS4wuNayRKttqA9MpuCG7E/0De7N9AiBjRi1soREiBrAzQ6MYkG/+vbyVDjzW1spHMlVIyaK/Go4xJY4xFyPBINc3BsaWNlLWFtdWxldBpiCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGg9PcGVuTWluaW5nUm91bmQi5wRq5AQKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBisxQEKEAoOMgwwLjA5NTAwMDAwMDAKCwoJKTD58kgGQAYACgsKCSkwhXmQBkAGAAoQCg5qDAoKCggYgJD8v4y5AwqbAgqYAmqVAgoWChRqEgoQCg4yDDAuMDMwMDAwMDAwMAoWChRqEgoQCg4yDDAuMDAwMDE5MDI1OQqkAQqhAWqeAQoQCg4yDDAuMDEwMDAwMDAwMAqJAQqGAVqDAQooaiYKEgoQMg4xMDAuMDAwMDAwMDAwMAoQCg4yDDAuMDAxMDAwMDAwMAopaicKEwoRMg8xMDAwLjAwMDAwMDAwMDAKEAoOMgwwLjAwMDEwMDAwMDAKLGoqChYKFDISMTAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wMDAwMTAwMDAwChYKFGoSChAKDjIMMC4wMDUwMDAwMDAwChAKDjIMMS4wMDAwMDAwMDAwCgUKAxjIAQoFCgMYyAEKBAoCGGQKmAEKlQFqkgEKGgoYMhY0MDAwMDAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wNTAwMDAwMDAwChAKDjIMMC4xNTAwMDAwMDAwChAKDjIMMC4yMDAwMDAwMDAwChQKEjIQMjAwMDAuMDAwMDAwMDAwMAoQCg4yDDAuNjAwMDAwMDAwMAoWChRSEgoQMg41NzAuMDAwMDAwMDAwMAoOCgxqCgoICgYYgJiavAQqSURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWE5MLMvJQZABgBCKgomCiQIARIgpAIoQHPvRQaHsNdO5rEYwhxfWqiTN0oyay5sNu1+JZQQHg==",
-        "created_at": "2025-09-30T15:09:58.128432Z"
+        "created_event_blob": "CgMyLjESpAcKRQDyJFzBWKhWjYXFFUNHyfj2rRyuKiHgVy4RST2zyrOky8oREiAPvq1+tHivAZYZHwew8mPnE3QMQGhIrPnFegG54RLBrBINc3BsaWNlLWFtdWxldBpiCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGg9PcGVuTWluaW5nUm91bmQi5wRq5AQKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBi8xQEKEAoOMgwwLjA5NTAwMDAwMDAKCwoJKV/mm24HQAYACgsKCSlfciK2B0AGAAoQCg5qDAoKCggYgNDNobC5AwqbAgqYAmqVAgoWChRqEgoQCg4yDDAuMDMwMDAwMDAwMAoWChRqEgoQCg4yDDAuMDAwMDE5MDI1OQqkAQqhAWqeAQoQCg4yDDAuMDEwMDAwMDAwMAqJAQqGAVqDAQooaiYKEgoQMg4xMDAuMDAwMDAwMDAwMAoQCg4yDDAuMDAxMDAwMDAwMAopaicKEwoRMg8xMDAwLjAwMDAwMDAwMDAKEAoOMgwwLjAwMDEwMDAwMDAKLGoqChYKFDISMTAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wMDAwMTAwMDAwChYKFGoSChAKDjIMMC4wMDUwMDAwMDAwChAKDjIMMS4wMDAwMDAwMDAwCgUKAxjIAQoFCgMYyAEKBAoCGGQKmAEKlQFqkgEKGgoYMhY0MDAwMDAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wNTAwMDAwMDAwChAKDjIMMC4xNTAwMDAwMDAwChAKDjIMMC4yMDAwMDAwMDAwChQKEjIQMjAwMDAuMDAwMDAwMDAwMAoQCg4yDDAuNjAwMDAwMDAwMAoWChRSEgoQMg41NzAuMDAwMDAwMDAwMAoOCgxqCgoICgYYgJiavAQqSURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWE5X6DYSgdABgBCKgomCiQIARIguMKRy1uC33OFn8XJRXcKH1DE8j/8GphiybQIAZoj2MEQHg==",
+        "created_at": "2025-09-30T16:32:04.923487Z"
       },
       "domain_id": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
     },
     {
       "contract": {
         "template_id": "6e9fc50fb94e56751b49f09ba2dc84da53a9d7cff08115ebb4f6b7a12d0c990c:Splice.Round:OpenMiningRound",
-        "contract_id": "0032b91199a3810f7bf960f56692721a111881193ab3f377dbd17af771c06075cbca111220059cf6fa69017f2d2d5ee459e3e80b00d0184decbd90edd6c934f52c23c6f2d4",
+        "contract_id": "0054f2d639443960e856739a0750551b135db5a013e74feeb003ef37636794cb3dca111220f61e64324ec139a6d23ecf9af041368033bb8a211d4e54729956a9ec2c76161a",
         "payload": {
           "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
           "tickDuration": {
             "microseconds": "600000000"
           },
           "issuingFor": {
-            "microseconds": "7578600000000"
+            "microseconds": "7583400000000"
           },
           "amuletPrice": "0.095",
           "issuanceConfig": {
@@ -87,7 +87,7 @@
             "validatorRewardCap": "0.2",
             "optValidatorFaucetCap": "570.0"
           },
-          "opensAt": "2025-09-30T15:30:10.379247Z",
+          "opensAt": "2025-09-30T16:52:16.597925Z",
           "transferConfigUsd": {
             "holdingFee": {
               "rate": "0.0000190259"
@@ -120,27 +120,27 @@
             },
             "maxNumOutputs": "100"
           },
-          "targetClosesAt": "2025-09-30T15:50:10.379247Z",
+          "targetClosesAt": "2025-09-30T17:12:16.597925Z",
           "round": {
-            "number": "12631"
+            "number": "12639"
           }
         },
-        "created_event_blob": "CgMyLjESpAcKRQAyuRGZo4EPe/lg9WaSchoRGIEZOrPzd9vRevdxwGB1y8oREiAFnPb6aQF/LS1e5Fnj6AsA0BhN7L2Q7dbJNPUsI8by1BINc3BsaWNlLWFtdWxldBpiCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGg9PcGVuTWluaW5nUm91bmQi5wRq5AQKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBiuxQEKEAoOMgwwLjA5NTAwMDAwMDAKCwoJKe8tcW0GQAYACgsKCSnvufe0BkAGAAoQCg5qDAoKCggYgKiW/JC5AwqbAgqYAmqVAgoWChRqEgoQCg4yDDAuMDMwMDAwMDAwMAoWChRqEgoQCg4yDDAuMDAwMDE5MDI1OQqkAQqhAWqeAQoQCg4yDDAuMDEwMDAwMDAwMAqJAQqGAVqDAQooaiYKEgoQMg4xMDAuMDAwMDAwMDAwMAoQCg4yDDAuMDAxMDAwMDAwMAopaicKEwoRMg8xMDAwLjAwMDAwMDAwMDAKEAoOMgwwLjAwMDEwMDAwMDAKLGoqChYKFDISMTAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wMDAwMTAwMDAwChYKFGoSChAKDjIMMC4wMDUwMDAwMDAwChAKDjIMMS4wMDAwMDAwMDAwCgUKAxjIAQoFCgMYyAEKBAoCGGQKmAEKlQFqkgEKGgoYMhY0MDAwMDAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wNTAwMDAwMDAwChAKDjIMMC4xNTAwMDAwMDAwChAKDjIMMC4yMDAwMDAwMDAwChQKEjIQMjAwMDAuMDAwMDAwMDAwMAoQCg4yDDAuNjAwMDAwMDAwMAoWChRSEgoQMg41NzAuMDAwMDAwMDAwMAoOCgxqCgoICgYYgJiavAQqSURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWE57+etSQZABgBCKgomCiQIARIguYx+ysues5vXz7SJzG2N6j2gV5TG/9QvSse5EqsdvBAQHg==",
-        "created_at": "2025-09-30T15:20:10.379247Z"
+        "created_event_blob": "CgMyLjESpAcKRQBU8tY5RDlg6FZzmgdQVRsTXbWgE+dP7rAD7zdjZ5TLPcoREiD2HmQyTsE5ptI+z5rwQTaAM7uKIR1OVHKZVqnsLHYWGhINc3BsaWNlLWFtdWxldBpiCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGg9PcGVuTWluaW5nUm91bmQi5wRq5AQKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBi+xQEKEAoOMgwwLjA5NTAwMDAwMDAKCwoJKaVPEZMHQAYACgsKCSml25faB0AGAAoQCg5qDAoKCggYgOjn3bS5AwqbAgqYAmqVAgoWChRqEgoQCg4yDDAuMDMwMDAwMDAwMAoWChRqEgoQCg4yDDAuMDAwMDE5MDI1OQqkAQqhAWqeAQoQCg4yDDAuMDEwMDAwMDAwMAqJAQqGAVqDAQooaiYKEgoQMg4xMDAuMDAwMDAwMDAwMAoQCg4yDDAuMDAxMDAwMDAwMAopaicKEwoRMg8xMDAwLjAwMDAwMDAwMDAKEAoOMgwwLjAwMDEwMDAwMDAKLGoqChYKFDISMTAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wMDAwMTAwMDAwChYKFGoSChAKDjIMMC4wMDUwMDAwMDAwChAKDjIMMS4wMDAwMDAwMDAwCgUKAxjIAQoFCgMYyAEKBAoCGGQKmAEKlQFqkgEKGgoYMhY0MDAwMDAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wNTAwMDAwMDAwChAKDjIMMC4xNTAwMDAwMDAwChAKDjIMMC4yMDAwMDAwMDAwChQKEjIQMjAwMDAuMDAwMDAwMDAwMAoQCg4yDDAuNjAwMDAwMDAwMAoWChRSEgoQMg41NzAuMDAwMDAwMDAwMAoOCgxqCgoICgYYgJiavAQqSURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWE5pQlObwdABgBCKgomCiQIARIgcfJI4INjO2mYsnzkXlSII7DpDqsshOXKV3kV1hUhRP0QHg==",
+        "created_at": "2025-09-30T16:42:16.597925Z"
       },
       "domain_id": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
     },
     {
       "contract": {
         "template_id": "6e9fc50fb94e56751b49f09ba2dc84da53a9d7cff08115ebb4f6b7a12d0c990c:Splice.Round:OpenMiningRound",
-        "contract_id": "0016e2adafb563dfec7db4f9a314252144741783e297ddd2c57b6a691a125cc44aca11122046a7611b522a440ff2b82df1e28f4d35f2fe1e99fe9f6de4bf9f02052b837ebb",
+        "contract_id": "00383064a385ac54701f9bd8980d2eda4be3464cefc21cbff0e9df3d635ce69c4fca11122031097ec4619bf9479973207aa1764239c09d5f228ef9012223e3beaa06431b0f",
         "payload": {
           "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
           "tickDuration": {
             "microseconds": "600000000"
           },
           "issuingFor": {
-            "microseconds": "7579200000000"
+            "microseconds": "7584000000000"
           },
           "amuletPrice": "0.095",
           "issuanceConfig": {
@@ -152,7 +152,7 @@
             "validatorRewardCap": "0.2",
             "optValidatorFaucetCap": "570.0"
           },
-          "opensAt": "2025-09-30T15:40:31.539405Z",
+          "opensAt": "2025-09-30T17:02:28.767802Z",
           "transferConfigUsd": {
             "holdingFee": {
               "rate": "0.0000190259"
@@ -185,13 +185,13 @@
             },
             "maxNumOutputs": "100"
           },
-          "targetClosesAt": "2025-09-30T16:00:31.539405Z",
+          "targetClosesAt": "2025-09-30T17:22:28.767802Z",
           "round": {
-            "number": "12632"
+            "number": "12640"
           }
         },
-        "created_event_blob": "CgMyLjESpAcKRQAW4q2vtWPf7H20+aMUJSFEdBeD4pfd0sV7amkaElzESsoREiBGp2EbUipED/K4LfHij0018v4emf6fbeS/nwIFK4N+uxINc3BsaWNlLWFtdWxldBpiCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGg9PcGVuTWluaW5nUm91bmQi5wRq5AQKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBiwxQEKEAoOMgwwLjA5NTAwMDAwMDAKCwoJKc1Ud5IGQAYACgsKCSnN4P3ZBkAGAAoQCg5qDAoKCggYgMCwuJW5AwqbAgqYAmqVAgoWChRqEgoQCg4yDDAuMDMwMDAwMDAwMAoWChRqEgoQCg4yDDAuMDAwMDE5MDI1OQqkAQqhAWqeAQoQCg4yDDAuMDEwMDAwMDAwMAqJAQqGAVqDAQooaiYKEgoQMg4xMDAuMDAwMDAwMDAwMAoQCg4yDDAuMDAxMDAwMDAwMAopaicKEwoRMg8xMDAwLjAwMDAwMDAwMDAKEAoOMgwwLjAwMDEwMDAwMDAKLGoqChYKFDISMTAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wMDAwMTAwMDAwChYKFGoSChAKDjIMMC4wMDUwMDAwMDAwChAKDjIMMS4wMDAwMDAwMDAwCgUKAxjIAQoFCgMYyAEKBAoCGGQKmAEKlQFqkgEKGgoYMhY0MDAwMDAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wNTAwMDAwMDAwChAKDjIMMC4xNTAwMDAwMDAwChAKDjIMMC4yMDAwMDAwMDAwChQKEjIQMjAwMDAuMDAwMDAwMDAwMAoQCg4yDDAuNjAwMDAwMDAwMAoWChRSEgoQMg41NzAuMDAwMDAwMDAwMAoOCgxqCgoICgYYgJiavAQqSURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWE5zQ60bgZABgBCKgomCiQIARIgevq08tFlEgBphBr6MH9AaYEGoEbYsbwA0fxCrztK2cIQHg==",
-        "created_at": "2025-09-30T15:30:31.539405Z"
+        "created_event_blob": "CgMyLjESpAcKRQA4MGSjhaxUcB+b2JgNLtpL40ZM78Icv/Dp3z1jXOacT8oREiAxCX7EYZv5R5lzIHqhdkI5wJ1fIo75ASIj476qBkMbDxINc3BsaWNlLWFtdWxldBpiCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGg9PcGVuTWluaW5nUm91bmQi5wRq5AQKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBjAxQEKEAoOMgwwLjA5NTAwMDAwMDAKCwoJKTpIjrcHQAYACgsKCSk61BT/B0AGAAoQCg5qDAoKCggYgICCmrm5AwqbAgqYAmqVAgoWChRqEgoQCg4yDDAuMDMwMDAwMDAwMAoWChRqEgoQCg4yDDAuMDAwMDE5MDI1OQqkAQqhAWqeAQoQCg4yDDAuMDEwMDAwMDAwMAqJAQqGAVqDAQooaiYKEgoQMg4xMDAuMDAwMDAwMDAwMAoQCg4yDDAuMDAxMDAwMDAwMAopaicKEwoRMg8xMDAwLjAwMDAwMDAwMDAKEAoOMgwwLjAwMDEwMDAwMDAKLGoqChYKFDISMTAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wMDAwMTAwMDAwChYKFGoSChAKDjIMMC4wMDUwMDAwMDAwChAKDjIMMS4wMDAwMDAwMDAwCgUKAxjIAQoFCgMYyAEKBAoCGGQKmAEKlQFqkgEKGgoYMhY0MDAwMDAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4wNTAwMDAwMDAwChAKDjIMMC4xNTAwMDAwMDAwChAKDjIMMC4yMDAwMDAwMDAwChQKEjIQMjAwMDAuMDAwMDAwMDAwMAoQCg4yDDAuNjAwMDAwMDAwMAoWChRSEgoQMg41NzAuMDAwMDAwMDAwMAoOCgxqCgoICgYYgJiavAQqSURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWE5OgLLkwdABgBCKgomCiQIARIgZLMZfIv3D+F/5junKv78KqBM7HiLJZ+5EEv73I4nYQwQHg==",
+        "created_at": "2025-09-30T16:52:28.767802Z"
       },
       "domain_id": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
     }
@@ -200,66 +200,66 @@
     {
       "contract": {
         "template_id": "6e9fc50fb94e56751b49f09ba2dc84da53a9d7cff08115ebb4f6b7a12d0c990c:Splice.Round:IssuingMiningRound",
-        "contract_id": "00fc8e88b6d2319467fbddbc8a054465e16635fac76bd028fdc55ede9b5469f1eaca111220f5eb4cf0b49a6b35d64ef6c0c29e025452ff75504729ab10dc2a8f7d25f6bdea",
+        "contract_id": "0091a125ecae6aac344a84edfba85dbb2eac5b03e090b5e08301f40daea5664dd9ca111220c6a21ef3e12f4bf9ae94623a4d38a7fedde7bec162fd3e9dee33a804f9536866",
         "payload": {
           "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
-          "optIssuancePerValidatorFaucetCoupon": "119.3924956624",
-          "issuancePerFeaturedAppRewardCoupon": "28.9981937658",
-          "opensAt": "2025-09-30T15:20:25.605853Z",
+          "optIssuancePerValidatorFaucetCoupon": "118.5948809295",
+          "issuancePerFeaturedAppRewardCoupon": "28.5119820141",
+          "opensAt": "2025-09-30T16:42:26.204329Z",
           "issuancePerSvRewardCoupon": "0.301400003",
-          "targetClosesAt": "2025-09-30T15:40:25.605853Z",
+          "targetClosesAt": "2025-09-30T17:02:26.204329Z",
           "issuancePerUnfeaturedAppRewardCoupon": "0.6",
           "round": {
-            "number": "12627"
+            "number": "12635"
           },
           "issuancePerValidatorRewardCoupon": "0.2"
         },
-        "created_event_blob": "CgMyLjESmwQKRQD8joi20jGUZ/vdvIoFRGXhZjX6x2vQKP3FXt6bVGnx6soREiD160zwtJprNdZO9sDCngJUUv91UEcpqxDcKo99Jfa96hINc3BsaWNlLWFtdWxldBplCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGhJJc3N1aW5nTWluaW5nUm91bmQi2wFq2AEKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBimxQEKEAoOMgwwLjIwMDAwMDAwMDAKEQoPMg0yOC45OTgxOTM3NjU4ChAKDjIMMC42MDAwMDAwMDAwChAKDjIMMC4zMDE0MDAwMDMwCgsKCSndPpZKBkAGAAoLCgkp3cockgZABgAKFgoUUhIKEDIOMTE5LjM5MjQ5NTY2MjQqSURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWE53fjSJgZABgBCKgomCiQIARIgtySiYEr9K1s0osuJE0rYSKK4eYHLuGIhQ4r0nHPZRQQQHg==",
-        "created_at": "2025-09-30T15:10:25.605853Z"
+        "created_event_blob": "CgMyLjESmwQKRQCRoSXsrmqsNEqE7fuoXbsurFsD4JC14IMB9A2upWZN2coREiDGoh7z4S9L+a6UYjpNOKf+3ee+wWL9Pp3uM6gE+VNoZhINc3BsaWNlLWFtdWxldBplCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGhJJc3N1aW5nTWluaW5nUm91bmQi2wFq2AEKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBi2xQEKEAoOMgwwLjIwMDAwMDAwMDAKEQoPMg0yOC41MTE5ODIwMTQxChAKDjIMMC42MDAwMDAwMDAwChAKDjIMMC4zMDE0MDAwMDMwCgsKCSmpnuBvB0AGAAoLCgkpqSpntwdABgAKFgoUUhIKEDIOMTE4LjU5NDg4MDkyOTUqSURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWE5qVgdTAdABgBCKgomCiQIARIgg24aD4k4srAcgEzleyJV4ruKz63jpYsZGjeV5bQl//oQHg==",
+        "created_at": "2025-09-30T16:32:26.204329Z"
       },
       "domain_id": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
     },
     {
       "contract": {
         "template_id": "6e9fc50fb94e56751b49f09ba2dc84da53a9d7cff08115ebb4f6b7a12d0c990c:Splice.Round:IssuingMiningRound",
-        "contract_id": "00669330fe28a78d7233cc30d87d29421f0cd2743e45c0d9bb49287c9b7a3e58caca111220d50d9e9c39c9500caec7f93fbd34e359bc095828979300168708d39dfd5264cd",
+        "contract_id": "0004ee019fe9dbe94a6b4ad81b0422ce61b8bfe8484751c52f12683d7bb7b9b4bcca111220aee0b3959ab353c2bbb64a58485d39f21be5ab9d5b7a5e5c8184732c1bf0b573",
         "payload": {
           "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
-          "optIssuancePerValidatorFaucetCoupon": "118.1574380399",
-          "issuancePerFeaturedAppRewardCoupon": "29.0635259588",
-          "opensAt": "2025-09-30T15:30:47.423539Z",
+          "optIssuancePerValidatorFaucetCoupon": "95.4098966913",
+          "issuancePerFeaturedAppRewardCoupon": "28.2057639679",
+          "opensAt": "2025-09-30T16:52:50.068940Z",
           "issuancePerSvRewardCoupon": "0.301400003",
-          "targetClosesAt": "2025-09-30T15:50:47.423539Z",
+          "targetClosesAt": "2025-09-30T17:12:50.068940Z",
           "issuancePerUnfeaturedAppRewardCoupon": "0.6",
           "round": {
-            "number": "12628"
+            "number": "12636"
           },
           "issuancePerValidatorRewardCoupon": "0.2"
         },
-        "created_event_blob": "CgMyLjESmwQKRQBmkzD+KKeNcjPMMNh9KUIfDNJ0PkXA2btJKHybej5YysoREiDVDZ6cOclQDK7H+T+9NONZvAlYKJeTABaHCNOd/VJkzRINc3BsaWNlLWFtdWxldBplCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGhJJc3N1aW5nTWluaW5nUm91bmQi2wFq2AEKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBioxQEKEAoOMgwwLjIwMDAwMDAwMDAKEQoPMg0yOS4wNjM1MjU5NTg4ChAKDjIMMC42MDAwMDAwMDAwChAKDjIMMC4zMDE0MDAwMDMwCgsKCSkzbqZvBkAGAAoLCgkpM/ostwZABgAKFgoUUhIKEDIOMTE4LjE1NzQzODAzOTkqSURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWE5MyjjSwZABgBCKgomCiQIARIg4DTDyABJ6u2+zvZD6snq07bp1OYVmDIabK2yqwGBBuYQHg==",
-        "created_at": "2025-09-30T15:20:47.423539Z"
+        "created_event_blob": "CgMyLjESmgQKRQAE7gGf6dvpSmtK2BsEIs5huL/oSEdRxS8SaD17t7m0vMoREiCu4LOVmrNTwru2SlhIXTnyG+WrnVt6XlyBhHMsG/C1cxINc3BsaWNlLWFtdWxldBplCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGhJJc3N1aW5nTWluaW5nUm91bmQi2gFq1wEKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBi4xQEKEAoOMgwwLjIwMDAwMDAwMDAKEQoPMg0yOC4yMDU3NjM5Njc5ChAKDjIMMC42MDAwMDAwMDAwChAKDjIMMC4zMDE0MDAwMDMwCgsKCSnMCRCVB0AGAAoLCgkpzJWW3AdABgAKFQoTUhEKDzINOTUuNDA5ODk2NjkxMypJRFNPOjoxMjIwYmU1OGMyOWU2NWRlNDBiZjI3M2JlMWRjMmIyNjZkNDNhOWEwMDJlYTViMTg5NTVhZWVmN2FhYzg4MWJiNDcxYTnMw0xxB0AGAEIqCiYKJAgBEiAzXAJxw6I7G3rw+1Oh/ou/TMF9U5IE7qlRTpJnGH4+LxAe",
+        "created_at": "2025-09-30T16:42:50.068940Z"
       },
       "domain_id": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
     },
     {
       "contract": {
         "template_id": "6e9fc50fb94e56751b49f09ba2dc84da53a9d7cff08115ebb4f6b7a12d0c990c:Splice.Round:IssuingMiningRound",
-        "contract_id": "00e9673fb31e7ca01614a260b41cb339510c535f7a7d037814e0acf5eb5142ef71ca1112207784201f65d359b275ee085b7df3b33251b849f9c617ce9c1c6a65ae040bc4d2",
+        "contract_id": "00e88d13dd1c1f8b36e4fcc7b2f5dc9e1bc8801294167e5c7fe2896219025561c0ca11122008a13752cde67a1f9e6a4816265e40f75ac409f5763e8f6e0d5605edd76947ac",
         "payload": {
           "dso": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
-          "optIssuancePerValidatorFaucetCoupon": "118.2233102926",
-          "issuancePerFeaturedAppRewardCoupon": "26.2573426635",
-          "opensAt": "2025-09-30T15:41:06.137253Z",
+          "optIssuancePerValidatorFaucetCoupon": "118.2104172043",
+          "issuancePerFeaturedAppRewardCoupon": "28.3385125332",
+          "opensAt": "2025-09-30T17:02:52.591484Z",
           "issuancePerSvRewardCoupon": "0.301400003",
-          "targetClosesAt": "2025-09-30T16:01:06.137253Z",
+          "targetClosesAt": "2025-09-30T17:22:52.591484Z",
           "issuancePerUnfeaturedAppRewardCoupon": "0.6",
           "round": {
-            "number": "12629"
+            "number": "12637"
           },
           "issuancePerValidatorRewardCoupon": "0.2"
         },
-        "created_event_blob": "CgMyLjESmwQKRQDpZz+zHnygFhSiYLQcszlRDFNfen0DeBTgrPXrUULvccoREiB3hCAfZdNZsnXuCFt987MyUbhJ+cYXzpwcamWuBAvE0hINc3BsaWNlLWFtdWxldBplCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGhJJc3N1aW5nTWluaW5nUm91bmQi2wFq2AEKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBiqxQEKEAoOMgwwLjIwMDAwMDAwMDAKEQoPMg0yNi4yNTczNDI2NjM1ChAKDjIMMC42MDAwMDAwMDAwChAKDjIMMC4zMDE0MDAwMDMwCgsKCSmlQIeUBkAGAAoLCgkppcwN3AZABgAKFgoUUhIKEDIOMTE4LjIyMzMxMDI5MjYqSURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWE5pfrDcAZABgBCKgomCiQIARIgn/Fc4IDXgVo16uYXl+p5EpXTaq2fyMUPZtm3aUgkH3EQHg==",
-        "created_at": "2025-09-30T15:31:06.137253Z"
+        "created_event_blob": "CgMyLjESmwQKRQDojRPdHB+LNuT8x7L13J4byIASlBZ+XH/iiWIZAlVhwMoREiAIoTdSzeZ6H55qSBYmXkD3WsQJ9XY+j24NVgXt12lHrBINc3BsaWNlLWFtdWxldBplCkA2ZTlmYzUwZmI5NGU1Njc1MWI0OWYwOWJhMmRjODRkYTUzYTlkN2NmZjA4MTE1ZWJiNGY2YjdhMTJkMGM5OTBjEgZTcGxpY2USBVJvdW5kGhJJc3N1aW5nTWluaW5nUm91bmQi2wFq2AEKTQpLOklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhCgwKCmoICgYKBBi6xQEKEAoOMgwwLjIwMDAwMDAwMDAKEQoPMg0yOC4zMzg1MTI1MzMyChAKDjIMMC42MDAwMDAwMDAwChAKDjIMMC4zMDE0MDAwMDMwCgsKCSl8zfm4B0AGAAoLCgkpfFmAAAhABgAKFgoUUhIKEDIOMTE4LjIxMDQxNzIwNDMqSURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWE5fIc2lQdABgBCKgomCiQIARIg7RmPFG2qNlGVMXcJq5TVs5boG1h1a3LvWtR8KRspesMQHg==",
+        "created_at": "2025-09-30T16:52:52.591484Z"
       },
       "domain_id": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
     }
