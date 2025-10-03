@@ -75,6 +75,8 @@ docs/
 .cursorrules
 .github/
 .prettierrc
+.cursorignore
+.prettierignore
 
 # Include the generated operations (which are under a test directory)
 # !build/**/src/test/**
