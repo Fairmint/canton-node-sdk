@@ -1,4 +1,3 @@
-.prettierignore
 LICENSE
 README.md
 build/src/clients/index
