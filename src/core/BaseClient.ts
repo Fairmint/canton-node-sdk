@@ -1,16 +1,16 @@
-import {
-  ApiType,
-  PartialProviderConfig,
-  ClientConfig,
-  NetworkType,
-  ProviderType,
-  LighthouseApiConfig,
-} from './types';
 import { AuthenticationManager } from './auth/AuthenticationManager';
-import { HttpClient } from './http/HttpClient';
-import { ConfigurationError } from './errors';
 import { EnvLoader } from './config/EnvLoader';
+import { ConfigurationError } from './errors';
+import { HttpClient } from './http/HttpClient';
 import { FileLogger } from './logging/FileLogger';
+import {
+  type ApiType,
+  type ClientConfig,
+  type LighthouseApiConfig,
+  type NetworkType,
+  type PartialProviderConfig,
+  type ProviderType,
+} from './types';
 
 /** Abstract base class providing common functionality for all API clients */
 export abstract class BaseClient {
@@ -25,7 +25,7 @@ export abstract class BaseClient {
 
     // If no config provided, use default configuration with EnvLoader and FileLogger
     this.clientConfig =
-      config ||
+      config ??
       ((): ClientConfig => {
         const defaultConfig = EnvLoader.getConfig(apiType);
         defaultConfig.logger = new FileLogger();
@@ -33,10 +33,8 @@ export abstract class BaseClient {
       })();
 
     // Validate that the required API configuration is present
-    if (!this.clientConfig.apis || !this.clientConfig.apis[apiType]) {
-      throw new ConfigurationError(
-        `API configuration not found for ${apiType}`
-      );
+    if (!this.clientConfig.apis?.[apiType]) {
+      throw new ConfigurationError(`API configuration not found for ${apiType}`);
     }
 
     // Build provider configuration from the provided config
@@ -44,25 +42,19 @@ export abstract class BaseClient {
       providerName: this.clientConfig.provider
         ? `${this.clientConfig.provider}_${this.clientConfig.network}`
         : this.clientConfig.network,
-      authUrl: this.clientConfig.authUrl || '',
+      authUrl: this.clientConfig.authUrl ?? '',
       apis: {
-        [apiType]: this.clientConfig.apis[apiType]!,
+        [apiType]: this.clientConfig.apis[apiType],
       },
     };
 
     // Initialize authentication manager
     const apiConfig = this.config.apis[this.apiType];
     if (!apiConfig) {
-      throw new ConfigurationError(
-        `API configuration not found for ${this.apiType}`
-      );
+      throw new ConfigurationError(`API configuration not found for ${this.apiType}`);
     }
 
-    this.authManager = new AuthenticationManager(
-      this.config.authUrl,
-      apiConfig.auth,
-      this.clientConfig.logger
-    );
+    this.authManager = new AuthenticationManager(this.config.authUrl, apiConfig.auth, this.clientConfig.logger);
 
     // Initialize HTTP client with logger
     this.httpClient = new HttpClient(this.clientConfig.logger);
@@ -132,7 +124,7 @@ export abstract class BaseClient {
 
   public getApiUrl(): string {
     const apiConfig = this.config.apis[this.apiType];
-    return apiConfig?.apiUrl || '';
+    return apiConfig?.apiUrl ?? '';
   }
 
   public getPartyId(): string {
@@ -141,7 +133,7 @@ export abstract class BaseClient {
     if (apiConfig?.partyId) {
       return apiConfig.partyId;
     }
-    return this.clientConfig.partyId || '';
+    return this.clientConfig.partyId ?? '';
   }
 
   public getUserId(): string | undefined {
@@ -156,7 +148,7 @@ export abstract class BaseClient {
   public getManagedParties(): string[] {
     // For now, always use environment variables for managed parties
     // as this is not typically provided in the API config
-    return this.clientConfig.managedParties || [];
+    return this.clientConfig.managedParties ?? [];
   }
 
   public buildPartyList(additionalParties: string[] = []): string[] {
@@ -205,7 +197,7 @@ export abstract class SimpleBaseClient {
 
     // If no config provided, use default configuration with EnvLoader and FileLogger
     this.clientConfig =
-      config ||
+      config ??
       ((): ClientConfig => {
         const defaultConfig = EnvLoader.getConfig(apiType);
         defaultConfig.logger = new FileLogger();
@@ -213,60 +205,37 @@ export abstract class SimpleBaseClient {
       })();
 
     // Validate that the required API configuration is present
-    if (!this.clientConfig.apis || !this.clientConfig.apis[apiType]) {
-      throw new ConfigurationError(
-        `API configuration not found for ${apiType}`
-      );
+    if (!this.clientConfig.apis?.[apiType]) {
+      throw new ConfigurationError(`API configuration not found for ${apiType}`);
     }
 
     // Get the API config
     const apiConfig = this.clientConfig.apis[apiType];
-    if (!apiConfig) {
-      throw new ConfigurationError(
-        `API configuration not found for ${this.apiType}`
-      );
-    }
 
     // For Lighthouse API, we expect LighthouseApiConfig
     if (apiType === 'LIGHTHOUSE_API') {
       this.apiConfig = apiConfig as LighthouseApiConfig;
     } else {
-      throw new ConfigurationError(
-        `Invalid API type for SimpleBaseClient: ${apiType}`
-      );
+      throw new ConfigurationError(`Invalid API type for SimpleBaseClient: ${apiType}`);
     }
 
     // Initialize HTTP client with logger
     this.httpClient = new HttpClient(this.clientConfig.logger);
   }
 
-  public async makeGetRequest<T>(
-    url: string,
-    config: { contentType?: string } = {}
-  ): Promise<T> {
+  public async makeGetRequest<T>(url: string, config: { contentType?: string } = {}): Promise<T> {
     return this.httpClient.makeGetRequest<T>(url, config);
   }
 
-  public async makePostRequest<T>(
-    url: string,
-    data: unknown,
-    config: { contentType?: string } = {}
-  ): Promise<T> {
+  public async makePostRequest<T>(url: string, data: unknown, config: { contentType?: string } = {}): Promise<T> {
     return this.httpClient.makePostRequest<T>(url, data, config);
   }
 
-  public async makeDeleteRequest<T>(
-    url: string,
-    config: { contentType?: string } = {}
-  ): Promise<T> {
+  public async makeDeleteRequest<T>(url: string, config: { contentType?: string } = {}): Promise<T> {
     return this.httpClient.makeDeleteRequest<T>(url, config);
   }
 
-  public async makePatchRequest<T>(
-    url: string,
-    data: unknown,
-    config: { contentType?: string } = {}
-  ): Promise<T> {
+  public async makePatchRequest<T>(url: string, data: unknown, config: { contentType?: string } = {}): Promise<T> {
     return this.httpClient.makePatchRequest<T>(url, data, config);
   }
 
@@ -275,7 +244,7 @@ export abstract class SimpleBaseClient {
   }
 
   public getPartyId(): string {
-    return this.clientConfig.partyId || '';
+    return this.clientConfig.partyId ?? '';
   }
 
   public getNetwork(): NetworkType {

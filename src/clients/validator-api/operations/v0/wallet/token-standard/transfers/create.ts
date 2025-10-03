@@ -1,20 +1,21 @@
 import { z } from 'zod';
 import { createApiOperation } from '../../../../../../../core';
-import { operations } from '../../../../../../../generated/apps/wallet/src/main/openapi/wallet-internal';
+import { type operations } from '../../../../../../../generated/apps/wallet/src/main/openapi/wallet-internal';
 
 /**
- * @description Create a new token standard transfer to send tokens to another party
+ * Create a new token standard transfer to send tokens to another party
+ *
  * @example
- * ```typescript
- * const result = await client.createTokenStandardTransfer({
+ *   ```typescript
+ *   const result = await client.createTokenStandardTransfer({
  *   receiver_party_id: 'party123',
  *   amount: '100',
  *   description: 'Payment for services',
  *   expires_at: Date.now() + 3600000, // 1 hour from now
  *   tracking_id: 'unique-tracking-id'
- * });
- * console.log(`Transfer created with output: ${result.output.transfer_instruction_cid}`);
- * ```
+ *   });
+ *
+ *   ```;
  */
 export const CreateTokenStandardTransfer = createApiOperation<
   operations['createTokenStandardTransfer']['requestBody']['content']['application/json'],
@@ -30,4 +31,4 @@ export const CreateTokenStandardTransfer = createApiOperation<
   method: 'POST',
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/wallet/token-standard/transfers`,
   buildRequestData: (params) => params,
-}); 
+});

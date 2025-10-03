@@ -1,5 +1,5 @@
+import { type z } from 'zod';
 import { createApiOperation } from '../../../../../core';
-import { z } from 'zod';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 import { GetParticipantIdParamsSchema } from '../../../schemas/operations';
 
@@ -13,4 +13,4 @@ export const GetParticipantId = createApiOperation<GetParticipantIdParams, GetPa
   method: 'GET',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
   buildRequestData: () => ({}),
-}); 
+});

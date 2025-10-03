@@ -43,4 +43,4 @@ export type CreateIdentityProviderConfigResponse = z.infer<typeof CreateIdentity
 export type GetIdentityProviderConfigResponse = z.infer<typeof GetIdentityProviderConfigResponseSchema>;
 export type UpdateIdentityProviderConfigRequest = z.infer<typeof UpdateIdentityProviderConfigRequestSchema>;
 export type UpdateIdentityProviderConfigResponse = z.infer<typeof UpdateIdentityProviderConfigResponseSchema>;
-export type DeleteIdentityProviderConfigResponse = z.infer<typeof DeleteIdentityProviderConfigResponseSchema>; 
+export type DeleteIdentityProviderConfigResponse = z.infer<typeof DeleteIdentityProviderConfigResponseSchema>;

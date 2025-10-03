@@ -1,14 +1,15 @@
 import { z } from 'zod';
 import { createApiOperation } from '../../../../../core';
-import { operations } from '../../../../../generated/apps/validator/src/main/openapi/ans-external';
+import { type operations } from '../../../../../generated/apps/validator/src/main/openapi/ans-external';
 
 /**
- * @description List ANS entries
+ * List ANS entries
+ *
  * @example
- * ```typescript
- * const entries = await client.listAnsEntries();
- * console.log(`Found ${entries.entries.length} entries`);
- * ```
+ *   ```typescript
+ *   const entries = await client.listAnsEntries();
+ *
+ *   ```;
  */
 export const ListAnsEntries = createApiOperation<
   void,
@@ -17,4 +18,4 @@ export const ListAnsEntries = createApiOperation<
   paramsSchema: z.void(),
   method: 'GET',
   buildUrl: (_params: void, apiUrl: string) => `${apiUrl}/api/validator/v0/entry/all`,
-}); 
+});

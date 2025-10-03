@@ -1,11 +1,7 @@
 export type NetworkType = 'devnet' | 'testnet' | 'mainnet';
 export type ProviderType = string;
 
-export type ApiType =
-  | 'LEDGER_JSON_API'
-  | 'VALIDATOR_API'
-  | 'SCAN_API'
-  | 'LIGHTHOUSE_API';
+export type ApiType = 'LEDGER_JSON_API' | 'VALIDATOR_API' | 'SCAN_API' | 'LIGHTHOUSE_API';
 
 export interface AuthConfig {
   grantType: string;

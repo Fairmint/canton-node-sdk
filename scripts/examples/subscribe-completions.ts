@@ -15,26 +15,29 @@ async function main(): Promise<void> {
       userId: '5',
     },
     {
-      onOpen: () => console.log('Completions stream opened'),
-      onMessage: msg => console.log(JSON.stringify(msg)),
-      onError: err => {
-        console.error('Stream error:', err);
+      onOpen: () => {},
+      onMessage: (msg) => {
+        console.log('Completion:', msg);
+      },
+      onError: (err) => {
+        console.error('Subscription error:', err);
         process.exit(1);
       },
-      onClose: (code, reason) =>
-        console.log(`Stream closed: ${code} ${reason}`),
+      onClose: (code, reason) => {
+        console.log(`Connection closed: ${code} - ${reason}`);
+      },
     }
   );
 
   // Keep open for demo
   setTimeout(() => {
     subscription.close();
-    console.log('Closed subscription (demo)');
+    console.log('Subscription closed after timeout');
     process.exit(0);
   }, 120000);
 }
 
-main().catch(err => {
-  console.error(err);
+main().catch((err) => {
+  console.error('Main error:', err);
   process.exit(1);
 });

@@ -1,1 +1,1 @@
-export { ValidatorApiClient } from './ValidatorApiClient.generated'; 
+export { ValidatorApiClient } from './ValidatorApiClient.generated';

@@ -1,11 +1,21 @@
 {
+  "arrowParens": "always",
+  "endOfLine": "lf",
+  "overrides": [
+    {
+      "files": "*.md",
+      "options": {
+        "tabWidth": 2,
+        "printWidth": 100,
+        "proseWrap": "always"
+      }
+    }
+  ],
+  "plugins": ["prettier-plugin-organize-imports", "prettier-plugin-packagejson", "prettier-plugin-jsdoc"],
+  "printWidth": 120,
   "semi": true,
-  "trailingComma": "es5",
   "singleQuote": true,
-  "printWidth": 80,
   "tabWidth": 2,
-  "useTabs": false,
-  "bracketSpacing": true,
-  "arrowParens": "avoid",
-  "endOfLine": "lf"
-} 
+  "trailingComma": "es5",
+  "useTabs": false
+}

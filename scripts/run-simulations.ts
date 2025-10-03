@@ -8,7 +8,7 @@ function findSimulationFiles(dir: string): string[] {
   for (const file of list) {
     const filePath = path.join(dir, file);
     const stat = fs.statSync(filePath);
-    if (stat && stat.isDirectory()) {
+    if (stat.isDirectory()) {
       if (file === 'core') continue;
       results = results.concat(findSimulationFiles(filePath));
     } else if (file.endsWith('.ts') && file !== 'index.ts') {
@@ -24,11 +24,6 @@ async function runSimulations(): Promise<void> {
   // Recursively find all TypeScript files in the simulations directory (excluding core and index files)
   const simulationFiles = findSimulationFiles(simulationsDir);
 
-  console.log(`Found ${simulationFiles.length} simulation files:`);
-  simulationFiles.forEach(file =>
-    console.log(`  - ${path.relative(simulationsDir, file)}`)
-  );
-
   // Initialize simulation runner and clear results directory
   const runner = new SimulationRunner();
   runner.clearResultsDir();
@@ -38,9 +33,7 @@ async function runSimulations(): Promise<void> {
 
   // Run each simulation file sequentially
   for (const file of simulationFiles) {
-    console.log(
-      `\n🚀 Running simulation: ${path.relative(simulationsDir, file)}`
-    );
+    console.log(`Running simulation: ${file}`);
     try {
       // Import the simulation module
       const simulationModule = await import(file);
@@ -51,27 +44,27 @@ async function runSimulations(): Promise<void> {
       } else {
         // Fallback: if no runAllTests export, the module should have executed on import
         // Wait a bit to ensure any async operations complete
-        await new Promise(resolve => global.setTimeout(resolve, 100));
+        await new Promise((resolve) => global.setTimeout(resolve, 100));
       }
 
-      console.log(`✅ Completed: ${path.relative(simulationsDir, file)}`);
+      console.log(`✓ Simulation completed: ${file}`);
     } catch (error) {
-      console.error(`❌ Failed: ${path.relative(simulationsDir, file)}`);
+      console.error(`✗ Simulation failed: ${file}`);
       console.error(error);
       hasFailures = true;
     }
   }
 
   if (hasFailures) {
-    console.log('\n❌ Some simulations failed!');
+    console.error('Some simulations failed');
     process.exit(1);
   } else {
-    console.log('\n🎉 All simulations completed successfully!');
+    console.log('All simulations passed');
   }
 }
 
 // Run the simulations
-runSimulations().catch(error => {
-  console.error('Failed to run simulations:', error);
+runSimulations().catch((error) => {
+  console.error('Error running simulations:', error);
   process.exit(1);
 });

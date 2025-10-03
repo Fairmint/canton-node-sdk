@@ -1,1 +1,1 @@
-export * from './get-allocation-factory'; 
+export * from './get-allocation-factory';

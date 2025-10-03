@@ -1,9 +1,7 @@
 import { z } from 'zod';
 import { RecordSchema } from '../base';
 
-/**
- * Created event details.
- */
+/** Created event details. */
 export const CreatedEventDetailsSchema = z.object({
   /** Offset of the event in the ledger stream. */
   offset: z.number(),
@@ -35,9 +33,7 @@ export const CreatedEventDetailsSchema = z.object({
   implementedInterfaces: z.array(z.string()).optional(),
 });
 
-/**
- * Archived event details.
- */
+/** Archived event details. */
 export const ArchivedEventDetailsSchema = z.object({
   /** Offset of the event in the ledger stream. */
   offset: z.number(),
@@ -55,9 +51,7 @@ export const ArchivedEventDetailsSchema = z.object({
   implementedInterfaces: z.array(z.string()).optional(),
 });
 
-/**
- * Assigned event details.
- */
+/** Assigned event details. */
 export const AssignedEventDetailsSchema = z.object({
   /** Offset of the event in the ledger stream. */
   offset: z.number(),
@@ -81,9 +75,7 @@ export const AssignedEventDetailsSchema = z.object({
   packageName: z.string(),
 });
 
-/**
- * Unassigned event details.
- */
+/** Unassigned event details. */
 export const UnassignedEventDetailsSchema = z.object({
   /** Offset of the event in the ledger stream. */
   offset: z.number(),
@@ -107,14 +99,10 @@ export const UnassignedEventDetailsSchema = z.object({
   packageName: z.string(),
 });
 
-/**
- * Empty command.
- */
+/** Empty command. */
 export const EmptyCommandSchema = z.object({});
 
-/**
- * Status details for completions.
- */
+/** Status details for completions. */
 export const StatusDetailsSchema = z.object({
   /** Error code. */
   code: z.number(),
@@ -130,4 +118,4 @@ export type ArchivedEventDetails = z.infer<typeof ArchivedEventDetailsSchema>;
 export type AssignedEventDetails = z.infer<typeof AssignedEventDetailsSchema>;
 export type UnassignedEventDetails = z.infer<typeof UnassignedEventDetailsSchema>;
 export type EmptyCommand = z.infer<typeof EmptyCommandSchema>;
-export type StatusDetails = z.infer<typeof StatusDetailsSchema>; 
+export type StatusDetails = z.infer<typeof StatusDetailsSchema>;

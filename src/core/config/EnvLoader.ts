@@ -1,8 +1,15 @@
 import { config } from 'dotenv';
-import * as path from 'path';
 import * as fs from 'fs';
-import { NetworkType, ProviderType, ClientConfig, ApiConfig, AuthConfig, LighthouseApiConfig } from '../types';
+import * as path from 'path';
 import { ConfigurationError } from '../errors';
+import {
+  type ApiConfig,
+  type AuthConfig,
+  type ClientConfig,
+  type LighthouseApiConfig,
+  type NetworkType,
+  type ProviderType,
+} from '../types';
 
 // Load environment variables with fallback to parent directory
 const currentEnvPath = '.env';
@@ -14,13 +21,6 @@ let result = config({ path: currentEnvPath });
 // If no .env file found in current directory, try parent directory
 if (result.error && fs.existsSync(parentEnvPath)) {
   result = config({ path: parentEnvPath });
-
-  if (result.error) {
-    console.warn(
-      'Failed to load .env file from parent directory:',
-      result.error.message
-    );
-  }
 }
 
 export interface EnvLoaderOptions {
@@ -31,7 +31,7 @@ export interface EnvLoaderOptions {
 /** Singleton class for managing environment variables and configuration */
 export class EnvLoader {
   private static instance: EnvLoader | undefined;
-  private env: Record<string, string | undefined>;
+  private readonly env: Record<string, string | undefined>;
   private options: EnvLoaderOptions;
 
   private constructor(options: EnvLoaderOptions = {}) {
@@ -49,26 +49,27 @@ export class EnvLoader {
     return EnvLoader.instance;
   }
 
-  public static resetInstance() {
+  public static resetInstance(): void {
     EnvLoader.instance = undefined;
   }
 
   /**
    * Get configuration for a specific API type from environment variables
+   *
    * @param apiType The API type to get configuration for
    * @param options Optional network and provider to use instead of reading from env
    * @returns ClientConfig with only the specified API configured
    */
   public static getConfig(apiType: string, options?: { network?: NetworkType; provider?: ProviderType }): ClientConfig {
     const envLoader = EnvLoader.getInstance();
-    
+
     // Determine which values to use - prioritize options over environment
-    const network = options?.network || envLoader.getCurrentNetwork();
-    const provider = options?.provider || envLoader.getCurrentProvider();
-    
+    const network = options?.network ?? envLoader.getCurrentNetwork();
+    const provider = options?.provider ?? envLoader.getCurrentProvider();
+
     // For Lighthouse API, provider is optional
     let authUrl: string | undefined;
-    
+
     if (apiType === 'LIGHTHOUSE_API') {
       // Lighthouse API doesn't require provider or auth URL
     } else {
@@ -87,54 +88,57 @@ export class EnvLoader {
       if (apiType === 'LIGHTHOUSE_API') {
         throw new ConfigurationError(
           `Missing required environment variable for ${apiType}. ` +
-          `Required: CANTON_${network.toUpperCase()}_${apiType.toUpperCase()}_URI`
+            `Required: CANTON_${network.toUpperCase()}_${apiType.toUpperCase()}_URI`
         );
       } else {
         const providerStr = provider ? provider.toUpperCase() : 'PROVIDER';
         throw new ConfigurationError(
           `Missing required environment variables for ${apiType}. ` +
-          `Required: CANTON_${network.toUpperCase()}_${providerStr}_${apiType.toUpperCase()}_URI, ` +
-          `CANTON_${network.toUpperCase()}_${providerStr}_${apiType.toUpperCase()}_CLIENT_ID, ` +
-          `and either CLIENT_SECRET (for client_credentials) or USERNAME/PASSWORD (for password grant)`
+            `Required: CANTON_${network.toUpperCase()}_${providerStr}_${apiType.toUpperCase()}_URI, ` +
+            `CANTON_${network.toUpperCase()}_${providerStr}_${apiType.toUpperCase()}_CLIENT_ID, ` +
+            `and either CLIENT_SECRET (for client_credentials) or USERNAME/PASSWORD (for password grant)`
         );
       }
     }
 
-    const config: ClientConfig = {
+    const clientConfig: ClientConfig = {
       network,
       apis: {
         [apiType]: apiConfig,
       },
     };
-    
+
     // Only add provider and authUrl if they exist
     if (provider) {
-      config.provider = provider;
+      clientConfig.provider = provider;
     }
     if (authUrl) {
-      config.authUrl = authUrl;
+      clientConfig.authUrl = authUrl;
     }
-    
-    return config;
+
+    return clientConfig;
   }
 
   /**
-   * Get a summary of the environment variables being used for a specific configuration
-   * This is useful for debugging configuration issues
+   * Get a summary of the environment variables being used for a specific configuration This is useful for debugging
+   * configuration issues
    */
-  public static getConfigSummary(apiType: string, options?: { network?: NetworkType; provider?: ProviderType }): {
+  public static getConfigSummary(
+    apiType: string,
+    options?: { network?: NetworkType; provider?: ProviderType }
+  ): {
     network: NetworkType;
     provider?: ProviderType;
     envVars: Record<string, string | undefined>;
     missingVars: string[];
   } {
     const envLoader = EnvLoader.getInstance();
-    const network = options?.network || envLoader.getCurrentNetwork();
-    const provider = options?.provider || envLoader.getCurrentProvider();
-    
+    const network = options?.network ?? envLoader.getCurrentNetwork();
+    const provider = options?.provider ?? envLoader.getCurrentProvider();
+
     const envVars: Record<string, string | undefined> = {};
     const missingVars: string[] = [];
-    
+
     // Collect all relevant environment variables
     if (apiType === 'LIGHTHOUSE_API') {
       const uriKey = `CANTON_${network.toUpperCase()}_${apiType.toUpperCase()}_URI`;
@@ -145,19 +149,23 @@ export class EnvLoader {
     } else if (provider) {
       // Non-Lighthouse APIs
       const baseKey = `CANTON_${network.toUpperCase()}_${provider.toUpperCase()}`;
-      
+
       // API-specific variables
       envVars[`${baseKey}_${apiType.toUpperCase()}_URI`] = envLoader.env[`${baseKey}_${apiType.toUpperCase()}_URI`];
-      envVars[`${baseKey}_${apiType.toUpperCase()}_CLIENT_ID`] = envLoader.env[`${baseKey}_${apiType.toUpperCase()}_CLIENT_ID`];
-      envVars[`${baseKey}_${apiType.toUpperCase()}_CLIENT_SECRET`] = envLoader.env[`${baseKey}_${apiType.toUpperCase()}_CLIENT_SECRET`];
-      envVars[`${baseKey}_${apiType.toUpperCase()}_USERNAME`] = envLoader.env[`${baseKey}_${apiType.toUpperCase()}_USERNAME`];
-      envVars[`${baseKey}_${apiType.toUpperCase()}_PASSWORD`] = envLoader.env[`${baseKey}_${apiType.toUpperCase()}_PASSWORD`];
-      
+      envVars[`${baseKey}_${apiType.toUpperCase()}_CLIENT_ID`] =
+        envLoader.env[`${baseKey}_${apiType.toUpperCase()}_CLIENT_ID`];
+      envVars[`${baseKey}_${apiType.toUpperCase()}_CLIENT_SECRET`] =
+        envLoader.env[`${baseKey}_${apiType.toUpperCase()}_CLIENT_SECRET`];
+      envVars[`${baseKey}_${apiType.toUpperCase()}_USERNAME`] =
+        envLoader.env[`${baseKey}_${apiType.toUpperCase()}_USERNAME`];
+      envVars[`${baseKey}_${apiType.toUpperCase()}_PASSWORD`] =
+        envLoader.env[`${baseKey}_${apiType.toUpperCase()}_PASSWORD`];
+
       // Common variables
       envVars[`${baseKey}_AUTH_URL`] = envLoader.env[`${baseKey}_AUTH_URL`];
       envVars[`${baseKey}_PARTY_ID`] = envLoader.env[`${baseKey}_PARTY_ID`];
       envVars[`${baseKey}_USER_ID`] = envLoader.env[`${baseKey}_USER_ID`];
-      
+
       // Check for missing required variables
       if (!envVars[`${baseKey}_${apiType.toUpperCase()}_URI`]) {
         missingVars.push(`${baseKey}_${apiType.toUpperCase()}_URI`);
@@ -169,18 +177,18 @@ export class EnvLoader {
         missingVars.push(`${baseKey}_AUTH_URL`);
       }
     }
-    
+
     // Add template and contract IDs to the summary
     const walletTemplateKey = `CANTON_WALLET_TEMPLATE_ID_${network.toUpperCase()}`;
     const preapprovalTemplateKey = `CANTON_PREAPPROVAL_TEMPLATE_ID_${network.toUpperCase()}`;
     const amuletRulesContractKey = `CANTON_AMULET_RULES_CONTRACT_ID_${network.toUpperCase()}`;
     const validatorWalletAppInstallContractKey = `CANTON_VALIDATOR_WALLET_APP_INSTALL_CONTRACT_ID_${network.toUpperCase()}`;
-    
+
     envVars[walletTemplateKey] = envLoader.env[walletTemplateKey];
     envVars[preapprovalTemplateKey] = envLoader.env[preapprovalTemplateKey];
     envVars[amuletRulesContractKey] = envLoader.env[amuletRulesContractKey];
     envVars[validatorWalletAppInstallContractKey] = envLoader.env[validatorWalletAppInstallContractKey];
-    
+
     // Check for missing template and contract variables
     if (!envVars[walletTemplateKey]) {
       missingVars.push(walletTemplateKey);
@@ -194,7 +202,7 @@ export class EnvLoader {
     if (!envVars[validatorWalletAppInstallContractKey]) {
       missingVars.push(validatorWalletAppInstallContractKey);
     }
-    
+
     return {
       network,
       provider,
@@ -204,11 +212,9 @@ export class EnvLoader {
   }
 
   public getNodeEnv(): 'development' | 'production' | 'test' {
-    const value = this.env['NODE_ENV'] || 'development';
+    const value = this.env['NODE_ENV'] ?? 'development';
     if (!['development', 'production', 'test'].includes(value)) {
-      throw new ConfigurationError(
-        `Invalid NODE_ENV: ${value}. Must be 'development', 'production', or 'test'`
-      );
+      throw new ConfigurationError(`Invalid NODE_ENV: ${value}. Must be 'development', 'production', or 'test'`);
     }
     return value as 'development' | 'production' | 'test';
   }
@@ -232,15 +238,13 @@ export class EnvLoader {
     }
     const value = this.env['CANTON_CURRENT_PROVIDER']?.toLowerCase();
     if (!value) {
-      throw new ConfigurationError(
-        'Missing or invalid CANTON_CURRENT_PROVIDER'
-      );
+      throw new ConfigurationError('Missing or invalid CANTON_CURRENT_PROVIDER');
     }
-    return value as ProviderType;
+    return value;
   }
 
   public getApiUri(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {
-    const targetNetwork = network || this.getCurrentNetwork();
+    const targetNetwork = network ?? this.getCurrentNetwork();
 
     // Special case for APIs that don't require provider-specific configuration
     if (apiType === 'LIGHTHOUSE_API') {
@@ -249,7 +253,7 @@ export class EnvLoader {
       return uri;
     }
 
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetProvider = provider ?? this.getCurrentProvider();
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_URI`;
     const uri = this.env[envKey];
 
@@ -257,40 +261,40 @@ export class EnvLoader {
   }
 
   public getApiClientId(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetNetwork = network ?? this.getCurrentNetwork();
+    const targetProvider = provider ?? this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_CLIENT_ID`;
     return this.env[envKey];
   }
 
   public getApiClientSecret(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetNetwork = network ?? this.getCurrentNetwork();
+    const targetProvider = provider ?? this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_CLIENT_SECRET`;
     return this.env[envKey];
   }
 
   public getApiUsername(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetNetwork = network ?? this.getCurrentNetwork();
+    const targetProvider = provider ?? this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_USERNAME`;
     return this.env[envKey];
   }
 
   public getApiPassword(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetNetwork = network ?? this.getCurrentNetwork();
+    const targetProvider = provider ?? this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_PASSWORD`;
     return this.env[envKey];
   }
 
   public getAuthUrl(network?: NetworkType, provider?: ProviderType): string {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetNetwork = network ?? this.getCurrentNetwork();
+    const targetProvider = provider ?? this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_AUTH_URL`;
     const authUrl = this.env[envKey];
@@ -303,8 +307,8 @@ export class EnvLoader {
   }
 
   public getPartyId(network?: NetworkType, provider?: ProviderType): string {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetNetwork = network ?? this.getCurrentNetwork();
+    const targetProvider = provider ?? this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_PARTY_ID`;
     const partyId = this.env[envKey];
@@ -317,15 +321,15 @@ export class EnvLoader {
   }
 
   public getUserId(network?: NetworkType, provider?: ProviderType): string | undefined {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetNetwork = network ?? this.getCurrentNetwork();
+    const targetProvider = provider ?? this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_USER_ID`;
     return this.env[envKey];
   }
 
   public getDatabaseUrl(network?: NetworkType): string {
-    const targetNetwork = network || this.getCurrentNetwork();
+    const targetNetwork = network ?? this.getCurrentNetwork();
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_DATABASE_URL`;
     const databaseUrl = this.env[envKey];
 
@@ -337,8 +341,8 @@ export class EnvLoader {
   }
 
   public getManagedParties(network?: NetworkType, provider?: ProviderType): string[] {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetNetwork = network ?? this.getCurrentNetwork();
+    const targetProvider = provider ?? this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_MANAGED_PARTIES`;
     const managedParties = this.env[envKey];
@@ -347,11 +351,14 @@ export class EnvLoader {
       return [];
     }
 
-    return managedParties.split(',').map(party => party.trim()).filter(party => party.length > 0);
+    return managedParties
+      .split(',')
+      .map((party) => party.trim())
+      .filter((party) => party.length > 0);
   }
 
   public getAmuletRulesContractId(network?: NetworkType): string {
-    const targetNetwork = network || this.getCurrentNetwork();
+    const targetNetwork = network ?? this.getCurrentNetwork();
     const envKey = `CANTON_AMULET_RULES_CONTRACT_ID_${targetNetwork.toUpperCase()}`;
     const contractId = this.env[envKey];
 
@@ -363,7 +370,7 @@ export class EnvLoader {
   }
 
   public getValidatorWalletAppInstallContractId(network?: NetworkType): string {
-    const targetNetwork = network || this.getCurrentNetwork();
+    const targetNetwork = network ?? this.getCurrentNetwork();
     const envKey = `CANTON_VALIDATOR_WALLET_APP_INSTALL_CONTRACT_ID_${targetNetwork.toUpperCase()}`;
     const contractId = this.env[envKey];
 
@@ -374,50 +381,54 @@ export class EnvLoader {
     return contractId;
   }
 
-  private loadApiConfig(apiType: string, network: NetworkType, provider?: ProviderType): ApiConfig | LighthouseApiConfig | undefined {
+  private loadApiConfig(
+    apiType: string,
+    network: NetworkType,
+    provider?: ProviderType
+  ): ApiConfig | LighthouseApiConfig | undefined {
     const apiUrl = this.getApiUri(apiType, network, provider);
-    
+
     // Special case for APIs that don't require authentication
     if (apiType === 'LIGHTHOUSE_API') {
       if (!apiUrl) {
         return undefined;
       }
-      
+
       const lighthouseConfig: LighthouseApiConfig = {
         apiUrl,
       };
-      
+
       // Lighthouse API doesn't require party ID at client level
       // Party ID will be provided in individual API calls
-      
+
       return lighthouseConfig;
     }
-    
+
     if (!provider) {
       return undefined; // Non-Lighthouse APIs require a provider
     }
-    
+
     const clientId = this.getApiClientId(apiType, network, provider);
     const clientSecret = this.getApiClientSecret(apiType, network, provider);
     const username = this.getApiUsername(apiType, network, provider);
     const password = this.getApiPassword(apiType, network, provider);
     const partyId = this.getPartyId(network, provider);
     const userId = this.getUserId(network, provider);
-    
+
     if (!apiUrl || !clientId) {
       return undefined;
     }
-    
+
     // Determine grant type based on available credentials
     let grantType: string;
     let auth: AuthConfig;
-    
+
     if (clientSecret) {
       // Use client_credentials if client secret is available
       grantType = 'client_credentials';
       auth = {
         grantType,
-        clientId: clientId || '',
+        clientId,
         clientSecret,
       };
     } else if (username && password) {
@@ -425,7 +436,7 @@ export class EnvLoader {
       grantType = 'password';
       auth = {
         grantType,
-        clientId: clientId || '',
+        clientId,
         username,
         password,
       };
@@ -434,15 +445,15 @@ export class EnvLoader {
       grantType = 'client_credentials';
       auth = {
         grantType,
-        clientId: clientId || '',
+        clientId,
       };
     }
-    
+
     const apiConfig: ApiConfig = {
-      apiUrl: apiUrl || '',
+      apiUrl,
       auth,
     };
-    
+
     if (partyId) {
       apiConfig.partyId = String(partyId);
     }
@@ -451,4 +462,4 @@ export class EnvLoader {
     }
     return apiConfig;
   }
-} 
+}

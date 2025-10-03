@@ -92,4 +92,6 @@ export type GetAllocationCancelContextParams = z.infer<typeof GetAllocationCance
 export type GetTransferFactoryParams = z.infer<typeof GetTransferFactoryParamsSchema>;
 export type GetTransferInstructionAcceptContextParams = z.infer<typeof GetTransferInstructionAcceptContextParamsSchema>;
 export type GetTransferInstructionRejectContextParams = z.infer<typeof GetTransferInstructionRejectContextParamsSchema>;
-export type GetTransferInstructionWithdrawContextParams = z.infer<typeof GetTransferInstructionWithdrawContextParamsSchema>; 
+export type GetTransferInstructionWithdrawContextParams = z.infer<
+  typeof GetTransferInstructionWithdrawContextParamsSchema
+>;

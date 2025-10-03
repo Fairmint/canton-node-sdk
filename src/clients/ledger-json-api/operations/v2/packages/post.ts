@@ -1,9 +1,9 @@
-import { z } from 'zod';
 import * as fs from 'fs';
-import { UploadDarFileResponse } from '../../../schemas/api';
+import { z } from 'zod';
 import { createApiOperation } from '../../../../../core';
+import { type UploadDarFileResponse } from '../../../schemas/api';
 
-// Schema for the parameters  
+// Schema for the parameters
 export const UploadDarFileParamsSchema = z.object({
   /** Path to the DAR file */
   filePath: z.string(),
@@ -14,27 +14,26 @@ export const UploadDarFileParamsSchema = z.object({
 export type UploadDarFileParams = z.infer<typeof UploadDarFileParamsSchema>;
 
 /**
- * @description Upload a DAR file to the participant node
+ * Upload a DAR file to the participant node
+ *
  * @example
- * ```typescript
- * const result = await client.uploadDarFile({
- *   filePath: 'my-package.dar',
- *   submissionId: 'unique-submission-id'
- * });
- * ```
+ *   ```typescript
+ *   const result = await client.uploadDarFile({
+ *     filePath: 'my-package.dar',
+ *     submissionId: 'unique-submission-id'
+ *   });
+ *   ```;
+ *
  * @param filePath - Path to the DAR file
  * @param submissionId - Optional submission ID for deduplication
  */
-export const UploadDarFile = createApiOperation<
-  UploadDarFileParams,
-  UploadDarFileResponse
->({
+export const UploadDarFile = createApiOperation<UploadDarFileParams, UploadDarFileResponse>({
   paramsSchema: UploadDarFileParamsSchema,
   method: 'POST',
   buildUrl: (params: UploadDarFileParams, apiUrl: string) => {
     const baseUrl = `${apiUrl}/v2/packages`;
     const queryParams = new URLSearchParams();
-    
+
     if (params.submissionId) {
       queryParams.append('submission_id', params.submissionId);
     }
@@ -52,6 +51,6 @@ export const UploadDarFile = createApiOperation<
   },
   requestConfig: {
     contentType: 'application/octet-stream',
-    includeBearerToken: true
-  }
-}); 
+    includeBearerToken: true,
+  },
+});

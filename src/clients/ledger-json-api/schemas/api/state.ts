@@ -1,16 +1,14 @@
 import { z } from 'zod';
-import { FilterSchema, ApiFeaturesSchema } from '../common';
-import { EventFormatSchema } from './events';
-import { 
-  CreatedEventDetailsSchema, 
-  ArchivedEventDetailsSchema, 
-  AssignedEventDetailsSchema, 
-  UnassignedEventDetailsSchema 
+import { ApiFeaturesSchema, FilterSchema } from '../common';
+import {
+  ArchivedEventDetailsSchema,
+  AssignedEventDetailsSchema,
+  CreatedEventDetailsSchema,
+  UnassignedEventDetailsSchema,
 } from './event-details';
+import { EventFormatSchema } from './events';
 
-/**
- * Get active contracts request.
- */
+/** Get active contracts request. */
 export const GetActiveContractsRequestSchema = z.object({
   /** Filter for the request (optional, deprecated). */
   filter: FilterSchema.optional(),
@@ -22,9 +20,7 @@ export const GetActiveContractsRequestSchema = z.object({
   eventFormat: EventFormatSchema.optional(),
 });
 
-/**
- * Active contract details.
- */
+/** Active contract details. */
 export const JsActiveContractSchema = z.object({
   /** Created event details. */
   createdEvent: CreatedEventDetailsSchema,
@@ -34,9 +30,7 @@ export const JsActiveContractSchema = z.object({
   reassignmentCounter: z.number(),
 });
 
-/**
- * Archived contract details.
- */
+/** Archived contract details. */
 export const JsArchivedSchema = z.object({
   /** Archived event details. */
   archivedEvent: ArchivedEventDetailsSchema,
@@ -44,17 +38,13 @@ export const JsArchivedSchema = z.object({
   synchronizerId: z.string(),
 });
 
-/**
- * Incomplete assigned contract details.
- */
+/** Incomplete assigned contract details. */
 export const JsIncompleteAssignedSchema = z.object({
   /** Assigned event details. */
   assignedEvent: AssignedEventDetailsSchema,
 });
 
-/**
- * Incomplete unassigned contract details.
- */
+/** Incomplete unassigned contract details. */
 export const JsIncompleteUnassignedSchema = z.object({
   /** Created event details. */
   createdEvent: CreatedEventDetailsSchema,
@@ -62,14 +52,10 @@ export const JsIncompleteUnassignedSchema = z.object({
   unassignedEvent: UnassignedEventDetailsSchema,
 });
 
-/**
- * Empty contract entry.
- */
+/** Empty contract entry. */
 export const JsEmptySchema = z.object({});
 
-/**
- * Contract entry (oneOf all contract entry types).
- */
+/** Contract entry (oneOf all contract entry types). */
 export const JsContractEntrySchema = z.union([
   z.object({ JsActiveContract: JsActiveContractSchema }),
   z.object({ JsEmpty: JsEmptySchema }),
@@ -77,9 +63,7 @@ export const JsContractEntrySchema = z.union([
   z.object({ JsIncompleteUnassigned: JsIncompleteUnassignedSchema }),
 ]);
 
-/**
- * Get active contracts response item.
- */
+/** Get active contracts response item. */
 export const JsGetActiveContractsResponseItemSchema = z.object({
   /** Workflow ID (optional). */
   workflowId: z.string().optional(),
@@ -87,22 +71,16 @@ export const JsGetActiveContractsResponseItemSchema = z.object({
   contractEntry: JsContractEntrySchema,
 });
 
-/**
- * Get active contracts response (array of contract entries).
- */
+/** Get active contracts response (array of contract entries). */
 export const JsGetActiveContractsResponseSchema = z.array(JsGetActiveContractsResponseItemSchema);
 
-/**
- * Get ledger end response.
- */
+/** Get ledger end response. */
 export const GetLedgerEndResponseSchema = z.object({
   /** Ledger end offset. */
   offset: z.number(),
 });
 
-/**
- * Get latest pruned offsets response.
- */
+/** Get latest pruned offsets response. */
 export const GetLatestPrunedOffsetsResponseSchema = z.object({
   /** Participant pruned up to inclusive offset. */
   participantPrunedUpToInclusive: z.number(),
@@ -110,9 +88,7 @@ export const GetLatestPrunedOffsetsResponseSchema = z.object({
   allDivulgedContractsPrunedUpToInclusive: z.number(),
 });
 
-/**
- * Connected synchronizer details.
- */
+/** Connected synchronizer details. */
 export const ConnectedSynchronizerSchema = z.object({
   /** Synchronizer alias. */
   synchronizerAlias: z.string(),
@@ -122,17 +98,13 @@ export const ConnectedSynchronizerSchema = z.object({
   permission: z.string(),
 });
 
-/**
- * Get connected synchronizers response.
- */
+/** Get connected synchronizers response. */
 export const GetConnectedSynchronizersResponseSchema = z.object({
   /** List of connected synchronizers. */
   connectedSynchronizers: z.array(ConnectedSynchronizerSchema),
 });
 
-/**
- * Get ledger API version response.
- */
+/** Get ledger API version response. */
 export const GetLedgerApiVersionResponseSchema = z.object({
   /** Version of the ledger API. */
   version: z.string(),
@@ -154,4 +126,4 @@ export type GetLedgerEndResponse = z.infer<typeof GetLedgerEndResponseSchema>;
 export type GetLatestPrunedOffsetsResponse = z.infer<typeof GetLatestPrunedOffsetsResponseSchema>;
 export type ConnectedSynchronizer = z.infer<typeof ConnectedSynchronizerSchema>;
 export type GetConnectedSynchronizersResponse = z.infer<typeof GetConnectedSynchronizersResponseSchema>;
-export type GetLedgerApiVersionResponse = z.infer<typeof GetLedgerApiVersionResponseSchema>; 
+export type GetLedgerApiVersionResponse = z.infer<typeof GetLedgerApiVersionResponseSchema>;

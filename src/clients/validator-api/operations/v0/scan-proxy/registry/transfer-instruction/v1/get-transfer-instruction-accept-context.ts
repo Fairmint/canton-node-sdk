@@ -1,5 +1,5 @@
-import { createApiOperation } from '../../../../../../../../core';
 import { z } from 'zod';
+import { createApiOperation } from '../../../../../../../../core';
 import type { components } from '../../../../../../../../generated/token-standard/splice-api-token-transfer-instruction-v1/openapi/transfer-instruction-v1';
 
 // Schema for path parameters
@@ -13,15 +13,16 @@ export type GetTransferInstructionAcceptContextRequest = components['schemas']['
 export type GetTransferInstructionAcceptContextResponse = components['schemas']['ChoiceContext'];
 
 /**
- * @description Get the choice context to accept a transfer instruction
+ * Get the choice context to accept a transfer instruction
+ *
  * @example
- * ```typescript
- * const context = await client.getTransferInstructionAcceptContext({
+ *   ```typescript
+ *   const context = await client.getTransferInstructionAcceptContext({
  *   transferInstructionId: 'contract-id-here',
  *   meta: { key: 'value' }
- * });
- * console.log(`Choice context data: ${JSON.stringify(context.choiceContextData)}`);
- * ```
+ *   });
+ *
+ *   ```;
  */
 export const GetTransferInstructionAcceptContext = createApiOperation<
   GetTransferInstructionAcceptContextParams,
@@ -29,9 +30,11 @@ export const GetTransferInstructionAcceptContext = createApiOperation<
 >({
   paramsSchema: GetTransferInstructionAcceptContextParamsSchema,
   method: 'POST',
-  buildUrl: (params: GetTransferInstructionAcceptContextParams, apiUrl: string) => 
+  buildUrl: (params: GetTransferInstructionAcceptContextParams, apiUrl: string) =>
     `${apiUrl}/api/validator/v0/scan-proxy/registry/transfer-instruction/v1/${params.transferInstructionId}/choice-contexts/accept`,
-  buildRequestData: (params: GetTransferInstructionAcceptContextParams): GetTransferInstructionAcceptContextRequest => ({
+  buildRequestData: (
+    params: GetTransferInstructionAcceptContextParams
+  ): GetTransferInstructionAcceptContextRequest => ({
     ...(params.meta && { meta: params.meta }),
   }),
-}); 
+});

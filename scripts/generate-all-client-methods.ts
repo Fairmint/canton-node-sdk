@@ -13,38 +13,20 @@ interface ClientConfig {
 const CLIENTS: ClientConfig[] = [
   {
     name: 'ValidatorApiClient',
-    clientFile: path.join(
-      __dirname,
-      '../src/clients/validator-api/ValidatorApiClient.generated.ts'
-    ),
-    operationsDir: path.join(
-      __dirname,
-      '../src/clients/validator-api/operations/v0'
-    ),
+    clientFile: path.join(__dirname, '../src/clients/validator-api/ValidatorApiClient.generated.ts'),
+    operationsDir: path.join(__dirname, '../src/clients/validator-api/operations/v0'),
     baseClass: 'BaseClient',
   },
   {
     name: 'LedgerJsonApiClient',
-    clientFile: path.join(
-      __dirname,
-      '../src/clients/ledger-json-api/LedgerJsonApiClient.generated.ts'
-    ),
-    operationsDir: path.join(
-      __dirname,
-      '../src/clients/ledger-json-api/operations/v2'
-    ),
+    clientFile: path.join(__dirname, '../src/clients/ledger-json-api/LedgerJsonApiClient.generated.ts'),
+    operationsDir: path.join(__dirname, '../src/clients/ledger-json-api/operations/v2'),
     baseClass: 'BaseClient',
   },
   {
     name: 'LighthouseApiClient',
-    clientFile: path.join(
-      __dirname,
-      '../src/clients/lighthouse-api/LighthouseApiClient.generated.ts'
-    ),
-    operationsDir: path.join(
-      __dirname,
-      '../src/clients/lighthouse-api/operations'
-    ),
+    clientFile: path.join(__dirname, '../src/clients/lighthouse-api/LighthouseApiClient.generated.ts'),
+    operationsDir: path.join(__dirname, '../src/clients/lighthouse-api/operations'),
     baseClass: 'SimpleBaseClient',
   },
 ];
@@ -53,10 +35,10 @@ const CLIENTS: ClientConfig[] = [
 function getAllTsFiles(dir: string): string[] {
   let results: string[] = [];
   const list = fs.readdirSync(dir);
-  list.forEach(file => {
+  list.forEach((file) => {
     const filePath = path.join(dir, file);
     const stat = fs.statSync(filePath);
-    if (stat && stat.isDirectory()) {
+    if (stat.isDirectory()) {
       results = results.concat(getAllTsFiles(filePath));
     } else if (file.endsWith('.ts')) {
       results.push(filePath);
@@ -74,7 +56,7 @@ function extractOperationInfo(fileContent: string): OperationInfo | null {
   // REST operations: createApiOperation or createSimpleApiOperation
   const apiRegex = /export const (\w+) = create(?:Simple)?ApiOperation<\s*([^,]+),\s*([^>]+)\s*>/s;
   const apiMatch = apiRegex.exec(fileContent);
-  if (apiMatch && apiMatch[1] && apiMatch[2] && apiMatch[3]) {
+  if (apiMatch?.[1] && apiMatch[2] && apiMatch[3]) {
     return {
       kind: 'api',
       operationName: apiMatch[1],
@@ -89,7 +71,7 @@ function extractOperationInfo(fileContent: string): OperationInfo | null {
   // operation name for generation, so match by name and ignore generic details.
   const wsNameRegex = /export const (\w+)\s*=\s*createWebSocketOperation</s;
   const wsNameMatch = wsNameRegex.exec(fileContent);
-  if (wsNameMatch && wsNameMatch[1]) {
+  if (wsNameMatch?.[1]) {
     return {
       kind: 'ws',
       operationName: wsNameMatch[1],
@@ -104,15 +86,13 @@ function extractOperationInfo(fileContent: string): OperationInfo | null {
 
 function relativeImportPath(from: string, to: string): string {
   let rel = path.relative(path.dirname(from), to).replace(/\\/g, '/');
-  if (!rel.startsWith('.')) rel = './' + rel;
+  if (!rel.startsWith('.')) rel = `./${rel}`;
   return rel.replace(/\.ts$/, '');
 }
 
-function generateMethodDeclarations(
-  ops: (OperationInfo & { importPath: string })[]
-): string {
+function generateMethodDeclarations(ops: Array<OperationInfo & { importPath: string }>): string {
   return ops
-    .map(op => {
+    .map((op) => {
       const methodName = operationNameToMethodName(op.operationName);
       if (op.kind === 'api') {
         const methodParamsType = `Parameters<InstanceType<typeof ${op.operationName}>['execute']>[0]`;
@@ -121,38 +101,30 @@ function generateMethodDeclarations(
           return `  public ${methodName}!: () => ${methodReturnType};`;
         }
         return `  public ${methodName}!: (params: ${methodParamsType}) => ${methodReturnType};`;
-      } else {
-        // WebSocket subscribe methods
-        const paramsType = `Parameters<InstanceType<typeof ${op.operationName}>['subscribe']>[0]`;
-        const messageType = `Parameters<Parameters<InstanceType<typeof ${op.operationName}>['subscribe']>[1]['onMessage']>[0]`;
-        return `  public ${methodName}!: (params: ${paramsType}, handlers: WebSocketHandlers<${messageType}>) => Promise<WebSocketSubscription>;`;
       }
+      // WebSocket subscribe methods
+      const paramsType = `Parameters<InstanceType<typeof ${op.operationName}>['subscribe']>[0]`;
+      const messageType = `Parameters<Parameters<InstanceType<typeof ${op.operationName}>['subscribe']>[1]['onMessage']>[0]`;
+      return `  public ${methodName}!: (params: ${paramsType}, handlers: WebSocketHandlers<${messageType}>) => Promise<WebSocketSubscription>;`;
     })
     .join('\n');
 }
 
-function generateMethodImplementations(
-  ops: (OperationInfo & { importPath: string })[]
-): string {
+function generateMethodImplementations(ops: Array<OperationInfo & { importPath: string }>): string {
   return ops
-    .map(op => {
+    .map((op) => {
       const methodName = operationNameToMethodName(op.operationName);
       if (op.kind === 'api') {
         const params = op.paramsType === 'void' ? '' : 'params';
         return `    this.${methodName} = (${params}) => new ${op.operationName}(this).execute(${params});`;
-      } else {
-        return `    this.${methodName} = (params, handlers) => new ${op.operationName}(this).subscribe(params as any, handlers as any);`;
       }
+      return `    this.${methodName} = (params, handlers) => new ${op.operationName}(this).subscribe(params as any, handlers as any);`;
     })
     .join('\n');
 }
 
-function generateOperationImports(
-  opFiles: { operationName: string; importPath: string }[]
-): string {
-  return opFiles
-    .map(op => `import { ${op.operationName} } from '${op.importPath}';`)
-    .join('\n');
+function generateOperationImports(opFiles: Array<{ operationName: string; importPath: string }>): string {
+  return opFiles.map((op) => `import { ${op.operationName} } from '${op.importPath}';`).join('\n');
 }
 
 // Convert operation name to method name (e.g., GetEventsByContractId -> getEventsByContractId)
@@ -167,7 +139,7 @@ function generateClientFile(clientConfig: ClientConfig): void {
   const files = getAllTsFiles(operationsDir);
 
   const allOps = files
-    .map(file => {
+    .map((file) => {
       const content = fs.readFileSync(file, 'utf8');
       const info = extractOperationInfo(content);
       if (!info) return null;
@@ -176,10 +148,9 @@ function generateClientFile(clientConfig: ClientConfig): void {
         importPath: relativeImportPath(clientFile, file),
       };
     })
-    .filter(Boolean) as (OperationInfo & { importPath: string })[];
+    .filter(Boolean) as Array<OperationInfo & { importPath: string }>;
 
   if (allOps.length === 0) {
-    console.warn(`No operations found for ${name} in ${operationsDir}`);
     return;
   }
 
@@ -189,10 +160,8 @@ function generateClientFile(clientConfig: ClientConfig): void {
   const opImports = generateOperationImports(allOps);
 
   // 3. Generate the complete client file content
-  const baseClassImport =
-    baseClass === 'SimpleBaseClient' ? 'SimpleBaseClient' : 'BaseClient';
-  const baseClassPath =
-    baseClass === 'SimpleBaseClient' ? '../../core' : '../../core';
+  const baseClassImport = baseClass === 'SimpleBaseClient' ? 'SimpleBaseClient' : 'BaseClient';
+  const baseClassPath = baseClass === 'SimpleBaseClient' ? '../../core' : '../../core';
 
   // Fix API type for ledger client
   const apiType =
@@ -202,7 +171,7 @@ function generateClientFile(clientConfig: ClientConfig): void {
         ? 'VALIDATOR_API'
         : 'LIGHTHOUSE_API';
 
-  const needsWsImports = allOps.some(op => op.kind === 'ws');
+  const needsWsImports = allOps.some((op) => op.kind === 'ws');
   const wsImports = needsWsImports ? `\nimport { WebSocketHandlers, WebSocketSubscription } from '../../core/ws';` : '';
 
   const content = `import { ${baseClassImport}, ClientConfig } from '${baseClassPath}';
@@ -226,21 +195,20 @@ ${methodImpls}
 
   // 4. Write the generated file
   fs.writeFileSync(clientFile, content);
-  console.log(`Generated ${name} with ${allOps.length} operations`);
 }
 
 function generateAllClients(): void {
   console.log('Generating all client files...');
 
-  CLIENTS.forEach(clientConfig => {
+  CLIENTS.forEach((clientConfig) => {
     try {
       generateClientFile(clientConfig);
-    } catch (error) {
-      console.error(`Error generating ${clientConfig.name}:`, error);
+    } catch (_error) {
+      console.error(`Error generating ${clientConfig.name}:`, _error);
     }
   });
 
-  console.log('Client generation complete!');
+  console.log('Client generation complete');
 }
 
 if (require.main === module) {

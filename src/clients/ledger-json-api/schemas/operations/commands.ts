@@ -4,10 +4,10 @@ import { NonEmptyStringSchema } from './base';
 export const SubmitAndWaitParamsSchema = z.object({
   /** Commands to submit and wait for completion. */
   commands: z.array(z.any()),
-  /** Unique identifier for the command. */
-  commandId: NonEmptyStringSchema,
-  /** Parties on whose behalf the command should be executed. */
-  actAs: z.array(NonEmptyStringSchema),
+  /** Unique identifier for the command (optional, will be auto-generated if not provided). */
+  commandId: NonEmptyStringSchema.optional(),
+  /** Parties on whose behalf the command should be executed (optional, will use client's party ID if not provided). */
+  actAs: z.array(NonEmptyStringSchema).optional(),
   /** User ID submitting the command (optional if using authentication). */
   userId: NonEmptyStringSchema.optional(),
   /** Parties to read as (optional). */
@@ -35,10 +35,10 @@ export const SubmitAndWaitParamsSchema = z.object({
 export const SubmitAndWaitForTransactionParamsSchema = z.object({
   /** Commands to submit and wait for transaction. */
   commands: z.array(z.any()),
-  /** Unique identifier for the command. */
-  commandId: NonEmptyStringSchema,
-  /** Parties on whose behalf the command should be executed. */
-  actAs: z.array(NonEmptyStringSchema),
+  /** Unique identifier for the command (optional, will be auto-generated if not provided). */
+  commandId: NonEmptyStringSchema.optional(),
+  /** Parties on whose behalf the command should be executed (optional, will use client's party ID if not provided). */
+  actAs: z.array(NonEmptyStringSchema).optional(),
   /** User ID submitting the command (optional if using authentication). */
   userId: NonEmptyStringSchema.optional(),
   /** Parties to read as (optional). */
@@ -119,10 +119,10 @@ export const SubmitAndWaitForTransactionTreeParamsSchema = z.object({
 export const AsyncSubmitParamsSchema = z.object({
   /** Commands to submit asynchronously. */
   commands: z.array(z.any()),
-  /** Unique identifier for the command. */
-  commandId: NonEmptyStringSchema,
-  /** Parties on whose behalf the command should be executed. */
-  actAs: z.array(NonEmptyStringSchema),
+  /** Unique identifier for the command (optional, will be auto-generated if not provided). */
+  commandId: NonEmptyStringSchema.optional(),
+  /** Parties on whose behalf the command should be executed (optional, will use client's party ID if not provided). */
+  actAs: z.array(NonEmptyStringSchema).optional(),
   /** User ID submitting the command (optional if using authentication). */
   userId: NonEmptyStringSchema.optional(),
   /** Parties to read as (optional). */
@@ -185,4 +185,4 @@ export type SubmitAndWaitForReassignmentParams = z.infer<typeof SubmitAndWaitFor
 export type SubmitAndWaitForTransactionTreeParams = z.infer<typeof SubmitAndWaitForTransactionTreeParamsSchema>;
 export type AsyncSubmitParams = z.infer<typeof AsyncSubmitParamsSchema>;
 export type AsyncSubmitReassignmentParams = z.infer<typeof AsyncSubmitReassignmentParamsSchema>;
-export type CompletionsParams = z.infer<typeof CompletionsParamsSchema>; 
+export type CompletionsParams = z.infer<typeof CompletionsParamsSchema>;

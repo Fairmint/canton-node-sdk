@@ -1,0 +1,10 @@
+build
+dist
+node_modules
+coverage
+docs
+temp
+artifacts
+*.lock
+*.log
+

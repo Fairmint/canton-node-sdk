@@ -1,8 +1,8 @@
 #!/usr/bin/env tsx
 
 import * as fs from 'fs';
-import * as path from 'path';
 import { glob } from 'glob';
+import * as path from 'path';
 
 interface OperationInfo {
   name: string;
@@ -18,12 +18,7 @@ async function findOperations(): Promise<OperationInfo[]> {
 
   // Find all operation files
   const operationFiles = await glob('src/clients/**/*.ts', {
-    ignore: [
-      '**/index.ts',
-      '**/register.ts',
-      '**/schemas/**',
-      '**/*.generated.ts',
-    ],
+    ignore: ['**/index.ts', '**/register.ts', '**/schemas/**', '**/*.generated.ts'],
   });
 
   for (const file of operationFiles) {
@@ -31,24 +26,16 @@ async function findOperations(): Promise<OperationInfo[]> {
 
     // Check if this is an operation file by looking for createApiOperation
     if (content.includes('createApiOperation')) {
-      const nameMatch = content.match(
-        /export const (\w+) = createApiOperation/
-      );
-      if (nameMatch && nameMatch[1]) {
+      const nameMatch = content.match(/export const (\w+) = createApiOperation/);
+      if (nameMatch?.[1]) {
         const name = nameMatch[1];
         const methodMatch = content.match(/method:\s*['"`]([A-Z]+)['"`]/);
-        const endpointMatch = content.match(
-          /endpoint\s*=\s*['"`]([^'"`]+)['"`]/
-        );
+        const endpointMatch = content.match(/endpoint\s*=\s*['"`]([^'"`]+)['"`]/);
         const paramsSchemaMatch = content.match(/paramsSchema:\s*(\w+)/);
 
-        const method = methodMatch && methodMatch[1] ? methodMatch[1] : 'GET';
-        const endpoint =
-          endpointMatch && endpointMatch[1] ? endpointMatch[1] : '/unknown';
-        const paramsSchema =
-          paramsSchemaMatch && paramsSchemaMatch[1]
-            ? paramsSchemaMatch[1]
-            : 'z.any()';
+        const method = methodMatch?.[1] ?? 'GET';
+        const endpoint = endpointMatch?.[1] ?? '/unknown';
+        const paramsSchema = paramsSchemaMatch?.[1] ?? 'z.any()';
 
         // Generate test path
         const relativePath = path.relative('src', file);
@@ -71,17 +58,10 @@ async function findOperations(): Promise<OperationInfo[]> {
 
 function generateTestContent(operation: OperationInfo): string {
   const importPath = path
-    .relative(
-      path.dirname(operation.testPath),
-      path.dirname(operation.filePath)
-    )
+    .relative(path.dirname(operation.testPath), path.dirname(operation.filePath))
     .replace(/\\/g, '/');
-  const mockClientPath = path
-    .relative(path.dirname(operation.testPath), 'test/utils')
-    .replace(/\\/g, '/');
-  const configPath = path
-    .relative(path.dirname(operation.testPath), 'test/config')
-    .replace(/\\/g, '/');
+  const mockClientPath = path.relative(path.dirname(operation.testPath), 'test/utils').replace(/\\/g, '/');
+  const configPath = path.relative(path.dirname(operation.testPath), 'test/config').replace(/\\/g, '/');
 
   const isValidatorApi = operation.filePath.includes('validator-api');
   const isLighthouseApi = operation.filePath.includes('lighthouse-api');
@@ -191,10 +171,7 @@ async function generateTests(): Promise<void> {
   console.log('Finding operations...');
   const operations = await findOperations();
 
-  console.log(`Found ${operations.length} operations:`);
-  operations.forEach(op => console.log(`  - ${op.name} (${op.filePath})`));
-
-  console.log('\nGenerating tests...');
+  console.log(`Found ${operations.length} operations`);
 
   for (const operation of operations) {
     // Create test directory if it doesn't exist
@@ -205,18 +182,21 @@ async function generateTests(): Promise<void> {
 
     // Check if test already exists
     if (fs.existsSync(operation.testPath)) {
-      console.log(`  Skipping ${operation.name} - test already exists`);
+      console.log(`Test already exists: ${operation.testPath}`);
       continue;
     }
 
     const testContent = generateTestContent(operation);
     fs.writeFileSync(operation.testPath, testContent);
-    console.log(`  Generated test for ${operation.name}`);
+    console.log(`Generated test: ${operation.testPath}`);
   }
 
-  console.log('\nTest generation complete!');
+  console.log('Test generation complete');
 }
 
 if (require.main === module) {
-  generateTests().catch(console.error);
+  generateTests().catch((error) => {
+    console.error('Error generating tests:', error);
+    process.exit(1);
+  });
 }

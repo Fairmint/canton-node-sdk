@@ -1,17 +1,21 @@
 import { createApiOperation } from '../../../../../core';
-import { LookupTransferCommandStatusResponse } from '../../../schemas/api';
-import { LookupTransferCommandStatusParamsSchema, LookupTransferCommandStatusParams } from '../../../schemas/operations';
+import { type LookupTransferCommandStatusResponse } from '../../../schemas/api';
+import {
+  LookupTransferCommandStatusParamsSchema,
+  type LookupTransferCommandStatusParams,
+} from '../../../schemas/operations';
 
 /**
- * @description Lookup transfer command status
+ * Lookup transfer command status
+ *
  * @example
- * ```typescript
- * const status = await client.lookupTransferCommandStatus({ 
- *   sender: 'party123', 
- *   nonce: 1 
- * });
- * console.log(`Status: ${status.status}`);
- * ```
+ *   ```typescript
+ *   const status = await client.lookupTransferCommandStatus({
+ *   sender: 'party123',
+ *   nonce: 1
+ *   });
+ *
+ *   ```;
  */
 export const LookupTransferCommandStatus = createApiOperation<
   LookupTransferCommandStatusParams,
@@ -19,5 +23,6 @@ export const LookupTransferCommandStatus = createApiOperation<
 >({
   paramsSchema: LookupTransferCommandStatusParamsSchema,
   method: 'GET',
-  buildUrl: (params, apiUrl: string) => `${apiUrl}/api/validator/v0/scan-proxy/transfer-commands/${params.sender}/${params.nonce}/status`,
-}); 
+  buildUrl: (params, apiUrl: string) =>
+    `${apiUrl}/api/validator/v0/scan-proxy/transfer-commands/${params.sender}/${params.nonce}/status`,
+});

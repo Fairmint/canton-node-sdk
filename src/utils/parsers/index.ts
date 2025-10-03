@@ -1,1 +1,1 @@
-export * from './fee-parser'; 
+export * from './fee-parser';

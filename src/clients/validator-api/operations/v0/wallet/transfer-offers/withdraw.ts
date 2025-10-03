@@ -1,21 +1,20 @@
 import { createApiOperation } from '../../../../../../core';
-import { WithdrawTransferOfferParamsSchema, WithdrawTransferOfferParams } from '../../../../schemas/operations';
-import { WithdrawTransferOfferResponse } from '../../../../schemas/api';
+import { type WithdrawTransferOfferResponse } from '../../../../schemas/api';
+import { WithdrawTransferOfferParamsSchema, type WithdrawTransferOfferParams } from '../../../../schemas/operations';
 
 /**
- * @description Withdraw a transfer offer by contract ID
+ * Withdraw a transfer offer by contract ID
+ *
  * @example
- * ```typescript
- * const result = await client.withdrawTransferOffer({ contractId: 'contract123' });
- * console.log(`Withdrawn offer: ${result.withdrawn_offer_contract_id}`);
- * ```
+ *   ```typescript
+ *   const result = await client.withdrawTransferOffer({ contractId: 'contract123' });
+ *
+ *   ```;
  */
-export const WithdrawTransferOffer = createApiOperation<
-  WithdrawTransferOfferParams,
-  WithdrawTransferOfferResponse
->({
+export const WithdrawTransferOffer = createApiOperation<WithdrawTransferOfferParams, WithdrawTransferOfferResponse>({
   paramsSchema: WithdrawTransferOfferParamsSchema,
   method: 'POST',
-  buildUrl: (params, apiUrl: string) => `${apiUrl}/api/validator/v0/wallet/transfer-offers/${params.contractId}/withdraw`,
+  buildUrl: (params, apiUrl: string) =>
+    `${apiUrl}/api/validator/v0/wallet/transfer-offers/${params.contractId}/withdraw`,
   buildRequestData: () => ({}),
-}); 
+});

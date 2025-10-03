@@ -1,7 +1,7 @@
-import { LedgerJsonApiClient } from '../../clients/ledger-json-api';
-import { ValidatorApiClient } from '../../clients/validator-api';
+import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
+import { type ValidatorApiClient } from '../../clients/validator-api';
+import { acceptTransferOffer, createTransferOffer } from '../amulet/offers';
 import { preApproveTransfers } from '../amulet/pre-approve-transfers';
-import { createTransferOffer, acceptTransferOffer } from '../amulet/offers';
 
 export interface CreatePartyOptions {
   /** Ledger JSON API client instance */
@@ -23,30 +23,27 @@ export interface PartyCreationResult {
 
 /**
  * Creates a party, optionally funds the wallet and if funded it then creates a preapproval contract for the party.
- * 
+ *
  * @param options - Configuration options for party creation
  * @returns Promise resolving to the party creation result
  */
 export async function createParty(options: CreatePartyOptions): Promise<PartyCreationResult> {
   // Use provided clients directly
   const { ledgerClient, validatorClient } = options;
-  
+
   const amountNum = parseFloat(options.amount);
   if (isNaN(amountNum) || amountNum < 0) {
     throw new Error(`Invalid amount: "${options.amount}". Amount must be a valid non-negative number.`);
   }
 
-  console.log(`Creating party ${options.partyName} with ${options.amount} funding...`);
-
   // Create user via Validator API
   const userStatus = await validatorClient.createUser({ name: options.partyName });
-  const result: PartyCreationResult = { 
-    partyId: userStatus.party_id
+  const result: PartyCreationResult = {
+    partyId: userStatus.party_id,
   };
 
   // Skip funding if amount is 0
   if (amountNum === 0) {
-    console.log('Party created successfully without funding');
     return result;
   }
 
@@ -57,28 +54,23 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
     amount: options.amount,
     description: `Welcome transfer for ${options.partyName}`,
   });
-  console.log(`Transfer offer contract ID: ${transferOfferContractId}`);
 
   // Accept transfer offer
-  const acceptTransferOfferResult = await acceptTransferOffer({
+  await acceptTransferOffer({
     ledgerClient,
     transferOfferContractId,
     acceptingPartyId: result.partyId,
   });
-  console.log(`Accept transfer offer result: ${acceptTransferOfferResult}`);
 
   // Wait 30 seconds for transfer to settle
-  console.log(`Waiting 30 seconds for transfer to be settled by wallet automation... Update ID: ${acceptTransferOfferResult.transactionTree.updateId}`);
-  await new Promise(resolve => setTimeout(resolve, 30000));
+  await new Promise((resolve) => setTimeout(resolve, 30000));
 
   // Create transfer preapproval
   const preapprovalResult = await preApproveTransfers(ledgerClient, validatorClient, {
     receiverPartyId: result.partyId,
   });
-  
-  result.preapprovalContractId = preapprovalResult.contractId;
-  console.log(`Preapproval contract ID: ${preapprovalResult.contractId}`);
 
-  console.log('Party created successfully!');
+  result.preapprovalContractId = preapprovalResult.contractId;
+
   return result;
-} 
+}

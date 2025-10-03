@@ -1,11 +1,9 @@
 import { z } from 'zod';
-import { StatusDetailsSchema } from './event-details';
-import { DeduplicationPeriodSchema } from './commands';
 import { TraceContextSchema } from '../common';
+import { DeduplicationPeriodSchema } from './commands';
+import { StatusDetailsSchema } from './event-details';
 
-/**
- * Status information for completions.
- */
+/** Status information for completions. */
 export const JsStatusSchema = z.object({
   /** Status code. */
   code: z.number(),
@@ -15,9 +13,7 @@ export const JsStatusSchema = z.object({
   details: z.array(StatusDetailsSchema).optional(),
 });
 
-/**
- * Synchronizer time information.
- */
+/** Synchronizer time information. */
 export const SynchronizerTimeSchema = z.object({
   /** Synchronizer ID. */
   synchronizerId: z.string(),
@@ -25,9 +21,7 @@ export const SynchronizerTimeSchema = z.object({
   recordTime: z.string(),
 });
 
-/**
- * Completion details.
- */
+/** Completion details. */
 export const CompletionSchema = z.object({
   /** The completion details. */
   value: z.object({
@@ -44,24 +38,27 @@ export const CompletionSchema = z.object({
     /** Submission ID (optional). */
     submissionId: z.string().optional(),
     /** Deduplication period (optional; WS may use multiple shapes). */
-    deduplicationPeriod: z.union([
-      // Standard REST/JS shapes
-      DeduplicationPeriodSchema,
-      // WS variants with nested value wrappers or primitives
-      z.object({ DeduplicationOffset: z.object({ value: z.object({ offset: z.number() }) }) }),
-      z.object({ DeduplicationOffset: z.object({ value: z.number() }) }),
-      z.object({ DeduplicationOffset: z.object({ offset: z.number() }) }),
-      z.object({ DeduplicationOffset: z.number() }),
-      z.object({ DeduplicationOffset: z.string() }),
-      z.object({ DeduplicationDuration: z.object({ value: z.object({ seconds: z.number() }) }) }),
-      z.object({ DeduplicationDuration: z.object({ value: z.number() }) }),
-      z.object({ DeduplicationDuration: z.object({ seconds: z.number() }) }),
-      z.object({ DeduplicationDuration: z.number() }),
-      z.object({ DeduplicationDuration: z.string() }),
-      // Sometimes an explicit Empty or empty object
-      z.object({ Empty: z.object({}).strict() }),
-      z.object({}).strict(),
-    ]).optional().nullable(),
+    deduplicationPeriod: z
+      .union([
+        // Standard REST/JS shapes
+        DeduplicationPeriodSchema,
+        // WS variants with nested value wrappers or primitives
+        z.object({ DeduplicationOffset: z.object({ value: z.object({ offset: z.number() }) }) }),
+        z.object({ DeduplicationOffset: z.object({ value: z.number() }) }),
+        z.object({ DeduplicationOffset: z.object({ offset: z.number() }) }),
+        z.object({ DeduplicationOffset: z.number() }),
+        z.object({ DeduplicationOffset: z.string() }),
+        z.object({ DeduplicationDuration: z.object({ value: z.object({ seconds: z.number() }) }) }),
+        z.object({ DeduplicationDuration: z.object({ value: z.number() }) }),
+        z.object({ DeduplicationDuration: z.object({ seconds: z.number() }) }),
+        z.object({ DeduplicationDuration: z.number() }),
+        z.object({ DeduplicationDuration: z.string() }),
+        // Sometimes an explicit Empty or empty object
+        z.object({ Empty: z.object({}).strict() }),
+        z.object({}).strict(),
+      ])
+      .optional()
+      .nullable(),
     /** Trace context (optional). */
     traceContext: TraceContextSchema.optional(),
     /** Offset for resuming the stream. */
@@ -71,9 +68,7 @@ export const CompletionSchema = z.object({
   }),
 });
 
-/**
- * Offset checkpoint for stream resumption.
- */
+/** Offset checkpoint for stream resumption. */
 export const OffsetCheckpointSchema = z.object({
   /** The checkpoint details. */
   value: z.object({
@@ -84,18 +79,14 @@ export const OffsetCheckpointSchema = z.object({
   }),
 });
 
-/**
- * Completion response (oneOf completion, empty, or offset checkpoint).
- */
+/** Completion response (oneOf completion, empty, or offset checkpoint). */
 export const CompletionResponseSchema = z.union([
   z.object({ Completion: CompletionSchema }),
   z.object({ Empty: z.object({}) }),
   z.object({ OffsetCheckpoint: OffsetCheckpointSchema }),
 ]);
 
-/**
- * Completion stream request.
- */
+/** Completion stream request. */
 export const CompletionStreamRequestSchema = z.object({
   /** User ID for the stream (optional if using authentication). */
   userId: z.string().optional(),
@@ -105,9 +96,7 @@ export const CompletionStreamRequestSchema = z.object({
   beginExclusive: z.number().optional(),
 });
 
-/**
- * Completion stream response.
- */
+/** Completion stream response. */
 export const CompletionStreamResponseSchema = z.object({
   /** The completion response. */
   completionResponse: CompletionResponseSchema,
@@ -121,4 +110,4 @@ export type Completion = z.infer<typeof CompletionSchema>;
 export type OffsetCheckpoint = z.infer<typeof OffsetCheckpointSchema>;
 export type CompletionResponse = z.infer<typeof CompletionResponseSchema>;
 export type CompletionStreamRequest = z.infer<typeof CompletionStreamRequestSchema>;
-export type CompletionStreamResponse = z.infer<typeof CompletionStreamResponseSchema>; 
+export type CompletionStreamResponse = z.infer<typeof CompletionStreamResponseSchema>;

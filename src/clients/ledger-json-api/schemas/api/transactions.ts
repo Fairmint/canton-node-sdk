@@ -20,12 +20,14 @@ export const TransactionTreeSchema = z
     /** Synchronizer ID for the transaction. */
     synchronizerId: z.string(),
     /** Trace context for distributed tracing (optional). */
-    traceContext: z.object({
-      /** W3C traceparent header value. */
-      traceparent: z.string(),
-      /** W3C tracestate header value (nullable). */
-      tracestate: z.string().nullable(),
-    }).optional(),
+    traceContext: z
+      .object({
+        /** W3C traceparent header value. */
+        traceparent: z.string(),
+        /** W3C tracestate header value (nullable). */
+        tracestate: z.string().nullable(),
+      })
+      .optional(),
   })
   .strict();
 
@@ -74,11 +76,7 @@ export const TransactionTreeByOffsetResponseSchema = z
 
 export type TransactionTree = z.infer<typeof TransactionTreeSchema>;
 export type CommandResponse = z.infer<typeof CommandResponseSchema>;
-export type CreateContractResponse = z.infer<
-  typeof CreateContractResponseSchema
->;
+export type CreateContractResponse = z.infer<typeof CreateContractResponseSchema>;
 export type UpdateByIdRequest = z.infer<typeof UpdateByIdRequestSchema>;
 export type UpdateByIdResponse = z.infer<typeof UpdateByIdResponseSchema>;
-export type TransactionTreeByOffsetResponse = z.infer<
-  typeof TransactionTreeByOffsetResponseSchema
->; 
+export type TransactionTreeByOffsetResponse = z.infer<typeof TransactionTreeByOffsetResponseSchema>;

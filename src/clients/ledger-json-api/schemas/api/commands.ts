@@ -5,14 +5,12 @@ import {
   DeduplicationOffsetSchema,
   EmptyDeduplicationSchema,
   MinLedgerTimeRelSchema,
-  PrefetchContractKeySchema
+  PrefetchContractKeySchema,
 } from '../common';
 
 export const CreateCommandSchema = z
   .object({
-    /**
-     * Command to create a new contract instance.
-     */
+    /** Command to create a new contract instance. */
     CreateCommand: z
       .object({
         /** Template ID of the contract to create. */
@@ -26,9 +24,7 @@ export const CreateCommandSchema = z
 
 export const ExerciseCommandSchema = z
   .object({
-    /**
-     * Command to exercise a choice on an existing contract.
-     */
+    /** Command to exercise a choice on an existing contract. */
     ExerciseCommand: z
       .object({
         /** Template ID of the contract. */
@@ -44,10 +40,7 @@ export const ExerciseCommandSchema = z
   })
   .strict();
 
-export const CommandSchema = z.union([
-  CreateCommandSchema,
-  ExerciseCommandSchema,
-]);
+export const CommandSchema = z.union([CreateCommandSchema, ExerciseCommandSchema]);
 
 export const DisclosedContractSchema = z
   .object({
@@ -77,77 +70,75 @@ export const CommandRequestSchema = z
   })
   .strict();
 
-/**
- * Command to create a contract and immediately exercise a choice on it.
- */
+/** Command to create a contract and immediately exercise a choice on it. */
 export const CreateAndExerciseCommandSchema = z
   .object({
-    CreateAndExerciseCommand: z.object({
-      /** Template ID of the contract to create. */
-      templateId: z.string(),
-      /** Arguments for the contract creation. */
-      createArguments: RecordSchema,
-      /** Name of the choice to exercise. */
-      choice: z.string(),
-      /** Arguments for the choice. */
-      choiceArgument: RecordSchema,
-    }).strict(),
+    CreateAndExerciseCommand: z
+      .object({
+        /** Template ID of the contract to create. */
+        templateId: z.string(),
+        /** Arguments for the contract creation. */
+        createArguments: RecordSchema,
+        /** Name of the choice to exercise. */
+        choice: z.string(),
+        /** Arguments for the choice. */
+        choiceArgument: RecordSchema,
+      })
+      .strict(),
   })
   .strict();
 
-/**
- * Command to exercise a choice on a contract by key.
- */
+/** Command to exercise a choice on a contract by key. */
 export const ExerciseByKeyCommandSchema = z
   .object({
-    ExerciseByKeyCommand: z.object({
-      /** Template ID of the contract. */
-      templateId: z.string(),
-      /** Contract key to exercise the choice on. */
-      contractKey: RecordSchema,
-      /** Name of the choice to exercise. */
-      choice: z.string(),
-      /** Arguments for the choice. */
-      choiceArgument: RecordSchema,
-    }).strict(),
+    ExerciseByKeyCommand: z
+      .object({
+        /** Template ID of the contract. */
+        templateId: z.string(),
+        /** Contract key to exercise the choice on. */
+        contractKey: RecordSchema,
+        /** Name of the choice to exercise. */
+        choice: z.string(),
+        /** Arguments for the choice. */
+        choiceArgument: RecordSchema,
+      })
+      .strict(),
   })
   .strict();
 
-/**
- * Command to assign a contract (reassignment).
- */
+/** Command to assign a contract (reassignment). */
 export const AssignCommandSchema = z
   .object({
-    AssignCommand: z.object({
-      /** Reassignment ID from the unassigned event. */
-      reassignmentId: z.string(),
-      /** Source synchronizer ID. */
-      source: z.string(),
-      /** Target synchronizer ID. */
-      target: z.string(),
-    }).strict(),
+    AssignCommand: z
+      .object({
+        /** Reassignment ID from the unassigned event. */
+        reassignmentId: z.string(),
+        /** Source synchronizer ID. */
+        source: z.string(),
+        /** Target synchronizer ID. */
+        target: z.string(),
+      })
+      .strict(),
   })
   .strict();
 
-/**
- * Command to unassign a contract (reassignment).
- */
+/** Command to unassign a contract (reassignment). */
 export const UnassignCommandSchema = z
   .object({
-    UnassignCommand: z.object({
-      /** Contract ID to unassign. */
-      contractId: z.string(),
-      /** Source synchronizer ID. */
-      source: z.string(),
-      /** Target synchronizer ID. */
-      target: z.string(),
-    }).strict(),
+    UnassignCommand: z
+      .object({
+        /** Contract ID to unassign. */
+        contractId: z.string(),
+        /** Source synchronizer ID. */
+        source: z.string(),
+        /** Target synchronizer ID. */
+        target: z.string(),
+      })
+      .strict(),
   })
   .strict();
 
-/**
- * Composite command type (oneOf all supported commands).
- */
+/** Composite command type (oneOf all supported commands). */
 export const CompositeCommandSchema = z.union([
   CreateAndExerciseCommandSchema,
   CreateCommandSchema,
@@ -157,18 +148,14 @@ export const CompositeCommandSchema = z.union([
   UnassignCommandSchema,
 ]);
 
-/**
- * Deduplication period (oneOf duration, offset, or empty).
- */
+/** Deduplication period (oneOf duration, offset, or empty). */
 export const DeduplicationPeriodSchema = z.union([
   z.object({ DeduplicationDuration: DeduplicationDurationSchema }),
   z.object({ DeduplicationOffset: DeduplicationOffsetSchema }),
   z.object({ Empty: EmptyDeduplicationSchema }),
 ]);
 
-/**
- * Commands container with all command types.
- */
+/** Commands container with all command types. */
 export const JsCommandsSchema = z.object({
   /** Workflow ID (optional). */
   workflowId: z.string().optional(),
@@ -203,4 +190,4 @@ export type ExerciseByKeyCommand = z.infer<typeof ExerciseByKeyCommandSchema>;
 export type AssignCommand = z.infer<typeof AssignCommandSchema>;
 export type UnassignCommand = z.infer<typeof UnassignCommandSchema>;
 export type CompositeCommand = z.infer<typeof CompositeCommandSchema>;
-export type JsCommands = z.infer<typeof JsCommandsSchema>; 
+export type JsCommands = z.infer<typeof JsCommandsSchema>;

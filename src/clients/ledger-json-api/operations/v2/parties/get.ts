@@ -1,5 +1,5 @@
-import { createApiOperation } from '../../../../../core';
 import { z } from 'zod';
+import { createApiOperation } from '../../../../../core';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 
 const endpoint = '/v2/parties';
@@ -12,10 +12,7 @@ export const GetPartiesParamsSchema = z.object({
 export type GetPartiesParams = z.infer<typeof GetPartiesParamsSchema>;
 export type GetPartiesResponse = paths[typeof endpoint]['get']['responses']['200']['content']['application/json'];
 
-export const GetParties = createApiOperation<
-  GetPartiesParams,
-  GetPartiesResponse
->({
+export const GetParties = createApiOperation<GetPartiesParams, GetPartiesResponse>({
   paramsSchema: GetPartiesParamsSchema,
   method: 'GET',
   buildUrl: (params, apiUrl) => {
@@ -24,4 +21,4 @@ export const GetParties = createApiOperation<
     if (params.pageToken) url.searchParams.set('pageToken', params.pageToken);
     return url.toString();
   },
-}); 
+});

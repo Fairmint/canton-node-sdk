@@ -102,5 +102,3 @@ export const TransferPreapprovalSendRequestSchema = z.object({
 export type TransferPreapprovalContract = z.infer<typeof TransferPreapprovalContractSchema>;
 export type TransferPreapprovalResponse = z.infer<typeof TransferPreapprovalResponseSchema>;
 export type TransferPreapprovalSendRequest = z.infer<typeof TransferPreapprovalSendRequestSchema>;
-
- 

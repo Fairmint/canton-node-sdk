@@ -1,14 +1,18 @@
 import { createApiOperation } from '../../../../../core';
-import { ListIdentityProviderConfigsParamsSchema, ListIdentityProviderConfigsParams } from '../../../schemas/operations';
-import { ListIdentityProviderConfigsResponse } from '../../../schemas/api';
+import { type ListIdentityProviderConfigsResponse } from '../../../schemas/api';
+import {
+  ListIdentityProviderConfigsParamsSchema,
+  type ListIdentityProviderConfigsParams,
+} from '../../../schemas/operations';
 
 /**
- * @description List all identity provider configs
+ * List all identity provider configs
+ *
  * @example
- * ```typescript
- * const result = await client.listIdentityProviderConfigs();
- * console.log(result.identityProviderConfigs);
- * ```
+ *   ```typescript
+ *   const result = await client.listIdentityProviderConfigs();
+ *
+ *   ```;
  */
 export const ListIdentityProviderConfigs = createApiOperation<
   ListIdentityProviderConfigsParams,
@@ -17,4 +21,4 @@ export const ListIdentityProviderConfigs = createApiOperation<
   paramsSchema: ListIdentityProviderConfigsParamsSchema,
   method: 'GET',
   buildUrl: (_params: ListIdentityProviderConfigsParams, apiUrl: string) => `${apiUrl}/v2/idps`,
-}); 
+});

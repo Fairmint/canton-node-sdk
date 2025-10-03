@@ -1,1 +1,1 @@
-export * from './createParty'; 
+export * from './createParty';

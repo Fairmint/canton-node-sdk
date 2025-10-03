@@ -1,5 +1,5 @@
+import { type z } from 'zod';
 import { createApiOperation } from '../../../../../core';
-import { z } from 'zod';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
 import { GetActiveContractsParamsSchema } from '../../../schemas/operations';
@@ -7,7 +7,8 @@ import { GetActiveContractsParamsSchema } from '../../../schemas/operations';
 const endpoint = '/v2/state/active-contracts' as const;
 
 export type GetActiveContractsParams = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
-export type GetActiveContractsResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
+export type GetActiveContractsResponse =
+  paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
 // Custom params type with optional activeAtOffset
 export type GetActiveContractsCustomParams = z.infer<typeof GetActiveContractsParamsSchema>;
@@ -30,10 +31,10 @@ export const GetActiveContracts = createApiOperation<GetActiveContractsCustomPar
     return queryString ? `${baseUrl}?${queryString}` : baseUrl;
   },
   buildRequestData: async (params, client) => {
-    const requestVerbose = params.verbose === undefined ? true : params.verbose;
+    const requestVerbose = params.verbose ?? true;
 
     // Determine activeAtOffset (default to ledger end if not specified)
-    let activeAtOffset = params.activeAtOffset;
+    let { activeAtOffset } = params;
     if (activeAtOffset === undefined) {
       const ledgerClient = client as LedgerJsonApiClient;
       const ledgerEnd = await ledgerClient.getLedgerEnd({});
@@ -41,26 +42,44 @@ export const GetActiveContracts = createApiOperation<GetActiveContractsCustomPar
     }
 
     // Build filter structure based on parties and template IDs
-    let filter: any = undefined;
+    interface FilterStructure {
+      filtersByParty?: Record<string, PartyFilter>;
+      filtersForAnyParty?: { cumulative: TemplateFilterArray };
+    }
+    interface PartyFilter {
+      cumulative?: TemplateFilterArray;
+    }
+    type TemplateFilterArray = Array<{
+      identifierFilter: {
+        TemplateFilter: {
+          value: {
+            templateId: string;
+            includeCreatedEventBlob: boolean;
+          };
+        };
+      };
+    }>;
+
+    let filter: FilterStructure | undefined = undefined;
 
     if (params.parties && params.parties.length > 0) {
       const uniqueParties = Array.from(new Set(params.parties));
-      const filtersByParty: Record<string, any> = {};
+      const filtersByParty: Record<string, PartyFilter> = {};
 
       for (const party of uniqueParties) {
-        let partyFilter: any = {};
+        let partyFilter: PartyFilter = {};
 
         if (params.templateIds && params.templateIds.length > 0) {
           // Create template filters for this party
-          const cumulative = params.templateIds.map(templateId => ({
+          const cumulative = params.templateIds.map((templateId) => ({
             identifierFilter: {
               TemplateFilter: {
                 value: {
                   templateId,
-                  includeCreatedEventBlob: false
-                }
-              }
-            }
+                  includeCreatedEventBlob: false,
+                },
+              },
+            },
           }));
 
           partyFilter = { cumulative };
@@ -75,19 +94,19 @@ export const GetActiveContracts = createApiOperation<GetActiveContractsCustomPar
       filter = { filtersByParty };
     } else if (params.templateIds && params.templateIds.length > 0) {
       // Template filters for any party
-      const cumulative = params.templateIds.map(templateId => ({
+      const cumulative = params.templateIds.map((templateId) => ({
         identifierFilter: {
           TemplateFilter: {
             value: {
               templateId,
-              includeCreatedEventBlob: false
-            }
-          }
-        }
+              includeCreatedEventBlob: false,
+            },
+          },
+        },
       }));
 
       filter = {
-        filtersForAnyParty: { cumulative }
+        filtersForAnyParty: { cumulative },
       };
     }
 
@@ -98,4 +117,4 @@ export const GetActiveContracts = createApiOperation<GetActiveContractsCustomPar
       activeAtOffset,
     };
   },
-}); 
+});

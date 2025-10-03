@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { URLSearchParams } from 'url';
-import { AuthConfig } from '../types';
-import { AuthenticationError, ApiError } from '../errors';
-import { Logger } from '../logging';
+import { ApiError, AuthenticationError } from '../errors';
+import { type Logger } from '../logging';
+import { type AuthConfig } from '../types';
 
 export interface AuthResponse {
   access_token: string;
@@ -17,15 +17,15 @@ export class AuthenticationManager {
   private tokenExpiry: number | null = null;
 
   constructor(
-    private authUrl: string,
-    private authConfig: AuthConfig,
-    private logger?: Logger
+    private readonly authUrl: string,
+    private readonly authConfig: AuthConfig,
+    private readonly logger?: Logger
   ) {}
 
   public async authenticate(): Promise<string> {
     // Check if we have a valid token
-    if (this.isTokenValid()) {
-      return this.bearerToken!;
+    if (this.isTokenValid() && this.bearerToken) {
+      return this.bearerToken;
     }
     // Check if authentication credentials are provided
     if (!this.authConfig.clientId || this.authConfig.clientId.trim() === '') {
@@ -57,7 +57,7 @@ export class AuthenticationManager {
       formData.append('password', this.authConfig.password);
     }
 
-    const url = this.authUrl + '/';
+    const url = `${this.authUrl}/`;
     const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
 
     // Build a log-friendly representation of the request body
@@ -67,13 +67,9 @@ export class AuthenticationManager {
     }
 
     try {
-      const response = await axios.post<AuthResponse>(
-        url,
-        formData.toString(),
-        {
-          headers,
-        }
-      );
+      const response = await axios.post<AuthResponse>(url, formData.toString(), {
+        headers,
+      });
 
       if (!response.data.access_token) {
         throw new AuthenticationError(
@@ -82,10 +78,10 @@ export class AuthenticationManager {
       }
 
       this.bearerToken = response.data.access_token;
-      
+
       // Set token expiry if provided
       if (response.data.expires_in) {
-        this.tokenExpiry = Date.now() + (response.data.expires_in * 1000);
+        this.tokenExpiry = Date.now() + response.data.expires_in * 1000;
       }
 
       // Log success
@@ -97,16 +93,18 @@ export class AuthenticationManager {
     } catch (error) {
       // Log failure with context
       if (this.logger) {
-        const errorPayload = axios.isAxiosError(error) ? (error.response?.data || error.message) : (error instanceof Error ? error.message : String(error));
+        const errorPayload = axios.isAxiosError(error)
+          ? (error.response?.data ?? error.message)
+          : error instanceof Error
+            ? error.message
+            : String(error);
         await this.logger.logRequestResponse(url, { method: 'POST', headers, data: requestBody }, errorPayload);
       }
 
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
         const statusText = error.response?.statusText;
-        const errorData = error.response?.data
-          ? JSON.stringify(error.response.data, null, 2)
-          : error.message;
+        const errorData = error.response?.data ? JSON.stringify(error.response.data, null, 2) : error.message;
 
         throw new ApiError(
           `Authentication failed for URL ${url} with status ${status} ${statusText}: ${errorData}`,
@@ -147,7 +145,7 @@ export class AuthenticationManager {
     if (missingConfig.length > 0) {
       throw new AuthenticationError(
         `Authentication configuration incomplete. Missing required fields: ${missingConfig.join(', ')}. ` +
-        `Grant Type: ${this.authConfig.grantType}`
+          `Grant Type: ${this.authConfig.grantType}`
       );
     }
   }
@@ -164,6 +162,6 @@ export class AuthenticationManager {
 
     // Check if token has expired (with 5 minute buffer)
     const bufferTime = 5 * 60 * 1000; // 5 minutes
-    return Date.now() < (this.tokenExpiry - bufferTime);
+    return Date.now() < this.tokenExpiry - bufferTime;
   }
-} 
+}

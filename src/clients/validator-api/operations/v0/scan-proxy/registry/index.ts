@@ -1,4 +1,4 @@
-export * from './transfer-instruction';
-export * from './metadata';
+export * from './allocation-instruction';
 export * from './allocations';
-export * from './allocation-instruction'; 
+export * from './metadata';
+export * from './transfer-instruction';

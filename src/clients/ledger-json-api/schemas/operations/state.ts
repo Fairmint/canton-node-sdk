@@ -1,9 +1,7 @@
 import { z } from 'zod';
 import { NonEmptyStringSchema } from './base';
 
-/**
- * Parameters for getting active contracts.
- */
+/** Parameters for getting active contracts. */
 export const GetActiveContractsParamsSchema = z.object({
   /** The offset at which the snapshot of the active contracts will be computed. Defaults to ledger-end if not provided. */
   activeAtOffset: z.number().optional(),
@@ -19,9 +17,7 @@ export const GetActiveContractsParamsSchema = z.object({
   verbose: z.boolean().optional(),
 });
 
-/**
- * Parameters for getting connected synchronizers.
- */
+/** Parameters for getting connected synchronizers. */
 export const GetConnectedSynchronizersParamsSchema = z.object({
   /** Party to get synchronizers for. */
   party: NonEmptyStringSchema,
@@ -29,18 +25,14 @@ export const GetConnectedSynchronizersParamsSchema = z.object({
   participantId: z.string().optional(),
 });
 
-/**
- * Parameters for getting ledger end.
- */
+/** Parameters for getting ledger end. */
 export const GetLedgerEndParamsSchema = z.object({});
 
-/**
- * Parameters for getting latest pruned offsets.
- */
+/** Parameters for getting latest pruned offsets. */
 export const GetLatestPrunedOffsetsParamsSchema = z.object({});
 
 // Export types
 export type GetActiveContractsParams = z.infer<typeof GetActiveContractsParamsSchema>;
 export type GetConnectedSynchronizersParams = z.infer<typeof GetConnectedSynchronizersParamsSchema>;
 export type GetLedgerEndParams = z.infer<typeof GetLedgerEndParamsSchema>;
-export type GetLatestPrunedOffsetsParams = z.infer<typeof GetLatestPrunedOffsetsParamsSchema>; 
+export type GetLatestPrunedOffsetsParams = z.infer<typeof GetLatestPrunedOffsetsParamsSchema>;

@@ -1,16 +1,16 @@
-import { createApiOperation } from '../../../../../core';
 import { z } from 'zod';
+import { createApiOperation } from '../../../../../core';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 
 const endpoint = '/v2/updates/update-by-id' as const;
 
 // Define the parameters that the operation accepts
-export type GetUpdateByIdParams = {
+export interface GetUpdateByIdParams {
   /** The ID of the update to fetch. */
   updateId: string;
   /** Parties to read as (optional). */
   readAs: string[];
-};
+}
 
 export type GetUpdateByIdResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
@@ -23,10 +23,8 @@ export const GetUpdateById = createApiOperation<GetUpdateByIdParams, GetUpdateBy
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
   buildRequestData: (params) => {
     // Validate updateId parameter
-    if (!params.updateId || params.updateId === 'undefined' || params.updateId.trim() === '') {
-      throw new Error(
-        `Invalid updateId: "${params.updateId}". updateId must be a non-empty string.`
-      );
+    if (params.updateId === 'undefined' || params.updateId.trim() === '') {
+      throw new Error(`Invalid updateId: "${params.updateId}". updateId must be a non-empty string.`);
     }
 
     // Build the request body according to the API specification
@@ -41,7 +39,7 @@ export const GetUpdateById = createApiOperation<GetUpdateByIdParams, GetUpdateBy
         },
       },
       // Include requestingParties if readAs is provided
-      ...(params.readAs && params.readAs.length > 0 && { requestingParties: params.readAs }),
+      ...(params.readAs.length > 0 && { requestingParties: params.readAs }),
     };
   },
-}); 
+});

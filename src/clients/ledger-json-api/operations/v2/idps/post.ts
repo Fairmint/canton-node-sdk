@@ -1,16 +1,20 @@
 import { createApiOperation } from '../../../../../core';
-import { CreateIdentityProviderConfigParamsSchema, CreateIdentityProviderConfigParams } from '../../../schemas/operations';
-import { CreateIdentityProviderConfigResponse } from '../../../schemas/api';
+import { type CreateIdentityProviderConfigResponse } from '../../../schemas/api';
+import {
+  CreateIdentityProviderConfigParamsSchema,
+  type CreateIdentityProviderConfigParams,
+} from '../../../schemas/operations';
 
 /**
- * @description Create identity provider config
+ * Create identity provider config
+ *
  * @example
- * ```typescript
- * const result = await client.createIdentityProviderConfig({
- *   identityProviderConfig: { ... }
- * });
- * console.log(result.identityProviderConfig);
- * ```
+ *   ```typescript
+ *   const result = await client.createIdentityProviderConfig({
+ *     identityProviderConfig: { ... }
+ *   });
+ *
+ *   ```;
  */
 export const CreateIdentityProviderConfig = createApiOperation<
   CreateIdentityProviderConfigParams,
@@ -22,4 +26,4 @@ export const CreateIdentityProviderConfig = createApiOperation<
   buildRequestData: (params: CreateIdentityProviderConfigParams) => ({
     identityProviderConfig: params.identityProviderConfig,
   }),
-}); 
+});
