@@ -63,7 +63,9 @@
                     ]
                   ],
                   "holdingFees": "0.0003805180",
-                  "outputFees": ["0.6000000000"],
+                  "outputFees": [
+                    "0.6000000000"
+                  ],
                   "senderChangeFee": "0.6000000000",
                   "senderChangeAmount": "1220.4572090682",
                   "amuletPrice": "0.0500000000",
@@ -153,7 +155,9 @@
                   ]
                 ],
                 "holdingFees": "0.0003805180",
-                "outputFees": ["0.6000000000"],
+                "outputFees": [
+                  "0.6000000000"
+                ],
                 "senderChangeFee": "0.6000000000",
                 "senderChangeAmount": "1220.4572090682",
                 "amuletPrice": "0.0500000000",
@@ -224,7 +228,9 @@
             "witnessParties": [
               "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
             ],
-            "signatories": ["DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"],
+            "signatories": [
+              "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
+            ],
             "observers": [
               "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
             ],
@@ -256,7 +262,9 @@
             "witnessParties": [
               "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
             ],
-            "signatories": ["DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"],
+            "signatories": [
+              "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
+            ],
             "observers": [
               "TransferAgent-devnet-1::1220ea70ea2cbfe6be431f34c7323e249c624a02fb2209d2b73fabd7eea1fe84df34"
             ],

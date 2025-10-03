@@ -18,7 +18,12 @@
         "tid": "PLACEHOLDER_TID",
         "category": "11"
       },
-      "resources": [["ErrorResource(OFFSET)", "9999999"]],
+      "resources": [
+        [
+          "ErrorResource(OFFSET)",
+          "9999999"
+        ]
+      ],
       "errorCategory": 11,
       "grpcCodeValue": 5,
       "retryInfo": null,
