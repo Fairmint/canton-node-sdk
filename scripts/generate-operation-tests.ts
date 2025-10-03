@@ -168,13 +168,13 @@ describe('${operation.name} Operation', () => {
 }
 
 async function generateTests(): Promise<void> {
-  console.log('Finding operations...');
+  
   const operations = await findOperations();
 
-  console.log(`Found ${operations.length} operations:`);
-  operations.forEach((op) => console.log(`  - ${op.name} (${op.filePath})`));
+  
+  operations.forEach((op) => 
 
-  console.log('\nGenerating tests...');
+  
 
   for (const operation of operations) {
     // Create test directory if it doesn't exist
@@ -185,18 +185,18 @@ async function generateTests(): Promise<void> {
 
     // Check if test already exists
     if (fs.existsSync(operation.testPath)) {
-      console.log(`  Skipping ${operation.name} - test already exists`);
+      
       continue;
     }
 
     const testContent = generateTestContent(operation);
     fs.writeFileSync(operation.testPath, testContent);
-    console.log(`  Generated test for ${operation.name}`);
+    
   }
 
-  console.log('\nTest generation complete!');
+  
 }
 
 if (require.main === module) {
-  generateTests().catch(console.error);
+  generateTests().catch(
 }

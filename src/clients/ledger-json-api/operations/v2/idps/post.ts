@@ -13,7 +13,7 @@ import {
  *   const result = await client.createIdentityProviderConfig({
  *     identityProviderConfig: { ... }
  *   });
- *   console.log(result.identityProviderConfig);
+ *   
  *   ```;
  */
 export const CreateIdentityProviderConfig = createApiOperation<

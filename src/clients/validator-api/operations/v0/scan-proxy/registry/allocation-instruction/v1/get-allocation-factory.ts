@@ -27,7 +27,7 @@ export type GetAllocationFactoryResponse =
  *   choiceArguments: { /* choice arguments *\/ },
  *   excludeDebugFields: false
  *   });
- *   console.log(`Factory ID: ${factory.factoryId}`);
+ *   
  *   ```
  */
 export const GetAllocationFactory = createApiOperation<GetAllocationFactoryParams, GetAllocationFactoryResponse>({

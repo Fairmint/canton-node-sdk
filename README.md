@@ -18,7 +18,7 @@ import { LedgerJsonApiClient } from '@fairmint/canton-node-sdk';
 
 const client = new LedgerJsonApiClient(config);
 const version = await client.getVersion();
-console.log(`Connected to Canton ${version.version}`);
+
 ```
 
 ## For Contributors

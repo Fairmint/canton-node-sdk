@@ -8,7 +8,7 @@ import { type ListPackagesResponse } from '../../../schemas/api';
  * @example
  *   ```typescript
  *   const packages = await client.listPackages();
- *   console.log(`Available packages: ${packages.packageIds.join(', ')}`);
+ *   
  *   ```
  */
 export const ListPackages = createApiOperation<void, ListPackagesResponse>({

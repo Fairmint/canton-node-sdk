@@ -18,7 +18,7 @@ export type GetPackageStatusParams = z.infer<typeof GetPackageStatusParamsSchema
  *   const status = await client.getPackageStatus({
  *   packageId: 'package-123'
  *   });
- *   console.log(`Package status: ${status.packageStatus}`);
+ *   
  *   ```
  *
  * @param packageId - Package ID to get status for

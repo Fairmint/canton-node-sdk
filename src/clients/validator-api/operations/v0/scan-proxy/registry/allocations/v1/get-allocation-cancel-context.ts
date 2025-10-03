@@ -27,7 +27,7 @@ export type GetAllocationCancelContextResponse =
  *   allocationId: 'allocation123',
  *   meta: { key: 'value' }
  *   });
- *   console.log(`Choice context data: ${JSON.stringify(context.choiceContextData)}`);
+ *   
  *   ```
  */
 export const GetAllocationCancelContext = createApiOperation<

@@ -151,7 +151,6 @@ function generateClientFile(clientConfig: ClientConfig): void {
     .filter(Boolean) as Array<OperationInfo & { importPath: string }>;
 
   if (allOps.length === 0) {
-    console.warn(`No operations found for ${name} in ${operationsDir}`);
     return;
   }
 
@@ -196,21 +195,21 @@ ${methodImpls}
 
   // 4. Write the generated file
   fs.writeFileSync(clientFile, content);
-  console.log(`Generated ${name} with ${allOps.length} operations`);
+  
 }
 
 function generateAllClients(): void {
-  console.log('Generating all client files...');
+  
 
   CLIENTS.forEach((clientConfig) => {
     try {
       generateClientFile(clientConfig);
     } catch (error) {
-      console.error(`Error generating ${clientConfig.name}:`, error);
+      
     }
   });
 
-  console.log('Client generation complete!');
+  
 }
 
 if (require.main === module) {

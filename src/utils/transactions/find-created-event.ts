@@ -15,7 +15,7 @@ export function findCreatedEventByTemplateName(
 ): CreatedTreeEvent | undefined {
   const { transactionTree } = response;
 
-  if (!transactionTree?.eventsById) {
+  if (!transactionTree.eventsById) {
     return undefined;
   }
 

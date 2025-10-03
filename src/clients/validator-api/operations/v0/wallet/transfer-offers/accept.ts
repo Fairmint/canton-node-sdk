@@ -8,7 +8,7 @@ import { AcceptTransferOfferParamsSchema, type AcceptTransferOfferParams } from 
  * @example
  *   ```typescript
  *   const result = await client.acceptTransferOffer({ contractId: 'contract123' });
- *   console.log(`Accepted offer: ${result.accepted_offer_contract_id}`);
+ *   
  *   ```
  */
 export const AcceptTransferOffer = createApiOperation<AcceptTransferOfferParams, AcceptTransferOfferResponse>({

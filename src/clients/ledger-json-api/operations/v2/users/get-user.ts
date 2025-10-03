@@ -18,7 +18,7 @@ export type GetUserResponse = paths[typeof endpoint]['get']['responses']['200'][
  * @example
  *   ```typescript
  *   const user = await client.getUser({ userId: 'alice' });
- *   console.log(`User ${user.user.id} is ${user.user.isDeactivated ? 'deactivated' : 'active'}`);
+ *   
  *   ```
  */
 export const GetUser = createApiOperation<GetUserParams, GetUserResponse>({

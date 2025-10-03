@@ -1,5 +1,9 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { type DisclosedContract, type ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/commands';
+import {
+  type SubmitAndWaitForTransactionTreeParams,
+  type SubmitAndWaitForTransactionTreeResponse,
+} from '../../clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction-tree';
 import { type ValidatorApiClient } from '../../clients/validator-api';
 import { getCurrentMiningRoundContext } from '../mining/mining-rounds';
 import { getAmuletsForTransfer } from './get-amulets-for-transfer';
@@ -30,7 +34,7 @@ export interface TransferToPreapprovedResult {
     /** Domain ID where the transfer occurred */
     domainId: string;
     /** Transfer result summary */
-    transferResult: any;
+    transferResult: SubmitAndWaitForTransactionTreeResponse;
   }>;
 }
 
@@ -55,7 +59,7 @@ export interface TransferToPreapprovedResult {
  *   ]
  *   });
  *
- *   console.log(`Completed ${result.transferResults.length} transfers`);
+ *   
  *   ```
  *
  * @param ledgerClient - Ledger JSON API client for submitting commands
@@ -81,7 +85,7 @@ export async function transferToPreapproved(
   const { openMiningRound: openMiningRoundContractId } = miningRoundContext;
 
   // Get amulet inputs for the sender party
-  console.log('🔍 Fetching amulet inputs for sender party...');
+  
   const amulets = await getAmuletsForTransfer({
     jsonApiClient: ledgerClient,
     readAs: [params.senderPartyId],
@@ -97,7 +101,7 @@ export async function transferToPreapproved(
     value: amulet.contractId,
   }));
 
-  console.log(`📦 Found ${amulets.length} amulets for transfer`);
+  
 
   const transferResults: TransferToPreapprovedResult['transferResults'] = [];
 
@@ -121,7 +125,7 @@ export async function transferToPreapproved(
 
   // Process each transfer
   for (const transfer of params.transfers) {
-    console.log(`🔄 Processing transfer to ${transfer.recipientPartyId}...`);
+    
 
     // Look up transfer preapproval for the recipient
     const transferPreapprovalResponse = await validatorClient.lookupTransferPreapprovalByParty({
@@ -198,7 +202,7 @@ export async function transferToPreapproved(
     }
 
     // Submit the command
-    const submitParams: any = {
+    const submitParams: SubmitAndWaitForTransactionTreeParams = {
       commands: [transferCommand],
       commandId: `transfer-preapproved-${transfer.recipientPartyId}-${Date.now()}`,
       actAs: [params.senderPartyId],
@@ -214,7 +218,7 @@ export async function transferToPreapproved(
       transferResult: result,
     });
 
-    console.log(`✅ Transfer to ${transfer.recipientPartyId} completed successfully`);
+    
   }
 
   return { transferResults };

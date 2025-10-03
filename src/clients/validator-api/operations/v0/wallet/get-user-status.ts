@@ -8,7 +8,7 @@ import { type operations } from '../../../../../generated/apps/wallet/src/main/o
  * @example
  *   ```typescript
  *   const status = await client.getUserStatus();
- *   console.log(`User onboarded: ${status.user_onboarded}, Wallet installed: ${status.user_wallet_installed}`);
+ *   
  *   ```
  */
 export const GetUserStatus = createApiOperation<

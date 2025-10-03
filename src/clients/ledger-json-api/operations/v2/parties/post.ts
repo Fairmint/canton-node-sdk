@@ -32,7 +32,7 @@ export type AllocatePartyParams = z.infer<typeof AllocatePartyParamsSchema>;
  *   partyIdHint: 'alice',
  *   identityProviderId: 'default'
  *   });
- *   console.log(`Allocated party: ${result.partyDetails.party}`);
+ *   
  *   ```
  */
 export const AllocateParty = createApiOperation<AllocatePartyParams, AllocatePartyResponse>({

@@ -21,7 +21,7 @@ async function main(): Promise<void> {
       // using the provided parties (or the client's party list).
     },
     {
-      onOpen: () => console.log('Active contracts stream opened'),
+      onOpen: () => 
       onMessage: (msg) => {
         // Count only active contract entries
         if (
@@ -33,16 +33,16 @@ async function main(): Promise<void> {
         ) {
           activeContractsFound += 1;
         }
-        console.log(JSON.stringify(msg));
+        
       },
       onError: (err) => {
-        console.error('Stream error:', err);
-        console.log(`${activeContractsFound} active contracts found`);
+        
+        
         process.exit(1);
       },
       onClose: (code, reason) => {
-        console.log(`Stream closed: ${code} ${reason}`);
-        console.log(`${activeContractsFound} active contracts found`);
+        
+        
         process.exit(0);
       },
     }
@@ -51,12 +51,12 @@ async function main(): Promise<void> {
   // Keep open for demo
   setTimeout(() => {
     subscription.close();
-    console.log(`${activeContractsFound} active contracts found`);
+    
     process.exit(0);
   }, 120000);
 }
 
 main().catch((err) => {
-  console.error(err);
+  
   process.exit(1);
 });

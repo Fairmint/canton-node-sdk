@@ -8,7 +8,7 @@ import { type operations } from '../../../../../generated/apps/validator/src/mai
  * @example
  *   ```typescript
  *   const rules = await client.getAmuletRules();
- *   console.log(`Domain ID: ${rules.amulet_rules.domain_id}`);
+ *   
  *   ```
  */
 export const GetAmuletRules = createApiOperation<

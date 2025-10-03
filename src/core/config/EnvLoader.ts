@@ -21,10 +21,6 @@ let result = config({ path: currentEnvPath });
 // If no .env file found in current directory, try parent directory
 if (result.error && fs.existsSync(parentEnvPath)) {
   result = config({ path: parentEnvPath });
-
-  if (result.error) {
-    console.warn('Failed to load .env file from parent directory:', result.error.message);
-  }
 }
 
 export interface EnvLoaderOptions {

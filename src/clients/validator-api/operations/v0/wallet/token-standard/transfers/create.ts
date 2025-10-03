@@ -14,7 +14,7 @@ import { type operations } from '../../../../../../../generated/apps/wallet/src/
  *   expires_at: Date.now() + 3600000, // 1 hour from now
  *   tracking_id: 'unique-tracking-id'
  *   });
- *   console.log(`Transfer created with output: ${result.output.transfer_instruction_cid}`);
+ *   
  *   ```
  */
 export const CreateTokenStandardTransfer = createApiOperation<

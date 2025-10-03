@@ -59,7 +59,7 @@ function prepareRelease(): void {
     const packageJson: PackageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
 
     const currentVersion: string = packageJson.version;
-    console.log(`Current version: ${currentVersion}`);
+    
 
     // Extract major, minor, patch
     const versionParts: number[] = currentVersion.split('.').map(Number);
@@ -75,13 +75,13 @@ function prepareRelease(): void {
     // Find next available version (increment patch until we find one that doesn't exist)
     const newVersion: string = findNextAvailableVersion(major, minor, patch);
 
-    console.log(`New version: ${newVersion}`);
+    
 
     // Update version in package.json (without git tag)
     packageJson.version = newVersion;
     fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
-    console.log('✅ Updated package.json with new version');
+    
 
     // Generate changelog since last tag or main branch
     let commits: string;
@@ -90,20 +90,20 @@ function prepareRelease(): void {
       lastTag = execSync('git describe --tags --abbrev=0 2>/dev/null', {
         encoding: 'utf8',
       }).trim();
-      console.log(`Last tag: ${lastTag}`);
+      
       commits = execSync(`git log --oneline --format="%s" ${lastTag}..HEAD`, {
         encoding: 'utf8',
       }).trim();
     } catch {
       // No previous tag, get commits ahead of main branch
-      console.log('No previous tag found, getting commits ahead of main branch');
+      
       commits = execSync('git log --oneline --format="%s" main..HEAD', {
         encoding: 'utf8',
       }).trim();
     }
 
     if (!commits) {
-      console.log('No commits found for changelog');
+      
       return;
     }
 
@@ -112,18 +112,18 @@ function prepareRelease(): void {
 
     const changelog: string = commitLines.join('\n');
 
-    console.log('\n📋 Generated changelog:');
-    console.log('='.repeat(50));
-    console.log(changelog);
-    console.log('='.repeat(50));
+    
+    
+    
+    
 
     // Create detailed tag message
     const tagMessage = `Release v${newVersion}\n\nChanges:\n${changelog}`;
 
-    console.log('\n🏷️  Tag message preview:');
-    console.log('='.repeat(50));
-    console.log(tagMessage);
-    console.log('='.repeat(50));
+    
+    
+    
+    
 
     // Save changelog to file for reference
     const changelogPath: string = path.join(process.cwd(), 'CHANGELOG.md');
@@ -143,14 +143,14 @@ function prepareRelease(): void {
       fs.writeFileSync(changelogPath, changelogContent);
     }
 
-    console.log(`\n✅ Saved changelog to CHANGELOG.md`);
-    console.log(`\n🎯 Ready for release! Next steps:`);
-    console.log(`1. Review the changes above`);
-    console.log(`2. Run: npm publish (if ready to publish)`);
-    console.log(`3. Run: git tag -a "v${newVersion}" -m "${tagMessage.replace(/\n/g, '\\n')}"`);
-    console.log(`4. Run: git push origin "v${newVersion}"`);
+    
+    
+    
+    
+    
+    
   } catch (error) {
-    console.error('❌ Error preparing release:', (error as Error).message);
+    
     process.exit(1);
   }
 }

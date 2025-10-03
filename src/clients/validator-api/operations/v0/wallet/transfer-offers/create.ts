@@ -14,7 +14,7 @@ import { CreateTransferOfferParamsSchema, type CreateTransferOfferParams } from 
  *   expires_at: Date.now() + 3600000, // 1 hour from now
  *   tracking_id: 'unique-tracking-id'
  *   });
- *   console.log(`Offer created: ${offer.offer_contract_id}`);
+ *   
  *   ```
  */
 export const CreateTransferOffer = createApiOperation<CreateTransferOfferParams, CreateTransferOfferResponse>({

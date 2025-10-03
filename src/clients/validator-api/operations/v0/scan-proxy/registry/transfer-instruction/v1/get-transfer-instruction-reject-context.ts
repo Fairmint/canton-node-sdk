@@ -21,7 +21,7 @@ export type GetTransferInstructionRejectContextResponse = components['schemas'][
  *   transferInstructionId: 'contract-id-here',
  *   meta: { key: 'value' }
  *   });
- *   console.log(`Choice context data: ${JSON.stringify(context.choiceContextData)}`);
+ *   
  *   ```
  */
 export const GetTransferInstructionRejectContext = createApiOperation<

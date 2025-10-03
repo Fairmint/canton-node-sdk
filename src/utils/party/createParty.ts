@@ -36,7 +36,7 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
     throw new Error(`Invalid amount: "${options.amount}". Amount must be a valid non-negative number.`);
   }
 
-  console.log(`Creating party ${options.partyName} with ${options.amount} funding...`);
+  
 
   // Create user via Validator API
   const userStatus = await validatorClient.createUser({ name: options.partyName });
@@ -46,7 +46,7 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
 
   // Skip funding if amount is 0
   if (amountNum === 0) {
-    console.log('Party created successfully without funding');
+    
     return result;
   }
 
@@ -57,20 +57,16 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
     amount: options.amount,
     description: `Welcome transfer for ${options.partyName}`,
   });
-  console.log(`Transfer offer contract ID: ${transferOfferContractId}`);
+  
 
   // Accept transfer offer
-  const acceptTransferOfferResult = await acceptTransferOffer({
+  await acceptTransferOffer({
     ledgerClient,
     transferOfferContractId,
     acceptingPartyId: result.partyId,
   });
-  console.log(`Accept transfer offer result: ${acceptTransferOfferResult}`);
-
+  
   // Wait 30 seconds for transfer to settle
-  console.log(
-    `Waiting 30 seconds for transfer to be settled by wallet automation... Update ID: ${acceptTransferOfferResult.transactionTree.updateId}`
-  );
   await new Promise((resolve) => setTimeout(resolve, 30000));
 
   // Create transfer preapproval
@@ -79,8 +75,8 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
   });
 
   result.preapprovalContractId = preapprovalResult.contractId;
-  console.log(`Preapproval contract ID: ${preapprovalResult.contractId}`);
+  
 
-  console.log('Party created successfully!');
+  
   return result;
 }

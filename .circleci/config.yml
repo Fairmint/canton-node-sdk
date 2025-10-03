@@ -34,7 +34,7 @@ jobs:
       - run:
           name: Lint
           command: |
-            npm run lint
+            npm run fix
       - run:
           name: Run Simulate
           command: |

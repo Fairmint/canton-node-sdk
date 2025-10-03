@@ -18,7 +18,7 @@ const CreateAnsEntryParamsSchema = z.object({
  *   url: 'https://my-app.com',
  *   description: 'My application'
  *   });
- *   console.log(`Entry created: ${entry.entryContextCid}`);
+ *   
  *   ```
  */
 export const CreateAnsEntry = createApiOperation<

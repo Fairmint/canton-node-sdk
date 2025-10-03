@@ -28,7 +28,7 @@ export type GetTransferFactoryResponse =
  *   choiceArguments: { /* choice arguments *\/ },
  *   excludeDebugFields: false
  *   });
- *   console.log(`Factory ID: ${factory.factoryId}`);
+ *   
  *   ```
  */
 export const GetTransferFactory = createApiOperation<GetTransferFactoryParams, GetTransferFactoryResponse>({

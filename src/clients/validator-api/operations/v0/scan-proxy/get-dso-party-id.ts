@@ -8,7 +8,7 @@ import { type operations } from '../../../../../generated/apps/validator/src/mai
  * @example
  *   ```typescript
  *   const dsoParty = await client.getDsoPartyId();
- *   console.log(`DSO Party ID: ${dsoParty.dso_party_id}`);
+ *   
  *   ```
  */
 export const GetDsoPartyId = createApiOperation<

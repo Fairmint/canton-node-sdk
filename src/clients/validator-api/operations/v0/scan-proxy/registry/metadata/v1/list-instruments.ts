@@ -22,7 +22,7 @@ export type ListInstrumentsResponse = paths[typeof apiPath]['get']['responses'][
  *   pageSize: 25,
  *   pageToken: 'next-page-token'
  *   });
- *   console.log(`Found ${instruments.instruments.length} instruments`);
+ *   
  *   ```
  */
 export const ListInstruments = createApiOperation<ListInstrumentsParams, ListInstrumentsResponse>({

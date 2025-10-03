@@ -15,7 +15,7 @@ import {
  *   displayName: 'Alice Party',
  *   isLocal: true
  *   });
- *   console.log(`Allocated party: ${result.party.party}`);
+ *   
  *   ```
  */
 export const InteractiveSubmissionAllocateParty = createApiOperation<

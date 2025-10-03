@@ -13,7 +13,7 @@ import {
  *   const result = await client.interactiveSubmissionUploadDar({
  *     darFile: fs.readFileSync('my-package.dar')
  *   });
- *   console.log('DAR file uploaded successfully');
+ *   
  *   ```;
  */
 export const InteractiveSubmissionUploadDar = createApiOperation<

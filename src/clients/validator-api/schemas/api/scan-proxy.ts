@@ -23,9 +23,38 @@ export const GetMemberTrafficStatusResponseSchema = z.object({
 export type GetMemberTrafficStatusResponse = z.infer<typeof GetMemberTrafficStatusResponseSchema>;
 
 // Mining Rounds Schemas
+export const OpenMiningRoundSchema = z.object({
+  contract: z.object({
+    contract_id: z.string(),
+    template_id: z.string(),
+    created_event_blob: z.string(),
+    payload: z.object({
+      opensAt: z.string().optional(),
+      roundNumber: z.number().optional(),
+      round_number: z.number().optional(),
+      round: z
+        .object({
+          number: z.string().optional(),
+        })
+        .optional(),
+    }),
+  }),
+  domain_id: z.string(),
+});
+
+export const IssuingMiningRoundSchema = z.object({
+  round_number: z.number(),
+  contract_id: z.string().optional(),
+  contract: z
+    .object({
+      contract_id: z.string(),
+    })
+    .optional(),
+});
+
 export const GetOpenAndIssuingMiningRoundsResponseSchema = z.object({
-  open_mining_rounds: z.array(z.any()),
-  issuing_mining_rounds: z.array(z.any()),
+  open_mining_rounds: z.array(OpenMiningRoundSchema),
+  issuing_mining_rounds: z.array(IssuingMiningRoundSchema),
 });
 
 export const MiningRoundDetailsSchema = z.object({
@@ -40,6 +69,8 @@ export const GetMiningRoundDetailsResponseSchema = z.object({
   mining_round: MiningRoundDetailsSchema,
 });
 
+export type OpenMiningRound = z.infer<typeof OpenMiningRoundSchema>;
+export type IssuingMiningRound = z.infer<typeof IssuingMiningRoundSchema>;
 export type GetOpenAndIssuingMiningRoundsResponse = z.infer<typeof GetOpenAndIssuingMiningRoundsResponseSchema>;
 export type MiningRoundDetails = z.infer<typeof MiningRoundDetailsSchema>;
 export type GetMiningRoundDetailsResponse = z.infer<typeof GetMiningRoundDetailsResponseSchema>;

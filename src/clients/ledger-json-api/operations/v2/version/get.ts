@@ -8,7 +8,7 @@ import { type GetLedgerApiVersionResponse } from '../../../schemas/api';
  * @example
  *   ```typescript
  *   const version = await client.getVersion();
- *   console.log(`Ledger API Version: ${version.version}`);
+ *   
  *   ```
  */
 export const GetVersion = createApiOperation<void, GetLedgerApiVersionResponse>({

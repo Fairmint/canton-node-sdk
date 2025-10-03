@@ -19,7 +19,7 @@ import {
  *   ],
  *   synchronizerId: 'sync-123'
  *   });
- *   console.log(`Preferred packages: ${result.packageReferences.map(p => p.packageId).join(', ')}`);
+ *   
  *   ```
  */
 export const InteractiveSubmissionGetPreferredPackages = createApiOperation<

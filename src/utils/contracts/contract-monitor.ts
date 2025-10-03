@@ -1,4 +1,5 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
+import { type JsGetActiveContractsResponseItem } from '../../clients/ledger-json-api/schemas/api/state';
 
 /** Options for waiting for contract archival */
 export interface WaitForContractArchivalOptions {
@@ -33,7 +34,7 @@ export async function waitForContractToBeArchived(
   const startTime = Date.now();
 
   if (verbose) {
-    console.log(`⏳ Waiting for contract ${contractId} to be archived...`);
+    
   }
 
   while (Date.now() - startTime < maxWaitTimeMs) {
@@ -50,24 +51,23 @@ export async function waitForContractToBeArchived(
       // Check if our contract is still in the active contracts list
       const isStillActive =
         Array.isArray(activeContracts) &&
-        activeContracts.some((contract: any) => {
+        activeContracts.some((contract: JsGetActiveContractsResponseItem) => {
           const createdEvent = contract?.contractEntry?.JsActiveContract?.createdEvent;
           return createdEvent?.contractId === contractId;
         });
 
       if (!isStillActive) {
         if (verbose) {
-          console.log(`✅ Contract ${contractId} has been archived successfully`);
+          
         }
         return;
       }
 
       if (verbose) {
-        console.log(`⏳ Contract ${contractId} is still active, waiting...`);
+        
       }
       await new Promise((resolve) => setTimeout(resolve, checkIntervalMs));
-    } catch (error) {
-      console.error('❌ Error checking contract status:', error instanceof Error ? error.message : 'Unknown error');
+    } catch {
       // Continue waiting even if there's an error checking status
       await new Promise((resolve) => setTimeout(resolve, checkIntervalMs));
     }

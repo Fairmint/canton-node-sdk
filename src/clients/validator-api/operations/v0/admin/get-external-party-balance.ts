@@ -12,7 +12,7 @@ const GetExternalPartyBalanceParamsSchema = z.object({
  * @example
  *   ```typescript
  *   const balance = await client.getExternalPartyBalance({ partyId: 'party123' });
- *   console.log(`Total coin holdings: ${balance.total_coin_holdings}`);
+ *   
  *   ```
  */
 export const GetExternalPartyBalance = createApiOperation<

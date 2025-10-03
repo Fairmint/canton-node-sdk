@@ -34,7 +34,7 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
     }
     this.ensureResultsDir();
     this.writtenFiles.clear();
-    console.log('🧹 Cleared results directory');
+    
   }
 
   private sanitizeFilename(filename: string): string {
@@ -127,8 +127,8 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
       const sanitizedData = this.sanitizeData(data);
       fs.writeFileSync(filepath, JSON.stringify(sanitizedData, null, 2));
       this.writtenFiles.add(path.join(simulationFilePath || '', filename));
-      console.log(`✅ Simulation "${simulationName}" completed`);
-      console.log(`📁 Result saved to: ${filepath}`);
+      
+      
       return data;
     } catch (error) {
       const errorDetails: { error: string; details: unknown } = {
@@ -155,8 +155,8 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
       const sanitizedErrorDetails = this.sanitizeData(errorDetails);
       fs.writeFileSync(filepath, JSON.stringify(sanitizedErrorDetails, null, 2));
       this.writtenFiles.add(path.join(simulationFilePath || '', filename));
-      console.log(`⚠️  Simulation "${simulationName}" failed (expected)`);
-      console.log(`📁 Error details saved to: ${filepath}`);
+      
+      
       return errorDetails;
     }
   }

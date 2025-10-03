@@ -17,7 +17,7 @@ const GetAnsRulesParamsSchema = z.object({
  *   cached_ans_rules_contract_id: 'contract123',
  *   cached_ans_rules_domain_id: 'domain123'
  *   });
- *   console.log(`Rules: ${rules.ans_rules_update}`);
+ *   
  *   ```
  */
 export const GetAnsRules = createApiOperation<

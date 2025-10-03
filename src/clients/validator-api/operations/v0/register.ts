@@ -8,7 +8,7 @@ import { type operations } from '../../../../generated/apps/validator/src/main/o
  * @example
  *   ```typescript
  *   const result = await client.registerNewUser();
- *   console.log(`User registered with party ID: ${result.party_id}`);
+ *   
  *   ```
  */
 export const RegisterNewUser = createApiOperation<

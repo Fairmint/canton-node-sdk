@@ -9,7 +9,7 @@ import { GetBuyTrafficRequestStatusParamsSchema } from '../../../../schemas/oper
  * @example
  *   ```typescript
  *   const status = await client.getBuyTrafficRequestStatus({ trackingId: 'unique-tracking-id' });
- *   console.log(`Request status: ${status.status}`);
+ *   
  *   ```
  */
 export const GetBuyTrafficRequestStatus = createApiOperation<

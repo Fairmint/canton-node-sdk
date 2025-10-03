@@ -1,4 +1,5 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
+import { type JsGetActiveContractsResponseItem } from '../../clients/ledger-json-api/schemas/api/state';
 
 export interface AmuletForTransfer {
   contractId: string;
@@ -12,6 +13,30 @@ export interface GetAmuletsForTransferParams {
   jsonApiClient: LedgerJsonApiClient;
   /** Party IDs to read as (first one is used as sender) */
   readAs?: string[];
+}
+
+/** Legacy contract format for backward compatibility */
+interface LegacyContract {
+  payload?: Record<string, unknown>;
+  contract?: {
+    template_id?: string;
+    contract_id?: string;
+    payload?: Record<string, unknown>;
+    contract?: {
+      template_id?: string;
+      contract_id?: string;
+      payload?: Record<string, unknown>;
+    };
+  };
+  template_id?: string;
+  contract_id?: string;
+}
+
+/** Internal amulet representation with extracted data */
+interface AmuletData {
+  contractId: string;
+  templateId: string;
+  payload: Record<string, unknown>;
 }
 
 /**
@@ -33,27 +58,30 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
     parties: [senderParty],
   });
 
-  const allAmulets: any[] = [];
+  const allAmulets: AmuletData[] = [];
   const contractsArr = Array.isArray(activeContracts) ? activeContracts : [];
 
-  contractsArr.forEach((ctr: any) => {
-    let payload, templateId, contractId;
-    console.log('ctr: ', ctr);
+  contractsArr.forEach((ctr) => {
+    const typedCtr = ctr as JsGetActiveContractsResponseItem | LegacyContract;
+    let payload: Record<string, unknown> | undefined;
+    let templateId: string | undefined;
+    let contractId: string | undefined;
+    
 
-    if (ctr.contractEntry?.JsActiveContract?.createdEvent) {
-      const created = ctr.contractEntry.JsActiveContract.createdEvent;
-      payload = created.createArgument;
-      templateId = created.templateId;
-      contractId = created.contractId;
-    } else if (ctr.contract) {
-      payload = ctr.contract.payload;
-      templateId = ctr.contract.contract?.template_id || ctr.contract.template_id;
-      contractId = ctr.contract.contract?.contract_id || ctr.contract.contract_id;
+    if ('contractEntry' in typedCtr && typedCtr.contractEntry && 'JsActiveContract' in typedCtr.contractEntry) {
+      const { createdEvent } = typedCtr.contractEntry.JsActiveContract;
+      payload = createdEvent.createArgument;
+      ({ templateId, contractId } = createdEvent);
+    } else if ('contract' in typedCtr && typedCtr.contract) {
+      const { contract } = typedCtr;
+      ({ payload } = contract);
+      templateId = contract.contract?.template_id ?? contract.template_id;
+      contractId = contract.contract?.contract_id ?? contract.contract_id;
     }
 
-    console.log('payload: ', payload);
-    console.log('templateId: ', templateId);
-    console.log('contractId: ', contractId);
+    
+    
+    
 
     if (!payload || !templateId || !contractId) return;
 
@@ -64,20 +92,31 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
   });
 
   // Helper to extract owner and numeric amount from diverse amulet shapes
-  const extract = (amulet: any) => {
-    const payload = amulet?.payload ?? amulet?.contract?.contract?.payload ?? {};
-    const ownerFull = payload.owner ?? amulet.owner ?? amulet.partyId ?? amulet.party_id ?? '';
+  const extract = (amulet: AmuletData | LegacyContract) => {
+    const amuletPayload = 'payload' in amulet ? amulet.payload : undefined;
+    const payload = amuletPayload ?? (amulet as LegacyContract).contract?.contract?.payload ?? {};
+    
+    const amuletRecord = amulet as Record<string, unknown>;
+    const ownerFull = 
+      (payload['owner'] as string | undefined) ?? 
+      (amuletRecord['owner'] as string | undefined) ?? 
+      (amuletRecord['partyId'] as string | undefined) ?? 
+      (amuletRecord['party_id'] as string | undefined) ?? 
+      '';
+    
     const rawAmountCandidate =
-      payload.amount ??
-      amulet.amount ??
-      amulet.effective_amount ??
-      amulet.effectiveAmount ??
-      amulet.initialAmount ??
+      payload['amount'] ??
+      amuletRecord['amount'] ??
+      amuletRecord['effective_amount'] ??
+      amuletRecord['effectiveAmount'] ??
+      amuletRecord['initialAmount'] ??
       '0';
+    
     let rawAmount = rawAmountCandidate;
     if (typeof rawAmountCandidate === 'object' && rawAmountCandidate !== null) {
-      rawAmount = rawAmountCandidate.initialAmount ?? '0';
+      rawAmount = (rawAmountCandidate as Record<string, unknown>)['initialAmount'] ?? '0';
     }
+    
     const numericAmount = parseFloat(rawAmount as string);
     return { owner: ownerFull, numericAmount };
   };
@@ -101,15 +140,17 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
 
   // Map to the structure expected by buildAmuletInputs
   const result = partyAmulets.map((a) => {
-    const inner = a.contract?.contract ?? {};
-    const payload = inner.payload ?? {};
-    const amtObj = payload.amount ?? {};
-    const intAmount = typeof amtObj === 'object' ? amtObj.initialAmount : amtObj;
+    const { payload } = a;
+    const amtObj = payload['amount'] ?? {};
+    const intAmount = typeof amtObj === 'object' && amtObj !== null 
+      ? (amtObj as Record<string, unknown>)['initialAmount'] 
+      : amtObj;
+    
     return {
-      contractId: inner.contract_id ?? a.contractId ?? a.contract_id,
-      templateId: inner.template_id ?? a.templateId ?? a.template_id ?? 'splice-amulet:Splice.Amulet:Amulet',
-      effectiveAmount: a.effective_amount ?? intAmount ?? '0',
-      owner: payload.owner ?? extract(a).owner,
+      contractId: a.contractId,
+      templateId: a.templateId,
+      effectiveAmount: (intAmount as string | undefined) ?? '0',
+      owner: (payload['owner'] as string | undefined) ?? extract(a).owner,
     };
   });
 

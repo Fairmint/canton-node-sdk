@@ -17,7 +17,7 @@ export type GetFeaturedAppRightParams = z.infer<typeof GetFeaturedAppRightParams
  * @example
  *   ```typescript
  *   const right = await client.lookupFeaturedAppRight({ partyId: 'party123' });
- *   console.log(`Featured app right: ${right.featured_app_right}`);
+ *   
  *   ```
  */
 export const LookupFeaturedAppRight = createApiOperation<GetFeaturedAppRightParams, LookupFeaturedAppRightResponse>({

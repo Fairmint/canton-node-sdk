@@ -31,7 +31,7 @@ class OperationDocGenerator {
   }
 
   async generateDocs(): Promise<void> {
-    console.log('🔍 Scanning operations directories...');
+    
 
     // Scan ledger-json-api operations
     const ledgerOperationsDir = path.join(process.cwd(), 'src/clients/ledger-json-api/operations');
@@ -41,7 +41,7 @@ class OperationDocGenerator {
     const validatorOperationsDir = path.join(process.cwd(), 'src/clients/validator-api/operations');
     await this.scanOperations(validatorOperationsDir, 'validator-api');
 
-    console.log(`📝 Found ${this.operations.length} operations`);
+    
 
     // Create docs directory
     const docsDir = path.join(process.cwd(), 'docs');
@@ -57,7 +57,7 @@ class OperationDocGenerator {
       await this.generateOperationDoc(operation);
     }
 
-    console.log('✅ Documentation generation complete!');
+    
   }
 
   private async scanOperations(dir: string, apiType: 'ledger-json-api' | 'validator-api'): Promise<void> {
@@ -538,35 +538,35 @@ ${closeBrace}`;
   }
 
   private isPropertyOptional(node: ts.Expression): boolean {
-    console.log(`[isPropertyOptional] node kind: ${node.kind}`);
+    
 
     if (ts.isPropertyAccessExpression(node)) {
-      console.log(`[isPropertyOptional] PropertyAccessExpression - name: ${node.name.text}`);
+      
       if (node.name.text === 'optional') {
-        console.log(`[isPropertyOptional] Found 'optional' - returning true`);
+        
         return true;
       }
       // Check if it's a chain like z.string().optional()
       if (ts.isCallExpression(node.expression)) {
-        console.log(`[isPropertyOptional] Recursing into CallExpression`);
+        
         return this.isPropertyOptional(node.expression);
       }
     }
 
     if (ts.isCallExpression(node)) {
-      console.log(`[isPropertyOptional] CallExpression - checking expression`);
+      
       if (ts.isPropertyAccessExpression(node.expression)) {
-        console.log(
+        
           `[isPropertyOptional] CallExpression with PropertyAccessExpression - name: ${node.expression.name.text}`
         );
         if (node.expression.name.text === 'optional') {
-          console.log(`[isPropertyOptional] Found 'optional' in CallExpression - returning true`);
+          
           return true;
         }
       }
     }
 
-    console.log(`[isPropertyOptional] No optional found - returning false`);
+    
     return false;
   }
 
@@ -918,7 +918,7 @@ ${categories.map((category) => this.generateCategorySection(apiType, category)).
       }
       const indexPath = path.join(generatedDir, fileName);
       fs.writeFileSync(indexPath, indexContent);
-      console.log(`📄 Generated ${apiName} operations index: ${indexPath}`);
+      
     }
   }
 
@@ -1032,13 +1032,13 @@ const subscription = await client.${operation.name.toLowerCase()}.subscribe(
   },
   {
     onMessage: (message) => {
-      console.log('Received message:', message);
+      
     },
     onError: (error) => {
-      console.error('WebSocket error:', error);
+      
     },
     onClose: () => {
-      console.log('WebSocket connection closed');
+      
     }
   }
 );
@@ -1065,7 +1065,7 @@ subscription.close();`
     }
 
     fs.writeFileSync(docPath, docContent);
-    console.log(`📄 Generated operation doc: ${docPath}`);
+    
   }
 
   private generateNavigationForOperation(operation: OperationInfo): string {
@@ -1129,7 +1129,7 @@ async function main(): Promise<void> {
     const generator = new OperationDocGenerator();
     await generator.generateDocs();
   } catch (error) {
-    console.error('❌ Error generating documentation:', error);
+    
     process.exit(1);
   }
 }

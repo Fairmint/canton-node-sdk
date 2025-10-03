@@ -8,7 +8,7 @@ import { type ListTransferOffersResponse } from '../../../../schemas/api';
  * @example
  *   ```typescript
  *   const offers = await client.listTransferOffers();
- *   console.log(`Found ${offers.offers.length} transfer offers`);
+ *   
  *   ```
  */
 export const ListTransferOffers = createApiOperation<void, ListTransferOffersResponse>({

@@ -21,7 +21,7 @@ import {
  *   { kind: { CanActAs: { party: 'Alice::1220' } } }
  *   ]
  *   });
- *   console.log(`Created user: ${result.user.id}`);
+ *   
  *   ```
  */
 export const InteractiveSubmissionCreateUser = createApiOperation<

@@ -28,7 +28,6 @@ export class FileLogger implements Logger {
       try {
         fs.mkdirSync(this.logDir, { recursive: true });
       } catch (error) {
-        console.warn('Could not create logs directory, disabling file logging:', error);
         this.enableFileLogging = false;
       }
     }
@@ -39,22 +38,18 @@ export class FileLogger implements Logger {
       return;
     }
 
-    try {
-      const timestamp = new Date().toISOString();
-      const logEntry = {
-        timestamp,
-        url,
-        request: this.sanitizeForLogging(request),
-        response: this.sanitizeForLogging(response),
-      };
+    const timestamp = new Date().toISOString();
+    const logEntry = {
+      timestamp,
+      url,
+      request: this.sanitizeForLogging(request),
+      response: this.sanitizeForLogging(response),
+    };
 
-      const logFile = path.join(this.logDir, `api-${timestamp.split('T')[0]}.log`);
-      const logLine = `${JSON.stringify(logEntry)}\n`;
+    const logFile = path.join(this.logDir, `api-${timestamp.split('T')[0]}.log`);
+    const logLine = `${JSON.stringify(logEntry)}\n`;
 
-      await fs.promises.appendFile(logFile, logLine);
-    } catch (error) {
-      console.warn('Failed to log request/response:', error);
-    }
+    await fs.promises.appendFile(logFile, logLine);
   }
 
   private sanitizeForLogging(obj: unknown): unknown {

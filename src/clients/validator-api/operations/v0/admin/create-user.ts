@@ -11,7 +11,7 @@ import { type operations } from '../../../../../generated/apps/validator/src/mai
  *   name: 'John Doe',
  *   party_id: 'party123'
  *   });
- *   console.log(`User created with party ID: ${user.party_id}`);
+ *   
  *   ```
  */
 export const CreateUser = createApiOperation<

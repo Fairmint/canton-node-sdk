@@ -8,7 +8,7 @@ import { type operations } from '../../../../../../../generated/apps/wallet/src/
  * @example
  *   ```typescript
  *   const transfers = await client.listTokenStandardTransfers();
- *   console.log(`Found ${transfers.transfers.length} transfers`);
+ *   
  *   ```
  */
 export const ListTokenStandardTransfers = createApiOperation<

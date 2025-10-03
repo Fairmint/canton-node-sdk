@@ -21,7 +21,7 @@ function collapseManifest(): void {
 
     // Exit with error if no files found
     if (lines.length === 0) {
-      console.error('ERROR: No files found for manifest generation');
+      
       process.exit(1);
     }
 
@@ -55,10 +55,10 @@ function collapseManifest(): void {
     const sortedFiles = Array.from(collapsedFiles).sort();
 
     for (const file of sortedFiles) {
-      console.log(file);
+      
     }
   } catch (error) {
-    console.error('Error processing manifest:', error);
+    
     process.exit(1);
   }
 }

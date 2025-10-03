@@ -8,7 +8,7 @@ import { type operations } from '../../../../../generated/apps/validator/src/mai
  * @example
  *   ```typescript
  *   const entries = await client.listAnsEntries();
- *   console.log(`Found ${entries.entries.length} entries`);
+ *   
  *   ```
  */
 export const ListAnsEntries = createApiOperation<

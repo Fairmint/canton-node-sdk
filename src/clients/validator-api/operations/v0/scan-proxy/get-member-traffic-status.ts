@@ -22,7 +22,7 @@ import { type GetMemberTrafficStatusParams } from '../../../schemas/operations';
  *   memberId: 'PAR::id::fingerprint'
  *   });
  *
- *   console.log(`Total consumed: ${status.traffic_status.actual.total_consumed}`);
+ *   
  *   ```
  */
 export class GetMemberTrafficStatus extends ApiOperation<

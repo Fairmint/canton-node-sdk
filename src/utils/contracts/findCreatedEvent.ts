@@ -30,11 +30,15 @@ export function findCreatedEventByTemplateId(
   expectedTemplateId: string
 ): CreatedTreeEventWrapper | undefined {
   // Handle both direct structure and nested transaction structure
-  const transactionTree = response.transactionTree as any;
-  const eventsById = (transactionTree?.eventsById ?? transactionTree?.transaction?.eventsById ?? {}) as Record<
-    string,
-    unknown
-  >;
+  interface TransactionTreeStructure {
+    eventsById?: Record<string, unknown>;
+    transaction?: {
+      eventsById?: Record<string, unknown>;
+    };
+  }
+  
+  const transactionTree = response.transactionTree as TransactionTreeStructure | undefined;
+  const eventsById = transactionTree?.eventsById ?? transactionTree?.transaction?.eventsById ?? {};
 
   // Extract the part after the first ':' from the expected template ID
   const expectedTemplateIdSuffix = expectedTemplateId.includes(':')
@@ -44,7 +48,7 @@ export function findCreatedEventByTemplateId(
   for (const event of Object.values(eventsById)) {
     if (isCreatedTreeEventWrapper(event)) {
       const created = event.CreatedTreeEvent.value;
-      if (created?.templateId) {
+      if (created.templateId) {
         // Extract the part after the first ':' from the actual template ID
         const actualTemplateIdSuffix = created.templateId.includes(':')
           ? created.templateId.substring(created.templateId.indexOf(':') + 1)

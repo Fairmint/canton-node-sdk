@@ -13,7 +13,7 @@ import {
  *   const request = await client.createBuyTrafficRequest({
  *   traffic_amount: 1000
  *   });
- *   console.log(`Request created: ${request.request_contract_id}`);
+ *   
  *   ```
  */
 export const CreateBuyTrafficRequest = createApiOperation<

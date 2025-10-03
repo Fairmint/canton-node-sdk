@@ -15,7 +15,7 @@ import {
  *   parties: ['Alice', 'Bob'],
  *   synchronizerId: 'sync-123'
  *   });
- *   console.log(`Preferred package: ${result.packagePreference?.packageReference.packageId}`);
+ *   
  *   ```
  */
 export const InteractiveSubmissionGetPreferredPackageVersion = createApiOperation<

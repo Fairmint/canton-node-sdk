@@ -14,7 +14,7 @@ import {
  *   sender: 'party123',
  *   nonce: 1
  *   });
- *   console.log(`Status: ${status.status}`);
+ *   
  *   ```
  */
 export const LookupTransferCommandStatus = createApiOperation<

@@ -9,7 +9,7 @@ import { GetTransferOfferStatusParamsSchema } from '../../../../schemas/operatio
  * @example
  *   ```typescript
  *   const status = await client.getTransferOfferStatus({ trackingId: 'unique-tracking-id' });
- *   console.log(`Offer status: ${status.status}`);
+ *   
  *   ```
  */
 export const GetTransferOfferStatus = createApiOperation<

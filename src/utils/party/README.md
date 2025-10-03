@@ -24,8 +24,8 @@ const result = await createParty({
   amount: '100',
 });
 
-console.log('Party created:', result.partyId);
-console.log('Preapproval contract:', result.preapprovalContractId);
+
+
 ```
 
 ### Parameters

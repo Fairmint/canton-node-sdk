@@ -12,7 +12,7 @@ const LookupAnsEntryByNameParamsSchema = z.object({
  * @example
  *   ```typescript
  *   const entry = await client.lookupAnsEntryByName({ name: 'my-app' });
- *   console.log(`Entry: ${entry.entry}`);
+ *   
  *   ```
  */
 export const LookupAnsEntryByName = createApiOperation<

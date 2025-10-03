@@ -8,7 +8,7 @@ import { GetAuthenticatedUserParamsSchema, type GetAuthenticatedUserParams } fro
  * @example
  *   ```typescript
  *   const user = await client.getAuthenticatedUser({ identityProviderId: 'default' });
- *   console.log(`Authenticated as: ${user.user.id}`);
+ *   
  *   ```
  */
 export const GetAuthenticatedUser = createApiOperation<GetAuthenticatedUserParams, GetUserResponse>({

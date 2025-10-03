@@ -8,7 +8,7 @@ import { RejectTransferOfferParamsSchema, type RejectTransferOfferParams } from 
  * @example
  *   ```typescript
  *   const result = await client.rejectTransferOffer({ contractId: 'contract123' });
- *   console.log(`Rejected offer: ${result.rejected_offer_contract_id}`);
+ *   
  *   ```
  */
 export const RejectTransferOffer = createApiOperation<RejectTransferOfferParams, RejectTransferOfferResponse>({

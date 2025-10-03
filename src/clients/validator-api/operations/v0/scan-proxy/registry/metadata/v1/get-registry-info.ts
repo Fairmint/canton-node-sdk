@@ -13,8 +13,8 @@ export type GetRegistryInfoResponse = paths[typeof apiPath]['get']['responses'][
  * @example
  *   ```typescript
  *   const info = await client.getRegistryInfo();
- *   console.log(`Admin ID: ${info.adminId}`);
- *   console.log(`Supported APIs: ${Object.keys(info.supportedApis)}`);
+ *   
+ *   
  *   ```
  */
 export const GetRegistryInfo = createApiOperation<void, GetRegistryInfoResponse>({

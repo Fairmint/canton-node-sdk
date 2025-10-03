@@ -18,7 +18,7 @@ export type GetInstrumentResponse = paths[typeof apiPath]['get']['responses']['2
  * @example
  *   ```typescript
  *   const instrument = await client.getInstrument({ instrumentId: 'instrument123' });
- *   console.log(`Instrument: ${instrument.name} (${instrument.symbol})`);
+ *   
  *   ```
  */
 export const GetInstrument = createApiOperation<GetInstrumentParams, GetInstrumentResponse>({

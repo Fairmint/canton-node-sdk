@@ -8,7 +8,7 @@ import { type operations } from '../../../../../generated/apps/wallet/src/main/o
  * @example
  *   ```typescript
  *   const amulets = await client.getAmulets();
- *   console.log(`Amulets: ${amulets.amulets.length}, Locked: ${amulets.locked_amulets.length}`);
+ *   
  *   ```
  */
 export const GetAmulets = createApiOperation<
