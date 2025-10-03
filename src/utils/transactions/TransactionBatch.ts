@@ -49,11 +49,11 @@ export class TransactionBatch {
   }
 
   public async submit(): Promise<BatchSubmitResult> {
-    // Dedupe disclosed contracts by their stringified representation
+    // Dedupe disclosed contracts by contractId
     this.disclosedContracts = Array.from(
       new Map(
         this.disclosedContracts.map(contract => [
-          JSON.stringify(contract),
+          contract.contractId,
           contract
         ])
       ).values()
