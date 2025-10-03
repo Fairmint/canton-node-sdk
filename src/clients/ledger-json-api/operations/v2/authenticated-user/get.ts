@@ -8,8 +8,8 @@ import { GetAuthenticatedUserParamsSchema, type GetAuthenticatedUserParams } fro
  * @example
  *   ```typescript
  *   const user = await client.getAuthenticatedUser({ identityProviderId: 'default' });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const GetAuthenticatedUser = createApiOperation<GetAuthenticatedUserParams, GetUserResponse>({
   paramsSchema: GetAuthenticatedUserParamsSchema,

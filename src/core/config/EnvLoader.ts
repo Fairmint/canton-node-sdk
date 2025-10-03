@@ -64,8 +64,8 @@ export class EnvLoader {
     const envLoader = EnvLoader.getInstance();
 
     // Determine which values to use - prioritize options over environment
-    const network = options?.network || envLoader.getCurrentNetwork();
-    const provider = options?.provider || envLoader.getCurrentProvider();
+    const network = options?.network ?? envLoader.getCurrentNetwork();
+    const provider = options?.provider ?? envLoader.getCurrentProvider();
 
     // For Lighthouse API, provider is optional
     let authUrl: string | undefined;
@@ -101,7 +101,7 @@ export class EnvLoader {
       }
     }
 
-    const config: ClientConfig = {
+    const clientConfig: ClientConfig = {
       network,
       apis: {
         [apiType]: apiConfig,
@@ -110,13 +110,13 @@ export class EnvLoader {
 
     // Only add provider and authUrl if they exist
     if (provider) {
-      config.provider = provider;
+      clientConfig.provider = provider;
     }
     if (authUrl) {
-      config.authUrl = authUrl;
+      clientConfig.authUrl = authUrl;
     }
 
-    return config;
+    return clientConfig;
   }
 
   /**
@@ -133,8 +133,8 @@ export class EnvLoader {
     missingVars: string[];
   } {
     const envLoader = EnvLoader.getInstance();
-    const network = options?.network || envLoader.getCurrentNetwork();
-    const provider = options?.provider || envLoader.getCurrentProvider();
+    const network = options?.network ?? envLoader.getCurrentNetwork();
+    const provider = options?.provider ?? envLoader.getCurrentProvider();
 
     const envVars: Record<string, string | undefined> = {};
     const missingVars: string[] = [];
@@ -212,7 +212,7 @@ export class EnvLoader {
   }
 
   public getNodeEnv(): 'development' | 'production' | 'test' {
-    const value = this.env['NODE_ENV'] || 'development';
+    const value = this.env['NODE_ENV'] ?? 'development';
     if (!['development', 'production', 'test'].includes(value)) {
       throw new ConfigurationError(`Invalid NODE_ENV: ${value}. Must be 'development', 'production', or 'test'`);
     }
@@ -244,7 +244,7 @@ export class EnvLoader {
   }
 
   public getApiUri(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {
-    const targetNetwork = network || this.getCurrentNetwork();
+    const targetNetwork = network ?? this.getCurrentNetwork();
 
     // Special case for APIs that don't require provider-specific configuration
     if (apiType === 'LIGHTHOUSE_API') {
@@ -253,7 +253,7 @@ export class EnvLoader {
       return uri;
     }
 
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetProvider = provider ?? this.getCurrentProvider();
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_URI`;
     const uri = this.env[envKey];
 
@@ -261,40 +261,40 @@ export class EnvLoader {
   }
 
   public getApiClientId(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetNetwork = network ?? this.getCurrentNetwork();
+    const targetProvider = provider ?? this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_CLIENT_ID`;
     return this.env[envKey];
   }
 
   public getApiClientSecret(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetNetwork = network ?? this.getCurrentNetwork();
+    const targetProvider = provider ?? this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_CLIENT_SECRET`;
     return this.env[envKey];
   }
 
   public getApiUsername(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetNetwork = network ?? this.getCurrentNetwork();
+    const targetProvider = provider ?? this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_USERNAME`;
     return this.env[envKey];
   }
 
   public getApiPassword(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetNetwork = network ?? this.getCurrentNetwork();
+    const targetProvider = provider ?? this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_${apiType.toUpperCase()}_PASSWORD`;
     return this.env[envKey];
   }
 
   public getAuthUrl(network?: NetworkType, provider?: ProviderType): string {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetNetwork = network ?? this.getCurrentNetwork();
+    const targetProvider = provider ?? this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_AUTH_URL`;
     const authUrl = this.env[envKey];
@@ -307,8 +307,8 @@ export class EnvLoader {
   }
 
   public getPartyId(network?: NetworkType, provider?: ProviderType): string {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetNetwork = network ?? this.getCurrentNetwork();
+    const targetProvider = provider ?? this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_PARTY_ID`;
     const partyId = this.env[envKey];
@@ -321,15 +321,15 @@ export class EnvLoader {
   }
 
   public getUserId(network?: NetworkType, provider?: ProviderType): string | undefined {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetNetwork = network ?? this.getCurrentNetwork();
+    const targetProvider = provider ?? this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_USER_ID`;
     return this.env[envKey];
   }
 
   public getDatabaseUrl(network?: NetworkType): string {
-    const targetNetwork = network || this.getCurrentNetwork();
+    const targetNetwork = network ?? this.getCurrentNetwork();
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_DATABASE_URL`;
     const databaseUrl = this.env[envKey];
 
@@ -341,8 +341,8 @@ export class EnvLoader {
   }
 
   public getManagedParties(network?: NetworkType, provider?: ProviderType): string[] {
-    const targetNetwork = network || this.getCurrentNetwork();
-    const targetProvider = provider || this.getCurrentProvider();
+    const targetNetwork = network ?? this.getCurrentNetwork();
+    const targetProvider = provider ?? this.getCurrentProvider();
 
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_MANAGED_PARTIES`;
     const managedParties = this.env[envKey];
@@ -358,7 +358,7 @@ export class EnvLoader {
   }
 
   public getAmuletRulesContractId(network?: NetworkType): string {
-    const targetNetwork = network || this.getCurrentNetwork();
+    const targetNetwork = network ?? this.getCurrentNetwork();
     const envKey = `CANTON_AMULET_RULES_CONTRACT_ID_${targetNetwork.toUpperCase()}`;
     const contractId = this.env[envKey];
 
@@ -370,7 +370,7 @@ export class EnvLoader {
   }
 
   public getValidatorWalletAppInstallContractId(network?: NetworkType): string {
-    const targetNetwork = network || this.getCurrentNetwork();
+    const targetNetwork = network ?? this.getCurrentNetwork();
     const envKey = `CANTON_VALIDATOR_WALLET_APP_INSTALL_CONTRACT_ID_${targetNetwork.toUpperCase()}`;
     const contractId = this.env[envKey];
 
@@ -428,7 +428,7 @@ export class EnvLoader {
       grantType = 'client_credentials';
       auth = {
         grantType,
-        clientId: clientId ?? '',
+        clientId,
         clientSecret,
       };
     } else if (username && password) {
@@ -436,7 +436,7 @@ export class EnvLoader {
       grantType = 'password';
       auth = {
         grantType,
-        clientId: clientId ?? '',
+        clientId,
         username,
         password,
       };
@@ -445,12 +445,12 @@ export class EnvLoader {
       grantType = 'client_credentials';
       auth = {
         grantType,
-        clientId: clientId ?? '',
+        clientId,
       };
     }
 
     const apiConfig: ApiConfig = {
-      apiUrl: apiUrl ?? '',
+      apiUrl,
       auth,
     };
 

@@ -36,8 +36,6 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
     throw new Error(`Invalid amount: "${options.amount}". Amount must be a valid non-negative number.`);
   }
 
-  
-
   // Create user via Validator API
   const userStatus = await validatorClient.createUser({ name: options.partyName });
   const result: PartyCreationResult = {
@@ -46,7 +44,6 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
 
   // Skip funding if amount is 0
   if (amountNum === 0) {
-    
     return result;
   }
 
@@ -57,7 +54,6 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
     amount: options.amount,
     description: `Welcome transfer for ${options.partyName}`,
   });
-  
 
   // Accept transfer offer
   await acceptTransferOffer({
@@ -65,7 +61,7 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
     transferOfferContractId,
     acceptingPartyId: result.partyId,
   });
-  
+
   // Wait 30 seconds for transfer to settle
   await new Promise((resolve) => setTimeout(resolve, 30000));
 
@@ -75,8 +71,6 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
   });
 
   result.preapprovalContractId = preapprovalResult.contractId;
-  
 
-  
   return result;
 }

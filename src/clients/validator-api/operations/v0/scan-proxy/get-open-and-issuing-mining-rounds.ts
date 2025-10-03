@@ -8,8 +8,8 @@ import { type GetOpenAndIssuingMiningRoundsResponse } from '../../../schemas/api
  * @example
  *   ```typescript
  *   const rounds = await client.getOpenAndIssuingMiningRounds();
- *   
- *   ```
+ *
+ *   ```;
  */
 export const GetOpenAndIssuingMiningRounds = createApiOperation<void, GetOpenAndIssuingMiningRoundsResponse>({
   paramsSchema: z.void(),

@@ -66,22 +66,17 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
     let payload: Record<string, unknown> | undefined;
     let templateId: string | undefined;
     let contractId: string | undefined;
-    
 
-    if ('contractEntry' in typedCtr && typedCtr.contractEntry && 'JsActiveContract' in typedCtr.contractEntry) {
+    if ('contractEntry' in typedCtr && 'JsActiveContract' in typedCtr.contractEntry) {
       const { createdEvent } = typedCtr.contractEntry.JsActiveContract;
       payload = createdEvent.createArgument;
       ({ templateId, contractId } = createdEvent);
-    } else if ('contract' in typedCtr && typedCtr.contract) {
+    } else if ('contract' in typedCtr) {
       const { contract } = typedCtr;
       ({ payload } = contract);
       templateId = contract.contract?.template_id ?? contract.template_id;
       contractId = contract.contract?.contract_id ?? contract.contract_id;
     }
-
-    
-    
-    
 
     if (!payload || !templateId || !contractId) return;
 
@@ -95,15 +90,15 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
   const extract = (amulet: AmuletData | LegacyContract) => {
     const amuletPayload = 'payload' in amulet ? amulet.payload : undefined;
     const payload = amuletPayload ?? (amulet as LegacyContract).contract?.contract?.payload ?? {};
-    
+
     const amuletRecord = amulet as Record<string, unknown>;
-    const ownerFull = 
-      (payload['owner'] as string | undefined) ?? 
-      (amuletRecord['owner'] as string | undefined) ?? 
-      (amuletRecord['partyId'] as string | undefined) ?? 
-      (amuletRecord['party_id'] as string | undefined) ?? 
+    const ownerFull =
+      (payload['owner'] as string | undefined) ??
+      (amuletRecord['owner'] as string | undefined) ??
+      (amuletRecord['partyId'] as string | undefined) ??
+      (amuletRecord['party_id'] as string | undefined) ??
       '';
-    
+
     const rawAmountCandidate =
       payload['amount'] ??
       amuletRecord['amount'] ??
@@ -111,12 +106,12 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
       amuletRecord['effectiveAmount'] ??
       amuletRecord['initialAmount'] ??
       '0';
-    
+
     let rawAmount = rawAmountCandidate;
-    if (typeof rawAmountCandidate === 'object' && rawAmountCandidate !== null) {
+    if (typeof rawAmountCandidate === 'object') {
       rawAmount = (rawAmountCandidate as Record<string, unknown>)['initialAmount'] ?? '0';
     }
-    
+
     const numericAmount = parseFloat(rawAmount as string);
     return { owner: ownerFull, numericAmount };
   };
@@ -142,10 +137,8 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
   const result = partyAmulets.map((a) => {
     const { payload } = a;
     const amtObj = payload['amount'] ?? {};
-    const intAmount = typeof amtObj === 'object' && amtObj !== null 
-      ? (amtObj as Record<string, unknown>)['initialAmount'] 
-      : amtObj;
-    
+    const intAmount = typeof amtObj === 'object' ? (amtObj as Record<string, unknown>)['initialAmount'] : amtObj;
+
     return {
       contractId: a.contractId,
       templateId: a.templateId,

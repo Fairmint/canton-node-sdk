@@ -11,8 +11,8 @@ import { type operations } from '../../../../../generated/apps/validator/src/mai
  *   name: 'John Doe',
  *   party_id: 'party123'
  *   });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const CreateUser = createApiOperation<
   operations['onboardUser']['requestBody']['content']['application/json'],

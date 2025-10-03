@@ -13,8 +13,8 @@ import {
  *   const request = await client.createBuyTrafficRequest({
  *   traffic_amount: 1000
  *   });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const CreateBuyTrafficRequest = createApiOperation<
   CreateBuyTrafficRequestParams,

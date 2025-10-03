@@ -8,8 +8,8 @@ import { type ListPackagesResponse } from '../../../schemas/api';
  * @example
  *   ```typescript
  *   const packages = await client.listPackages();
- *   
- *   ```
+ *
+ *   ```;
  */
 export const ListPackages = createApiOperation<void, ListPackagesResponse>({
   paramsSchema: z.void(),

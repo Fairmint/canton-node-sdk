@@ -23,9 +23,6 @@ const result = await createParty({
   partyName: 'alice123',
   amount: '100',
 });
-
-
-
 ```
 
 ### Parameters

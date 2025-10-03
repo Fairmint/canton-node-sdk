@@ -34,7 +34,6 @@ export async function waitForContractToBeArchived(
   const startTime = Date.now();
 
   if (verbose) {
-    
   }
 
   while (Date.now() - startTime < maxWaitTimeMs) {
@@ -52,19 +51,17 @@ export async function waitForContractToBeArchived(
       const isStillActive =
         Array.isArray(activeContracts) &&
         activeContracts.some((contract: JsGetActiveContractsResponseItem) => {
-          const createdEvent = contract.contractEntry?.JsActiveContract?.createdEvent;
+          const { createdEvent } = contract.contractEntry.JsActiveContract;
           return createdEvent?.contractId === contractId;
         });
 
       if (!isStillActive) {
         if (verbose) {
-          
         }
         return;
       }
 
       if (verbose) {
-        
       }
       await new Promise((resolve) => setTimeout(resolve, checkIntervalMs));
     } catch {

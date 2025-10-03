@@ -24,13 +24,7 @@ async function main(): Promise<void> {
       onOpen: () => {},
       onMessage: (msg) => {
         // Count only active contract entries
-        if (
-          typeof msg === 'object' &&
-          msg !== null &&
-          'contractEntry' in msg &&
-          msg.contractEntry &&
-          'JsActiveContract' in msg.contractEntry
-        ) {
+        if (typeof msg === 'object' && 'contractEntry' in msg && 'JsActiveContract' in msg.contractEntry) {
           activeContractsFound += 1;
         }
       },

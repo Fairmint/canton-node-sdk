@@ -15,7 +15,7 @@ export class HttpClient {
 
   public async makeGetRequest<T>(url: string, config: RequestConfig = {}, _isRetry = false): Promise<T> {
     try {
-      const headers = await this.buildHeaders(config);
+      const headers = this.buildHeaders(config);
       const response = await this.axiosInstance.get<T>(url, { headers });
 
       await this.logRequestResponse(url, { method: 'GET', headers }, response.data);
@@ -33,7 +33,7 @@ export class HttpClient {
 
       // Log the error response before throwing
       if (axios.isAxiosError(error)) {
-        await this.logRequestResponse(url, { method: 'GET' }, error.response?.data || error.message);
+        await this.logRequestResponse(url, { method: 'GET' }, error.response?.data ?? error.message);
       }
       throw this.handleRequestError(error);
     }
@@ -46,7 +46,7 @@ export class HttpClient {
     _isRetry = false
   ): Promise<T> {
     try {
-      const headers = await this.buildHeaders(config);
+      const headers = this.buildHeaders(config);
       const response = await this.axiosInstance.post<T>(url, data, { headers });
 
       await this.logRequestResponse(url, { method: 'POST', headers, data }, response.data);
@@ -63,7 +63,7 @@ export class HttpClient {
 
       // Log the error response before throwing
       if (axios.isAxiosError(error)) {
-        await this.logRequestResponse(url, { method: 'POST', data }, error.response?.data || error.message);
+        await this.logRequestResponse(url, { method: 'POST', data }, error.response?.data ?? error.message);
       }
       throw this.handleRequestError(error);
     }
@@ -71,7 +71,7 @@ export class HttpClient {
 
   public async makeDeleteRequest<T>(url: string, config: RequestConfig = {}, _isRetry = false): Promise<T> {
     try {
-      const headers = await this.buildHeaders(config);
+      const headers = this.buildHeaders(config);
       const response = await this.axiosInstance.delete<T>(url, { headers });
 
       await this.logRequestResponse(url, { method: 'DELETE', headers }, response.data);
@@ -88,7 +88,7 @@ export class HttpClient {
 
       // Log the error response before throwing
       if (axios.isAxiosError(error)) {
-        await this.logRequestResponse(url, { method: 'DELETE' }, error.response?.data || error.message);
+        await this.logRequestResponse(url, { method: 'DELETE' }, error.response?.data ?? error.message);
       }
       throw this.handleRequestError(error);
     }
@@ -101,7 +101,7 @@ export class HttpClient {
     _isRetry = false
   ): Promise<T> {
     try {
-      const headers = await this.buildHeaders(config);
+      const headers = this.buildHeaders(config);
       const response = await this.axiosInstance.patch<T>(url, data, { headers });
 
       await this.logRequestResponse(url, { method: 'PATCH', headers, data }, response.data);
@@ -118,13 +118,13 @@ export class HttpClient {
 
       // Log the error response before throwing
       if (axios.isAxiosError(error)) {
-        await this.logRequestResponse(url, { method: 'PATCH', data }, error.response?.data || error.message);
+        await this.logRequestResponse(url, { method: 'PATCH', data }, error.response?.data ?? error.message);
       }
       throw this.handleRequestError(error);
     }
   }
 
-  private async buildHeaders(config: RequestConfig): Promise<Record<string, string>> {
+  private buildHeaders(config: RequestConfig): Record<string, string> {
     const headers: Record<string, string> = {};
 
     if (config.contentType) {
@@ -158,7 +158,7 @@ export class HttpClient {
   private handleRequestError(error: unknown): Error {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
-      const data = error.response?.data || {};
+      const data = error.response?.data ?? {};
       const { code } = data as { code?: string };
       const msg = code ? `HTTP ${status}: ${code}` : `HTTP ${status}`;
       const err = new ApiError(msg, status, error.response?.statusText) as ApiError & { response: unknown };

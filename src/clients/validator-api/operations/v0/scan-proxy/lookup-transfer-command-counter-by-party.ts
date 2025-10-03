@@ -11,8 +11,8 @@ import {
  * @example
  *   ```typescript
  *   const counter = await client.lookupTransferCommandCounterByParty({ party: 'party123' });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const LookupTransferCommandCounterByParty = createApiOperation<
   LookupTransferCommandCounterByPartyParams,

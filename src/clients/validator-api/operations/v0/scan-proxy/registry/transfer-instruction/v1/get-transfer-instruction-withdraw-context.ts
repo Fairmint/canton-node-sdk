@@ -23,8 +23,8 @@ export type GetTransferInstructionWithdrawContextResponse = components['schemas'
  *   transferInstructionId: 'contract-id-here',
  *   meta: { key: 'value' }
  *   });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const GetTransferInstructionWithdrawContext = createApiOperation<
   GetTransferInstructionWithdrawContextParams,

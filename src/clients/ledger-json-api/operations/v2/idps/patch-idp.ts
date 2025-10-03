@@ -14,7 +14,7 @@ import {
  *     identityProviderConfig: { ... },
  *     updateMask: { paths: ['isDeactivated'] }
  *   });
- *   
+ *
  *   ```;
  */
 export const UpdateIdentityProviderConfig = createApiOperation<

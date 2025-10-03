@@ -23,7 +23,7 @@ export const GetUpdateById = createApiOperation<GetUpdateByIdParams, GetUpdateBy
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
   buildRequestData: (params) => {
     // Validate updateId parameter
-    if (!params.updateId || params.updateId === 'undefined' || params.updateId.trim() === '') {
+    if (params.updateId === 'undefined' || params.updateId.trim() === '') {
       throw new Error(`Invalid updateId: "${params.updateId}". updateId must be a non-empty string.`);
     }
 
@@ -39,7 +39,7 @@ export const GetUpdateById = createApiOperation<GetUpdateByIdParams, GetUpdateBy
         },
       },
       // Include requestingParties if readAs is provided
-      ...(params.readAs && params.readAs.length > 0 && { requestingParties: params.readAs }),
+      ...(params.readAs.length > 0 && { requestingParties: params.readAs }),
     };
   },
 });

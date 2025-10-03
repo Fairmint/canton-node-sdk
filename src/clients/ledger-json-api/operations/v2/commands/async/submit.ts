@@ -19,7 +19,7 @@ export const AsyncSubmit = createApiOperation<AsyncSubmitParams, AsyncSubmitResp
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
   buildRequestData: (params, client) => ({
     ...params,
-    commandId: params.commandId || `async-submit-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-    actAs: params.actAs || [client.getPartyId()],
+    commandId: params.commandId ?? `async-submit-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+    actAs: params.actAs ?? [client.getPartyId()],
   }),
 });

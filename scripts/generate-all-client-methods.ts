@@ -38,7 +38,7 @@ function getAllTsFiles(dir: string): string[] {
   list.forEach((file) => {
     const filePath = path.join(dir, file);
     const stat = fs.statSync(filePath);
-    if (stat?.isDirectory()) {
+    if (stat.isDirectory()) {
       results = results.concat(getAllTsFiles(filePath));
     } else if (file.endsWith('.ts')) {
       results.push(filePath);
@@ -195,7 +195,6 @@ ${methodImpls}
 
   // 4. Write the generated file
   fs.writeFileSync(clientFile, content);
-  
 }
 
 function generateAllClients(): void {

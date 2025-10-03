@@ -11,8 +11,8 @@ import { GetPartyDetailsParamsSchema, type GetPartyDetailsParams } from '../../.
  *   party: 'alice@example.com',
  *   identityProviderId: 'default'
  *   });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const GetPartyDetails = createApiOperation<
   GetPartyDetailsParams,

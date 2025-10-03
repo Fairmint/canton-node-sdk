@@ -34,7 +34,6 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
     }
     this.ensureResultsDir();
     this.writtenFiles.clear();
-    
   }
 
   private sanitizeFilename(filename: string): string {
@@ -90,7 +89,7 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
     for (let i = 3; i < lines.length; i++) {
       const line = lines[i];
       if (!line) continue;
-      const match = line.match(/\((.*):\d+:\d+\)$/) || line.match(/at (.*):\d+:\d+$/);
+      const match = line.match(/\((.*):\d+:\d+\)$/) ?? line.match(/at (.*):\d+:\d+$/);
       if (match?.[1]) {
         const fullPath = match[1];
         if (typeof fullPath === 'string') {
@@ -110,9 +109,7 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
     simulationFn: (client: TClient) => Promise<T>,
     simulationFilePath?: string
   ): Promise<T | { error: string; details: unknown }> {
-    if (!simulationFilePath) {
-      simulationFilePath = BaseSimulationRunner.getCallerSimulationPath();
-    }
+    simulationFilePath ??= BaseSimulationRunner.getCallerSimulationPath();
     try {
       const data = await simulationFn(this.client);
       let resultDir = this.resultsDir;
@@ -122,13 +119,12 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
         fs.mkdirSync(resultDir, { recursive: true });
       }
       const filename = this.generateFilename(simulationName);
-      this.checkForDuplicateFile(path.join(simulationFilePath || '', filename));
+      this.checkForDuplicateFile(path.join(simulationFilePath ?? '', filename));
       const filepath = path.join(resultDir, filename);
       const sanitizedData = this.sanitizeData(data);
       fs.writeFileSync(filepath, JSON.stringify(sanitizedData, null, 2));
-      this.writtenFiles.add(path.join(simulationFilePath || '', filename));
-      
-      
+      this.writtenFiles.add(path.join(simulationFilePath ?? '', filename));
+
       return data;
     } catch (error) {
       const errorDetails: { error: string; details: unknown } = {
@@ -150,13 +146,12 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
         fs.mkdirSync(resultDir, { recursive: true });
       }
       const filename = this.generateFilename(simulationName);
-      this.checkForDuplicateFile(path.join(simulationFilePath || '', filename));
+      this.checkForDuplicateFile(path.join(simulationFilePath ?? '', filename));
       const filepath = path.join(resultDir, filename);
       const sanitizedErrorDetails = this.sanitizeData(errorDetails);
       fs.writeFileSync(filepath, JSON.stringify(sanitizedErrorDetails, null, 2));
-      this.writtenFiles.add(path.join(simulationFilePath || '', filename));
-      
-      
+      this.writtenFiles.add(path.join(simulationFilePath ?? '', filename));
+
       return errorDetails;
     }
   }

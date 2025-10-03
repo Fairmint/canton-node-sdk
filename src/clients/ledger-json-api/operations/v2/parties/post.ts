@@ -32,16 +32,16 @@ export type AllocatePartyParams = z.infer<typeof AllocatePartyParamsSchema>;
  *   partyIdHint: 'alice',
  *   identityProviderId: 'default'
  *   });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const AllocateParty = createApiOperation<AllocatePartyParams, AllocatePartyResponse>({
   paramsSchema: AllocatePartyParamsSchema,
   method: 'POST',
   buildUrl: (_params: AllocatePartyParams, apiUrl: string) => `${apiUrl}/v2/parties`,
   buildRequestData: (params: AllocatePartyParams, _client: BaseClient): AllocatePartyRequest => ({
-    partyIdHint: params.partyIdHint ?? '',
-    identityProviderId: params.identityProviderId ?? '',
+    partyIdHint: params.partyIdHint || '',
+    identityProviderId: params.identityProviderId || '',
     ...(params.localMetadata && {
       localMetadata: {
         resourceVersion: params.localMetadata.resourceVersion ?? '',

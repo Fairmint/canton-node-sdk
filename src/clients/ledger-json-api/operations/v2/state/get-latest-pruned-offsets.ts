@@ -15,8 +15,8 @@ export type GetLatestPrunedOffsetsResponse =
  * @example
  *   ```typescript
  *   const prunedOffsets = await client.getLatestPrunedOffsets();
- *   
- *   ```
+ *
+ *   ```;
  */
 export const GetLatestPrunedOffsets = createApiOperation<GetLatestPrunedOffsetsParams, GetLatestPrunedOffsetsResponse>({
   paramsSchema: GetLatestPrunedOffsetsParamsSchema,

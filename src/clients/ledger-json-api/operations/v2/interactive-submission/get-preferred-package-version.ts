@@ -15,8 +15,8 @@ import {
  *   parties: ['Alice', 'Bob'],
  *   synchronizerId: 'sync-123'
  *   });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const InteractiveSubmissionGetPreferredPackageVersion = createApiOperation<
   InteractiveSubmissionGetPreferredPackageVersionParams,

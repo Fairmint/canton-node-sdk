@@ -21,7 +21,6 @@ function collapseManifest(): void {
 
     // Exit with error if no files found
     if (lines.length === 0) {
-      
       process.exit(1);
     }
 

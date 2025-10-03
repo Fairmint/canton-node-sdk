@@ -8,8 +8,8 @@ import { type ListTransferOffersResponse } from '../../../../schemas/api';
  * @example
  *   ```typescript
  *   const offers = await client.listTransferOffers();
- *   
- *   ```
+ *
+ *   ```;
  */
 export const ListTransferOffers = createApiOperation<void, ListTransferOffersResponse>({
   paramsSchema: z.void(),

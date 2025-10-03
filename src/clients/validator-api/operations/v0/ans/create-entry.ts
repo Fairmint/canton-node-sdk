@@ -18,8 +18,8 @@ const CreateAnsEntryParamsSchema = z.object({
  *   url: 'https://my-app.com',
  *   description: 'My application'
  *   });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const CreateAnsEntry = createApiOperation<
   operations['createAnsEntry']['requestBody']['content']['application/json'],

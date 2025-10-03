@@ -33,9 +33,9 @@ async function findOperations(): Promise<OperationInfo[]> {
         const endpointMatch = content.match(/endpoint\s*=\s*['"`]([^'"`]+)['"`]/);
         const paramsSchemaMatch = content.match(/paramsSchema:\s*(\w+)/);
 
-        const method = methodMatch?.[1] ? methodMatch[1] : 'GET';
-        const endpoint = endpointMatch?.[1] ? endpointMatch[1] : '/unknown';
-        const paramsSchema = paramsSchemaMatch?.[1] ? paramsSchemaMatch[1] : 'z.any()';
+        const method = methodMatch?.[1] ?? 'GET';
+        const endpoint = endpointMatch?.[1] ?? '/unknown';
+        const paramsSchema = paramsSchemaMatch?.[1] ?? 'z.any()';
 
         // Generate test path
         const relativePath = path.relative('src', file);

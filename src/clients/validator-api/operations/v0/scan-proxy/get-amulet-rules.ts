@@ -8,8 +8,8 @@ import { type operations } from '../../../../../generated/apps/validator/src/mai
  * @example
  *   ```typescript
  *   const rules = await client.getAmuletRules();
- *   
- *   ```
+ *
+ *   ```;
  */
 export const GetAmuletRules = createApiOperation<
   void,

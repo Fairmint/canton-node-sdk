@@ -16,14 +16,13 @@ function generateForFile(yamlPath: string): void {
   const relativePath = yamlPath.replace(/^artifacts\/splice\//, '').replace(/\.yaml$/, '.ts');
   const outputPath = path.join('src/generated', relativePath);
   ensureDirectoryExists(outputPath);
-  
+
   execSync(`npx openapi-typescript "${yamlPath}" -o "${outputPath}"`, {
     stdio: 'inherit',
   });
 }
 
 function main(): void {
-  
   const openapiUnderDir = glob.sync('artifacts/splice/**/openapi/**/*.yaml', {
     nodir: true,
   });
@@ -35,7 +34,6 @@ function main(): void {
   const allFiles = Array.from(new Set([...openapiUnderDir, ...openapiRootFiles]));
 
   if (allFiles.length === 0) {
-    
     return;
   }
 
@@ -43,8 +41,6 @@ function main(): void {
   for (const file of allFiles) {
     generateForFile(file);
   }
-
-  
 }
 
 main();

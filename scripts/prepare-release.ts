@@ -59,7 +59,6 @@ function prepareRelease(): void {
     const packageJson: PackageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
 
     const currentVersion: string = packageJson.version;
-    
 
     // Extract major, minor, patch
     const versionParts: number[] = currentVersion.split('.').map(Number);
@@ -75,13 +74,9 @@ function prepareRelease(): void {
     // Find next available version (increment patch until we find one that doesn't exist)
     const newVersion: string = findNextAvailableVersion(major, minor, patch);
 
-    
-
     // Update version in package.json (without git tag)
     packageJson.version = newVersion;
     fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
-
-    
 
     // Generate changelog since last tag or main branch
     let commits: string;
@@ -90,20 +85,19 @@ function prepareRelease(): void {
       lastTag = execSync('git describe --tags --abbrev=0 2>/dev/null', {
         encoding: 'utf8',
       }).trim();
-      
+
       commits = execSync(`git log --oneline --format="%s" ${lastTag}..HEAD`, {
         encoding: 'utf8',
       }).trim();
     } catch {
       // No previous tag, get commits ahead of main branch
-      
+
       commits = execSync('git log --oneline --format="%s" main..HEAD', {
         encoding: 'utf8',
       }).trim();
     }
 
     if (!commits) {
-      
       return;
     }
 
@@ -111,11 +105,6 @@ function prepareRelease(): void {
     const commitLines: string[] = commits.split('\n').map((commit: string): string => `- ${commit}`);
 
     const changelog: string = commitLines.join('\n');
-
-    
-    
-    
-    
 
     // Create detailed tag message
     const _tagMessage = `Release v${newVersion}\n\nChanges:\n${changelog}`;

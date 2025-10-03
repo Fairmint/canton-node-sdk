@@ -18,8 +18,8 @@ export type GetUserResponse = paths[Endpoint]['get']['responses']['200']['conten
  * @example
  *   ```typescript
  *   const user = await client.getUser({ userId: 'alice' });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const GetUser = createApiOperation<GetUserParams, GetUserResponse>({
   paramsSchema: GetUserParamsSchema,

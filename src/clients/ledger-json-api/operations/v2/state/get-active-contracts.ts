@@ -31,7 +31,7 @@ export const GetActiveContracts = createApiOperation<GetActiveContractsCustomPar
     return queryString ? `${baseUrl}?${queryString}` : baseUrl;
   },
   buildRequestData: async (params, client) => {
-    const requestVerbose = params.verbose === undefined ? true : params.verbose;
+    const requestVerbose = params.verbose ?? true;
 
     // Determine activeAtOffset (default to ledger end if not specified)
     let { activeAtOffset } = params;

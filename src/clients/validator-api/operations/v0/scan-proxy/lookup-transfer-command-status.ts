@@ -14,8 +14,8 @@ import {
  *   sender: 'party123',
  *   nonce: 1
  *   });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const LookupTransferCommandStatus = createApiOperation<
   LookupTransferCommandStatusParams,

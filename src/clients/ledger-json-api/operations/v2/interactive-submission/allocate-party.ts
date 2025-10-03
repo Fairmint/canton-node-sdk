@@ -15,8 +15,8 @@ import {
  *   displayName: 'Alice Party',
  *   isLocal: true
  *   });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const InteractiveSubmissionAllocateParty = createApiOperation<
   InteractiveSubmissionAllocatePartyParams,

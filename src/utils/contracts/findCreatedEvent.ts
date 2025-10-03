@@ -36,7 +36,7 @@ export function findCreatedEventByTemplateId(
       eventsById?: Record<string, unknown>;
     };
   }
-  
+
   const transactionTree = response.transactionTree as TransactionTreeStructure | undefined;
   const eventsById = transactionTree?.eventsById ?? transactionTree?.transaction?.eventsById ?? {};
 

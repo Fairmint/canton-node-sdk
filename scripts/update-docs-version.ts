@@ -49,7 +49,7 @@ function updateFileVersion(filePath: string, version: string): void {
 }
 
 // Run the updater
-async function main(): Promise<void> {
+function main(): void {
   try {
     updateDocsVersion();
   } catch (_error) {
@@ -58,4 +58,4 @@ async function main(): Promise<void> {
   }
 }
 
-void main();
+main();

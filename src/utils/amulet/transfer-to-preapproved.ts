@@ -1,9 +1,9 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
-import { type DisclosedContract, type ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/commands';
 import {
   type SubmitAndWaitForTransactionTreeParams,
   type SubmitAndWaitForTransactionTreeResponse,
 } from '../../clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction-tree';
+import { type DisclosedContract, type ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/commands';
 import { type ValidatorApiClient } from '../../clients/validator-api';
 import { getCurrentMiningRoundContext } from '../mining/mining-rounds';
 import { getAmuletsForTransfer } from './get-amulets-for-transfer';
@@ -59,8 +59,8 @@ export interface TransferToPreapprovedResult {
  *   ]
  *   });
  *
- *   
- *   ```
+ *
+ *   ```;
  *
  * @param ledgerClient - Ledger JSON API client for submitting commands
  * @param validatorClient - Validator API client for getting network information
@@ -85,7 +85,7 @@ export async function transferToPreapproved(
   const { openMiningRound: openMiningRoundContractId } = miningRoundContext;
 
   // Get amulet inputs for the sender party
-  
+
   const amulets = await getAmuletsForTransfer({
     jsonApiClient: ledgerClient,
     readAs: [params.senderPartyId],
@@ -100,8 +100,6 @@ export async function transferToPreapproved(
     tag: 'InputAmulet' as const,
     value: amulet.contractId,
   }));
-
-  
 
   const transferResults: TransferToPreapprovedResult['transferResults'] = [];
 
@@ -125,21 +123,17 @@ export async function transferToPreapproved(
 
   // Process each transfer
   for (const transfer of params.transfers) {
-    
-
     // Look up transfer preapproval for the recipient
     const transferPreapprovalResponse = await validatorClient.lookupTransferPreapprovalByParty({
       partyId: transfer.recipientPartyId,
     });
 
-    if (!transferPreapprovalResponse.transfer_preapproval) {
-      throw new Error(`No transfer preapproval found for party ${transfer.recipientPartyId}`);
-    }
+    const { transfer_preapproval } = transferPreapprovalResponse;
 
-    const transferPreapprovalContract = transferPreapprovalResponse.transfer_preapproval.contract;
+    const transferPreapprovalContract = transfer_preapproval.contract;
     const transferPreapprovalContractId = transferPreapprovalContract.contract_id;
 
-    if (!transferPreapprovalResponse.transfer_preapproval.domain_id) {
+    if (!transfer_preapproval.domain_id) {
       throw new Error(`No domain ID found for transfer preapproval for party ${transfer.recipientPartyId}`);
     }
 
@@ -192,7 +186,7 @@ export async function transferToPreapproved(
           inputs,
           amount: transfer.amount,
           sender: params.senderPartyId,
-          description: transfer.description || null,
+          description: transfer.description ?? null,
         },
       },
     };
@@ -217,8 +211,6 @@ export async function transferToPreapproved(
       domainId: amuletRules.amulet_rules.domain_id,
       transferResult: result,
     });
-
-    
   }
 
   return { transferResults };

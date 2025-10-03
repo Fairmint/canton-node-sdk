@@ -220,7 +220,7 @@ export const EventsByContractIdResponseSchema = z
     archived: ArchivedEventSchema.optional(),
   })
   .strict()
-  .refine((data) => data.created || data.archived, {
+  .refine((data) => data.created ?? data.archived, {
     message: 'EventsByContractIdResponse must have at least one of: created, archived',
   });
 

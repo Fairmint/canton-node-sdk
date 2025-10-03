@@ -1,6 +1,6 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
-import { type DisclosedContract, type ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/commands';
 import { type SubmitAndWaitForTransactionTreeParams } from '../../clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction-tree';
+import { type DisclosedContract, type ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/commands';
 import { type ValidatorApiClient } from '../../clients/validator-api';
 import { getCurrentMiningRoundContext } from '../mining/mining-rounds';
 import { getAmuletsForTransfer } from './get-amulets-for-transfer';
@@ -44,8 +44,6 @@ export async function preApproveTransfers(
   // Set default expiration to 1 day from now if not provided
   const expiresAt = params.expiresAt ?? new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-  
-
   // Get network information
   const [amuletRules, dsoPartyId, miningRoundContext, featuredAppRight] = await Promise.all([
     validatorClient.getAmuletRules(),
@@ -54,17 +52,8 @@ export async function preApproveTransfers(
     validatorClient.lookupFeaturedAppRight({ partyId: params.receiverPartyId }),
   ]);
 
-  
-  
-  
-  
-  
-  
-
   // Derive current mining round context (handles opensAt logic)
   const { openMiningRound: openMiningRoundContractId, openMiningRoundContract } = miningRoundContext;
-
-  
 
   // Build disclosed contracts array directly
   const disclosedContracts: DisclosedContract[] = [
@@ -94,10 +83,8 @@ export async function preApproveTransfers(
     });
   }
 
-  
-
   // Get amulet inputs for the receiver party
-  
+
   const amulets = await getAmuletsForTransfer({
     jsonApiClient: ledgerClient,
     readAs: [params.receiverPartyId],
@@ -113,8 +100,6 @@ export async function preApproveTransfers(
     value: amulet.contractId,
   }));
 
-  
-
   // Create the TransferPreapproval contract using AmuletRules_CreateTransferPreapproval
   const createCommand: ExerciseCommand = {
     ExerciseCommand: {
@@ -128,7 +113,7 @@ export async function preApproveTransfers(
             openMiningRound: openMiningRoundContractId,
             issuingMiningRounds: [],
             validatorRights: [],
-            featuredAppRight: featuredAppRight.featured_app_right?.contract_id || null,
+            featuredAppRight: featuredAppRight.featured_app_right?.contract_id ?? null,
           },
         },
         inputs,
@@ -140,8 +125,6 @@ export async function preApproveTransfers(
     },
   };
 
-  
-
   // Submit the command
   const submitParams: SubmitAndWaitForTransactionTreeParams = {
     commands: [createCommand],
@@ -150,7 +133,6 @@ export async function preApproveTransfers(
     disclosedContracts,
   };
 
-  
   const result = await ledgerClient.submitAndWaitForTransactionTree(submitParams);
 
   // Extract the created TransferPreapproval contract ID from the result
@@ -162,9 +144,9 @@ export async function preApproveTransfers(
     if (
       event &&
       'CreatedTreeEvent' in event &&
-      event.CreatedTreeEvent?.value?.templateId?.includes('TransferPreapproval')
+      event.CreatedTreeEvent.value.templateId.includes('TransferPreapproval')
     ) {
-      contractId = event.CreatedTreeEvent.value.contractId;
+      ({ contractId } = event.CreatedTreeEvent.value);
       break;
     }
   }

@@ -72,10 +72,7 @@ interface ExerciseResult {
 // Type guard to check if an object is an ExerciseResult
 function isExerciseResult(obj: unknown): obj is ExerciseResult {
   return (
-    typeof obj === 'object' &&
-    obj !== null &&
-    'summary' in obj &&
-    typeof (obj as ExerciseResult).summary === 'object'
+    typeof obj === 'object' && obj !== null && 'summary' in obj && typeof (obj as ExerciseResult).summary === 'object'
   );
 }
 
@@ -187,7 +184,7 @@ export function parseFeesFromUpdate(treeEvent: TreeEvent): FeeAnalysis {
   totalFees = parseFloat(totalFees).toFixed(10);
 
   // Extract balance changes
-  const balanceChanges: BalanceChange[] = (summary.balanceChanges ?? []).map(([party, change]) => ({
+  const balanceChanges: BalanceChange[] = summary.balanceChanges.map(([party, change]) => ({
     party,
     changeToInitialAmountAsOfRoundZero: change.changeToInitialAmountAsOfRoundZero,
     changeToHoldingFeesRate: typeof change.changeToHoldingFeesRate === 'string' ? change.changeToHoldingFeesRate : '0',

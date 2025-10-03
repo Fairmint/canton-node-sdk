@@ -8,8 +8,8 @@ import { WithdrawTransferOfferParamsSchema, type WithdrawTransferOfferParams } f
  * @example
  *   ```typescript
  *   const result = await client.withdrawTransferOffer({ contractId: 'contract123' });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const WithdrawTransferOffer = createApiOperation<WithdrawTransferOfferParams, WithdrawTransferOfferResponse>({
   paramsSchema: WithdrawTransferOfferParamsSchema,

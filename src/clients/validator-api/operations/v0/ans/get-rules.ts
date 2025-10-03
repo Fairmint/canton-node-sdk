@@ -17,14 +17,16 @@ const GetAnsRulesParamsSchema = z.object({
  *   cached_ans_rules_contract_id: 'contract123',
  *   cached_ans_rules_domain_id: 'domain123'
  *   });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const GetAnsRules = createApiOperation<
   operations['getAnsRules']['requestBody']['content']['application/json'],
   operations['getAnsRules']['responses']['200']['content']['application/json']
 >({
-  paramsSchema: GetAnsRulesParamsSchema as z.ZodType<operations['getAnsRules']['requestBody']['content']['application/json']>,
+  paramsSchema: GetAnsRulesParamsSchema as z.ZodType<
+    operations['getAnsRules']['requestBody']['content']['application/json']
+  >,
   method: 'POST',
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/scan-proxy/ans-rules`,
   buildRequestData: (params) => params,

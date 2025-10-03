@@ -8,8 +8,8 @@ import { type operations } from '../../../../../../../generated/apps/wallet/src/
  * @example
  *   ```typescript
  *   const transfers = await client.listTokenStandardTransfers();
- *   
- *   ```
+ *
+ *   ```;
  */
 export const ListTokenStandardTransfers = createApiOperation<
   void,

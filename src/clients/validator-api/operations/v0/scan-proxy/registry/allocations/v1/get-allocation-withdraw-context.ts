@@ -6,7 +6,8 @@ import type {
 } from '../../../../../../../../generated/token-standard/splice-api-token-allocation-v1/openapi/allocation-v1';
 
 type ApiPath = '/registry/allocations/v1/{allocationId}/choice-contexts/withdraw';
-type Endpoint = '/api/validator/v0/scan-proxy/registry/allocations/v1';
+
+const endpoint = '/api/validator/v0/scan-proxy/registry/allocations/v1';
 
 export const GetAllocationWithdrawContextParamsSchema = z.object({
   allocationId: z.string(),
@@ -27,8 +28,8 @@ export type GetAllocationWithdrawContextResponse =
  *   allocationId: 'allocation123',
  *   meta: { key: 'value' }
  *   });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const GetAllocationWithdrawContext = createApiOperation<
   GetAllocationWithdrawContextParams,

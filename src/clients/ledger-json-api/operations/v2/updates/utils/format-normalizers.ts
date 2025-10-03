@@ -3,7 +3,7 @@ import type { GetUpdatesParams, IdentifierFilter } from '../../../../schemas/ope
 export function normalizeIdentifierFilter(filter: IdentifierFilter): unknown {
   if ('WildcardFilter' in filter) {
     const inner = (filter as { WildcardFilter: { includeCreatedEventBlob?: boolean } }).WildcardFilter;
-    return { WildcardFilter: { value: { includeCreatedEventBlob: inner?.includeCreatedEventBlob ?? false } } };
+    return { WildcardFilter: { value: { includeCreatedEventBlob: inner.includeCreatedEventBlob ?? false } } };
   }
   if ('InterfaceFilter' in filter) {
     const inner = (
@@ -15,8 +15,8 @@ export function normalizeIdentifierFilter(filter: IdentifierFilter): unknown {
       InterfaceFilter: {
         value: {
           interfaceId: inner.interfaceId,
-          includeInterfaceView: inner?.includeInterfaceView ?? false,
-          includeCreatedEventBlob: inner?.includeCreatedEventBlob ?? false,
+          includeInterfaceView: inner.includeInterfaceView ?? false,
+          includeCreatedEventBlob: inner.includeCreatedEventBlob ?? false,
         },
       },
     };
@@ -26,7 +26,7 @@ export function normalizeIdentifierFilter(filter: IdentifierFilter): unknown {
       .TemplateFilter;
     return {
       TemplateFilter: {
-        value: { templateId: inner?.templateId, includeCreatedEventBlob: inner?.includeCreatedEventBlob ?? false },
+        value: { templateId: inner.templateId, includeCreatedEventBlob: inner.includeCreatedEventBlob ?? false },
       },
     };
   }
@@ -37,7 +37,6 @@ export function normalizeIdentifierFilter(filter: IdentifierFilter): unknown {
 }
 
 export function normalizeUpdateFormat(p: GetUpdatesParams['updateFormat']): unknown {
-  if (!p) return undefined;
   interface NormalizedUpdateFormat {
     includeTransactions?: unknown;
     includeReassignments?: unknown;
@@ -118,12 +117,14 @@ export function buildWsRequestFilterAndVerbose(p: GetUpdatesParams['updateFormat
   filter?: unknown;
   verbose: boolean;
 } {
-  const verbose = Boolean(p?.includeTransactions?.eventFormat?.verbose);
-  if (!p?.includeTransactions?.eventFormat?.filtersByParty && !p?.includeReassignments && !p?.includeTopologyEvents) {
+  const verbose = Boolean(p.includeTransactions?.eventFormat.verbose);
+  if (!p.includeTransactions?.eventFormat.filtersByParty && !p.includeReassignments && !p.includeTopologyEvents) {
     return { verbose };
   }
-  const eventFormat = p?.includeTransactions?.eventFormat;
-  if (!eventFormat) return { verbose };
+  if (!p.includeTransactions?.eventFormat) {
+    return { verbose };
+  }
+  const { eventFormat } = p.includeTransactions;
 
   const byParty = eventFormat.filtersByParty as unknown as Record<
     string,

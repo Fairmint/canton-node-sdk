@@ -21,8 +21,8 @@ export type GetTransferInstructionAcceptContextResponse = components['schemas'][
  *   transferInstructionId: 'contract-id-here',
  *   meta: { key: 'value' }
  *   });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const GetTransferInstructionAcceptContext = createApiOperation<
   GetTransferInstructionAcceptContextParams,

@@ -6,7 +6,8 @@ import type {
 } from '../../../../../../../../generated/token-standard/splice-api-token-transfer-instruction-v1/openapi/transfer-instruction-v1';
 
 type ApiPath = '/registry/transfer-instruction/v1/transfer-factory';
-type Endpoint = '/api/validator/v0/scan-proxy/registry/transfer-instruction/v1/transfer-factory';
+
+const endpoint = '/api/validator/v0/scan-proxy/registry/transfer-instruction/v1/transfer-factory';
 
 // Simple schema that matches the generated type exactly
 export const GetTransferFactoryParamsSchema = z.object({
@@ -16,8 +17,7 @@ export const GetTransferFactoryParamsSchema = z.object({
 
 export type GetTransferFactoryParams = components['schemas']['GetFactoryRequest'];
 export type GetTransferFactoryRequest = paths[ApiPath]['post']['requestBody']['content']['application/json'];
-export type GetTransferFactoryResponse =
-  paths[ApiPath]['post']['responses']['200']['content']['application/json'];
+export type GetTransferFactoryResponse = paths[ApiPath]['post']['responses']['200']['content']['application/json'];
 
 /**
  * Get the factory and choice context for executing a direct transfer
@@ -28,8 +28,8 @@ export type GetTransferFactoryResponse =
  *   choiceArguments: { /* choice arguments *\/ },
  *   excludeDebugFields: false
  *   });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const GetTransferFactory = createApiOperation<GetTransferFactoryParams, GetTransferFactoryResponse>({
   paramsSchema: GetTransferFactoryParamsSchema,

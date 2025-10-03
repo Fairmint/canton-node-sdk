@@ -8,8 +8,8 @@ import { type GetLedgerApiVersionResponse } from '../../../schemas/api';
  * @example
  *   ```typescript
  *   const version = await client.getVersion();
- *   
- *   ```
+ *
+ *   ```;
  */
 export const GetVersion = createApiOperation<void, GetLedgerApiVersionResponse>({
   paramsSchema: z.void(),

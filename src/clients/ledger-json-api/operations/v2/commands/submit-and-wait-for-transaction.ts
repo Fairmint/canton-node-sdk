@@ -24,7 +24,7 @@ export const SubmitAndWaitForTransaction = createApiOperation<
   buildRequestData: (params, client) => ({
     ...params,
     commandId:
-      params.commandId || `submit-and-wait-for-transaction-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-    actAs: params.actAs || [client.getPartyId()],
+      params.commandId ?? `submit-and-wait-for-transaction-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+    actAs: params.actAs ?? [client.getPartyId()],
   }),
 });

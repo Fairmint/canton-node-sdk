@@ -8,8 +8,8 @@ import { type operations } from '../../../../../generated/apps/wallet/src/main/o
  * @example
  *   ```typescript
  *   const status = await client.getUserStatus();
- *   
- *   ```
+ *
+ *   ```;
  */
 export const GetUserStatus = createApiOperation<
   void,

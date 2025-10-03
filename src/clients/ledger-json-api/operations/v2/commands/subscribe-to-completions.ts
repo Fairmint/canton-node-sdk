@@ -24,14 +24,14 @@ export const SubscribeToCompletions = createWebSocketOperation<
 >({
   paramsSchema: CompletionStreamRequestSchema,
   buildPath: (_params, _apiUrl) => `${path}`,
-  buildRequestMessage: async (params, client) => {
-    const userId = params.userId || client.getUserId();
+  buildRequestMessage: (params, client) => {
+    const userId = params.userId ?? client.getUserId();
     if (!userId) {
       throw new Error('subscribeToCompletions requires a userId. Provide it in params or configure client userId.');
     }
     return {
       userId,
-      parties: params.parties && params.parties.length > 0 ? params.parties : client.buildPartyList(),
+      parties: params.parties.length > 0 ? params.parties : client.buildPartyList(),
       beginExclusive: params.beginExclusive,
     };
   },

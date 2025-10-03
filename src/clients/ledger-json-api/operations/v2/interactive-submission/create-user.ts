@@ -21,8 +21,8 @@ import {
  *   { kind: { CanActAs: { party: 'Alice::1220' } } }
  *   ]
  *   });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const InteractiveSubmissionCreateUser = createApiOperation<
   InteractiveSubmissionCreateUserParams,

@@ -12,8 +12,8 @@ const LookupAnsEntryByPartyParamsSchema = z.object({
  * @example
  *   ```typescript
  *   const entry = await client.lookupAnsEntryByParty({ party: 'party123' });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const LookupAnsEntryByParty = createApiOperation<
   { party: string },

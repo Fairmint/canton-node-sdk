@@ -8,8 +8,8 @@ import { type operations } from '../../../../generated/apps/validator/src/main/o
  * @example
  *   ```typescript
  *   const result = await client.registerNewUser();
- *   
- *   ```
+ *
+ *   ```;
  */
 export const RegisterNewUser = createApiOperation<
   void,

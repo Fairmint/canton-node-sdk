@@ -9,8 +9,8 @@ import { GetBuyTrafficRequestStatusParamsSchema } from '../../../../schemas/oper
  * @example
  *   ```typescript
  *   const status = await client.getBuyTrafficRequestStatus({ trackingId: 'unique-tracking-id' });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const GetBuyTrafficRequestStatus = createApiOperation<
   z.infer<typeof GetBuyTrafficRequestStatusParamsSchema>,

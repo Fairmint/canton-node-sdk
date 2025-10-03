@@ -11,7 +11,7 @@ import {
  * @example
  *   ```typescript
  *   const result = await client.listIdentityProviderConfigs();
- *   
+ *
  *   ```;
  */
 export const ListIdentityProviderConfigs = createApiOperation<

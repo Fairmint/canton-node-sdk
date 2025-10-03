@@ -35,7 +35,7 @@ function findLatestMiningRound(openMiningRounds: OpenMiningRound[]): OpenMiningR
     const roundB = getRoundNumber(b);
     return roundB - roundA;
   });
-  
+
   return sorted[0] ?? null;
 }
 
@@ -78,7 +78,7 @@ export async function getCurrentMiningRoundContext(validatorClient: ValidatorApi
 
   // Use the *last* round that has opened (the most recent open one)
   const lastOpenRound = validOpenRounds[validOpenRounds.length - 1];
-  
+
   if (!lastOpenRound) {
     throw new Error('No valid open mining round found');
   }
@@ -154,22 +154,18 @@ export async function waitForRoundChange(
 
   const initialRoundNumber = await getCurrentRoundNumber(validatorClient);
 
-  
-
   while (Date.now() - startTime < maxWaitTime) {
     try {
       const miningRoundsResponse = await validatorClient.getOpenAndIssuingMiningRounds();
       const currentOpenMiningRounds = miningRoundsResponse.open_mining_rounds;
 
       if (currentOpenMiningRounds.length === 0) {
-        
         await sleep(checkInterval);
         continue;
       }
 
       const latestRound = findLatestMiningRound(currentOpenMiningRounds);
       if (!latestRound) {
-        
         await sleep(checkInterval);
         continue;
       }
@@ -178,19 +174,16 @@ export async function waitForRoundChange(
       process.stdout.write('.');
 
       if (currentRoundNumber > initialRoundNumber) {
-        
         return;
       }
 
       // Round hasn't changed yet, wait and check again
       await sleep(checkInterval);
     } catch {
-      
       await sleep(checkInterval);
     }
   }
 
-  
   throw new Error(
     `Timeout waiting for mining round to change from ${initialRoundNumber} after ${maxWaitTime / 1000} seconds`
   );

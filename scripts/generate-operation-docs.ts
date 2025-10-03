@@ -31,8 +31,6 @@ class OperationDocGenerator {
   }
 
   async generateDocs(): Promise<void> {
-    
-
     // Scan ledger-json-api operations
     const ledgerOperationsDir = path.join(process.cwd(), 'src/clients/ledger-json-api/operations');
     await this.scanOperations(ledgerOperationsDir, 'ledger-json-api');
@@ -41,8 +39,6 @@ class OperationDocGenerator {
     const validatorOperationsDir = path.join(process.cwd(), 'src/clients/validator-api/operations');
     await this.scanOperations(validatorOperationsDir, 'validator-api');
 
-    
-
     // Create docs directory
     const docsDir = path.join(process.cwd(), 'docs');
     if (!fs.existsSync(docsDir)) {
@@ -50,14 +46,12 @@ class OperationDocGenerator {
     }
 
     // Generate main operations index
-    await this.generateOperationsIndex();
+    this.generateOperationsIndex();
 
     // Generate individual operation docs
     for (const operation of this.operations) {
-      await this.generateOperationDoc(operation);
+      this.generateOperationDoc(operation);
     }
-
-    
   }
 
   private async scanOperations(dir: string, apiType: 'ledger-json-api' | 'validator-api'): Promise<void> {
@@ -69,12 +63,12 @@ class OperationDocGenerator {
       if (entry.isDirectory()) {
         await this.scanOperations(fullPath, apiType);
       } else if (entry.isFile() && entry.name.endsWith('.ts') && !entry.name.startsWith('index')) {
-        await this.extractOperationInfo(fullPath, apiType);
+        this.extractOperationInfo(fullPath, apiType);
       }
     }
   }
 
-  private async extractOperationInfo(filePath: string, apiType: 'ledger-json-api' | 'validator-api'): Promise<void> {
+  private extractOperationInfo(filePath: string, apiType: 'ledger-json-api' | 'validator-api'): void {
     const sourceCode = fs.readFileSync(filePath, 'utf-8');
     const sourceFile = ts.createSourceFile(filePath, sourceCode, ts.ScriptTarget.Latest, true);
 
@@ -92,16 +86,13 @@ class OperationDocGenerator {
     // For specific operations, handle parameters and responses differently
     if (operationInfo.name) {
       // Extract parameters and response info
-      await this.extractParametersAndResponse(operationInfo, sourceFile);
+      this.extractParametersAndResponse(operationInfo, sourceFile);
 
       this.operations.push(operationInfo as OperationInfo);
     }
   }
 
-  private async extractParametersAndResponse(
-    operationInfo: Partial<OperationInfo>,
-    sourceFile: ts.SourceFile
-  ): Promise<void> {
+  private extractParametersAndResponse(operationInfo: Partial<OperationInfo>, sourceFile: ts.SourceFile): void {
     const sourceCode = sourceFile.getFullText();
 
     // Look for imports from schemas to understand parameter and response types
@@ -139,7 +130,7 @@ class OperationDocGenerator {
       }
     } else {
       // Generic parameter extraction for other operations
-      operationInfo.parameters = this.extractGenericParameters(imports, operationInfo.apiType || 'ledger-json-api');
+      operationInfo.parameters = this.extractGenericParameters(imports, operationInfo.apiType ?? 'ledger-json-api');
     }
 
     // Extract method from createApiOperation call
@@ -204,7 +195,7 @@ class OperationDocGenerator {
     const pathParts = filePath.split('/');
     const operationsIndex = pathParts.findIndex((part) => part === 'operations');
     if (operationsIndex !== -1 && pathParts[operationsIndex + 2]) {
-      return pathParts[operationsIndex + 2] || 'uncategorized';
+      return pathParts[operationsIndex + 2] ?? 'uncategorized';
     }
     return 'uncategorized';
   }
@@ -214,10 +205,8 @@ class OperationDocGenerator {
       // Look for exported constant declarations (function names)
       if (ts.isVariableStatement(node) && node.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)) {
         for (const declaration of node.declarationList.declarations) {
-          if (ts.isVariableDeclaration(declaration) && declaration.name) {
-            if (ts.isIdentifier(declaration.name)) {
-              operationInfo.name = declaration.name.text;
-            }
+          if (ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name)) {
+            operationInfo.name = declaration.name.text;
           }
         }
       }
@@ -230,12 +219,12 @@ class OperationDocGenerator {
           continue;
         }
 
-        if ('tagName' in tag && tag.tagName) {
+        if ('tagName' in tag) {
           if (tag.tagName.text === 'description') {
             operationInfo.description = tag.comment ? tag.comment.toString().trim() : '';
           } else if (tag.tagName.text === 'example') {
-            if (!operationInfo.examples) operationInfo.examples = [];
-            const exampleText = tag.comment?.toString().trim() || '';
+            operationInfo.examples ??= [];
+            const exampleText = tag.comment?.toString().trim() ?? '';
             // Clean up the example text
             const cleanExample = exampleText
               .replace(/```typescript\n?/g, '')
@@ -320,7 +309,7 @@ class OperationDocGenerator {
       );
       if (openApiResponseMatch) {
         // Extract the operation name and create a response type name
-        const operationName = operationInfo.name || 'UnknownOperation';
+        const operationName = operationInfo.name ?? 'UnknownOperation';
         operationInfo.responseType = `${operationName}Response`;
         operationInfo.responseSchema = `{ /* OpenAPI response type from paths */ }`;
       } else {
@@ -330,7 +319,7 @@ class OperationDocGenerator {
         );
         if (validatorApiResponseMatch) {
           // Extract the operation name and create a response type name
-          const operationName = operationInfo.name || 'UnknownOperation';
+          const operationName = operationInfo.name ?? 'UnknownOperation';
           operationInfo.responseType = `${operationName}Response`;
           operationInfo.responseSchema = `{ /* OpenAPI response type from operations */ }`;
         }
@@ -357,6 +346,12 @@ class OperationDocGenerator {
             return this.extractZodArrayStructure(node, fromFilePath, localSchemaMap);
           case 'union':
             return this.extractZodUnionStructure(node, fromFilePath, localSchemaMap);
+          case 'optional':
+            // Handle optional() as a special case at the call expression level if needed
+            return 'any';
+          case 'nullable':
+            // Handle nullable() as a special case at the call expression level if needed
+            return 'any';
           default:
             return 'any';
         }
@@ -538,17 +533,12 @@ ${closeBrace}`;
   }
 
   private isPropertyOptional(node: ts.Expression): boolean {
-    
-
     if (ts.isPropertyAccessExpression(node)) {
-      
       if (node.name.text === 'optional') {
-        
         return true;
       }
       // Check if it's a chain like z.string().optional()
       if (ts.isCallExpression(node.expression)) {
-        
         return this.isPropertyOptional(node.expression);
       }
     }
@@ -556,13 +546,11 @@ ${closeBrace}`;
     if (ts.isCallExpression(node)) {
       if (ts.isPropertyAccessExpression(node.expression)) {
         if (node.expression.name.text === 'optional') {
-          
           return true;
         }
       }
     }
 
-    
     return false;
   }
 
@@ -613,9 +601,8 @@ ${closeBrace}`;
           if (propertyName === 'optional') {
             return `${baseType} | undefined`;
           }
-          if (propertyName === 'nullable') {
-            return `${baseType} | null`;
-          }
+          // If not optional, then it must be nullable
+          return `${baseType} | null`;
         }
 
         // Handle base Zod types
@@ -741,7 +728,7 @@ ${closeBrace}`;
   ): string | null {
     // Check cache first
     if (this.schemaCache.has(schemaName)) {
-      return this.schemaCache.get(schemaName) || null;
+      return this.schemaCache.get(schemaName) ?? null;
     }
 
     // If fromFilePath is provided, build or use the local schema map
@@ -786,7 +773,7 @@ ${closeBrace}`;
       const sourceFile = ts.createSourceFile(fromFilePath, sourceCode, ts.ScriptTarget.Latest, true);
       const importMap: Record<string, string> = {};
       ts.forEachChild(sourceFile, (node) => {
-        if (ts.isImportDeclaration(node) && node.importClause && node.moduleSpecifier) {
+        if (ts.isImportDeclaration(node) && node.importClause) {
           const importPath = (node.moduleSpecifier as ts.StringLiteral).text;
           if (node.importClause.namedBindings && ts.isNamedImports(node.importClause.namedBindings)) {
             for (const specifier of node.importClause.namedBindings.elements) {
@@ -876,11 +863,11 @@ ${closeBrace}`;
 | Operation | Description |
 |-----------|-------------|
 ${categoryOperations
-  .map((op) => `| [${op.name}](/operations/${op.name.toLowerCase()}/) | ${op.description || 'No description'} |`)
+  .map((op) => `| [${op.name}](/operations/${op.name.toLowerCase()}/) | ${op.description ?? 'No description'} |`)
   .join('\n')}`;
   }
 
-  private async generateOperationsIndex(): Promise<void> {
+  private generateOperationsIndex(): void {
     // No frontMatter in generated files
 
     // Dynamically detect categories from operation file paths
@@ -914,11 +901,10 @@ ${categories.map((category) => this.generateCategorySection(apiType, category)).
       }
       const indexPath = path.join(generatedDir, fileName);
       fs.writeFileSync(indexPath, indexContent);
-      
     }
   }
 
-  private async generateOperationDoc(operation: OperationInfo): Promise<void> {
+  private generateOperationDoc(operation: OperationInfo): void {
     // Validate that operation name is defined
     if (!operation.name) {
       throw new Error(
@@ -947,14 +933,6 @@ ${categories.map((category) => this.generateCategorySection(apiType, category)).
       }
     }
 
-    // Validate that method is defined
-    if (!operation.method) {
-      throw new Error(
-        `Missing HTTP method for operation "${operation.name}" in file "${operation.filePath}". ` +
-          `This operation must have a method defined in the createApiOperation call.`
-      );
-    }
-
     // Get navigation for this operation
     const navigation = this.generateNavigationForOperation(operation);
 
@@ -962,7 +940,7 @@ ${categories.map((category) => this.generateCategorySection(apiType, category)).
     const uniqueExamples = operation.examples ? [...new Set(operation.examples)] : [];
 
     // Fix response schema JSON formatting
-    let responseSchemaFormatted = operation.responseSchema || `{ /* ${operation.responseType} */ }`;
+    let responseSchemaFormatted = operation.responseSchema ?? `{ /* ${operation.responseType} */ }`;
     if (responseSchemaFormatted.startsWith('`') && responseSchemaFormatted.endsWith('`')) {
       // Remove wrapping backticks if present
       responseSchemaFormatted = responseSchemaFormatted.slice(1, -1);
@@ -990,7 +968,7 @@ ${navigation}
 ${operation.description ? `## Description\n\n${operation.description}\n\n` : ''}
 
 ## Parameters
-${operation.parameters || 'None'}
+${operation.parameters ?? 'None'}
 
 ## Response Type
 \`\`\`json
@@ -1061,7 +1039,6 @@ subscription.close();`
     }
 
     fs.writeFileSync(docPath, docContent);
-    
   }
 
   private generateNavigationForOperation(operation: OperationInfo): string {
@@ -1071,7 +1048,7 @@ subscription.close();`
     // Group by category
     const categorizedOps = new Map<string, OperationInfo[]>();
     sameApiOperations.forEach((op) => {
-      const category = op.category || 'uncategorized';
+      const category = op.category ?? 'uncategorized';
       if (!categorizedOps.has(category)) {
         categorizedOps.set(category, []);
       }

@@ -12,8 +12,8 @@ const LookupAnsEntryByNameParamsSchema = z.object({
  * @example
  *   ```typescript
  *   const entry = await client.lookupAnsEntryByName({ name: 'my-app' });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const LookupAnsEntryByName = createApiOperation<
   { name: string },

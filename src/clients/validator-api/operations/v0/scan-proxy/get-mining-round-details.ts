@@ -8,8 +8,8 @@ import { GetMiningRoundDetailsParamsSchema, type GetMiningRoundDetailsParams } f
  * @example
  *   ```typescript
  *   const details = await client.getMiningRoundDetails({ roundNumber: 1 });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const GetMiningRoundDetails = createApiOperation<GetMiningRoundDetailsParams, GetMiningRoundDetailsResponse>({
   paramsSchema: GetMiningRoundDetailsParamsSchema,

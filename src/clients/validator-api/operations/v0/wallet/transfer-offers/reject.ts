@@ -8,8 +8,8 @@ import { RejectTransferOfferParamsSchema, type RejectTransferOfferParams } from 
  * @example
  *   ```typescript
  *   const result = await client.rejectTransferOffer({ contractId: 'contract123' });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const RejectTransferOffer = createApiOperation<RejectTransferOfferParams, RejectTransferOfferResponse>({
   paramsSchema: RejectTransferOfferParamsSchema,

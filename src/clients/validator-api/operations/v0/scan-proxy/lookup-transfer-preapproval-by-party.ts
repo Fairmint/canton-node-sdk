@@ -11,8 +11,8 @@ import {
  * @example
  *   ```typescript
  *   const preapproval = await client.lookupTransferPreapprovalByParty({ partyId: 'party123' });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const LookupTransferPreapprovalByParty = createApiOperation<
   GetTransferPreapprovalsByPartyParams,

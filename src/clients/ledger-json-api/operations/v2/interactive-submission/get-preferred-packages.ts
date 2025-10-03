@@ -19,8 +19,8 @@ import {
  *   ],
  *   synchronizerId: 'sync-123'
  *   });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const InteractiveSubmissionGetPreferredPackages = createApiOperation<
   InteractiveSubmissionGetPreferredPackagesParams,

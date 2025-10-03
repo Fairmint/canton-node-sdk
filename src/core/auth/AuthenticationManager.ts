@@ -24,8 +24,8 @@ export class AuthenticationManager {
 
   public async authenticate(): Promise<string> {
     // Check if we have a valid token
-    if (this.isTokenValid()) {
-      return this.bearerToken!;
+    if (this.isTokenValid() && this.bearerToken) {
+      return this.bearerToken;
     }
     // Check if authentication credentials are provided
     if (!this.authConfig.clientId || this.authConfig.clientId.trim() === '') {
@@ -94,7 +94,7 @@ export class AuthenticationManager {
       // Log failure with context
       if (this.logger) {
         const errorPayload = axios.isAxiosError(error)
-          ? error.response?.data || error.message
+          ? (error.response?.data ?? error.message)
           : error instanceof Error
             ? error.message
             : String(error);

@@ -25,7 +25,7 @@ export abstract class BaseClient {
 
     // If no config provided, use default configuration with EnvLoader and FileLogger
     this.clientConfig =
-      config ||
+      config ??
       ((): ClientConfig => {
         const defaultConfig = EnvLoader.getConfig(apiType);
         defaultConfig.logger = new FileLogger();
@@ -197,7 +197,7 @@ export abstract class SimpleBaseClient {
 
     // If no config provided, use default configuration with EnvLoader and FileLogger
     this.clientConfig =
-      config ||
+      config ??
       ((): ClientConfig => {
         const defaultConfig = EnvLoader.getConfig(apiType);
         defaultConfig.logger = new FileLogger();
@@ -211,9 +211,6 @@ export abstract class SimpleBaseClient {
 
     // Get the API config
     const apiConfig = this.clientConfig.apis[apiType];
-    if (!apiConfig) {
-      throw new ConfigurationError(`API configuration not found for ${this.apiType}`);
-    }
 
     // For Lighthouse API, we expect LighthouseApiConfig
     if (apiType === 'LIGHTHOUSE_API') {

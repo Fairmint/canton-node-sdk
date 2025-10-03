@@ -3,7 +3,8 @@ import { createApiOperation } from '../../../../../../../../core';
 import type { paths } from '../../../../../../../../generated/token-standard/splice-api-token-metadata-v1/openapi/token-metadata-v1';
 
 type ApiPath = '/registry/metadata/v1/instruments';
-type Endpoint = '/api/validator/v0/scan-proxy/registry/metadata/v1/instruments';
+
+const endpoint = '/api/validator/v0/scan-proxy/registry/metadata/v1/instruments';
 
 export const ListInstrumentsParamsSchema = z.object({
   pageSize: z.number().optional(),
@@ -22,8 +23,8 @@ export type ListInstrumentsResponse = paths[ApiPath]['get']['responses']['200'][
  *   pageSize: 25,
  *   pageToken: 'next-page-token'
  *   });
- *   
- *   ```
+ *
+ *   ```;
  */
 export const ListInstruments = createApiOperation<ListInstrumentsParams, ListInstrumentsResponse>({
   paramsSchema: ListInstrumentsParamsSchema,
