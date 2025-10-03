@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createApiOperation } from '../../../../../core';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 
-const endpoint = '/v2/users/{user-id}';
+type Endpoint = '/v2/users/{user-id}';
 
 export const GetUserParamsSchema = z.object({
   userId: z.string(),
@@ -10,7 +10,7 @@ export const GetUserParamsSchema = z.object({
 });
 
 export type GetUserParams = z.infer<typeof GetUserParamsSchema>;
-export type GetUserResponse = paths[typeof endpoint]['get']['responses']['200']['content']['application/json'];
+export type GetUserResponse = paths[Endpoint]['get']['responses']['200']['content']['application/json'];
 
 /**
  * Get details for a specific user

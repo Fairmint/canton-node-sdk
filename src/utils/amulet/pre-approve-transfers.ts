@@ -42,7 +42,7 @@ export async function preApproveTransfers(
   params: PreApproveTransfersParams
 ): Promise<PreApproveTransfersResult> {
   // Set default expiration to 1 day from now if not provided
-  const expiresAt = params.expiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const expiresAt = params.expiresAt ?? new Date(Date.now() + 24 * 60 * 60 * 1000);
 
   
 
@@ -73,7 +73,7 @@ export async function preApproveTransfers(
       contractId: amuletRules.amulet_rules.contract.contract_id,
       templateId: amuletRules.amulet_rules.contract.template_id,
       createdEventBlob: amuletRules.amulet_rules.contract.created_event_blob,
-      synchronizerId: amuletRules.amulet_rules.domain_id || '',
+      synchronizerId: amuletRules.amulet_rules.domain_id ?? '',
     },
     // Open mining round contract
     {
@@ -90,7 +90,7 @@ export async function preApproveTransfers(
       contractId: featuredAppRight.featured_app_right.contract_id,
       templateId: featuredAppRight.featured_app_right.template_id,
       createdEventBlob: featuredAppRight.featured_app_right.created_event_blob,
-      synchronizerId: amuletRules.amulet_rules.domain_id || '',
+      synchronizerId: amuletRules.amulet_rules.domain_id ?? '',
     });
   }
 
@@ -175,7 +175,7 @@ export async function preApproveTransfers(
 
   return {
     contractId,
-    domainId: amuletRules.amulet_rules.domain_id || '',
+    domainId: amuletRules.amulet_rules.domain_id ?? '',
     amuletPaid: '0', // This would be extracted from the transfer result
   };
 }

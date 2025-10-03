@@ -24,7 +24,7 @@ export const GetAnsRules = createApiOperation<
   operations['getAnsRules']['requestBody']['content']['application/json'],
   operations['getAnsRules']['responses']['200']['content']['application/json']
 >({
-  paramsSchema: GetAnsRulesParamsSchema as any,
+  paramsSchema: GetAnsRulesParamsSchema as z.ZodType<operations['getAnsRules']['requestBody']['content']['application/json']>,
   method: 'POST',
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/scan-proxy/ans-rules`,
   buildRequestData: (params) => params,

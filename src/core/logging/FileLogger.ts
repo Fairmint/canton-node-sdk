@@ -10,11 +10,11 @@ export class FileLogger implements Logger {
   private enableFileLogging: boolean;
 
   constructor(config: LoggerConfig = {}) {
-    const disableEnv = process.env?.['DISABLE_FILE_LOGGER'];
+    const disableEnv = process.env['DISABLE_FILE_LOGGER'];
     const isDisabledByEnv =
       typeof disableEnv === 'string' && ['1', 'true', 'yes', 'on'].includes(disableEnv.toLowerCase());
     this.enableFileLogging = isDisabledByEnv ? false : (config.enableLogging ?? true);
-    this.logDir = config.logDir || path.join(__dirname, '../../../logs');
+    this.logDir = config.logDir ?? path.join(__dirname, '../../../logs');
 
     this.setupLogging();
   }
@@ -27,7 +27,7 @@ export class FileLogger implements Logger {
     if (!fs.existsSync(this.logDir)) {
       try {
         fs.mkdirSync(this.logDir, { recursive: true });
-      } catch (error) {
+      } catch {
         this.enableFileLogging = false;
       }
     }

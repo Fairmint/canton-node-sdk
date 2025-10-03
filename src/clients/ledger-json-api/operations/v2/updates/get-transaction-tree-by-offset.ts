@@ -37,7 +37,7 @@ export const GetTransactionTreeByOffset = createApiOperation<
   buildUrl: (params, apiUrl, client) => {
     const currentPartyId = client.getPartyId();
 
-    const readParties = Array.from(new Set([currentPartyId, ...(params.parties || [])]));
+    const readParties = Array.from(new Set([currentPartyId, ...(params.parties ?? [])]));
 
     const baseUrl = `${apiUrl}${endpoint.replace('{offset}', params.offset)}`;
 

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createApiOperation } from '../../../../../core';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 
-const endpoint = '/v2/users/{user-id}/rights';
+type Endpoint = '/v2/users/{user-id}/rights';
 
 export const ListUserRightsParamsSchema = z.object({
   userId: z.string(),
@@ -10,7 +10,7 @@ export const ListUserRightsParamsSchema = z.object({
 });
 
 export type ListUserRightsParams = z.infer<typeof ListUserRightsParamsSchema>;
-export type ListUserRightsResponse = paths[typeof endpoint]['get']['responses']['200']['content']['application/json'];
+export type ListUserRightsResponse = paths[Endpoint]['get']['responses']['200']['content']['application/json'];
 
 export const ListUserRights = createApiOperation<ListUserRightsParams, ListUserRightsResponse>({
   paramsSchema: ListUserRightsParamsSchema,

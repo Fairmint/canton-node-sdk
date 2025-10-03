@@ -32,25 +32,29 @@ async function main(): Promise<void> {
       },
     },
     {
-      onOpen: () => 
-      onMessage: (msg) => 
+      onOpen: () => {},
+      onMessage: (msg) => {
+        console.log('Update:', msg);
+      },
       onError: (err) => {
-        
+        console.error('Subscription error:', err);
         process.exit(1);
       },
-      onClose: (code, reason) => 
+      onClose: (code, reason) => {
+        console.log(`Connection closed: ${code} - ${reason}`);
+      },
     }
   );
 
   // Keep open for demo
   setTimeout(() => {
     subscription.close();
-    
+    console.log('Subscription closed after timeout');
     process.exit(0);
   }, 120000);
 }
 
 main().catch((err) => {
-  
+  console.error('Main error:', err);
   process.exit(1);
 });

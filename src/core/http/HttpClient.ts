@@ -159,10 +159,10 @@ export class HttpClient {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
       const data = error.response?.data || {};
-      const { code } = data;
+      const { code } = data as { code?: string };
       const msg = code ? `HTTP ${status}: ${code}` : `HTTP ${status}`;
-      const err = new ApiError(msg, status, error.response?.statusText);
-      (err as any).response = data;
+      const err = new ApiError(msg, status, error.response?.statusText) as ApiError & { response: unknown };
+      err.response = data;
       return err;
     }
     return new NetworkError(`Request failed: ${error instanceof Error ? error.message : String(error)}`);

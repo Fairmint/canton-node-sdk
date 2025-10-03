@@ -52,7 +52,7 @@ export async function createTransferOffer(params: CreateTransferOfferParams): Pr
             receiver: receiverPartyId,
             amount: { amount, unit: 'AmuletUnit' },
             description,
-            expiresAt: (expiresAt || defaultExpiresAt).toISOString(),
+            expiresAt: (expiresAt ?? defaultExpiresAt).toISOString(),
             trackingId,
           },
         },

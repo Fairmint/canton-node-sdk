@@ -49,7 +49,7 @@ export class EnvLoader {
     return EnvLoader.instance;
   }
 
-  public static resetInstance() {
+  public static resetInstance(): void {
     EnvLoader.instance = undefined;
   }
 
@@ -428,7 +428,7 @@ export class EnvLoader {
       grantType = 'client_credentials';
       auth = {
         grantType,
-        clientId: clientId || '',
+        clientId: clientId ?? '',
         clientSecret,
       };
     } else if (username && password) {
@@ -436,7 +436,7 @@ export class EnvLoader {
       grantType = 'password';
       auth = {
         grantType,
-        clientId: clientId || '',
+        clientId: clientId ?? '',
         username,
         password,
       };
@@ -445,12 +445,12 @@ export class EnvLoader {
       grantType = 'client_credentials';
       auth = {
         grantType,
-        clientId: clientId || '',
+        clientId: clientId ?? '',
       };
     }
 
     const apiConfig: ApiConfig = {
-      apiUrl: apiUrl || '',
+      apiUrl: apiUrl ?? '',
       auth,
     };
 

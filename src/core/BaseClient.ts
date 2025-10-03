@@ -42,7 +42,7 @@ export abstract class BaseClient {
       providerName: this.clientConfig.provider
         ? `${this.clientConfig.provider}_${this.clientConfig.network}`
         : this.clientConfig.network,
-      authUrl: this.clientConfig.authUrl || '',
+      authUrl: this.clientConfig.authUrl ?? '',
       apis: {
         [apiType]: this.clientConfig.apis[apiType],
       },
@@ -124,7 +124,7 @@ export abstract class BaseClient {
 
   public getApiUrl(): string {
     const apiConfig = this.config.apis[this.apiType];
-    return apiConfig?.apiUrl || '';
+    return apiConfig?.apiUrl ?? '';
   }
 
   public getPartyId(): string {
@@ -133,7 +133,7 @@ export abstract class BaseClient {
     if (apiConfig?.partyId) {
       return apiConfig.partyId;
     }
-    return this.clientConfig.partyId || '';
+    return this.clientConfig.partyId ?? '';
   }
 
   public getUserId(): string | undefined {
@@ -148,7 +148,7 @@ export abstract class BaseClient {
   public getManagedParties(): string[] {
     // For now, always use environment variables for managed parties
     // as this is not typically provided in the API config
-    return this.clientConfig.managedParties || [];
+    return this.clientConfig.managedParties ?? [];
   }
 
   public buildPartyList(additionalParties: string[] = []): string[] {
@@ -247,7 +247,7 @@ export abstract class SimpleBaseClient {
   }
 
   public getPartyId(): string {
-    return this.clientConfig.partyId || '';
+    return this.clientConfig.partyId ?? '';
   }
 
   public getNetwork(): NetworkType {

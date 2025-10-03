@@ -16,6 +16,7 @@ const eslintConfig = [
       '**/temp/**',
       '**/artifacts/**',
       '**/generated/**',
+      '**/*.generated.*',
       '**/*.js',
       '**/*.mjs',
     ],

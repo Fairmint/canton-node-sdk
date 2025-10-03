@@ -55,10 +55,10 @@ function collapseManifest(): void {
     const sortedFiles = Array.from(collapsedFiles).sort();
 
     for (const file of sortedFiles) {
-      
+      console.log(file);
     }
-  } catch (error) {
-    
+  } catch (_error) {
+    console.error('Error collapsing manifest:', _error);
     process.exit(1);
   }
 }

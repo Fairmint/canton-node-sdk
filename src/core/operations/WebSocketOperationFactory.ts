@@ -12,7 +12,10 @@ export interface WebSocketOperationConfig<Params, RequestMessage, InboundMessage
 
 export function createWebSocketOperation<Params, RequestMessage, InboundMessage>(
   config: WebSocketOperationConfig<Params, RequestMessage, InboundMessage>
-) {
+): new (client: BaseClient) => {
+  client: BaseClient;
+  subscribe: (params: Params, handlers: WebSocketHandlers<InboundMessage>) => Promise<WebSocketSubscription>;
+} {
   return class WebSocketOperation {
     constructor(public client: BaseClient) {}
 
@@ -41,7 +44,13 @@ export function createWebSocketOperation<Params, RequestMessage, InboundMessage>
       const wrappedHandlers: WebSocketHandlers<InboundMessage> = config.transformInbound
         ? {
             ...handlers,
-            onMessage: (msg) => handlers.onMessage(config.transformInbound!(msg)),
+            onMessage: (msg) => {
+              if (config.transformInbound) {
+                handlers.onMessage(config.transformInbound(msg));
+              } else {
+                handlers.onMessage(msg);
+              }
+            },
           }
         : handlers;
 

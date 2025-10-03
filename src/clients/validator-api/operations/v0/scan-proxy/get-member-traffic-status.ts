@@ -33,10 +33,14 @@ export class GetMemberTrafficStatus extends ApiOperation<
     params: GetMemberTrafficStatusParams
   ): Promise<operations['getMemberTrafficStatus']['responses']['200']['content']['application/json']> {
     // Auto-determine domainId if not provided
-    const domainId = params.domainId || (await getCurrentMiningRoundDomainId(this.client as any));
+    const domainId =
+      params.domainId ||
+      (await getCurrentMiningRoundDomainId(
+        this.client as { getAmuletRules: () => Promise<{ amulet_rules: { domain_id: string } }> }
+      ));
 
     // Auto-determine memberId if not provided
-    const memberId = params.memberId || (this.client as any).getPartyId();
+    const memberId = params.memberId || (this.client as { getPartyId: () => string }).getPartyId();
 
     const url = `${this.getApiUrl()}/api/validator/v0/scan-proxy/v0/domains/${encodeURIComponent(domainId)}/members/${encodeURIComponent(memberId)}/traffic-status`;
 

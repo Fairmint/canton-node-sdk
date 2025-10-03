@@ -5,8 +5,8 @@ import type {
   paths,
 } from '../../../../../../../../generated/token-standard/splice-api-token-allocation-v1/openapi/allocation-v1';
 
-const apiPath = '/registry/allocations/v1/{allocationId}/choice-contexts/withdraw';
-const endpoint = '/api/validator/v0/scan-proxy/registry/allocations/v1';
+type ApiPath = '/registry/allocations/v1/{allocationId}/choice-contexts/withdraw';
+type Endpoint = '/api/validator/v0/scan-proxy/registry/allocations/v1';
 
 export const GetAllocationWithdrawContextParamsSchema = z.object({
   allocationId: z.string(),
@@ -16,7 +16,7 @@ export const GetAllocationWithdrawContextParamsSchema = z.object({
 export type GetAllocationWithdrawContextParams = z.infer<typeof GetAllocationWithdrawContextParamsSchema>;
 export type GetAllocationWithdrawContextRequest = components['schemas']['GetChoiceContextRequest'];
 export type GetAllocationWithdrawContextResponse =
-  paths[typeof apiPath]['post']['responses']['200']['content']['application/json'];
+  paths[ApiPath]['post']['responses']['200']['content']['application/json'];
 
 /**
  * Get the choice context to withdraw an allocation

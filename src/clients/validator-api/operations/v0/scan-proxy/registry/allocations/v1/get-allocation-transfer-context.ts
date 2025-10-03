@@ -5,8 +5,8 @@ import type {
   paths,
 } from '../../../../../../../../generated/token-standard/splice-api-token-allocation-v1/openapi/allocation-v1';
 
-const apiPath = '/registry/allocations/v1/{allocationId}/choice-contexts/execute-transfer';
-const endpoint = '/api/validator/v0/scan-proxy/registry/allocations/v1';
+type ApiPath = '/registry/allocations/v1/{allocationId}/choice-contexts/execute-transfer';
+type Endpoint = '/api/validator/v0/scan-proxy/registry/allocations/v1';
 
 export const GetAllocationTransferContextParamsSchema = z.object({
   allocationId: z.string(),
@@ -16,7 +16,7 @@ export const GetAllocationTransferContextParamsSchema = z.object({
 export type GetAllocationTransferContextParams = z.infer<typeof GetAllocationTransferContextParamsSchema>;
 export type GetAllocationTransferContextRequest = components['schemas']['GetChoiceContextRequest'];
 export type GetAllocationTransferContextResponse =
-  paths[typeof apiPath]['post']['responses']['200']['content']['application/json'];
+  paths[ApiPath]['post']['responses']['200']['content']['application/json'];
 
 /**
  * Get the choice context to execute a transfer on an allocation

@@ -56,39 +56,57 @@ export class WebSocketClient {
 
     await log('connect', { headers: token ? { Authorization: '[REDACTED]' } : undefined, protocols });
 
-    socket.on('open', async () => {
-      try {
-        socket.send(JSON.stringify(requestMessage));
-        await log('send', requestMessage);
-        if (handlers.onOpen) handlers.onOpen();
-      } catch (err) {
-        await log('send_error', err instanceof Error ? { message: err.message } : String(err));
-        if (handlers.onError) handlers.onError(err as Error);
-        socket.close();
+    socket.on('open', () => {
+      void (async () => {
+        try {
+          socket.send(JSON.stringify(requestMessage));
+          await log('send', requestMessage);
+          if (handlers.onOpen) handlers.onOpen();
+        } catch (err) {
+          await log('send_error', err instanceof Error ? { message: err.message } : String(err));
+          if (handlers.onError) handlers.onError(err as Error);
+          socket.close();
+        }
+      })();
+    });
+
+    socket.on('message', (rawData: RawData) => {
+      // Convert RawData to string safely
+      let dataString: string;
+      if (Buffer.isBuffer(rawData)) {
+        dataString = rawData.toString('utf8');
+      } else if (Array.isArray(rawData)) {
+        dataString = Buffer.concat(rawData).toString('utf8');
+      } else {
+        dataString = new TextDecoder().decode(rawData);
       }
+      void (async () => {
+        try {
+          const parsed = WebSocketErrorUtils.safeJsonParse(dataString, 'WebSocket message');
+          await log('message', parsed);
+          handlers.onMessage(parsed as InboundMessage);
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          await log('parse_error', { raw: dataString, error: errorMessage });
+          // Close connection on JSON parse failure to prevent inconsistent state
+          socket.close(1003, 'Invalid JSON received');
+          if (handlers.onError) handlers.onError(err as Error);
+        }
+      })();
     });
 
-    socket.on('message', async (data: RawData) => {
-      try {
-        const parsed = WebSocketErrorUtils.safeJsonParse(data.toString(), 'WebSocket message');
-        await log('message', parsed);
-        handlers.onMessage(parsed as InboundMessage);
-      } catch (err) {
-        await log('parse_error', { raw: data.toString(), error: err instanceof Error ? err.message : String(err) });
-        // Close connection on JSON parse failure to prevent inconsistent state
-        socket.close(1003, 'Invalid JSON received');
-        if (handlers.onError) handlers.onError(err as Error);
-      }
+    socket.on('error', (err: Error) => {
+      void (async () => {
+        await log('socket_error', { message: err.message });
+        if (handlers.onError) handlers.onError(err);
+      })();
     });
 
-    socket.on('error', async (err: Error) => {
-      await log('socket_error', { message: err.message });
-      if (handlers.onError) handlers.onError(err);
-    });
-
-    socket.on('close', async (code: number, reason: Buffer) => {
-      await log('close', { code, reason: reason.toString() });
-      if (handlers.onClose) handlers.onClose(code, reason.toString());
+    socket.on('close', (code: number, reason: Buffer) => {
+      void (async () => {
+        await log('close', { code, reason: reason.toString() });
+        if (handlers.onClose) handlers.onClose(code, reason.toString());
+      })();
     });
 
     return {

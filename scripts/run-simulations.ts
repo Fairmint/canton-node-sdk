@@ -24,9 +24,6 @@ async function runSimulations(): Promise<void> {
   // Recursively find all TypeScript files in the simulations directory (excluding core and index files)
   const simulationFiles = findSimulationFiles(simulationsDir);
 
-  
-  simulationFiles.forEach((file) => 
-
   // Initialize simulation runner and clear results directory
   const runner = new SimulationRunner();
   runner.clearResultsDir();
@@ -36,7 +33,7 @@ async function runSimulations(): Promise<void> {
 
   // Run each simulation file sequentially
   for (const file of simulationFiles) {
-    
+    console.log(`Running simulation: ${file}`);
     try {
       // Import the simulation module
       const simulationModule = await import(file);
@@ -50,24 +47,24 @@ async function runSimulations(): Promise<void> {
         await new Promise((resolve) => global.setTimeout(resolve, 100));
       }
 
-      
+      console.log(`✓ Simulation completed: ${file}`);
     } catch (error) {
-      
-      
+      console.error(`✗ Simulation failed: ${file}`);
+      console.error(error);
       hasFailures = true;
     }
   }
 
   if (hasFailures) {
-    
+    console.error('Some simulations failed');
     process.exit(1);
   } else {
-    
+    console.log('All simulations passed');
   }
 }
 
 // Run the simulations
 runSimulations().catch((error) => {
-  
+  console.error('Error running simulations:', error);
   process.exit(1);
 });

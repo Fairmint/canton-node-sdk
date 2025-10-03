@@ -15,10 +15,6 @@ export function findCreatedEventByTemplateName(
 ): CreatedTreeEvent | undefined {
   const { transactionTree } = response;
 
-  if (!transactionTree.eventsById) {
-    return undefined;
-  }
-
   // Iterate through all events in the transaction tree
   for (const event of Object.values(transactionTree.eventsById)) {
     // Check if this is a CreatedTreeEvent

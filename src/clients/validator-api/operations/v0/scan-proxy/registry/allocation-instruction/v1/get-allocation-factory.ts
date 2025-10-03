@@ -5,8 +5,8 @@ import type {
   paths,
 } from '../../../../../../../../generated/token-standard/splice-api-token-allocation-instruction-v1/openapi/allocation-instruction-v1';
 
-const apiPath = '/registry/allocation-instruction/v1/allocation-factory';
-const endpoint = '/api/validator/v0/scan-proxy/registry/allocation-instruction/v1/allocation-factory';
+type ApiPath = '/registry/allocation-instruction/v1/allocation-factory';
+type Endpoint = '/api/validator/v0/scan-proxy/registry/allocation-instruction/v1/allocation-factory';
 
 export const GetAllocationFactoryParamsSchema = z.object({
   choiceArguments: z.record(z.string(), z.never()),
@@ -16,7 +16,7 @@ export const GetAllocationFactoryParamsSchema = z.object({
 export type GetAllocationFactoryParams = z.infer<typeof GetAllocationFactoryParamsSchema>;
 export type GetAllocationFactoryRequest = components['schemas']['GetFactoryRequest'];
 export type GetAllocationFactoryResponse =
-  paths[typeof apiPath]['post']['responses']['200']['content']['application/json'];
+  paths[ApiPath]['post']['responses']['200']['content']['application/json'];
 
 /**
  * Get the factory and choice context for creating allocations using the AllocationFactory_Allocate choice

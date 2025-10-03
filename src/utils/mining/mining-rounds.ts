@@ -18,8 +18,7 @@ function getRoundNumber(miningRound: OpenMiningRound): number {
     return (
       miningRound.contract.payload.roundNumber ??
       miningRound.contract.payload.round_number ??
-      (miningRound.contract.payload.round?.number ? parseInt(miningRound.contract.payload.round.number, 10) : 0) ??
-      0
+      (miningRound.contract.payload.round?.number ? parseInt(miningRound.contract.payload.round.number, 10) : 0)
     );
   } catch {
     return 0;
@@ -64,7 +63,7 @@ export async function getCurrentMiningRoundContext(validatorClient: ValidatorApi
   const now = new Date();
   const validOpenRounds = miningRoundsResponse.open_mining_rounds.filter((round) => {
     try {
-      const opensAtRaw = round?.contract?.payload?.opensAt;
+      const opensAtRaw = round.contract.payload.opensAt;
       if (!opensAtRaw) return false;
       const opensAt = new Date(opensAtRaw);
       return opensAt <= now;

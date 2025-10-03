@@ -31,7 +31,7 @@ export const GetEventsByContractId = createApiOperation<EventsByContractIdParams
   method: 'POST',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
   buildRequestData: (params, client): EventsByContractIdRequest => {
-    const readParties = [...new Set([client.getPartyId(), ...(params.readAs || [])])];
+    const readParties = [...new Set([client.getPartyId(), ...(params.readAs ?? [])])];
     return {
       contractId: params.contractId,
       eventFormat: {

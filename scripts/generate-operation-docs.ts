@@ -554,11 +554,7 @@ ${closeBrace}`;
     }
 
     if (ts.isCallExpression(node)) {
-      
       if (ts.isPropertyAccessExpression(node.expression)) {
-        
-          `[isPropertyOptional] CallExpression with PropertyAccessExpression - name: ${node.expression.name.text}`
-        );
         if (node.expression.name.text === 'optional') {
           
           return true;
@@ -1128,10 +1124,10 @@ async function main(): Promise<void> {
   try {
     const generator = new OperationDocGenerator();
     await generator.generateDocs();
-  } catch (error) {
-    
+  } catch (_error) {
+    console.error('Error generating docs:', _error);
     process.exit(1);
   }
 }
 
-main();
+void main();

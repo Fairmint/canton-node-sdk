@@ -2,9 +2,9 @@ import z from 'zod';
 import { createApiOperation } from '../../../../../core';
 import type { paths } from '../../../../../generated/apps/validator/src/main/openapi/scan-proxy';
 
-const endpoint = '/v0/scan-proxy/featured-apps/{provider_party_id}';
+type Endpoint = '/v0/scan-proxy/featured-apps/{provider_party_id}';
 export type LookupFeaturedAppRightResponse =
-  paths[typeof endpoint]['get']['responses']['200']['content']['application/json'];
+  paths[Endpoint]['get']['responses']['200']['content']['application/json'];
 
 export const GetFeaturedAppRightParamsSchema = z.object({
   partyId: z.string(),

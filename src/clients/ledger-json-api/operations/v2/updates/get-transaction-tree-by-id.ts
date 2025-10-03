@@ -34,7 +34,7 @@ export const GetTransactionTreeById = createApiOperation<GetTransactionTreeByIdP
   buildUrl: (params, apiUrl, client) => {
     const currentPartyId = client.getPartyId();
 
-    const readParties = Array.from(new Set([currentPartyId, ...(params.parties || [])]));
+    const readParties = Array.from(new Set([currentPartyId, ...(params.parties ?? [])]));
 
     const baseUrl = `${apiUrl}${endpoint.replace('{update-id}', params.updateId)}`;
 

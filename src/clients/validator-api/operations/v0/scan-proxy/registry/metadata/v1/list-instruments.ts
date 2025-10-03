@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { createApiOperation } from '../../../../../../../../core';
 import type { paths } from '../../../../../../../../generated/token-standard/splice-api-token-metadata-v1/openapi/token-metadata-v1';
 
-const apiPath = '/registry/metadata/v1/instruments';
-const endpoint = '/api/validator/v0/scan-proxy/registry/metadata/v1/instruments';
+type ApiPath = '/registry/metadata/v1/instruments';
+type Endpoint = '/api/validator/v0/scan-proxy/registry/metadata/v1/instruments';
 
 export const ListInstrumentsParamsSchema = z.object({
   pageSize: z.number().optional(),
@@ -11,7 +11,7 @@ export const ListInstrumentsParamsSchema = z.object({
 });
 
 export type ListInstrumentsParams = z.infer<typeof ListInstrumentsParamsSchema>;
-export type ListInstrumentsResponse = paths[typeof apiPath]['get']['responses']['200']['content']['application/json'];
+export type ListInstrumentsResponse = paths[ApiPath]['get']['responses']['200']['content']['application/json'];
 
 /**
  * List all instruments managed by this instrument admin

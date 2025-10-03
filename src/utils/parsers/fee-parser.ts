@@ -75,8 +75,7 @@ function isExerciseResult(obj: unknown): obj is ExerciseResult {
     typeof obj === 'object' &&
     obj !== null &&
     'summary' in obj &&
-    typeof (obj as ExerciseResult).summary === 'object' &&
-    (obj as ExerciseResult).summary !== null
+    typeof (obj as ExerciseResult).summary === 'object'
   );
 }
 
@@ -179,19 +178,18 @@ export function parseFeesFromUpdate(treeEvent: TreeEvent): FeeAnalysis {
   const senderChangeFee = typeof summary.senderChangeFee === 'string' ? summary.senderChangeFee : '0';
 
   // Calculate total fees using string math
-  let totalFees = holdingFees ?? '0';
+  let totalFees = holdingFees;
   for (const fee of outputFees) {
-    totalFees = addStrings(totalFees, typeof fee === 'string' ? fee : '0');
+    totalFees = addStrings(totalFees, fee);
   }
-  totalFees = addStrings(totalFees, senderChangeFee ?? '0');
+  totalFees = addStrings(totalFees, senderChangeFee);
   // Pad to 10 decimals for output
   totalFees = parseFloat(totalFees).toFixed(10);
 
   // Extract balance changes
-  const balanceChanges: BalanceChange[] = (summary.balanceChanges || []).map(([party, change]) => ({
+  const balanceChanges: BalanceChange[] = (summary.balanceChanges ?? []).map(([party, change]) => ({
     party,
-    changeToInitialAmountAsOfRoundZero:
-      typeof change.changeToInitialAmountAsOfRoundZero === 'string' ? change.changeToInitialAmountAsOfRoundZero : '0',
+    changeToInitialAmountAsOfRoundZero: change.changeToInitialAmountAsOfRoundZero,
     changeToHoldingFeesRate: typeof change.changeToHoldingFeesRate === 'string' ? change.changeToHoldingFeesRate : '0',
   }));
 

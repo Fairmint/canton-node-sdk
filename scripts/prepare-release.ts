@@ -118,12 +118,9 @@ function prepareRelease(): void {
     
 
     // Create detailed tag message
-    const tagMessage = `Release v${newVersion}\n\nChanges:\n${changelog}`;
+    const _tagMessage = `Release v${newVersion}\n\nChanges:\n${changelog}`;
 
-    
-    
-    
-    
+    console.log('Release tag prepared:', _tagMessage);
 
     // Save changelog to file for reference
     const changelogPath: string = path.join(process.cwd(), 'CHANGELOG.md');
@@ -143,14 +140,10 @@ function prepareRelease(): void {
       fs.writeFileSync(changelogPath, changelogContent);
     }
 
-    
-    
-    
-    
-    
-    
-  } catch (error) {
-    
+    console.log('Changelog updated successfully');
+    console.log('Release preparation complete');
+  } catch (_error) {
+    console.error('Error preparing release:', _error);
     process.exit(1);
   }
 }

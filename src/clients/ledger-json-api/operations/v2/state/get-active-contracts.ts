@@ -42,14 +42,32 @@ export const GetActiveContracts = createApiOperation<GetActiveContractsCustomPar
     }
 
     // Build filter structure based on parties and template IDs
-    let filter: any = undefined;
+    interface FilterStructure {
+      filtersByParty?: Record<string, PartyFilter>;
+      filtersForAnyParty?: { cumulative: TemplateFilterArray };
+    }
+    interface PartyFilter {
+      cumulative?: TemplateFilterArray;
+    }
+    type TemplateFilterArray = Array<{
+      identifierFilter: {
+        TemplateFilter: {
+          value: {
+            templateId: string;
+            includeCreatedEventBlob: boolean;
+          };
+        };
+      };
+    }>;
+
+    let filter: FilterStructure | undefined = undefined;
 
     if (params.parties && params.parties.length > 0) {
       const uniqueParties = Array.from(new Set(params.parties));
-      const filtersByParty: Record<string, any> = {};
+      const filtersByParty: Record<string, PartyFilter> = {};
 
       for (const party of uniqueParties) {
-        let partyFilter: any = {};
+        let partyFilter: PartyFilter = {};
 
         if (params.templateIds && params.templateIds.length > 0) {
           // Create template filters for this party

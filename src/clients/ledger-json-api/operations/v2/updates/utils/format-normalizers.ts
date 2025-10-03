@@ -38,7 +38,12 @@ export function normalizeIdentifierFilter(filter: IdentifierFilter): unknown {
 
 export function normalizeUpdateFormat(p: GetUpdatesParams['updateFormat']): unknown {
   if (!p) return undefined;
-  const out: any = {};
+  interface NormalizedUpdateFormat {
+    includeTransactions?: unknown;
+    includeReassignments?: unknown;
+    includeTopologyEvents?: unknown;
+  }
+  const out: NormalizedUpdateFormat = {};
   if (p.includeTransactions) {
     out.includeTransactions = {
       transactionShape: p.includeTransactions.transactionShape,
