@@ -2,6 +2,7 @@ import { ApiOperation } from '../../../../../core/operations/ApiOperation';
 import { type operations } from '../../../../../generated/apps/scan/src/main/openapi/scan';
 import { getCurrentMiningRoundDomainId } from '../../../../../utils/mining/mining-rounds';
 import { type GetMemberTrafficStatusParams } from '../../../schemas/operations';
+import { type ValidatorApiClient } from '../../../ValidatorApiClient.generated';
 
 /**
  * Get a member's traffic status as reported by the sequencer
@@ -35,9 +36,7 @@ export class GetMemberTrafficStatus extends ApiOperation<
     // Auto-determine domainId if not provided
     const domainId =
       params.domainId ??
-      (await getCurrentMiningRoundDomainId(
-        this.client as { getAmuletRules: () => Promise<{ amulet_rules: { domain_id: string } }> }
-      ));
+      (await getCurrentMiningRoundDomainId(this.client as unknown as ValidatorApiClient));
 
     // Auto-determine memberId if not provided
     const memberId = params.memberId ?? (this.client as { getPartyId: () => string }).getPartyId();

@@ -25,7 +25,7 @@ export const CreateBuyTrafficRequest = createApiOperation<
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/wallet/buy-traffic-requests`,
   buildRequestData: async (params, client) => {
     // Cast client to ValidatorApiClient to access getAmuletRules
-    const validatorClient = client as { getAmuletRules: () => Promise<{ amulet_rules: { domain_id: string } }> };
+    const validatorClient = client as unknown as { getAmuletRules: () => Promise<{ amulet_rules: { domain_id: string } }> };
 
     // Get domain_id from amulet rules
     const amuletRules = await validatorClient.getAmuletRules();

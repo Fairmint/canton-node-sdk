@@ -1,5 +1,4 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
-import { type JsGetActiveContractsResponseItem } from '../../clients/ledger-json-api/schemas/api/state';
 
 /** Options for waiting for contract archival */
 export interface WaitForContractArchivalOptions {
@@ -50,9 +49,12 @@ export async function waitForContractToBeArchived(
       // Check if our contract is still in the active contracts list
       const isStillActive =
         Array.isArray(activeContracts) &&
-        activeContracts.some((contract: JsGetActiveContractsResponseItem) => {
-          const { createdEvent } = contract.contractEntry.JsActiveContract;
-          return createdEvent?.contractId === contractId;
+        activeContracts.some((contract) => {
+          if ('JsActiveContract' in contract.contractEntry) {
+            const { createdEvent } = contract.contractEntry.JsActiveContract;
+            return createdEvent?.contractId === contractId;
+          }
+          return false;
         });
 
       if (!isStillActive) {
