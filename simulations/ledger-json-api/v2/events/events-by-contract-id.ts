@@ -11,21 +11,21 @@ const TEST_CONTRACT_IDS = {
 export async function runAllTests() {
   await runner.runSimulation(
     'valid',
-    client => client.getEventsByContractId({
+    async client => client.getEventsByContractId({
       contractId: TEST_CONTRACT_IDS.VALID,
     }),
   );
 
   await runner.runSimulation(
     'invalid_format',
-    client => client.getEventsByContractId({
+    async client => client.getEventsByContractId({
       contractId: TEST_CONTRACT_IDS.INVALID_FORMAT,
     }),
   );
 
   await runner.runSimulation(
     'non_existent',
-    client => client.getEventsByContractId({
+    async client => client.getEventsByContractId({
       contractId: TEST_CONTRACT_IDS.NON_EXISTENT,
     }),
   );

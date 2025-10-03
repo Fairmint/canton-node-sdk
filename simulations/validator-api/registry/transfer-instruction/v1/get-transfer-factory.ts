@@ -5,7 +5,7 @@ const runner = new ValidatorSimulationRunner();
 export async function runAllTests() {
   await runner.runSimulation(
     'valid',
-    client => client.getTransferFactory({
+    async client => client.getTransferFactory({
       choiceArguments: {},
       excludeDebugFields: false,
     }),
@@ -13,7 +13,7 @@ export async function runAllTests() {
 
   await runner.runSimulation(
     'valid_with_debug_excluded',
-    client => client.getTransferFactory({
+    async client => client.getTransferFactory({
       choiceArguments: {},
       excludeDebugFields: true,
     }),

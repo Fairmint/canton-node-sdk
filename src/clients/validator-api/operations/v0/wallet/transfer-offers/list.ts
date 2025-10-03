@@ -1,5 +1,5 @@
 import { createApiOperation } from '../../../../../../core';
-import { ListTransferOffersResponse } from '../../../../schemas/api';
+import { type ListTransferOffersResponse } from '../../../../schemas/api';
 import { z } from 'zod';
 
 /**

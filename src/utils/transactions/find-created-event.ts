@@ -13,9 +13,9 @@ export function findCreatedEventByTemplateName(
   response: SubmitAndWaitForTransactionTreeResponse,
   templateName: string
 ): CreatedTreeEvent | undefined {
-  const transactionTree = response.transactionTree;
+  const {transactionTree} = response;
   
-  if (!transactionTree || !transactionTree.eventsById) {
+  if (!transactionTree?.eventsById) {
     return undefined;
   }
 

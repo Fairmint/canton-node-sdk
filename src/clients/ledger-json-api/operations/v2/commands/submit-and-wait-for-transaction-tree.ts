@@ -46,11 +46,9 @@ export const SubmitAndWaitForTransactionTree = createApiOperation<SubmitAndWaitF
   paramsSchema: SubmitAndWaitForTransactionTreeParamsSchema,
   method: 'POST',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
-  buildRequestData: (params, client) => {
-    return {
+  buildRequestData: (params, client) => ({
       ...params,
       commandId: params.commandId || `submit-and-wait-for-transaction-tree-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
       actAs: params.actAs || [client.getPartyId()],
-    };
-  },
+    }),
 }); 

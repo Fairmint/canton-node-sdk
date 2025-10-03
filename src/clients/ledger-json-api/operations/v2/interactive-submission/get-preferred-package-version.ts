@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { InteractiveSubmissionGetPreferredPackageVersionParamsSchema, InteractiveSubmissionGetPreferredPackageVersionParams } from '../../../schemas/operations';
-import { GetPreferredPackageVersionResponse } from '../../../schemas/api';
+import { InteractiveSubmissionGetPreferredPackageVersionParamsSchema, type InteractiveSubmissionGetPreferredPackageVersionParams } from '../../../schemas/operations';
+import { type GetPreferredPackageVersionResponse } from '../../../schemas/api';
 
 /**
  * @description Get the preferred package version for constructing a command submission

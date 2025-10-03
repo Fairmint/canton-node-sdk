@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../../core';
-import { CreateTransferOfferResponse } from '../../../../schemas/api';
-import { CreateTransferOfferParamsSchema, CreateTransferOfferParams } from '../../../../schemas/operations';
+import { type CreateTransferOfferResponse } from '../../../../schemas/api';
+import { CreateTransferOfferParamsSchema, type CreateTransferOfferParams } from '../../../../schemas/operations';
 
 /**
  * @description Create a new transfer offer to send tokens to another party

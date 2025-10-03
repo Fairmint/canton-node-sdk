@@ -16,8 +16,7 @@ export type ActiveContractsWsMessage = z.infer<typeof JsGetActiveContractsRespon
 export const SubscribeToActiveContracts = createWebSocketOperation<ActiveContractsWsParams, z.infer<typeof GetActiveContractsRequestSchema>, ActiveContractsWsMessage>({
 	paramsSchema: ActiveContractsParamsSchema,
 	buildPath: (_params, _apiUrl) => `${path}`,
-	buildRequestMessage: (params, client) => {
-		return {
+	buildRequestMessage: (params, client) => ({
 			filter: undefined,
 			verbose: params.eventFormat ? undefined : params.verbose ?? false,
 			activeAtOffset: params.activeAtOffset,
@@ -25,16 +24,13 @@ export const SubscribeToActiveContracts = createWebSocketOperation<ActiveContrac
 				filtersByParty: Object.fromEntries((params.parties && params.parties.length > 0 ? params.parties : client.buildPartyList()).map(p => [p, { cumulative: [] }])),
 				verbose: params.verbose ?? false,
 			},
-		};
-	},
-	transformInbound: (msg) => {
-		return WebSocketErrorUtils.parseUnion(
+		}),
+	transformInbound: (msg) => WebSocketErrorUtils.parseUnion(
 			msg,
 			z.union([
 				JsGetActiveContractsResponseItemSchema,
 				JsCantonErrorSchema,
 			]),
 			'SubscribeToActiveContracts'
-		);
-	},
+		),
 }); 

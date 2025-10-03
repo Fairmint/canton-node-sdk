@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createWebSocketOperation } from '../../../../../core/operations/WebSocketOperationFactory';
-import { CompletionStreamRequestSchema, CompletionStreamResponseSchema, CompletionStreamRequest, CompletionStreamResponse } from '../../../schemas/api/completions';
+import { CompletionStreamRequestSchema, CompletionStreamResponseSchema, type CompletionStreamRequest, type CompletionStreamResponse } from '../../../schemas/api/completions';
 import { JsCantonErrorSchema, WsCantonErrorSchema } from '../../../schemas/api/errors';
 import { WebSocketErrorUtils } from '../../../../../core/ws/WebSocketErrorUtils';
 
@@ -23,8 +23,7 @@ export const SubscribeToCompletions = createWebSocketOperation<CompletionsWsPara
 			beginExclusive: params.beginExclusive,
 		};
 	},
-	transformInbound: (msg) => {
-		return WebSocketErrorUtils.parseUnion(
+	transformInbound: (msg) => WebSocketErrorUtils.parseUnion(
 			msg,
 			z.union([
 				CompletionStreamResponseSchema,
@@ -32,6 +31,5 @@ export const SubscribeToCompletions = createWebSocketOperation<CompletionsWsPara
 				WsCantonErrorSchema,
 			]),
 			'SubscribeToCompletions'
-		);
-	},
+		),
 }); 

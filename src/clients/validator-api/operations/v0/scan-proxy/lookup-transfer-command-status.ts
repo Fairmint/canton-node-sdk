@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { LookupTransferCommandStatusResponse } from '../../../schemas/api';
-import { LookupTransferCommandStatusParamsSchema, LookupTransferCommandStatusParams } from '../../../schemas/operations';
+import { type LookupTransferCommandStatusResponse } from '../../../schemas/api';
+import { LookupTransferCommandStatusParamsSchema, type LookupTransferCommandStatusParams } from '../../../schemas/operations';
 
 /**
  * @description Lookup transfer command status

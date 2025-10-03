@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { BaseClient, SimpleBaseClient } from '../BaseClient';
-import { RequestConfig } from '../types';
+import { type BaseClient, type SimpleBaseClient } from '../BaseClient';
+import { type RequestConfig } from '../types';
 import { ValidationError } from '../errors';
 
 /** Abstract base class for API operations with parameter validation and request handling */

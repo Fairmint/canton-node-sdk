@@ -1,7 +1,7 @@
-import { BaseClient, createApiOperation } from '../../../../../core';
+import { type BaseClient, createApiOperation } from '../../../../../core';
 import { z } from 'zod';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
-import { AllocatePartyResponse } from '../../../schemas/api';
+import { type AllocatePartyResponse } from '../../../schemas/api';
 
 // Type aliases for better readability and to avoid repetition
 type AllocatePartyRequest = paths['/v2/parties']['post']['requestBody']['content']['application/json'];
@@ -39,8 +39,7 @@ export const AllocateParty = createApiOperation<
   paramsSchema: AllocatePartyParamsSchema,
   method: 'POST',
   buildUrl: (_params: AllocatePartyParams, apiUrl: string) => `${apiUrl}/v2/parties`,
-  buildRequestData: (params: AllocatePartyParams, _client: BaseClient): AllocatePartyRequest => {
-    return {
+  buildRequestData: (params: AllocatePartyParams, _client: BaseClient): AllocatePartyRequest => ({
       partyIdHint: params.partyIdHint ?? '',
       identityProviderId: params.identityProviderId ?? '',
       ...(params.localMetadata && {
@@ -49,6 +48,5 @@ export const AllocateParty = createApiOperation<
           annotations: params.localMetadata.annotations ?? {},
         },
       }),
-    };
-  },
+    }),
 }); 

@@ -1,6 +1,6 @@
-import { LedgerJsonApiClient } from '../../clients/ledger-json-api';
-import { ValidatorApiClient } from '../../clients/validator-api';
-import { ExerciseCommand, DisclosedContract } from '../../clients/ledger-json-api/schemas/api/commands';
+import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
+import { type ValidatorApiClient } from '../../clients/validator-api';
+import { type ExerciseCommand, type DisclosedContract } from '../../clients/ledger-json-api/schemas/api/commands';
 import { getCurrentMiningRoundContext } from '../mining/mining-rounds';
 import { getAmuletsForTransfer } from './get-amulets-for-transfer';
 

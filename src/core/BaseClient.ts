@@ -1,10 +1,10 @@
 import {
-  ApiType,
-  PartialProviderConfig,
-  ClientConfig,
-  NetworkType,
-  ProviderType,
-  LighthouseApiConfig,
+  type ApiType,
+  type PartialProviderConfig,
+  type ClientConfig,
+  type NetworkType,
+  type ProviderType,
+  type LighthouseApiConfig,
 } from './types';
 import { AuthenticationManager } from './auth/AuthenticationManager';
 import { HttpClient } from './http/HttpClient';
@@ -33,7 +33,7 @@ export abstract class BaseClient {
       })();
 
     // Validate that the required API configuration is present
-    if (!this.clientConfig.apis || !this.clientConfig.apis[apiType]) {
+    if (!this.clientConfig.apis?.[apiType]) {
       throw new ConfigurationError(
         `API configuration not found for ${apiType}`
       );
@@ -46,7 +46,7 @@ export abstract class BaseClient {
         : this.clientConfig.network,
       authUrl: this.clientConfig.authUrl || '',
       apis: {
-        [apiType]: this.clientConfig.apis[apiType]!,
+        [apiType]: this.clientConfig.apis[apiType],
       },
     };
 
@@ -213,7 +213,7 @@ export abstract class SimpleBaseClient {
       })();
 
     // Validate that the required API configuration is present
-    if (!this.clientConfig.apis || !this.clientConfig.apis[apiType]) {
+    if (!this.clientConfig.apis?.[apiType]) {
       throw new ConfigurationError(
         `API configuration not found for ${apiType}`
       );

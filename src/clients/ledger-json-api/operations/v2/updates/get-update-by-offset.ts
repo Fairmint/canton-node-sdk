@@ -1,5 +1,5 @@
 import { createApiOperation } from '../../../../../core';
-import { z } from 'zod';
+import { type z } from 'zod';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 import { GetUpdateByOffsetParamsSchema } from '../../../schemas/operations';
 

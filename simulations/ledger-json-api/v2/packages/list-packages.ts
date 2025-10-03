@@ -9,6 +9,6 @@ export async function runAllTests() {
   // Test: successful package listing
   await runner.runSimulation<ListPackagesResponse>(
     'list_packages',
-    client => client.listPackages(),
+    async client => client.listPackages(),
   );
 } 

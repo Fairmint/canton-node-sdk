@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createApiOperation } from '../../../../../core';
-import { operations } from '../../../../../generated/apps/wallet/src/main/openapi/wallet-internal';
+import { type operations } from '../../../../../generated/apps/wallet/src/main/openapi/wallet-internal';
 
 /**
  * @description Get the list of amulets and locked amulets for the current user

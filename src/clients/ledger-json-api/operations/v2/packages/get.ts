@@ -1,5 +1,5 @@
 import { createApiOperation } from '../../../../../core';
-import { ListPackagesResponse } from '../../../schemas/api';
+import { type ListPackagesResponse } from '../../../schemas/api';
 import { z } from 'zod';
 
 /**

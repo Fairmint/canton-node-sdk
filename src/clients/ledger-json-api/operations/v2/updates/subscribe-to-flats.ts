@@ -17,7 +17,7 @@ export const SubscribeToFlats = createWebSocketOperation<UpdatesFlatsWsParams, u
 	paramsSchema: UpdatesFlatsParamsSchema,
 	buildPath: (_params, _apiUrl) => `${path}`,
 	buildRequestMessage: (params) => {
-		const hasUpdateFormat = !!params.updateFormat;
+		const hasUpdateFormat = Boolean(params.updateFormat);
 		const { filter, verbose } = buildWsRequestFilterAndVerbose(params.updateFormat);
 		return {
 			beginExclusive: params.beginExclusive,
@@ -27,8 +27,7 @@ export const SubscribeToFlats = createWebSocketOperation<UpdatesFlatsWsParams, u
 			...(hasUpdateFormat ? { updateFormat: normalizeUpdateFormat(params.updateFormat) } : { filter }),
 		};
 	},
-	transformInbound: (msg) => {
-		return WebSocketErrorUtils.parseUnion(
+	transformInbound: (msg) => WebSocketErrorUtils.parseUnion(
 			msg,
 			z.union([
 				z.object({ update: JsUpdateSchema }),
@@ -37,6 +36,5 @@ export const SubscribeToFlats = createWebSocketOperation<UpdatesFlatsWsParams, u
 				WsCantonErrorSchema,
 			]),
 			'SubscribeToFlats'
-		);
-	},
+		),
 }); 

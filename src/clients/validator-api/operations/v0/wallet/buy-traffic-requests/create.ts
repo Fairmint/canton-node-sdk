@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../../core';
-import { CreateBuyTrafficRequestResponse } from '../../../../schemas/api';
-import { CreateBuyTrafficRequestParamsSchema, CreateBuyTrafficRequestParams } from '../../../../schemas/operations';
+import { type CreateBuyTrafficRequestResponse } from '../../../../schemas/api';
+import { CreateBuyTrafficRequestParamsSchema, type CreateBuyTrafficRequestParams } from '../../../../schemas/operations';
 
 /**
  * @description Create a new buy traffic request to purchase traffic from another validator
@@ -25,7 +25,7 @@ export const CreateBuyTrafficRequest = createApiOperation<
     
     // Get domain_id from amulet rules
     const amuletRules = await validatorClient.getAmuletRules();
-    const domain_id = amuletRules.amulet_rules.domain_id;
+    const {domain_id} = amuletRules.amulet_rules;
     
     if (!domain_id) {
       throw new Error('Unable to determine domain_id from amulet rules');

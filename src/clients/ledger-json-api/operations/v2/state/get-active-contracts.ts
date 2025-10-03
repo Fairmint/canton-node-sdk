@@ -1,5 +1,5 @@
 import { createApiOperation } from '../../../../../core';
-import { z } from 'zod';
+import { type z } from 'zod';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
 import { GetActiveContractsParamsSchema } from '../../../schemas/operations';
@@ -33,7 +33,7 @@ export const GetActiveContracts = createApiOperation<GetActiveContractsCustomPar
     const requestVerbose = params.verbose === undefined ? true : params.verbose;
 
     // Determine activeAtOffset (default to ledger end if not specified)
-    let activeAtOffset = params.activeAtOffset;
+    let {activeAtOffset} = params;
     if (activeAtOffset === undefined) {
       const ledgerClient = client as LedgerJsonApiClient;
       const ledgerEnd = await ledgerClient.getLedgerEnd({});

@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { URLSearchParams } from 'url';
-import { AuthConfig } from '../types';
+import { type AuthConfig } from '../types';
 import { AuthenticationError, ApiError } from '../errors';
-import { Logger } from '../logging';
+import { type Logger } from '../logging';
 
 export interface AuthResponse {
   access_token: string;
@@ -17,9 +17,9 @@ export class AuthenticationManager {
   private tokenExpiry: number | null = null;
 
   constructor(
-    private authUrl: string,
-    private authConfig: AuthConfig,
-    private logger?: Logger
+    private readonly authUrl: string,
+    private readonly authConfig: AuthConfig,
+    private readonly logger?: Logger
   ) {}
 
   public async authenticate(): Promise<string> {
@@ -57,7 +57,7 @@ export class AuthenticationManager {
       formData.append('password', this.authConfig.password);
     }
 
-    const url = this.authUrl + '/';
+    const url = `${this.authUrl  }/`;
     const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
 
     // Build a log-friendly representation of the request body

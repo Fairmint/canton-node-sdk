@@ -26,7 +26,7 @@ export async function runAllTests() {
   // Test with valid offset and transaction format
   await runner.runSimulation(
     'valid',
-    client => client.getTransactionByOffset({
+    async client => client.getTransactionByOffset({
       offset: TEST_OFFSETS.VALID,
       transactionFormat: DEFAULT_TRANSACTION_FORMAT,
     }),
@@ -35,7 +35,7 @@ export async function runAllTests() {
   // Test with invalid offset format
   await runner.runSimulation(
     'invalid_format',
-    client => client.getTransactionByOffset({
+    async client => client.getTransactionByOffset({
       offset: TEST_OFFSETS.INVALID_FORMAT,
       transactionFormat: DEFAULT_TRANSACTION_FORMAT,
     }),
@@ -44,7 +44,7 @@ export async function runAllTests() {
   // Test with non-existent offset
   await runner.runSimulation(
     'non_existent',
-    client => client.getTransactionByOffset({
+    async client => client.getTransactionByOffset({
       offset: TEST_OFFSETS.NON_EXISTENT,
       transactionFormat: DEFAULT_TRANSACTION_FORMAT,
     }),

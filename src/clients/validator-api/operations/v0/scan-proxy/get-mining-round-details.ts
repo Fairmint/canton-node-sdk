@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { GetMiningRoundDetailsResponse } from '../../../schemas/api';
-import { GetMiningRoundDetailsParamsSchema, GetMiningRoundDetailsParams } from '../../../schemas/operations';
+import { type GetMiningRoundDetailsResponse } from '../../../schemas/api';
+import { GetMiningRoundDetailsParamsSchema, type GetMiningRoundDetailsParams } from '../../../schemas/operations';
 
 /**
  * @description Get details for a specific mining round

@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { InteractiveSubmissionAllocatePartyParamsSchema, InteractiveSubmissionAllocatePartyParams } from '../../../schemas/operations';
-import { InteractiveSubmissionAllocatePartyResponse } from '../../../schemas/api';
+import { InteractiveSubmissionAllocatePartyParamsSchema, type InteractiveSubmissionAllocatePartyParams } from '../../../schemas/operations';
+import { type InteractiveSubmissionAllocatePartyResponse } from '../../../schemas/api';
 
 /**
  * @description Allocate party interactively

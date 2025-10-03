@@ -1,6 +1,6 @@
-import { z } from 'zod';
+import { type z } from 'zod';
 import { createApiOperation } from '../../../../../../core';
-import { GetBuyTrafficRequestStatusResponse } from '../../../../schemas/api';
+import { type GetBuyTrafficRequestStatusResponse } from '../../../../schemas/api';
 import { GetBuyTrafficRequestStatusParamsSchema } from '../../../../schemas/operations';
 
 /**

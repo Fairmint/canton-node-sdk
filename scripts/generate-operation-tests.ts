@@ -34,7 +34,7 @@ async function findOperations(): Promise<OperationInfo[]> {
       const nameMatch = content.match(
         /export const (\w+) = createApiOperation/
       );
-      if (nameMatch && nameMatch[1]) {
+      if (nameMatch?.[1]) {
         const name = nameMatch[1];
         const methodMatch = content.match(/method:\s*['"`]([A-Z]+)['"`]/);
         const endpointMatch = content.match(
@@ -42,11 +42,11 @@ async function findOperations(): Promise<OperationInfo[]> {
         );
         const paramsSchemaMatch = content.match(/paramsSchema:\s*(\w+)/);
 
-        const method = methodMatch && methodMatch[1] ? methodMatch[1] : 'GET';
+        const method = methodMatch?.[1] ? methodMatch[1] : 'GET';
         const endpoint =
-          endpointMatch && endpointMatch[1] ? endpointMatch[1] : '/unknown';
+          endpointMatch?.[1] ? endpointMatch[1] : '/unknown';
         const paramsSchema =
-          paramsSchemaMatch && paramsSchemaMatch[1]
+          paramsSchemaMatch?.[1]
             ? paramsSchemaMatch[1]
             : 'z.any()';
 

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createApiOperation } from '../../../../../core';
-import { operations } from '../../../../../generated/apps/validator/src/main/openapi/validator-internal';
+import { type operations } from '../../../../../generated/apps/validator/src/main/openapi/validator-internal';
 
 /**
  * @description Create a new user in the system

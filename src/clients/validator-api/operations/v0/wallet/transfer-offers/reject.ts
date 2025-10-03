@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../../core';
-import { RejectTransferOfferParamsSchema, RejectTransferOfferParams } from '../../../../schemas/operations';
-import { RejectTransferOfferResponse } from '../../../../schemas/api';
+import { RejectTransferOfferParamsSchema, type RejectTransferOfferParams } from '../../../../schemas/operations';
+import { type RejectTransferOfferResponse } from '../../../../schemas/api';
 
 /**
  * @description Reject a transfer offer by contract ID

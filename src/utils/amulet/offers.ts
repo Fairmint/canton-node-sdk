@@ -1,5 +1,5 @@
-import { LedgerJsonApiClient } from '../../clients/ledger-json-api';
-import { SubmitAndWaitForTransactionTreeResponse } from '../../clients/ledger-json-api/operations';
+import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
+import { type SubmitAndWaitForTransactionTreeResponse } from '../../clients/ledger-json-api/operations';
 import { EnvLoader } from '../../core/config/EnvLoader';
 
 export interface CreateTransferOfferParams {
@@ -79,7 +79,7 @@ export async function createTransferOffer(params: CreateTransferOfferParams): Pr
 export async function acceptTransferOffer(params: AcceptTransferOfferParams): Promise<SubmitAndWaitForTransactionTreeResponse> {
 	const { ledgerClient, transferOfferContractId, acceptingPartyId } = params;
 
-	return await ledgerClient.submitAndWaitForTransactionTree({
+	return ledgerClient.submitAndWaitForTransactionTree({
 		commands: [{
 			ExerciseCommand: {
 				templateId: '#splice-wallet:Splice.Wallet.TransferOffer:TransferOffer',

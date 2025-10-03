@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createApiOperation } from '../../../../../core';
-import { operations } from '../../../../../generated/apps/validator/src/main/openapi/scan-proxy';
+import { type operations } from '../../../../../generated/apps/validator/src/main/openapi/scan-proxy';
 
 const LookupAnsEntryByPartyParamsSchema = z.object({
   party: z.string(),

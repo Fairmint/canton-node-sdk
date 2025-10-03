@@ -1,5 +1,5 @@
-import { ValidatorApiClient } from "../../clients";
-import { DisclosedContract } from "../../clients/ledger-json-api/schemas";
+import { type ValidatorApiClient } from "../../clients";
+import { type DisclosedContract } from "../../clients/ledger-json-api/schemas";
 
 export async function getFeaturedAppRightContractDetails(
   validatorApi: ValidatorApiClient,
@@ -7,7 +7,7 @@ export async function getFeaturedAppRightContractDetails(
   const featuredAppRight = await validatorApi.lookupFeaturedAppRight({
     partyId: validatorApi.getPartyId(),
   });
-  if (!featuredAppRight || !featuredAppRight.featured_app_right) {
+  if (!featuredAppRight?.featured_app_right) {
     throw new Error(
       `No featured app right found for party ${validatorApi.getPartyId()}`
     );

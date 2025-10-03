@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import * as fs from 'fs';
-import { UploadDarFileResponse } from '../../../schemas/api';
+import { type UploadDarFileResponse } from '../../../schemas/api';
 import { createApiOperation } from '../../../../../core';
 
 // Schema for the parameters  

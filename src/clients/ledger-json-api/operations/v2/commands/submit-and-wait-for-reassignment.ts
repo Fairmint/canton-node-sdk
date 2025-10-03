@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { SubmitAndWaitForReassignmentParamsSchema, SubmitAndWaitForReassignmentParams } from '../../../schemas/operations';
-import { JsSubmitAndWaitForReassignmentResponse } from '../../../schemas/api';
+import { SubmitAndWaitForReassignmentParamsSchema, type SubmitAndWaitForReassignmentParams } from '../../../schemas/operations';
+import { type JsSubmitAndWaitForReassignmentResponse } from '../../../schemas/api';
 
 /**
  * @description Submit a batch of reassignment commands and wait for the reassignment response
@@ -24,10 +24,8 @@ export const SubmitAndWaitForReassignment = createApiOperation<
   paramsSchema: SubmitAndWaitForReassignmentParamsSchema,
   method: 'POST',
   buildUrl: (_params: SubmitAndWaitForReassignmentParams, apiUrl: string) => `${apiUrl}/v2/commands/submit-and-wait-for-reassignment`,
-  buildRequestData: (params: SubmitAndWaitForReassignmentParams) => {
-    return {
+  buildRequestData: (params: SubmitAndWaitForReassignmentParams) => ({
       reassignmentCommands: params.reassignmentCommands,
       eventFormat: params.eventFormat,
-    };
-  },
+    }),
 }); 

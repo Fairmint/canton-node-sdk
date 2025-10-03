@@ -5,12 +5,12 @@ import type { paths } from '../../../../../generated/canton/community/ledger/led
 const endpoint = '/v2/updates/update-by-id' as const;
 
 // Define the parameters that the operation accepts
-export type GetUpdateByIdParams = {
+export interface GetUpdateByIdParams {
   /** The ID of the update to fetch. */
   updateId: string;
   /** Parties to read as (optional). */
   readAs: string[];
-};
+}
 
 export type GetUpdateByIdResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 

@@ -1,6 +1,6 @@
-import { z } from 'zod';
+import { type z } from 'zod';
 import { createApiOperation } from '../../../../../../core';
-import { GetTransferOfferStatusResponse } from '../../../../schemas/api';
+import { type GetTransferOfferStatusResponse } from '../../../../schemas/api';
 import { GetTransferOfferStatusParamsSchema } from '../../../../schemas/operations';
 
 /**

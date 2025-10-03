@@ -1,12 +1,12 @@
-import axios, { AxiosInstance } from 'axios';
-import { RequestConfig } from '../types';
+import axios, { type AxiosInstance } from 'axios';
+import { type RequestConfig } from '../types';
 import { ApiError, NetworkError } from '../errors';
-import { Logger } from '../logging';
+import { type Logger } from '../logging';
 
 /** Handles HTTP requests with authentication, logging, and error handling */
 export class HttpClient {
-  private axiosInstance: AxiosInstance;
-  private logger: Logger | undefined;
+  private readonly axiosInstance: AxiosInstance;
+  private readonly logger: Logger | undefined;
 
   constructor(logger?: Logger) {
     this.axiosInstance = axios.create();
@@ -171,7 +171,7 @@ export class HttpClient {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
       const data = error.response?.data || {};
-      const code = data.code;
+      const {code} = data;
       const msg = code ? `HTTP ${status}: ${code}` : `HTTP ${status}`;
       const err = new ApiError(msg, status, error.response?.statusText);
       (err as any).response = data;

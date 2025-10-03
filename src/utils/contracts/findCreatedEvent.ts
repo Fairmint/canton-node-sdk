@@ -1,4 +1,4 @@
-import { SubmitAndWaitForTransactionTreeResponse } from "../../clients/ledger-json-api/operations";
+import { type SubmitAndWaitForTransactionTreeResponse } from "../../clients/ledger-json-api/operations";
 
 export interface CreatedTreeEventValue {
 	contractId: string;
@@ -22,7 +22,7 @@ export interface CreatedTreeEventWrapper {
 function isCreatedTreeEventWrapper(event: unknown): event is CreatedTreeEventWrapper {
 	if (!event || typeof event !== 'object') return false;
 	const e = event as { CreatedTreeEvent?: { value?: unknown } };
-	return !!e.CreatedTreeEvent && typeof e.CreatedTreeEvent === 'object' && 'value' in e.CreatedTreeEvent;
+	return Boolean(e.CreatedTreeEvent) && typeof e.CreatedTreeEvent === 'object' && 'value' in e.CreatedTreeEvent;
 }
 
 export function findCreatedEventByTemplateId(

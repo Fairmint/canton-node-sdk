@@ -2,7 +2,7 @@
  * Types for fee-related data structures
  */
 
-import { TreeEvent } from '../../clients/ledger-json-api/schemas/api/events';
+import { type TreeEvent } from '../../clients/ledger-json-api/schemas/api/events';
 
 export interface BalanceChange {
   party: string;
@@ -159,13 +159,13 @@ export function parseFeesFromUpdate(treeEvent: TreeEvent): FeeAnalysis {
     throw new Error('No fee information found in TreeEvent - only AmuletRules_Transfer choices contain fee data');
   }
 
-  const exerciseResult = exercisedEvent.exerciseResult;
+  const {exerciseResult} = exercisedEvent;
   
   if (!isExerciseResult(exerciseResult) || !isExerciseResultSummary(exerciseResult.summary)) {
     throw new Error('No fee information found in exercise result');
   }
 
-  const summary = exerciseResult.summary;
+  const {summary} = exerciseResult;
   
   // Extract fee components
   const holdingFees = typeof summary.holdingFees === 'string' ? summary.holdingFees : '0';
@@ -228,7 +228,7 @@ export function parseFeesFromUpdate(treeEvent: TreeEvent): FeeAnalysis {
  * @param decimals - Number of decimal places to show (default: 10)
  * @returns Formatted fee amount
  */
-export function formatFeeAmount(amount: string, decimals: number = 10): string {
+export function formatFeeAmount(amount: string, decimals = 10): string {
   const num = parseFloat(amount);
   return num.toFixed(decimals);
 }

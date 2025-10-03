@@ -67,7 +67,7 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
     if (typeof data === 'object' && data !== null) {
       if (Array.isArray(data)) {
         return data.map(item => this.sanitizeData(item));
-      } else {
+      } 
         const result: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(data)) {
           if (key === 'traceId' && typeof value === 'string') {
@@ -81,13 +81,13 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
           }
         }
         return result;
-      }
+      
     }
     return data;
   }
 
   private static getCallerSimulationPath(): string | undefined {
-    const stack = new Error().stack;
+    const {stack} = new Error();
     if (!stack) return undefined;
     const lines = stack.split('\n');
     for (let i = 3; i < lines.length; i++) {
@@ -95,7 +95,7 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
       if (!line) continue;
       const match =
         line.match(/\((.*):\d+:\d+\)$/) || line.match(/at (.*):\d+:\d+$/);
-      if (match && match[1]) {
+      if (match?.[1]) {
         const fullPath = match[1];
         if (typeof fullPath === 'string') {
           const idx = fullPath.lastIndexOf('simulations/');

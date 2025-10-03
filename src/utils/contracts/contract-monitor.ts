@@ -1,4 +1,4 @@
-import { LedgerJsonApiClient } from '../../clients/ledger-json-api';
+import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 
 /**
  * Options for waiting for contract archival

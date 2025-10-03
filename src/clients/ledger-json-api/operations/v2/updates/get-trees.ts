@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { GetUpdateTreesParamsSchema, GetUpdateTreesParams } from '../../../schemas/operations';
-import { GetUpdateTreesResponse } from '../../../schemas/api';
+import { GetUpdateTreesParamsSchema, type GetUpdateTreesParams } from '../../../schemas/operations';
+import { type GetUpdateTreesResponse } from '../../../schemas/api';
 
 /**
  * @description Query update transactions tree list (blocking call)

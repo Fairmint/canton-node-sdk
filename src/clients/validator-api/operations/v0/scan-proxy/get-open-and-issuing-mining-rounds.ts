@@ -1,5 +1,5 @@
 import { createApiOperation } from '../../../../../core';
-import { GetOpenAndIssuingMiningRoundsResponse } from '../../../schemas/api';
+import { type GetOpenAndIssuingMiningRoundsResponse } from '../../../schemas/api';
 import { z } from 'zod';
 
 /**

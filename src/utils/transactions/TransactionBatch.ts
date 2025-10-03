@@ -1,6 +1,5 @@
-import { LedgerJsonApiClient } from "../../clients";
-import { SubmitAndWaitForTransactionTreeResponse } from "../../clients/ledger-json-api/operations";
-import { DisclosedContract, Command } from "../../clients/ledger-json-api/schemas";
+import { type LedgerJsonApiClient } from "../../clients";
+import { type DisclosedContract, type Command } from "../../clients/ledger-json-api/schemas";
 
 export interface BatchSubmitResult {
   updateId: string;
@@ -9,7 +8,7 @@ export interface BatchSubmitResult {
 export class TransactionBatch {
   private readonly client: LedgerJsonApiClient;
   private readonly actAs: string[];
-  private readAs: string[] | undefined;
+  private readonly readAs: string[] | undefined;
   private disclosedContracts: DisclosedContract[] = [];
   private commands: Command[] = [];
 
@@ -65,7 +64,7 @@ export class TransactionBatch {
       ...(this.disclosedContracts.length > 0
         ? { disclosedContracts: this.disclosedContracts }
         : {}),
-    })) as SubmitAndWaitForTransactionTreeResponse;
+    }));
 
     return { updateId: response.transactionTree.updateId };
   }

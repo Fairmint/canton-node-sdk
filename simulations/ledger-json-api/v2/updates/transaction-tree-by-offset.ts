@@ -15,7 +15,7 @@ export async function runAllTests() {
   // Test with valid offset and parties
   await runner.runSimulation<TransactionTreeByOffsetResponse>(
     'valid',
-    client => client.getTransactionTreeByOffset({
+    async client => client.getTransactionTreeByOffset({
       offset: TEST_OFFSETS.VALID,
     }),
   );
@@ -23,7 +23,7 @@ export async function runAllTests() {
   // Test with invalid offset format
   await runner.runSimulation(
     'invalid_format',
-    client => client.getTransactionTreeByOffset({
+    async client => client.getTransactionTreeByOffset({
       offset: TEST_OFFSETS.INVALID_FORMAT,
     }),
   );
@@ -31,7 +31,7 @@ export async function runAllTests() {
   // Test with non-existent offset
   await runner.runSimulation(
     'non_existent',
-    client => client.getTransactionTreeByOffset({
+    async client => client.getTransactionTreeByOffset({
       offset: TEST_OFFSETS.NON_EXISTENT,
     }),
   );

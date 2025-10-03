@@ -1,4 +1,4 @@
-import { LedgerJsonApiClient } from '../../clients/ledger-json-api';
+import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 
 export interface AmuletForTransfer {
 	contractId: string;
@@ -43,9 +43,7 @@ export async function getAmuletsForTransfer(
 		console.log('ctr: ', ctr);
 
 		if (
-			ctr.contractEntry &&
-			ctr.contractEntry.JsActiveContract &&
-			ctr.contractEntry.JsActiveContract.createdEvent
+			ctr.contractEntry?.JsActiveContract?.createdEvent
 		) {
 			const created = ctr.contractEntry.JsActiveContract.createdEvent;
 			payload = created.createArgument;

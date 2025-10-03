@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { BaseClient } from '../BaseClient';
-import { WebSocketClient, WebSocketHandlers, WebSocketSubscription } from '../ws';
+import { type BaseClient } from '../BaseClient';
+import { WebSocketClient, type WebSocketHandlers, type WebSocketSubscription } from '../ws';
 import { ValidationError } from '../errors';
 
 export interface WebSocketOperationConfig<Params, RequestMessage, InboundMessage> {

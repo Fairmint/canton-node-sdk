@@ -1,5 +1,5 @@
 import { createApiOperation } from '../../../../../core';
-import { GetLedgerApiVersionResponse } from '../../../schemas/api';
+import { type GetLedgerApiVersionResponse } from '../../../schemas/api';
 import { z } from 'zod';
 
 /**

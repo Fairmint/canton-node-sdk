@@ -32,11 +32,9 @@ export const Completions = createApiOperation<
     }
     return url.toString();
   },
-  buildRequestData: (params): CompletionsRequest => {
-    return {
+  buildRequestData: (params): CompletionsRequest => ({
       userId: params.userId,
       parties: params.parties,
       beginExclusive: params.beginExclusive,
-    };
-  },
+    }),
 }); 

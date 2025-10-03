@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { GetAuthenticatedUserParamsSchema, GetAuthenticatedUserParams } from '../../../schemas/operations';
-import { GetUserResponse } from '../../../schemas/api';
+import { GetAuthenticatedUserParamsSchema, type GetAuthenticatedUserParams } from '../../../schemas/operations';
+import { type GetUserResponse } from '../../../schemas/api';
 
 /**
  * @description Get details for the currently authenticated user

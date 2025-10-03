@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../../core';
-import { AcceptTransferOfferResponse } from '../../../../schemas/api';
-import { AcceptTransferOfferParamsSchema, AcceptTransferOfferParams } from '../../../../schemas/operations';
+import { type AcceptTransferOfferResponse } from '../../../../schemas/api';
+import { AcceptTransferOfferParamsSchema, type AcceptTransferOfferParams } from '../../../../schemas/operations';
 
 /**
  * @description Accept a transfer offer by contract ID

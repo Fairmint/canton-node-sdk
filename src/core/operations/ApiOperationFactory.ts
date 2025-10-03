@@ -1,7 +1,7 @@
-import { z } from 'zod';
+import { type z } from 'zod';
 import { ApiOperation, SimpleApiOperation } from './ApiOperation';
-import { RequestConfig } from '../types';
-import { BaseClient, SimpleBaseClient } from '../BaseClient';
+import { type RequestConfig } from '../types';
+import { type BaseClient, type SimpleBaseClient } from '../BaseClient';
 
 export interface ApiOperationConfig<Params, Response> {
   paramsSchema: z.ZodSchema<Params>;

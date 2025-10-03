@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { InteractiveSubmissionCreateUserParamsSchema, InteractiveSubmissionCreateUserParams } from '../../../schemas/operations';
-import { InteractiveSubmissionCreateUserResponse } from '../../../schemas/api';
+import { InteractiveSubmissionCreateUserParamsSchema, type InteractiveSubmissionCreateUserParams } from '../../../schemas/operations';
+import { type InteractiveSubmissionCreateUserResponse } from '../../../schemas/api';
 
 /**
  * @description Create user interactively

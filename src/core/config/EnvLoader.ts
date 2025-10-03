@@ -1,7 +1,7 @@
 import { config } from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
-import { NetworkType, ProviderType, ClientConfig, ApiConfig, AuthConfig, LighthouseApiConfig } from '../types';
+import { type NetworkType, type ProviderType, type ClientConfig, type ApiConfig, type AuthConfig, type LighthouseApiConfig } from '../types';
 import { ConfigurationError } from '../errors';
 
 // Load environment variables with fallback to parent directory
@@ -31,7 +31,7 @@ export interface EnvLoaderOptions {
 /** Singleton class for managing environment variables and configuration */
 export class EnvLoader {
   private static instance: EnvLoader | undefined;
-  private env: Record<string, string | undefined>;
+  private readonly env: Record<string, string | undefined>;
   private options: EnvLoaderOptions;
 
   private constructor(options: EnvLoaderOptions = {}) {
@@ -236,7 +236,7 @@ export class EnvLoader {
         'Missing or invalid CANTON_CURRENT_PROVIDER'
       );
     }
-    return value as ProviderType;
+    return value;
   }
 
   public getApiUri(apiType: string, network?: NetworkType, provider?: ProviderType): string | undefined {

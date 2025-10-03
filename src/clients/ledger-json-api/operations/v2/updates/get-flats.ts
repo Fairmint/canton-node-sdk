@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { GetUpdatesParamsSchema, GetUpdatesParams } from '../../../schemas/operations';
-import { GetUpdatesResponse } from '../../../schemas/api';
+import { GetUpdatesParamsSchema, type GetUpdatesParams } from '../../../schemas/operations';
+import { type GetUpdatesResponse } from '../../../schemas/api';
 
 /**
  * @description Query flat transactions update list (blocking call)

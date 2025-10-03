@@ -1,5 +1,5 @@
 import { createApiOperation } from '../../../../../core';
-import { GetPartyDetailsParamsSchema, GetPartyDetailsParams } from '../../../schemas/operations';
+import { GetPartyDetailsParamsSchema, type GetPartyDetailsParams } from '../../../schemas/operations';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 
 /**

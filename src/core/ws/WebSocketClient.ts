@@ -1,5 +1,5 @@
-import WebSocket, { RawData } from 'ws';
-import { BaseClient } from '../BaseClient';
+import WebSocket, { type RawData } from 'ws';
+import { type BaseClient } from '../BaseClient';
 import { WebSocketErrorUtils } from './WebSocketErrorUtils';
 
 export interface WebSocketSubscription {
@@ -24,7 +24,7 @@ export interface WebSocketHandlers<Message, ErrorMessage = unknown> {
  * - Dispatches parsed messages to user handlers
  */
 export class WebSocketClient {
-	constructor(private client: BaseClient) {}
+	constructor(private readonly client: BaseClient) {}
 
 	public async connect<RequestMessage, InboundMessage, ErrorMessage = unknown>(
 		path: string,

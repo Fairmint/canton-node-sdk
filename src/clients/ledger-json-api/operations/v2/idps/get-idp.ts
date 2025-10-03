@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { GetIdentityProviderConfigParamsSchema, GetIdentityProviderConfigParams } from '../../../schemas/operations';
-import { GetIdentityProviderConfigResponse } from '../../../schemas/api';
+import { GetIdentityProviderConfigParamsSchema, type GetIdentityProviderConfigParams } from '../../../schemas/operations';
+import { type GetIdentityProviderConfigResponse } from '../../../schemas/api';
 
 /**
  * @description Get identity provider config

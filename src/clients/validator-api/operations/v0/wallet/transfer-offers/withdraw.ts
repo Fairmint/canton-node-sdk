@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../../core';
-import { WithdrawTransferOfferParamsSchema, WithdrawTransferOfferParams } from '../../../../schemas/operations';
-import { WithdrawTransferOfferResponse } from '../../../../schemas/api';
+import { WithdrawTransferOfferParamsSchema, type WithdrawTransferOfferParams } from '../../../../schemas/operations';
+import { type WithdrawTransferOfferResponse } from '../../../../schemas/api';
 
 /**
  * @description Withdraw a transfer offer by contract ID

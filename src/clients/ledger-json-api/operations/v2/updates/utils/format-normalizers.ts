@@ -27,8 +27,8 @@ export function normalizeUpdateFormat(p: GetUpdatesParams['updateFormat']): unkn
       transactionShape: p.includeTransactions.transactionShape,
       eventFormat: {
         filtersByParty: (() => {
-          type PartyFilter = { cumulative: Array<{ identifierFilter: IdentifierFilter }> };
-          const byParty = p.includeTransactions!.eventFormat.filtersByParty as unknown as Record<string, PartyFilter>;
+          interface PartyFilter { cumulative: Array<{ identifierFilter: IdentifierFilter }> }
+          const byParty = p.includeTransactions.eventFormat.filtersByParty as unknown as Record<string, PartyFilter>;
           return Object.fromEntries(
             Object.entries(byParty).map(([party, cfg]) => [
               party,
@@ -46,8 +46,8 @@ export function normalizeUpdateFormat(p: GetUpdatesParams['updateFormat']): unkn
   if (p.includeReassignments) {
     out.includeReassignments = {
       filtersByParty: (() => {
-        type PartyFilter = { cumulative: Array<{ identifierFilter: IdentifierFilter }> };
-        const byParty = p.includeReassignments!.filtersByParty as unknown as Record<string, PartyFilter>;
+        interface PartyFilter { cumulative: Array<{ identifierFilter: IdentifierFilter }> }
+        const byParty = p.includeReassignments.filtersByParty as unknown as Record<string, PartyFilter>;
         return Object.fromEntries(
           Object.entries(byParty).map(([party, cfg]) => [
             party,
@@ -69,7 +69,7 @@ export function normalizeUpdateFormat(p: GetUpdatesParams['updateFormat']): unkn
 
 // Build legacy TransactionFilter + verbose for WS GetUpdatesRequest, per AsyncAPI
 export function buildWsRequestFilterAndVerbose(p: GetUpdatesParams['updateFormat']): { filter?: unknown; verbose: boolean } {
-  const verbose = !!p?.includeTransactions?.eventFormat?.verbose;
+  const verbose = Boolean(p?.includeTransactions?.eventFormat?.verbose);
   if (!p?.includeTransactions?.eventFormat?.filtersByParty && !p?.includeReassignments && !p?.includeTopologyEvents) {
     return { verbose };
   }

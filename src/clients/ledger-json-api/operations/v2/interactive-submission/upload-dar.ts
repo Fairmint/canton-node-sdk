@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { InteractiveSubmissionUploadDarParamsSchema, InteractiveSubmissionUploadDarParams } from '../../../schemas/operations';
-import { InteractiveSubmissionUploadDarResponse } from '../../../schemas/api';
+import { InteractiveSubmissionUploadDarParamsSchema, type InteractiveSubmissionUploadDarParams } from '../../../schemas/operations';
+import { type InteractiveSubmissionUploadDarResponse } from '../../../schemas/api';
 
 /**
  * @description Upload DAR file interactively
@@ -19,8 +19,8 @@ export const InteractiveSubmissionUploadDar = createApiOperation<
   paramsSchema: InteractiveSubmissionUploadDarParamsSchema,
   method: 'POST',
   buildUrl: (_params: InteractiveSubmissionUploadDarParams, apiUrl: string) => `${apiUrl}/v2/interactive-submission/upload-dar`,
-  buildRequestData: (params: InteractiveSubmissionUploadDarParams) => {
+  buildRequestData: (params: InteractiveSubmissionUploadDarParams) => 
     // Return the DAR file content as the request body
-    return params.darFile;
-  },
+     params.darFile
+  ,
 }); 

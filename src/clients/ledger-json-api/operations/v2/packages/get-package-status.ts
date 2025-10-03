@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
 import { z } from 'zod';
-import { GetPackageStatusResponse } from '../../../schemas/api';
+import { type GetPackageStatusResponse } from '../../../schemas/api';
 
 // Schema for the parameters
 export const GetPackageStatusParamsSchema = z.object({

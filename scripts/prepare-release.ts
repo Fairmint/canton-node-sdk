@@ -91,7 +91,7 @@ function prepareRelease(): void {
     packageJson.version = newVersion;
     fs.writeFileSync(
       packageJsonPath,
-      JSON.stringify(packageJson, null, 2) + '\n'
+      `${JSON.stringify(packageJson, null, 2)  }\n`
     );
 
     console.log('✅ Updated package.json with new version');
@@ -125,9 +125,7 @@ function prepareRelease(): void {
     // Extract PR numbers and create changelog
     const commitLines: string[] = commits
       .split('\n')
-      .map((commit: string): string => {
-        return `- ${commit}`;
-      });
+      .map((commit: string): string => `- ${commit}`);
 
     const changelog: string = commitLines.join('\n');
 
@@ -137,7 +135,7 @@ function prepareRelease(): void {
     console.log('='.repeat(50));
 
     // Create detailed tag message
-    const tagMessage: string = `Release v${newVersion}\n\nChanges:\n${changelog}`;
+    const tagMessage = `Release v${newVersion}\n\nChanges:\n${changelog}`;
 
     console.log('\n🏷️  Tag message preview:');
     console.log('='.repeat(50));
@@ -152,7 +150,7 @@ function prepareRelease(): void {
       ? `\n[Previous version: ${lastTag}](https://github.com/Fairmint/canton-node-sdk/releases/tag/${lastTag})`
       : '';
 
-    const changelogContent: string = `# Changelog for v${newVersion}\n\n${changelog}${previousVersionLink}\n\n`;
+    const changelogContent = `# Changelog for v${newVersion}\n\n${changelog}${previousVersionLink}\n\n`;
 
     // Prepend to existing changelog if it exists
     if (fs.existsSync(changelogPath)) {

@@ -1,11 +1,11 @@
-import { GetOpenAndIssuingMiningRoundsResponse } from '../../clients/validator-api/schemas/api';
-import { ValidatorApiClient } from '../../clients/validator-api';
-import { DisclosedContract } from '../../clients/ledger-json-api/schemas';
+import { type GetOpenAndIssuingMiningRoundsResponse } from '../../clients/validator-api/schemas/api';
+import { type ValidatorApiClient } from '../../clients/validator-api';
+import { type DisclosedContract } from '../../clients/ledger-json-api/schemas';
 
 /**
  * Sleep utility function
  */
-function sleep(ms: number): Promise<void> {
+async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
@@ -70,7 +70,7 @@ export async function getCurrentMiningRoundContext(
   const now = new Date();
   const validOpenRounds = miningRoundsResponse.open_mining_rounds.filter(round => {
     try {
-      const opensAtRaw = (round as any)?.contract?.payload?.opensAt as string | undefined;
+      const opensAtRaw = (round)?.contract?.payload?.opensAt as string | undefined;
       if (!opensAtRaw) return false;
       const opensAt = new Date(opensAtRaw);
       return opensAt <= now;
@@ -84,7 +84,7 @@ export async function getCurrentMiningRoundContext(
   }
 
   // Use the *last* round that has opened (the most recent open one)
-  const lastOpenRound = validOpenRounds[validOpenRounds.length - 1] as any;
+  const lastOpenRound = validOpenRounds[validOpenRounds.length - 1];
 
   const openMiningRoundContract: DisclosedContract = {
     contractId: lastOpenRound.contract.contract_id,

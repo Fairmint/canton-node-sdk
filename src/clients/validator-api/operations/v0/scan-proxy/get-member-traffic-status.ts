@@ -1,7 +1,7 @@
 import { ApiOperation } from '../../../../../core/operations/ApiOperation';
-import { operations } from '../../../../../generated/apps/scan/src/main/openapi/scan';
+import { type operations } from '../../../../../generated/apps/scan/src/main/openapi/scan';
 import { getCurrentMiningRoundDomainId } from '../../../../../utils/mining/mining-rounds';
-import { GetMemberTrafficStatusParams } from '../../../schemas/operations';
+import { type GetMemberTrafficStatusParams } from '../../../schemas/operations';
 
 /**
  * @description Get a member's traffic status as reported by the sequencer

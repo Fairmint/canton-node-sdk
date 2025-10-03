@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { DeleteIdentityProviderConfigParamsSchema, DeleteIdentityProviderConfigParams } from '../../../schemas/operations';
-import { DeleteIdentityProviderConfigResponse } from '../../../schemas/api';
+import { DeleteIdentityProviderConfigParamsSchema, type DeleteIdentityProviderConfigParams } from '../../../schemas/operations';
+import { type DeleteIdentityProviderConfigResponse } from '../../../schemas/api';
 
 /**
  * @description Delete identity provider config

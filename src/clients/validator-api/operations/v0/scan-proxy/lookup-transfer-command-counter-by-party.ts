@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { LookupTransferCommandCounterByPartyResponse } from '../../../schemas/api';
-import { LookupTransferCommandCounterByPartyParamsSchema, LookupTransferCommandCounterByPartyParams } from '../../../schemas/operations';
+import { type LookupTransferCommandCounterByPartyResponse } from '../../../schemas/api';
+import { LookupTransferCommandCounterByPartyParamsSchema, type LookupTransferCommandCounterByPartyParams } from '../../../schemas/operations';
 
 /**
  * @description Lookup transfer command counter by party

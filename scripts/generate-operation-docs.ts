@@ -18,10 +18,10 @@ interface OperationInfo {
 }
 
 class OperationDocGenerator {
-  private operations: OperationInfo[] = [];
-  private schemaCache = new Map<string, string>();
-  private sdkVersion: string;
-  private githubRepo = 'https://github.com/Fairmint/canton-node-sdk';
+  private readonly operations: OperationInfo[] = [];
+  private readonly schemaCache = new Map<string, string>();
+  private readonly sdkVersion: string;
+  private readonly githubRepo = 'https://github.com/Fairmint/canton-node-sdk';
 
   constructor() {
     // Read SDK version from package.json
@@ -198,9 +198,9 @@ class OperationDocGenerator {
   }
 
   private extractGenericParameters(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     _imports: string[],
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     _apiType: string
   ): string {
     // For now, return a placeholder for other operations
@@ -362,7 +362,7 @@ class OperationDocGenerator {
     const responseTypeMatch = sourceCode.match(
       /export\s+type\s+(\w+Response)\s*=/
     );
-    if (responseTypeMatch && responseTypeMatch[1]) {
+    if (responseTypeMatch?.[1]) {
       operationInfo.responseType = responseTypeMatch[1];
       // For OpenAPI types, we'll use a generic response schema since the actual structure comes from the OpenAPI spec
       operationInfo.responseSchema = `{ /* OpenAPI response type: ${responseTypeMatch[1]} */ }`;
@@ -484,7 +484,7 @@ class OperationDocGenerator {
   private extractZodObjectStructure(
     node: ts.CallExpression,
     fromFilePath?: string,
-    indentLevel: number = 1,
+    indentLevel = 1,
     localSchemaMap?: Map<string, ts.Expression>
   ): string {
     const arg = node.arguments[0];
@@ -546,7 +546,7 @@ class OperationDocGenerator {
     const sortedProperties = this.sortObjectProperties(propertyMap);
 
     const openBrace = '{';
-    const closeBrace = (indentLevel > 1 ? indent : '') + '}';
+    const closeBrace = `${indentLevel > 1 ? indent : ''  }}`;
     return `${openBrace}
 ${sortedProperties.join('\n')}
 ${closeBrace}`;
@@ -711,7 +711,7 @@ ${closeBrace}`;
   private extractPropertyType(
     node: ts.Expression,
     fromFilePath?: string,
-    indentLevel: number = 2,
+    indentLevel = 2,
     localSchemaMap?: Map<string, ts.Expression>
   ): string {
     if (ts.isCallExpression(node)) {
@@ -730,7 +730,7 @@ ${closeBrace}`;
           );
           if (propertyName === 'optional') {
             return `${baseType} | undefined`;
-          } else if (propertyName === 'nullable') {
+          } if (propertyName === 'nullable') {
             return `${baseType} | null`;
           }
         }
@@ -868,7 +868,7 @@ ${closeBrace}`;
         ? this.extractPropertyType(args[0], fromFilePath, 2, localSchemaMap)
         : 'any';
       return `Record<string, ${valueType}>`;
-    } else if (args.length === 2) {
+    } if (args.length === 2) {
       const keyType = args[0]
         ? this.extractPropertyType(args[0], fromFilePath, 2, localSchemaMap)
         : 'string';
@@ -928,7 +928,7 @@ ${closeBrace}`;
       schemaMap = this.buildLocalSchemaMap(fromFilePath);
     }
     // Try to resolve from the local schema map first
-    if (schemaMap && schemaMap.has(schemaName)) {
+    if (schemaMap?.has(schemaName)) {
       const expr = schemaMap.get(schemaName)!;
       const schemaDefinition = this.extractSchemaStructure(
         expr,
@@ -941,7 +941,7 @@ ${closeBrace}`;
 
     // Determine which API schemas directory to search based on fromFilePath
     let schemasDir: string;
-    if (fromFilePath && fromFilePath.includes('validator-api')) {
+    if (fromFilePath?.includes('validator-api')) {
       schemasDir = path.join(
         process.cwd(),
         'src/clients/validator-api/schemas'
@@ -1042,7 +1042,7 @@ ${closeBrace}`;
     return null;
   }
 
-  private detectCategories(): { apiType: string; categories: string[] }[] {
+  private detectCategories(): Array<{ apiType: string; categories: string[] }> {
     const apiCategories = new Map<string, Set<string>>();
 
     for (const operation of this.operations) {
@@ -1213,8 +1213,8 @@ sdk_version: ${this.sdkVersion}
 
 `;
     const docContent =
-      frontMatter +
-      `# ${operation.name}
+      `${frontMatter 
+      }# ${operation.name}
 
 ${navigation}
 

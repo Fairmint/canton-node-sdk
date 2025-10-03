@@ -1,5 +1,5 @@
-import { LedgerJsonApiClient } from '../../clients/ledger-json-api';
-import { ValidatorApiClient } from '../../clients/validator-api';
+import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
+import { type ValidatorApiClient } from '../../clients/validator-api';
 import { preApproveTransfers } from '../amulet/pre-approve-transfers';
 import { createTransferOffer, acceptTransferOffer } from '../amulet/offers';
 

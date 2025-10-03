@@ -1,6 +1,6 @@
 import { createApiOperation } from '../../../../../core';
-import { LookupTransferPreapprovalByPartyResponse } from '../../../schemas/api';
-import { GetTransferPreapprovalsByPartyParamsSchema, GetTransferPreapprovalsByPartyParams } from '../../../schemas/operations';
+import { type LookupTransferPreapprovalByPartyResponse } from '../../../schemas/api';
+import { GetTransferPreapprovalsByPartyParamsSchema, type GetTransferPreapprovalsByPartyParams } from '../../../schemas/operations';
 
 /**
  * @description Lookup transfer preapproval by party

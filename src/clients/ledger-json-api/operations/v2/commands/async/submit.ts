@@ -1,5 +1,5 @@
 import { createApiOperation } from '../../../../../../core';
-import { z } from 'zod';
+import { type z } from 'zod';
 import type { paths } from '../../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 import { AsyncSubmitParamsSchema } from '../../../../schemas/operations';
 
@@ -17,11 +17,9 @@ export const AsyncSubmit = createApiOperation<AsyncSubmitParams, AsyncSubmitResp
   paramsSchema: AsyncSubmitParamsSchema,
   method: 'POST',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
-  buildRequestData: (params, client) => {
-    return {
+  buildRequestData: (params, client) => ({
       ...params,
       commandId: params.commandId || `async-submit-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
       actAs: params.actAs || [client.getPartyId()],
-    };
-  },
+    }),
 }); 

@@ -25,8 +25,7 @@ export const SubscribeToTrees = createWebSocketOperation<UpdatesTreesWsParams, u
 			filter,
 		};
 	},
-	transformInbound: (msg) => {
-		return WebSocketErrorUtils.parseUnion(
+	transformInbound: (msg) => WebSocketErrorUtils.parseUnion(
 			msg,
 			z.union([
 				z.object({ update: z.object({ JsTransactionTree: JsTransactionTreeSchema }) }),
@@ -35,6 +34,5 @@ export const SubscribeToTrees = createWebSocketOperation<UpdatesTreesWsParams, u
 				WsCantonErrorSchema,
 			]),
 			'SubscribeToTrees'
-		);
-	},
+		),
 }); 
