@@ -13,7 +13,7 @@ jobs:
       packages: write
       pages: write
       id-token: write
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -48,10 +48,10 @@ jobs:
         run: |
           # Get the new version from package.json
           NEW_VERSION=$(node -p "require('./package.json').version")
-          
+
           # Read the changelog to create tag message
           CHANGELOG=$(cat CHANGELOG.md | head -100)
-          
+
           # Create git tag with detailed message
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"

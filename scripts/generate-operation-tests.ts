@@ -1,8 +1,8 @@
 #!/usr/bin/env tsx
 
 import * as fs from 'fs';
-import * as path from 'path';
 import { glob } from 'glob';
+import * as path from 'path';
 
 interface OperationInfo {
   name: string;
@@ -18,12 +18,7 @@ async function findOperations(): Promise<OperationInfo[]> {
 
   // Find all operation files
   const operationFiles = await glob('src/clients/**/*.ts', {
-    ignore: [
-      '**/index.ts',
-      '**/register.ts',
-      '**/schemas/**',
-      '**/*.generated.ts',
-    ],
+    ignore: ['**/index.ts', '**/register.ts', '**/schemas/**', '**/*.generated.ts'],
   });
 
   for (const file of operationFiles) {
@@ -31,24 +26,16 @@ async function findOperations(): Promise<OperationInfo[]> {
 
     // Check if this is an operation file by looking for createApiOperation
     if (content.includes('createApiOperation')) {
-      const nameMatch = content.match(
-        /export const (\w+) = createApiOperation/
-      );
+      const nameMatch = content.match(/export const (\w+) = createApiOperation/);
       if (nameMatch?.[1]) {
         const name = nameMatch[1];
         const methodMatch = content.match(/method:\s*['"`]([A-Z]+)['"`]/);
-        const endpointMatch = content.match(
-          /endpoint\s*=\s*['"`]([^'"`]+)['"`]/
-        );
+        const endpointMatch = content.match(/endpoint\s*=\s*['"`]([^'"`]+)['"`]/);
         const paramsSchemaMatch = content.match(/paramsSchema:\s*(\w+)/);
 
         const method = methodMatch?.[1] ? methodMatch[1] : 'GET';
-        const endpoint =
-          endpointMatch?.[1] ? endpointMatch[1] : '/unknown';
-        const paramsSchema =
-          paramsSchemaMatch?.[1]
-            ? paramsSchemaMatch[1]
-            : 'z.any()';
+        const endpoint = endpointMatch?.[1] ? endpointMatch[1] : '/unknown';
+        const paramsSchema = paramsSchemaMatch?.[1] ? paramsSchemaMatch[1] : 'z.any()';
 
         // Generate test path
         const relativePath = path.relative('src', file);
@@ -71,17 +58,10 @@ async function findOperations(): Promise<OperationInfo[]> {
 
 function generateTestContent(operation: OperationInfo): string {
   const importPath = path
-    .relative(
-      path.dirname(operation.testPath),
-      path.dirname(operation.filePath)
-    )
+    .relative(path.dirname(operation.testPath), path.dirname(operation.filePath))
     .replace(/\\/g, '/');
-  const mockClientPath = path
-    .relative(path.dirname(operation.testPath), 'test/utils')
-    .replace(/\\/g, '/');
-  const configPath = path
-    .relative(path.dirname(operation.testPath), 'test/config')
-    .replace(/\\/g, '/');
+  const mockClientPath = path.relative(path.dirname(operation.testPath), 'test/utils').replace(/\\/g, '/');
+  const configPath = path.relative(path.dirname(operation.testPath), 'test/config').replace(/\\/g, '/');
 
   const isValidatorApi = operation.filePath.includes('validator-api');
   const isLighthouseApi = operation.filePath.includes('lighthouse-api');
@@ -192,7 +172,7 @@ async function generateTests(): Promise<void> {
   const operations = await findOperations();
 
   console.log(`Found ${operations.length} operations:`);
-  operations.forEach(op => console.log(`  - ${op.name} (${op.filePath})`));
+  operations.forEach((op) => console.log(`  - ${op.name} (${op.filePath})`));
 
   console.log('\nGenerating tests...');
 

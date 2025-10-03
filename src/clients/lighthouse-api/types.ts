@@ -1,8 +1,6 @@
 import { z } from 'zod';
 
-/**
- * Balance information for the transfer agent
- */
+/** Balance information for the transfer agent */
 export const BalanceSchema = z.object({
   currency: z.string(),
   total_cc: z.number(),
@@ -10,9 +8,7 @@ export const BalanceSchema = z.object({
 
 export type Balance = z.infer<typeof BalanceSchema>;
 
-/**
- * Traffic status information for the transfer agent
- */
+/** Traffic status information for the transfer agent */
 export const TrafficStatusSchema = z.object({
   total_consumed: z.number(),
   total_limit: z.number(),
@@ -23,9 +19,7 @@ export const TrafficStatusSchema = z.object({
 
 export type TrafficStatus = z.infer<typeof TrafficStatusSchema>;
 
-/**
- * Validator information for the transfer agent
- */
+/** Validator information for the transfer agent */
 export const ValidatorSchema = z.object({
   id: z.string(),
   sponsor: z.string(),
@@ -45,13 +39,11 @@ export const ValidatorSchema = z.object({
 
 export type Validator = z.infer<typeof ValidatorSchema>;
 
-/**
- * Complete response from the Lighthouse API getTransferAgent endpoint
- */
+/** Complete response from the Lighthouse API getTransferAgent endpoint */
 export const GetTransferAgentResponseSchema = z.object({
   balance: BalanceSchema,
   traffic_status: TrafficStatusSchema,
   validator: ValidatorSchema,
 });
 
-export type GetTransferAgentResponse = z.infer<typeof GetTransferAgentResponseSchema>; 
+export type GetTransferAgentResponse = z.infer<typeof GetTransferAgentResponseSchema>;

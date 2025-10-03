@@ -185,4 +185,4 @@ export type SubmitAndWaitForReassignmentParams = z.infer<typeof SubmitAndWaitFor
 export type SubmitAndWaitForTransactionTreeParams = z.infer<typeof SubmitAndWaitForTransactionTreeParamsSchema>;
 export type AsyncSubmitParams = z.infer<typeof AsyncSubmitParamsSchema>;
 export type AsyncSubmitReassignmentParams = z.infer<typeof AsyncSubmitReassignmentParamsSchema>;
-export type CompletionsParams = z.infer<typeof CompletionsParamsSchema>; 
+export type CompletionsParams = z.infer<typeof CompletionsParamsSchema>;

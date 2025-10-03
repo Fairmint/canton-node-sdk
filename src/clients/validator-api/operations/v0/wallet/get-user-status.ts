@@ -3,12 +3,13 @@ import { createApiOperation } from '../../../../../core';
 import { type operations } from '../../../../../generated/apps/wallet/src/main/openapi/wallet-internal';
 
 /**
- * @description Get the current user status including onboarding and wallet installation status
+ * Get the current user status including onboarding and wallet installation status
+ *
  * @example
- * ```typescript
- * const status = await client.getUserStatus();
- * console.log(`User onboarded: ${status.user_onboarded}, Wallet installed: ${status.user_wallet_installed}`);
- * ```
+ *   ```typescript
+ *   const status = await client.getUserStatus();
+ *   console.log(`User onboarded: ${status.user_onboarded}, Wallet installed: ${status.user_wallet_installed}`);
+ *   ```
  */
 export const GetUserStatus = createApiOperation<
   void,
@@ -17,4 +18,4 @@ export const GetUserStatus = createApiOperation<
   paramsSchema: z.void(),
   method: 'GET',
   buildUrl: (_params: void, apiUrl: string) => `${apiUrl}/api/validator/v0/wallet/user-status`,
-}); 
+});

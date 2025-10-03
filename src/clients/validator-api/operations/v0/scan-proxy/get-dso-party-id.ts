@@ -3,12 +3,13 @@ import { createApiOperation } from '../../../../../core';
 import { type operations } from '../../../../../generated/apps/validator/src/main/openapi/scan-proxy';
 
 /**
- * @description Get the DSO party ID
+ * Get the DSO party ID
+ *
  * @example
- * ```typescript
- * const dsoParty = await client.getDsoPartyId();
- * console.log(`DSO Party ID: ${dsoParty.dso_party_id}`);
- * ```
+ *   ```typescript
+ *   const dsoParty = await client.getDsoPartyId();
+ *   console.log(`DSO Party ID: ${dsoParty.dso_party_id}`);
+ *   ```
  */
 export const GetDsoPartyId = createApiOperation<
   void,
@@ -17,4 +18,4 @@ export const GetDsoPartyId = createApiOperation<
   paramsSchema: z.void(),
   method: 'GET',
   buildUrl: (_params: void, apiUrl: string) => `${apiUrl}/api/validator/v0/scan-proxy/dso-party-id`,
-}); 
+});

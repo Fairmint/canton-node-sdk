@@ -34,17 +34,11 @@ class OperationDocGenerator {
     console.log('🔍 Scanning operations directories...');
 
     // Scan ledger-json-api operations
-    const ledgerOperationsDir = path.join(
-      process.cwd(),
-      'src/clients/ledger-json-api/operations'
-    );
+    const ledgerOperationsDir = path.join(process.cwd(), 'src/clients/ledger-json-api/operations');
     await this.scanOperations(ledgerOperationsDir, 'ledger-json-api');
 
     // Scan validator-api operations
-    const validatorOperationsDir = path.join(
-      process.cwd(),
-      'src/clients/validator-api/operations'
-    );
+    const validatorOperationsDir = path.join(process.cwd(), 'src/clients/validator-api/operations');
     await this.scanOperations(validatorOperationsDir, 'validator-api');
 
     console.log(`📝 Found ${this.operations.length} operations`);
@@ -66,10 +60,7 @@ class OperationDocGenerator {
     console.log('✅ Documentation generation complete!');
   }
 
-  private async scanOperations(
-    dir: string,
-    apiType: 'ledger-json-api' | 'validator-api'
-  ): Promise<void> {
+  private async scanOperations(dir: string, apiType: 'ledger-json-api' | 'validator-api'): Promise<void> {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
 
     for (const entry of entries) {
@@ -77,27 +68,15 @@ class OperationDocGenerator {
 
       if (entry.isDirectory()) {
         await this.scanOperations(fullPath, apiType);
-      } else if (
-        entry.isFile() &&
-        entry.name.endsWith('.ts') &&
-        !entry.name.startsWith('index')
-      ) {
+      } else if (entry.isFile() && entry.name.endsWith('.ts') && !entry.name.startsWith('index')) {
         await this.extractOperationInfo(fullPath, apiType);
       }
     }
   }
 
-  private async extractOperationInfo(
-    filePath: string,
-    apiType: 'ledger-json-api' | 'validator-api'
-  ): Promise<void> {
+  private async extractOperationInfo(filePath: string, apiType: 'ledger-json-api' | 'validator-api'): Promise<void> {
     const sourceCode = fs.readFileSync(filePath, 'utf-8');
-    const sourceFile = ts.createSourceFile(
-      filePath,
-      sourceCode,
-      ts.ScriptTarget.Latest,
-      true
-    );
+    const sourceFile = ts.createSourceFile(filePath, sourceCode, ts.ScriptTarget.Latest, true);
 
     const operationInfo: Partial<OperationInfo> = {
       filePath,
@@ -129,8 +108,7 @@ class OperationDocGenerator {
     const imports = this.extractImports(sourceFile);
 
     // Check if this operation uses OpenAPI types (imports from generated paths)
-    const usesOpenApiTypes =
-      sourceCode.includes('generated/') && sourceCode.includes('openapi');
+    const usesOpenApiTypes = sourceCode.includes('generated/') && sourceCode.includes('openapi');
 
     if (usesOpenApiTypes) {
       // Extract response type from OpenAPI-based operations
@@ -161,10 +139,7 @@ class OperationDocGenerator {
       }
     } else {
       // Generic parameter extraction for other operations
-      operationInfo.parameters = this.extractGenericParameters(
-        imports,
-        operationInfo.apiType || 'ledger-json-api'
-      );
+      operationInfo.parameters = this.extractGenericParameters(imports, operationInfo.apiType || 'ledger-json-api');
     }
 
     // Extract method from createApiOperation call
@@ -198,9 +173,8 @@ class OperationDocGenerator {
   }
 
   private extractGenericParameters(
-     
     _imports: string[],
-     
+
     _apiType: string
   ): string {
     // For now, return a placeholder for other operations
@@ -213,10 +187,7 @@ class OperationDocGenerator {
 
     const visit = (node: ts.Node): void => {
       if (ts.isImportDeclaration(node) && node.importClause) {
-        if (
-          node.importClause.namedBindings &&
-          ts.isNamedImports(node.importClause.namedBindings)
-        ) {
+        if (node.importClause.namedBindings && ts.isNamedImports(node.importClause.namedBindings)) {
           for (const element of node.importClause.namedBindings.elements) {
             imports.push(element.name.text);
           }
@@ -231,23 +202,17 @@ class OperationDocGenerator {
 
   private determineCategoryFromPath(filePath: string): string {
     const pathParts = filePath.split('/');
-    const operationsIndex = pathParts.findIndex(part => part === 'operations');
+    const operationsIndex = pathParts.findIndex((part) => part === 'operations');
     if (operationsIndex !== -1 && pathParts[operationsIndex + 2]) {
       return pathParts[operationsIndex + 2] || 'uncategorized';
     }
     return 'uncategorized';
   }
 
-  private extractMetadata(
-    sourceFile: ts.SourceFile,
-    operationInfo: Partial<OperationInfo>
-  ): void {
+  private extractMetadata(sourceFile: ts.SourceFile, operationInfo: Partial<OperationInfo>): void {
     const visit = (node: ts.Node): void => {
       // Look for exported constant declarations (function names)
-      if (
-        ts.isVariableStatement(node) &&
-        node.modifiers?.some(mod => mod.kind === ts.SyntaxKind.ExportKeyword)
-      ) {
+      if (ts.isVariableStatement(node) && node.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)) {
         for (const declaration of node.declarationList.declarations) {
           if (ts.isVariableDeclaration(declaration) && declaration.name) {
             if (ts.isIdentifier(declaration.name)) {
@@ -267,9 +232,7 @@ class OperationDocGenerator {
 
         if ('tagName' in tag && tag.tagName) {
           if (tag.tagName.text === 'description') {
-            operationInfo.description = tag.comment
-              ? tag.comment.toString().trim()
-              : '';
+            operationInfo.description = tag.comment ? tag.comment.toString().trim() : '';
           } else if (tag.tagName.text === 'example') {
             if (!operationInfo.examples) operationInfo.examples = [];
             const exampleText = tag.comment?.toString().trim() || '';
@@ -280,10 +243,7 @@ class OperationDocGenerator {
               .trim();
 
             // Only add if not already present (prevent duplicates)
-            if (
-              cleanExample &&
-              !operationInfo.examples.includes(cleanExample)
-            ) {
+            if (cleanExample && !operationInfo.examples.includes(cleanExample)) {
               operationInfo.examples.push(cleanExample);
             }
           }
@@ -302,10 +262,7 @@ class OperationDocGenerator {
             if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name)) {
               const propName = prop.name.text;
 
-              if (
-                propName === 'method' &&
-                ts.isStringLiteral(prop.initializer)
-              ) {
+              if (propName === 'method' && ts.isStringLiteral(prop.initializer)) {
                 operationInfo.method = prop.initializer.text as 'GET' | 'POST' | 'WebSocket';
               }
             }
@@ -337,14 +294,8 @@ class OperationDocGenerator {
     visit(sourceFile);
   }
 
-  private extractResponseType(
-    node: ts.ImportDeclaration,
-    operationInfo: Partial<OperationInfo>
-  ): void {
-    if (
-      node.importClause?.namedBindings &&
-      ts.isNamedImports(node.importClause.namedBindings)
-    ) {
+  private extractResponseType(node: ts.ImportDeclaration, operationInfo: Partial<OperationInfo>): void {
+    if (node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings)) {
       for (const specifier of node.importClause.namedBindings.elements) {
         const name = specifier.name.text;
         if (name.includes('Response')) {
@@ -354,14 +305,9 @@ class OperationDocGenerator {
     }
   }
 
-  private extractOpenApiResponseType(
-    sourceCode: string,
-    operationInfo: Partial<OperationInfo>
-  ): void {
+  private extractOpenApiResponseType(sourceCode: string, operationInfo: Partial<OperationInfo>): void {
     // Look for response type definitions like: AsyncSubmitReassignmentResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
-    const responseTypeMatch = sourceCode.match(
-      /export\s+type\s+(\w+Response)\s*=/
-    );
+    const responseTypeMatch = sourceCode.match(/export\s+type\s+(\w+Response)\s*=/);
     if (responseTypeMatch?.[1]) {
       operationInfo.responseType = responseTypeMatch[1];
       // For OpenAPI types, we'll use a generic response schema since the actual structure comes from the OpenAPI spec
@@ -406,48 +352,22 @@ class OperationDocGenerator {
         const propertyName = node.expression.name.text;
         switch (propertyName) {
           case 'object':
-            return this.extractZodObjectStructure(
-              node,
-              fromFilePath,
-              1,
-              localSchemaMap
-            );
+            return this.extractZodObjectStructure(node, fromFilePath, 1, localSchemaMap);
           case 'array':
-            return this.extractZodArrayStructure(
-              node,
-              fromFilePath,
-              localSchemaMap
-            );
+            return this.extractZodArrayStructure(node, fromFilePath, localSchemaMap);
           case 'union':
-            return this.extractZodUnionStructure(
-              node,
-              fromFilePath,
-              localSchemaMap
-            );
+            return this.extractZodUnionStructure(node, fromFilePath, localSchemaMap);
           default:
             return 'any';
         }
       } else if (ts.isIdentifier(node.expression)) {
         switch (node.expression.text) {
           case 'z.object':
-            return this.extractZodObjectStructure(
-              node,
-              fromFilePath,
-              1,
-              localSchemaMap
-            );
+            return this.extractZodObjectStructure(node, fromFilePath, 1, localSchemaMap);
           case 'z.array':
-            return this.extractZodArrayStructure(
-              node,
-              fromFilePath,
-              localSchemaMap
-            );
+            return this.extractZodArrayStructure(node, fromFilePath, localSchemaMap);
           case 'z.union':
-            return this.extractZodUnionStructure(
-              node,
-              fromFilePath,
-              localSchemaMap
-            );
+            return this.extractZodUnionStructure(node, fromFilePath, localSchemaMap);
           default:
             return 'any';
         }
@@ -461,24 +381,16 @@ class OperationDocGenerator {
         return 'any';
       }
       if (schemaName.endsWith('Schema')) {
-        const resolvedType = this.resolveSchemaReference(
-          schemaName,
-          fromFilePath,
-          localSchemaMap
-        );
+        const resolvedType = this.resolveSchemaReference(schemaName, fromFilePath, localSchemaMap);
         if (resolvedType) {
           return resolvedType;
         }
         throw new Error(`Could not resolve referenced schema: ${schemaName}`);
       }
-      throw new Error(
-        `Encountered identifier that is not a schema: ${schemaName}`
-      );
+      throw new Error(`Encountered identifier that is not a schema: ${schemaName}`);
     }
 
-    throw new Error(
-      `Unknown node type in extractSchemaStructure: ${node.kind}`
-    );
+    throw new Error(`Unknown node type in extractSchemaStructure: ${node.kind}`);
   }
 
   private extractZodObjectStructure(
@@ -498,32 +410,17 @@ class OperationDocGenerator {
         const propName = prop.name.text;
         let propType;
         // If the initializer is an identifier and ends with 'Schema', resolve it
-        if (
-          ts.isIdentifier(prop.initializer) &&
-          prop.initializer.text.endsWith('Schema')
-        ) {
-          propType = this.extractPropertyType(
-            prop.initializer,
-            fromFilePath,
-            indentLevel + 1,
-            localSchemaMap
-          );
+        if (ts.isIdentifier(prop.initializer) && prop.initializer.text.endsWith('Schema')) {
+          propType = this.extractPropertyType(prop.initializer, fromFilePath, indentLevel + 1, localSchemaMap);
         } else {
           // Pass indentLevel + 1 for nested objects
-          propType = this.extractPropertyType(
-            prop.initializer,
-            fromFilePath,
-            indentLevel + 1,
-            localSchemaMap
-          );
+          propType = this.extractPropertyType(prop.initializer, fromFilePath, indentLevel + 1, localSchemaMap);
         }
 
         // Check if the property is optional by looking for .optional() calls
         const isOptional = this.isPropertyOptional(prop.initializer);
 
-        const cleanType = propType
-          .replace(' | undefined', '')
-          .replace(' | null', '');
+        const cleanType = propType.replace(' | undefined', '').replace(' | null', '');
 
         // If the property type is a multi-line object, ensure the semicolon is at the correct indentation
         let displayType = cleanType;
@@ -546,7 +443,7 @@ class OperationDocGenerator {
     const sortedProperties = this.sortObjectProperties(propertyMap);
 
     const openBrace = '{';
-    const closeBrace = `${indentLevel > 1 ? indent : ''  }}`;
+    const closeBrace = `${indentLevel > 1 ? indent : ''}}`;
     return `${openBrace}
 ${sortedProperties.join('\n')}
 ${closeBrace}`;
@@ -644,9 +541,7 @@ ${closeBrace}`;
     console.log(`[isPropertyOptional] node kind: ${node.kind}`);
 
     if (ts.isPropertyAccessExpression(node)) {
-      console.log(
-        `[isPropertyOptional] PropertyAccessExpression - name: ${node.name.text}`
-      );
+      console.log(`[isPropertyOptional] PropertyAccessExpression - name: ${node.name.text}`);
       if (node.name.text === 'optional') {
         console.log(`[isPropertyOptional] Found 'optional' - returning true`);
         return true;
@@ -665,9 +560,7 @@ ${closeBrace}`;
           `[isPropertyOptional] CallExpression with PropertyAccessExpression - name: ${node.expression.name.text}`
         );
         if (node.expression.name.text === 'optional') {
-          console.log(
-            `[isPropertyOptional] Found 'optional' in CallExpression - returning true`
-          );
+          console.log(`[isPropertyOptional] Found 'optional' in CallExpression - returning true`);
           return true;
         }
       }
@@ -685,12 +578,7 @@ ${closeBrace}`;
     const arg = node.arguments[0];
     if (!arg) return 'any[]';
 
-    const elementType = this.extractPropertyType(
-      arg,
-      fromFilePath,
-      2,
-      localSchemaMap
-    );
+    const elementType = this.extractPropertyType(arg, fromFilePath, 2, localSchemaMap);
     return `${elementType}[]`;
   }
 
@@ -702,9 +590,7 @@ ${closeBrace}`;
     const args = node.arguments;
     if (args.length === 0) return 'any';
 
-    const types = args.map(arg =>
-      this.extractPropertyType(arg, fromFilePath, 2, localSchemaMap)
-    );
+    const types = args.map((arg) => this.extractPropertyType(arg, fromFilePath, 2, localSchemaMap));
     return types.join(' | ');
   }
 
@@ -730,7 +616,8 @@ ${closeBrace}`;
           );
           if (propertyName === 'optional') {
             return `${baseType} | undefined`;
-          } if (propertyName === 'nullable') {
+          }
+          if (propertyName === 'nullable') {
             return `${baseType} | null`;
           }
         }
@@ -744,48 +631,24 @@ ${closeBrace}`;
           case 'boolean':
             return 'boolean';
           case 'object':
-            return this.extractZodObjectStructure(
-              node,
-              fromFilePath,
-              indentLevel,
-              localSchemaMap
-            );
+            return this.extractZodObjectStructure(node, fromFilePath, indentLevel, localSchemaMap);
           case 'array':
-            return this.extractZodArrayStructure(
-              node,
-              fromFilePath,
-              localSchemaMap
-            );
+            return this.extractZodArrayStructure(node, fromFilePath, localSchemaMap);
           case 'union':
-            return this.extractZodUnionStructure(
-              node,
-              fromFilePath,
-              localSchemaMap
-            );
+            return this.extractZodUnionStructure(node, fromFilePath, localSchemaMap);
           case 'record':
-            return this.extractZodRecordStructure(
-              node,
-              fromFilePath,
-              localSchemaMap
-            );
+            return this.extractZodRecordStructure(node, fromFilePath, localSchemaMap);
           case 'any':
             return 'any';
           case 'unknown':
             return 'unknown';
           default:
             // If it's not a known Zod type, try to resolve it as a schema reference
-            if (
-              ts.isIdentifier(node.expression.expression) &&
-              node.expression.expression.text === 'z'
-            ) {
+            if (ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'z') {
               return 'any'; // Unknown Zod type
             }
             // Try to resolve as a schema reference
-            return this.extractSchemaStructure(
-              node,
-              fromFilePath,
-              localSchemaMap
-            );
+            return this.extractSchemaStructure(node, fromFilePath, localSchemaMap);
         }
       }
 
@@ -799,30 +662,13 @@ ${closeBrace}`;
           case 'z.boolean':
             return 'boolean';
           case 'z.object':
-            return this.extractZodObjectStructure(
-              node,
-              fromFilePath,
-              indentLevel,
-              localSchemaMap
-            );
+            return this.extractZodObjectStructure(node, fromFilePath, indentLevel, localSchemaMap);
           case 'z.array':
-            return this.extractZodArrayStructure(
-              node,
-              fromFilePath,
-              localSchemaMap
-            );
+            return this.extractZodArrayStructure(node, fromFilePath, localSchemaMap);
           case 'z.union':
-            return this.extractZodUnionStructure(
-              node,
-              fromFilePath,
-              localSchemaMap
-            );
+            return this.extractZodUnionStructure(node, fromFilePath, localSchemaMap);
           case 'z.record':
-            return this.extractZodRecordStructure(
-              node,
-              fromFilePath,
-              localSchemaMap
-            );
+            return this.extractZodRecordStructure(node, fromFilePath, localSchemaMap);
           case 'z.any':
             return 'any';
           case 'z.unknown':
@@ -837,11 +683,7 @@ ${closeBrace}`;
     if (ts.isIdentifier(node)) {
       const schemaName = node.text;
       if (schemaName.endsWith('Schema')) {
-        const resolvedType = this.resolveSchemaReference(
-          schemaName,
-          fromFilePath,
-          localSchemaMap
-        );
+        const resolvedType = this.resolveSchemaReference(schemaName, fromFilePath, localSchemaMap);
         if (resolvedType) {
           return resolvedType;
         }
@@ -864,17 +706,12 @@ ${closeBrace}`;
     // In Zod, z.record(valueType) means Record<string, valueType>
     // z.record(keyType, valueType) means Record<keyType, valueType>
     if (args.length === 1) {
-      const valueType = args[0]
-        ? this.extractPropertyType(args[0], fromFilePath, 2, localSchemaMap)
-        : 'any';
+      const valueType = args[0] ? this.extractPropertyType(args[0], fromFilePath, 2, localSchemaMap) : 'any';
       return `Record<string, ${valueType}>`;
-    } if (args.length === 2) {
-      const keyType = args[0]
-        ? this.extractPropertyType(args[0], fromFilePath, 2, localSchemaMap)
-        : 'string';
-      const valueType = args[1]
-        ? this.extractPropertyType(args[1], fromFilePath, 2, localSchemaMap)
-        : 'any';
+    }
+    if (args.length === 2) {
+      const keyType = args[0] ? this.extractPropertyType(args[0], fromFilePath, 2, localSchemaMap) : 'string';
+      const valueType = args[1] ? this.extractPropertyType(args[1], fromFilePath, 2, localSchemaMap) : 'any';
       return `Record<${keyType}, ${valueType}>`;
     }
 
@@ -886,22 +723,11 @@ ${closeBrace}`;
     const schemaMap = new Map<string, ts.Expression>();
     if (!fs.existsSync(filePath)) return schemaMap;
     const sourceCode = fs.readFileSync(filePath, 'utf-8');
-    const sourceFile = ts.createSourceFile(
-      filePath,
-      sourceCode,
-      ts.ScriptTarget.Latest,
-      true
-    );
+    const sourceFile = ts.createSourceFile(filePath, sourceCode, ts.ScriptTarget.Latest, true);
     const visit = (node: ts.Node): void => {
-      if (
-        ts.isVariableStatement(node) &&
-        node.modifiers?.some(mod => mod.kind === ts.SyntaxKind.ExportKeyword)
-      ) {
+      if (ts.isVariableStatement(node) && node.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)) {
         for (const declaration of node.declarationList.declarations) {
-          if (
-            ts.isVariableDeclaration(declaration) &&
-            ts.isIdentifier(declaration.name)
-          ) {
+          if (ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name)) {
             schemaMap.set(declaration.name.text, declaration.initializer!);
           }
         }
@@ -930,11 +756,7 @@ ${closeBrace}`;
     // Try to resolve from the local schema map first
     if (schemaMap?.has(schemaName)) {
       const expr = schemaMap.get(schemaName)!;
-      const schemaDefinition = this.extractSchemaStructure(
-        expr,
-        fromFilePath,
-        localSchemaMap
-      );
+      const schemaDefinition = this.extractSchemaStructure(expr, fromFilePath, localSchemaMap);
       this.schemaCache.set(schemaName, schemaDefinition);
       return schemaDefinition;
     }
@@ -942,15 +764,9 @@ ${closeBrace}`;
     // Determine which API schemas directory to search based on fromFilePath
     let schemasDir: string;
     if (fromFilePath?.includes('validator-api')) {
-      schemasDir = path.join(
-        process.cwd(),
-        'src/clients/validator-api/schemas'
-      );
+      schemasDir = path.join(process.cwd(), 'src/clients/validator-api/schemas');
     } else {
-      schemasDir = path.join(
-        process.cwd(),
-        'src/clients/ledger-json-api/schemas'
-      );
+      schemasDir = path.join(process.cwd(), 'src/clients/ledger-json-api/schemas');
     }
 
     const apiDir = path.join(schemasDir, 'api');
@@ -958,37 +774,25 @@ ${closeBrace}`;
     if (fs.existsSync(apiDir)) {
       schemaFiles = fs
         .readdirSync(apiDir)
-        .filter(f => f.endsWith('.ts'))
-        .map(f => path.join('api', f));
+        .filter((f) => f.endsWith('.ts'))
+        .map((f) => path.join('api', f));
     }
     const parentSchemaFiles = fs
       .readdirSync(schemasDir)
-      .filter(f => f.endsWith('.ts'))
-      .map(f => f);
+      .filter((f) => f.endsWith('.ts'))
+      .map((f) => f);
     schemaFiles.push(...parentSchemaFiles);
 
     // If fromFilePath is provided, search it first (with schemaMap)
     if (fromFilePath && fs.existsSync(fromFilePath)) {
       // Also build import map for imported schemas
       const sourceCode = fs.readFileSync(fromFilePath, 'utf-8');
-      const sourceFile = ts.createSourceFile(
-        fromFilePath,
-        sourceCode,
-        ts.ScriptTarget.Latest,
-        true
-      );
+      const sourceFile = ts.createSourceFile(fromFilePath, sourceCode, ts.ScriptTarget.Latest, true);
       const importMap: Record<string, string> = {};
-      ts.forEachChild(sourceFile, node => {
-        if (
-          ts.isImportDeclaration(node) &&
-          node.importClause &&
-          node.moduleSpecifier
-        ) {
+      ts.forEachChild(sourceFile, (node) => {
+        if (ts.isImportDeclaration(node) && node.importClause && node.moduleSpecifier) {
           const importPath = (node.moduleSpecifier as ts.StringLiteral).text;
-          if (
-            node.importClause.namedBindings &&
-            ts.isNamedImports(node.importClause.namedBindings)
-          ) {
+          if (node.importClause.namedBindings && ts.isNamedImports(node.importClause.namedBindings)) {
             for (const specifier of node.importClause.namedBindings.elements) {
               importMap[specifier.name.text] = importPath;
             }
@@ -1002,20 +806,13 @@ ${closeBrace}`;
         if (!importFilePath.endsWith('.ts')) importFilePath += '.ts';
         let resolvedPath = '';
         if (importFilePath.startsWith('.')) {
-          resolvedPath = path.resolve(
-            path.dirname(fromFilePath),
-            importFilePath
-          );
+          resolvedPath = path.resolve(path.dirname(fromFilePath), importFilePath);
         } else {
           // Assume import from schemas directory
           resolvedPath = path.join(schemasDir, importFilePath);
         }
         if (fs.existsSync(resolvedPath)) {
-          return this.resolveSchemaReference(
-            schemaName,
-            resolvedPath,
-            localSchemaMap
-          );
+          return this.resolveSchemaReference(schemaName, resolvedPath, localSchemaMap);
         }
       }
       // If not found, do not retry local search (prevents infinite loop)
@@ -1029,11 +826,7 @@ ${closeBrace}`;
         const fileSchemaMap = this.buildLocalSchemaMap(filePath);
         if (fileSchemaMap.has(schemaName)) {
           const expr = fileSchemaMap.get(schemaName)!;
-          const schemaDefinition = this.extractSchemaStructure(
-            expr,
-            filePath,
-            localSchemaMap
-          );
+          const schemaDefinition = this.extractSchemaStructure(expr, filePath, localSchemaMap);
           this.schemaCache.set(schemaName, schemaDefinition);
           return schemaDefinition;
         }
@@ -1049,9 +842,7 @@ ${closeBrace}`;
       // Extract category from file path
       // Path format: .../operations/v2/category/filename.ts or .../operations/v0/category/filename.ts
       const pathParts = operation.filePath.split('/');
-      const operationsIndex = pathParts.findIndex(
-        part => part === 'operations'
-      );
+      const operationsIndex = pathParts.findIndex((part) => part === 'operations');
 
       if (operationsIndex !== -1 && pathParts[operationsIndex + 2]) {
         const category = pathParts[operationsIndex + 2];
@@ -1072,7 +863,7 @@ ${closeBrace}`;
 
   private generateCategorySection(apiType: string, category: string): string {
     const categoryOperations = this.operations.filter(
-      op => op.apiType === apiType && op.filePath.includes(`/${category}/`)
+      (op) => op.apiType === apiType && op.filePath.includes(`/${category}/`)
     );
 
     if (categoryOperations.length === 0) {
@@ -1089,10 +880,7 @@ ${closeBrace}`;
 | Operation | Description |
 |-----------|-------------|
 ${categoryOperations
-  .map(
-    op =>
-      `| [${op.name}](/operations/${op.name.toLowerCase()}/) | ${op.description || 'No description'} |`
-  )
+  .map((op) => `| [${op.name}](/operations/${op.name.toLowerCase()}/) | ${op.description || 'No description'} |`)
   .join('\n')}`;
   }
 
@@ -1106,12 +894,8 @@ ${categoryOperations
     for (const apiData of apiCategories) {
       const { apiType, categories } = apiData;
 
-      const apiName =
-        apiType === 'ledger-json-api' ? 'Ledger JSON API' : 'Validator API';
-      const fileName =
-        apiType === 'ledger-json-api'
-          ? 'ledger-json-api-operations.md'
-          : 'validator-api-operations.md';
+      const apiName = apiType === 'ledger-json-api' ? 'Ledger JSON API' : 'Validator API';
+      const fileName = apiType === 'ledger-json-api' ? 'ledger-json-api-operations.md' : 'validator-api-operations.md';
 
       const indexContent = `---
 layout: default
@@ -1124,7 +908,7 @@ This document provides an overview of all available operations in the Canton Nod
 
 ## Operations by Category
 
-${categories.map(category => this.generateCategorySection(apiType, category)).join('\n\n')}
+${categories.map((category) => this.generateCategorySection(apiType, category)).join('\n\n')}
 
 `;
 
@@ -1179,26 +963,17 @@ ${categories.map(category => this.generateCategorySection(apiType, category)).jo
     const navigation = this.generateNavigationForOperation(operation);
 
     // Deduplicate examples
-    const uniqueExamples = operation.examples
-      ? [...new Set(operation.examples)]
-      : [];
+    const uniqueExamples = operation.examples ? [...new Set(operation.examples)] : [];
 
     // Fix response schema JSON formatting
-    let responseSchemaFormatted =
-      operation.responseSchema || `{ /* ${operation.responseType} */ }`;
-    if (
-      responseSchemaFormatted.startsWith('`') &&
-      responseSchemaFormatted.endsWith('`')
-    ) {
+    let responseSchemaFormatted = operation.responseSchema || `{ /* ${operation.responseType} */ }`;
+    if (responseSchemaFormatted.startsWith('`') && responseSchemaFormatted.endsWith('`')) {
       // Remove wrapping backticks if present
       responseSchemaFormatted = responseSchemaFormatted.slice(1, -1);
     }
 
     // Ensure proper JSON formatting
-    if (
-      !responseSchemaFormatted.startsWith('{') &&
-      !responseSchemaFormatted.startsWith('[')
-    ) {
+    if (!responseSchemaFormatted.startsWith('{') && !responseSchemaFormatted.startsWith('[')) {
       responseSchemaFormatted = `{ /* ${responseSchemaFormatted} */ }`;
     }
 
@@ -1212,9 +987,7 @@ sdk_version: ${this.sdkVersion}
 ---
 
 `;
-    const docContent =
-      `${frontMatter 
-      }# ${operation.name}
+    const docContent = `${frontMatter}# ${operation.name}
 
 ${navigation}
 
@@ -1234,9 +1007,7 @@ ${responseSchemaFormatted}
 ## Examples
 ${
   uniqueExamples.length > 0
-    ? uniqueExamples
-        .map(example => `\`\`\`typescript\n${example}\n\`\`\``)
-        .join('\n\n')
+    ? uniqueExamples.map((example) => `\`\`\`typescript\n${example}\n\`\`\``).join('\n\n')
     : 'No examples available'
 }
 
@@ -1275,8 +1046,8 @@ const subscription = await client.${operation.name.toLowerCase()}.subscribe(
 // To close the subscription
 subscription.close();`
     : uniqueExamples.length > 0
-    ? uniqueExamples[0]
-    : `// Example usage for ${operation.name}`
+      ? uniqueExamples[0]
+      : `// Example usage for ${operation.name}`
 }
 \`\`\`
 
@@ -1285,12 +1056,7 @@ subscription.close();`
 *Generated from: [${relativeFilePath}](${githubLink})*
 `;
 
-    const docPath = path.join(
-      process.cwd(),
-      'docs',
-      '_operations',
-      `${operation.name.toLowerCase()}.md`
-    );
+    const docPath = path.join(process.cwd(), 'docs', '_operations', `${operation.name.toLowerCase()}.md`);
 
     // Ensure operations directory exists
     const operationsDir = path.dirname(docPath);
@@ -1304,13 +1070,11 @@ subscription.close();`
 
   private generateNavigationForOperation(operation: OperationInfo): string {
     // Get all operations for the same API type
-    const sameApiOperations = this.operations.filter(
-      op => op.apiType === operation.apiType
-    );
+    const sameApiOperations = this.operations.filter((op) => op.apiType === operation.apiType);
 
     // Group by category
     const categorizedOps = new Map<string, OperationInfo[]>();
-    sameApiOperations.forEach(op => {
+    sameApiOperations.forEach((op) => {
       const category = op.category || 'uncategorized';
       if (!categorizedOps.has(category)) {
         categorizedOps.set(category, []);
@@ -1328,12 +1092,8 @@ subscription.close();`
 `;
 
     for (const category of sortedCategories) {
-      const categoryOps = categorizedOps
-        .get(category)!
-        .sort((a, b) => a.name.localeCompare(b.name));
-      const categoryName =
-        category.charAt(0).toUpperCase() +
-        category.slice(1).replace(/[-_]/g, ' ');
+      const categoryOps = categorizedOps.get(category)!.sort((a, b) => a.name.localeCompare(b.name));
+      const categoryName = category.charAt(0).toUpperCase() + category.slice(1).replace(/[-_]/g, ' ');
 
       navigation += `  <div style="margin-bottom: 8px;">
     <div style="font-weight: 500; font-size: 14px; color: #555; margin-bottom: 4px;">${categoryName}</div>

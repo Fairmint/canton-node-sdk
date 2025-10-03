@@ -1,6 +1,4 @@
-/**
- * Types for fee-related data structures
- */
+/** Types for fee-related data structures */
 
 import { type TreeEvent } from '../../clients/ledger-json-api/schemas/api/events';
 
@@ -40,10 +38,15 @@ interface ExerciseResultSummary {
   inputValidatorRewardAmount: string;
   inputSvRewardAmount: string;
   inputAmuletAmount: string;
-  balanceChanges: Array<[string, {
-    changeToInitialAmountAsOfRoundZero: string;
-    changeToHoldingFeesRate: string;
-  }]>;
+  balanceChanges: Array<
+    [
+      string,
+      {
+        changeToInitialAmountAsOfRoundZero: string;
+        changeToHoldingFeesRate: string;
+      },
+    ]
+  >;
   holdingFees: string;
   outputFees: string[];
   senderChangeFee: string;
@@ -111,6 +114,7 @@ function addStrings(a: string, b: string): string {
 
 /**
  * Finds the AmuletRules_Transfer event in an event tree
+ *
  * @param eventTree - The event tree as a Record<string, TreeEvent>
  * @returns The TreeEvent containing fee information, or null if not found
  */
@@ -128,21 +132,23 @@ function findAmuletRulesTransferEvent(eventTree: Record<string, TreeEvent>): Tre
 
 /**
  * Parses fee information from an event tree (Record<string, TreeEvent>)
+ *
  * @param eventTree - The event tree object
  * @returns FeeAnalysis object with extracted fee information and validation
  */
 export function parseFeesFromEventTree(eventTree: Record<string, TreeEvent>): FeeAnalysis {
   const amuletRulesEvent = findAmuletRulesTransferEvent(eventTree);
-  
+
   if (!amuletRulesEvent) {
     throw new Error('No AmuletRules_Transfer event found in event tree');
   }
-  
+
   return parseFeesFromUpdate(amuletRulesEvent);
 }
 
 /**
  * Parses fee information from a TreeEvent
+ *
  * @param treeEvent - The TreeEvent object
  * @returns FeeAnalysis object with extracted fee information and validation
  */
@@ -153,25 +159,25 @@ export function parseFeesFromUpdate(treeEvent: TreeEvent): FeeAnalysis {
   }
 
   const exercisedEvent = treeEvent.ExercisedTreeEvent.value;
-  
+
   // Check if this is an AmuletRules_Transfer choice which contains fee information
   if (exercisedEvent.choice !== 'AmuletRules_Transfer') {
     throw new Error('No fee information found in TreeEvent - only AmuletRules_Transfer choices contain fee data');
   }
 
-  const {exerciseResult} = exercisedEvent;
-  
+  const { exerciseResult } = exercisedEvent;
+
   if (!isExerciseResult(exerciseResult) || !isExerciseResultSummary(exerciseResult.summary)) {
     throw new Error('No fee information found in exercise result');
   }
 
-  const {summary} = exerciseResult;
-  
+  const { summary } = exerciseResult;
+
   // Extract fee components
   const holdingFees = typeof summary.holdingFees === 'string' ? summary.holdingFees : '0';
   const outputFees = Array.isArray(summary.outputFees) ? summary.outputFees : [];
   const senderChangeFee = typeof summary.senderChangeFee === 'string' ? summary.senderChangeFee : '0';
-  
+
   // Calculate total fees using string math
   let totalFees = holdingFees ?? '0';
   for (const fee of outputFees) {
@@ -180,50 +186,53 @@ export function parseFeesFromUpdate(treeEvent: TreeEvent): FeeAnalysis {
   totalFees = addStrings(totalFees, senderChangeFee ?? '0');
   // Pad to 10 decimals for output
   totalFees = parseFloat(totalFees).toFixed(10);
-  
+
   // Extract balance changes
   const balanceChanges: BalanceChange[] = (summary.balanceChanges || []).map(([party, change]) => ({
     party,
-    changeToInitialAmountAsOfRoundZero: typeof change.changeToInitialAmountAsOfRoundZero === 'string' ? change.changeToInitialAmountAsOfRoundZero : '0',
-    changeToHoldingFeesRate: typeof change.changeToHoldingFeesRate === 'string' ? change.changeToHoldingFeesRate : '0'
+    changeToInitialAmountAsOfRoundZero:
+      typeof change.changeToInitialAmountAsOfRoundZero === 'string' ? change.changeToInitialAmountAsOfRoundZero : '0',
+    changeToHoldingFeesRate: typeof change.changeToHoldingFeesRate === 'string' ? change.changeToHoldingFeesRate : '0',
   }));
-  
+
   // Calculate total balance change using string math
-  let totalBalanceChange = "0";
+  let totalBalanceChange = '0';
   for (const change of balanceChanges) {
-    const amt = typeof change.changeToInitialAmountAsOfRoundZero === 'string' ? change.changeToInitialAmountAsOfRoundZero : '0';
+    const amt =
+      typeof change.changeToInitialAmountAsOfRoundZero === 'string' ? change.changeToInitialAmountAsOfRoundZero : '0';
     totalBalanceChange = addStrings(totalBalanceChange, amt);
   }
   totalBalanceChange = parseFloat(totalBalanceChange).toFixed(10);
-  
+
   // Validate that fees match balance changes (allow for small epsilon)
   const totalFeesCalculated = totalFees;
   const isBalanced = Math.abs(parseFloat(totalBalanceChange) + parseFloat(totalFeesCalculated)) < 1e-8;
-  
+
   const feeValidation: FeeAnalysis['feeValidation'] = {
     isBalanced,
     totalBalanceChange,
-    totalFeesCalculated
+    totalFeesCalculated,
   };
-  
+
   if (!isBalanced) {
     feeValidation.discrepancy = (parseFloat(totalBalanceChange) + parseFloat(totalFeesCalculated)).toString();
   }
-  
+
   return {
     totalFees,
     feeBreakdown: {
       holdingFees,
       outputFees,
-      senderChangeFee
+      senderChangeFee,
     },
     balanceChanges,
-    feeValidation
+    feeValidation,
   };
 }
 
 /**
  * Formats fee amounts for display
+ *
  * @param amount - The fee amount as a string
  * @param decimals - Number of decimal places to show (default: 10)
  * @returns Formatted fee amount
@@ -235,30 +244,31 @@ export function formatFeeAmount(amount: string, decimals = 10): string {
 
 /**
  * Validates that all fee components are present and non-negative
+ *
  * @param feeAnalysis - The fee analysis result
  * @returns Array of validation errors, empty if valid
  */
 export function validateFeeAnalysis(feeAnalysis: FeeAnalysis): string[] {
   const errors: string[] = [];
-  
+
   if (parseFloat(feeAnalysis.feeBreakdown.holdingFees) < 0) {
     errors.push('Holding fees cannot be negative');
   }
-  
+
   if (parseFloat(feeAnalysis.feeBreakdown.senderChangeFee) < 0) {
     errors.push('Sender change fee cannot be negative');
   }
-  
+
   for (const fee of feeAnalysis.feeBreakdown.outputFees) {
     if (parseFloat(fee) < 0) {
       errors.push('Output fees cannot be negative');
       break;
     }
   }
-  
+
   if (!feeAnalysis.feeValidation.isBalanced) {
     errors.push(`Fee balance mismatch: ${feeAnalysis.feeValidation.discrepancy}`);
   }
-  
+
   return errors;
-} 
+}

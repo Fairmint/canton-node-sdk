@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { FileLogger } from '../../src/core/logging';
 import { EnvLoader } from '../../src/core';
+import { FileLogger } from '../../src/core/logging';
 
 /** Abstract base class for simulation runners with shared functionality */
 export abstract class BaseSimulationRunner<TClient, TConfig> {
@@ -52,9 +52,7 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
   private checkForDuplicateFile(filename: string): void {
     const filepath = path.join(this.resultsDir, filename);
     if (fs.existsSync(filepath)) {
-      throw new Error(
-        `File already exists: ${filename}. This indicates a duplicate simulation or naming conflict.`
-      );
+      throw new Error(`File already exists: ${filename}. This indicates a duplicate simulation or naming conflict.`);
     }
     if (this.writtenFiles.has(filename)) {
       throw new Error(
@@ -66,35 +64,33 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
   private sanitizeData(data: unknown): unknown {
     if (typeof data === 'object' && data !== null) {
       if (Array.isArray(data)) {
-        return data.map(item => this.sanitizeData(item));
-      } 
-        const result: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(data)) {
-          if (key === 'traceId' && typeof value === 'string') {
-            result[key] = 'PLACEHOLDER_TRACE_ID';
-          } else if (key === 'stack' && typeof value === 'string') {
-            result[key] = 'PLACEHOLDER_STACK_TRACE';
-          } else if (key === 'tid' && typeof value === 'string') {
-            result[key] = 'PLACEHOLDER_TID';
-          } else {
-            result[key] = this.sanitizeData(value);
-          }
+        return data.map((item) => this.sanitizeData(item));
+      }
+      const result: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(data)) {
+        if (key === 'traceId' && typeof value === 'string') {
+          result[key] = 'PLACEHOLDER_TRACE_ID';
+        } else if (key === 'stack' && typeof value === 'string') {
+          result[key] = 'PLACEHOLDER_STACK_TRACE';
+        } else if (key === 'tid' && typeof value === 'string') {
+          result[key] = 'PLACEHOLDER_TID';
+        } else {
+          result[key] = this.sanitizeData(value);
         }
-        return result;
-      
+      }
+      return result;
     }
     return data;
   }
 
   private static getCallerSimulationPath(): string | undefined {
-    const {stack} = new Error();
+    const { stack } = new Error();
     if (!stack) return undefined;
     const lines = stack.split('\n');
     for (let i = 3; i < lines.length; i++) {
       const line = lines[i];
       if (!line) continue;
-      const match =
-        line.match(/\((.*):\d+:\d+\)$/) || line.match(/at (.*):\d+:\d+$/);
+      const match = line.match(/\((.*):\d+:\d+\)$/) || line.match(/at (.*):\d+:\d+$/);
       if (match?.[1]) {
         const fullPath = match[1];
         if (typeof fullPath === 'string') {
@@ -121,9 +117,7 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
       const data = await simulationFn(this.client);
       let resultDir = this.resultsDir;
       if (simulationFilePath) {
-        const relPath = simulationFilePath
-          .replace(/\\/g, '/')
-          .replace(/\.ts$/, '');
+        const relPath = simulationFilePath.replace(/\\/g, '/').replace(/\.ts$/, '');
         resultDir = path.join(this.resultsDir, relPath);
         fs.mkdirSync(resultDir, { recursive: true });
       }
@@ -151,9 +145,7 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
       };
       let resultDir = this.resultsDir;
       if (simulationFilePath) {
-        const relPath = simulationFilePath
-          .replace(/\\/g, '/')
-          .replace(/\.ts$/, '');
+        const relPath = simulationFilePath.replace(/\\/g, '/').replace(/\.ts$/, '');
         resultDir = path.join(this.resultsDir, relPath);
         fs.mkdirSync(resultDir, { recursive: true });
       }
@@ -161,10 +153,7 @@ export abstract class BaseSimulationRunner<TClient, TConfig> {
       this.checkForDuplicateFile(path.join(simulationFilePath || '', filename));
       const filepath = path.join(resultDir, filename);
       const sanitizedErrorDetails = this.sanitizeData(errorDetails);
-      fs.writeFileSync(
-        filepath,
-        JSON.stringify(sanitizedErrorDetails, null, 2)
-      );
+      fs.writeFileSync(filepath, JSON.stringify(sanitizedErrorDetails, null, 2));
       this.writtenFiles.add(path.join(simulationFilePath || '', filename));
       console.log(`⚠️  Simulation "${simulationName}" failed (expected)`);
       console.log(`📁 Error details saved to: ${filepath}`);

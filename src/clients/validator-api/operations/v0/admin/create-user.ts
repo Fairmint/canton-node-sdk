@@ -3,15 +3,16 @@ import { createApiOperation } from '../../../../../core';
 import { type operations } from '../../../../../generated/apps/validator/src/main/openapi/validator-internal';
 
 /**
- * @description Create a new user in the system
+ * Create a new user in the system
+ *
  * @example
- * ```typescript
- * const user = await client.createUser({
+ *   ```typescript
+ *   const user = await client.createUser({
  *   name: 'John Doe',
  *   party_id: 'party123'
- * });
- * console.log(`User created with party ID: ${user.party_id}`);
- * ```
+ *   });
+ *   console.log(`User created with party ID: ${user.party_id}`);
+ *   ```
  */
 export const CreateUser = createApiOperation<
   operations['onboardUser']['requestBody']['content']['application/json'],
@@ -24,4 +25,4 @@ export const CreateUser = createApiOperation<
   method: 'POST',
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/admin/users`,
   buildRequestData: (params) => params,
-}); 
+});

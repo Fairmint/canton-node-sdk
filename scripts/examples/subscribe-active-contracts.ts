@@ -22,21 +22,20 @@ async function main(): Promise<void> {
     },
     {
       onOpen: () => console.log('Active contracts stream opened'),
-      onMessage: msg => {
+      onMessage: (msg) => {
         // Count only active contract entries
         if (
           typeof msg === 'object' &&
           msg !== null &&
           'contractEntry' in msg &&
-          (msg).contractEntry &&
-          'JsActiveContract' in
-            (msg).contractEntry
+          msg.contractEntry &&
+          'JsActiveContract' in msg.contractEntry
         ) {
           activeContractsFound += 1;
         }
         console.log(JSON.stringify(msg));
       },
-      onError: err => {
+      onError: (err) => {
         console.error('Stream error:', err);
         console.log(`${activeContractsFound} active contracts found`);
         process.exit(1);
@@ -57,7 +56,7 @@ async function main(): Promise<void> {
   }, 120000);
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error(err);
   process.exit(1);
 });

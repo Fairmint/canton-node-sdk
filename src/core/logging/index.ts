@@ -1,2 +1,2 @@
+export { FileLogger } from './FileLogger';
 export { Logger, LoggerConfig } from './Logger';
-export { FileLogger } from './FileLogger'; 

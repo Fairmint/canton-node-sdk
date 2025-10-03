@@ -3,12 +3,13 @@ import { createApiOperation } from '../../../../../core';
 import { type operations } from '../../../../../generated/apps/wallet/src/main/openapi/wallet-internal';
 
 /**
- * @description Get the list of amulets and locked amulets for the current user
+ * Get the list of amulets and locked amulets for the current user
+ *
  * @example
- * ```typescript
- * const amulets = await client.getAmulets();
- * console.log(`Amulets: ${amulets.amulets.length}, Locked: ${amulets.locked_amulets.length}`);
- * ```
+ *   ```typescript
+ *   const amulets = await client.getAmulets();
+ *   console.log(`Amulets: ${amulets.amulets.length}, Locked: ${amulets.locked_amulets.length}`);
+ *   ```
  */
 export const GetAmulets = createApiOperation<
   void,
@@ -17,4 +18,4 @@ export const GetAmulets = createApiOperation<
   paramsSchema: z.void(),
   method: 'GET',
   buildUrl: (_params: void, apiUrl: string) => `${apiUrl}/api/validator/v0/wallet/amulets`,
-}); 
+});

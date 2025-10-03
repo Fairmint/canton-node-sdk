@@ -1,8 +1,5 @@
 import { z } from 'zod';
-import { 
-  CreateTransferOfferRequestSchema,
-  TransferPreapprovalSendRequestSchema
-} from '../api/wallet';
+import { CreateTransferOfferRequestSchema, TransferPreapprovalSendRequestSchema } from '../api/wallet';
 
 // Transfer Offer Parameters
 export const CreateTransferOfferParamsSchema = CreateTransferOfferRequestSchema;
@@ -27,8 +24,6 @@ export const GetBuyTrafficRequestStatusParamsSchema = z.object({
   trackingId: z.string(),
 });
 
-
-
 // Transfer Preapproval Parameters
 export const TransferPreapprovalSendParamsSchema = TransferPreapprovalSendRequestSchema;
 
@@ -39,4 +34,4 @@ export type RejectTransferOfferParams = z.infer<typeof RejectTransferOfferParams
 export type WithdrawTransferOfferParams = z.infer<typeof WithdrawTransferOfferParamsSchema>;
 export type CreateBuyTrafficRequestParams = z.infer<typeof CreateBuyTrafficRequestParamsSchema>;
 export type GetBuyTrafficRequestStatusParams = z.infer<typeof GetBuyTrafficRequestStatusParamsSchema>;
-export type TransferPreapprovalSendParams = z.infer<typeof TransferPreapprovalSendParamsSchema>; 
+export type TransferPreapprovalSendParams = z.infer<typeof TransferPreapprovalSendParamsSchema>;

@@ -5,4 +5,4 @@ export * from './wallet';
 export * from './ans';
 
 // Scan proxy operation schemas
-export * from './scan-proxy'; 
+export * from './scan-proxy';

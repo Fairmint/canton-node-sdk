@@ -21,7 +21,7 @@ const result = await createParty({
   ledgerClient,
   validatorClient,
   partyName: 'alice123',
-  amount: '100'
+  amount: '100',
 });
 
 console.log('Party created:', result.partyId);
@@ -59,4 +59,4 @@ The following environment variables must be set for the specified network and pr
 - `CANTON_{NETWORK}_{PROVIDER}_VALIDATOR_API_CLIENT_ID`
 - `CANTON_{NETWORK}_{PROVIDER}_VALIDATOR_API_CLIENT_SECRET` (or username/password)
 - `CANTON_WALLET_TEMPLATE_ID_{NETWORK}`
-- `CANTON_VALIDATOR_WALLET_APP_INSTALL_CONTRACT_ID_{NETWORK}` 
+- `CANTON_VALIDATOR_WALLET_APP_INSTALL_CONTRACT_ID_{NETWORK}`

@@ -3,12 +3,13 @@ import { createApiOperation } from '../../../../../../../core';
 import { type operations } from '../../../../../../../generated/apps/wallet/src/main/openapi/wallet-internal';
 
 /**
- * @description List all token standard transfers for the current user
+ * List all token standard transfers for the current user
+ *
  * @example
- * ```typescript
- * const transfers = await client.listTokenStandardTransfers();
- * console.log(`Found ${transfers.transfers.length} transfers`);
- * ```
+ *   ```typescript
+ *   const transfers = await client.listTokenStandardTransfers();
+ *   console.log(`Found ${transfers.transfers.length} transfers`);
+ *   ```
  */
 export const ListTokenStandardTransfers = createApiOperation<
   void,
@@ -17,4 +18,4 @@ export const ListTokenStandardTransfers = createApiOperation<
   paramsSchema: z.void(),
   method: 'GET',
   buildUrl: (_params: void, apiUrl: string) => `${apiUrl}/api/validator/v0/wallet/token-standard/transfers`,
-}); 
+});

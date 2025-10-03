@@ -1,1 +1,1 @@
-export * from './mining-rounds'; 
+export * from './mining-rounds';

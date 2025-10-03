@@ -6,11 +6,7 @@ module.exports = {
     project: './tsconfig.json',
   },
   plugins: ['@typescript-eslint', 'prettier'],
-  extends: [
-    'eslint:recommended',
-    '@typescript-eslint/recommended',
-    'prettier',
-  ],
+  extends: ['eslint:recommended', '@typescript-eslint/recommended', 'prettier'],
   rules: {
     'prettier/prettier': 'error',
     '@typescript-eslint/no-unused-vars': 'error',
@@ -26,4 +22,4 @@ module.exports = {
     es2020: true,
   },
   ignorePatterns: ['build/', 'node_modules/', '*.js'],
-}; 
+};

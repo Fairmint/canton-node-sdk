@@ -3,9 +3,8 @@
 /**
  * Collapse TypeScript manifest by removing mapping files and collapsing extensions
  *
- * This script reads file paths from stdin and outputs a simplified manifest
- * that removes .d.ts.map and .js.map files and collapses .d.ts and .js files
- * into single entries without extensions.
+ * This script reads file paths from stdin and outputs a simplified manifest that removes .d.ts.map and .js.map files
+ * and collapses .d.ts and .js files into single entries without extensions.
  */
 
 import { readFileSync } from 'fs';
@@ -18,7 +17,7 @@ function collapseManifest(): void {
     const lines = input
       .trim()
       .split('\n')
-      .filter(line => line.length > 0);
+      .filter((line) => line.length > 0);
 
     // Exit with error if no files found
     if (lines.length === 0) {

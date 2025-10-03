@@ -46,4 +46,4 @@ export type ListAnsEntriesProxyResponse = z.infer<typeof ListAnsEntriesProxyResp
 export type LookupAnsEntryByNameResponse = z.infer<typeof LookupAnsEntryByNameResponseSchema>;
 export type LookupAnsEntryByPartyResponse = z.infer<typeof LookupAnsEntryByPartyResponseSchema>;
 export type GetAnsRulesRequest = z.infer<typeof GetAnsRulesRequestSchema>;
-export type GetAnsRulesResponse = z.infer<typeof GetAnsRulesResponseSchema>; 
+export type GetAnsRulesResponse = z.infer<typeof GetAnsRulesResponseSchema>;

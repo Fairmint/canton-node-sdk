@@ -5,4 +5,4 @@
     "outDir": "./build"
   },
   "include": ["src/**/*", "test/**/*", "scripts/**/*", "simulations/**/*"]
-} 
+}

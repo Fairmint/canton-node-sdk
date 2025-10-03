@@ -1,24 +1,28 @@
 import { createApiOperation } from '../../../../../core';
-import { InteractiveSubmissionCreateUserParamsSchema, type InteractiveSubmissionCreateUserParams } from '../../../schemas/operations';
 import { type InteractiveSubmissionCreateUserResponse } from '../../../schemas/api';
+import {
+  InteractiveSubmissionCreateUserParamsSchema,
+  type InteractiveSubmissionCreateUserParams,
+} from '../../../schemas/operations';
 
 /**
- * @description Create user interactively
+ * Create user interactively
+ *
  * @example
- * ```typescript
- * const result = await client.interactiveSubmissionCreateUser({
+ *   ```typescript
+ *   const result = await client.interactiveSubmissionCreateUser({
  *   user: {
- *     id: 'alice',
- *     primaryParty: 'Alice::1220',
- *     isDeactivated: false,
- *     identityProviderId: 'default'
+ *   id: 'alice',
+ *   primaryParty: 'Alice::1220',
+ *   isDeactivated: false,
+ *   identityProviderId: 'default'
  *   },
  *   rights: [
- *     { kind: { CanActAs: { party: 'Alice::1220' } } }
+ *   { kind: { CanActAs: { party: 'Alice::1220' } } }
  *   ]
- * });
- * console.log(`Created user: ${result.user.id}`);
- * ```
+ *   });
+ *   console.log(`Created user: ${result.user.id}`);
+ *   ```
  */
 export const InteractiveSubmissionCreateUser = createApiOperation<
   InteractiveSubmissionCreateUserParams,
@@ -26,9 +30,10 @@ export const InteractiveSubmissionCreateUser = createApiOperation<
 >({
   paramsSchema: InteractiveSubmissionCreateUserParamsSchema,
   method: 'POST',
-  buildUrl: (_params: InteractiveSubmissionCreateUserParams, apiUrl: string) => `${apiUrl}/v2/interactive-submission/create-user`,
+  buildUrl: (_params: InteractiveSubmissionCreateUserParams, apiUrl: string) =>
+    `${apiUrl}/v2/interactive-submission/create-user`,
   buildRequestData: (params: InteractiveSubmissionCreateUserParams) => ({
     user: params.user,
     rights: params.rights,
   }),
-}); 
+});

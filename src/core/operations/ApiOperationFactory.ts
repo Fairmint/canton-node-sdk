@@ -1,7 +1,7 @@
 import { type z } from 'zod';
-import { ApiOperation, SimpleApiOperation } from './ApiOperation';
-import { type RequestConfig } from '../types';
 import { type BaseClient, type SimpleBaseClient } from '../BaseClient';
+import { type RequestConfig } from '../types';
+import { ApiOperation, SimpleApiOperation } from './ApiOperation';
 
 export interface ApiOperationConfig<Params, Response> {
   paramsSchema: z.ZodSchema<Params>;
@@ -20,50 +20,46 @@ export interface SimpleApiOperationConfig<Params, Response> {
   transformResponse?: (response: Response) => Response;
 }
 
-export function createApiOperation<Params, Response>(
-  config: ApiOperationConfig<Params, Response>
-) {
+export function createApiOperation<Params, Response>(config: ApiOperationConfig<Params, Response>) {
   return class extends ApiOperation<Params, Response> {
     async execute(params: Params): Promise<Response> {
       // Validate parameters
       const validatedParams = this.validateParams(params, config.paramsSchema);
 
-        const url = config.buildUrl(validatedParams, this.getApiUrl(), this.client);
-        const requestConfig = config.requestConfig || { 
-          contentType: 'application/json', 
-          includeBearerToken: true 
-        };
+      const url = config.buildUrl(validatedParams, this.getApiUrl(), this.client);
+      const requestConfig = config.requestConfig || {
+        contentType: 'application/json',
+        includeBearerToken: true,
+      };
 
-        let response: Response;
+      let response: Response;
 
-        if (config.method === 'GET') {
-          response = await this.makeGetRequest<Response>(url, requestConfig);
-        } else if (config.method === 'DELETE') {
-          response = await this.makeDeleteRequest<Response>(url, requestConfig);
+      if (config.method === 'GET') {
+        response = await this.makeGetRequest<Response>(url, requestConfig);
+      } else if (config.method === 'DELETE') {
+        response = await this.makeDeleteRequest<Response>(url, requestConfig);
+      } else {
+        const data = await config.buildRequestData?.(validatedParams, this.client);
+        if (config.method === 'POST') {
+          response = await this.makePostRequest<Response>(url, data, requestConfig);
+        } else if (config.method === 'PATCH') {
+          response = await this.makePatchRequest<Response>(url, data, requestConfig);
         } else {
-          const data = await config.buildRequestData?.(validatedParams, this.client);
-          if (config.method === 'POST') {
-            response = await this.makePostRequest<Response>(url, data, requestConfig);
-          } else if (config.method === 'PATCH') {
-            response = await this.makePatchRequest<Response>(url, data, requestConfig);
-          } else {
-            throw new Error(`Unsupported HTTP method: ${config.method}`);
-          }
+          throw new Error(`Unsupported HTTP method: ${config.method}`);
         }
+      }
 
-        // Transform response if needed
-        if (config.transformResponse) {
-          return config.transformResponse(response);
-        }
+      // Transform response if needed
+      if (config.transformResponse) {
+        return config.transformResponse(response);
+      }
 
-        return response;
+      return response;
     }
   };
 }
 
-export function createSimpleApiOperation<Params, Response>(
-  config: SimpleApiOperationConfig<Params, Response>
-) {
+export function createSimpleApiOperation<Params, Response>(config: SimpleApiOperationConfig<Params, Response>) {
   return class extends SimpleApiOperation<Params, Response> {
     async execute(params: Params): Promise<Response> {
       // Validate parameters
@@ -96,4 +92,4 @@ export function createSimpleApiOperation<Params, Response>(
       return response;
     }
   };
-} 
+}

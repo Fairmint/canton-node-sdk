@@ -63,7 +63,9 @@ export const LookupTransferCommandStatusResponseSchema = z.object({
   status: z.string(),
 });
 
-export type LookupTransferCommandCounterByPartyResponse = z.infer<typeof LookupTransferCommandCounterByPartyResponseSchema>;
+export type LookupTransferCommandCounterByPartyResponse = z.infer<
+  typeof LookupTransferCommandCounterByPartyResponseSchema
+>;
 export type LookupTransferCommandStatusResponse = z.infer<typeof LookupTransferCommandStatusResponseSchema>;
 
 // Transfer Preapproval Schema
@@ -101,15 +103,17 @@ export const GetInstrumentResponseSchema = InstrumentSchema;
 
 export const ChoiceContextSchema = z.object({
   choiceContextData: z.record(z.string(), z.never()),
-  disclosedContracts: z.array(z.object({
-    templateId: z.string(),
-    contractId: z.string(),
-    createdEventBlob: z.string(),
-    synchronizerId: z.string(),
-    debugPackageName: z.string().optional(),
-    debugPayload: z.record(z.string(), z.never()).optional(),
-    debugCreatedAt: z.string().optional(),
-  })),
+  disclosedContracts: z.array(
+    z.object({
+      templateId: z.string(),
+      contractId: z.string(),
+      createdEventBlob: z.string(),
+      synchronizerId: z.string(),
+      debugPackageName: z.string().optional(),
+      debugPayload: z.record(z.string(), z.never()).optional(),
+      debugCreatedAt: z.string().optional(),
+    })
+  ),
 });
 
 export const GetAllocationFactoryResponseSchema = z.object({
@@ -143,6 +147,12 @@ export type GetAllocationWithdrawContextResponse = z.infer<typeof GetAllocationW
 export type GetAllocationCancelContextResponse = z.infer<typeof GetAllocationCancelContextResponseSchema>;
 export type TransferFactoryWithChoiceContext = z.infer<typeof TransferFactoryWithChoiceContextSchema>;
 export type GetTransferFactoryResponse = z.infer<typeof GetTransferFactoryResponseSchema>;
-export type GetTransferInstructionAcceptContextResponse = z.infer<typeof GetTransferInstructionAcceptContextResponseSchema>;
-export type GetTransferInstructionRejectContextResponse = z.infer<typeof GetTransferInstructionRejectContextResponseSchema>;
-export type GetTransferInstructionWithdrawContextResponse = z.infer<typeof GetTransferInstructionWithdrawContextResponseSchema>; 
+export type GetTransferInstructionAcceptContextResponse = z.infer<
+  typeof GetTransferInstructionAcceptContextResponseSchema
+>;
+export type GetTransferInstructionRejectContextResponse = z.infer<
+  typeof GetTransferInstructionRejectContextResponseSchema
+>;
+export type GetTransferInstructionWithdrawContextResponse = z.infer<
+  typeof GetTransferInstructionWithdrawContextResponseSchema
+>;

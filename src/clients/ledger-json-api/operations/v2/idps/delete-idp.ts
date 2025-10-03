@@ -1,13 +1,17 @@
 import { createApiOperation } from '../../../../../core';
-import { DeleteIdentityProviderConfigParamsSchema, type DeleteIdentityProviderConfigParams } from '../../../schemas/operations';
 import { type DeleteIdentityProviderConfigResponse } from '../../../schemas/api';
+import {
+  DeleteIdentityProviderConfigParamsSchema,
+  type DeleteIdentityProviderConfigParams,
+} from '../../../schemas/operations';
 
 /**
- * @description Delete identity provider config
+ * Delete identity provider config
+ *
  * @example
- * ```typescript
- * await client.deleteIdentityProviderConfig({ idpId: 'my-idp' });
- * ```
+ *   ```typescript
+ *   await client.deleteIdentityProviderConfig({ idpId: 'my-idp' });
+ *   ```;
  */
 export const DeleteIdentityProviderConfig = createApiOperation<
   DeleteIdentityProviderConfigParams,
@@ -16,4 +20,4 @@ export const DeleteIdentityProviderConfig = createApiOperation<
   paramsSchema: DeleteIdentityProviderConfigParamsSchema,
   method: 'DELETE',
   buildUrl: (params: DeleteIdentityProviderConfigParams, apiUrl: string) => `${apiUrl}/v2/idps/${params.idpId}`,
-}); 
+});

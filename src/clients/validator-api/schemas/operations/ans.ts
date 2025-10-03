@@ -19,4 +19,4 @@ export type CreateAnsEntryParams = z.infer<typeof CreateAnsEntryParamsSchema>;
 export type GetAnsRulesParams = z.infer<typeof GetAnsRulesParamsSchema>;
 export type LookupAnsEntryByNameParams = z.infer<typeof LookupAnsEntryByNameParamsSchema>;
 export type LookupAnsEntryByPartyParams = z.infer<typeof LookupAnsEntryByPartyParamsSchema>;
-export type ListAnsEntriesProxyParams = z.infer<typeof ListAnsEntriesProxyParamsSchema>; 
+export type ListAnsEntriesProxyParams = z.infer<typeof ListAnsEntriesProxyParamsSchema>;

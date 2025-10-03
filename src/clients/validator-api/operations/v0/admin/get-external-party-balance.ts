@@ -7,12 +7,13 @@ const GetExternalPartyBalanceParamsSchema = z.object({
 });
 
 /**
- * @description Get external party balance information
+ * Get external party balance information
+ *
  * @example
- * ```typescript
- * const balance = await client.getExternalPartyBalance({ partyId: 'party123' });
- * console.log(`Total coin holdings: ${balance.total_coin_holdings}`);
- * ```
+ *   ```typescript
+ *   const balance = await client.getExternalPartyBalance({ partyId: 'party123' });
+ *   console.log(`Total coin holdings: ${balance.total_coin_holdings}`);
+ *   ```
  */
 export const GetExternalPartyBalance = createApiOperation<
   { partyId: string },
@@ -20,5 +21,6 @@ export const GetExternalPartyBalance = createApiOperation<
 >({
   paramsSchema: GetExternalPartyBalanceParamsSchema,
   method: 'GET',
-  buildUrl: (params, apiUrl: string) => `${apiUrl}/api/validator/v0/admin/external-party/balance?party_id=${params.partyId}`,
-}); 
+  buildUrl: (params, apiUrl: string) =>
+    `${apiUrl}/api/validator/v0/admin/external-party/balance?party_id=${params.partyId}`,
+});

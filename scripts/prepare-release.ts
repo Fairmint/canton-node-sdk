@@ -5,10 +5,10 @@
  *
  * Prepares a new release by incrementing version and generating changelog.
  *
- * Usage:
- *   npm run prepare-release
+ * Usage: npm run prepare-release
  *
  * Features:
+ *
  * - Increments patch version in package.json
  * - Creates changelog from commits since last tag
  * - Links commits to GitHub PRs
@@ -16,8 +16,8 @@
  * - Saves changelog to CHANGELOG.md
  */
 
-import fs from 'fs';
 import { execSync } from 'child_process';
+import fs from 'fs';
 import path from 'path';
 
 interface PackageJson {
@@ -25,9 +25,7 @@ interface PackageJson {
   [key: string]: unknown;
 }
 
-/**
- * Check if a git tag exists
- */
+/** Check if a git tag exists */
 function tagExists(tag: string): boolean {
   try {
     execSync(`git rev-parse "refs/tags/${tag}"`, { stdio: 'ignore' });
@@ -37,14 +35,8 @@ function tagExists(tag: string): boolean {
   }
 }
 
-/**
- * Find the next available version by incrementing patch until we find one that doesn't exist
- */
-function findNextAvailableVersion(
-  major: number,
-  minor: number,
-  startPatch: number
-): string {
+/** Find the next available version by incrementing patch until we find one that doesn't exist */
+function findNextAvailableVersion(major: number, minor: number, startPatch: number): string {
   let patch = startPatch;
   let version: string;
 
@@ -57,16 +49,14 @@ function findNextAvailableVersion(
 }
 
 /**
- * Prepare release by incrementing version and generating changelog
- * This script can be run locally to test the release process
+ * Prepare release by incrementing version and generating changelog This script can be run locally to test the release
+ * process
  */
 function prepareRelease(): void {
   try {
     // Read package.json
     const packageJsonPath: string = path.join(process.cwd(), 'package.json');
-    const packageJson: PackageJson = JSON.parse(
-      fs.readFileSync(packageJsonPath, 'utf8')
-    );
+    const packageJson: PackageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
 
     const currentVersion: string = packageJson.version;
     console.log(`Current version: ${currentVersion}`);
@@ -89,10 +79,7 @@ function prepareRelease(): void {
 
     // Update version in package.json (without git tag)
     packageJson.version = newVersion;
-    fs.writeFileSync(
-      packageJsonPath,
-      `${JSON.stringify(packageJson, null, 2)  }\n`
-    );
+    fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
     console.log('✅ Updated package.json with new version');
 
@@ -109,9 +96,7 @@ function prepareRelease(): void {
       }).trim();
     } catch {
       // No previous tag, get commits ahead of main branch
-      console.log(
-        'No previous tag found, getting commits ahead of main branch'
-      );
+      console.log('No previous tag found, getting commits ahead of main branch');
       commits = execSync('git log --oneline --format="%s" main..HEAD', {
         encoding: 'utf8',
       }).trim();
@@ -123,9 +108,7 @@ function prepareRelease(): void {
     }
 
     // Extract PR numbers and create changelog
-    const commitLines: string[] = commits
-      .split('\n')
-      .map((commit: string): string => `- ${commit}`);
+    const commitLines: string[] = commits.split('\n').map((commit: string): string => `- ${commit}`);
 
     const changelog: string = commitLines.join('\n');
 
@@ -164,9 +147,7 @@ function prepareRelease(): void {
     console.log(`\n🎯 Ready for release! Next steps:`);
     console.log(`1. Review the changes above`);
     console.log(`2. Run: npm publish (if ready to publish)`);
-    console.log(
-      `3. Run: git tag -a "v${newVersion}" -m "${tagMessage.replace(/\n/g, '\\n')}"`
-    );
+    console.log(`3. Run: git tag -a "v${newVersion}" -m "${tagMessage.replace(/\n/g, '\\n')}"`);
     console.log(`4. Run: git push origin "v${newVersion}"`);
   } catch (error) {
     console.error('❌ Error preparing release:', (error as Error).message);

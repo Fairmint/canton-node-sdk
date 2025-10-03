@@ -1,8 +1,6 @@
 import { z } from 'zod';
 
-/**
- * Interactive submission allocate party request.
- */
+/** Interactive submission allocate party request. */
 export const InteractiveSubmissionAllocatePartyRequestSchema = z.object({
   /** Party identifier hint (optional). */
   partyIdHint: z.string().optional(),
@@ -12,9 +10,7 @@ export const InteractiveSubmissionAllocatePartyRequestSchema = z.object({
   isLocal: z.boolean().optional(),
 });
 
-/**
- * Interactive submission allocate party response.
- */
+/** Interactive submission allocate party response. */
 export const InteractiveSubmissionAllocatePartyResponseSchema = z.object({
   /** Allocated party details. */
   party: z.object({
@@ -27,9 +23,7 @@ export const InteractiveSubmissionAllocatePartyResponseSchema = z.object({
   }),
 });
 
-/**
- * Interactive submission create user request.
- */
+/** Interactive submission create user request. */
 export const InteractiveSubmissionCreateUserRequestSchema = z.object({
   /** User to create. */
   user: z.object({
@@ -40,32 +34,36 @@ export const InteractiveSubmissionCreateUserRequestSchema = z.object({
     /** Whether the user is deactivated. */
     isDeactivated: z.boolean(),
     /** User metadata (optional). */
-    metadata: z.object({
-      /** Resource version for concurrent change detection. */
-      resourceVersion: z.string(),
-      /** Annotations for the resource. */
-      annotations: z.record(z.string(), z.string()),
-    }).optional(),
+    metadata: z
+      .object({
+        /** Resource version for concurrent change detection. */
+        resourceVersion: z.string(),
+        /** Annotations for the resource. */
+        annotations: z.record(z.string(), z.string()),
+      })
+      .optional(),
     /** Identity provider ID (optional). */
     identityProviderId: z.string().optional(),
   }),
   /** Rights to assign to the user (optional). */
-  rights: z.array(z.object({
-    /** The kind of right. */
-    kind: z.union([
-      z.object({ CanActAs: z.object({ party: z.string() }) }),
-      z.object({ CanReadAs: z.object({ party: z.string() }) }),
-      z.object({ CanReadAsAnyParty: z.object({}) }),
-      z.object({ Empty: z.object({}) }),
-      z.object({ IdentityProviderAdmin: z.object({}) }),
-      z.object({ ParticipantAdmin: z.object({}) }),
-    ]),
-  })).optional(),
+  rights: z
+    .array(
+      z.object({
+        /** The kind of right. */
+        kind: z.union([
+          z.object({ CanActAs: z.object({ party: z.string() }) }),
+          z.object({ CanReadAs: z.object({ party: z.string() }) }),
+          z.object({ CanReadAsAnyParty: z.object({}) }),
+          z.object({ Empty: z.object({}) }),
+          z.object({ IdentityProviderAdmin: z.object({}) }),
+          z.object({ ParticipantAdmin: z.object({}) }),
+        ]),
+      })
+    )
+    .optional(),
 });
 
-/**
- * Interactive submission create user response.
- */
+/** Interactive submission create user response. */
 export const InteractiveSubmissionCreateUserResponseSchema = z.object({
   /** Created user. */
   user: z.object({
@@ -76,34 +74,34 @@ export const InteractiveSubmissionCreateUserResponseSchema = z.object({
     /** Whether the user is deactivated. */
     isDeactivated: z.boolean(),
     /** User metadata (optional). */
-    metadata: z.object({
-      /** Resource version for concurrent change detection. */
-      resourceVersion: z.string(),
-      /** Annotations for the resource. */
-      annotations: z.record(z.string(), z.string()),
-    }).optional(),
+    metadata: z
+      .object({
+        /** Resource version for concurrent change detection. */
+        resourceVersion: z.string(),
+        /** Annotations for the resource. */
+        annotations: z.record(z.string(), z.string()),
+      })
+      .optional(),
     /** Identity provider ID (optional). */
     identityProviderId: z.string().optional(),
   }),
 });
 
-/**
- * Interactive submission upload DAR request.
- */
+/** Interactive submission upload DAR request. */
 export const InteractiveSubmissionUploadDarRequestSchema = z.object({
   /** DAR file content. */
   darFile: z.any(), // Buffer or string
 });
 
-/**
- * Interactive submission upload DAR response.
- */
+/** Interactive submission upload DAR response. */
 export const InteractiveSubmissionUploadDarResponseSchema = z.object({});
 
 // Export types
 export type InteractiveSubmissionAllocatePartyRequest = z.infer<typeof InteractiveSubmissionAllocatePartyRequestSchema>;
-export type InteractiveSubmissionAllocatePartyResponse = z.infer<typeof InteractiveSubmissionAllocatePartyResponseSchema>;
+export type InteractiveSubmissionAllocatePartyResponse = z.infer<
+  typeof InteractiveSubmissionAllocatePartyResponseSchema
+>;
 export type InteractiveSubmissionCreateUserRequest = z.infer<typeof InteractiveSubmissionCreateUserRequestSchema>;
 export type InteractiveSubmissionCreateUserResponse = z.infer<typeof InteractiveSubmissionCreateUserResponseSchema>;
 export type InteractiveSubmissionUploadDarRequest = z.infer<typeof InteractiveSubmissionUploadDarRequestSchema>;
-export type InteractiveSubmissionUploadDarResponse = z.infer<typeof InteractiveSubmissionUploadDarResponseSchema>; 
+export type InteractiveSubmissionUploadDarResponse = z.infer<typeof InteractiveSubmissionUploadDarResponseSchema>;

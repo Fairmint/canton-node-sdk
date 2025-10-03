@@ -1,22 +1,26 @@
 import { createApiOperation } from '../../../../../core';
-import { InteractiveSubmissionGetPreferredPackagesParamsSchema, type InteractiveSubmissionGetPreferredPackagesParams } from '../../../schemas/operations';
 import { type GetPreferredPackagesResponse } from '../../../schemas/api';
+import {
+  InteractiveSubmissionGetPreferredPackagesParamsSchema,
+  type InteractiveSubmissionGetPreferredPackagesParams,
+} from '../../../schemas/operations';
 
 /**
- * @description Get the version of preferred packages for constructing a command submission
+ * Get the version of preferred packages for constructing a command submission
+ *
  * @example
- * ```typescript
- * const result = await client.interactiveSubmissionGetPreferredPackages({
+ *   ```typescript
+ *   const result = await client.interactiveSubmissionGetPreferredPackages({
  *   packageVettingRequirements: [
- *     {
- *       parties: ['Alice', 'Bob'],
- *       packageName: 'my-package'
- *     }
+ *   {
+ *   parties: ['Alice', 'Bob'],
+ *   packageName: 'my-package'
+ *   }
  *   ],
  *   synchronizerId: 'sync-123'
- * });
- * console.log(`Preferred packages: ${result.packageReferences.map(p => p.packageId).join(', ')}`);
- * ```
+ *   });
+ *   console.log(`Preferred packages: ${result.packageReferences.map(p => p.packageId).join(', ')}`);
+ *   ```
  */
 export const InteractiveSubmissionGetPreferredPackages = createApiOperation<
   InteractiveSubmissionGetPreferredPackagesParams,
@@ -24,10 +28,11 @@ export const InteractiveSubmissionGetPreferredPackages = createApiOperation<
 >({
   paramsSchema: InteractiveSubmissionGetPreferredPackagesParamsSchema,
   method: 'POST',
-  buildUrl: (_params: InteractiveSubmissionGetPreferredPackagesParams, apiUrl: string) => `${apiUrl}/v2/interactive-submission/preferred-packages`,
+  buildUrl: (_params: InteractiveSubmissionGetPreferredPackagesParams, apiUrl: string) =>
+    `${apiUrl}/v2/interactive-submission/preferred-packages`,
   buildRequestData: (params: InteractiveSubmissionGetPreferredPackagesParams) => ({
     packageVettingRequirements: params.packageVettingRequirements,
     synchronizerId: params.synchronizerId,
     vettingValidAt: params.vettingValidAt,
   }),
-}); 
+});

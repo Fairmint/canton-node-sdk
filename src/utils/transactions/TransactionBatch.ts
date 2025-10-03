@@ -1,5 +1,5 @@
-import { type LedgerJsonApiClient } from "../../clients";
-import { type DisclosedContract, type Command } from "../../clients/ledger-json-api/schemas";
+import { type LedgerJsonApiClient } from '../../clients';
+import { type Command, type DisclosedContract } from '../../clients/ledger-json-api/schemas';
 
 export interface BatchSubmitResult {
   updateId: string;
@@ -50,24 +50,15 @@ export class TransactionBatch {
   public async submit(): Promise<BatchSubmitResult> {
     // Dedupe disclosed contracts by contractId
     this.disclosedContracts = Array.from(
-      new Map(
-        this.disclosedContracts.map(contract => [
-          contract.contractId,
-          contract
-        ])
-      ).values()
+      new Map(this.disclosedContracts.map((contract) => [contract.contractId, contract])).values()
     );
-    const response = (await this.client.submitAndWaitForTransactionTree({
+    const response = await this.client.submitAndWaitForTransactionTree({
       actAs: this.actAs,
       ...(this.readAs ? { readAs: this.readAs } : {}),
       commands: this.commands,
-      ...(this.disclosedContracts.length > 0
-        ? { disclosedContracts: this.disclosedContracts }
-        : {}),
-    }));
+      ...(this.disclosedContracts.length > 0 ? { disclosedContracts: this.disclosedContracts } : {}),
+    });
 
     return { updateId: response.transactionTree.updateId };
   }
 }
-
-

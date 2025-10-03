@@ -1,5 +1,5 @@
-import { createApiOperation } from '../../../../../core';
 import { z } from 'zod';
+import { createApiOperation } from '../../../../../core';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 
 const endpoint = '/v2/users';
@@ -12,10 +12,7 @@ export const ListUsersParamsSchema = z.object({
 export type ListUsersParams = z.infer<typeof ListUsersParamsSchema>;
 export type ListUsersResponse = paths[typeof endpoint]['get']['responses']['200']['content']['application/json'];
 
-export const ListUsers = createApiOperation<
-  ListUsersParams,
-  ListUsersResponse
->({
+export const ListUsers = createApiOperation<ListUsersParams, ListUsersResponse>({
   paramsSchema: ListUsersParamsSchema,
   method: 'GET',
   buildUrl: (params, apiUrl) => {
@@ -30,4 +27,4 @@ export const ListUsers = createApiOperation<
     const queryString = queryParams.toString();
     return queryString ? `${baseUrl}?${queryString}` : baseUrl;
   },
-}); 
+});

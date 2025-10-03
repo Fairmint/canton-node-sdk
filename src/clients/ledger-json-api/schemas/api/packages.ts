@@ -1,29 +1,21 @@
 import { z } from 'zod';
 
-/**
- * List packages response.
- */
+/** List packages response. */
 export const ListPackagesResponseSchema = z.object({
   /** List of package IDs. */
   packageIds: z.array(z.string()),
 });
 
-/**
- * Upload DAR file response.
- */
+/** Upload DAR file response. */
 export const UploadDarFileResponseSchema = z.object({});
 
-/**
- * Get package status response.
- */
+/** Get package status response. */
 export const GetPackageStatusResponseSchema = z.object({
   /** The status of the package. */
   packageStatus: z.string(),
 });
 
-/**
- * Package reference details.
- */
+/** Package reference details. */
 export const PackageReferenceSchema = z.object({
   /** Package ID. */
   packageId: z.string(),
@@ -33,9 +25,7 @@ export const PackageReferenceSchema = z.object({
   packageVersion: z.string(),
 });
 
-/**
- * Package vetting requirement.
- */
+/** Package vetting requirement. */
 export const PackageVettingRequirementSchema = z.object({
   /** Parties whose vetting state should be considered. */
   parties: z.array(z.string()),
@@ -43,9 +33,7 @@ export const PackageVettingRequirementSchema = z.object({
   packageName: z.string(),
 });
 
-/**
- * Package preference details.
- */
+/** Package preference details. */
 export const PackagePreferenceSchema = z.object({
   /** Package reference. */
   packageReference: PackageReferenceSchema,
@@ -53,9 +41,7 @@ export const PackagePreferenceSchema = z.object({
   synchronizerId: z.string(),
 });
 
-/**
- * Get preferred package version request.
- */
+/** Get preferred package version request. */
 export const GetPreferredPackagesRequestSchema = z.object({
   /** Package vetting requirements. */
   packageVettingRequirements: z.array(PackageVettingRequirementSchema),
@@ -65,9 +51,7 @@ export const GetPreferredPackagesRequestSchema = z.object({
   vettingValidAt: z.string().optional(),
 });
 
-/**
- * Get preferred packages response.
- */
+/** Get preferred packages response. */
 export const GetPreferredPackagesResponseSchema = z.object({
   /** Package references. */
   packageReferences: z.array(PackageReferenceSchema),
@@ -75,9 +59,7 @@ export const GetPreferredPackagesResponseSchema = z.object({
   synchronizerId: z.string(),
 });
 
-/**
- * Get preferred package version response.
- */
+/** Get preferred package version response. */
 export const GetPreferredPackageVersionResponseSchema = z.object({
   /** Package preference (optional). */
   packagePreference: PackagePreferenceSchema.optional(),
@@ -92,4 +74,4 @@ export type PackageVettingRequirement = z.infer<typeof PackageVettingRequirement
 export type PackagePreference = z.infer<typeof PackagePreferenceSchema>;
 export type GetPreferredPackagesRequest = z.infer<typeof GetPreferredPackagesRequestSchema>;
 export type GetPreferredPackagesResponse = z.infer<typeof GetPreferredPackagesResponseSchema>;
-export type GetPreferredPackageVersionResponse = z.infer<typeof GetPreferredPackageVersionResponseSchema>; 
+export type GetPreferredPackageVersionResponse = z.infer<typeof GetPreferredPackageVersionResponseSchema>;

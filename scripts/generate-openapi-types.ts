@@ -1,9 +1,9 @@
 #!/usr/bin/env tsx
 
-import * as fs from 'fs';
-import * as path from 'path';
 import { execSync } from 'child_process';
+import * as fs from 'fs';
 import { glob } from 'glob';
+import * as path from 'path';
 
 function ensureDirectoryExists(filePath: string): void {
   const dir = path.dirname(filePath);
@@ -13,9 +13,7 @@ function ensureDirectoryExists(filePath: string): void {
 }
 
 function generateForFile(yamlPath: string): void {
-  const relativePath = yamlPath
-    .replace(/^artifacts\/splice\//, '')
-    .replace(/\.yaml$/, '.ts');
+  const relativePath = yamlPath.replace(/^artifacts\/splice\//, '').replace(/\.yaml$/, '.ts');
   const outputPath = path.join('src/generated', relativePath);
   ensureDirectoryExists(outputPath);
   console.log(`🧬 Generating types for ${yamlPath} -> ${outputPath}`);
@@ -34,9 +32,7 @@ function main(): void {
   });
 
   // Merge and de-duplicate
-  const allFiles = Array.from(
-    new Set([...openapiUnderDir, ...openapiRootFiles])
-  );
+  const allFiles = Array.from(new Set([...openapiUnderDir, ...openapiRootFiles]));
 
   if (allFiles.length === 0) {
     console.log('⚠️  No OpenAPI files found.');

@@ -31,27 +31,18 @@ async function updateDocsVersion(): Promise<void> {
   console.log('✅ Documentation version update complete!');
 }
 
-async function updateFileVersion(
-  filePath: string,
-  version: string
-): Promise<void> {
+async function updateFileVersion(filePath: string, version: string): Promise<void> {
   const content = fs.readFileSync(filePath, 'utf-8');
 
   // Check if file already has sdk_version in front matter
   if (content.includes('sdk_version:')) {
     // Update existing sdk_version
-    const updatedContent = content.replace(
-      /sdk_version:\s*[\d.]+/,
-      `sdk_version: ${version}`
-    );
+    const updatedContent = content.replace(/sdk_version:\s*[\d.]+/, `sdk_version: ${version}`);
     fs.writeFileSync(filePath, updatedContent);
     console.log(`📄 Updated version in: ${filePath}`);
   } else {
     // Add sdk_version to front matter
-    const updatedContent = content.replace(
-      /^---\s*\n/,
-      `---\nsdk_version: ${version}\n`
-    );
+    const updatedContent = content.replace(/^---\s*\n/, `---\nsdk_version: ${version}\n`);
     fs.writeFileSync(filePath, updatedContent);
     console.log(`📄 Added version to: ${filePath}`);
   }

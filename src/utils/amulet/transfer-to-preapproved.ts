@@ -1,6 +1,6 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
+import { type DisclosedContract, type ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/commands';
 import { type ValidatorApiClient } from '../../clients/validator-api';
-import { type ExerciseCommand, type DisclosedContract } from '../../clients/ledger-json-api/schemas/api/commands';
 import { getCurrentMiningRoundContext } from '../mining/mining-rounds';
 import { getAmuletsForTransfer } from './get-amulets-for-transfer';
 
@@ -36,28 +36,28 @@ export interface TransferToPreapprovedResult {
 
 /**
  * Transfers coins to multiple parties that have pre-approved transfers enabled
- * 
+ *
  * @example
- * ```typescript
- * const result = await transferToPreapproved(ledgerClient, validatorClient, {
+ *   ```typescript
+ *   const result = await transferToPreapproved(ledgerClient, validatorClient, {
  *   senderPartyId: 'sender-party-id',
  *   transfers: [
- *     {
- *       recipientPartyId: 'recipient-1',
- *       amount: '100',
- *       description: 'Payment for services'
- *     },
- *     {
- *       recipientPartyId: 'recipient-2', 
- *       amount: '50',
- *       description: 'Bonus payment'
- *     }
+ *   {
+ *   recipientPartyId: 'recipient-1',
+ *   amount: '100',
+ *   description: 'Payment for services'
+ *   },
+ *   {
+ *   recipientPartyId: 'recipient-2',
+ *   amount: '50',
+ *   description: 'Bonus payment'
+ *   }
  *   ]
- * });
- * 
- * console.log(`Completed ${result.transferResults.length} transfers`);
- * ```
- * 
+ *   });
+ *
+ *   console.log(`Completed ${result.transferResults.length} transfers`);
+ *   ```
+ *
  * @param ledgerClient - Ledger JSON API client for submitting commands
  * @param validatorClient - Validator API client for getting network information
  * @param params - Parameters for the transfers
@@ -75,18 +75,16 @@ export async function transferToPreapproved(
   // Get network information
   const [amuletRules, miningRoundContext] = await Promise.all([
     validatorClient.getAmuletRules(),
-    getCurrentMiningRoundContext(validatorClient)
+    getCurrentMiningRoundContext(validatorClient),
   ]);
 
-  const {
-    openMiningRound: openMiningRoundContractId,
-  } = miningRoundContext;
+  const { openMiningRound: openMiningRoundContractId } = miningRoundContext;
 
   // Get amulet inputs for the sender party
   console.log('🔍 Fetching amulet inputs for sender party...');
   const amulets = await getAmuletsForTransfer({
     jsonApiClient: ledgerClient,
-    readAs: [params.senderPartyId]
+    readAs: [params.senderPartyId],
   });
 
   if (amulets.length === 0) {
@@ -94,9 +92,9 @@ export async function transferToPreapproved(
   }
 
   // Convert amulets to input format
-  const inputs = amulets.map(amulet => ({
+  const inputs = amulets.map((amulet) => ({
     tag: 'InputAmulet' as const,
-    value: amulet.contractId
+    value: amulet.contractId,
   }));
 
   console.log(`📦 Found ${amulets.length} amulets for transfer`);
@@ -118,7 +116,7 @@ export async function transferToPreapproved(
       templateId: miningRoundContext.openMiningRoundContract.templateId,
       createdEventBlob: miningRoundContext.openMiningRoundContract.createdEventBlob,
       synchronizerId: miningRoundContext.openMiningRoundContract.synchronizerId,
-    }
+    },
   ];
 
   // Process each transfer
@@ -142,8 +140,8 @@ export async function transferToPreapproved(
     }
 
     // Look up featured app right for the recipient
-    const featuredAppRight = await validatorClient.lookupFeaturedAppRight({ 
-      partyId: transfer.recipientPartyId 
+    const featuredAppRight = await validatorClient.lookupFeaturedAppRight({
+      partyId: transfer.recipientPartyId,
     });
 
     if (!featuredAppRight.featured_app_right?.contract_id) {
@@ -168,7 +166,7 @@ export async function transferToPreapproved(
         templateId: transferPreapprovalContract.template_id,
         createdEventBlob: transferPreapprovalContract.created_event_blob,
         synchronizerId: transferPreapprovalResponse.transfer_preapproval.domain_id,
-      }
+      },
     ];
 
     // Create the transfer command using TransferPreapproval_Send
@@ -184,15 +182,15 @@ export async function transferToPreapproved(
               openMiningRound: openMiningRoundContractId,
               issuingMiningRounds: [],
               validatorRights: [],
-              featuredAppRight: featuredAppRightContractId
-            }
+              featuredAppRight: featuredAppRightContractId,
+            },
           },
           inputs,
           amount: transfer.amount,
           sender: params.senderPartyId,
-          description: transfer.description || null
-        }
-      }
+          description: transfer.description || null,
+        },
+      },
     };
 
     if (!amuletRules.amulet_rules.domain_id) {

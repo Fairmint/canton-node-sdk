@@ -1,9 +1,7 @@
 import { z } from 'zod';
 import { UpdateMaskSchema } from '../common';
 
-/**
- * Object metadata for resources.
- */
+/** Object metadata for resources. */
 export const ObjectMetaSchema = z.object({
   /** Resource version for concurrent change detection. */
   resourceVersion: z.string(),
@@ -11,9 +9,7 @@ export const ObjectMetaSchema = z.object({
   annotations: z.record(z.string(), z.string()),
 });
 
-/**
- * User rights types.
- */
+/** User rights types. */
 export const CanActAsSchema = z.object({
   /** The party the user can act as. */
   party: z.string(),
@@ -30,9 +26,7 @@ export const IdentityProviderAdminSchema = z.object({});
 
 export const ParticipantAdminSchema = z.object({});
 
-/**
- * User right kind (oneOf all right types).
- */
+/** User right kind (oneOf all right types). */
 export const RightKindSchema = z.union([
   z.object({ CanActAs: CanActAsSchema }),
   z.object({ CanReadAs: CanReadAsSchema }),
@@ -42,17 +36,13 @@ export const RightKindSchema = z.union([
   z.object({ ParticipantAdmin: ParticipantAdminSchema }),
 ]);
 
-/**
- * User right.
- */
+/** User right. */
 export const RightSchema = z.object({
   /** The kind of right. */
   kind: RightKindSchema,
 });
 
-/**
- * User details.
- */
+/** User details. */
 export const UserSchema = z.object({
   /** User identifier. */
   id: z.string(),
@@ -66,9 +56,7 @@ export const UserSchema = z.object({
   identityProviderId: z.string().optional(),
 });
 
-/**
- * Party details.
- */
+/** Party details. */
 export const PartyDetailsSchema = z.object({
   /** Party identifier. */
   party: z.string(),
@@ -80,9 +68,7 @@ export const PartyDetailsSchema = z.object({
   identityProviderId: z.string().optional(),
 });
 
-/**
- * Create user request.
- */
+/** Create user request. */
 export const CreateUserRequestSchema = z.object({
   /** The user to create. */
   user: UserSchema,
@@ -90,17 +76,13 @@ export const CreateUserRequestSchema = z.object({
   rights: z.array(RightSchema).optional(),
 });
 
-/**
- * Create user response.
- */
+/** Create user response. */
 export const CreateUserResponseSchema = z.object({
   /** Created user. */
   user: UserSchema,
 });
 
-/**
- * Update user request.
- */
+/** Update user request. */
 export const UpdateUserRequestSchema = z.object({
   /** The user to update. */
   user: UserSchema,
@@ -108,25 +90,19 @@ export const UpdateUserRequestSchema = z.object({
   updateMask: UpdateMaskSchema,
 });
 
-/**
- * Update user response.
- */
+/** Update user response. */
 export const UpdateUserResponseSchema = z.object({
   /** Updated user. */
   user: UserSchema,
 });
 
-/**
- * Get user response.
- */
+/** Get user response. */
 export const GetUserResponseSchema = z.object({
   /** Retrieved user. */
   user: UserSchema,
 });
 
-/**
- * List users response.
- */
+/** List users response. */
 export const ListUsersResponseSchema = z.object({
   /** List of users. */
   users: z.array(UserSchema),
@@ -134,17 +110,13 @@ export const ListUsersResponseSchema = z.object({
   nextPageToken: z.string(),
 });
 
-/**
- * List user rights response.
- */
+/** List user rights response. */
 export const ListUserRightsResponseSchema = z.object({
   /** All rights of the user. */
   rights: z.array(RightSchema),
 });
 
-/**
- * Grant user rights request.
- */
+/** Grant user rights request. */
 export const GrantUserRightsRequestSchema = z.object({
   /** User ID to grant rights to. */
   userId: z.string(),
@@ -154,17 +126,13 @@ export const GrantUserRightsRequestSchema = z.object({
   identityProviderId: z.string().optional(),
 });
 
-/**
- * Grant user rights response.
- */
+/** Grant user rights response. */
 export const GrantUserRightsResponseSchema = z.object({
   /** Rights that were newly granted. */
   newlyGrantedRights: z.array(RightSchema),
 });
 
-/**
- * Revoke user rights request.
- */
+/** Revoke user rights request. */
 export const RevokeUserRightsRequestSchema = z.object({
   /** User ID to revoke rights from. */
   userId: z.string(),
@@ -174,17 +142,13 @@ export const RevokeUserRightsRequestSchema = z.object({
   identityProviderId: z.string().optional(),
 });
 
-/**
- * Revoke user rights response.
- */
+/** Revoke user rights response. */
 export const RevokeUserRightsResponseSchema = z.object({
   /** Rights that were actually revoked. */
   newlyRevokedRights: z.array(RightSchema),
 });
 
-/**
- * Update user identity provider request.
- */
+/** Update user identity provider request. */
 export const UpdateUserIdentityProviderIdRequestSchema = z.object({
   /** User ID to update. */
   userId: z.string(),
@@ -194,19 +158,13 @@ export const UpdateUserIdentityProviderIdRequestSchema = z.object({
   targetIdentityProviderId: z.string(),
 });
 
-/**
- * Update user identity provider response.
- */
+/** Update user identity provider response. */
 export const UpdateUserIdentityProviderIdResponseSchema = z.object({});
 
-/**
- * Delete user response.
- */
+/** Delete user response. */
 export const DeleteUserResponseSchema = z.object({});
 
-/**
- * Allocate party request.
- */
+/** Allocate party request. */
 export const AllocatePartyRequestSchema = z.object({
   /** Party ID hint (optional). */
   partyIdHint: z.string().optional(),
@@ -220,17 +178,13 @@ export const AllocatePartyRequestSchema = z.object({
   userId: z.string().optional(),
 });
 
-/**
- * Allocate party response.
- */
+/** Allocate party response. */
 export const AllocatePartyResponseSchema = z.object({
   /** Party details. */
   partyDetails: PartyDetailsSchema,
 });
 
-/**
- * Update party details request.
- */
+/** Update party details request. */
 export const UpdatePartyDetailsRequestSchema = z.object({
   /** Party details to update. */
   partyDetails: PartyDetailsSchema,
@@ -238,17 +192,13 @@ export const UpdatePartyDetailsRequestSchema = z.object({
   updateMask: UpdateMaskSchema,
 });
 
-/**
- * Update party details response.
- */
+/** Update party details response. */
 export const UpdatePartyDetailsResponseSchema = z.object({
   /** Updated party details. */
   partyDetails: PartyDetailsSchema,
 });
 
-/**
- * List known parties response.
- */
+/** List known parties response. */
 export const ListKnownPartiesResponseSchema = z.object({
   /** List of party details. */
   partyDetails: z.array(PartyDetailsSchema),
@@ -256,17 +206,13 @@ export const ListKnownPartiesResponseSchema = z.object({
   nextPageToken: z.string(),
 });
 
-/**
- * Get parties response.
- */
+/** Get parties response. */
 export const GetPartiesResponseSchema = z.object({
   /** Party details. */
   partyDetails: z.array(PartyDetailsSchema),
 });
 
-/**
- * Get participant ID response.
- */
+/** Get participant ID response. */
 export const GetParticipantIdResponseSchema = z.object({
   /** Participant identifier. */
   participantId: z.string(),
@@ -303,4 +249,4 @@ export type UpdatePartyDetailsRequest = z.infer<typeof UpdatePartyDetailsRequest
 export type UpdatePartyDetailsResponse = z.infer<typeof UpdatePartyDetailsResponseSchema>;
 export type ListKnownPartiesResponse = z.infer<typeof ListKnownPartiesResponseSchema>;
 export type GetPartiesResponse = z.infer<typeof GetPartiesResponseSchema>;
-export type GetParticipantIdResponse = z.infer<typeof GetParticipantIdResponseSchema>; 
+export type GetParticipantIdResponse = z.infer<typeof GetParticipantIdResponseSchema>;

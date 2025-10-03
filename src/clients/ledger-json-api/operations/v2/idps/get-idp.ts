@@ -1,14 +1,18 @@
 import { createApiOperation } from '../../../../../core';
-import { GetIdentityProviderConfigParamsSchema, type GetIdentityProviderConfigParams } from '../../../schemas/operations';
 import { type GetIdentityProviderConfigResponse } from '../../../schemas/api';
+import {
+  GetIdentityProviderConfigParamsSchema,
+  type GetIdentityProviderConfigParams,
+} from '../../../schemas/operations';
 
 /**
- * @description Get identity provider config
+ * Get identity provider config
+ *
  * @example
- * ```typescript
- * const result = await client.getIdentityProviderConfig({ idpId: 'my-idp' });
- * console.log(result.identityProviderConfig);
- * ```
+ *   ```typescript
+ *   const result = await client.getIdentityProviderConfig({ idpId: 'my-idp' });
+ *   console.log(result.identityProviderConfig);
+ *   ```;
  */
 export const GetIdentityProviderConfig = createApiOperation<
   GetIdentityProviderConfigParams,
@@ -17,4 +21,4 @@ export const GetIdentityProviderConfig = createApiOperation<
   paramsSchema: GetIdentityProviderConfigParamsSchema,
   method: 'GET',
   buildUrl: (params: GetIdentityProviderConfigParams, apiUrl: string) => `${apiUrl}/v2/idps/${params.idpId}`,
-}); 
+});

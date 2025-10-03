@@ -2,38 +2,6 @@
   "name": "@fairmint/canton-node-sdk",
   "version": "0.0.1",
   "description": "Canton Node SDK",
-  "main": "build/src/index.js",
-  "types": "build/src/index.d.ts",
-  "publishConfig": {
-    "access": "public"
-  },
-  "scripts": {
-    "build": "npm run build:core && npm run build:lint",
-    "build:core": "npm run generate:openapi-types && npm run build:core:generate-client-methods && tsc", 
-    "build:core:generate-client-methods": "tsx scripts/generate-all-client-methods.ts",
-    "generate:openapi-types": "tsx scripts/generate-openapi-types.ts",
-    "build:lint": "tsc -p tsconfig.lint.json",
-    "simulate": "tsx --tsconfig tsconfig.lint.json scripts/run-simulations.ts",
-    "simulate:events": "tsx --tsconfig tsconfig.lint.json scripts/run-events-simulation.ts",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "fix": "npm run lint:fix && npm run format:fix",
-    "format": "prettier --check .",
-    "format:fix": "prettier --write .",
-    "lint": "eslint . --max-warnings=0",
-    "lint:fix": "eslint . --fix --max-warnings=0",
-    "lint:npm:check": "npmPkgJsonLint .",
-    "lint:npm": "npmPkgJsonLint . --fix",
-    "clean": "rm -rf build",
-    "artifacts:manifest": "mkdir -p artifacts && npm pack --dry-run --json --ignore-scripts > /tmp/npm-pack.json 2>/dev/null && jq -r '.[0].files[].path' /tmp/npm-pack.json | sort | tsx scripts/collapse-manifest.ts > artifacts/npm-manifest.txt",
-    "artifacts:clone-splice": "./scripts/clone-splice.sh",
-    "prepack": "npm run clean && npm run build:core",
-    "prepublishOnly": "npm run prepack",
-    "prepare-release": "tsx scripts/prepare-release.ts",
-    "docs": "tsx scripts/update-docs-version.ts && tsx scripts/generate-operation-docs.ts",
-    "docs:dev": "npm run docs && cd docs && bundle exec jekyll serve --livereload --port 4000",
-    "docs:build": "npm run docs && cd docs && bundle exec jekyll build"
-  },
   "keywords": [
     "canton",
     "sdk",
@@ -41,16 +9,54 @@
     "blockchain",
     "daml"
   ],
-  "author": "Fairmint",
-  "license": "MIT",
+  "homepage": "https://sdk.canton.fairmint.com/",
+  "bugs": {
+    "url": "https://github.com/Fairmint/canton-node-sdk/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Fairmint/canton-node-sdk.git"
   },
-  "bugs": {
-    "url": "https://github.com/Fairmint/canton-node-sdk/issues"
+  "license": "MIT",
+  "author": "Fairmint",
+  "main": "build/src/index.js",
+  "types": "build/src/index.d.ts",
+  "scripts": {
+    "artifacts:clone-splice": "./scripts/clone-splice.sh",
+    "artifacts:manifest": "mkdir -p artifacts && npm pack --dry-run --json --ignore-scripts > /tmp/npm-pack.json 2>/dev/null && jq -r '.[0].files[].path' /tmp/npm-pack.json | sort | tsx scripts/collapse-manifest.ts > artifacts/npm-manifest.txt",
+    "build": "npm run build:core && npm run build:lint",
+    "build:core": "npm run generate:openapi-types && npm run build:core:generate-client-methods && tsc",
+    "build:core:generate-client-methods": "tsx scripts/generate-all-client-methods.ts",
+    "build:lint": "tsc -p tsconfig.lint.json",
+    "clean": "rm -rf build",
+    "docs": "tsx scripts/update-docs-version.ts && tsx scripts/generate-operation-docs.ts",
+    "docs:build": "npm run docs && cd docs && bundle exec jekyll build",
+    "docs:dev": "npm run docs && cd docs && bundle exec jekyll serve --livereload --port 4000",
+    "fix": "npm run lint:fix && npm run format:fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "generate:openapi-types": "tsx scripts/generate-openapi-types.ts",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix --max-warnings=0",
+    "lint:npm": "npmPkgJsonLint . --fix",
+    "lint:npm:check": "npmPkgJsonLint .",
+    "prepack": "npm run clean && npm run build:core",
+    "prepare-release": "tsx scripts/prepare-release.ts",
+    "prepublishOnly": "npm run prepack",
+    "simulate": "tsx --tsconfig tsconfig.lint.json scripts/run-simulations.ts",
+    "simulate:events": "tsx --tsconfig tsconfig.lint.json scripts/run-events-simulation.ts",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
-  "homepage": "https://sdk.canton.fairmint.com/",
+  "dependencies": {
+    "axios": "1.11.0",
+    "dotenv": "17.2.2",
+    "glob": "^11.0.3",
+    "openapi-fetch": "^0.14.0",
+    "openapi-typescript": "7.9.1",
+    "ws": "8.18.3",
+    "zod": "4.1.11"
+  },
   "devDependencies": {
     "@types/jest": "30.0.0",
     "@types/node": "24.6.2",
@@ -77,13 +83,7 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "dependencies": {
-    "axios": "1.11.0",
-    "dotenv": "17.2.2",
-    "glob": "^11.0.3",
-    "openapi-fetch": "^0.14.0",
-    "openapi-typescript": "7.9.1",
-    "zod": "4.1.11",
-    "ws": "8.18.3"
+  "publishConfig": {
+    "access": "public"
   }
 }

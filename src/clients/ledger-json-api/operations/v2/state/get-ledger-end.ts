@@ -1,5 +1,5 @@
-import { createApiOperation } from '../../../../../core';
 import { type z } from 'zod';
+import { createApiOperation } from '../../../../../core';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 import { GetLedgerEndParamsSchema } from '../../../schemas/operations';
 
@@ -13,4 +13,4 @@ export const GetLedgerEnd = createApiOperation<GetLedgerEndParams, GetLedgerEndR
   method: 'GET',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
   buildRequestData: () => ({}),
-}); 
+});

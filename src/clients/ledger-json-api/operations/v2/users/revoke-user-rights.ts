@@ -1,5 +1,5 @@
-import { createApiOperation } from '../../../../../core';
 import { type z } from 'zod';
+import { createApiOperation } from '../../../../../core';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 import { RevokeUserRightsParamsSchema } from '../../../schemas/operations';
 
@@ -8,7 +8,8 @@ const endpoint = '/v2/users/{user-id}/rights' as const;
 // The params type should include both path parameters and request body
 export type RevokeUserRightsParams = z.infer<typeof RevokeUserRightsParamsSchema>;
 
-export type RevokeUserRightsResponse = paths[typeof endpoint]['patch']['responses']['200']['content']['application/json'];
+export type RevokeUserRightsResponse =
+  paths[typeof endpoint]['patch']['responses']['200']['content']['application/json'];
 
 export const RevokeUserRights = createApiOperation<RevokeUserRightsParams, RevokeUserRightsResponse>({
   paramsSchema: RevokeUserRightsParamsSchema,
@@ -18,4 +19,4 @@ export const RevokeUserRights = createApiOperation<RevokeUserRightsParams, Revok
     const { userId, ...requestBody } = params;
     return requestBody;
   },
-}); 
+});

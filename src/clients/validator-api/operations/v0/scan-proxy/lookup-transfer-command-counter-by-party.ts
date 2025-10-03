@@ -1,14 +1,18 @@
 import { createApiOperation } from '../../../../../core';
 import { type LookupTransferCommandCounterByPartyResponse } from '../../../schemas/api';
-import { LookupTransferCommandCounterByPartyParamsSchema, type LookupTransferCommandCounterByPartyParams } from '../../../schemas/operations';
+import {
+  LookupTransferCommandCounterByPartyParamsSchema,
+  type LookupTransferCommandCounterByPartyParams,
+} from '../../../schemas/operations';
 
 /**
- * @description Lookup transfer command counter by party
+ * Lookup transfer command counter by party
+ *
  * @example
- * ```typescript
- * const counter = await client.lookupTransferCommandCounterByParty({ party: 'party123' });
- * console.log(`Counter: ${counter.counter}`);
- * ```
+ *   ```typescript
+ *   const counter = await client.lookupTransferCommandCounterByParty({ party: 'party123' });
+ *   console.log(`Counter: ${counter.counter}`);
+ *   ```
  */
 export const LookupTransferCommandCounterByParty = createApiOperation<
   LookupTransferCommandCounterByPartyParams,
@@ -16,5 +20,6 @@ export const LookupTransferCommandCounterByParty = createApiOperation<
 >({
   paramsSchema: LookupTransferCommandCounterByPartyParamsSchema,
   method: 'GET',
-  buildUrl: (params, apiUrl: string) => `${apiUrl}/api/validator/v0/scan-proxy/transfer-commands/${params.party}/counter`,
-}); 
+  buildUrl: (params, apiUrl: string) =>
+    `${apiUrl}/api/validator/v0/scan-proxy/transfer-commands/${params.party}/counter`,
+});

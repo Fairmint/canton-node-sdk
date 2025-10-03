@@ -1,18 +1,16 @@
 import { z } from 'zod';
-import { 
-  CreatedEventDetailsSchema, 
-  ArchivedEventDetailsSchema, 
-  AssignedEventDetailsSchema, 
-  UnassignedEventDetailsSchema 
+import { TraceContextSchema } from '../common';
+import { JsCommandsSchema } from './commands';
+import { OffsetCheckpointSchema } from './completions';
+import {
+  ArchivedEventDetailsSchema,
+  AssignedEventDetailsSchema,
+  CreatedEventDetailsSchema,
+  UnassignedEventDetailsSchema,
 } from './event-details';
 import { EventFormatSchema, TreeEventSchema } from './events';
-import { TraceContextSchema } from '../common';
-import { OffsetCheckpointSchema } from './completions';
-import { JsCommandsSchema } from './commands';
 
-/**
- * Update event kind (oneOf all update event types).
- */
+/** Update event kind (oneOf all update event types). */
 export const JsUpdateEventKindSchema = z.union([
   z.object({ JsCreated: CreatedEventDetailsSchema }),
   z.object({ JsArchived: ArchivedEventDetailsSchema }),
@@ -20,9 +18,7 @@ export const JsUpdateEventKindSchema = z.union([
   z.object({ JsUnassigned: UnassignedEventDetailsSchema }),
 ]);
 
-/**
- * Update event details.
- */
+/** Update event details. */
 export const JsUpdateEventSchema = z.object({
   /** The kind of update event. */
   kind: JsUpdateEventKindSchema,
@@ -32,9 +28,7 @@ export const JsUpdateEventSchema = z.object({
   reassignmentCounter: z.number(),
 });
 
-/**
- * Transaction details.
- */
+/** Transaction details. */
 export const JsTransactionSchema = z.object({
   /** Unique update ID for the transaction. */
   updateId: z.string(),
@@ -54,9 +48,7 @@ export const JsTransactionSchema = z.object({
   recordTime: z.string(),
 });
 
-/**
- * Transaction tree details.
- */
+/** Transaction tree details. */
 export const JsTransactionTreeSchema = z.object({
   /** Unique update ID for the transaction. */
   updateId: z.string(),
@@ -74,18 +66,14 @@ export const JsTransactionTreeSchema = z.object({
   recordTime: z.string(),
 });
 
-/**
- * Update (oneOf transaction or transaction tree).
- */
+/** Update (oneOf transaction or transaction tree). */
 export const JsUpdateSchema = z.union([
   z.object({ JsTransaction: JsTransactionSchema }),
   z.object({ JsTransactionTree: JsTransactionTreeSchema }),
   z.object({ OffsetCheckpoint: OffsetCheckpointSchema }),
 ]);
 
-/**
- * WebSocket update wrappers (per AsyncAPI) - relaxed typing to accept server payloads.
- */
+/** WebSocket update wrappers (per AsyncAPI) - relaxed typing to accept server payloads. */
 export const WsUpdateSchema = z.union([
   z.object({ OffsetCheckpoint: z.any() }),
   z.object({ Reassignment: z.any() }),
@@ -99,9 +87,7 @@ export const WsUpdateTreesSchema = z.union([
   z.object({ TransactionTree: z.any() }),
 ]);
 
-/**
- * Update stream request.
- */
+/** Update stream request. */
 export const UpdateStreamRequestSchema = z.object({
   /** User ID for the stream (optional if using authentication). */
   userId: z.string().optional(),
@@ -113,17 +99,13 @@ export const UpdateStreamRequestSchema = z.object({
   eventFormat: EventFormatSchema.optional(),
 });
 
-/**
- * Update stream response.
- */
+/** Update stream response. */
 export const UpdateStreamResponseSchema = z.object({
   /** The update. */
   update: JsUpdateSchema,
 });
 
-/**
- * Submit and wait for transaction request.
- */
+/** Submit and wait for transaction request. */
 export const JsSubmitAndWaitForTransactionRequestSchema = z.object({
   /** The commands to submit. */
   commands: JsCommandsSchema,
@@ -131,49 +113,43 @@ export const JsSubmitAndWaitForTransactionRequestSchema = z.object({
   eventFormat: EventFormatSchema.optional(),
 });
 
-/**
- * Submit and wait for transaction response.
- */
+/** Submit and wait for transaction response. */
 export const JsSubmitAndWaitForTransactionResponseSchema = z.object({
   /** The transaction that resulted from the submitted command. */
   transaction: JsTransactionSchema,
 });
 
-/**
- * Submit and wait response.
- */
+/** Submit and wait response. */
 export const SubmitAndWaitResponseSchema = z.object({
   /** The update that resulted from the submitted command. */
   update: JsUpdateSchema,
 });
 
-/**
- * Get updates response (array of updates).
- */
-export const GetUpdatesResponseSchema = z.array(z.object({
-  /** The update. */
-  update: JsUpdateSchema,
-}));
+/** Get updates response (array of updates). */
+export const GetUpdatesResponseSchema = z.array(
+  z.object({
+    /** The update. */
+    update: JsUpdateSchema,
+  })
+);
 
-/**
- * Get update trees response (array of transaction trees).
- */
-export const GetUpdateTreesResponseSchema = z.array(z.object({
-  /** The update. */
-  update: z.object({ JsTransactionTree: JsTransactionTreeSchema }),
-}));
+/** Get update trees response (array of transaction trees). */
+export const GetUpdateTreesResponseSchema = z.array(
+  z.object({
+    /** The update. */
+    update: z.object({ JsTransactionTree: JsTransactionTreeSchema }),
+  })
+);
 
-/**
- * Get transaction response.
- */
+/** Get transaction response. */
 export const GetTransactionResponseSchema = z.object({
   /** The transaction. */
   transaction: JsTransactionSchema,
 });
 
 /**
- * Get transaction response (actual API response format).
- * The API returns events as an array of tree events, not update events.
+ * Get transaction response (actual API response format). The API returns events as an array of tree events, not update
+ * events.
  */
 export const GetTransactionResponseActualSchema = z.object({
   /** The transaction. */
@@ -189,11 +165,13 @@ export const GetTransactionResponseActualSchema = z.object({
     /** Offset of the transaction in the ledger stream. */
     offset: z.number(),
     /** Collection of tree events (not update events). */
-    events: z.array(z.union([
-      z.object({ ArchivedEvent: z.any() }),
-      z.object({ CreatedEvent: z.any() }),
-      z.object({ ExercisedEvent: z.any() }),
-    ])),
+    events: z.array(
+      z.union([
+        z.object({ ArchivedEvent: z.any() }),
+        z.object({ CreatedEvent: z.any() }),
+        z.object({ ExercisedEvent: z.any() }),
+      ])
+    ),
     /** Record time of the transaction. */
     recordTime: z.string(),
     /** Synchronizer ID for the transaction. */
@@ -203,17 +181,13 @@ export const GetTransactionResponseActualSchema = z.object({
   }),
 });
 
-/**
- * Get update response.
- */
+/** Get update response. */
 export const GetUpdateResponseSchema = z.object({
   /** The update. */
   update: JsUpdateSchema,
 });
 
-/**
- * Get transaction tree response.
- */
+/** Get transaction tree response. */
 export const GetTransactionTreeResponseSchema = z.object({
   /** The transaction tree. */
   transaction: JsTransactionTreeSchema,
@@ -237,4 +211,4 @@ export type GetUpdateTreesResponse = z.infer<typeof GetUpdateTreesResponseSchema
 export type GetTransactionResponse = z.infer<typeof GetTransactionResponseSchema>;
 export type GetUpdateResponse = z.infer<typeof GetUpdateResponseSchema>;
 export type GetTransactionTreeResponse = z.infer<typeof GetTransactionTreeResponseSchema>;
-export type GetTransactionResponseActual = z.infer<typeof GetTransactionResponseActualSchema>; 
+export type GetTransactionResponseActual = z.infer<typeof GetTransactionResponseActualSchema>;

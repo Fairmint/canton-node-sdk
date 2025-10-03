@@ -1,6 +1,6 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
+import { type DisclosedContract, type ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/commands';
 import { type ValidatorApiClient } from '../../clients/validator-api';
-import { type ExerciseCommand, type DisclosedContract } from '../../clients/ledger-json-api/schemas/api/commands';
 import { getCurrentMiningRoundContext } from '../mining/mining-rounds';
 import { getAmuletsForTransfer } from './get-amulets-for-transfer';
 
@@ -29,7 +29,7 @@ export interface PreApproveTransfersResult {
 
 /**
  * Creates a TransferPreapproval contract to enable pre-approved transfers for a party
- * 
+ *
  * @param ledgerClient - Ledger JSON API client for submitting commands
  * @param validatorClient - Validator API client for getting network information
  * @param params - Parameters for creating the pre-approval
@@ -42,15 +42,15 @@ export async function preApproveTransfers(
 ): Promise<PreApproveTransfersResult> {
   // Set default expiration to 1 day from now if not provided
   const expiresAt = params.expiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000);
-  
+
   console.log('🔍 Fetching network information...');
-  
+
   // Get network information
   const [amuletRules, dsoPartyId, miningRoundContext, featuredAppRight] = await Promise.all([
     validatorClient.getAmuletRules(),
     validatorClient.getDsoPartyId(),
     getCurrentMiningRoundContext(validatorClient),
-    validatorClient.lookupFeaturedAppRight({ partyId: params.receiverPartyId })
+    validatorClient.lookupFeaturedAppRight({ partyId: params.receiverPartyId }),
   ]);
 
   console.log('📊 Network information fetched:');
@@ -61,8 +61,7 @@ export async function preApproveTransfers(
   console.log(`   Featured App Right: ${featuredAppRight.featured_app_right ? 'Found' : 'Not found'}`);
 
   // Derive current mining round context (handles opensAt logic)
-  const { openMiningRound: openMiningRoundContractId, openMiningRoundContract } =
-    miningRoundContext;
+  const { openMiningRound: openMiningRoundContractId, openMiningRoundContract } = miningRoundContext;
 
   console.log(`✅ Using open mining round: ${openMiningRoundContractId}`);
 
@@ -81,7 +80,7 @@ export async function preApproveTransfers(
       templateId: openMiningRoundContract.templateId,
       createdEventBlob: openMiningRoundContract.createdEventBlob,
       synchronizerId: openMiningRoundContract.synchronizerId,
-    }
+    },
   ];
 
   // Add featured app right contract if found
@@ -100,7 +99,7 @@ export async function preApproveTransfers(
   console.log('🔍 Fetching amulet inputs for receiver party...');
   const amulets = await getAmuletsForTransfer({
     jsonApiClient: ledgerClient,
-    readAs: [params.receiverPartyId]
+    readAs: [params.receiverPartyId],
   });
 
   if (amulets.length === 0) {
@@ -108,9 +107,9 @@ export async function preApproveTransfers(
   }
 
   // Convert amulets to input format
-  const inputs = amulets.map(amulet => ({
+  const inputs = amulets.map((amulet) => ({
     tag: 'InputAmulet' as const,
-    value: amulet.contractId
+    value: amulet.contractId,
   }));
 
   console.log(`📦 Found ${amulets.length} amulets for transfer`);
@@ -128,16 +127,16 @@ export async function preApproveTransfers(
             openMiningRound: openMiningRoundContractId,
             issuingMiningRounds: [],
             validatorRights: [],
-            featuredAppRight: featuredAppRight.featured_app_right?.contract_id || null
-          }
+            featuredAppRight: featuredAppRight.featured_app_right?.contract_id || null,
+          },
         },
         inputs,
         receiver: params.receiverPartyId,
         provider: params.receiverPartyId,
         expiresAt: expiresAt.toISOString(),
-        expectedDso: dsoPartyId.dso_party_id
-      }
-    }
+        expectedDso: dsoPartyId.dso_party_id,
+      },
+    },
   };
 
   console.log('📝 Created exercise command for TransferPreapproval', createCommand);
@@ -149,22 +148,26 @@ export async function preApproveTransfers(
     actAs: [params.receiverPartyId],
     disclosedContracts,
   };
-  
+
   console.log('🚀 Submitting command to ledger...');
   const result = await ledgerClient.submitAndWaitForTransactionTree(submitParams);
 
   // Extract the created TransferPreapproval contract ID from the result
   const events = result.transactionTree.eventsById;
   let contractId: string | undefined;
-  
+
   for (const eventKey in events) {
     const event = events[eventKey];
-    if (event && 'CreatedTreeEvent' in event && event.CreatedTreeEvent?.value?.templateId?.includes('TransferPreapproval')) {
+    if (
+      event &&
+      'CreatedTreeEvent' in event &&
+      event.CreatedTreeEvent?.value?.templateId?.includes('TransferPreapproval')
+    ) {
       contractId = event.CreatedTreeEvent.value.contractId;
       break;
     }
   }
-  
+
   if (!contractId) {
     throw new Error('Failed to create TransferPreapproval contract');
   }
@@ -172,6 +175,6 @@ export async function preApproveTransfers(
   return {
     contractId,
     domainId: amuletRules.amulet_rules.domain_id || '',
-    amuletPaid: '0' // This would be extracted from the transfer result
+    amuletPaid: '0', // This would be extracted from the transfer result
   };
-} 
+}

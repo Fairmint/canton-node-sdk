@@ -1,5 +1,5 @@
-import { createApiOperation } from '../../../../../core';
 import { z } from 'zod';
+import { createApiOperation } from '../../../../../core';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 
 const endpoint = '/v2/updates/update-by-id' as const;
@@ -24,9 +24,7 @@ export const GetUpdateById = createApiOperation<GetUpdateByIdParams, GetUpdateBy
   buildRequestData: (params) => {
     // Validate updateId parameter
     if (!params.updateId || params.updateId === 'undefined' || params.updateId.trim() === '') {
-      throw new Error(
-        `Invalid updateId: "${params.updateId}". updateId must be a non-empty string.`
-      );
+      throw new Error(`Invalid updateId: "${params.updateId}". updateId must be a non-empty string.`);
     }
 
     // Build the request body according to the API specification
@@ -44,4 +42,4 @@ export const GetUpdateById = createApiOperation<GetUpdateByIdParams, GetUpdateBy
       ...(params.readAs && params.readAs.length > 0 && { requestingParties: params.readAs }),
     };
   },
-}); 
+});

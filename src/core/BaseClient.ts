@@ -1,16 +1,16 @@
+import { AuthenticationManager } from './auth/AuthenticationManager';
+import { EnvLoader } from './config/EnvLoader';
+import { ConfigurationError } from './errors';
+import { HttpClient } from './http/HttpClient';
+import { FileLogger } from './logging/FileLogger';
 import {
   type ApiType,
-  type PartialProviderConfig,
   type ClientConfig,
-  type NetworkType,
-  type ProviderType,
   type LighthouseApiConfig,
+  type NetworkType,
+  type PartialProviderConfig,
+  type ProviderType,
 } from './types';
-import { AuthenticationManager } from './auth/AuthenticationManager';
-import { HttpClient } from './http/HttpClient';
-import { ConfigurationError } from './errors';
-import { EnvLoader } from './config/EnvLoader';
-import { FileLogger } from './logging/FileLogger';
 
 /** Abstract base class providing common functionality for all API clients */
 export abstract class BaseClient {
@@ -34,9 +34,7 @@ export abstract class BaseClient {
 
     // Validate that the required API configuration is present
     if (!this.clientConfig.apis?.[apiType]) {
-      throw new ConfigurationError(
-        `API configuration not found for ${apiType}`
-      );
+      throw new ConfigurationError(`API configuration not found for ${apiType}`);
     }
 
     // Build provider configuration from the provided config
@@ -53,16 +51,10 @@ export abstract class BaseClient {
     // Initialize authentication manager
     const apiConfig = this.config.apis[this.apiType];
     if (!apiConfig) {
-      throw new ConfigurationError(
-        `API configuration not found for ${this.apiType}`
-      );
+      throw new ConfigurationError(`API configuration not found for ${this.apiType}`);
     }
 
-    this.authManager = new AuthenticationManager(
-      this.config.authUrl,
-      apiConfig.auth,
-      this.clientConfig.logger
-    );
+    this.authManager = new AuthenticationManager(this.config.authUrl, apiConfig.auth, this.clientConfig.logger);
 
     // Initialize HTTP client with logger
     this.httpClient = new HttpClient(this.clientConfig.logger);
@@ -214,59 +206,39 @@ export abstract class SimpleBaseClient {
 
     // Validate that the required API configuration is present
     if (!this.clientConfig.apis?.[apiType]) {
-      throw new ConfigurationError(
-        `API configuration not found for ${apiType}`
-      );
+      throw new ConfigurationError(`API configuration not found for ${apiType}`);
     }
 
     // Get the API config
     const apiConfig = this.clientConfig.apis[apiType];
     if (!apiConfig) {
-      throw new ConfigurationError(
-        `API configuration not found for ${this.apiType}`
-      );
+      throw new ConfigurationError(`API configuration not found for ${this.apiType}`);
     }
 
     // For Lighthouse API, we expect LighthouseApiConfig
     if (apiType === 'LIGHTHOUSE_API') {
       this.apiConfig = apiConfig as LighthouseApiConfig;
     } else {
-      throw new ConfigurationError(
-        `Invalid API type for SimpleBaseClient: ${apiType}`
-      );
+      throw new ConfigurationError(`Invalid API type for SimpleBaseClient: ${apiType}`);
     }
 
     // Initialize HTTP client with logger
     this.httpClient = new HttpClient(this.clientConfig.logger);
   }
 
-  public async makeGetRequest<T>(
-    url: string,
-    config: { contentType?: string } = {}
-  ): Promise<T> {
+  public async makeGetRequest<T>(url: string, config: { contentType?: string } = {}): Promise<T> {
     return this.httpClient.makeGetRequest<T>(url, config);
   }
 
-  public async makePostRequest<T>(
-    url: string,
-    data: unknown,
-    config: { contentType?: string } = {}
-  ): Promise<T> {
+  public async makePostRequest<T>(url: string, data: unknown, config: { contentType?: string } = {}): Promise<T> {
     return this.httpClient.makePostRequest<T>(url, data, config);
   }
 
-  public async makeDeleteRequest<T>(
-    url: string,
-    config: { contentType?: string } = {}
-  ): Promise<T> {
+  public async makeDeleteRequest<T>(url: string, config: { contentType?: string } = {}): Promise<T> {
     return this.httpClient.makeDeleteRequest<T>(url, config);
   }
 
-  public async makePatchRequest<T>(
-    url: string,
-    data: unknown,
-    config: { contentType?: string } = {}
-  ): Promise<T> {
+  public async makePatchRequest<T>(url: string, data: unknown, config: { contentType?: string } = {}): Promise<T> {
     return this.httpClient.makePatchRequest<T>(url, data, config);
   }
 

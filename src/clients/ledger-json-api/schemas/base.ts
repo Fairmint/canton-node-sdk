@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 /**
- * Generic record schema allowing string, number, boolean, null, nested objects, and arrays.
- * Used for contract arguments and choice arguments.
+ * Generic record schema allowing string, number, boolean, null, nested objects, and arrays. Used for contract arguments
+ * and choice arguments.
  */
 export const RecordSchema = z.record(
   z.string(),
@@ -14,4 +14,4 @@ export const RecordSchema = z.record(
     z.record(z.string(), z.any()), // Allow nested objects
     z.array(z.any()), // Allow arrays
   ])
-); 
+);

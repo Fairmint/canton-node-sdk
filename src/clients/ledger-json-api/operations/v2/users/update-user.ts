@@ -1,5 +1,5 @@
-import { createApiOperation } from '../../../../../core';
 import { type z } from 'zod';
+import { createApiOperation } from '../../../../../core';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 import { UpdateUserParamsSchema } from '../../../schemas/operations';
 
@@ -18,4 +18,4 @@ export const UpdateUser = createApiOperation<UpdateUserParams, UpdateUserRespons
     const { userId, ...requestBody } = params;
     return requestBody;
   },
-}); 
+});

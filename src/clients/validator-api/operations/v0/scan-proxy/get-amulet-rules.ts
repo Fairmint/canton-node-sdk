@@ -3,12 +3,13 @@ import { createApiOperation } from '../../../../../core';
 import { type operations } from '../../../../../generated/apps/validator/src/main/openapi/scan-proxy';
 
 /**
- * @description Get amulet rules
+ * Get amulet rules
+ *
  * @example
- * ```typescript
- * const rules = await client.getAmuletRules();
- * console.log(`Domain ID: ${rules.amulet_rules.domain_id}`);
- * ```
+ *   ```typescript
+ *   const rules = await client.getAmuletRules();
+ *   console.log(`Domain ID: ${rules.amulet_rules.domain_id}`);
+ *   ```
  */
 export const GetAmuletRules = createApiOperation<
   void,
@@ -17,4 +18,4 @@ export const GetAmuletRules = createApiOperation<
   paramsSchema: z.void(),
   method: 'GET',
   buildUrl: (_params: void, apiUrl: string) => `${apiUrl}/api/validator/v0/scan-proxy/amulet-rules`,
-}); 
+});

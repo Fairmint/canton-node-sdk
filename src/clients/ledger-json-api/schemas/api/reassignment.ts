@@ -1,12 +1,10 @@
 import { z } from 'zod';
-import { AssignCommandSchema, UnassignCommandSchema } from './commands';
-import { EmptyCommandSchema, CreatedEventDetailsSchema, UnassignedEventDetailsSchema } from './event-details';
-import { EventFormatSchema } from './events';
 import { TraceContextSchema } from '../common';
+import { AssignCommandSchema, UnassignCommandSchema } from './commands';
+import { CreatedEventDetailsSchema, EmptyCommandSchema, UnassignedEventDetailsSchema } from './event-details';
+import { EventFormatSchema } from './events';
 
-/**
- * Reassignment command wrapper.
- */
+/** Reassignment command wrapper. */
 export const ReassignmentCommandSchema = z.object({
   /** The reassignment command. */
   command: z.union([
@@ -16,9 +14,7 @@ export const ReassignmentCommandSchema = z.object({
   ]),
 });
 
-/**
- * Reassignment commands container.
- */
+/** Reassignment commands container. */
 export const ReassignmentCommandsSchema = z.object({
   /** Workflow ID (optional). */
   workflowId: z.string().optional(),
@@ -34,22 +30,16 @@ export const ReassignmentCommandsSchema = z.object({
   commands: z.array(ReassignmentCommandSchema),
 });
 
-/**
- * Submit reassignment request.
- */
+/** Submit reassignment request. */
 export const SubmitReassignmentRequestSchema = z.object({
   /** The reassignment commands to submit. */
   reassignmentCommands: ReassignmentCommandsSchema,
 });
 
-/**
- * Submit reassignment response.
- */
+/** Submit reassignment response. */
 export const SubmitReassignmentResponseSchema = z.object({});
 
-/**
- * Submit and wait for reassignment request.
- */
+/** Submit and wait for reassignment request. */
 export const SubmitAndWaitForReassignmentRequestSchema = z.object({
   /** The reassignment commands to submit. */
   reassignmentCommands: ReassignmentCommandsSchema,
@@ -57,9 +47,7 @@ export const SubmitAndWaitForReassignmentRequestSchema = z.object({
   eventFormat: EventFormatSchema.optional(),
 });
 
-/**
- * Assignment event details.
- */
+/** Assignment event details. */
 export const JsAssignmentEventSchema = z.object({
   /** Source synchronizer ID. */
   source: z.string(),
@@ -75,25 +63,19 @@ export const JsAssignmentEventSchema = z.object({
   createdEvent: CreatedEventDetailsSchema,
 });
 
-/**
- * Unassigned event details.
- */
+/** Unassigned event details. */
 export const JsUnassignedEventSchema = z.object({
   /** Unassigned event details. */
   value: UnassignedEventDetailsSchema,
 });
 
-/**
- * Reassignment event (oneOf assignment or unassigned).
- */
+/** Reassignment event (oneOf assignment or unassigned). */
 export const JsReassignmentEventSchema = z.union([
   z.object({ JsAssignmentEvent: JsAssignmentEventSchema }),
   z.object({ JsUnassignedEvent: JsUnassignedEventSchema }),
 ]);
 
-/**
- * Complete reassignment view.
- */
+/** Complete reassignment view. */
 export const JsReassignmentSchema = z.object({
   /** Unique update ID for the reassignment. */
   updateId: z.string(),
@@ -111,9 +93,7 @@ export const JsReassignmentSchema = z.object({
   recordTime: z.string(),
 });
 
-/**
- * Submit and wait for reassignment response.
- */
+/** Submit and wait for reassignment response. */
 export const JsSubmitAndWaitForReassignmentResponseSchema = z.object({
   /** The reassignment that resulted from the submitted command. */
   reassignment: JsReassignmentSchema,
@@ -129,4 +109,4 @@ export type JsAssignmentEvent = z.infer<typeof JsAssignmentEventSchema>;
 export type JsUnassignedEvent = z.infer<typeof JsUnassignedEventSchema>;
 export type JsReassignmentEvent = z.infer<typeof JsReassignmentEventSchema>;
 export type JsReassignment = z.infer<typeof JsReassignmentSchema>;
-export type JsSubmitAndWaitForReassignmentResponse = z.infer<typeof JsSubmitAndWaitForReassignmentResponseSchema>; 
+export type JsSubmitAndWaitForReassignmentResponse = z.infer<typeof JsSubmitAndWaitForReassignmentResponseSchema>;

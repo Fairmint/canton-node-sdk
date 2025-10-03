@@ -3,9 +3,7 @@ import { RecordSchema } from '../base';
 
 export const CreatedTreeEventSchema = z
   .object({
-    /**
-     * The created event details for a contract node in the transaction tree.
-     */
+    /** The created event details for a contract node in the transaction tree. */
     CreatedTreeEvent: z
       .object({
         value: z
@@ -47,9 +45,7 @@ export const CreatedTreeEventSchema = z
 
 export const ExercisedTreeEventSchema = z
   .object({
-    /**
-     * The exercised event details for a contract node in the transaction tree.
-     */
+    /** The exercised event details for a contract node in the transaction tree. */
     ExercisedTreeEvent: z
       .object({
         value: z
@@ -91,9 +87,7 @@ export const ExercisedTreeEventSchema = z
 
 export const ArchivedTreeEventSchema = z
   .object({
-    /**
-     * The archived event details for a contract node in the transaction tree.
-     */
+    /** The archived event details for a contract node in the transaction tree. */
     ArchivedTreeEvent: z
       .object({
         value: z
@@ -119,39 +113,28 @@ export const ArchivedTreeEventSchema = z
   })
   .strict();
 
-export const TreeEventSchema = z.union([
-  CreatedTreeEventSchema,
-  ExercisedTreeEventSchema,
-  ArchivedTreeEventSchema,
-]);
+export const TreeEventSchema = z.union([CreatedTreeEventSchema, ExercisedTreeEventSchema, ArchivedTreeEventSchema]);
 
 export const EventFormatSchema = z
   .object({
-    /**
-     * If true, include all available fields in the event. If false, include only essential fields.
-     */
+    /** If true, include all available fields in the event. If false, include only essential fields. */
     verbose: z.boolean(),
     /**
-     * Map of party IDs to their event filters. Each key is a party, and the value specifies which events to include for that party.
+     * Map of party IDs to their event filters. Each key is a party, and the value specifies which events to include for
+     * that party.
      */
     filtersByParty: z.record(
       z.string(),
       z
         .object({
-          /**
-           * List of template or interface filters for this party.
-           */
+          /** List of template or interface filters for this party. */
           cumulative: z.array(z.string()),
         })
         .strict()
     ),
-    /**
-     * If true, include the createdEventBlob field in created events.
-     */
+    /** If true, include the createdEventBlob field in created events. */
     includeCreatedEventBlob: z.boolean().optional(),
-    /**
-     * If true, include interface views in created events.
-     */
+    /** If true, include interface views in created events. */
     includeInterfaceViews: z.boolean().optional(),
   })
   .strict();
@@ -167,9 +150,7 @@ export const EventsByContractIdRequestSchema = z
 
 export const CreatedEventSchema = z
   .object({
-    /**
-     * The created event details for a contract.
-     */
+    /** The created event details for a contract. */
     createdEvent: z
       .object({
         /** Offset of the event in the ledger stream. */
@@ -207,9 +188,7 @@ export const CreatedEventSchema = z
 
 export const ArchivedEventSchema = z
   .object({
-    /**
-     * The archived event details for a contract.
-     */
+    /** The archived event details for a contract. */
     archivedEvent: z
       .object({
         /** Offset of the event in the ledger stream. */
@@ -241,9 +220,8 @@ export const EventsByContractIdResponseSchema = z
     archived: ArchivedEventSchema.optional(),
   })
   .strict()
-  .refine(data => data.created || data.archived, {
-    message:
-      'EventsByContractIdResponse must have at least one of: created, archived',
+  .refine((data) => data.created || data.archived, {
+    message: 'EventsByContractIdResponse must have at least one of: created, archived',
   });
 
 export type CreatedTreeEvent = z.infer<typeof CreatedTreeEventSchema>;
@@ -251,10 +229,8 @@ export type ExercisedTreeEvent = z.infer<typeof ExercisedTreeEventSchema>;
 export type ArchivedTreeEvent = z.infer<typeof ArchivedTreeEventSchema>;
 export type TreeEvent = z.infer<typeof TreeEventSchema>;
 export type EventFormat = z.infer<typeof EventFormatSchema>;
-export type EventsByContractIdRequest = z.infer<
-  typeof EventsByContractIdRequestSchema
->;
+export type EventsByContractIdRequest = z.infer<typeof EventsByContractIdRequestSchema>;
 export type CreatedEvent = z.infer<typeof CreatedEventSchema>;
 export type ArchivedEvent = z.infer<typeof ArchivedEventSchema>;
 // Re-export the OpenAPI-generated type for consistency
-export type { EventsByContractIdResponse } from '../../operations/v2/events/get-events-by-contract-id'; 
+export type { EventsByContractIdResponse } from '../../operations/v2/events/get-events-by-contract-id';

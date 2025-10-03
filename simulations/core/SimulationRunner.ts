@@ -1,16 +1,10 @@
 import { LedgerJsonApiClient } from '../../src/clients/ledger-json-api';
-import { BaseSimulationRunner } from './BaseSimulationRunner';
 import { type ClientConfig } from '../../src/core/types';
+import { BaseSimulationRunner } from './BaseSimulationRunner';
 
 /** Manages simulation execution, result storage, and file handling for API testing */
-export default class SimulationRunner extends BaseSimulationRunner<
-  LedgerJsonApiClient,
-  ClientConfig
-> {
+export default class SimulationRunner extends BaseSimulationRunner<LedgerJsonApiClient, ClientConfig> {
   constructor() {
-    super(
-      'LEDGER_JSON_API',
-      (config: ClientConfig) => new LedgerJsonApiClient(config)
-    );
+    super('LEDGER_JSON_API', (config: ClientConfig) => new LedgerJsonApiClient(config));
   }
 }

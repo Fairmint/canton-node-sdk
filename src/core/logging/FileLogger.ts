@@ -1,7 +1,7 @@
-import * as path from 'path';
-import * as fs from 'fs';
-import { type Logger, type LoggerConfig } from './Logger';
 import dotenv from 'dotenv';
+import * as fs from 'fs';
+import * as path from 'path';
+import { type Logger, type LoggerConfig } from './Logger';
 dotenv.config();
 
 /** Logs API requests and responses to files with sensitive data redaction */
@@ -11,7 +11,8 @@ export class FileLogger implements Logger {
 
   constructor(config: LoggerConfig = {}) {
     const disableEnv = process.env?.['DISABLE_FILE_LOGGER'];
-    const isDisabledByEnv = typeof disableEnv === 'string' && ['1', 'true', 'yes', 'on'].includes(disableEnv.toLowerCase());
+    const isDisabledByEnv =
+      typeof disableEnv === 'string' && ['1', 'true', 'yes', 'on'].includes(disableEnv.toLowerCase());
     this.enableFileLogging = isDisabledByEnv ? false : (config.enableLogging ?? true);
     this.logDir = config.logDir || path.join(__dirname, '../../../logs');
 
@@ -33,11 +34,7 @@ export class FileLogger implements Logger {
     }
   }
 
-  public async logRequestResponse(
-    url: string,
-    request: unknown,
-    response: unknown
-  ): Promise<void> {
+  public async logRequestResponse(url: string, request: unknown, response: unknown): Promise<void> {
     if (!this.enableFileLogging) {
       return;
     }
@@ -52,7 +49,7 @@ export class FileLogger implements Logger {
       };
 
       const logFile = path.join(this.logDir, `api-${timestamp.split('T')[0]}.log`);
-      const logLine = `${JSON.stringify(logEntry)  }\n`;
+      const logLine = `${JSON.stringify(logEntry)}\n`;
 
       await fs.promises.appendFile(logFile, logLine);
     } catch (error) {
@@ -84,4 +81,4 @@ export class FileLogger implements Logger {
 
     return obj;
   }
-} 
+}

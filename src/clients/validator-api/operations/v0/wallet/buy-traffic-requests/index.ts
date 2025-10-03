@@ -1,2 +1,2 @@
 export * from './create';
-export * from './get-status'; 
+export * from './get-status';

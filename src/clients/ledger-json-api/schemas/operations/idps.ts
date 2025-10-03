@@ -37,4 +37,4 @@ export type ListIdentityProviderConfigsParams = z.infer<typeof ListIdentityProvi
 export type CreateIdentityProviderConfigParams = z.infer<typeof CreateIdentityProviderConfigParamsSchema>;
 export type GetIdentityProviderConfigParams = z.infer<typeof GetIdentityProviderConfigParamsSchema>;
 export type UpdateIdentityProviderConfigParams = z.infer<typeof UpdateIdentityProviderConfigParamsSchema>;
-export type DeleteIdentityProviderConfigParams = z.infer<typeof DeleteIdentityProviderConfigParamsSchema>; 
+export type DeleteIdentityProviderConfigParams = z.infer<typeof DeleteIdentityProviderConfigParamsSchema>;

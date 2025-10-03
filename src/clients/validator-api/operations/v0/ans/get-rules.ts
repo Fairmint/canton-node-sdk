@@ -9,15 +9,16 @@ const GetAnsRulesParamsSchema = z.object({
 });
 
 /**
- * @description Get ANS rules
+ * Get ANS rules
+ *
  * @example
- * ```typescript
- * const rules = await client.getAnsRules({ 
+ *   ```typescript
+ *   const rules = await client.getAnsRules({
  *   cached_ans_rules_contract_id: 'contract123',
  *   cached_ans_rules_domain_id: 'domain123'
- * });
- * console.log(`Rules: ${rules.ans_rules_update}`);
- * ```
+ *   });
+ *   console.log(`Rules: ${rules.ans_rules_update}`);
+ *   ```
  */
 export const GetAnsRules = createApiOperation<
   operations['getAnsRules']['requestBody']['content']['application/json'],
@@ -27,4 +28,4 @@ export const GetAnsRules = createApiOperation<
   method: 'POST',
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/scan-proxy/ans-rules`,
   buildRequestData: (params) => params,
-}); 
+});

@@ -1,6 +1,9 @@
-import { createApiOperation } from '../../../../../../../../core';
 import { z } from 'zod';
-import type { paths, components } from '../../../../../../../../generated/token-standard/splice-api-token-allocation-v1/openapi/allocation-v1';
+import { createApiOperation } from '../../../../../../../../core';
+import type {
+  components,
+  paths,
+} from '../../../../../../../../generated/token-standard/splice-api-token-allocation-v1/openapi/allocation-v1';
 
 const apiPath = '/registry/allocations/v1/{allocationId}/choice-contexts/execute-transfer';
 const endpoint = '/api/validator/v0/scan-proxy/registry/allocations/v1';
@@ -12,18 +15,20 @@ export const GetAllocationTransferContextParamsSchema = z.object({
 
 export type GetAllocationTransferContextParams = z.infer<typeof GetAllocationTransferContextParamsSchema>;
 export type GetAllocationTransferContextRequest = components['schemas']['GetChoiceContextRequest'];
-export type GetAllocationTransferContextResponse = paths[typeof apiPath]['post']['responses']['200']['content']['application/json'];
+export type GetAllocationTransferContextResponse =
+  paths[typeof apiPath]['post']['responses']['200']['content']['application/json'];
 
 /**
- * @description Get the choice context to execute a transfer on an allocation
+ * Get the choice context to execute a transfer on an allocation
+ *
  * @example
- * ```typescript
- * const context = await client.getAllocationTransferContext({
+ *   ```typescript
+ *   const context = await client.getAllocationTransferContext({
  *   allocationId: 'allocation123',
  *   meta: { key: 'value' }
- * });
- * console.log(`Choice context data: ${JSON.stringify(context.choiceContextData)}`);
- * ```
+ *   });
+ *   console.log(`Choice context data: ${JSON.stringify(context.choiceContextData)}`);
+ *   ```
  */
 export const GetAllocationTransferContext = createApiOperation<
   GetAllocationTransferContextParams,
@@ -31,7 +36,7 @@ export const GetAllocationTransferContext = createApiOperation<
 >({
   paramsSchema: GetAllocationTransferContextParamsSchema,
   method: 'POST',
-  buildUrl: (params: GetAllocationTransferContextParams, apiUrl: string) => 
+  buildUrl: (params: GetAllocationTransferContextParams, apiUrl: string) =>
     `${apiUrl}${endpoint}/${params.allocationId}/choice-contexts/execute-transfer`,
   buildRequestData: (params: GetAllocationTransferContextParams): GetAllocationTransferContextRequest => {
     const request: GetAllocationTransferContextRequest = {};
@@ -40,4 +45,4 @@ export const GetAllocationTransferContext = createApiOperation<
     }
     return request;
   },
-}); 
+});

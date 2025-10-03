@@ -1,5 +1,5 @@
-import { createApiOperation } from '../../../../../../../../core';
 import { z } from 'zod';
+import { createApiOperation } from '../../../../../../../../core';
 import type { components } from '../../../../../../../../generated/token-standard/splice-api-token-transfer-instruction-v1/openapi/transfer-instruction-v1';
 
 // Schema for path parameters
@@ -13,15 +13,16 @@ export type GetTransferInstructionRejectContextRequest = components['schemas']['
 export type GetTransferInstructionRejectContextResponse = components['schemas']['ChoiceContext'];
 
 /**
- * @description Get the choice context to reject a transfer instruction
+ * Get the choice context to reject a transfer instruction
+ *
  * @example
- * ```typescript
- * const context = await client.getTransferInstructionRejectContext({
+ *   ```typescript
+ *   const context = await client.getTransferInstructionRejectContext({
  *   transferInstructionId: 'contract-id-here',
  *   meta: { key: 'value' }
- * });
- * console.log(`Choice context data: ${JSON.stringify(context.choiceContextData)}`);
- * ```
+ *   });
+ *   console.log(`Choice context data: ${JSON.stringify(context.choiceContextData)}`);
+ *   ```
  */
 export const GetTransferInstructionRejectContext = createApiOperation<
   GetTransferInstructionRejectContextParams,
@@ -29,9 +30,11 @@ export const GetTransferInstructionRejectContext = createApiOperation<
 >({
   paramsSchema: GetTransferInstructionRejectContextParamsSchema,
   method: 'POST',
-  buildUrl: (params: GetTransferInstructionRejectContextParams, apiUrl: string) => 
+  buildUrl: (params: GetTransferInstructionRejectContextParams, apiUrl: string) =>
     `${apiUrl}/api/validator/v0/scan-proxy/registry/transfer-instruction/v1/${params.transferInstructionId}/choice-contexts/reject`,
-  buildRequestData: (params: GetTransferInstructionRejectContextParams): GetTransferInstructionRejectContextRequest => ({
+  buildRequestData: (
+    params: GetTransferInstructionRejectContextParams
+  ): GetTransferInstructionRejectContextRequest => ({
     ...(params.meta && { meta: params.meta }),
   }),
-}); 
+});

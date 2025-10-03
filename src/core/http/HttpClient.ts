@@ -1,7 +1,7 @@
 import axios, { type AxiosInstance } from 'axios';
-import { type RequestConfig } from '../types';
 import { ApiError, NetworkError } from '../errors';
 import { type Logger } from '../logging';
+import { type RequestConfig } from '../types';
 
 /** Handles HTTP requests with authentication, logging, and error handling */
 export class HttpClient {
@@ -13,11 +13,7 @@ export class HttpClient {
     this.logger = logger;
   }
 
-  public async makeGetRequest<T>(
-    url: string,
-    config: RequestConfig = {},
-    _isRetry = false
-  ): Promise<T> {
+  public async makeGetRequest<T>(url: string, config: RequestConfig = {}, _isRetry = false): Promise<T> {
     try {
       const headers = await this.buildHeaders(config);
       const response = await this.axiosInstance.get<T>(url, { headers });
@@ -73,11 +69,7 @@ export class HttpClient {
     }
   }
 
-  public async makeDeleteRequest<T>(
-    url: string,
-    config: RequestConfig = {},
-    _isRetry = false
-  ): Promise<T> {
+  public async makeDeleteRequest<T>(url: string, config: RequestConfig = {}, _isRetry = false): Promise<T> {
     try {
       const headers = await this.buildHeaders(config);
       const response = await this.axiosInstance.delete<T>(url, { headers });
@@ -157,11 +149,7 @@ export class HttpClient {
     delete this.axiosInstance.defaults.headers.common['Authorization'];
   }
 
-  private async logRequestResponse(
-    url: string,
-    request: unknown,
-    response: unknown
-  ): Promise<void> {
+  private async logRequestResponse(url: string, request: unknown, response: unknown): Promise<void> {
     if (this.logger) {
       await this.logger.logRequestResponse(url, request, response);
     }
@@ -171,15 +159,13 @@ export class HttpClient {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
       const data = error.response?.data || {};
-      const {code} = data;
+      const { code } = data;
       const msg = code ? `HTTP ${status}: ${code}` : `HTTP ${status}`;
       const err = new ApiError(msg, status, error.response?.statusText);
       (err as any).response = data;
       return err;
     }
-    return new NetworkError(
-      `Request failed: ${error instanceof Error ? error.message : String(error)}`
-    );
+    return new NetworkError(`Request failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   /** Determines whether a request error is retryable (HTTP 5xx or network error) */
@@ -192,4 +178,4 @@ export class HttpClient {
     // Only retry non-Axios errors that are instances of NetworkError
     return error instanceof NetworkError;
   }
-} 
+}

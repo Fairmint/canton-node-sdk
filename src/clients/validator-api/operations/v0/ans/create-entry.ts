@@ -9,16 +9,17 @@ const CreateAnsEntryParamsSchema = z.object({
 });
 
 /**
- * @description Create a new ANS entry
+ * Create a new ANS entry
+ *
  * @example
- * ```typescript
- * const entry = await client.createAnsEntry({
+ *   ```typescript
+ *   const entry = await client.createAnsEntry({
  *   name: 'my-app',
  *   url: 'https://my-app.com',
  *   description: 'My application'
- * });
- * console.log(`Entry created: ${entry.entryContextCid}`);
- * ```
+ *   });
+ *   console.log(`Entry created: ${entry.entryContextCid}`);
+ *   ```
  */
 export const CreateAnsEntry = createApiOperation<
   operations['createAnsEntry']['requestBody']['content']['application/json'],
@@ -28,4 +29,4 @@ export const CreateAnsEntry = createApiOperation<
   method: 'POST',
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/entry/create`,
   buildRequestData: (params) => params,
-}); 
+});

@@ -39,5 +39,3 @@ export * from './interactive-submission';
 
 // Command response schemas
 export * from './command-responses';
-
- 
