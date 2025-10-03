@@ -52,7 +52,7 @@ export async function waitForContractToBeArchived(
         activeContracts.some((contract) => {
           if ('JsActiveContract' in contract.contractEntry) {
             const { createdEvent } = contract.contractEntry.JsActiveContract;
-            return createdEvent?.contractId === contractId;
+            return createdEvent.contractId === contractId;
           }
           return false;
         });

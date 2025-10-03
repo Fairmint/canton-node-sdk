@@ -7,7 +7,7 @@ export interface ApiOperationConfig<Params, Response> {
   paramsSchema: z.ZodSchema<Params>;
   method: 'GET' | 'POST' | 'DELETE' | 'PATCH';
   buildUrl: (params: Params, apiUrl: string, client: BaseClient) => string;
-  buildRequestData?: (params: Params, client: BaseClient) => unknown | Promise<unknown>;
+  buildRequestData?: (params: Params, client: BaseClient) => unknown;
   requestConfig?: RequestConfig;
   transformResponse?: (response: Response) => Response;
 }
@@ -16,7 +16,7 @@ export interface SimpleApiOperationConfig<Params, Response> {
   paramsSchema: z.ZodSchema<Params>;
   method: 'GET' | 'POST' | 'DELETE' | 'PATCH';
   buildUrl: (params: Params, apiUrl: string, client: SimpleBaseClient) => string;
-  buildRequestData?: (params: Params, client: SimpleBaseClient) => unknown | Promise<unknown>;
+  buildRequestData?: (params: Params, client: SimpleBaseClient) => unknown;
   transformResponse?: (response: Response) => Response;
 }
 

@@ -35,8 +35,7 @@ export class GetMemberTrafficStatus extends ApiOperation<
   ): Promise<operations['getMemberTrafficStatus']['responses']['200']['content']['application/json']> {
     // Auto-determine domainId if not provided
     const domainId =
-      params.domainId ??
-      (await getCurrentMiningRoundDomainId(this.client as unknown as ValidatorApiClient));
+      params.domainId ?? (await getCurrentMiningRoundDomainId(this.client as unknown as ValidatorApiClient));
 
     // Auto-determine memberId if not provided
     const memberId = params.memberId ?? (this.client as { getPartyId: () => string }).getPartyId();
