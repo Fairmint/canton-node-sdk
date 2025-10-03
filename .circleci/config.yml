@@ -32,13 +32,13 @@ jobs:
           command: |
             npm run artifacts:manifest
       - run:
-          name: Lint
-          command: |
-            npm run fix
-      - run:
           name: Run Simulate
           command: |
             npm run simulate
+      - run:
+          name: Lint
+          command: |
+            npm run fix
       - run:
           name: Check for changes and commit
           command: |
