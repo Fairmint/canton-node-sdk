@@ -11,7 +11,7 @@ export async function getFeaturedAppRightContractDetails(validatorApi: Validator
   // The featured-apps endpoint may not include the synchronizer/domain id.
   // Get domain_id from amulet rules which reliably expose it.
   const amuletRules = await validatorApi.getAmuletRules();
-  const synchronizerId = amuletRules.amulet_rules.domain_id ?? '';
+  const synchronizerId = amuletRules.amulet_rules.domain_id;
   return {
     contractId: featuredAppRight.featured_app_right.contract_id,
     createdEventBlob: featuredAppRight.featured_app_right.created_event_blob,

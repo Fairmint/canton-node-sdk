@@ -116,21 +116,23 @@ export const AmuletContractSchema = z.object({
 });
 
 export const GetAmuletsResponseSchema = z.object({
-  amulets: z.array(z.object({
-    contract: AmuletContractSchema,
-    round: z.number(),
-    accrued_holding_fee: z.string(),
-    effective_amount: z.string(),
-  })),
-  locked_amulets: z.array(z.object({
-    contract: AmuletContractSchema,
-    round: z.number(),
-    accrued_holding_fee: z.string(),
-    effective_amount: z.string(),
-  })),
+  amulets: z.array(
+    z.object({
+      contract: AmuletContractSchema,
+      round: z.number(),
+      accrued_holding_fee: z.string(),
+      effective_amount: z.string(),
+    })
+  ),
+  locked_amulets: z.array(
+    z.object({
+      contract: AmuletContractSchema,
+      round: z.number(),
+      accrued_holding_fee: z.string(),
+      effective_amount: z.string(),
+    })
+  ),
 });
 
 export type AmuletContract = z.infer<typeof AmuletContractSchema>;
 export type GetAmuletsResponse = z.infer<typeof GetAmuletsResponseSchema>;
-
- 
