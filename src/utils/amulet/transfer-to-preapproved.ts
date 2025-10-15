@@ -110,7 +110,7 @@ export async function transferToPreapproved(
       contractId: amuletRules.amulet_rules.contract.contract_id,
       templateId: amuletRules.amulet_rules.contract.template_id,
       createdEventBlob: amuletRules.amulet_rules.contract.created_event_blob,
-      synchronizerId: amuletRules.amulet_rules.domain_id ?? '',
+      synchronizerId: amuletRules.amulet_rules.domain_id,
     },
     // Open mining round contract (shared)
     {
@@ -156,7 +156,7 @@ export async function transferToPreapproved(
         contractId: featuredAppRight.featured_app_right.contract_id,
         templateId: featuredAppRight.featured_app_right.template_id,
         createdEventBlob: featuredAppRight.featured_app_right.created_event_blob,
-        synchronizerId: amuletRules.amulet_rules.domain_id ?? '',
+        synchronizerId: amuletRules.amulet_rules.domain_id,
       },
       // Transfer preapproval contract for this recipient
       {

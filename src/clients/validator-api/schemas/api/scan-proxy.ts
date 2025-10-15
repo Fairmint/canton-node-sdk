@@ -78,7 +78,13 @@ export type GetMiningRoundDetailsResponse = z.infer<typeof GetMiningRoundDetails
 // Amulet Rules Schema
 export const GetAmuletRulesResponseSchema = z.object({
   amulet_rules: z.object({
-    contract: z.any(),
+    contract: z.object({
+      template_id: z.string(),
+      contract_id: z.string(),
+      payload: z.any(),
+      created_event_blob: z.string(),
+      created_at: z.string(),
+    }),
     domain_id: z.string(),
   }),
 });

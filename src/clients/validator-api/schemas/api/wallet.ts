@@ -102,3 +102,37 @@ export const TransferPreapprovalSendRequestSchema = z.object({
 export type TransferPreapprovalContract = z.infer<typeof TransferPreapprovalContractSchema>;
 export type TransferPreapprovalResponse = z.infer<typeof TransferPreapprovalResponseSchema>;
 export type TransferPreapprovalSendRequest = z.infer<typeof TransferPreapprovalSendRequestSchema>;
+
+// Get Amulets Response Schema
+export const AmuletContractSchema = z.object({
+  contract: z.object({
+    template_id: z.string(),
+    contract_id: z.string(),
+    payload: z.any(),
+    created_event_blob: z.string(),
+    created_at: z.string(),
+  }),
+  domain_id: z.string(),
+});
+
+export const GetAmuletsResponseSchema = z.object({
+  amulets: z.array(
+    z.object({
+      contract: AmuletContractSchema,
+      round: z.number(),
+      accrued_holding_fee: z.string(),
+      effective_amount: z.string(),
+    })
+  ),
+  locked_amulets: z.array(
+    z.object({
+      contract: AmuletContractSchema,
+      round: z.number(),
+      accrued_holding_fee: z.string(),
+      effective_amount: z.string(),
+    })
+  ),
+});
+
+export type AmuletContract = z.infer<typeof AmuletContractSchema>;
+export type GetAmuletsResponse = z.infer<typeof GetAmuletsResponseSchema>;

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createApiOperation } from '../../../../../core';
-import { type operations } from '../../../../../generated/apps/validator/src/main/openapi/scan-proxy';
+import { type GetAmuletRulesResponse } from '../../../schemas/api/scan-proxy';
 
 /**
  * Get amulet rules
@@ -11,10 +11,7 @@ import { type operations } from '../../../../../generated/apps/validator/src/mai
  *
  *   ```;
  */
-export const GetAmuletRules = createApiOperation<
-  void,
-  operations['getAmuletRules']['responses']['200']['content']['application/json']
->({
+export const GetAmuletRules = createApiOperation<void, GetAmuletRulesResponse>({
   paramsSchema: z.void(),
   method: 'GET',
   buildUrl: (_params: void, apiUrl: string) => `${apiUrl}/api/validator/v0/scan-proxy/amulet-rules`,
