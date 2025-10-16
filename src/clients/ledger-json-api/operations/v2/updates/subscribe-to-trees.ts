@@ -1,7 +1,7 @@
-import { z } from 'zod';
+import { type z } from 'zod';
 import { createWebSocketOperation } from '../../../../../core/operations/WebSocketOperationFactory';
-import { JsCantonErrorSchema, WsCantonErrorSchema } from '../../../schemas/api/errors';
-import { JsTransactionTreeSchema, WsUpdateTreesSchema } from '../../../schemas/api/updates';
+import { type JsCantonErrorSchema, type WsCantonErrorSchema } from '../../../schemas/api/errors';
+import { type JsTransactionTreeSchema, type WsUpdateTreesSchema } from '../../../schemas/api/updates';
 import { GetUpdatesParamsSchema } from '../../../schemas/operations/updates';
 import { buildWsRequestFilterAndVerbose } from './utils/format-normalizers';
 
