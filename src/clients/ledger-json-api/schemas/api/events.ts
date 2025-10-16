@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { RecordSchema } from '../base';
+import { CumulativeFilterSchema } from '../operations/updates';
 
 export const CreatedTreeEventSchema = z
   .object({
@@ -115,6 +116,17 @@ export const ArchivedTreeEventSchema = z
 
 export const TreeEventSchema = z.union([CreatedTreeEventSchema, ExercisedTreeEventSchema, ArchivedTreeEventSchema]);
 
+/** Collection of filters for a party */
+export const FiltersSchema = z
+  .object({
+    /**
+     * Every filter in the cumulative list expands the scope of the resulting stream. Each interface, template or
+     * wildcard filter means additional events that will match the query.
+     */
+    cumulative: z.array(CumulativeFilterSchema).optional(),
+  })
+  .strict();
+
 export const EventFormatSchema = z
   .object({
     /** If true, include all available fields in the event. If false, include only essential fields. */
@@ -123,15 +135,7 @@ export const EventFormatSchema = z
      * Map of party IDs to their event filters. Each key is a party, and the value specifies which events to include for
      * that party.
      */
-    filtersByParty: z.record(
-      z.string(),
-      z
-        .object({
-          /** List of template or interface filters for this party. */
-          cumulative: z.array(z.string()),
-        })
-        .strict()
-    ),
+    filtersByParty: z.record(z.string(), FiltersSchema).optional(),
     /** If true, include the createdEventBlob field in created events. */
     includeCreatedEventBlob: z.boolean().optional(),
     /** If true, include interface views in created events. */
@@ -228,6 +232,7 @@ export type CreatedTreeEvent = z.infer<typeof CreatedTreeEventSchema>;
 export type ExercisedTreeEvent = z.infer<typeof ExercisedTreeEventSchema>;
 export type ArchivedTreeEvent = z.infer<typeof ArchivedTreeEventSchema>;
 export type TreeEvent = z.infer<typeof TreeEventSchema>;
+export type Filters = z.infer<typeof FiltersSchema>;
 export type EventFormat = z.infer<typeof EventFormatSchema>;
 export type EventsByContractIdRequest = z.infer<typeof EventsByContractIdRequestSchema>;
 export type CreatedEvent = z.infer<typeof CreatedEventSchema>;
