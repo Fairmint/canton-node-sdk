@@ -19,7 +19,11 @@ async function main(): Promise<void> {
                 cumulative: [
                   {
                     identifierFilter: {
-                      WildcardFilter: { includeCreatedEventBlob: true },
+                      WildcardFilter: {
+                        value: {
+                          includeCreatedEventBlob: true,
+                        },
+                      },
                     },
                   },
                 ],
