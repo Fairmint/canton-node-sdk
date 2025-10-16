@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createWebSocketOperation } from '../../../../../core/operations/WebSocketOperationFactory';
 import { WebSocketErrorUtils } from '../../../../../core/ws/WebSocketErrorUtils';
-import { JsCantonErrorSchema } from '../../../schemas/api/errors';
+import { JsCantonErrorSchema, WsCantonErrorSchema } from '../../../schemas/api/errors';
 import { GetActiveContractsRequestSchema, JsGetActiveContractsResponseItemSchema } from '../../../schemas/api/state';
 
 const path = '/v2/state/active-contracts' as const;
@@ -13,7 +13,8 @@ const ActiveContractsParamsSchema = GetActiveContractsRequestSchema.extend({
 export type ActiveContractsWsParams = z.infer<typeof ActiveContractsParamsSchema>;
 export type ActiveContractsWsMessage =
   | z.infer<typeof JsGetActiveContractsResponseItemSchema>
-  | z.infer<typeof JsCantonErrorSchema>;
+  | z.infer<typeof JsCantonErrorSchema>
+  | z.infer<typeof WsCantonErrorSchema>;
 
 export const SubscribeToActiveContracts = createWebSocketOperation<
   ActiveContractsWsParams,
@@ -24,7 +25,7 @@ export const SubscribeToActiveContracts = createWebSocketOperation<
   buildPath: (_params, _apiUrl) => `${path}`,
   buildRequestMessage: (params, client) => ({
     filter: undefined,
-    verbose: params.eventFormat ? undefined : (params.verbose ?? false),
+    verbose: params.eventFormat ? params.verbose : (params.verbose ?? false),
     activeAtOffset: params.activeAtOffset,
     eventFormat: params.eventFormat ?? {
       filtersByParty: Object.fromEntries(
@@ -39,7 +40,7 @@ export const SubscribeToActiveContracts = createWebSocketOperation<
   transformInbound: (msg) =>
     WebSocketErrorUtils.parseUnion(
       msg,
-      z.union([JsGetActiveContractsResponseItemSchema, JsCantonErrorSchema]),
+      z.union([JsGetActiveContractsResponseItemSchema, JsCantonErrorSchema, WsCantonErrorSchema]),
       'SubscribeToActiveContracts'
     ),
 });
