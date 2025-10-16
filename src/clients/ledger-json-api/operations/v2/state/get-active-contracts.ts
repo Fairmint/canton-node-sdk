@@ -2,7 +2,7 @@ import { type z } from 'zod';
 import { createApiOperation } from '../../../../../core';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
-import { GetActiveContractsParamsSchema } from '../../../schemas/operations';
+import { GetActiveContractsParamsSchema, type IdentifierFilter } from '../../../schemas/operations';
 
 const endpoint = '/v2/state/active-contracts' as const;
 
@@ -43,35 +43,20 @@ export const GetActiveContracts = createApiOperation<GetActiveContractsCustomPar
 
     // Build filter structure based on parties and template IDs
     interface FilterStructure {
-      filtersByParty?: Record<string, PartyFilter>;
-      filtersForAnyParty?: { cumulative: TemplateFilterArray };
+      filtersByParty?: Record<string, { cumulative: Array<{ identifierFilter: IdentifierFilter }> }>;
+      filtersForAnyParty?: { cumulative: Array<{ identifierFilter: IdentifierFilter }> };
     }
-    interface PartyFilter {
-      cumulative?: TemplateFilterArray;
-    }
-    type TemplateFilterArray = Array<{
-      identifierFilter: {
-        TemplateFilter: {
-          value: {
-            templateId: string;
-            includeCreatedEventBlob: boolean;
-          };
-        };
-      };
-    }>;
 
     let filter: FilterStructure | undefined = undefined;
 
     if (params.parties && params.parties.length > 0) {
       const uniqueParties = Array.from(new Set(params.parties));
-      const filtersByParty: Record<string, PartyFilter> = {};
+      const filtersByParty: Record<string, { cumulative: Array<{ identifierFilter: IdentifierFilter }> }> = {};
 
       for (const party of uniqueParties) {
-        let partyFilter: PartyFilter = {};
-
         if (params.templateIds && params.templateIds.length > 0) {
           // Create template filters for this party
-          const cumulative = params.templateIds.map((templateId) => ({
+          const cumulative = params.templateIds.map((templateId): { identifierFilter: IdentifierFilter } => ({
             identifierFilter: {
               TemplateFilter: {
                 value: {
@@ -82,19 +67,17 @@ export const GetActiveContracts = createApiOperation<GetActiveContractsCustomPar
             },
           }));
 
-          partyFilter = { cumulative };
+          filtersByParty[party] = { cumulative };
         } else {
           // No template filters specified, use empty filter (wildcard)
-          partyFilter = {};
+          filtersByParty[party] = { cumulative: [] };
         }
-
-        filtersByParty[party] = partyFilter;
       }
 
       filter = { filtersByParty };
     } else if (params.templateIds && params.templateIds.length > 0) {
       // Template filters for any party
-      const cumulative = params.templateIds.map((templateId) => ({
+      const cumulative = params.templateIds.map((templateId): { identifierFilter: IdentifierFilter } => ({
         identifierFilter: {
           TemplateFilter: {
             value: {

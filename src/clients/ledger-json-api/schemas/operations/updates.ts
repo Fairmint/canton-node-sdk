@@ -1,25 +1,38 @@
 import { z } from 'zod';
 import { NonEmptyStringSchema } from './base';
 
-// Shared identifier filter schema
+// Filter content schemas matching AsyncAPI spec
+const InterfaceFilterContentSchema = z.object({
+  interfaceId: z.string(),
+  includeInterfaceView: z.boolean(),
+  includeCreatedEventBlob: z.boolean(),
+});
+
+const TemplateFilterContentSchema = z.object({
+  templateId: z.string(),
+  includeCreatedEventBlob: z.boolean(),
+});
+
+const WildcardFilterContentSchema = z.object({
+  includeCreatedEventBlob: z.boolean(),
+});
+
+// Identifier filter schema - matches AsyncAPI spec with 'value' wrapper
 export const IdentifierFilterSchema = z.union([
   z.object({ Empty: z.object({}) }),
   z.object({
     InterfaceFilter: z.object({
-      interfaceId: z.string(),
-      includeInterfaceView: z.boolean().optional(),
-      includeCreatedEventBlob: z.boolean().optional(),
+      value: InterfaceFilterContentSchema,
     }),
   }),
   z.object({
     TemplateFilter: z.object({
-      templateId: z.string(),
-      includeCreatedEventBlob: z.boolean().optional(),
+      value: TemplateFilterContentSchema,
     }),
   }),
   z.object({
     WildcardFilter: z.object({
-      includeCreatedEventBlob: z.boolean().optional(),
+      value: WildcardFilterContentSchema,
     }),
   }),
 ]);
