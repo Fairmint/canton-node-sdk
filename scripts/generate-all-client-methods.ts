@@ -51,7 +51,7 @@ type OperationInfo =
   | { kind: 'api'; operationName: string; paramsType: string; responseType: string }
   | { kind: 'ws'; operationName: string; paramsType: string; requestType: string; messageType: string };
 
-// Extract operation info from a file (supports REST and WebSocket operations)
+// Extract operation info from a file (supports REST, WebSocket, and class-based operations)
 function extractOperationInfo(fileContent: string): OperationInfo | null {
   // REST operations: createApiOperation or createSimpleApiOperation
   const apiRegex = /export const (\w+) = create(?:Simple)?ApiOperation<\s*([^,]+),\s*([^>]+)\s*>/s;
@@ -62,6 +62,18 @@ function extractOperationInfo(fileContent: string): OperationInfo | null {
       operationName: apiMatch[1],
       paramsType: apiMatch[2].trim(),
       responseType: apiMatch[3].trim(),
+    };
+  }
+
+  // Class-based operations: export class OperationName { ... execute(...) }
+  const classRegex = /export class (\w+)\s*{[\s\S]*?public async execute\(/s;
+  const classMatch = classRegex.exec(fileContent);
+  if (classMatch?.[1]) {
+    return {
+      kind: 'api',
+      operationName: classMatch[1],
+      paramsType: 'unknown',
+      responseType: 'unknown',
     };
   }
 

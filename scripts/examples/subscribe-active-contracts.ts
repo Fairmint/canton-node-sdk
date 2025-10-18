@@ -16,7 +16,6 @@ async function main(): Promise<void> {
   const results = await client.getActiveContracts({
     activeAtOffset,
     parties: [partyId],
-    verbose: false,
     onItem: (msg) => {
       const entry = (msg as any)?.contractEntry;
       if (entry && typeof entry === 'object' && 'JsActiveContract' in entry) {
