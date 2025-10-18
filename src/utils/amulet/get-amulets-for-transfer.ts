@@ -56,6 +56,7 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
 
   const activeContracts = await jsonApiClient.getActiveContracts({
     parties: [senderParty],
+    templateIds: ['#splice-amulet:Splice.Amulet:Amulet'],
   });
 
   const allAmulets: AmuletData[] = [];

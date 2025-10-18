@@ -205,7 +205,6 @@ build/src/utils/amulet/index
 build/src/utils/amulet/offers
 build/src/utils/amulet/pre-approve-transfers
 build/src/utils/amulet/transfer-to-preapproved
-build/src/utils/contracts/contract-monitor
 build/src/utils/contracts/featuredAppRight
 build/src/utils/contracts/findCreatedEvent
 build/src/utils/contracts/index
