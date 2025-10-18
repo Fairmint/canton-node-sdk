@@ -3,31 +3,31 @@ import { type BaseClient } from '../../../../../core/BaseClient';
 import { WebSocketClient } from '../../../../../core/ws/WebSocketClient';
 import { WebSocketErrorUtils } from '../../../../../core/ws/WebSocketErrorUtils';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
-import {
-  GetActiveContractsRequestSchema,
-  JsGetActiveContractsResponseItemSchema,
-  type JsGetActiveContractsResponseItem,
-  type JsGetActiveContractsResponse,
-} from '../../../schemas/api/state';
 import { JsCantonErrorSchema, WsCantonErrorSchema } from '../../../schemas/api/errors';
+import {
+  JsGetActiveContractsResponseItemSchema,
+  type JsGetActiveContractsResponse,
+  type JsGetActiveContractsResponseItem,
+} from '../../../schemas/api/state';
 
 const path = '/v2/state/active-contracts' as const;
 
 /**
- * We intentionally do not expose the JSON/REST version of this endpoint.
- * The REST variant is too limited, while the WebSocket variant returns the same
- * snapshot and automatically closes the connection once the current state is sent.
- * Wrapping the WebSocket call behind a simple awaitable method gives a better DX
- * and keeps the door open for optional streaming via a callback.
+ * We intentionally do not expose the JSON/REST version of this endpoint. The REST variant is too limited, while the
+ * WebSocket variant returns the same snapshot and automatically closes the connection once the current state is sent.
+ * Wrapping the WebSocket call behind a simple awaitable method gives a better DX and keeps the door open for optional
+ * streaming via a callback.
  */
 
-const ActiveContractsParamsSchema = GetActiveContractsRequestSchema.extend({
+const ActiveContractsParamsSchema = z.object({
+  /** Optional list of parties to scope the filter. */
+  parties: z.array(z.string()).optional(),
+  /** Optional template filter applied server-side. */
+  templateFilter: z.string().optional(),
+  /** Include created event blob in TemplateFilter results (default false). */
+  includeCreatedEventBlob: z.boolean().optional(),
   /** Allow caller to omit activeAtOffset; we'll default to ledger end */
   activeAtOffset: z.number().optional(),
-  /** Optional list of parties to scope the `eventFormat` filter. */
-  parties: z.array(z.string()).optional(),
-  /** Controls verbosity when auto-building the eventFormat. */
-  verbose: z.boolean().optional(),
 });
 
 export type GetActiveContractsParams = z.infer<typeof ActiveContractsParamsSchema> & {
@@ -49,22 +49,39 @@ export class GetActiveContracts {
       activeAtOffset = ledgerEnd.offset;
     }
 
-    // Build request message: prefer provided eventFormat, otherwise infer from parties/buildPartyList
+    // Build request message with server-side template filter
+    const partyList =
+      validated.parties && validated.parties.length > 0 ? validated.parties : this.client.buildPartyList();
+
     const requestMessage = {
       filter: undefined as unknown,
-      verbose: validated.eventFormat ? validated.verbose : (validated.verbose ?? false),
+      verbose: false,
       activeAtOffset,
-      eventFormat:
-        validated.eventFormat ?? {
-          filtersByParty: Object.fromEntries(
-            (validated.parties && validated.parties.length > 0
-              ? validated.parties
-              : this.client.buildPartyList()
-            ).map((p) => [p, { cumulative: [] }])
-          ),
-          verbose: validated.verbose ?? false,
-        },
-    };
+      eventFormat: {
+        verbose: false,
+        filtersByParty: Object.fromEntries(
+          partyList.map((p) => [
+            p,
+            {
+              cumulative: validated.templateFilter
+                ? [
+                    {
+                      identifierFilter: {
+                        TemplateFilter: {
+                          value: {
+                            templateId: validated.templateFilter,
+                            includeCreatedEventBlob: validated.includeCreatedEventBlob ?? false,
+                          },
+                        },
+                      },
+                    },
+                  ]
+                : [],
+            },
+          ])
+        ),
+      },
+    } as const;
 
     const wsClient = new WebSocketClient(this.client);
 
