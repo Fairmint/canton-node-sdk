@@ -22,8 +22,8 @@ const path = '/v2/state/active-contracts' as const;
 const ActiveContractsParamsSchema = z.object({
   /** Optional list of parties to scope the filter. */
   parties: z.array(z.string()).optional(),
-  /** Optional template filter applied server-side. */
-  templateFilter: z.string().optional(),
+  /** Optional template filters applied server-side. */
+  templateIds: z.array(z.string()).optional(),
   /** Include created event blob in TemplateFilter results (default false). */
   includeCreatedEventBlob: z.boolean().optional(),
   /** Allow caller to omit activeAtOffset; we'll default to ledger end */
@@ -63,20 +63,19 @@ export class GetActiveContracts {
           partyList.map((p) => [
             p,
             {
-              cumulative: validated.templateFilter
-                ? [
-                    {
+              cumulative:
+                validated.templateIds && validated.templateIds.length > 0
+                  ? validated.templateIds.map((templateId) => ({
                       identifierFilter: {
                         TemplateFilter: {
                           value: {
-                            templateId: validated.templateFilter,
+                            templateId,
                             includeCreatedEventBlob: validated.includeCreatedEventBlob ?? false,
                           },
                         },
                       },
-                    },
-                  ]
-                : [],
+                    }))
+                  : [],
             },
           ])
         ),
