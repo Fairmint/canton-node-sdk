@@ -12,40 +12,22 @@ async function main(): Promise<void> {
 
   let activeContractsFound = 0;
 
-  const subscription = await client.subscribeToActiveContracts(
-    {
-      activeAtOffset,
-      parties: [partyId],
-      verbose: false,
-      // If you omit eventFormat, the client builds a default filtersByParty
-      // using the provided parties (or the client's party list).
+  // New awaitable API with optional onItem streaming callback
+  const results = await client.getActiveContracts({
+    activeAtOffset,
+    parties: [partyId],
+    verbose: false,
+    onItem: (msg) => {
+      const entry = (msg as any)?.contractEntry;
+      if (entry && typeof entry === 'object' && 'JsActiveContract' in entry) {
+        activeContractsFound += 1;
+      }
     },
-    {
-      onOpen: () => {},
-      onMessage: (msg) => {
-        // Count only active contract entries
-        if (typeof msg === 'object' && 'contractEntry' in msg && 'JsActiveContract' in msg.contractEntry) {
-          activeContractsFound += 1;
-        }
-      },
-      onError: (err) => {
-        console.error('Subscription error:', err);
-        process.exit(1);
-      },
-      onClose: (code, reason) => {
-        console.log(`Active contracts found: ${activeContractsFound}`);
-        console.log(`Connection closed: ${code} - ${reason}`);
-        process.exit(0);
-      },
-    }
-  );
+  });
 
-  // Keep open for demo
-  setTimeout(() => {
-    subscription.close();
-    console.log('Subscription closed after timeout');
-    process.exit(0);
-  }, 120000);
+  console.log(`Active contracts found (via onItem): ${activeContractsFound}`);
+  console.log(`Total results: ${Array.isArray(results) ? results.length : 0}`);
+  process.exit(0);
 }
 
 main().catch((err) => {

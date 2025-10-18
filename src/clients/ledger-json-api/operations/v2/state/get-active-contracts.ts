@@ -1,103 +1,128 @@
-import { type z } from 'zod';
-import { createApiOperation } from '../../../../../core';
-import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
+import { z } from 'zod';
+import { type BaseClient } from '../../../../../core/BaseClient';
+import { WebSocketClient } from '../../../../../core/ws/WebSocketClient';
+import { WebSocketErrorUtils } from '../../../../../core/ws/WebSocketErrorUtils';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
-import { GetActiveContractsParamsSchema, type IdentifierFilter } from '../../../schemas/operations';
+import {
+  GetActiveContractsRequestSchema,
+  JsGetActiveContractsResponseItemSchema,
+  type JsGetActiveContractsResponseItem,
+  type JsGetActiveContractsResponse,
+} from '../../../schemas/api/state';
+import { JsCantonErrorSchema, WsCantonErrorSchema } from '../../../schemas/api/errors';
 
-const endpoint = '/v2/state/active-contracts' as const;
+const path = '/v2/state/active-contracts' as const;
 
-export type GetActiveContractsParams = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
-export type GetActiveContractsResponse =
-  paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
+/**
+ * We intentionally do not expose the JSON/REST version of this endpoint.
+ * The REST variant is too limited, while the WebSocket variant returns the same
+ * snapshot and automatically closes the connection once the current state is sent.
+ * Wrapping the WebSocket call behind a simple awaitable method gives a better DX
+ * and keeps the door open for optional streaming via a callback.
+ */
 
-// Custom params type with optional activeAtOffset
-export type GetActiveContractsCustomParams = z.infer<typeof GetActiveContractsParamsSchema>;
+const ActiveContractsParamsSchema = GetActiveContractsRequestSchema.extend({
+  /** Allow caller to omit activeAtOffset; we'll default to ledger end */
+  activeAtOffset: z.number().optional(),
+  /** Optional list of parties to scope the `eventFormat` filter. */
+  parties: z.array(z.string()).optional(),
+  /** Controls verbosity when auto-building the eventFormat. */
+  verbose: z.boolean().optional(),
+});
 
-export const GetActiveContracts = createApiOperation<GetActiveContractsCustomParams, GetActiveContractsResponse>({
-  paramsSchema: GetActiveContractsParamsSchema,
-  method: 'POST',
-  buildUrl: (params, apiUrl) => {
-    const baseUrl = `${apiUrl}${endpoint}`;
-    const queryParams = new URLSearchParams();
+export type GetActiveContractsParams = z.infer<typeof ActiveContractsParamsSchema> & {
+  /** Optional per-item callback to consume results as they arrive. */
+  onItem?: (item: JsGetActiveContractsResponseItem) => void;
+};
 
-    if (params.limit !== undefined) {
-      queryParams.append('limit', params.limit.toString());
-    }
-    if (params.streamIdleTimeoutMs !== undefined) {
-      queryParams.append('stream_idle_timeout_ms', params.streamIdleTimeoutMs.toString());
-    }
+export class GetActiveContracts {
+  constructor(private readonly client: BaseClient) {}
 
-    const queryString = queryParams.toString();
-    return queryString ? `${baseUrl}?${queryString}` : baseUrl;
-  },
-  buildRequestData: async (params, client) => {
-    const requestVerbose = params.verbose ?? true;
+  public async execute(params: GetActiveContractsParams): Promise<JsGetActiveContractsResponse> {
+    const validated = ActiveContractsParamsSchema.parse(params);
 
     // Determine activeAtOffset (default to ledger end if not specified)
-    let { activeAtOffset } = params;
+    let { activeAtOffset } = validated;
     if (activeAtOffset === undefined) {
-      const ledgerClient = client as LedgerJsonApiClient;
+      const ledgerClient = this.client as unknown as LedgerJsonApiClient;
       const ledgerEnd = await ledgerClient.getLedgerEnd({});
       activeAtOffset = ledgerEnd.offset;
     }
 
-    // Build filter structure based on parties and template IDs
-    interface FilterStructure {
-      filtersByParty?: Record<string, { cumulative: Array<{ identifierFilter: IdentifierFilter }> }>;
-      filtersForAnyParty?: { cumulative: Array<{ identifierFilter: IdentifierFilter }> };
-    }
-
-    let filter: FilterStructure | undefined = undefined;
-
-    if (params.parties && params.parties.length > 0) {
-      const uniqueParties = Array.from(new Set(params.parties));
-      const filtersByParty: Record<string, { cumulative: Array<{ identifierFilter: IdentifierFilter }> }> = {};
-
-      for (const party of uniqueParties) {
-        if (params.templateIds && params.templateIds.length > 0) {
-          // Create template filters for this party
-          const cumulative = params.templateIds.map((templateId): { identifierFilter: IdentifierFilter } => ({
-            identifierFilter: {
-              TemplateFilter: {
-                value: {
-                  templateId,
-                  includeCreatedEventBlob: false,
-                },
-              },
-            },
-          }));
-
-          filtersByParty[party] = { cumulative };
-        } else {
-          // No template filters specified, use empty filter (wildcard)
-          filtersByParty[party] = { cumulative: [] };
-        }
-      }
-
-      filter = { filtersByParty };
-    } else if (params.templateIds && params.templateIds.length > 0) {
-      // Template filters for any party
-      const cumulative = params.templateIds.map((templateId): { identifierFilter: IdentifierFilter } => ({
-        identifierFilter: {
-          TemplateFilter: {
-            value: {
-              templateId,
-              includeCreatedEventBlob: false,
-            },
-          },
-        },
-      }));
-
-      filter = {
-        filtersForAnyParty: { cumulative },
-      };
-    }
-
-    // Build and return the request body explicitly
-    return {
-      filter,
-      verbose: requestVerbose,
+    // Build request message: prefer provided eventFormat, otherwise infer from parties/buildPartyList
+    const requestMessage = {
+      filter: undefined as unknown,
+      verbose: validated.eventFormat ? validated.verbose : (validated.verbose ?? false),
       activeAtOffset,
+      eventFormat:
+        validated.eventFormat ?? {
+          filtersByParty: Object.fromEntries(
+            (validated.parties && validated.parties.length > 0
+              ? validated.parties
+              : this.client.buildPartyList()
+            ).map((p) => [p, { cumulative: [] }])
+          ),
+          verbose: validated.verbose ?? false,
+        },
     };
-  },
-});
+
+    const wsClient = new WebSocketClient(this.client);
+
+    return new Promise<JsGetActiveContractsResponse>((resolve, reject) => {
+      const results: JsGetActiveContractsResponse = [];
+      let settled = false;
+
+      void wsClient
+        .connect<typeof requestMessage, unknown>(path, requestMessage, {
+          onMessage: (raw) => {
+            try {
+              const parsed = WebSocketErrorUtils.parseUnion(
+                raw,
+                z.union([JsGetActiveContractsResponseItemSchema, JsCantonErrorSchema, WsCantonErrorSchema]),
+                'GetActiveContracts'
+              ) as unknown as
+                | z.infer<typeof JsGetActiveContractsResponseItemSchema>
+                | z.infer<typeof JsCantonErrorSchema>
+                | z.infer<typeof WsCantonErrorSchema>;
+
+              // Distinguish item vs error union members
+              if ('contractEntry' in (parsed as Record<string, unknown>)) {
+                const item = parsed as JsGetActiveContractsResponseItem;
+                results.push(item);
+                if (typeof params.onItem === 'function') {
+                  params.onItem(item);
+                }
+              } else if (!settled) {
+                // Treat any non-item as an error message
+                settled = true;
+                reject(parsed as unknown as Error);
+              }
+            } catch (e) {
+              if (!settled) {
+                settled = true;
+                reject(e as Error);
+              }
+            }
+          },
+          onError: (err) => {
+            if (!settled) {
+              settled = true;
+              reject(err as Error);
+            }
+          },
+          onClose: () => {
+            if (!settled) {
+              settled = true;
+              resolve(results);
+            }
+          },
+        })
+        .catch((err) => {
+          if (!settled) {
+            settled = true;
+            reject(err as Error);
+          }
+        });
+    });
+  }
+}
