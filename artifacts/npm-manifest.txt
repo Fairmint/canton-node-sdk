@@ -46,7 +46,6 @@ build/src/clients/ledger-json-api/operations/v2/state/get-connected-synchronizer
 build/src/clients/ledger-json-api/operations/v2/state/get-latest-pruned-offsets
 build/src/clients/ledger-json-api/operations/v2/state/get-ledger-end
 build/src/clients/ledger-json-api/operations/v2/state/index
-build/src/clients/ledger-json-api/operations/v2/state/subscribe-to-active-contracts
 build/src/clients/ledger-json-api/operations/v2/updates/get-flats
 build/src/clients/ledger-json-api/operations/v2/updates/get-transaction-by-id
 build/src/clients/ledger-json-api/operations/v2/updates/get-transaction-by-offset
