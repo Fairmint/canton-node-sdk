@@ -46,18 +46,14 @@ build/src/clients/ledger-json-api/operations/v2/state/get-connected-synchronizer
 build/src/clients/ledger-json-api/operations/v2/state/get-latest-pruned-offsets
 build/src/clients/ledger-json-api/operations/v2/state/get-ledger-end
 build/src/clients/ledger-json-api/operations/v2/state/index
-build/src/clients/ledger-json-api/operations/v2/updates/get-flats
 build/src/clients/ledger-json-api/operations/v2/updates/get-transaction-by-id
 build/src/clients/ledger-json-api/operations/v2/updates/get-transaction-by-offset
 build/src/clients/ledger-json-api/operations/v2/updates/get-transaction-tree-by-id
 build/src/clients/ledger-json-api/operations/v2/updates/get-transaction-tree-by-offset
-build/src/clients/ledger-json-api/operations/v2/updates/get-trees
 build/src/clients/ledger-json-api/operations/v2/updates/get-update-by-id
 build/src/clients/ledger-json-api/operations/v2/updates/get-update-by-offset
 build/src/clients/ledger-json-api/operations/v2/updates/index
-build/src/clients/ledger-json-api/operations/v2/updates/subscribe-to-flats
-build/src/clients/ledger-json-api/operations/v2/updates/subscribe-to-trees
-build/src/clients/ledger-json-api/operations/v2/updates/utils/format-normalizers
+build/src/clients/ledger-json-api/operations/v2/updates/subscribe-to-updates
 build/src/clients/ledger-json-api/operations/v2/users/create-user
 build/src/clients/ledger-json-api/operations/v2/users/delete-user
 build/src/clients/ledger-json-api/operations/v2/users/get-user
@@ -68,6 +64,7 @@ build/src/clients/ledger-json-api/operations/v2/users/list-users
 build/src/clients/ledger-json-api/operations/v2/users/revoke-user-rights
 build/src/clients/ledger-json-api/operations/v2/users/update-user
 build/src/clients/ledger-json-api/operations/v2/users/update-user-identity-provider
+build/src/clients/ledger-json-api/operations/v2/utils/event-format-builder
 build/src/clients/ledger-json-api/operations/v2/version/get
 build/src/clients/ledger-json-api/operations/v2/version/index
 build/src/clients/ledger-json-api/schemas/api/command-responses
