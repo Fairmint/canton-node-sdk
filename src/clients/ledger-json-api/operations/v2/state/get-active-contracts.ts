@@ -1,13 +1,8 @@
 import { z } from 'zod';
 import { WebSocketClient } from '../../../../../core/ws/WebSocketClient';
-import { WebSocketErrorUtils } from '../../../../../core/ws/WebSocketErrorUtils';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
-import { JsCantonErrorSchema, WsCantonErrorSchema } from '../../../schemas/api/errors';
-import {
-  JsGetActiveContractsResponseItemSchema,
-  type JsGetActiveContractsResponse,
-  type JsGetActiveContractsResponseItem,
-} from '../../../schemas/api/state';
+import { type JsCantonErrorSchema, type WsCantonErrorSchema } from '../../../schemas/api/errors';
+import { type JsGetActiveContractsResponse, type JsGetActiveContractsResponseItem } from '../../../schemas/api/state';
 import { buildEventFormat } from '../utils/event-format-builder';
 
 const path = '/v2/state/active-contracts' as const;
@@ -79,18 +74,16 @@ export class GetActiveContracts {
         .connect<typeof requestMessage, unknown>(path, requestMessage, {
           onMessage: (raw) => {
             try {
-              const parsed = WebSocketErrorUtils.parseUnion(
-                raw,
-                z.union([JsGetActiveContractsResponseItemSchema, JsCantonErrorSchema, WsCantonErrorSchema]),
-                'GetActiveContracts'
-              ) as unknown as
-                | z.infer<typeof JsGetActiveContractsResponseItemSchema>
+              // Skip Zod validation for response types - just use the raw parsed JSON
+              // Zod validation is only needed for input types, not outputs
+              const parsed = raw as
+                | JsGetActiveContractsResponseItem
                 | z.infer<typeof JsCantonErrorSchema>
                 | z.infer<typeof WsCantonErrorSchema>;
 
               // Distinguish item vs error union members
-              if ('contractEntry' in (parsed as Record<string, unknown>)) {
-                const item = parsed as JsGetActiveContractsResponseItem;
+              if (typeof parsed === 'object' && 'contractEntry' in parsed) {
+                const item = parsed;
                 results.push(item);
                 if (typeof params.onItem === 'function') {
                   params.onItem(item);
