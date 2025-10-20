@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { type BaseClient } from '../../../../../core/BaseClient';
 import { WebSocketClient } from '../../../../../core/ws/WebSocketClient';
 import { WebSocketErrorUtils } from '../../../../../core/ws/WebSocketErrorUtils';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
@@ -38,7 +37,7 @@ export type UpdatesWsMessage =
   | z.infer<typeof WsCantonErrorSchema>;
 
 export class SubscribeToUpdates {
-  constructor(private readonly client: BaseClient) {}
+  constructor(private readonly client: LedgerJsonApiClient) {}
 
   public async connect(params: SubscribeToUpdatesParams): Promise<void> {
     const validated = SubscribeToUpdatesParamsSchema.parse(params);
@@ -46,8 +45,7 @@ export class SubscribeToUpdates {
     // Determine beginExclusive (default to ledger end if not specified)
     let { beginExclusive } = validated;
     if (beginExclusive === undefined) {
-      const ledgerClient = this.client as unknown as LedgerJsonApiClient;
-      const ledgerEnd = await ledgerClient.getLedgerEnd({});
+      const ledgerEnd = await this.client.getLedgerEnd({});
       beginExclusive = ledgerEnd.offset;
     }
 

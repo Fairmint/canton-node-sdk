@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { type BaseClient } from '../../../../../core/BaseClient';
 import { WebSocketClient } from '../../../../../core/ws/WebSocketClient';
 import { WebSocketErrorUtils } from '../../../../../core/ws/WebSocketErrorUtils';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
@@ -37,7 +36,7 @@ export type GetActiveContractsParams = z.infer<typeof ActiveContractsParamsSchem
 };
 
 export class GetActiveContracts {
-  constructor(private readonly client: BaseClient) {}
+  constructor(private readonly client: LedgerJsonApiClient) {}
 
   public async execute(params: GetActiveContractsParams): Promise<JsGetActiveContractsResponse> {
     const validated = ActiveContractsParamsSchema.parse(params);
@@ -45,8 +44,7 @@ export class GetActiveContracts {
     // Determine activeAtOffset (default to ledger end if not specified)
     let { activeAtOffset } = validated;
     if (activeAtOffset === undefined) {
-      const ledgerClient = this.client as unknown as LedgerJsonApiClient;
-      const ledgerEnd = await ledgerClient.getLedgerEnd({});
+      const ledgerEnd = await this.client.getLedgerEnd({});
       activeAtOffset = ledgerEnd.offset;
     }
 
