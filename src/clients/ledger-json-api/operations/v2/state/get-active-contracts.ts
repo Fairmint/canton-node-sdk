@@ -9,6 +9,7 @@ import {
   type JsGetActiveContractsResponse,
   type JsGetActiveContractsResponseItem,
 } from '../../../schemas/api/state';
+import { buildEventFormat } from '../utils/event-format-builder';
 
 const path = '/v2/state/active-contracts' as const;
 
@@ -49,37 +50,23 @@ export class GetActiveContracts {
       activeAtOffset = ledgerEnd.offset;
     }
 
-    // Build request message with server-side template filter
+    // Build party list
     const partyList =
       validated.parties && validated.parties.length > 0 ? validated.parties : this.client.buildPartyList();
 
+    // Build event format
+    const eventFormat = buildEventFormat({
+      parties: partyList,
+      ...(validated.templateIds !== undefined && { templateIds: validated.templateIds }),
+      ...(validated.includeCreatedEventBlob !== undefined && { includeCreatedEventBlob: validated.includeCreatedEventBlob }),
+    });
+
+    // Build request message
     const requestMessage = {
       filter: undefined as unknown,
       verbose: false,
       activeAtOffset,
-      eventFormat: {
-        verbose: false,
-        filtersByParty: Object.fromEntries(
-          partyList.map((p) => [
-            p,
-            {
-              cumulative:
-                validated.templateIds && validated.templateIds.length > 0
-                  ? validated.templateIds.map((templateId) => ({
-                      identifierFilter: {
-                        TemplateFilter: {
-                          value: {
-                            templateId,
-                            includeCreatedEventBlob: validated.includeCreatedEventBlob ?? false,
-                          },
-                        },
-                      },
-                    }))
-                  : [],
-            },
-          ])
-        ),
-      },
+      eventFormat,
     } as const;
 
     const wsClient = new WebSocketClient(this.client);
