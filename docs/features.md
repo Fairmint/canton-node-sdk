@@ -105,11 +105,15 @@ const status = await client.getPackageStatus({ packageId: 'my-package' });
 #### Transaction Operations
 
 ```typescript
-// Get transaction updates
-const updates = await client.getUpdates({
+// Subscribe to transaction updates with easy-to-use options
+await client.subscribeToUpdates({
   beginExclusive: 1000,
-  endInclusive: 2000,
-  updateFormat: { includeTransactions: { eventFormat: { verbose: true } } },
+  templateIds: ['Module:Template'],
+  includeCreatedEventBlob: true,
+  includeReassignments: true,
+  onMessage: (msg) => {
+    console.log('Update:', msg);
+  },
 });
 
 // Query specific transactions

@@ -58,7 +58,8 @@ export class HttpClient {
           { method: 'POST', retry: true, data },
           `Retrying after error: ${axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)}`
         );
-        return this.makePostRequest(url, data, config, true);
+        const retryData = this.prepareDataForRetry(data);
+        return this.makePostRequest(url, retryData, config, true);
       }
 
       // Log the error response before throwing
@@ -113,7 +114,8 @@ export class HttpClient {
           { method: 'PATCH', retry: true, data },
           `Retrying after error: ${axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)}`
         );
-        return this.makePatchRequest(url, data, config, true);
+        const retryData = this.prepareDataForRetry(data);
+        return this.makePatchRequest(url, retryData, config, true);
       }
 
       // Log the error response before throwing
@@ -177,5 +179,18 @@ export class HttpClient {
     }
     // Only retry non-Axios errors that are instances of NetworkError
     return error instanceof NetworkError;
+  }
+
+  /**
+   * Prepares request data for retry by updating commandId fields to avoid duplicate command rejection. If the data
+   * contains a commandId field, appends a retry suffix with timestamp to make it unique.
+   */
+  private prepareDataForRetry(data: unknown): unknown {
+    if (data && typeof data === 'object' && 'commandId' in data) {
+      const originalCommandId = (data as { commandId: string }).commandId;
+      const retryCommandId = `${originalCommandId}-retry`;
+      return { ...data, commandId: retryCommandId };
+    }
+    return data;
   }
 }

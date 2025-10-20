@@ -4,7 +4,13 @@ import type { paths } from '../../../../../generated/canton/community/ledger/led
 import { type AllocatePartyResponse } from '../../../schemas/api';
 
 // Type aliases for better readability and to avoid repetition
-type AllocatePartyRequest = paths['/v2/parties']['post']['requestBody']['content']['application/json'];
+type GeneratedAllocatePartyRequest = paths['/v2/parties']['post']['requestBody']['content']['application/json'];
+
+// Extended type to support both old and new API versions
+type AllocatePartyRequest = GeneratedAllocatePartyRequest & {
+  synchronizerId?: string;
+  userId?: string;
+};
 
 // Schema for the parameters
 export const AllocatePartyParamsSchema = z.object({
@@ -12,6 +18,10 @@ export const AllocatePartyParamsSchema = z.object({
   partyIdHint: z.string(),
   /** Identity provider ID (required) */
   identityProviderId: z.string(),
+  /** Synchronizer ID (required) */
+  synchronizerId: z.string(),
+  /** User ID (required) */
+  userId: z.string(),
   /** Local metadata (optional) */
   localMetadata: z
     .object({
@@ -29,10 +39,11 @@ export type AllocatePartyParams = z.infer<typeof AllocatePartyParamsSchema>;
  * @example
  *   ```typescript
  *   const result = await client.allocateParty({
- *   partyIdHint: 'alice',
- *   identityProviderId: 'default'
+ *     partyIdHint: 'alice',
+ *     identityProviderId: 'default',
+ *     synchronizerId: 'global-synchronizer',
+ *     userId: 'user-123'
  *   });
- *
  *   ```;
  */
 export const AllocateParty = createApiOperation<AllocatePartyParams, AllocatePartyResponse>({
@@ -40,8 +51,10 @@ export const AllocateParty = createApiOperation<AllocatePartyParams, AllocatePar
   method: 'POST',
   buildUrl: (_params: AllocatePartyParams, apiUrl: string) => `${apiUrl}/v2/parties`,
   buildRequestData: (params: AllocatePartyParams, _client: BaseClient): AllocatePartyRequest => ({
-    partyIdHint: params.partyIdHint || '',
-    identityProviderId: params.identityProviderId || '',
+    partyIdHint: params.partyIdHint,
+    identityProviderId: params.identityProviderId,
+    synchronizerId: params.synchronizerId,
+    userId: params.userId,
     ...(params.localMetadata && {
       localMetadata: {
         resourceVersion: params.localMetadata.resourceVersion ?? '',

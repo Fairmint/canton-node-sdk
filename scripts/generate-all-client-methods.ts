@@ -48,7 +48,7 @@ function getAllTsFiles(dir: string): string[] {
 }
 
 type OperationInfo =
-  | { kind: 'api'; operationName: string; paramsType: string; responseType: string }
+  | { kind: 'api'; operationName: string; paramsType: string; responseType: string; methodName?: string }
   | { kind: 'ws'; operationName: string; paramsType: string; requestType: string; messageType: string };
 
 // Extract operation info from a file (supports REST, WebSocket, and class-based operations)
@@ -66,14 +66,16 @@ function extractOperationInfo(fileContent: string): OperationInfo | null {
   }
 
   // Class-based operations: export class OperationName { ... execute(...) }
-  const classRegex = /export class (\w+)\s*{[\s\S]*?public async execute\(/s;
+  const classRegex = /export class (\w+)\s*{[\s\S]*?public async (execute|connect)\(/s;
   const classMatch = classRegex.exec(fileContent);
   if (classMatch?.[1]) {
+    const methodName = classMatch[2]; // 'execute' or 'connect'
     return {
       kind: 'api',
       operationName: classMatch[1],
       paramsType: 'unknown',
       responseType: 'unknown',
+      ...(methodName && { methodName }), // Only include if defined
     };
   }
 
@@ -107,8 +109,9 @@ function generateMethodDeclarations(ops: Array<OperationInfo & { importPath: str
     .map((op) => {
       const methodName = operationNameToMethodName(op.operationName);
       if (op.kind === 'api') {
-        const methodParamsType = `Parameters<InstanceType<typeof ${op.operationName}>['execute']>[0]`;
-        const methodReturnType = `ReturnType<InstanceType<typeof ${op.operationName}>['execute']>`;
+        const opMethodName = op.methodName ?? 'execute';
+        const methodParamsType = `Parameters<InstanceType<typeof ${op.operationName}>['${opMethodName}']>[0]`;
+        const methodReturnType = `ReturnType<InstanceType<typeof ${op.operationName}>['${opMethodName}']>`;
         if (op.paramsType === 'void') {
           return `  public ${methodName}!: () => ${methodReturnType};`;
         }
@@ -128,7 +131,8 @@ function generateMethodImplementations(ops: Array<OperationInfo & { importPath: 
       const methodName = operationNameToMethodName(op.operationName);
       if (op.kind === 'api') {
         const params = op.paramsType === 'void' ? '' : 'params';
-        return `    this.${methodName} = (${params}) => new ${op.operationName}(this).execute(${params});`;
+        const opMethodName = op.methodName ?? 'execute';
+        return `    this.${methodName} = (${params}) => new ${op.operationName}(this).${opMethodName}(${params});`;
       }
       return `    this.${methodName} = (params, handlers) => new ${op.operationName}(this).subscribe(params as any, handlers as any);`;
     })

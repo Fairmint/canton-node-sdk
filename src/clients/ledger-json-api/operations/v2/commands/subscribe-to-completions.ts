@@ -1,13 +1,11 @@
-import { z } from 'zod';
+import { type z } from 'zod';
 import { createWebSocketOperation } from '../../../../../core/operations/WebSocketOperationFactory';
-import { WebSocketErrorUtils } from '../../../../../core/ws/WebSocketErrorUtils';
 import {
   CompletionStreamRequestSchema,
-  CompletionStreamResponseSchema,
   type CompletionStreamRequest,
   type CompletionStreamResponse,
 } from '../../../schemas/api/completions';
-import { JsCantonErrorSchema, WsCantonErrorSchema } from '../../../schemas/api/errors';
+import { type JsCantonErrorSchema, type WsCantonErrorSchema } from '../../../schemas/api/errors';
 
 const path = '/v2/commands/completions' as const;
 
@@ -35,10 +33,4 @@ export const SubscribeToCompletions = createWebSocketOperation<
       beginExclusive: params.beginExclusive,
     };
   },
-  transformInbound: (msg) =>
-    WebSocketErrorUtils.parseUnion(
-      msg,
-      z.union([CompletionStreamResponseSchema, JsCantonErrorSchema, WsCantonErrorSchema]),
-      'SubscribeToCompletions'
-    ),
 });

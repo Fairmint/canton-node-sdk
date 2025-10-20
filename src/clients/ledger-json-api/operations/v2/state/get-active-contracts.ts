@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { type BaseClient } from '../../../../../core/BaseClient';
 import { WebSocketClient } from '../../../../../core/ws/WebSocketClient';
 import { WebSocketErrorUtils } from '../../../../../core/ws/WebSocketErrorUtils';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
@@ -9,6 +8,7 @@ import {
   type JsGetActiveContractsResponse,
   type JsGetActiveContractsResponseItem,
 } from '../../../schemas/api/state';
+import { buildEventFormat } from '../utils/event-format-builder';
 
 const path = '/v2/state/active-contracts' as const;
 
@@ -36,7 +36,7 @@ export type GetActiveContractsParams = z.infer<typeof ActiveContractsParamsSchem
 };
 
 export class GetActiveContracts {
-  constructor(private readonly client: BaseClient) {}
+  constructor(private readonly client: LedgerJsonApiClient) {}
 
   public async execute(params: GetActiveContractsParams): Promise<JsGetActiveContractsResponse> {
     const validated = ActiveContractsParamsSchema.parse(params);
@@ -44,42 +44,29 @@ export class GetActiveContracts {
     // Determine activeAtOffset (default to ledger end if not specified)
     let { activeAtOffset } = validated;
     if (activeAtOffset === undefined) {
-      const ledgerClient = this.client as unknown as LedgerJsonApiClient;
-      const ledgerEnd = await ledgerClient.getLedgerEnd({});
+      const ledgerEnd = await this.client.getLedgerEnd({});
       activeAtOffset = ledgerEnd.offset;
     }
 
-    // Build request message with server-side template filter
+    // Build party list
     const partyList =
       validated.parties && validated.parties.length > 0 ? validated.parties : this.client.buildPartyList();
 
+    // Build event format
+    const eventFormat = buildEventFormat({
+      parties: partyList,
+      ...(validated.templateIds !== undefined && { templateIds: validated.templateIds }),
+      ...(validated.includeCreatedEventBlob !== undefined && {
+        includeCreatedEventBlob: validated.includeCreatedEventBlob,
+      }),
+    });
+
+    // Build request message
     const requestMessage = {
       filter: undefined as unknown,
       verbose: false,
       activeAtOffset,
-      eventFormat: {
-        verbose: false,
-        filtersByParty: Object.fromEntries(
-          partyList.map((p) => [
-            p,
-            {
-              cumulative:
-                validated.templateIds && validated.templateIds.length > 0
-                  ? validated.templateIds.map((templateId) => ({
-                      identifierFilter: {
-                        TemplateFilter: {
-                          value: {
-                            templateId,
-                            includeCreatedEventBlob: validated.includeCreatedEventBlob ?? false,
-                          },
-                        },
-                      },
-                    }))
-                  : [],
-            },
-          ])
-        ),
-      },
+      eventFormat,
     } as const;
 
     const wsClient = new WebSocketClient(this.client);
