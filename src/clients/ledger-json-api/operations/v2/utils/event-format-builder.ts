@@ -1,6 +1,6 @@
 /**
- * Shared utility for building eventFormat configuration used across multiple Ledger JSON API operations.
- * This module provides a consistent way to construct the complex eventFormat structure from simple parameters.
+ * Shared utility for building eventFormat configuration used across multiple Ledger JSON API operations. This module
+ * provides a consistent way to construct the complex eventFormat structure from simple parameters.
  */
 
 export interface EventFormatBuilderParams {
@@ -13,9 +13,9 @@ export interface EventFormatBuilderParams {
 }
 
 /**
- * Builds the eventFormat object structure used in various Ledger JSON API operations.
- * This centralizes the logic for creating filtersByParty configurations from simple parameters.
- * 
+ * Builds the eventFormat object structure used in various Ledger JSON API operations. This centralizes the logic for
+ * creating filtersByParty configurations from simple parameters.
+ *
  * @param params - Configuration parameters for building the event format
  * @returns An eventFormat object ready to be used in API requests
  */
@@ -61,4 +61,3 @@ export function buildEventFormat(params: EventFormatBuilderParams): {
     ),
   };
 }
-

@@ -109,7 +109,7 @@ function generateMethodDeclarations(ops: Array<OperationInfo & { importPath: str
     .map((op) => {
       const methodName = operationNameToMethodName(op.operationName);
       if (op.kind === 'api') {
-        const opMethodName = op.methodName || 'execute';
+        const opMethodName = op.methodName ?? 'execute';
         const methodParamsType = `Parameters<InstanceType<typeof ${op.operationName}>['${opMethodName}']>[0]`;
         const methodReturnType = `ReturnType<InstanceType<typeof ${op.operationName}>['${opMethodName}']>`;
         if (op.paramsType === 'void') {
@@ -131,7 +131,7 @@ function generateMethodImplementations(ops: Array<OperationInfo & { importPath: 
       const methodName = operationNameToMethodName(op.operationName);
       if (op.kind === 'api') {
         const params = op.paramsType === 'void' ? '' : 'params';
-        const opMethodName = op.methodName || 'execute';
+        const opMethodName = op.methodName ?? 'execute';
         return `    this.${methodName} = (${params}) => new ${op.operationName}(this).${opMethodName}(${params});`;
       }
       return `    this.${methodName} = (params, handlers) => new ${op.operationName}(this).subscribe(params as any, handlers as any);`;

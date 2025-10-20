@@ -1,11 +1,11 @@
-import { z } from 'zod';
+import { type z } from 'zod';
 import { createWebSocketOperation } from '../../../../../core/operations/WebSocketOperationFactory';
 import {
   CompletionStreamRequestSchema,
   type CompletionStreamRequest,
   type CompletionStreamResponse,
 } from '../../../schemas/api/completions';
-import { JsCantonErrorSchema, WsCantonErrorSchema } from '../../../schemas/api/errors';
+import { type JsCantonErrorSchema, type WsCantonErrorSchema } from '../../../schemas/api/errors';
 
 const path = '/v2/commands/completions' as const;
 

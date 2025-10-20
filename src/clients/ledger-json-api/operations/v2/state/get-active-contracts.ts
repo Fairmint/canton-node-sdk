@@ -58,7 +58,9 @@ export class GetActiveContracts {
     const eventFormat = buildEventFormat({
       parties: partyList,
       ...(validated.templateIds !== undefined && { templateIds: validated.templateIds }),
-      ...(validated.includeCreatedEventBlob !== undefined && { includeCreatedEventBlob: validated.includeCreatedEventBlob }),
+      ...(validated.includeCreatedEventBlob !== undefined && {
+        includeCreatedEventBlob: validated.includeCreatedEventBlob,
+      }),
     });
 
     // Build request message

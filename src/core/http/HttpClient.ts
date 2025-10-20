@@ -182,8 +182,8 @@ export class HttpClient {
   }
 
   /**
-   * Prepares request data for retry by updating commandId fields to avoid duplicate command rejection.
-   * If the data contains a commandId field, appends a retry suffix with timestamp to make it unique.
+   * Prepares request data for retry by updating commandId fields to avoid duplicate command rejection. If the data
+   * contains a commandId field, appends a retry suffix with timestamp to make it unique.
    */
   private prepareDataForRetry(data: unknown): unknown {
     if (data && typeof data === 'object' && 'commandId' in data) {
