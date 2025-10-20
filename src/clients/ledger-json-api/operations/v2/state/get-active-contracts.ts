@@ -2,10 +2,7 @@ import { z } from 'zod';
 import { WebSocketClient } from '../../../../../core/ws/WebSocketClient';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
 import { type JsCantonErrorSchema, type WsCantonErrorSchema } from '../../../schemas/api/errors';
-import {
-  type JsGetActiveContractsResponse,
-  type JsGetActiveContractsResponseItem,
-} from '../../../schemas/api/state';
+import { type JsGetActiveContractsResponse, type JsGetActiveContractsResponseItem } from '../../../schemas/api/state';
 import { buildEventFormat } from '../utils/event-format-builder';
 
 const path = '/v2/state/active-contracts' as const;
