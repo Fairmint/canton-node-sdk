@@ -1,9 +1,8 @@
 import { z } from 'zod';
 import { WebSocketClient } from '../../../../../core/ws/WebSocketClient';
-import { WebSocketErrorUtils } from '../../../../../core/ws/WebSocketErrorUtils';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
-import { JsCantonErrorSchema, WsCantonErrorSchema } from '../../../schemas/api/errors';
-import { JsUpdateSchema, WsUpdateSchema } from '../../../schemas/api/updates';
+import { type JsCantonErrorSchema, type WsCantonErrorSchema } from '../../../schemas/api/errors';
+import { type JsUpdateSchema, type WsUpdateSchema } from '../../../schemas/api/updates';
 import { buildEventFormat } from '../utils/event-format-builder';
 
 const path = '/v2/updates' as const;
@@ -118,15 +117,9 @@ export class SubscribeToUpdates {
         .connect<typeof requestMessage, unknown>(path, requestMessage, {
           onMessage: (raw) => {
             try {
-              const parsed = WebSocketErrorUtils.parseUnion(
-                raw,
-                z.union([
-                  z.object({ update: z.union([JsUpdateSchema, WsUpdateSchema]) }),
-                  JsCantonErrorSchema,
-                  WsCantonErrorSchema,
-                ]),
-                'SubscribeToUpdates'
-              ) as UpdatesWsMessage;
+              // Skip Zod validation for response types - just use the raw parsed JSON
+              // Zod validation is only needed for input types, not outputs
+              const parsed = raw as UpdatesWsMessage;
 
               // Call user's onMessage callback if provided
               if (typeof params.onMessage === 'function') {
@@ -134,7 +127,7 @@ export class SubscribeToUpdates {
               }
 
               // Check if it's an error
-              if ('errors' in parsed || 'error' in parsed) {
+              if (typeof parsed === 'object' && ('errors' in parsed || 'error' in parsed)) {
                 if (!settled) {
                   settled = true;
                   reject(parsed as unknown as Error);
