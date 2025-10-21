@@ -147,7 +147,6 @@
       "traceparent": "00-15a4d8d02143f6ee1929fe2ed412f31e-466ebded40b73f03-01",
       "tracestate": null
     },
-    "recordTime": "2025-07-02T19:51:05.811417Z",
-    "externalTransactionHash": null
+    "recordTime": "2025-07-02T19:51:05.811417Z"
   }
 }
