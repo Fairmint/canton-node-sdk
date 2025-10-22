@@ -20,7 +20,7 @@ import {
  *     traffic_amount: 1000,
  *     receiving_validator_party_id: 'validator::party123...'
  *   });
- *   ```
+ *   ```;
  */
 export const CreateBuyTrafficRequest = createApiOperation<
   CreateBuyTrafficRequestParams,
@@ -44,7 +44,7 @@ export const CreateBuyTrafficRequest = createApiOperation<
     }
 
     // Get receiving validator party ID from params or client configuration
-    const receiving_validator_party_id = params.receiving_validator_party_id || client.getPartyId();
+    const receiving_validator_party_id = params.receiving_validator_party_id ?? client.getPartyId();
 
     // Generate a unique tracking ID
     const tracking_id = `buy-traffic-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
