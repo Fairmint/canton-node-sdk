@@ -10,10 +10,16 @@ import {
  *
  * @example
  *   ```typescript
+ *   // Purchase traffic for the current validator
  *   const request = await client.createBuyTrafficRequest({
- *   traffic_amount: 1000
+ *     traffic_amount: 1000
  *   });
  *
+ *   // Purchase traffic for a different validator
+ *   const request = await client.createBuyTrafficRequest({
+ *     traffic_amount: 1000,
+ *     receiving_validator_party_id: 'validator::party123...'
+ *   });
  *   ```;
  */
 export const CreateBuyTrafficRequest = createApiOperation<
@@ -37,8 +43,8 @@ export const CreateBuyTrafficRequest = createApiOperation<
       throw new Error('Unable to determine domain_id from amulet rules');
     }
 
-    // Get receiving validator party ID from client configuration
-    const receiving_validator_party_id = client.getPartyId();
+    // Get receiving validator party ID from params or client configuration
+    const receiving_validator_party_id = params.receiving_validator_party_id ?? client.getPartyId();
 
     // Generate a unique tracking ID
     const tracking_id = `buy-traffic-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;

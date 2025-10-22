@@ -14,7 +14,7 @@ export class FileLogger implements Logger {
     const isDisabledByEnv =
       typeof disableEnv === 'string' && ['1', 'true', 'yes', 'on'].includes(disableEnv.toLowerCase());
     this.enableFileLogging = isDisabledByEnv ? false : (config.enableLogging ?? true);
-    this.logDir = config.logDir ?? path.join(__dirname, '../../../logs');
+    this.logDir = config.logDir ?? process.env['FILE_LOGGER_DIR'] ?? path.join(__dirname, '../../../logs');
 
     this.setupLogging();
   }
@@ -61,14 +61,21 @@ export class FileLogger implements Logger {
       return obj;
     }
 
+    if (Array.isArray(obj)) {
+      return obj.map((item) => this.sanitizeForLogging(item));
+    }
+
     if (typeof obj === 'object') {
       const sanitized: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(obj)) {
         // Skip sensitive fields
-        if (['password', 'client_secret', 'access_token', 'authorization'].includes(key.toLowerCase())) {
+        if (
+          ['password', 'client_secret', 'access_token', 'authorization', 'refresh_token'].includes(key.toLowerCase())
+        ) {
           sanitized[key] = '[REDACTED]';
         } else {
-          sanitized[key] = value;
+          // Recursively sanitize nested objects
+          sanitized[key] = this.sanitizeForLogging(value);
         }
       }
       return sanitized;
