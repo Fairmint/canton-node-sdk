@@ -19,6 +19,7 @@ export const WithdrawTransferOfferParamsSchema = z.object({
 // Buy Traffic Request Parameters
 export const CreateBuyTrafficRequestParamsSchema = z.object({
   traffic_amount: z.number(),
+  receiving_validator_party_id: z.string().optional(),
 });
 export const GetBuyTrafficRequestStatusParamsSchema = z.object({
   trackingId: z.string(),
