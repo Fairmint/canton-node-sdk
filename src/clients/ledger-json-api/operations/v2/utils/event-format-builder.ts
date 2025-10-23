@@ -24,16 +24,27 @@ export function buildEventFormat(params: EventFormatBuilderParams): {
   filtersByParty: Record<
     string,
     {
-      cumulative: Array<{
-        identifierFilter: {
-          TemplateFilter: {
-            value: {
-              templateId: string;
-              includeCreatedEventBlob: boolean;
+      cumulative: Array<
+        | {
+            identifierFilter: {
+              TemplateFilter: {
+                value: {
+                  templateId: string;
+                  includeCreatedEventBlob: boolean;
+                };
+              };
             };
-          };
-        };
-      }>;
+          }
+        | {
+            identifierFilter: {
+              WildcardFilter: {
+                value: {
+                  includeCreatedEventBlob: boolean;
+                };
+              };
+            };
+          }
+      >;
     }
   >;
 } {
@@ -55,7 +66,19 @@ export function buildEventFormat(params: EventFormatBuilderParams): {
                     },
                   },
                 }))
-              : [],
+              : params.includeCreatedEventBlob
+                ? [
+                    {
+                      identifierFilter: {
+                        WildcardFilter: {
+                          value: {
+                            includeCreatedEventBlob: true,
+                          },
+                        },
+                      },
+                    },
+                  ]
+                : [],
         },
       ])
     ),
