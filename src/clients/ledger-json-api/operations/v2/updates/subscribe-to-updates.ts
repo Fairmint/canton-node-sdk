@@ -7,6 +7,31 @@ import { buildEventFormat } from '../utils/event-format-builder';
 
 const path = '/v2/updates' as const;
 
+/**
+ * The `TransactionShape` enum defines the event shape for `Transaction`s and can have two different flavors AcsDelta and
+ * LedgerEffects.
+ * ```protobuf
+ * enum TransactionShape {
+ *   TRANSACTION_SHAPE_ACS_DELTA = 1;
+ *   TRANSACTION_SHAPE_LEDGER_EFFECTS = 2;
+ * }
+ * ```
+ * - AcsDelta
+ *
+ *   The transaction shape that is sufficient to maintain an accurate ACS view. This translates to create and archive
+ *   events. The field witness_parties in events are populated as stakeholders, transaction filter will apply accordingly.
+ *
+ * - LedgerEffects
+ *
+ *   The transaction shape that allows maintaining an ACS and also conveys detailed information about all exercises.
+ *   This translates to create, consuming exercise and non-consuming exercise. The field witness_parties in events are
+ *   populated as cumulative informees, transaction filter will apply accordingly.
+ */
+export enum TransactionShape {
+  TRANSACTION_SHAPE_ACS_DELTA = 'TRANSACTION_SHAPE_ACS_DELTA',
+  TRANSACTION_SHAPE_LEDGER_EFFECTS = 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
+}
+
 const SubscribeToUpdatesParamsSchema = z.object({
   /** Optional list of parties to scope the filter. */
   parties: z.array(z.string()).optional(),
@@ -22,6 +47,8 @@ const SubscribeToUpdatesParamsSchema = z.object({
   includeReassignments: z.boolean().optional(),
   /** Include topology events in the stream (default false). */
   includeTopologyEvents: z.boolean().optional(),
+  /** Transaction shape (default TRANSACTION_SHAPE_LEDGER_EFFECTS). */
+  transactionShape: z.nativeEnum(TransactionShape).optional(),
 });
 
 export type SubscribeToUpdatesParams = z.infer<typeof SubscribeToUpdatesParamsSchema> & {
@@ -65,7 +92,7 @@ export class SubscribeToUpdates {
     const updateFormat: {
       includeTransactions?: {
         eventFormat: ReturnType<typeof buildEventFormat>;
-        transactionShape: string;
+        transactionShape: TransactionShape;
       };
       includeReassignments?: {
         filtersByParty: ReturnType<typeof buildEventFormat>['filtersByParty'];
@@ -79,7 +106,8 @@ export class SubscribeToUpdates {
     } = {
       includeTransactions: {
         eventFormat,
-        transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA',
+        transactionShape:
+          validated.transactionShape ?? TransactionShape.TRANSACTION_SHAPE_LEDGER_EFFECTS,
       },
     };
 
