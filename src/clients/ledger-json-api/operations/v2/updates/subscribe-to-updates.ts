@@ -8,23 +8,25 @@ import { buildEventFormat } from '../utils/event-format-builder';
 const path = '/v2/updates' as const;
 
 /**
- * The `TransactionShape` enum defines the event shape for `Transaction`s and can have two different flavors AcsDelta and
- * LedgerEffects.
+ * The `TransactionShape` enum defines the event shape for `Transaction`s and can have two different flavors AcsDelta
+ * and LedgerEffects.
+ *
  * ```protobuf
  * enum TransactionShape {
  *   TRANSACTION_SHAPE_ACS_DELTA = 1;
  *   TRANSACTION_SHAPE_LEDGER_EFFECTS = 2;
  * }
  * ```
+ *
  * - AcsDelta
  *
  *   The transaction shape that is sufficient to maintain an accurate ACS view. This translates to create and archive
- *   events. The field witness_parties in events are populated as stakeholders, transaction filter will apply accordingly.
- *
+ *   events. The field witness_parties in events are populated as stakeholders, transaction filter will apply
+ *   accordingly.
  * - LedgerEffects
  *
- *   The transaction shape that allows maintaining an ACS and also conveys detailed information about all exercises.
- *   This translates to create, consuming exercise and non-consuming exercise. The field witness_parties in events are
+ *   The transaction shape that allows maintaining an ACS and also conveys detailed information about all exercises. This
+ *   translates to create, consuming exercise and non-consuming exercise. The field witness_parties in events are
  *   populated as cumulative informees, transaction filter will apply accordingly.
  */
 export enum TransactionShape {
@@ -106,8 +108,7 @@ export class SubscribeToUpdates {
     } = {
       includeTransactions: {
         eventFormat,
-        transactionShape:
-          validated.transactionShape ?? TransactionShape.TRANSACTION_SHAPE_LEDGER_EFFECTS,
+        transactionShape: validated.transactionShape ?? TransactionShape.TRANSACTION_SHAPE_LEDGER_EFFECTS,
       },
     };
 
