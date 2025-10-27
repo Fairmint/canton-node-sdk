@@ -46,7 +46,7 @@ export function buildEventFormat(params: EventFormatBuilderParams): {
   verbose: boolean;
   filtersByParty: Record<string, { cumulative: FilterCumulative }>;
 } {
-  if (!params.parties || params.parties.length === 0) {
+  if (params.parties?.length === 0) {
     throw new Error('At least one party is required for event format filters');
   }
 

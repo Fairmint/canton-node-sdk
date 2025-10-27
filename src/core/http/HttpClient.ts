@@ -40,12 +40,7 @@ export class HttpClient {
     }
   }
 
-  public async makePostRequest<T>(
-    url: string,
-    data: unknown,
-    config: RequestConfig = {},
-    _retryCount = 0
-  ): Promise<T> {
+  public async makePostRequest<T>(url: string, data: unknown, config: RequestConfig = {}, _retryCount = 0): Promise<T> {
     try {
       const headers = this.buildHeaders(config);
       const response = await this.axiosInstance.post<T>(url, data, { headers });
@@ -175,8 +170,8 @@ export class HttpClient {
   }
 
   /**
-   * Determines whether a request error is retryable.
-   * Retries on:
+   * Determines whether a request error is retryable. Retries on:
+   *
    * - HTTP 5xx server errors
    * - Network errors
    * - Canton-specific transient errors: UNKNOWN_CONTRACT_SYNCHRONIZERS (400), SEQUENCER_BACKPRESSURE (409), HTTP 503

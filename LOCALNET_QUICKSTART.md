@@ -72,17 +72,20 @@ Each file is a JSON snapshot of an API response or error.
 ## 🐛 Common Issues
 
 ### "Port already in use"
+
 ```bash
 npm run localnet:stop  # Clean up previous instance
 ```
 
 ### "Health checks failing"
+
 ```bash
 # Wait longer (can take 2 minutes)
 npm run localnet:status
 ```
 
 ### "LOCALNET_DIR not set"
+
 ```bash
 # Add to shell profile and reload:
 export LOCALNET_DIR="/tmp/splice-localnet/splice-node/docker-compose/localnet"
@@ -102,12 +105,12 @@ https://app.circleci.com/pipelines/github/YOUR_ORG/canton-node-sdk
 
 ## ⏱️ Time Expectations
 
-| Task | Time |
-|------|------|
+| Task             | Time        |
+| ---------------- | ----------- |
 | First-time setup | 5-7 minutes |
-| Start LocalNet | 1-2 minutes |
-| Run all tests | 2-5 minutes |
-| Stop LocalNet | 10 seconds |
+| Start LocalNet   | 1-2 minutes |
+| Run all tests    | 2-5 minutes |
+| Stop LocalNet    | 10 seconds  |
 
 ## 💡 Pro Tips
 
@@ -124,4 +127,3 @@ https://app.circleci.com/pipelines/github/YOUR_ORG/canton-node-sdk
 ---
 
 **Need help?** See [LOCALNET_TESTING.md](./docs/LOCALNET_TESTING.md) for detailed troubleshooting.
-

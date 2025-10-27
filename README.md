@@ -27,7 +27,8 @@ environment.
 
 ## Testing with LocalNet
 
-The SDK includes comprehensive integration testing against a local Splice network (LocalNet). See the [LocalNet Testing Guide](./docs/LOCALNET_TESTING.md) for detailed instructions.
+The SDK includes comprehensive integration testing against a local Splice network (LocalNet). See
+the [LocalNet Testing Guide](./docs/LOCALNET_TESTING.md) for detailed instructions.
 
 ### Quick Start
 

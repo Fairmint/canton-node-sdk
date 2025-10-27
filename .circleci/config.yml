@@ -24,7 +24,7 @@ executors:
 # ============================================================================
 commands:
   restore_node_modules:
-    description: "Restore node_modules from cache"
+    description: 'Restore node_modules from cache'
     steps:
       - restore_cache:
           keys:
@@ -32,7 +32,7 @@ commands:
             - v1-dependencies-
 
   save_node_modules:
-    description: "Save node_modules to cache"
+    description: 'Save node_modules to cache'
     steps:
       - save_cache:
           key: v1-dependencies-{{ checksum "package.json" }}
@@ -40,11 +40,11 @@ commands:
             - node_modules
 
   setup_localnet:
-    description: "Download and setup Splice LocalNet"
+    description: 'Download and setup Splice LocalNet'
     parameters:
       version:
         type: string
-        default: "0.4.22"
+        default: '0.4.22'
     steps:
       - run:
           name: Download Splice LocalNet Bundle
@@ -88,7 +88,7 @@ commands:
             echo "✓ LocalNet files verified"
 
   start_localnet:
-    description: "Start Splice LocalNet services"
+    description: 'Start Splice LocalNet services'
     steps:
       - run:
           name: Start LocalNet
@@ -162,7 +162,7 @@ commands:
             echo "✓ LocalNet is ready for testing"
 
   stop_localnet:
-    description: "Stop Splice LocalNet services"
+    description: 'Stop Splice LocalNet services'
     steps:
       - run:
           name: Stop LocalNet
@@ -189,7 +189,7 @@ commands:
           when: always
 
   show_localnet_logs:
-    description: "Show LocalNet logs on failure"
+    description: 'Show LocalNet logs on failure'
     steps:
       - run:
           name: Show LocalNet Logs
@@ -228,6 +228,9 @@ jobs:
           command: npm install
       - save_node_modules
       - run:
+          name: Clone Splice Artifacts
+          command: npm run artifacts:clone-splice
+      - run:
           name: Run Unit Tests
           command: npm test
       - run:
@@ -244,6 +247,9 @@ jobs:
           name: Install Dependencies
           command: npm install
       - save_node_modules
+      - run:
+          name: Clone Splice Artifacts
+          command: npm run artifacts:clone-splice
       - run:
           name: Run Linter
           command: npm run lint
@@ -283,9 +289,16 @@ jobs:
             npm install
       - save_node_modules
 
+      # Clone Splice artifacts for type generation
+      - run:
+          name: Clone Splice Artifacts
+          command: |
+            source $BASH_ENV
+            npm run artifacts:clone-splice
+
       # Setup and start LocalNet
       - setup_localnet:
-          version: "0.4.22"
+          version: '0.4.22'
       - start_localnet
 
       # Create LocalNet environment configuration
@@ -381,7 +394,7 @@ workflows:
   nightly-regression:
     triggers:
       - schedule:
-          cron: "0 2 * * *"  # Run at 2 AM UTC daily
+          cron: '0 2 * * *' # Run at 2 AM UTC daily
           filters:
             branches:
               only:

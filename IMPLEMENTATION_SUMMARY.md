@@ -1,6 +1,7 @@
 # LocalNet & CircleCI Implementation Summary
 
-This document summarizes the implementation of LocalNet integration and CircleCI regression testing for the Canton Node SDK.
+This document summarizes the implementation of LocalNet integration and CircleCI regression testing
+for the Canton Node SDK.
 
 ## 📋 Overview
 
@@ -17,6 +18,7 @@ Successfully implemented a complete LocalNet testing infrastructure with:
 ### 1. LocalNet Setup ✅
 
 Created automated setup for Splice LocalNet v0.4.22, including:
+
 - Download and extraction scripts
 - Environment configuration
 - Health check monitoring
@@ -25,6 +27,7 @@ Created automated setup for Splice LocalNet v0.4.22, including:
 ### 2. CircleCI Integration ✅
 
 Implemented complete CI/CD pipeline with:
+
 - LocalNet deployment in CI environment
 - Automated regression testing
 - Scheduled nightly runs
@@ -33,6 +36,7 @@ Implemented complete CI/CD pipeline with:
 ### 3. Developer Experience ✅
 
 Provided comprehensive developer tools:
+
 - Simple npm commands for all operations
 - Clear documentation with examples
 - Quick start guide for new developers
@@ -43,9 +47,11 @@ Provided comprehensive developer tools:
 ### Configuration Files
 
 #### `.circleci/config.yml`
+
 **Purpose**: CircleCI pipeline configuration
 
 **Features**:
+
 - 3 jobs: `test`, `lint`, `test-localnet`
 - 2 workflows: `build-test`, `nightly-regression`
 - Reusable commands for LocalNet operations
@@ -53,6 +59,7 @@ Provided comprehensive developer tools:
 - Artifact storage for test results
 
 **Key Sections**:
+
 ```yaml
 executors:
   - node-docker: For standard Node.js jobs
@@ -75,15 +82,18 @@ workflows:
 ```
 
 #### `example.env.localnet`
+
 **Purpose**: Environment configuration template for LocalNet
 
 **Contains**:
+
 - All required environment variables
 - Port configurations for all 3 validators
 - Authentication settings
 - Contract ID placeholders
 
 **Usage**:
+
 ```bash
 cp example.env.localnet .env
 ```
@@ -93,59 +103,71 @@ cp example.env.localnet .env
 All scripts are located in `scripts/` and made executable:
 
 #### `setup-localnet.sh`
+
 **Purpose**: One-time LocalNet download and setup
 
 **Features**:
+
 - Downloads Splice v0.4.22 bundle
 - Extracts to `/tmp/splice-localnet/`
 - Displays environment variable setup instructions
 - Verifies all files are present
 
 **Usage**:
+
 ```bash
 ./scripts/setup-localnet.sh [version]
 npm run localnet:setup
 ```
 
 #### `start-localnet.sh`
+
 **Purpose**: Start all LocalNet services
 
 **Features**:
+
 - Validates environment variables
 - Starts Docker Compose with all profiles
 - Checks service status
 - Displays access URLs
 
 **Usage**:
+
 ```bash
 ./scripts/start-localnet.sh
 npm run localnet:start
 ```
 
 #### `stop-localnet.sh`
+
 **Purpose**: Stop and clean up LocalNet
 
 **Features**:
+
 - Stops all containers
 - Removes volumes (clean state)
 - Graceful error handling
 
 **Usage**:
+
 ```bash
 ./scripts/stop-localnet.sh
 npm run localnet:stop
 ```
 
 #### `localnet-status.sh`
+
 **Purpose**: Check LocalNet health and status
 
 **Features**:
+
 - Container status display
 - Health check for all JSON APIs
 - Web UI availability checks
 - Color-coded output
 
 **Usage**:
+
 ```bash
 ./scripts/localnet-status.sh
 npm run localnet:status
@@ -154,9 +176,11 @@ npm run localnet:status
 ### Documentation
 
 #### `LOCALNET_QUICKSTART.md`
+
 **Purpose**: Fast-track guide for developers
 
 **Sections**:
+
 - 5-minute first-time setup
 - Daily usage commands
 - Quick links to LocalNet UIs
@@ -166,9 +190,11 @@ npm run localnet:status
 **Audience**: Developers who want to start testing immediately
 
 #### `docs/LOCALNET_TESTING.md`
+
 **Purpose**: Comprehensive LocalNet testing guide
 
 **Sections**:
+
 - Overview of LocalNet architecture
 - Prerequisites and setup
 - Detailed configuration instructions
@@ -177,13 +203,14 @@ npm run localnet:status
 - Port and URL reference
 - Troubleshooting guide
 
-**Length**: ~500 lines
-**Audience**: All developers, includes advanced topics
+**Length**: ~500 lines **Audience**: All developers, includes advanced topics
 
 #### `docs/CIRCLECI_SETUP.md`
+
 **Purpose**: Deep dive into CI/CD configuration
 
 **Sections**:
+
 - Configuration structure explanation
 - Job and workflow details
 - Environment setup process
@@ -192,15 +219,16 @@ npm run localnet:status
 - Optimization tips
 - Monitoring guidance
 
-**Length**: ~700 lines
-**Audience**: DevOps and maintainers
+**Length**: ~700 lines **Audience**: DevOps and maintainers
 
 ### Updated Files
 
 #### `package.json`
+
 **Changes**: Added LocalNet-related scripts
 
 **New Scripts**:
+
 ```json
 {
   "localnet:setup": "./scripts/setup-localnet.sh",
@@ -213,9 +241,11 @@ npm run localnet:status
 ```
 
 #### `README.md`
+
 **Changes**: Added LocalNet and CI/CD sections
 
 **New Content**:
+
 - Testing with LocalNet overview
 - Quick start commands
 - Available npm scripts
@@ -273,12 +303,14 @@ graph TD
 ### Test Execution
 
 **Local**:
+
 ```bash
 npm run test              # Unit tests only
 npm run test:regression   # Full regression suite
 ```
 
 **CI**:
+
 - Automatic on every push
 - Parallel execution of lint + test
 - Sequential test-localnet after both pass
@@ -288,6 +320,7 @@ npm run test:regression   # Full regression suite
 ### Local Results
 
 Saved to `simulations/results/`:
+
 ```
 simulations/results/
 ├── ledger-json-api/
@@ -302,6 +335,7 @@ simulations/results/
 ```
 
 Each file is a JSON snapshot of:
+
 - Successful API responses
 - Error responses with details
 - Validation results
@@ -309,6 +343,7 @@ Each file is a JSON snapshot of:
 ### CircleCI Artifacts
 
 Accessible in CircleCI UI under "Artifacts" tab:
+
 - Full simulation results directory
 - Individual JSON files for each test
 - Downloadable for local inspection
@@ -318,16 +353,19 @@ Accessible in CircleCI UI under "Artifacts" tab:
 ### CircleCI Project Setup
 
 **Required Steps**:
+
 1. Connect repository to CircleCI
 2. Set project to use config at `.circleci/config.yml`
 3. Enable workflows
 
 **Permissions**:
+
 - Automatically configured in workflow
 - No manual secrets required
 - Uses CircleCI's built-in Docker support
 
 **Resource Class**:
+
 - `node-docker`: Large (4 vCPU, 8GB RAM)
 - `ubuntu-machine`: Large with Docker
 
@@ -335,21 +373,23 @@ Accessible in CircleCI UI under "Artifacts" tab:
 
 ### Timing Benchmarks
 
-| Operation | Expected Time |
-|-----------|---------------|
-| First-time setup | 5-7 minutes |
-| LocalNet start | 1-2 minutes |
-| Health checks | 30-60 seconds |
-| Test execution | 2-5 minutes |
+| Operation        | Expected Time |
+| ---------------- | ------------- |
+| First-time setup | 5-7 minutes   |
+| LocalNet start   | 1-2 minutes   |
+| Health checks    | 30-60 seconds |
+| Test execution   | 2-5 minutes   |
 | Full CI pipeline | 10-15 minutes |
 
 ### Resource Usage
 
 **Local**:
+
 - Docker: 4-6 GB RAM, 2-3 CPU cores
 - Disk: ~2 GB for LocalNet bundle
 
 **CI**:
+
 - Executor: Large machine (4 vCPU, 8GB RAM)
 - Network: ~500MB download per run (cached)
 
@@ -436,12 +476,14 @@ Accessible in CircleCI UI under "Artifacts" tab:
 To update Splice version:
 
 1. Update version in `.circleci/config.yml`:
+
    ```yaml
    setup_localnet:
-     version: "0.4.23"  # Update here
+     version: '0.4.23' # Update here
    ```
 
 2. Update default in `scripts/setup-localnet.sh`:
+
    ```bash
    SPLICE_VERSION="${1:-0.4.23}"  # Update here
    ```
@@ -491,11 +533,9 @@ All planned features implemented:
 ## 🙏 Acknowledgments
 
 Based on:
+
 - [Splice LocalNet Documentation](https://docs.dev.sync.global/app_dev/testing/localnet.html)
 - Canton Node SDK architecture
 - CircleCI best practices
 
-**Implementation Date**: October 24, 2025
-**Splice Version**: 0.4.22
-**SDK Version**: 0.0.1
-
+**Implementation Date**: October 24, 2025 **Splice Version**: 0.4.22 **SDK Version**: 0.0.1
