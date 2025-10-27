@@ -28,14 +28,14 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - v1-dependencies-{{ checksum "package-lock.json" }}
+            - v1-dependencies-{{ checksum "package.json" }}
             - v1-dependencies-
 
   save_node_modules:
     description: "Save node_modules to cache"
     steps:
       - save_cache:
-          key: v1-dependencies-{{ checksum "package-lock.json" }}
+          key: v1-dependencies-{{ checksum "package.json" }}
           paths:
             - node_modules
 
@@ -225,7 +225,7 @@ jobs:
       - restore_node_modules
       - run:
           name: Install Dependencies
-          command: npm ci
+          command: npm install
       - save_node_modules
       - run:
           name: Run Unit Tests
@@ -242,7 +242,7 @@ jobs:
       - restore_node_modules
       - run:
           name: Install Dependencies
-          command: npm ci
+          command: npm install
       - save_node_modules
       - run:
           name: Run Linter
@@ -280,7 +280,7 @@ jobs:
           name: Install Dependencies
           command: |
             source $BASH_ENV
-            npm ci
+            npm install
       - save_node_modules
 
       # Setup and start LocalNet
