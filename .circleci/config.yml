@@ -294,7 +294,7 @@ jobs:
           command: |
             source $BASH_ENV
 
-            cat > .env.localnet << 'EOF'
+            cat > .env.localnet \<< 'EOF'
             DOTENV_CONFIG_QUIET=true
 
             # LocalNet Configuration for CI
