@@ -285,14 +285,27 @@ jobs:
       - run:
           name: Install Dependencies
           command: |
-            source $BASH_ENV
+            # Ensure Node.js is available
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            nvm use 20
+
+            # Verify Node.js and npm are available
+            echo "Node version: $(node --version)"
+            echo "npm version: $(npm --version)"
+
+            # Install dependencies
             npm install
       - save_node_modules
       # Clone Splice artifacts for type generation
       - run:
           name: Clone Splice Artifacts
           command: |
-            source $BASH_ENV
+            # Ensure Node.js is available
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            nvm use 20
+
             npm run artifacts:clone-splice
 
       # Setup and start LocalNet
@@ -349,14 +362,21 @@ jobs:
       - run:
           name: Build SDK
           command: |
-            source $BASH_ENV
+            # Ensure Node.js is available
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            nvm use 20
+
             npm run build:core
 
       # Run regression tests (simulations)
       - run:
           name: Run Regression Tests (Simulations)
           command: |
-            source $BASH_ENV
+            # Ensure Node.js is available
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            nvm use 20
 
             echo "Running SDK simulations against LocalNet..."
             npm run simulate
