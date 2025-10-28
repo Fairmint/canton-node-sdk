@@ -15,6 +15,7 @@ describe('EnvLoader', () => {
     delete process.env['CANTON_AMULET_RULES_CONTRACT_ID_DEVNET'];
     delete process.env['CANTON_VALIDATOR_WALLET_APP_INSTALL_CONTRACT_ID_DEVNET'];
     delete process.env['CANTON_CURRENT_NETWORK'];
+    delete process.env['CANTON_MAINNET_LIGHTHOUSE_API_URI'];
   });
 
   describe('getAmuletRulesContractId', () => {
@@ -91,6 +92,7 @@ describe('EnvLoader', () => {
       process.env['CANTON_AMULET_RULES_CONTRACT_ID_MAINNET'] = 'test-amulet-rules-contract';
       process.env['CANTON_VALIDATOR_WALLET_APP_INSTALL_CONTRACT_ID_MAINNET'] =
         'test-validator-wallet-app-install-contract';
+      process.env['CANTON_MAINNET_LIGHTHOUSE_API_URI'] = 'http://localhost:3000';
 
       const summary = EnvLoader.getConfigSummary('LIGHTHOUSE_API');
 

@@ -77,7 +77,7 @@ export class SubscribeToUpdates {
       beginExclusive = ledgerEnd.offset;
     }
 
-    // Build party list
+    // Build party list - default to client's party list if not provided
     const partyList =
       validated.parties && validated.parties.length > 0 ? validated.parties : this.client.buildPartyList();
 
