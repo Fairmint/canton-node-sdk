@@ -288,7 +288,6 @@ jobs:
             source $BASH_ENV
             npm install
       - save_node_modules
-
       # Clone Splice artifacts for type generation
       - run:
           name: Clone Splice Artifacts
