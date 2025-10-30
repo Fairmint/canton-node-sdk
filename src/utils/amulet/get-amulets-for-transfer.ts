@@ -10,15 +10,30 @@ export interface AmuletForTransfer {
 
 export type TransferInputForTransfer =
   | { tag: 'InputAmulet'; contractId: string; templateId: string; effectiveAmount: string; owner: string }
-  | { tag: 'InputAppRewardCoupon'; contractId: string; templateId: string; effectiveAmount: string; beneficiary: string }
-  | { tag: 'InputValidatorRewardCoupon'; contractId: string; templateId: string; effectiveAmount: string; beneficiary: string };
+  | {
+      tag: 'InputAppRewardCoupon';
+      contractId: string;
+      templateId: string;
+      effectiveAmount: string;
+      beneficiary: string;
+    }
+  | {
+      tag: 'InputValidatorRewardCoupon';
+      contractId: string;
+      templateId: string;
+      effectiveAmount: string;
+      beneficiary: string;
+    };
 
 export interface GetAmuletsForTransferParams {
   /** Ledger JSON API client for querying active contracts */
   jsonApiClient: LedgerJsonApiClient;
   /** Party IDs to read as (first one is used as sender) */
   readAs?: string[];
-  /** If true, returns all valid transfer inputs (Amulet, AppRewardCoupon, ValidatorRewardCoupon). Defaults to false (only Amulet). */
+  /**
+   * If true, returns all valid transfer inputs (Amulet, AppRewardCoupon, ValidatorRewardCoupon). Defaults to false
+   * (only Amulet).
+   */
   includeAllTransferInputs?: boolean;
 }
 
@@ -47,15 +62,13 @@ interface ContractData {
 }
 
 /**
- * Gets unlocked amulets owned by the sender party that can be used for transfers.
- * Optionally returns all valid transfer inputs (Amulet, AppRewardCoupon, ValidatorRewardCoupon).
+ * Gets unlocked amulets owned by the sender party that can be used for transfers. Optionally returns all valid transfer
+ * inputs (Amulet, AppRewardCoupon, ValidatorRewardCoupon).
  *
  * @param params - Parameters for getting transfer inputs
  * @returns Promise resolving to array of transfer inputs suitable for transfer
  */
-export async function getAmuletsForTransfer(
-  params: GetAmuletsForTransferParams
-): Promise<AmuletForTransfer[]> {
+export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams): Promise<AmuletForTransfer[]> {
   const { jsonApiClient, readAs, includeAllTransferInputs } = params;
 
   // Query ledger for active contracts for this party
