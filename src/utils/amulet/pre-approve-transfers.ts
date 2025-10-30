@@ -8,6 +8,8 @@ import { getAmuletsForTransfer } from './get-amulets-for-transfer';
 export interface PreApproveTransfersParams {
   /** Party ID to enable pre-approved transfers for (receiver) */
   receiverPartyId: string;
+  /** Party ID of the provider (defaults to receiverPartyId if not specified) */
+  providerPartyId?: string;
   /** When the pre-approval expires (defaults to 1 day from now) */
   expiresAt?: Date;
   /** Contract details for disclosed contracts (optional - will be fetched if not provided) */
@@ -41,8 +43,11 @@ export async function preApproveTransfers(
   validatorClient: ValidatorApiClient,
   params: PreApproveTransfersParams
 ): Promise<PreApproveTransfersResult> {
-  // Set default expiration to 1 day from now if not provided
-  const expiresAt = params.expiresAt ?? new Date(Date.now() + 24 * 60 * 60 * 1000);
+  // Set default expiration to 1 year from now if not provided
+  const expiresAt = params.expiresAt ?? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+
+  // Use receiverPartyId as provider if not specified
+  const providerPartyId = params.providerPartyId ?? params.receiverPartyId;
 
   // Get network information
   const [amuletRules, dsoPartyId, miningRoundContext, featuredAppRight] = await Promise.all([
@@ -118,7 +123,7 @@ export async function preApproveTransfers(
         },
         inputs,
         receiver: params.receiverPartyId,
-        provider: params.receiverPartyId,
+        provider: providerPartyId,
         expiresAt: expiresAt.toISOString(),
         expectedDso: dsoPartyId.dso_party_id,
       },

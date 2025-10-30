@@ -8,11 +8,18 @@ export interface AmuletForTransfer {
   owner: string;
 }
 
+export type TransferInputForTransfer =
+  | { tag: 'InputAmulet'; contractId: string; templateId: string; effectiveAmount: string; owner: string }
+  | { tag: 'InputAppRewardCoupon'; contractId: string; templateId: string; effectiveAmount: string; beneficiary: string }
+  | { tag: 'InputValidatorRewardCoupon'; contractId: string; templateId: string; effectiveAmount: string; beneficiary: string };
+
 export interface GetAmuletsForTransferParams {
   /** Ledger JSON API client for querying active contracts */
   jsonApiClient: LedgerJsonApiClient;
   /** Party IDs to read as (first one is used as sender) */
   readAs?: string[];
+  /** If true, returns all valid transfer inputs (Amulet, AppRewardCoupon, ValidatorRewardCoupon). Defaults to false (only Amulet). */
+  includeAllTransferInputs?: boolean;
 }
 
 /** Legacy contract format for backward compatibility */
@@ -32,34 +39,46 @@ interface LegacyContract {
   contract_id?: string;
 }
 
-/** Internal amulet representation with extracted data */
-interface AmuletData {
+/** Internal contract representation with extracted data */
+interface ContractData {
   contractId: string;
   templateId: string;
   payload: Record<string, unknown>;
 }
 
 /**
- * Gets unlocked amulets owned by the sender party that can be used for transfers
+ * Gets unlocked amulets owned by the sender party that can be used for transfers.
+ * Optionally returns all valid transfer inputs (Amulet, AppRewardCoupon, ValidatorRewardCoupon).
  *
- * @param params - Parameters for getting amulets
- * @returns Promise resolving to array of amulets suitable for transfer
+ * @param params - Parameters for getting transfer inputs
+ * @returns Promise resolving to array of transfer inputs suitable for transfer
  */
-export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams): Promise<AmuletForTransfer[]> {
-  const { jsonApiClient, readAs } = params;
+export async function getAmuletsForTransfer(
+  params: GetAmuletsForTransferParams
+): Promise<AmuletForTransfer[]> {
+  const { jsonApiClient, readAs, includeAllTransferInputs } = params;
 
-  // Query ledger for active contracts for this party (unlocked amulets)
+  // Query ledger for active contracts for this party
   if (!readAs?.[0]) {
     return [];
   }
   const senderParty = readAs[0];
 
+  // Build template IDs to query based on includeAllTransferInputs flag
+  const templateIds = includeAllTransferInputs
+    ? [
+        '#splice-amulet:Splice.Amulet:Amulet',
+        '#splice-amulet:Splice.Amulet:AppRewardCoupon',
+        '#splice-amulet:Splice.Amulet:ValidatorRewardCoupon',
+      ]
+    : ['#splice-amulet:Splice.Amulet:Amulet'];
+
   const activeContracts = await jsonApiClient.getActiveContracts({
     parties: [senderParty],
-    templateIds: ['#splice-amulet:Splice.Amulet:Amulet'],
+    templateIds,
   });
 
-  const allAmulets: AmuletData[] = [];
+  const allContracts: ContractData[] = [];
   const contractsArr = Array.isArray(activeContracts) ? activeContracts : [];
 
   contractsArr.forEach((ctr) => {
@@ -81,70 +100,100 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
 
     if (!payload || !templateId || !contractId) return;
 
+    // Filter for valid transfer input contracts
     const isUnlockedAmulet = templateId.includes('Splice.Amulet:Amulet') && !templateId.includes('LockedAmulet');
-    if (!isUnlockedAmulet) return;
+    const isAppRewardCoupon = templateId.includes('AppRewardCoupon');
+    const isValidatorRewardCoupon = templateId.includes('ValidatorRewardCoupon');
 
-    allAmulets.push({ contractId, templateId, payload });
+    if (!isUnlockedAmulet && !isAppRewardCoupon && !isValidatorRewardCoupon) return;
+
+    allContracts.push({ contractId, templateId, payload });
   });
 
-  // Helper to extract owner and numeric amount from diverse amulet shapes
-  const extract = (amulet: AmuletData | LegacyContract) => {
-    const amuletPayload = 'payload' in amulet ? amulet.payload : undefined;
-    const payload = amuletPayload ?? (amulet as LegacyContract).contract?.contract?.payload ?? {};
+  // Helper to extract owner/beneficiary and numeric amount from diverse contract shapes
+  const extract = (contract: ContractData | LegacyContract) => {
+    const contractPayload = 'payload' in contract ? contract.payload : undefined;
+    const payload = contractPayload ?? (contract as LegacyContract).contract?.contract?.payload ?? {};
 
-    const amuletRecord = amulet as Record<string, unknown>;
-    const ownerFull =
-      (payload['owner'] as string | undefined) ??
-      (amuletRecord['owner'] as string | undefined) ??
-      (amuletRecord['partyId'] as string | undefined) ??
-      (amuletRecord['party_id'] as string | undefined) ??
-      '';
+    const contractRecord = contract as Record<string, unknown>;
+    const templateId = 'templateId' in contract ? contract.templateId : undefined;
 
-    const rawAmountCandidate =
-      payload['amount'] ??
-      amuletRecord['amount'] ??
-      amuletRecord['effective_amount'] ??
-      amuletRecord['effectiveAmount'] ??
-      amuletRecord['initialAmount'] ??
-      '0';
+    // Extract owner/beneficiary based on contract type
+    let ownerFull = '';
+    if (templateId?.includes('AppRewardCoupon') || templateId?.includes('ValidatorRewardCoupon')) {
+      // For coupons, beneficiary is optional and falls back to provider
+      const beneficiary = payload['beneficiary'] as string | undefined;
+      const provider = payload['provider'] as string | undefined;
+      ownerFull = beneficiary ?? provider ?? '';
+    } else {
+      // For amulets, use owner field
+      ownerFull =
+        (payload['owner'] as string | undefined) ??
+        (contractRecord['owner'] as string | undefined) ??
+        (contractRecord['partyId'] as string | undefined) ??
+        (contractRecord['party_id'] as string | undefined) ??
+        '';
+    }
 
-    let rawAmount = rawAmountCandidate;
-    if (typeof rawAmountCandidate === 'object') {
-      rawAmount = (rawAmountCandidate as Record<string, unknown>)['initialAmount'] ?? '0';
+    // Extract amount based on contract type
+    let rawAmount: unknown = '0';
+    if (templateId?.includes('AppRewardCoupon') || templateId?.includes('ValidatorRewardCoupon')) {
+      // For coupons, amount is directly in payload
+      rawAmount = payload['amount'] ?? '0';
+    } else {
+      // For amulets, amount might be nested
+      const rawAmountCandidate =
+        payload['amount'] ??
+        contractRecord['amount'] ??
+        contractRecord['effective_amount'] ??
+        contractRecord['effectiveAmount'] ??
+        contractRecord['initialAmount'] ??
+        '0';
+
+      rawAmount = rawAmountCandidate;
+      if (typeof rawAmountCandidate === 'object') {
+        rawAmount = (rawAmountCandidate as Record<string, unknown>)['initialAmount'] ?? '0';
+      }
     }
 
     const numericAmount = parseFloat(rawAmount as string);
     return { owner: ownerFull, numericAmount };
   };
 
-  // Note: Processing amulets to extract contract information
-
-  // Keep amulets owned by sender (readAs[0]) and with positive balance
-  const partyAmulets = allAmulets.filter((a) => {
-    const { owner, numericAmount } = extract(a);
+  // Filter contracts owned by sender (readAs[0]) and with positive balance
+  const partyContracts = allContracts.filter((c) => {
+    const { owner, numericAmount } = extract(c);
     return numericAmount > 0 && owner === senderParty;
   });
 
-  if (partyAmulets.length === 0) {
+  if (partyContracts.length === 0) {
     return [];
   }
 
-  // Sort biggest → smallest so we pick high-value amulets first
-  partyAmulets.sort((a, b) => extract(b).numericAmount - extract(a).numericAmount);
+  // Sort biggest → smallest so we pick high-value contracts first
+  partyContracts.sort((a, b) => extract(b).numericAmount - extract(a).numericAmount);
 
-  // Note: partyAmulets is now sorted by amount (biggest first)
+  // Map to the structure expected by buildAmuletInputs (maintaining backward compatibility)
+  const result = partyContracts.map((c) => {
+    const { payload, templateId } = c;
 
-  // Map to the structure expected by buildAmuletInputs
-  const result = partyAmulets.map((a) => {
-    const { payload } = a;
-    const amtObj = payload['amount'] ?? {};
-    const intAmount = typeof amtObj === 'object' ? (amtObj as Record<string, unknown>)['initialAmount'] : amtObj;
+    // Extract amount based on contract type
+    let effectiveAmount = '0';
+    if (templateId.includes('AppRewardCoupon') || templateId.includes('ValidatorRewardCoupon')) {
+      // For coupons, amount is directly in payload
+      effectiveAmount = (payload['amount'] as string | undefined) ?? '0';
+    } else {
+      // For amulets, amount might be nested
+      const amtObj = payload['amount'] ?? {};
+      const intAmount = typeof amtObj === 'object' ? (amtObj as Record<string, unknown>)['initialAmount'] : amtObj;
+      effectiveAmount = (intAmount as string | undefined) ?? '0';
+    }
 
     return {
-      contractId: a.contractId,
-      templateId: a.templateId,
-      effectiveAmount: (intAmount as string | undefined) ?? '0',
-      owner: (payload['owner'] as string | undefined) ?? extract(a).owner,
+      contractId: c.contractId,
+      templateId: c.templateId,
+      effectiveAmount,
+      owner: extract(c).owner,
     };
   });
 
