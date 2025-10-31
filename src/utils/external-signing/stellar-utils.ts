@@ -44,3 +44,26 @@ export function loadStellarKeypair(secret: string): Keypair {
 export function generateStellarKeypair(): Keypair {
   return Keypair.random();
 }
+
+/**
+ * Convert Stellar public key to hex string (for Validator API)
+ *
+ * @param keypair - Stellar keypair
+ * @returns Hex-encoded public key
+ */
+export function stellarPublicKeyToHex(keypair: Keypair): string {
+  return keypair.rawPublicKey().toString('hex');
+}
+
+/**
+ * Sign hex-encoded hash with Stellar keypair (for Validator API)
+ *
+ * @param keypair - Stellar keypair to sign with
+ * @param hexHash - Hex-encoded hash to sign
+ * @returns Hex-encoded signature
+ */
+export function signHexWithStellarKeypair(keypair: Keypair, hexHash: string): string {
+  const dataBuffer = Buffer.from(hexHash, 'hex');
+  const signature = keypair.sign(dataBuffer);
+  return signature.toString('hex');
+}

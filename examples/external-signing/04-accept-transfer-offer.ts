@@ -100,9 +100,33 @@ async function main() {
   console.log('   ✓ Client initialized');
 
   try {
+    // Step 4: Fetch the transfer offer contract to disclose it
+    console.log('\n4️⃣  Fetching transfer offer contract...');
+    console.log(`   - Contract ID: ${offerData.contractId.substring(0, 40)}...`);
 
-    // Step 4: Prepare transaction to accept the offer
-    console.log('\n4️⃣  Preparing transaction to accept offer...');
+    const contractsResponse = await ledgerClient.getActiveContracts({
+      templateIds: ['#splice-wallet:Splice.Wallet.TransferOffer:TransferOffer'],
+      includeCreatedEventBlob: true, // Required to get the createdEventBlob
+    });
+
+    // Find the contract in the response
+    const contractItem = contractsResponse.find((item) => {
+      if ('JsActiveContract' in item.contractEntry) {
+        return item.contractEntry.JsActiveContract.createdEvent.contractId === offerData.contractId;
+      }
+      return false;
+    });
+
+    if (!contractItem || !('JsActiveContract' in contractItem.contractEntry)) {
+      throw new Error(`Transfer offer contract not found: ${offerData.contractId}`);
+    }
+
+    const activeContract = contractItem.contractEntry.JsActiveContract;
+    console.log('   ✓ Transfer offer contract fetched');
+
+    // Step 5: Prepare transaction to accept the offer
+    console.log('\n5️⃣  Preparing transaction to accept offer...');
+    console.log('   - Disclosing transfer offer contract');
     console.log('   - Interpreting commands');
     console.log('   - Computing transaction hash');
 
@@ -125,19 +149,28 @@ async function main() {
       // Note: Don't set readAs - the validator operator user will read
       commandId,
       synchronizerId: keyData.synchronizerId,
+      // Disclose the transfer offer contract so Canton can validate the transaction
+      disclosedContracts: [
+        {
+          templateId: activeContract.createdEvent.templateId,
+          contractId: activeContract.createdEvent.contractId,
+          createdEventBlob: activeContract.createdEvent.createdEventBlob,
+          synchronizerId: activeContract.synchronizerId,
+        },
+      ],
     });
 
     console.log('   ✓ Transaction prepared');
     console.log(`   ✓ Hash: ${prepared.preparedTransactionHash.substring(0, 40)}...`);
     console.log(`   ✓ Hashing version: ${prepared.hashingSchemeVersion}`);
 
-    // Step 5: Sign the transaction hash with external key
-    console.log('\n5️⃣  Signing transaction hash with external key...');
+    // Step 6: Sign the transaction hash with external key
+    console.log('\n6️⃣  Signing transaction hash with external key...');
     const signature = signWithStellarKeypair(keypair, prepared.preparedTransactionHash);
     console.log(`   ✓ Signature: ${signature.substring(0, 40)}...`);
 
-    // Step 6: Execute the signed transaction
-    console.log('\n6️⃣  Submitting signed transaction to Canton...');
+    // Step 7: Execute the signed transaction
+    console.log('\n7️⃣  Submitting signed transaction to Canton...');
     const submissionId = `sub-${Date.now()}`;
 
     await executeExternalTransaction({
@@ -155,7 +188,7 @@ async function main() {
 
     console.log('   ✓ Transaction submitted successfully!');
 
-    // Step 7: Display results
+    // Step 8: Display results
     console.log('\n' + '═'.repeat(70));
     console.log('✅ SUCCESS! Transfer Accepted with External Signature');
     console.log('═'.repeat(70));
@@ -168,10 +201,11 @@ async function main() {
     console.log(`   Signed By:         ${keyData.publicKeyFingerprint}`);
     console.log('\n💡 What Happened:');
     console.log('   1. Loaded external party keypair and transfer offer info');
-    console.log('   2. Prepared the accept transaction');
-    console.log('   3. Signed transaction hash with external key (client-side)');
-    console.log('   4. Submitted signed transaction to Canton');
-    console.log('   5. Canton validators verified the signature and executed the transfer');
+    console.log('   2. Fetched the transfer offer contract from Canton');
+    console.log('   3. Disclosed the contract and prepared the accept transaction');
+    console.log('   4. Signed transaction hash with external key (client-side)');
+    console.log('   5. Submitted signed transaction to Canton');
+    console.log('   6. Canton validators verified the signature and executed the transfer');
     console.log(`\n💰 The external party now has ${offerData.amount} CC in their balance!`);
     console.log('');
 

@@ -17,23 +17,39 @@ export VALIDATOR_API_URL="https://your-validator/api/validator"
 export VALIDATOR_API_TOKEN="your-validator-token"
 ```
 
-3. Canton administrator access (for step 2 - granting rights)
+3. Canton administrator access (for one-time step 0 - granting CanExecuteAsAnyParty)
+4. Canton >= 3.1 (for CanExecuteAsAnyParty support)
 
 ## Files
 
+- `00-setup-validator-external-signing.ts` - **ONE-TIME** setup: Grant CanExecuteAsAnyParty (requires admin)
 - `01-allocate-external-party.ts` - Allocate (onboard) an external party
-- `02-grant-external-party-read-rights.ts` - Grant CanReadAs rights (requires admin)
+- `02-grant-external-party-read-rights.ts` - *(DEPRECATED)* Per-party rights (use 00 instead)
 - `03-create-transfer-offer.ts` - Create a transfer offer to an external party
 - `04-accept-transfer-offer.ts` - Accept a transfer offer using external signing
 
 ## Complete Workflow
 
+### One-Time Network Setup (Admin Required)
+
+**Run this ONCE per validator/network with admin credentials:**
+
 ```bash
-# Step 1: Allocate external party
+# Step 0: Setup validator for external signing (requires admin)
+# This grants CanExecuteAsAnyParty to the validator operator
+# Canton >= 3.1 required
+npx tsx examples/external-signing/00-setup-validator-external-signing.ts
+```
+
+After this one-time setup, all external parties will work without additional configuration!
+
+### Regular Workflow (Per External Party)
+
+```bash
+# Step 1: Allocate external party (no special permissions needed)
 npx tsx examples/external-signing/01-allocate-external-party.ts alice
 
-# Step 2: Grant read rights (may require admin intervention)
-npx tsx examples/external-signing/02-grant-external-party-read-rights.ts ../keys/alice--<fingerprint>.json
+# Step 2: Skip! No longer needed with CanExecuteAsAnyParty
 
 # Step 3: Create transfer offer (from internal party with funds)
 npx tsx examples/external-signing/03-create-transfer-offer.ts ../keys/alice--<fingerprint>.json 10.0
@@ -43,6 +59,37 @@ npx tsx examples/external-signing/04-accept-transfer-offer.ts ../keys/alice--<fi
 ```
 
 ## Step-by-Step Guide
+
+### Step 0: One-Time Setup (Admin Required)
+
+**⚠️ Run this ONCE per validator/network before using external signing:**
+
+```bash
+npx tsx examples/external-signing/00-setup-validator-external-signing.ts
+```
+
+**What it does:**
+- Grants `CanExecuteAsAnyParty` permission to the validator operator user
+- Allows the validator to execute externally signed transactions for any party
+- Introduced in Canton 3.1
+
+**Expected output (if you don't have admin rights):**
+```
+⚠️  ADMIN CREDENTIALS REQUIRED
+This setup requires ParticipantAdmin or IdentityProviderAdmin permissions.
+```
+
+**Solution:** Contact your Canton administrator to run this script with admin credentials.
+
+**After successful setup:**
+```
+✅ SUCCESS! Validator Configured for External Signing
+• User "5" can now execute transactions for ANY party
+• External parties can prepare and execute transactions
+• No need to grant rights for each external party individually
+```
+
+## Regular Workflow (After Setup)
 
 ### Step 1: Allocate External Party
 
@@ -68,7 +115,7 @@ Party ID: alice::1220...
 Keys saved to: ../keys/alice--1220...json
 ```
 
-### Step 2: Grant Read Rights
+### Step 2: Grant Read Rights (DEPRECATED - Use Step 0 Instead)
 
 Attempts to grant `CanReadAs` rights to the validator operator user for the external party:
 
@@ -129,7 +176,9 @@ Demonstrates the complete external signing workflow for accepting the transfer o
 npx tsx examples/external-signing/04-accept-transfer-offer.ts ../keys/alice--<fingerprint>.json
 ```
 
-**Prerequisites:** Step 2 (rights granting) must be completed successfully.
+**Prerequisites:**
+- Step 0 (one-time setup) must be completed by an admin
+- If Step 0 wasn't run, you'll get HTTP 403 errors
 
 **This will:**
 - Load the external party's keypair from file

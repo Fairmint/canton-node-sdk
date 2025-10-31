@@ -1,6 +1,7 @@
 import type { Keypair } from '@stellar/stellar-base';
 import type { LedgerJsonApiClient } from '../../clients/ledger-json-api';
-import { stellarPublicKeyToBase64, signWithStellarKeypair } from './stellar-utils';
+import { ValidatorApiClient } from '../../clients/validator-api';
+import { stellarPublicKeyToHex, signHexWithStellarKeypair } from './stellar-utils';
 
 /**
  * Parameters for creating an external party
@@ -76,62 +77,44 @@ export interface CreateExternalPartyResult {
 export async function createExternalParty(
   params: CreateExternalPartyParams
 ): Promise<CreateExternalPartyResult> {
-  const { ledgerClient, keypair, partyName, synchronizerId } = params;
+  const { keypair, partyName } = params;
 
-  // Step 1: Convert Stellar public key to base64 for Canton
-  const publicKeyBase64 = stellarPublicKeyToBase64(keypair);
+  // Initialize Validator API client
+  const validatorClient = new ValidatorApiClient();
 
-  // Step 2: Generate external party topology
-  const topology = await ledgerClient.generateExternalPartyTopology({
-    synchronizer: synchronizerId,
-    partyHint: partyName,
-    publicKey: {
-      format: 'CRYPTO_KEY_FORMAT_RAW',
-      keyData: publicKeyBase64,
-      keySpec: 'SIGNING_KEY_SPEC_EC_CURVE25519',
-    },
-    localParticipantObservationOnly: params.localParticipantObservationOnly,
-    otherConfirmingParticipantUids: params.otherConfirmingParticipantUids,
-    confirmationThreshold: params.confirmationThreshold,
-    observingParticipantUids: params.observingParticipantUids,
+  // Step 1: Convert Stellar public key to hex for Validator API
+  const publicKeyHex = stellarPublicKeyToHex(keypair);
+
+  // Step 2: Generate external party topology using Validator API
+  const topology = await validatorClient.generateExternalPartyTopology({
+    party_hint: partyName,
+    public_key: publicKeyHex,
   });
 
-  const { multiHash, publicKeyFingerprint, topologyTransactions } = topology;
+  const { party_id, topology_txs } = topology;
 
-  if (!publicKeyFingerprint) {
-    throw new Error('No public key fingerprint returned from topology generation');
+  if (!party_id) {
+    throw new Error('No party ID returned from topology generation');
   }
 
-  if (!multiHash) {
-    throw new Error('No multi-hash returned from topology generation');
+  if (!topology_txs || topology_txs.length === 0) {
+    throw new Error('No topology transactions returned from topology generation');
   }
 
-  // Step 3: Sign the multi-hash using the Stellar keypair
-  const signature = signWithStellarKeypair(keypair, multiHash);
+  // Step 3: Sign each topology transaction hash using the Stellar keypair
+  const signedTopologyTxs = topology_txs.map((tx) => ({
+    topology_tx: tx.topology_tx,
+    signed_hash: signHexWithStellarKeypair(keypair, tx.hash),
+  }));
 
-  // Step 4: Wrap topology transactions as SignedTransactions
-  const onboardingTransactions =
-    topologyTransactions?.map((transaction: string) => ({
-      transaction,
-    })) ?? [];
-
-  // Step 5: Allocate external party with topology transactions and multi-hash signature
-  const allocatedParty = await ledgerClient.allocateExternalParty({
-    synchronizer: synchronizerId,
-    identityProviderId: 'default',
-    onboardingTransactions,
-    multiHashSignatures: [
-      {
-        format: 'SIGNATURE_FORMAT_RAW',
-        signature,
-        signedBy: publicKeyFingerprint,
-        signingAlgorithmSpec: 'SIGNING_ALGORITHM_SPEC_ED25519',
-      },
-    ],
+  // Step 4: Submit the signed topology transactions using Validator API
+  const submitResult = await validatorClient.submitExternalPartyTopology({
+    public_key: publicKeyHex,
+    signed_topology_txs: signedTopologyTxs,
   });
 
-  if (!allocatedParty.partyId) {
-    throw new Error('Failed to allocate external party - no party ID returned');
+  if (!submitResult.party_id) {
+    throw new Error('Failed to submit external party topology - no party ID returned');
   }
 
   // Note: For external parties, we don't need to create a separate user or grant rights.
@@ -140,10 +123,10 @@ export async function createExternalParty(
   // the authorization for the transaction.
 
   return {
-    partyId: allocatedParty.partyId,
+    partyId: submitResult.party_id,
     userId: '', // Will be resolved automatically when preparing transactions
-    publicKey: publicKeyBase64,
-    publicKeyFingerprint,
+    publicKey: publicKeyHex,
+    publicKeyFingerprint: party_id.split('::')[1] || '', // Extract fingerprint from party ID
     stellarAddress: keypair.publicKey(),
     stellarSecret: keypair.secret(),
   };
