@@ -36,11 +36,20 @@ export async function getStellarWallet(privyClient: PrivyClient, walletId: strin
   const rawPublicKey = StrKey.decodeEd25519PublicKey(privyWallet.address);
   const publicKeyBase64 = Buffer.from(rawPublicKey).toString('base64');
 
-  return {
+  // Safely access owner property that may not be in type definitions
+  const owner = (privyWallet as { owner?: { user_id: string } })['owner'];
+
+  const result: StellarWallet = {
     id: privyWallet.id,
     address: privyWallet.address,
     chain_type: 'stellar',
-    owner: privyWallet.owner,
     publicKeyBase64,
   };
+
+  // Only include owner if it exists (for exactOptionalPropertyTypes compliance)
+  if (owner) {
+    result.owner = owner;
+  }
+
+  return result;
 }
