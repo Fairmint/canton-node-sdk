@@ -37,6 +37,8 @@ const privy = createPrivyClient({
 
 ### Create a Stellar Wallet
 
+**Option 1: Create an unlinked wallet (new user)**
+
 ```typescript
 import { createStellarWallet } from '@fairmint/canton-node-sdk';
 
@@ -45,11 +47,27 @@ const wallet = await createStellarWallet(privy);
 console.log('Wallet ID:', wallet.id);
 console.log('Stellar Address:', wallet.address);
 console.log('Public Key (base64):', wallet.publicKeyBase64);
+```
 
-// Create a wallet linked to a Privy user
+**Option 2: Add wallet to existing Privy user**
+
+This is the common use case when users already exist in your database with a Privy ID and possibly
+other wallets (Solana, Ethereum, etc.).
+
+```typescript
+// User already exists with Privy ID from your database
+const existingPrivyUserId = 'did:privy:cm94jlli5020iky0lbo19pwf3';
+
+// Create a Stellar wallet linked to this existing user
 const userWallet = await createStellarWallet(privy, {
-  userId: 'did:privy:...',
+  userId: existingPrivyUserId,
 });
+
+console.log('Wallet linked to user:', userWallet.owner?.user_id);
+console.log('Stellar Address:', userWallet.address);
+
+// Save to your database
+// UPDATE users SET stellar_wallet_address = userWallet.address WHERE privy_user_id = existingPrivyUserId
 ```
 
 ### Retrieve an Existing Wallet
@@ -159,9 +177,13 @@ interface SignResult {
 }
 ```
 
-## Running the Example
+## Running the Examples
 
-A complete working example is available in `test/privy.example.ts`. To run it:
+Two complete working examples are available:
+
+### Example 1: Creating a New Wallet (`test/privy.example.ts`)
+
+Creates a standalone wallet (not linked to a user). To run it:
 
 ```bash
 # From the canton-node-sdk directory
@@ -180,5 +202,25 @@ tsx test/privy.example.ts
 
 The example will create a real Stellar wallet, retrieve it, and sign test data.
 
+### Example 2: Adding Stellar Wallet to Existing User (`test/privy.add-stellar-wallet.example.ts`)
+
+Demonstrates how to add a Stellar wallet to an existing Privy user (common use case for users with
+existing Solana/Ethereum wallets). To run it:
+
+```bash
+# Run with a Privy user ID from your database
+npx tsx test/privy.add-stellar-wallet.example.ts did:privy:YOUR_USER_ID
+
+# Example
+npx tsx test/privy.add-stellar-wallet.example.ts did:privy:cm94jlli5020iky0lbo19pwf3
+```
+
+The example will:
+
+1. Create a new Stellar wallet linked to the specified user
+2. Verify the wallet was properly linked
+3. Test signing with the new wallet
+4. Show database update SQL example
+
 **Note**: Due to ESM compatibility issues with Jest, the Privy utilities are tested using the
-example file with `tsx` rather than Jest unit tests.
+example files with `tsx` rather than Jest unit tests.
