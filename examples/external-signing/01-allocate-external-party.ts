@@ -5,20 +5,137 @@
  * The private key is generated locally and never leaves your control.
  *
  * Usage:
- *   npx tsx examples/external-signing/01-allocate-external-party.ts <party-name>
+ *   npx tsx examples/external-signing/01-allocate-external-party.ts <party-name> [network] [provider]
  *
- * Example:
+ * Arguments:
+ *   party-name  Name for the party (default: 'alice')
+ *   network     Network to use: 'devnet' or 'mainnet' (default: 'devnet')
+ *   provider    Provider to use: '5n' or 'intellect' (default: '5n')
+ *
+ * Examples:
  *   npx tsx examples/external-signing/01-allocate-external-party.ts alice
+ *   npx tsx examples/external-signing/01-allocate-external-party.ts alice devnet 5n
+ *   npx tsx examples/external-signing/01-allocate-external-party.ts alice mainnet intellect
  */
 
 import { Keypair } from '@stellar/stellar-base';
-import { LedgerJsonApiClient, ValidatorApiClient, createExternalParty } from '../../src';
+import {
+  LedgerJsonApiClient,
+  ValidatorApiClient,
+  createExternalParty,
+  EnvLoader,
+  FileLogger,
+  type ClientConfig,
+} from '../../src';
 import * as fs from 'fs';
 import * as path from 'path';
 
+function printUsage(): void {
+  console.log('\nUsage:');
+  console.log('  npx tsx examples/external-signing/01-allocate-external-party.ts <party-name> [network] [provider]');
+  console.log('\nArguments:');
+  console.log('  party-name  Name for the party (default: alice)');
+  console.log('  network     Network: devnet or mainnet (default: devnet)');
+  console.log('  provider    Provider: 5n or intellect (default: 5n)');
+  console.log('\nExamples:');
+  console.log('  npx tsx examples/external-signing/01-allocate-external-party.ts alice');
+  console.log('  npx tsx examples/external-signing/01-allocate-external-party.ts alice devnet 5n');
+  console.log('  npx tsx examples/external-signing/01-allocate-external-party.ts alice mainnet intellect\n');
+}
+
+function createLedgerClient(network: string, provider: string): LedgerJsonApiClient {
+  const envLoader = EnvLoader.getInstance();
+  return new LedgerJsonApiClient({
+    network: network as any,
+    provider: provider as any,
+    authUrl: envLoader.getAuthUrl(network as any, provider as any),
+    apis: {
+      LEDGER_JSON_API: {
+        apiUrl: envLoader.getApiUri('LEDGER_JSON_API', network as any, provider as any) ?? '',
+        auth: {
+          clientId: envLoader.getApiClientId('LEDGER_JSON_API', network as any, provider as any) ?? '',
+          clientSecret: envLoader.getApiClientSecret('LEDGER_JSON_API', network as any, provider as any) ?? '',
+          grantType: 'client_credentials',
+        },
+        partyId: envLoader.getPartyId(network as any, provider as any),
+      },
+    },
+    logger: new FileLogger(),
+  });
+}
+
+function createValidatorClient(network: string, provider: string): ValidatorApiClient {
+  const envLoader = EnvLoader.getInstance();
+  const apiUrl = envLoader.getApiUri('VALIDATOR_API', network as any, provider as any);
+  const clientId = envLoader.getApiClientId('VALIDATOR_API', network as any, provider as any);
+  const clientSecret = envLoader.getApiClientSecret('VALIDATOR_API', network as any, provider as any);
+  const authUrl = envLoader.getAuthUrl(network as any, provider as any);
+  const partyId = envLoader.getPartyId(network as any, provider as any);
+  const userId = envLoader.getUserId(network as any, provider as any);
+  const username = envLoader.getApiUsername('VALIDATOR_API', network as any, provider as any);
+  const password = envLoader.getApiPassword('VALIDATOR_API', network as any, provider as any);
+
+  if (!apiUrl || !authUrl) {
+    throw new Error('Missing required environment configuration for ValidatorApiClient');
+  }
+
+  // Validate authentication method
+  const hasClientCredentials = clientId && clientSecret;
+  const hasPasswordGrant = username && password && clientId;
+
+  if (!hasClientCredentials && !hasPasswordGrant) {
+    throw new Error('Must provide either clientId+clientSecret or clientId+username+password');
+  }
+
+  const clientConfig: ClientConfig = {
+    network: network as any,
+    provider: provider as any,
+    authUrl,
+    apis: {
+      VALIDATOR_API: {
+        apiUrl,
+        auth: hasClientCredentials
+          ? {
+              grantType: 'client_credentials',
+              clientId: clientId!,
+              clientSecret: clientSecret!,
+            }
+          : {
+              grantType: 'password',
+              clientId: clientId!,
+              username: username!,
+              password: password!,
+            },
+        partyId,
+        userId,
+      },
+    },
+    logger: new FileLogger(),
+  };
+
+  return new ValidatorApiClient(clientConfig);
+}
+
 async function main() {
   const partyName = process.argv[2] || 'alice';
-  console.log(`\n🔐 Onboarding External Party: ${partyName}\n`);
+  const network = process.argv[3] || 'devnet';
+  const provider = process.argv[4] || '5n';
+
+  // Validate network and provider
+  if (!['devnet', 'mainnet'].includes(network)) {
+    console.error(`❌ Invalid network: ${network}. Must be 'devnet' or 'mainnet'`);
+    printUsage();
+    process.exit(1);
+  }
+
+  if (!['5n', 'intellect'].includes(provider)) {
+    console.error(`❌ Invalid provider: ${provider}. Must be '5n' or 'intellect'`);
+    printUsage();
+    process.exit(1);
+  }
+
+  console.log(`\n🔐 Onboarding External Party: ${partyName}`);
+  console.log(`📡 Network: ${network}, Provider: ${provider}\n`);
 
   // Step 1: Generate a new Stellar Ed25519 keypair
   console.log('1️⃣  Generating Stellar Ed25519 keypair...');
@@ -28,8 +145,8 @@ async function main() {
 
   // Step 2: Initialize Canton clients
   console.log('\n2️⃣  Initializing Canton clients...');
-  const ledgerClient = new LedgerJsonApiClient();
-  const validatorClient = new ValidatorApiClient();
+  const ledgerClient = createLedgerClient(network, provider);
+  const validatorClient = createValidatorClient(network, provider);
   console.log('   ✓ Clients initialized');
 
   // Step 3: Get synchronizer ID from mining rounds
@@ -80,7 +197,8 @@ async function main() {
     publicKey: party.publicKey,
     publicKeyFingerprint: party.publicKeyFingerprint,
     synchronizerId,
-    network: 'devnet',
+    network,
+    provider,
     createdAt: new Date().toISOString(),
   };
 
@@ -93,6 +211,8 @@ async function main() {
   console.log(`\n📋 Party Details:`);
   console.log(`   Party Name:        ${partyName}`);
   console.log(`   Party ID:          ${party.partyId}`);
+  console.log(`   Network:           ${network}`);
+  console.log(`   Provider:          ${provider}`);
   console.log(`   Stellar Address:   ${party.stellarAddress}`);
   console.log(`   Stellar Secret:    ${party.stellarSecret}`);
   console.log(`   Public Key:        ${party.publicKey.substring(0, 40)}...`);

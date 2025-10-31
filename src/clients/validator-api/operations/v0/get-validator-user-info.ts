@@ -23,4 +23,3 @@ export const GetValidatorUserInfo = createApiOperation<void, GetValidatorUserInf
   buildUrl: (_params, apiUrl) => `${apiUrl}/api/validator/v0/validator-user`,
   buildRequestData: () => ({}),
 });
-

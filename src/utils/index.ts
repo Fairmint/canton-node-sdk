@@ -6,3 +6,4 @@ export * from './parsers';
 export * from './party';
 export * from './privy';
 export * from './transactions';
+export * from './external-signing';
