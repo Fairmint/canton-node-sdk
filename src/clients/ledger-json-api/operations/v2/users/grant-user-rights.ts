@@ -15,7 +15,7 @@ export const GrantUserRights = createApiOperation<GrantUserRightsParams, GrantUs
   method: 'POST',
   buildUrl: (params, apiUrl) => `${apiUrl}/v2/users/${params.userId}/rights`,
   buildRequestData: (params) => {
-    const { userId: _userId, ...requestBody } = params;
-    return requestBody;
+    // Canton API expects userId in both the URL path AND the request body
+    return params;
   },
 });

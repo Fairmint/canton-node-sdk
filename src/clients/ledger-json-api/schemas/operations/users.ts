@@ -110,12 +110,12 @@ export const GrantUserRightsParamsSchema = z.object({
       z.object({
         /** The kind of right. */
         kind: z.union([
-          z.object({ CanActAs: z.object({ party: z.string() }) }),
-          z.object({ CanReadAs: z.object({ party: z.string() }) }),
-          z.object({ CanReadAsAnyParty: z.object({}) }),
-          z.object({ Empty: z.object({}) }),
-          z.object({ IdentityProviderAdmin: z.object({}) }),
-          z.object({ ParticipantAdmin: z.object({}) }),
+          z.object({ CanActAs: z.object({ value: z.object({ party: z.string() }) }) }),
+          z.object({ CanReadAs: z.object({ value: z.object({ party: z.string() }) }) }),
+          z.object({ CanReadAsAnyParty: z.object({ value: z.object({}) }) }),
+          z.object({ Empty: z.object({ value: z.object({}) }) }),
+          z.object({ IdentityProviderAdmin: z.object({ value: z.object({}) }) }),
+          z.object({ ParticipantAdmin: z.object({ value: z.object({}) }) }),
         ]),
       })
     )
