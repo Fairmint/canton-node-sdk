@@ -4,7 +4,8 @@ import type { paths } from '../../../../../../generated/canton/community/ledger/
 
 // Type aliases for better readability
 type GeneratedRequest = paths['/v2/parties/external/allocate']['post']['requestBody']['content']['application/json'];
-type GeneratedResponse = paths['/v2/parties/external/allocate']['post']['responses']['200']['content']['application/json'];
+type GeneratedResponse =
+  paths['/v2/parties/external/allocate']['post']['responses']['200']['content']['application/json'];
 
 // Schema for signature
 const SignatureSchema = z.object({
@@ -44,9 +45,9 @@ export type AllocateExternalPartyResponse = GeneratedResponse;
 /**
  * Allocate a new external party
  *
- * This endpoint completes the onboarding of an external party by submitting the signed topology
- * transactions or multi-hash signatures. The topology transactions and multi-hash should be
- * obtained from the generate-topology endpoint and signed with the external party's private key.
+ * This endpoint completes the onboarding of an external party by submitting the signed topology transactions or
+ * multi-hash signatures. The topology transactions and multi-hash should be obtained from the generate-topology
+ * endpoint and signed with the external party's private key.
  *
  * @example
  *   ```typescript
@@ -73,14 +74,10 @@ export type AllocateExternalPartyResponse = GeneratedResponse;
  *   });
  *   ```;
  */
-export const AllocateExternalParty = createApiOperation<
-  AllocateExternalPartyParams,
-  AllocateExternalPartyResponse
->({
+export const AllocateExternalParty = createApiOperation<AllocateExternalPartyParams, AllocateExternalPartyResponse>({
   paramsSchema: AllocateExternalPartyParamsSchema,
   method: 'POST',
-  buildUrl: (_params: AllocateExternalPartyParams, apiUrl: string) =>
-    `${apiUrl}/v2/parties/external/allocate`,
+  buildUrl: (_params: AllocateExternalPartyParams, apiUrl: string) => `${apiUrl}/v2/parties/external/allocate`,
   buildRequestData: (params: AllocateExternalPartyParams, _client: BaseClient): GeneratedRequest => ({
     synchronizer: params.synchronizer,
     identityProviderId: params.identityProviderId,

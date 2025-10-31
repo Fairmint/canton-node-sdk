@@ -3,8 +3,10 @@ import { type BaseClient, createApiOperation } from '../../../../../../core';
 import type { paths } from '../../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 
 // Type aliases for better readability
-type GeneratedRequest = paths['/v2/parties/external/generate-topology']['post']['requestBody']['content']['application/json'];
-type GeneratedResponse = paths['/v2/parties/external/generate-topology']['post']['responses']['200']['content']['application/json'];
+type GeneratedRequest =
+  paths['/v2/parties/external/generate-topology']['post']['requestBody']['content']['application/json'];
+type GeneratedResponse =
+  paths['/v2/parties/external/generate-topology']['post']['responses']['200']['content']['application/json'];
 
 // Schema for signing public key
 const SigningPublicKeySchema = z.object({
@@ -38,9 +40,9 @@ export type GenerateExternalPartyTopologyResponse = GeneratedResponse;
 /**
  * Generate a topology for an external party
  *
- * This endpoint generates the topology transactions and multi-hash needed to onboard an external party.
- * The multi-hash should be signed using the external party's private key and then submitted to the
- * allocate endpoint along with the generated topology transactions.
+ * This endpoint generates the topology transactions and multi-hash needed to onboard an external party. The multi-hash
+ * should be signed using the external party's private key and then submitted to the allocate endpoint along with the
+ * generated topology transactions.
  *
  * @example
  *   ```typescript
