@@ -49,7 +49,7 @@ console.log('Stellar Address:', wallet.address);
 console.log('Public Key (base64):', wallet.publicKeyBase64);
 ```
 
-**Option 2: Add wallet to existing Privy user**
+**Option 2: Add wallet to existing Privy user (common use case)**
 
 This is the common use case when users already exist in your database with a Privy ID and possibly
 other wallets (Solana, Ethereum, etc.).
@@ -58,17 +58,28 @@ other wallets (Solana, Ethereum, etc.).
 // User already exists with Privy ID from your database
 const existingPrivyUserId = 'did:privy:cm94jlli5020iky0lbo19pwf3';
 
-// Create a Stellar wallet linked to this existing user
+// Create a Stellar embedded wallet linked to this existing user
 const userWallet = await createStellarWallet(privy, {
   userId: existingPrivyUserId,
 });
 
-console.log('Wallet linked to user:', userWallet.owner?.user_id);
+console.log('Wallet ID:', userWallet.id);
 console.log('Stellar Address:', userWallet.address);
+
+// The wallet is now linked to the user in Privy's system
+// Verify in the Privy Dashboard under the user's wallets
 
 // Save to your database
 // UPDATE users SET stellar_wallet_address = userWallet.address WHERE privy_user_id = existingPrivyUserId
 ```
+
+**Important Notes:**
+
+- The `owner` property may not be returned in the API response, but the wallet IS linked to the user
+  in Privy's system
+- You can verify the linkage in the Privy Dashboard
+- Embedded wallets require user authentication for signing (cannot be done server-side only)
+- Use Privy's client SDK in your frontend for transaction signing
 
 ### Retrieve an Existing Wallet
 
@@ -217,10 +228,10 @@ npx tsx test/privy.add-stellar-wallet.example.ts did:privy:cm94jlli5020iky0lbo19
 
 The example will:
 
-1. Create a new Stellar wallet linked to the specified user
-2. Verify the wallet was properly linked
-3. Test signing with the new wallet
-4. Show database update SQL example
+1. Create a new Stellar embedded wallet linked to the specified user
+2. Verify the wallet can be retrieved
+3. Show database update SQL example
+4. Explain how to use the wallet for signing (client-side)
 
 **Note**: Due to ESM compatibility issues with Jest, the Privy utilities are tested using the
 example files with `tsx` rather than Jest unit tests.

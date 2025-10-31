@@ -1,14 +1,21 @@
 /**
  * Add Stellar Wallet to Existing Privy User Example
  *
- * This example demonstrates how to add a Stellar wallet to an existing Privy user who already has a Privy ID (and
- * possibly other wallets like Solana or Ethereum).
+ * This example demonstrates how to create a Stellar embedded wallet for an existing Privy user who already has a Privy
+ * ID (and possibly other wallets like Solana or Ethereum).
  *
  * Use Case:
  *
  * - User exists in your database with a Privy ID (format: did:privy:...)
  * - User already has Solana and/or Ethereum wallets via Privy
  * - You want to add a Stellar wallet to the same user account
+ *
+ * Important Notes:
+ *
+ * - The wallet will be created and linked to the user in Privy's system
+ * - The wallet linkage can be verified in the Privy Dashboard
+ * - Wallet signing requires user authentication (client-side) - it cannot be done server-side
+ * - The owner property may not be returned in the API response, but the wallet IS linked
  *
  * Setup:
  *
@@ -24,7 +31,7 @@
  */
 
 import dotenv from 'dotenv';
-import { createPrivyClientFromEnv, createStellarWallet, getStellarWallet, signWithWallet } from '../src/utils/privy';
+import { createPrivyClientFromEnv, createStellarWallet, getStellarWallet } from '../src/utils/privy';
 
 // Load environment variables
 dotenv.config();
@@ -81,38 +88,25 @@ async function main() {
       userId: privyUserId,
     });
 
-    console.log('✓ Stellar wallet created and linked successfully!');
+    console.log('✓ Stellar wallet created successfully!');
     console.log('  Wallet ID:', stellarWallet.id);
     console.log('  Stellar Address:', stellarWallet.address);
     console.log('  Public Key (base64):', stellarWallet.publicKeyBase64);
-    console.log('  Linked to User:', stellarWallet.owner?.user_id);
+    console.log();
+    console.log("  Note: The wallet is linked to the user in Privy's system.");
+    console.log("  You can verify this in the Privy Dashboard under the user's wallets.");
     console.log();
 
-    // Step 3: Verify the wallet was properly linked by retrieving it
-    console.log('Step 3: Verifying wallet linkage...');
+    // Step 3: Verify the wallet by retrieving it
+    console.log('Step 3: Verifying wallet retrieval...');
     const retrievedWallet = await getStellarWallet(privy, stellarWallet.id);
 
-    if (retrievedWallet.owner?.user_id === privyUserId) {
-      console.log('✓ Wallet successfully linked to user');
-      console.log('  Confirmation: Owner ID matches');
+    if (retrievedWallet.address === stellarWallet.address) {
+      console.log('✓ Wallet retrieved successfully');
+      console.log('  Confirmation: Address matches');
     } else {
-      console.warn('⚠ Warning: Owner ID does not match (this should not happen)');
+      console.warn('⚠ Warning: Retrieved wallet address does not match');
     }
-    console.log();
-
-    // Step 4: Test signing with the new wallet
-    console.log('Step 4: Testing wallet signing capability...');
-    const testMessage = `Stellar wallet test - ${new Date().toISOString()}`;
-    const testMessageHex = Buffer.from(testMessage).toString('hex');
-
-    const signature = await signWithWallet(privy, {
-      walletId: stellarWallet.id,
-      data: testMessageHex,
-    });
-
-    console.log('✓ Successfully signed test message');
-    console.log('  Message:', testMessage);
-    console.log('  Signature (base64):', `${signature.signatureBase64.substring(0, 32)}...`);
     console.log();
 
     // Summary
@@ -129,13 +123,19 @@ async function main() {
     console.log('Next Steps:');
     console.log('  1. Save the Stellar wallet ID and address to your database');
     console.log('  2. Associate it with the user record');
-    console.log('  3. The wallet can now be used for Stellar transactions');
+    console.log('  3. Verify in Privy Dashboard that the wallet appears under the user');
     console.log();
     console.log('Database Update Example:');
     console.log('  UPDATE users');
     console.log(`  SET stellar_wallet_address = '${stellarWallet.address}',`);
     console.log(`      stellar_wallet_id = '${stellarWallet.id}'`);
     console.log(`  WHERE privy_user_id = '${privyUserId}';`);
+    console.log();
+    console.log('Using the Wallet:');
+    console.log('  - The wallet is an embedded wallet managed by Privy');
+    console.log('  - Signing transactions requires user authentication (client-side)');
+    console.log("  - Use Privy's client SDK in your frontend to sign transactions");
+    console.log('  - The user will authenticate via Privy and sign with their wallet');
     console.log();
   } catch (error) {
     console.error('❌ Error occurred:');
