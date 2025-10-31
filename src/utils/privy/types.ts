@@ -1,10 +1,6 @@
-/**
- * Privy wallet types and interfaces
- */
+/** Privy wallet types and interfaces */
 
-/**
- * Options for creating a Privy client
- */
+/** Options for creating a Privy client */
 export interface PrivyClientOptions {
   /** Privy App ID from environment variables or provided directly */
   appId: string;
@@ -12,17 +8,13 @@ export interface PrivyClientOptions {
   appSecret: string;
 }
 
-/**
- * Options for creating a Stellar wallet
- */
+/** Options for creating a Stellar wallet */
 export interface CreateStellarWalletOptions {
   /** Optional user ID to link the wallet to (format: did:privy:...) */
   userId?: string;
 }
 
-/**
- * Stellar wallet information returned from Privy
- */
+/** Stellar wallet information returned from Privy */
 export interface StellarWallet {
   /** Wallet ID (used for signing operations) */
   id: string;
@@ -38,9 +30,7 @@ export interface StellarWallet {
   publicKeyBase64: string;
 }
 
-/**
- * Options for signing data with a Stellar wallet
- */
+/** Options for signing data with a Stellar wallet */
 export interface SignOptions {
   /** Wallet ID to use for signing */
   walletId: string;
@@ -48,9 +38,7 @@ export interface SignOptions {
   data: string | Buffer;
 }
 
-/**
- * Result of a signing operation
- */
+/** Result of a signing operation */
 export interface SignResult {
   /** Signature in hex format (with 0x prefix) */
   signature: string;

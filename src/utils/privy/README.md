@@ -4,7 +4,9 @@ Utilities for creating, retrieving, and signing with Stellar wallets using Privy
 
 ## Overview
 
-This module provides TypeScript utilities for managing Stellar wallets through the Privy API. Privy handles wallet creation and key management, making it easy to integrate Stellar wallet functionality into your Canton applications.
+This module provides TypeScript utilities for managing Stellar wallets through the Privy API. Privy
+handles wallet creation and key management, making it easy to integrate Stellar wallet functionality
+into your Canton applications.
 
 ## Setup
 
@@ -29,7 +31,7 @@ const privy = createPrivyClientFromEnv();
 // Or with explicit credentials
 const privy = createPrivyClient({
   appId: 'your-app-id',
-  appSecret: 'your-app-secret'
+  appSecret: 'your-app-secret',
 });
 ```
 
@@ -46,7 +48,7 @@ console.log('Public Key (base64):', wallet.publicKeyBase64);
 
 // Create a wallet linked to a Privy user
 const userWallet = await createStellarWallet(privy, {
-  userId: 'did:privy:...'
+  userId: 'did:privy:...',
 });
 ```
 
@@ -67,7 +69,7 @@ import { signWithWallet } from '@fairmint/canton-node-sdk';
 // Sign hex data
 const result = await signWithWallet(privy, {
   walletId: wallet.id,
-  data: 'deadbeef'
+  data: 'deadbeef',
 });
 
 console.log('Signature (hex):', result.signature);
@@ -76,7 +78,7 @@ console.log('Signature (base64):', result.signatureBase64);
 // Sign a Buffer
 const bufferResult = await signWithWallet(privy, {
   walletId: wallet.id,
-  data: Buffer.from('test message to sign')
+  data: Buffer.from('test message to sign'),
 });
 ```
 
@@ -87,6 +89,7 @@ const bufferResult = await signWithWallet(privy, {
 Creates a Privy client with explicit credentials.
 
 **Parameters:**
+
 - `options.appId` - Privy App ID
 - `options.appSecret` - Privy App Secret
 
@@ -103,6 +106,7 @@ Creates a Privy client from environment variables (`PRIVY_APP_ID` and `PRIVY_APP
 Creates a new Stellar wallet.
 
 **Parameters:**
+
 - `privyClient` - Configured Privy client
 - `options.userId` (optional) - User ID to link wallet to (format: `did:privy:...`)
 
@@ -113,6 +117,7 @@ Creates a new Stellar wallet.
 Retrieves an existing Stellar wallet.
 
 **Parameters:**
+
 - `privyClient` - Configured Privy client
 - `walletId` - The wallet ID to retrieve
 
@@ -123,6 +128,7 @@ Retrieves an existing Stellar wallet.
 Signs data using a Stellar wallet.
 
 **Parameters:**
+
 - `privyClient` - Configured Privy client
 - `options.walletId` - Wallet ID to sign with
 - `options.data` - Data to sign (hex string or Buffer)
@@ -135,11 +141,11 @@ Signs data using a Stellar wallet.
 
 ```typescript
 interface StellarWallet {
-  id: string;                    // Wallet ID
-  address: string;               // Stellar public address
+  id: string; // Wallet ID
+  address: string; // Stellar public address
   chain_type: 'stellar';
-  owner?: { user_id: string };   // Owner info if linked
-  publicKeyBase64: string;       // Base64 encoded public key
+  owner?: { user_id: string }; // Owner info if linked
+  publicKeyBase64: string; // Base64 encoded public key
 }
 ```
 
@@ -147,9 +153,9 @@ interface StellarWallet {
 
 ```typescript
 interface SignResult {
-  signature: string;         // Signature in hex (with 0x prefix)
-  encoding: string;          // Encoding format
-  signatureBase64: string;   // Signature in base64
+  signature: string; // Signature in hex (with 0x prefix)
+  encoding: string; // Encoding format
+  signatureBase64: string; // Signature in base64
 }
 ```
 
@@ -174,4 +180,5 @@ tsx test/privy.example.ts
 
 The example will create a real Stellar wallet, retrieve it, and sign test data.
 
-**Note**: Due to ESM compatibility issues with Jest, the Privy utilities are tested using the example file with `tsx` rather than Jest unit tests.
+**Note**: Due to ESM compatibility issues with Jest, the Privy utilities are tested using the
+example file with `tsx` rather than Jest unit tests.

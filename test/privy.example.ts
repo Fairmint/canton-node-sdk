@@ -2,36 +2,30 @@
  * Privy Stellar Wallet Example
  *
  * This example demonstrates how to:
+ *
  * 1. Create a Privy client
  * 2. Create a new Stellar wallet
  * 3. Retrieve an existing wallet
  * 4. Sign data with a wallet
  *
  * Setup:
+ *
  * 1. Copy example.env to .env: cp example.env .env
  * 2. Set PRIVY_APP_ID and PRIVY_APP_SECRET in .env
  * 3. Install dependencies: npm install
  *
- * Run:
- * tsx test/privy.example.ts
+ * Run: tsx test/privy.example.ts
  *
  * Note: This creates real wallets using the Privy API.
  */
 
 import dotenv from 'dotenv';
-import {
-  createPrivyClientFromEnv,
-  createStellarWallet,
-  getStellarWallet,
-  signWithWallet,
-} from '../src/utils/privy';
+import { createPrivyClientFromEnv, createStellarWallet, getStellarWallet, signWithWallet } from '../src/utils/privy';
 
 // Load environment variables
 dotenv.config();
 
-/**
- * Main example function
- */
+/** Main example function */
 async function main() {
   console.log('='.repeat(60));
   console.log('Privy Stellar Wallet Example');
