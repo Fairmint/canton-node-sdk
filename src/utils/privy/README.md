@@ -81,6 +81,13 @@ console.log('Stellar Address:', userWallet.address);
 - Embedded wallets require user authentication for signing (cannot be done server-side only)
 - Use Privy's client SDK in your frontend for transaction signing
 
+
+// Create a wallet linked to a Privy user
+const userWallet = await createStellarWallet(privy, {
+  userId: 'did:privy:...',
+});
+```
+
 ### Retrieve an Existing Wallet
 
 ```typescript
@@ -195,6 +202,9 @@ Two complete working examples are available:
 ### Example 1: Creating a New Wallet (`test/privy.example.ts`)
 
 Creates a standalone wallet (not linked to a user). To run it:
+## Running the Example
+
+A complete working example is available in `test/privy.example.ts`. To run it:
 
 ```bash
 # From the canton-node-sdk directory
@@ -235,3 +245,5 @@ The example will:
 
 **Note**: Due to ESM compatibility issues with Jest, the Privy utilities are tested using the
 example files with `tsx` rather than Jest unit tests.
+**Note**: Due to ESM compatibility issues with Jest, the Privy utilities are tested using the
+example file with `tsx` rather than Jest unit tests.
