@@ -147,6 +147,11 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
       // DevNet configuration
       const baseUrl = 'https://wallet.validator.devnet.transfer-agent.xyz/api/validator/v0';
       console.log('  Network: DevNet');
+      console.log('  Base URL:', baseUrl);
+      console.log('  Auth endpoint:', `${baseUrl}/auth`);
+      console.log('  Ledger endpoint:', `${baseUrl}/ledger`);
+      console.log('  Topology endpoint:', `${baseUrl}/topology`);
+      console.log('  Admin endpoint:', `${baseUrl}/admin`);
 
       // For devnet, use unsafe auth (similar to localnet)
       authFactory = () => {
@@ -155,14 +160,18 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
         auth.adminId = 'ledger-api-admin';
         auth.audience = 'https://canton.network.global';
         auth.unsafeSecret = 'test';
+        console.log('  Auth factory: UnsafeAuthController configured');
         return auth;
       };
 
-      ledgerFactory = (userId: string, authTokenProvider: any, isAdmin: boolean) =>
-        new LedgerController(userId, new URL(`${baseUrl}/ledger`), undefined, isAdmin, authTokenProvider);
+      ledgerFactory = (userId: string, authTokenProvider: any, isAdmin: boolean) => {
+        console.log(`  Creating LedgerController: userId=${userId}, isAdmin=${isAdmin}`);
+        return new LedgerController(userId, new URL(`${baseUrl}/ledger`), undefined, isAdmin, authTokenProvider);
+      };
 
-      topologyFactory = (userId: string, authTokenProvider: any, synchronizerId: any) =>
-        new TopologyController(
+      topologyFactory = (userId: string, authTokenProvider: any, synchronizerId: any) => {
+        console.log(`  Creating TopologyController: userId=${userId}, synchronizerId=${synchronizerId}`);
+        return new TopologyController(
           `${baseUrl}/admin`,
           new URL(`${baseUrl}/topology`),
           userId,
@@ -170,9 +179,11 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
           undefined,
           authTokenProvider
         );
+      };
 
-      tokenStandardFactory = (userId: string, authTokenProvider: any, isAdmin: boolean) =>
-        new TokenStandardController(
+      tokenStandardFactory = (userId: string, authTokenProvider: any, isAdmin: boolean) => {
+        console.log(`  Creating TokenStandardController: userId=${userId}, isAdmin=${isAdmin}`);
+        return new TokenStandardController(
           userId,
           new URL(`${baseUrl}/token-standard`),
           new URL(`${baseUrl}/validator`),
@@ -180,6 +191,7 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
           authTokenProvider,
           isAdmin
         );
+      };
     } else if (finalScanProxyUrl.includes('testnet')) {
       // TestNet configuration
       const baseUrl = 'https://wallet.validator.testnet.transfer-agent.xyz/api/validator/v0';
@@ -238,6 +250,36 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
     await sdk.connectTopology(finalScanProxyUrl);
 
     console.log('✓ Canton SDK initialized');
+    console.log();
+
+    // Step 3.5: Debug - Test API endpoint directly
+    console.log('Step 3.5: Testing devnet API endpoints directly...');
+    try {
+      const testEndpoints = [
+        `${finalScanProxyUrl.replace('/scan-proxy', '')}/ledger/version`,
+        `${finalScanProxyUrl.replace('/scan-proxy', '')}/ledger`,
+        finalScanProxyUrl,
+      ];
+
+      for (const endpoint of testEndpoints) {
+        try {
+          console.log(`  Testing: ${endpoint}`);
+          const response = await fetch(endpoint, {
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+          });
+          console.log(`    Status: ${response.status} ${response.statusText}`);
+          const text = await response.text();
+          console.log(`    Response: ${text.substring(0, 200)}${text.length > 200 ? '...' : ''}`);
+        } catch (err) {
+          console.log(`    Error: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    } catch (error) {
+      console.log('  Could not test endpoints:', error);
+    }
     console.log();
 
     // Step 4: Generate external party topology
