@@ -247,3 +247,71 @@ The example will:
 example files with `tsx` rather than Jest unit tests.
 **Note**: Due to ESM compatibility issues with Jest, the Privy utilities are tested using the
 example file with `tsx` rather than Jest unit tests.
+
+## Canton Network Integration
+
+### Generating Canton Party IDs from Privy Wallets
+
+You can use Privy Stellar wallets to generate Canton Network party IDs. This allows users to
+interact with Canton Network using their Privy-managed wallets.
+
+A complete example is available in `test/canton-party-from-privy-wallet.example.ts`.
+
+**Setup:**
+
+1. Install Canton Network SDK: `npm install @canton-network/wallet-sdk`
+2. Set `CANTON_SCAN_PROXY_URL` in your `.env` file
+3. Have Privy credentials configured
+
+**Example:**
+
+```typescript
+import { createPrivyClientFromEnv, createStellarWallet } from '@fairmint/canton-node-sdk';
+import { WalletSDKImpl } from '@canton-network/wallet-sdk';
+import { StrKey } from '@stellar/stellar-base';
+
+// Create Privy wallet
+const privy = createPrivyClientFromEnv();
+const wallet = await createStellarWallet(privy, { userId: 'did:privy:...' });
+
+// Initialize Canton SDK
+const sdk = new WalletSDKImpl().configure({...});
+await sdk.connect();
+await sdk.connectTopology(process.env.CANTON_SCAN_PROXY_URL);
+
+// Generate external party
+const generatedParty = await sdk.userLedger?.generateExternalParty(
+  wallet.publicKeyBase64,
+  'party-hint'
+);
+
+// Sign with Privy (requires user authentication for embedded wallets)
+const { signature } = await privy.wallets().rawSign(wallet.id, {
+  params: { hash: '0x' + hexHash }
+});
+
+// Allocate party
+const allocatedParty = await sdk.userLedger?.allocateExternalParty(
+  signatureBase64,
+  generatedParty
+);
+
+console.log('Canton Party ID:', allocatedParty.partyId);
+```
+
+**Running the example:**
+
+```bash
+# Create new wallet and generate party
+npx tsx test/canton-party-from-privy-wallet.example.ts
+
+# Use existing wallet
+npx tsx test/canton-party-from-privy-wallet.example.ts <wallet-id> <party-hint>
+
+# Create wallet for user and generate party
+npx tsx test/canton-party-from-privy-wallet.example.ts did:privy:<user-id> <party-hint>
+```
+
+See the
+[Canton Network documentation](https://docs.dev.sync.global/app_dev/validator_api/index.html#scan-proxy-api)
+for more details on the Scan Proxy API.
