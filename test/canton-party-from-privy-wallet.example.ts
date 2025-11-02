@@ -57,6 +57,7 @@ import {
   TopologyController,
   TokenStandardController,
   UnsafeAuthController,
+  ClientCredentialOAuthController,
 } from '@canton-network/wallet-sdk';
 import dotenv from 'dotenv';
 import { pino } from 'pino';
@@ -145,23 +146,56 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
 
     if (finalScanProxyUrl.includes('devnet')) {
       // DevNet configuration
-      const baseUrl = 'https://wallet.validator.devnet.transfer-agent.xyz/api/validator/v0';
+      // Check if OAuth credentials are available
+      const oauthClientId = process.env['CANTON_OAUTH_CLIENT_ID'];
+      const oauthClientSecret = process.env['CANTON_OAUTH_CLIENT_SECRET'];
+      const oauthAuthority = process.env['CANTON_OAUTH_AUTHORITY'] || 'https://auth.transfer-agent.xyz/application/o/validator-devnet/';
+      const oauthAudience = process.env['CANTON_OAUTH_AUDIENCE'] || 'validator-devnet-m2m';
+      const oauthScope = process.env['CANTON_OAUTH_SCOPE'] || 'openid';
+      const hasOAuthCredentials = Boolean(oauthClientId && oauthClientSecret);
+
+      // Use custom base URL if provided, otherwise default (note: no /v0/ for devnet with OAuth)
+      const baseUrl = process.env['CANTON_BASE_URL'] ||
+        (hasOAuthCredentials
+          ? 'https://wallet.validator.devnet.transfer-agent.xyz/api/validator'
+          : 'https://wallet.validator.devnet.transfer-agent.xyz/api/validator/v0');
+
       console.log('  Network: DevNet');
       console.log('  Base URL:', baseUrl);
+      console.log('  OAuth Credentials:', hasOAuthCredentials ? '✓ Available' : '✗ Not available (using unsafe auth)');
+
+      if (hasOAuthCredentials) {
+        console.log('  OAuth Authority:', oauthAuthority);
+        console.log('  OAuth Client ID:', oauthClientId);
+        console.log('  OAuth Audience:', oauthAudience);
+      }
+
       console.log('  Auth endpoint:', `${baseUrl}/auth`);
       console.log('  Ledger endpoint:', `${baseUrl}/ledger`);
       console.log('  Topology endpoint:', `${baseUrl}/topology`);
       console.log('  Admin endpoint:', `${baseUrl}/admin`);
 
-      // For devnet, use unsafe auth (similar to localnet)
+      // Use OAuth if credentials are available, otherwise unsafe auth
       authFactory = () => {
-        const auth = new UnsafeAuthController(logger);
-        auth.userId = 'ledger-api-user';
-        auth.adminId = 'ledger-api-admin';
-        auth.audience = 'https://canton.network.global';
-        auth.unsafeSecret = 'test';
-        console.log('  Auth factory: UnsafeAuthController configured');
-        return auth;
+        if (hasOAuthCredentials) {
+          const auth = new ClientCredentialOAuthController(oauthAuthority, logger);
+          auth.userId = oauthClientId;
+          auth.userSecret = oauthClientSecret;
+          auth.adminId = oauthClientId;
+          auth.adminSecret = oauthClientSecret;
+          auth.audience = oauthAudience;
+          auth.scope = oauthScope;
+          console.log('  Auth factory: ClientCredentialOAuthController configured');
+          return auth;
+        }
+          const auth = new UnsafeAuthController(logger);
+          auth.userId = 'ledger-api-user';
+          auth.adminId = 'ledger-api-admin';
+          auth.audience = 'https://canton.network.global';
+          auth.unsafeSecret = 'test';
+          console.log('  Auth factory: UnsafeAuthController configured (fallback)');
+          return auth;
+
       };
 
       ledgerFactory = (userId: string, authTokenProvider: any, isAdmin: boolean) => {
@@ -194,16 +228,45 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
       };
     } else if (finalScanProxyUrl.includes('testnet')) {
       // TestNet configuration
-      const baseUrl = 'https://wallet.validator.testnet.transfer-agent.xyz/api/validator/v0';
-      console.log('  Network: TestNet');
+      // Check if OAuth credentials are available
+      const oauthClientId = process.env['CANTON_OAUTH_CLIENT_ID'];
+      const oauthClientSecret = process.env['CANTON_OAUTH_CLIENT_SECRET'];
+      const oauthAuthority = process.env['CANTON_OAUTH_AUTHORITY'] || 'https://auth.transfer-agent.xyz/application/o/validator-testnet/';
+      const oauthAudience = process.env['CANTON_OAUTH_AUDIENCE'] || 'validator-testnet-m2m';
+      const oauthScope = process.env['CANTON_OAUTH_SCOPE'] || 'openid';
+      const hasOAuthCredentials = Boolean(oauthClientId && oauthClientSecret);
 
+      // Use custom base URL if provided, otherwise default (note: no /v0/ for testnet with OAuth)
+      const baseUrl = process.env['CANTON_BASE_URL'] ||
+        (hasOAuthCredentials
+          ? 'https://wallet.validator.testnet.transfer-agent.xyz/api/validator'
+          : 'https://wallet.validator.testnet.transfer-agent.xyz/api/validator/v0');
+
+      console.log('  Network: TestNet');
+      console.log('  Base URL:', baseUrl);
+      console.log('  OAuth Credentials:', hasOAuthCredentials ? '✓ Available' : '✗ Not available (using unsafe auth)');
+
+      // Use OAuth if credentials are available, otherwise unsafe auth
       authFactory = () => {
-        const auth = new UnsafeAuthController(logger);
-        auth.userId = 'ledger-api-user';
-        auth.adminId = 'ledger-api-admin';
-        auth.audience = 'https://canton.network.global';
-        auth.unsafeSecret = 'test';
-        return auth;
+        if (hasOAuthCredentials) {
+          const auth = new ClientCredentialOAuthController(oauthAuthority, logger);
+          auth.userId = oauthClientId;
+          auth.userSecret = oauthClientSecret;
+          auth.adminId = oauthClientId;
+          auth.adminSecret = oauthClientSecret;
+          auth.audience = oauthAudience;
+          auth.scope = oauthScope;
+          console.log('  Auth factory: ClientCredentialOAuthController configured');
+          return auth;
+        }
+          const auth = new UnsafeAuthController(logger);
+          auth.userId = 'ledger-api-user';
+          auth.adminId = 'ledger-api-admin';
+          auth.audience = 'https://canton.network.global';
+          auth.unsafeSecret = 'test';
+          console.log('  Auth factory: UnsafeAuthController configured (fallback)');
+          return auth;
+
       };
 
       ledgerFactory = (userId: string, authTokenProvider: any, isAdmin: boolean) =>
