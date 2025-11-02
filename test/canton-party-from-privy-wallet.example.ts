@@ -300,6 +300,10 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
       tokenStandardFactory = localNetTokenStandardDefault;
     }
 
+    // Step 3.5: Debug - Test API endpoints BEFORE SDK connection
+    console.log();
+    console.log('Step 3.5: Testing devnet API endpoints directly (before SDK connect)...');
+
     const sdk = new WalletSDKImpl().configure({
       logger,
       authFactory,
@@ -308,34 +312,48 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
       tokenStandardFactory,
     });
 
-    await sdk.connect();
-    await sdk.connectAdmin();
-    await sdk.connectTopology(finalScanProxyUrl);
-
-    console.log('✓ Canton SDK initialized');
-    console.log();
-
-    // Step 3.5: Debug - Test API endpoint directly
-    console.log('Step 3.5: Testing devnet API endpoints directly...');
+    // Get OAuth token first if using OAuth
+    let authToken = '';
+    if (finalScanProxyUrl.includes('devnet') || finalScanProxyUrl.includes('testnet')) {
+      const oauthClientId = process.env['CANTON_OAUTH_CLIENT_ID'];
+      const oauthClientSecret = process.env['CANTON_OAUTH_CLIENT_SECRET'];
+      if (oauthClientId && oauthClientSecret) {
+        try {
+          console.log('  Getting OAuth token for API tests...');
+          const token = await sdk.auth.getUserToken();
+          authToken = token.token;
+          console.log('  ✓ OAuth token obtained');
+        } catch (err) {
+          console.log('  ⚠ Could not get OAuth token:', err instanceof Error ? err.message : String(err));
+        }
+      }
+    }
     try {
+      const baseUrlForTests = finalScanProxyUrl.replace('/scan-proxy', '').replace('/v0', '');
       const testEndpoints = [
-        `${finalScanProxyUrl.replace('/scan-proxy', '')}/ledger/version`,
-        `${finalScanProxyUrl.replace('/scan-proxy', '')}/ledger`,
+        `${baseUrlForTests}/ledger/version`,
+        `${baseUrlForTests}/ledger/v1/version`,
+        `${baseUrlForTests}/ledger`,
+        `${baseUrlForTests}/topology`,
         finalScanProxyUrl,
       ];
 
       for (const endpoint of testEndpoints) {
         try {
           console.log(`  Testing: ${endpoint}`);
-          const response = await fetch(endpoint, {
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-            },
-          });
+          const headers: Record<string, string> = {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          };
+
+          if (authToken) {
+            headers['Authorization'] = `Bearer ${authToken}`;
+          }
+
+          const response = await fetch(endpoint, { headers });
           console.log(`    Status: ${response.status} ${response.statusText}`);
           const text = await response.text();
-          console.log(`    Response: ${text.substring(0, 200)}${text.length > 200 ? '...' : ''}`);
+          console.log(`    Response: ${text.substring(0, 300)}${text.length > 300 ? '...' : ''}`);
         } catch (err) {
           console.log(`    Error: ${err instanceof Error ? err.message : String(err)}`);
         }
@@ -343,6 +361,14 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
     } catch (error) {
       console.log('  Could not test endpoints:', error);
     }
+    console.log();
+
+    console.log('Step 3.6: Connecting Canton SDK...');
+    await sdk.connect();
+    await sdk.connectAdmin();
+    await sdk.connectTopology(finalScanProxyUrl);
+
+    console.log('✓ Canton SDK initialized');
     console.log();
 
     // Step 4: Generate external party topology
