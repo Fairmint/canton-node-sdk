@@ -35,7 +35,7 @@ export const GetUpdateById = createApiOperation<GetUpdateByIdParams, GetUpdateBy
           eventFormat: {
             verbose: true,
           },
-          transactionShape: 'TRANSACTION_SHAPE_UNSPECIFIED',
+          transactionShape: 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
         },
       },
       // Include requestingParties if readAs is provided
