@@ -19,7 +19,14 @@
  *   npx tsx examples/external-signing/03-create-transfer-offer.ts ../keys/alice--12abc.json 10.0 devnet 5n
  */
 
-import { ValidatorApiClient, EnvLoader, FileLogger, type ClientConfig } from '../../src';
+import {
+  ValidatorApiClient,
+  EnvLoader,
+  FileLogger,
+  type ClientConfig,
+  type NetworkType,
+  type ProviderType,
+} from '../../src';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -38,14 +45,16 @@ interface KeyData {
 
 function createValidatorClient(network: string, provider: string): ValidatorApiClient {
   const envLoader = EnvLoader.getInstance();
-  const apiUrl = envLoader.getApiUri('VALIDATOR_API', network as any, provider as any);
-  const clientId = envLoader.getApiClientId('VALIDATOR_API', network as any, provider as any);
-  const clientSecret = envLoader.getApiClientSecret('VALIDATOR_API', network as any, provider as any);
-  const authUrl = envLoader.getAuthUrl(network as any, provider as any);
-  const partyId = envLoader.getPartyId(network as any, provider as any);
-  const userId = envLoader.getUserId(network as any, provider as any);
-  const username = envLoader.getApiUsername('VALIDATOR_API', network as any, provider as any);
-  const password = envLoader.getApiPassword('VALIDATOR_API', network as any, provider as any);
+  const networkType = network as NetworkType;
+  const providerType = provider as ProviderType;
+  const apiUrl = envLoader.getApiUri('VALIDATOR_API', networkType, providerType);
+  const clientId = envLoader.getApiClientId('VALIDATOR_API', networkType, providerType);
+  const clientSecret = envLoader.getApiClientSecret('VALIDATOR_API', networkType, providerType);
+  const authUrl = envLoader.getAuthUrl(networkType, providerType);
+  const partyId = envLoader.getPartyId(networkType, providerType);
+  const userId = envLoader.getUserId(networkType, providerType);
+  const username = envLoader.getApiUsername('VALIDATOR_API', networkType, providerType);
+  const password = envLoader.getApiPassword('VALIDATOR_API', networkType, providerType);
 
   if (!apiUrl || !authUrl) {
     throw new Error('Missing required environment configuration for ValidatorApiClient');
@@ -59,6 +68,10 @@ function createValidatorClient(network: string, provider: string): ValidatorApiC
     throw new Error('Must provide either clientId+clientSecret or clientId+username+password');
   }
 
+  if (hasPasswordGrant && (!username || !password)) {
+    throw new Error('Username and password are required for password grant');
+  }
+
   const validatorApiConfig = {
     apiUrl,
     auth: hasClientCredentials
@@ -70,19 +83,19 @@ function createValidatorClient(network: string, provider: string): ValidatorApiC
       : {
           grantType: 'password',
           clientId,
-          username: username!,
-          password: password!,
+          username: username ?? '',
+          password: password ?? '',
         },
     partyId,
     ...(userId && { userId }),
   };
 
   const clientConfig: ClientConfig = {
-    network: network as any,
-    provider: provider as any,
+    network: networkType,
+    provider: providerType,
     authUrl,
     apis: {
-      VALIDATOR_API: validatorApiConfig as any,
+      VALIDATOR_API: validatorApiConfig,
     },
     logger: new FileLogger(),
   };
@@ -93,7 +106,7 @@ function createValidatorClient(network: string, provider: string): ValidatorApiC
 async function main() {
   // Get parameters from command line
   const keyFilePath = process.argv[2];
-  const amount = process.argv[3] || '10.0';
+  const amount = process.argv[3] ?? '10.0';
 
   if (!keyFilePath) {
     console.error('\n❌ Error: Please provide a key file path');
@@ -119,8 +132,8 @@ async function main() {
   const keyData: KeyData = JSON.parse(fs.readFileSync(absolutePath, 'utf-8'));
 
   // Get network and provider from command line or key file
-  const network = process.argv[4] || keyData.network;
-  const provider = process.argv[5] || keyData.provider;
+  const network = process.argv[4] ?? keyData.network;
+  const provider = process.argv[5] ?? keyData.provider;
 
   // Validate network and provider
   if (!['devnet', 'mainnet'].includes(network)) {
@@ -194,8 +207,8 @@ async function main() {
     console.error('\n❌ Error creating transfer offer:', error);
     if (error instanceof Error) {
       console.error('\nDetails:', error.message);
-      if ('response' in error) {
-        console.error('Response:', JSON.stringify((error as any).response, null, 2));
+      if ('response' in error && error.response) {
+        console.error('Response:', JSON.stringify(error.response, null, 2));
       }
     }
     process.exit(1);
