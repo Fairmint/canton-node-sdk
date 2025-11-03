@@ -1,8 +1,8 @@
 /**
  * Example 1: Allocate External Party
  *
- * This example demonstrates how to allocate (onboard) an external party using a Stellar Ed25519 keypair.
- * The private key is generated locally and never leaves your control.
+ * This example demonstrates how to allocate (onboard) an external party using Privy for key management.
+ * The wallet is created via Privy and signing happens through their secure API.
  *
  * Usage:
  *   npx tsx examples/external-signing/01-allocate-external-party.ts <party-name> [network] [provider]
@@ -16,13 +16,17 @@
  *   npx tsx examples/external-signing/01-allocate-external-party.ts alice
  *   npx tsx examples/external-signing/01-allocate-external-party.ts alice devnet 5n
  *   npx tsx examples/external-signing/01-allocate-external-party.ts alice mainnet intellect
+ *
+ * Environment variables required:
+ *   PRIVY_APP_ID      - Your Privy App ID
+ *   PRIVY_APP_SECRET  - Your Privy App Secret
  */
 
-import { Keypair } from '@stellar/stellar-base';
 import {
   LedgerJsonApiClient,
   ValidatorApiClient,
-  createExternalParty,
+  createExternalPartyPrivy,
+  createPrivyClientFromEnv,
   EnvLoader,
   FileLogger,
   type ClientConfig,
@@ -87,28 +91,30 @@ function createValidatorClient(network: string, provider: string): ValidatorApiC
     throw new Error('Must provide either clientId+clientSecret or clientId+username+password');
   }
 
+  const validatorApiConfig = {
+    apiUrl,
+    auth: hasClientCredentials
+      ? {
+          grantType: 'client_credentials',
+          clientId,
+          clientSecret,
+        }
+      : {
+          grantType: 'password',
+          clientId,
+          username: username!,
+          password: password!,
+        },
+    partyId,
+    ...(userId && { userId }),
+  };
+
   const clientConfig: ClientConfig = {
     network: network as any,
     provider: provider as any,
     authUrl,
     apis: {
-      VALIDATOR_API: {
-        apiUrl,
-        auth: hasClientCredentials
-          ? {
-              grantType: 'client_credentials',
-              clientId: clientId!,
-              clientSecret: clientSecret!,
-            }
-          : {
-              grantType: 'password',
-              clientId: clientId!,
-              username: username!,
-              password: password!,
-            },
-        partyId,
-        userId,
-      },
+      VALIDATOR_API: validatorApiConfig as any,
     },
     logger: new FileLogger(),
   };
@@ -137,11 +143,10 @@ async function main() {
   console.log(`\n🔐 Onboarding External Party: ${partyName}`);
   console.log(`📡 Network: ${network}, Provider: ${provider}\n`);
 
-  // Step 1: Generate a new Stellar Ed25519 keypair
-  console.log('1️⃣  Generating Stellar Ed25519 keypair...');
-  const keypair = Keypair.random();
-  console.log(`   ✓ Public Key: ${keypair.publicKey()}`);
-  console.log(`   ✓ Secret Key: ${keypair.secret()}`);
+  // Step 1: Initialize Privy client
+  console.log('1️⃣  Initializing Privy client...');
+  const privyClient = createPrivyClientFromEnv();
+  console.log('   ✓ Privy client initialized');
 
   // Step 2: Initialize Canton clients
   console.log('\n2️⃣  Initializing Canton clients...');
@@ -153,7 +158,7 @@ async function main() {
   console.log('\n3️⃣  Getting synchronizer ID...');
   const miningRounds = await validatorClient.getOpenAndIssuingMiningRounds();
 
-  if (!miningRounds.open_mining_rounds || miningRounds.open_mining_rounds.length === 0) {
+  if (miningRounds.open_mining_rounds?.length === 0) {
     throw new Error('No open mining rounds found. Ensure the network is running.');
   }
 
@@ -166,13 +171,14 @@ async function main() {
 
   // Step 4: Onboard the external party
   console.log('\n4️⃣  Onboarding party to Canton...');
+  console.log('   - Creating Privy wallet');
   console.log('   - Generating topology transactions');
-  console.log('   - Signing multi-hash with local keypair');
+  console.log('   - Signing via Privy API');
   console.log('   - Submitting to participant node');
 
-  const party = await createExternalParty({
+  const party = await createExternalPartyPrivy({
+    privyClient,
     ledgerClient,
-    keypair,
     partyName,
     synchronizerId,
   });
@@ -192,8 +198,8 @@ async function main() {
     partyName,
     partyId: party.partyId,
     userId: party.userId,
-    stellarAddress: party.stellarAddress,
-    stellarSecret: party.stellarSecret,
+    walletId: party.wallet.id,
+    stellarAddress: party.wallet.address,
     publicKey: party.publicKey,
     publicKeyFingerprint: party.publicKeyFingerprint,
     synchronizerId,
@@ -205,7 +211,7 @@ async function main() {
   fs.writeFileSync(keyFile, JSON.stringify(keyData, null, 2));
 
   // Step 6: Display results
-  console.log('\n' + '═'.repeat(70));
+  console.log(`\n${  '═'.repeat(70)}`);
   console.log('✅ SUCCESS! External Party Onboarded');
   console.log('═'.repeat(70));
   console.log(`\n📋 Party Details:`);
@@ -213,13 +219,13 @@ async function main() {
   console.log(`   Party ID:          ${party.partyId}`);
   console.log(`   Network:           ${network}`);
   console.log(`   Provider:          ${provider}`);
-  console.log(`   Stellar Address:   ${party.stellarAddress}`);
-  console.log(`   Stellar Secret:    ${party.stellarSecret}`);
+  console.log(`   Privy Wallet ID:   ${party.wallet.id}`);
+  console.log(`   Stellar Address:   ${party.wallet.address}`);
   console.log(`   Public Key:        ${party.publicKey.substring(0, 40)}...`);
   console.log(`   Fingerprint:       ${party.publicKeyFingerprint}`);
   console.log(`\n💾 Keys saved to: ${keyFile}`);
   console.log('\n⚠️  IMPORTANT: Keep the keys file secure!');
-  console.log('   The Stellar secret is needed for all future operations.');
+  console.log('   The Privy wallet ID is needed for all future signing operations.');
   console.log('   Backup this file and never commit it to git.');
   console.log('');
 }

@@ -1,112 +1,63 @@
 # External Signing Examples
 
-These examples demonstrate how to use the External Signing SDK for Canton.
+These examples demonstrate how to use the External Signing SDK for Canton with Privy for secure key management.
 
 ## Prerequisites
 
 1. Install dependencies:
 ```bash
-npm install @stellar/stellar-base
+npm install @privy-io/node
 ```
 
 2. Set up environment variables:
 ```bash
-export LEDGER_JSON_API_URL="https://your-canton-node/api/ledger-json-api"
-export LEDGER_JSON_API_TOKEN="your-auth-token"
-export VALIDATOR_API_URL="https://your-validator/api/validator"
-export VALIDATOR_API_TOKEN="your-validator-token"
+# Privy credentials
+export PRIVY_APP_ID="your-privy-app-id"
+export PRIVY_APP_SECRET="your-privy-app-secret"
+
+# Canton API endpoints (network and provider specific)
+# See .env.example for full configuration
 ```
 
-3. Canton administrator access (for one-time step 0 - granting CanExecuteAsAnyParty)
-4. Canton >= 3.1 (for CanExecuteAsAnyParty support)
+3. Privy account with API access
 
 ## Files
 
-- `00-setup-validator-external-signing.ts` - **ONE-TIME** setup: Grant CanExecuteAsAnyParty (requires admin)
 - `01-allocate-external-party.ts` - Allocate (onboard) an external party
-- `02-grant-external-party-read-rights.ts` - *(DEPRECATED)* Per-party rights (use 00 instead)
 - `03-create-transfer-offer.ts` - Create a transfer offer to an external party
 - `04-accept-transfer-offer.ts` - Accept a transfer offer using external signing
 
 ## Complete Workflow
 
-### One-Time Network Setup (Admin Required)
-
-**Run this ONCE per validator/network with admin credentials:**
-
-```bash
-# Step 0: Setup validator for external signing (requires admin)
-# This grants CanExecuteAsAnyParty to the validator operator
-# Canton >= 3.1 required
-npx tsx examples/external-signing/00-setup-validator-external-signing.ts
-```
-
-After this one-time setup, all external parties will work without additional configuration!
-
-### Regular Workflow (Per External Party)
-
 ```bash
 # Step 1: Allocate external party (no special permissions needed)
 npx tsx examples/external-signing/01-allocate-external-party.ts alice
 
-# Step 2: Skip! No longer needed with CanExecuteAsAnyParty
-
-# Step 3: Create transfer offer (from internal party with funds)
+# Step 2: Create transfer offer (from internal party with funds)
 npx tsx examples/external-signing/03-create-transfer-offer.ts ../keys/alice--<fingerprint>.json 10.0
 
-# Step 4: Accept transfer offer (as external party using external signing)
+# Step 3: Accept transfer offer (as external party using external signing)
 npx tsx examples/external-signing/04-accept-transfer-offer.ts ../keys/alice--<fingerprint>.json
 ```
 
 ## Step-by-Step Guide
 
-### Step 0: One-Time Setup (Admin Required)
-
-**⚠️ Run this ONCE per validator/network before using external signing:**
-
-```bash
-npx tsx examples/external-signing/00-setup-validator-external-signing.ts
-```
-
-**What it does:**
-- Grants `CanExecuteAsAnyParty` permission to the validator operator user
-- Allows the validator to execute externally signed transactions for any party
-- Introduced in Canton 3.1
-
-**Expected output (if you don't have admin rights):**
-```
-⚠️  ADMIN CREDENTIALS REQUIRED
-This setup requires ParticipantAdmin or IdentityProviderAdmin permissions.
-```
-
-**Solution:** Contact your Canton administrator to run this script with admin credentials.
-
-**After successful setup:**
-```
-✅ SUCCESS! Validator Configured for External Signing
-• User "5" can now execute transactions for ANY party
-• External parties can prepare and execute transactions
-• No need to grant rights for each external party individually
-```
-
-## Regular Workflow (After Setup)
-
 ### Step 1: Allocate External Party
 
-Creates a new external party with a locally-generated Ed25519 keypair:
+Creates a new external party with a Privy-managed Ed25519 wallet:
 
 ```bash
 npx tsx examples/external-signing/01-allocate-external-party.ts alice
 ```
 
 **This will:**
-- Generate a new Stellar Ed25519 keypair
+- Create a new Stellar Ed25519 wallet via Privy
 - Create the party topology in Canton
-- Sign the topology transactions with the local key
+- Sign the topology transactions via Privy API
 - Allocate the party on Canton
-- Save the keys to `../keys/alice--<fingerprint>.json`
+- Save the wallet info to `../keys/alice--<fingerprint>.json`
 
-**⚠️ Important**: Keep the generated keys file secure! The secret key is needed for all future transactions.
+**⚠️ Important**: Keep the generated keys file secure! The Privy wallet ID is needed for all future signing operations.
 
 **Output:**
 ```
@@ -115,39 +66,7 @@ Party ID: alice::1220...
 Keys saved to: ../keys/alice--1220...json
 ```
 
-### Step 2: Grant Read Rights (DEPRECATED - Use Step 0 Instead)
-
-Attempts to grant `CanReadAs` rights to the validator operator user for the external party:
-
-```bash
-npx tsx examples/external-signing/02-grant-external-party-read-rights.ts ../keys/alice--<fingerprint>.json
-```
-
-**This will:**
-- Try to grant `CanReadAs` rights to the validator operator user
-- If successful (✅): Proceed to step 3
-- If permission denied (❌): Display instructions for manual admin intervention
-
-**Expected Result (Most Common):**
-
-```
-⚠️  ADMIN INTERVENTION REQUIRED
-
-The validator operator user does not have permission to grant rights.
-This is expected - granting rights requires admin permissions.
-
-📋 Next Steps:
-1. Contact your Canton administrator
-2. Ask them to grant CanReadAs rights using: [code snippet provided]
-```
-
-**Why This Step is Required:**
-
-Canton requires that the user preparing transactions must have `CanReadAs` rights for all parties involved, even with external signing. This is because Canton needs to validate the transaction is well-formed before generating the hash for signing.
-
-Without these rights, step 4 will fail with: `HTTP 403: "Security-sensitive error has been received"`
-
-### Step 3: Create Transfer Offer
+### Step 2: Create Transfer Offer
 
 Creates a transfer offer to the external party (using an internal party with funds):
 
@@ -168,7 +87,7 @@ Amount: 10.0 CC
 Offer info saved to: ../keys/alice--...-offer.json
 ```
 
-### Step 4: Accept Transfer with External Signing
+### Step 3: Accept Transfer with External Signing
 
 Demonstrates the complete external signing workflow for accepting the transfer offer:
 
@@ -176,15 +95,11 @@ Demonstrates the complete external signing workflow for accepting the transfer o
 npx tsx examples/external-signing/04-accept-transfer-offer.ts ../keys/alice--<fingerprint>.json
 ```
 
-**Prerequisites:**
-- Step 0 (one-time setup) must be completed by an admin
-- If Step 0 wasn't run, you'll get HTTP 403 errors
-
 **This will:**
-- Load the external party's keypair from file
+- Load the external party's Privy wallet info from file
 - Load the transfer offer info (from step 3)
 - Prepare a transaction to accept the transfer offer
-- Sign the transaction hash with the external Stellar keypair
+- Sign the transaction hash via Privy API
 - Execute the signed transaction on Canton
 - The external party receives the funds
 - Clean up the offer file
@@ -196,40 +111,52 @@ Transaction executed successfully
 Offer file cleaned up
 ```
 
-**If this fails with HTTP 403:** The rights were not granted in step 2. See step 2 output for instructions.
+**Note:** If you encounter HTTP 403 errors, ensure your validator operator has the necessary permissions to execute transactions for external parties.
 
 ## How It Works
 
-### External Party Allocation
+### External Party Allocation with Privy
 
 ```typescript
-import { Keypair } from '@stellar/stellar-base';
-import { createExternalParty } from '@fairmint/canton-node-sdk';
+import {
+  createPrivyClient,
+  createExternalPartyPrivy
+} from '@fairmint/canton-node-sdk';
 
-// Generate keypair
-const keypair = Keypair.random();
+// Initialize Privy client
+const privy = createPrivyClient({
+  appId: process.env.PRIVY_APP_ID!,
+  appSecret: process.env.PRIVY_APP_SECRET!
+});
 
-// Allocate party on Canton
-const party = await createExternalParty({
+// Allocate party on Canton (Privy creates wallet automatically)
+const party = await createExternalPartyPrivy({
+  privyClient: privy,
   ledgerClient,
-  keypair,
   partyName: 'alice',
   synchronizerId: 'global-domain::1220...',
 });
 
-// Save keys securely
+// Save wallet info securely
 console.log('Party ID:', party.partyId);
-console.log('Secret Key:', keypair.secret()); // Keep secure!
+console.log('Wallet ID:', party.wallet.id); // Keep secure!
 ```
 
-### External Transaction Signing
+### External Transaction Signing with Privy
 
 ```typescript
 import {
   prepareExternalTransaction,
   executeExternalTransaction,
-  signWithStellarKeypair
+  signWithPrivyWallet,
+  createPrivyClient
 } from '@fairmint/canton-node-sdk';
+
+// Initialize Privy client
+const privy = createPrivyClient({
+  appId: process.env.PRIVY_APP_ID!,
+  appSecret: process.env.PRIVY_APP_SECRET!
+});
 
 // 1. Prepare transaction (generates hash to sign)
 const prepared = await prepareExternalTransaction({
@@ -240,9 +167,10 @@ const prepared = await prepareExternalTransaction({
   synchronizerId: 'global-domain::1220...',
 });
 
-// 2. Sign the hash with external keypair
-const signature = signWithStellarKeypair(
-  keypair,
+// 2. Sign the hash via Privy
+const signature = await signWithPrivyWallet(
+  privy,
+  walletId,
   prepared.preparedTransactionHash
 );
 
@@ -262,20 +190,27 @@ await executeExternalTransaction({
 
 **⚠️ IMPORTANT: Never commit key files to git!**
 
-The key files contain the Stellar secret key which controls the external party. Keep these files secure:
+The key files contain the Privy wallet ID which controls the external party. Keep these files secure:
 
 - Add `keys/` to your `.gitignore`
-- Use encrypted storage for production keys
-- Backup keys securely
-- Never share secret keys
+- Use encrypted storage for production wallet IDs
+- Backup wallet info securely
+- Never share wallet IDs publicly
+- Keep your Privy App Secret secure (never commit to git)
+
+**Privy Security Benefits:**
+- Private keys never leave Privy's secure infrastructure
+- No need to manage key storage locally
+- Built-in key rotation and recovery options
+- Enterprise-grade security for production use
 
 ## Troubleshooting
 
-### "Security-sensitive error" or HTTP 403 in Step 4
+### "Security-sensitive error" or HTTP 403 in Step 3
 
-**Cause:** Rights were not granted in step 2.
+**Cause:** The validator operator user doesn't have sufficient permissions to execute transactions for external parties.
 
-**Solution:** Have a Canton administrator manually grant `CanReadAs` rights using the code snippet from step 2's output.
+**Solution:** Contact your Canton administrator to grant the necessary permissions (`CanExecuteAsAnyParty` or `CanReadAs` rights for the external party).
 
 ### "Key file not found"
 
@@ -291,9 +226,9 @@ The key files contain the Stellar secret key which controls the external party. 
 
 ### "No transfer offer found"
 
-**Cause:** Step 3 hasn't been run yet or the offer file was deleted.
+**Cause:** Step 2 hasn't been run yet or the offer file was deleted.
 
-**Solution:** Run step 3 to create a transfer offer before attempting step 4.
+**Solution:** Run step 2 to create a transfer offer before attempting step 3.
 
 ## Further Reading
 

@@ -28,8 +28,6 @@ export const CreateUserParamsSchema = z.object({
         annotations: z.record(z.string(), z.string()),
       })
       .optional(),
-    /** Identity provider ID (optional). */
-    identityProviderId: z.string().optional(),
   }),
   /** Rights to assign to the user (optional). */
   rights: z
@@ -53,8 +51,6 @@ export const CreateUserParamsSchema = z.object({
 export const GetUserParamsSchema = z.object({
   /** User ID to get details for. */
   userId: NonEmptyStringSchema,
-  /** Identity provider ID (optional). */
-  identityProviderId: z.string().optional(),
 });
 
 /** Schema for delete user parameters. */
@@ -84,8 +80,6 @@ export const UpdateUserParamsSchema = z.object({
         annotations: z.record(z.string(), z.string()),
       })
       .optional(),
-    /** Identity provider ID (optional). */
-    identityProviderId: z.string().optional(),
   }),
   /** Update mask for partial updates. */
   updateMask: z.object({
@@ -122,8 +116,6 @@ export const GrantUserRightsParamsSchema = z.object({
       })
     )
     .optional(),
-  /** Identity provider ID (optional). */
-  identityProviderId: z.string().optional(),
 });
 
 /** Schema for revoke user rights parameters. */
@@ -146,8 +138,6 @@ export const RevokeUserRightsParamsSchema = z.object({
       })
     )
     .optional(),
-  /** Identity provider ID (optional). */
-  identityProviderId: z.string().optional(),
 });
 
 /** Schema for update user identity provider parameters. */
@@ -161,10 +151,7 @@ export const UpdateUserIdentityProviderParamsSchema = z.object({
 });
 
 /** Schema for get authenticated user parameters. */
-export const GetAuthenticatedUserParamsSchema = z.object({
-  /** Identity provider ID (optional). */
-  identityProviderId: z.string().optional(),
-});
+export const GetAuthenticatedUserParamsSchema = z.object({});
 
 // Export types
 export type ListUsersParams = z.infer<typeof ListUsersParamsSchema>;

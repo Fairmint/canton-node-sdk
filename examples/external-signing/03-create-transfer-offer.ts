@@ -6,26 +6,88 @@
  * by the external party using example 04.
  *
  * Usage:
- *   npx tsx examples/external-signing/03-create-transfer-offer.ts <party-id-file> [amount]
+ *   npx tsx examples/external-signing/03-create-transfer-offer.ts <party-id-file> [amount] [network] [provider]
  *
- * Example:
+ * Arguments:
+ *   party-id-file  Path to the key file (required)
+ *   amount         Amount to transfer (optional, default: 10.0)
+ *   network        Network to use: 'devnet' or 'mainnet' (optional, defaults to value in key file)
+ *   provider       Provider to use: '5n' or 'intellect' (optional, defaults to value in key file)
+ *
+ * Examples:
  *   npx tsx examples/external-signing/03-create-transfer-offer.ts ../keys/alice--12abc.json 10.0
+ *   npx tsx examples/external-signing/03-create-transfer-offer.ts ../keys/alice--12abc.json 10.0 devnet 5n
  */
 
-import { ValidatorApiClient } from '../../src';
+import { ValidatorApiClient, EnvLoader, FileLogger, type ClientConfig } from '../../src';
 import * as fs from 'fs';
 import * as path from 'path';
 
 interface KeyData {
   partyName: string;
   partyId: string;
+  walletId: string;
   stellarAddress: string;
-  stellarSecret: string;
   publicKey: string;
   publicKeyFingerprint: string;
   synchronizerId: string;
   network: string;
+  provider: string;
   createdAt: string;
+}
+
+function createValidatorClient(network: string, provider: string): ValidatorApiClient {
+  const envLoader = EnvLoader.getInstance();
+  const apiUrl = envLoader.getApiUri('VALIDATOR_API', network as any, provider as any);
+  const clientId = envLoader.getApiClientId('VALIDATOR_API', network as any, provider as any);
+  const clientSecret = envLoader.getApiClientSecret('VALIDATOR_API', network as any, provider as any);
+  const authUrl = envLoader.getAuthUrl(network as any, provider as any);
+  const partyId = envLoader.getPartyId(network as any, provider as any);
+  const userId = envLoader.getUserId(network as any, provider as any);
+  const username = envLoader.getApiUsername('VALIDATOR_API', network as any, provider as any);
+  const password = envLoader.getApiPassword('VALIDATOR_API', network as any, provider as any);
+
+  if (!apiUrl || !authUrl) {
+    throw new Error('Missing required environment configuration for ValidatorApiClient');
+  }
+
+  // Validate authentication method
+  const hasClientCredentials = clientId && clientSecret;
+  const hasPasswordGrant = username && password && clientId;
+
+  if (!hasClientCredentials && !hasPasswordGrant) {
+    throw new Error('Must provide either clientId+clientSecret or clientId+username+password');
+  }
+
+  const validatorApiConfig = {
+    apiUrl,
+    auth: hasClientCredentials
+      ? {
+          grantType: 'client_credentials',
+          clientId,
+          clientSecret,
+        }
+      : {
+          grantType: 'password',
+          clientId,
+          username: username!,
+          password: password!,
+        },
+    partyId,
+    ...(userId && { userId }),
+  };
+
+  const clientConfig: ClientConfig = {
+    network: network as any,
+    provider: provider as any,
+    authUrl,
+    apis: {
+      VALIDATOR_API: validatorApiConfig as any,
+    },
+    logger: new FileLogger(),
+  };
+
+  return new ValidatorApiClient(clientConfig);
 }
 
 async function main() {
@@ -35,8 +97,9 @@ async function main() {
 
   if (!keyFilePath) {
     console.error('\n❌ Error: Please provide a key file path');
-    console.error('Usage: npx tsx 03-create-transfer-offer.ts <key-file> [amount]');
+    console.error('Usage: npx tsx 03-create-transfer-offer.ts <key-file> [amount] [network] [provider]');
     console.error('Example: npx tsx 03-create-transfer-offer.ts ../keys/alice--12abc.json 10.0');
+    console.error('Example: npx tsx 03-create-transfer-offer.ts ../keys/alice--12abc.json 10.0 devnet 5n');
     process.exit(1);
   }
 
@@ -55,12 +118,29 @@ async function main() {
 
   const keyData: KeyData = JSON.parse(fs.readFileSync(absolutePath, 'utf-8'));
 
+  // Get network and provider from command line or key file
+  const network = process.argv[4] || keyData.network;
+  const provider = process.argv[5] || keyData.provider;
+
+  // Validate network and provider
+  if (!['devnet', 'mainnet'].includes(network)) {
+    console.error(`❌ Invalid network: ${network}. Must be 'devnet' or 'mainnet'`);
+    process.exit(1);
+  }
+
+  if (!['5n', 'intellect'].includes(provider)) {
+    console.error(`❌ Invalid provider: ${provider}. Must be '5n' or 'intellect'`);
+    process.exit(1);
+  }
+
   console.log(`   ✓ Party Name: ${keyData.partyName}`);
   console.log(`   ✓ Party ID: ${keyData.partyId}`);
+  console.log(`   ✓ Network: ${network}`);
+  console.log(`   ✓ Provider: ${provider}`);
 
   // Step 2: Initialize Validator client
   console.log('\n2️⃣  Initializing Canton client...');
-  const validatorClient = new ValidatorApiClient();
+  const validatorClient = createValidatorClient(network, provider);
   console.log('   ✓ Client initialized');
 
   try {
@@ -97,7 +177,7 @@ async function main() {
     fs.writeFileSync(offerFile, JSON.stringify(offerData, null, 2));
 
     // Step 5: Display results
-    console.log('\n' + '═'.repeat(70));
+    console.log(`\n${  '═'.repeat(70)}`);
     console.log('✅ SUCCESS! Transfer Offer Created');
     console.log('═'.repeat(70));
     console.log(`\n📋 Offer Details:`);

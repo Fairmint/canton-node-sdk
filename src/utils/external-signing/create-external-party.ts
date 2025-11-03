@@ -97,7 +97,7 @@ export async function createExternalParty(
     throw new Error('No party ID returned from topology generation');
   }
 
-  if (!topology_txs || topology_txs.length === 0) {
+  if (topology_txs?.length === 0) {
     throw new Error('No topology transactions returned from topology generation');
   }
 
@@ -126,7 +126,7 @@ export async function createExternalParty(
     partyId: submitResult.party_id,
     userId: '', // Will be resolved automatically when preparing transactions
     publicKey: publicKeyHex,
-    publicKeyFingerprint: party_id.split('::')[1] || '', // Extract fingerprint from party ID
+    publicKeyFingerprint: party_id.split('::')[1] ?? '', // Extract fingerprint from party ID
     stellarAddress: keypair.publicKey(),
     stellarSecret: keypair.secret(),
   };

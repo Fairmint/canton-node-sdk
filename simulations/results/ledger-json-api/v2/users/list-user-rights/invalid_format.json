@@ -1,27 +1,27 @@
 {
-  "error": "HTTP 404: TRANSACTION_NOT_FOUND",
+  "error": "HTTP 404: USER_NOT_FOUND",
   "details": {
     "name": "ApiError",
-    "message": "HTTP 404: TRANSACTION_NOT_FOUND",
+    "message": "HTTP 404: USER_NOT_FOUND",
     "stack": "PLACEHOLDER_STACK_TRACE",
     "code": "API_ERROR",
     "status": 404,
     "statusText": "Not Found",
     "response": {
-      "code": "TRANSACTION_NOT_FOUND",
-      "cause": "Transaction not found, or not visible.",
+      "code": "USER_NOT_FOUND",
+      "cause": "getting user failed for unknown user \"rights\"",
       "correlationId": null,
       "traceId": "PLACEHOLDER_TRACE_ID",
       "context": {
-        "participant": "participant",
+        "participant": "'participant'",
         "definite_answer": "false",
         "tid": "PLACEHOLDER_TID",
         "category": "11"
       },
       "resources": [
         [
-          "ErrorResource(OFFSET)",
-          "9999999"
+          "ErrorResource(USER)",
+          "rights"
         ]
       ],
       "errorCategory": 11,

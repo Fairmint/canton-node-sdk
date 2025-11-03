@@ -16,6 +16,10 @@ export const RevokeUserRights = createApiOperation<RevokeUserRightsParams, Revok
   buildUrl: (params, apiUrl) => `${apiUrl}/v2/users/${params.userId}/rights`,
   buildRequestData: (params) => {
     const { userId: _userId, ...requestBody } = params;
-    return requestBody;
+    // Always inject empty string for identityProviderId
+    return {
+      ...requestBody,
+      identityProviderId: '',
+    };
   },
 });

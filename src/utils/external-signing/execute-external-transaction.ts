@@ -27,7 +27,11 @@ export async function executeExternalTransaction(
     preparedTransaction: options.preparedTransaction,
     hashingSchemeVersion: options.hashingSchemeVersion ?? 'HASHING_SCHEME_VERSION_V2',
     submissionId: options.submissionId,
-    deduplicationPeriod: options.deduplicationPeriod ?? { Empty: {} },
+    deduplicationPeriod: options.deduplicationPeriod ?? {
+      DeduplicationDuration: {
+        value: { duration: '30s' },
+      },
+    },
     partySignatures: {
       signatures: options.partySignatures,
     },

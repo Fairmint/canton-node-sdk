@@ -7,20 +7,19 @@ import { GetAuthenticatedUserParamsSchema, type GetAuthenticatedUserParams } fro
  *
  * @example
  *   ```typescript
- *   const user = await client.getAuthenticatedUser({ identityProviderId: 'default' });
+ *   const user = await client.getAuthenticatedUser({});
  *
  *   ```;
  */
 export const GetAuthenticatedUser = createApiOperation<GetAuthenticatedUserParams, GetUserResponse>({
   paramsSchema: GetAuthenticatedUserParamsSchema,
   method: 'GET',
-  buildUrl: (params: GetAuthenticatedUserParams, apiUrl: string) => {
+  buildUrl: (_params: GetAuthenticatedUserParams, apiUrl: string) => {
     const baseUrl = `${apiUrl}/v2/authenticated-user`;
     const queryParams = new URLSearchParams();
 
-    if (params.identityProviderId) {
-      queryParams.append('identity-provider-id', params.identityProviderId);
-    }
+    // Always pass empty string for identity-provider-id
+    queryParams.append('identity-provider-id', '');
 
     const queryString = queryParams.toString();
     return queryString ? `${baseUrl}?${queryString}` : baseUrl;

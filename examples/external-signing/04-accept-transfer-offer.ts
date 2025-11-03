@@ -2,27 +2,41 @@
  * Example 4: Accept Transfer Offer with External Signing
  *
  * This example demonstrates the external signing workflow for accepting a transfer offer:
- * 1. Load the external party's keypair from file
+ * 1. Load the external party's Privy wallet info from file
  * 2. Load the transfer offer info (created by example 03)
  * 3. Prepare a transaction to accept the offer
- * 4. Sign the transaction with the external key
+ * 4. Sign the transaction via Privy
  * 5. Execute the signed transaction
  *
  * Usage:
- *   npx tsx examples/external-signing/04-accept-transfer-offer.ts <party-id-file>
+ *   npx tsx examples/external-signing/04-accept-transfer-offer.ts <party-id-file> [network] [provider]
  *
- * Example:
+ * Arguments:
+ *   party-id-file  Path to the key file (required)
+ *   network        Network to use: 'devnet' or 'mainnet' (optional, defaults to value in key file)
+ *   provider       Provider to use: '5n' or 'intellect' (optional, defaults to value in key file)
+ *
+ * Examples:
  *   npx tsx examples/external-signing/04-accept-transfer-offer.ts ../keys/alice--12abc.json
+ *   npx tsx examples/external-signing/04-accept-transfer-offer.ts ../keys/alice--12abc.json devnet 5n
  *
  * Note: Run examples 01, 02, and 03 first!
+ *
+ * Environment variables required:
+ *   PRIVY_APP_ID      - Your Privy App ID
+ *   PRIVY_APP_SECRET  - Your Privy App Secret
  */
 
-import { Keypair } from '@stellar/stellar-base';
 import {
   LedgerJsonApiClient,
+  ValidatorApiClient,
   prepareExternalTransaction,
   executeExternalTransaction,
-  signWithStellarKeypair,
+  signWithPrivyWallet,
+  createPrivyClientFromEnv,
+  EnvLoader,
+  FileLogger,
+  type ClientConfig,
 } from '../../src';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -31,12 +45,13 @@ interface KeyData {
   partyName: string;
   partyId: string;
   userId: string;
+  walletId: string;
   stellarAddress: string;
-  stellarSecret: string;
   publicKey: string;
   publicKeyFingerprint: string;
   synchronizerId: string;
   network: string;
+  provider: string;
   createdAt: string;
 }
 
@@ -47,18 +62,94 @@ interface OfferData {
   createdAt: string;
 }
 
+function createLedgerClient(network: string, provider: string): LedgerJsonApiClient {
+  const envLoader = EnvLoader.getInstance();
+  return new LedgerJsonApiClient({
+    network: network as any,
+    provider: provider as any,
+    authUrl: envLoader.getAuthUrl(network as any, provider as any),
+    apis: {
+      LEDGER_JSON_API: {
+        apiUrl: envLoader.getApiUri('LEDGER_JSON_API', network as any, provider as any) ?? '',
+        auth: {
+          clientId: envLoader.getApiClientId('LEDGER_JSON_API', network as any, provider as any) ?? '',
+          clientSecret: envLoader.getApiClientSecret('LEDGER_JSON_API', network as any, provider as any) ?? '',
+          grantType: 'client_credentials',
+        },
+        partyId: envLoader.getPartyId(network as any, provider as any),
+      },
+    },
+    logger: new FileLogger(),
+  });
+}
+
+function createValidatorClient(network: string, provider: string): ValidatorApiClient {
+  const envLoader = EnvLoader.getInstance();
+  const apiUrl = envLoader.getApiUri('VALIDATOR_API', network as any, provider as any);
+  const clientId = envLoader.getApiClientId('VALIDATOR_API', network as any, provider as any);
+  const clientSecret = envLoader.getApiClientSecret('VALIDATOR_API', network as any, provider as any);
+  const authUrl = envLoader.getAuthUrl(network as any, provider as any);
+  const partyId = envLoader.getPartyId(network as any, provider as any);
+  const userId = envLoader.getUserId(network as any, provider as any);
+  const username = envLoader.getApiUsername('VALIDATOR_API', network as any, provider as any);
+  const password = envLoader.getApiPassword('VALIDATOR_API', network as any, provider as any);
+
+  if (!apiUrl || !authUrl) {
+    throw new Error('Missing required environment configuration for ValidatorApiClient');
+  }
+
+  // Validate authentication method
+  const hasClientCredentials = clientId && clientSecret;
+  const hasPasswordGrant = username && password && clientId;
+
+  if (!hasClientCredentials && !hasPasswordGrant) {
+    throw new Error('Must provide either clientId+clientSecret or clientId+username+password');
+  }
+
+  const validatorApiConfig = {
+    apiUrl,
+    auth: hasClientCredentials
+      ? {
+          grantType: 'client_credentials',
+          clientId,
+          clientSecret,
+        }
+      : {
+          grantType: 'password',
+          clientId,
+          username: username!,
+          password: password!,
+        },
+    partyId,
+    ...(userId && { userId }),
+  };
+
+  const clientConfig: ClientConfig = {
+    network: network as any,
+    provider: provider as any,
+    authUrl,
+    apis: {
+      VALIDATOR_API: validatorApiConfig as any,
+    },
+    logger: new FileLogger(),
+  };
+
+  return new ValidatorApiClient(clientConfig);
+}
+
 async function main() {
-  // Get key file from command line
+  // Get command line arguments
   const keyFilePath = process.argv[2];
 
   if (!keyFilePath) {
     console.error('\n❌ Error: Please provide a key file path');
-    console.error('Usage: npx tsx 04-accept-transfer-offer.ts <key-file>');
+    console.error('Usage: npx tsx 04-accept-transfer-offer.ts <key-file> [network] [provider]');
     console.error('Example: npx tsx 04-accept-transfer-offer.ts ../keys/alice--12abc.json');
+    console.error('Example: npx tsx 04-accept-transfer-offer.ts ../keys/alice--12abc.json devnet 5n');
     process.exit(1);
   }
 
-  // Step 1: Load keypair from file
+  // Step 1: Load wallet info from file
   console.log('\n✍️  Accepting Transfer Offer with External Signing\n');
   console.log(`1️⃣  Reading key file: ${keyFilePath}`);
 
@@ -72,11 +163,31 @@ async function main() {
   }
 
   const keyData: KeyData = JSON.parse(fs.readFileSync(absolutePath, 'utf-8'));
-  const keypair = Keypair.fromSecret(keyData.stellarSecret);
+
+  // Get network and provider from command line or key file
+  const network = process.argv[3] || keyData.network;
+  const provider = process.argv[4] || keyData.provider;
+
+  // Validate network and provider
+  if (!['devnet', 'mainnet'].includes(network)) {
+    console.error(`❌ Invalid network: ${network}. Must be 'devnet' or 'mainnet'`);
+    process.exit(1);
+  }
+
+  if (!['5n', 'intellect'].includes(provider)) {
+    console.error(`❌ Invalid provider: ${provider}. Must be '5n' or 'intellect'`);
+    process.exit(1);
+  }
 
   console.log(`   ✓ Party Name: ${keyData.partyName}`);
   console.log(`   ✓ Party ID: ${keyData.partyId}`);
-  console.log(`   ✓ Keypair loaded`);
+  console.log(`   ✓ Wallet ID: ${keyData.walletId}`);
+  console.log(`   ✓ Network: ${network}`);
+  console.log(`   ✓ Provider: ${provider}`);
+
+  // Initialize Privy client
+  const privyClient = createPrivyClientFromEnv();
+  console.log(`   ✓ Privy client initialized`);
 
   // Step 2: Load offer info from file
   console.log('\n2️⃣  Loading transfer offer info...');
@@ -94,15 +205,33 @@ async function main() {
   console.log(`   ✓ Contract ID: ${offerData.contractId.substring(0, 40)}...`);
   console.log(`   ✓ Amount: ${offerData.amount} CC`);
 
-  // Step 3: Initialize Canton client
-  console.log('\n3️⃣  Initializing Canton client...');
-  const ledgerClient = new LedgerJsonApiClient();
-  console.log('   ✓ Client initialized');
+  // Step 3: Initialize Canton clients
+  console.log('\n3️⃣  Initializing Canton clients...');
+  const ledgerClient = createLedgerClient(network, provider);
+  const validatorClient = createValidatorClient(network, provider);
+  console.log('   ✓ Clients initialized');
+
+  // Step 3b: Get validator operator user ID
+  console.log('\n3️⃣b Getting validator operator user ID...');
+  const validatorInfo = await validatorClient.getValidatorUserInfo();
+  const operatorUserId = validatorInfo.user_name;
+  console.log(`   ✓ Operator User ID: ${operatorUserId}`);
+
+  // Step 3c: Get current synchronizer ID from mining rounds
+  console.log('\n3️⃣c Getting synchronizer ID...');
+  const miningRounds = await validatorClient.getOpenAndIssuingMiningRounds();
+  if (miningRounds.open_mining_rounds?.length === 0) {
+    throw new Error('No open mining rounds found. Ensure the network is running.');
+  }
+  const synchronizerId = miningRounds.open_mining_rounds[0]?.domain_id;
+  if (!synchronizerId) {
+    throw new Error('No synchronizer ID found in mining rounds.');
+  }
+  console.log(`   ✓ Using synchronizer: ${synchronizerId}`);
 
   try {
     // Step 4: Fetch the transfer offer contract to disclose it
     console.log('\n4️⃣  Fetching transfer offer contract...');
-    console.log(`   - Contract ID: ${offerData.contractId.substring(0, 40)}...`);
 
     const contractsResponse = await ledgerClient.getActiveContracts({
       templateIds: ['#splice-wallet:Splice.Wallet.TransferOffer:TransferOffer'],
@@ -126,15 +255,12 @@ async function main() {
 
     // Step 5: Prepare transaction to accept the offer
     console.log('\n5️⃣  Preparing transaction to accept offer...');
-    console.log('   - Disclosing transfer offer contract');
-    console.log('   - Interpreting commands');
-    console.log('   - Computing transaction hash');
 
     const commandId = `external-accept-${Date.now()}`;
 
     const prepared = await prepareExternalTransaction({
       ledgerClient,
-      // userId is automatically fetched from validator API if not provided
+      userId: operatorUserId,
       commands: [
         {
           ExerciseCommand: {
@@ -146,16 +272,15 @@ async function main() {
         },
       ],
       actAs: [keyData.partyId],
-      // Note: Don't set readAs - the validator operator user will read
       commandId,
-      synchronizerId: keyData.synchronizerId,
       // Disclose the transfer offer contract so Canton can validate the transaction
+      synchronizerId,
       disclosedContracts: [
         {
           templateId: activeContract.createdEvent.templateId,
           contractId: activeContract.createdEvent.contractId,
           createdEventBlob: activeContract.createdEvent.createdEventBlob,
-          synchronizerId: activeContract.synchronizerId,
+          synchronizerId,
         },
       ],
     });
@@ -164,9 +289,18 @@ async function main() {
     console.log(`   ✓ Hash: ${prepared.preparedTransactionHash.substring(0, 40)}...`);
     console.log(`   ✓ Hashing version: ${prepared.hashingSchemeVersion}`);
 
-    // Step 6: Sign the transaction hash with external key
-    console.log('\n6️⃣  Signing transaction hash with external key...');
-    const signature = signWithStellarKeypair(keypair, prepared.preparedTransactionHash);
+    // Validate that preparedTransaction was returned
+    if (!prepared.preparedTransaction) {
+      throw new Error('Prepared transaction is missing from response');
+    }
+
+    // Step 6: Sign the transaction hash via Privy
+    console.log('\n6️⃣  Signing transaction hash via Privy...');
+    const signature = await signWithPrivyWallet(
+      privyClient,
+      keyData.walletId,
+      prepared.preparedTransactionHash
+    );
     console.log(`   ✓ Signature: ${signature.substring(0, 40)}...`);
 
     // Step 7: Execute the signed transaction
@@ -175,21 +309,34 @@ async function main() {
 
     await executeExternalTransaction({
       ledgerClient,
+      userId: operatorUserId,
       preparedTransaction: prepared.preparedTransaction,
-      partyId: keyData.partyId,
-      signature,
-      publicKeyFingerprint: keyData.publicKeyFingerprint,
       submissionId,
-      hashingSchemeVersion: prepared.hashingSchemeVersion,
+      partySignatures: [
+        {
+          party: keyData.partyId,
+          signatures: [
+            {
+              format: 'SIGNATURE_FORMAT_RAW',
+              signature,
+              signedBy: keyData.publicKeyFingerprint,
+              signingAlgorithmSpec: 'SIGNING_ALGORITHM_SPEC_ED25519',
+            },
+          ],
+        },
+      ],
+      ...(prepared.hashingSchemeVersion && { hashingSchemeVersion: prepared.hashingSchemeVersion }),
       deduplicationPeriod: {
-        DeduplicationDuration: { duration: '30s' },
+        DeduplicationDuration: {
+          value: { duration: '30s' },
+        },
       },
     });
 
     console.log('   ✓ Transaction submitted successfully!');
 
     // Step 8: Display results
-    console.log('\n' + '═'.repeat(70));
+    console.log(`\n${  '═'.repeat(70)}`);
     console.log('✅ SUCCESS! Transfer Accepted with External Signature');
     console.log('═'.repeat(70));
     console.log(`\n📋 Transaction Details:`);
@@ -200,10 +347,10 @@ async function main() {
     console.log(`   Party ID:          ${keyData.partyId}`);
     console.log(`   Signed By:         ${keyData.publicKeyFingerprint}`);
     console.log('\n💡 What Happened:');
-    console.log('   1. Loaded external party keypair and transfer offer info');
+    console.log('   1. Loaded external party wallet info and transfer offer');
     console.log('   2. Fetched the transfer offer contract from Canton');
     console.log('   3. Disclosed the contract and prepared the accept transaction');
-    console.log('   4. Signed transaction hash with external key (client-side)');
+    console.log('   4. Signed transaction hash via Privy API');
     console.log('   5. Submitted signed transaction to Canton');
     console.log('   6. Canton validators verified the signature and executed the transfer');
     console.log(`\n💰 The external party now has ${offerData.amount} CC in their balance!`);

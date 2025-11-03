@@ -6,7 +6,6 @@ type Endpoint = '/v2/users/{user-id}/rights';
 
 export const ListUserRightsParamsSchema = z.object({
   userId: z.string(),
-  identityProviderId: z.string().optional(),
 });
 
 export type ListUserRightsParams = z.infer<typeof ListUserRightsParamsSchema>;
@@ -18,9 +17,8 @@ export const ListUserRights = createApiOperation<ListUserRightsParams, ListUserR
   buildUrl: (params, apiUrl) => {
     const baseUrl = `${apiUrl}/v2/users/${params.userId}/rights`;
     const queryParams = new URLSearchParams();
-    if (params.identityProviderId) {
-      queryParams.append('identity-provider-id', params.identityProviderId);
-    }
+    // Always pass empty string for identity-provider-id
+    queryParams.append('identity-provider-id', '');
     const queryString = queryParams.toString();
     return queryString ? `${baseUrl}?${queryString}` : baseUrl;
   },

@@ -36,6 +36,7 @@
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "generate:openapi-types": "tsx scripts/generate-openapi-types.ts",
+    "grant-user-rights": "tsx scripts/grant-user-rights.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "lint:npm": "npmPkgJsonLint . --fix",

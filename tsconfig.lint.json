@@ -4,5 +4,5 @@
     "rootDir": ".",
     "outDir": "./build"
   },
-  "include": ["src/**/*", "test/**/*", "scripts/**/*", "simulations/**/*"]
+  "include": ["src/**/*", "test/**/*", "scripts/**/*", "simulations/**/*", "examples/**/*"]
 }

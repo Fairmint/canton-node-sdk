@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RecordSchema } from '../base';
 
 /** Interactive submission allocate party request. */
 export const InteractiveSubmissionAllocatePartyRequestSchema = z.object({
@@ -96,17 +97,52 @@ export const InteractiveSubmissionUploadDarRequestSchema = z.object({
 /** Interactive submission upload DAR response. */
 export const InteractiveSubmissionUploadDarResponseSchema = z.object({});
 
+const CreateCommandSchema = z.object({
+  CreateCommand: z.object({
+    templateId: z.string(),
+    createArguments: RecordSchema,
+  }),
+});
+
+const ExerciseCommandSchema = z.object({
+  ExerciseCommand: z.object({
+    templateId: z.string(),
+    contractId: z.string(),
+    choice: z.string(),
+    choiceArgument: RecordSchema,
+  }),
+});
+
+const CreateAndExerciseCommandSchema = z.object({
+  CreateAndExerciseCommand: z.object({
+    templateId: z.string(),
+    createArguments: RecordSchema,
+    choice: z.string(),
+    choiceArgument: RecordSchema,
+  }),
+});
+
+const ExerciseByKeyCommandSchema = z.object({
+  ExerciseByKeyCommand: z.object({
+    templateId: z.string(),
+    contractKey: RecordSchema,
+    choice: z.string(),
+    choiceArgument: RecordSchema,
+  }),
+});
+
 const CommandSchema = z.union([
-  z.object({ CreateCommand: z.unknown() }),
-  z.object({ ExerciseCommand: z.unknown() }),
-  z.object({ CreateAndExerciseCommand: z.unknown() }),
-  z.object({ ExerciseByKeyCommand: z.unknown() }),
+  CreateCommandSchema,
+  ExerciseCommandSchema,
+  CreateAndExerciseCommandSchema,
+  ExerciseByKeyCommandSchema,
 ]);
 
 const DisclosedContractSchema = z.object({
   contractId: z.string(),
   templateId: z.string(),
   createdEventBlob: z.string().optional(),
+  synchronizerId: z.string(),
   metadata: z.unknown().optional(),
 });
 
@@ -141,12 +177,16 @@ const DeduplicationPeriodSchema = z.union([
   z.object({ Empty: z.object({}) }),
   z.object({
     DeduplicationDuration: z.object({
-      duration: z.string(),
+      value: z.object({
+        duration: z.string(),
+      }),
     }),
   }),
   z.object({
     DeduplicationOffset: z.object({
-      offset: z.string(),
+      value: z.object({
+        offset: z.string(),
+      }),
     }),
   }),
 ]);
