@@ -70,7 +70,9 @@ export class FileLogger implements Logger {
       for (const [key, value] of Object.entries(obj)) {
         // Skip sensitive fields
         if (
-          ['password', 'client_secret', 'access_token', 'authorization', 'refresh_token'].includes(key.toLowerCase())
+          ['password', 'client_secret', 'access_token', 'authorization', 'refresh_token', 'id_token'].includes(
+            key.toLowerCase()
+          )
         ) {
           sanitized[key] = '[REDACTED]';
         } else {

@@ -7,6 +7,11 @@ A TypeScript SDK for interacting with Canton blockchain nodes.
 **For complete documentation, examples, and API references, visit:**
 **[https://sdk.canton.fairmint.com/](https://sdk.canton.fairmint.com/)**
 
+### Specialized Guides
+
+- 🔐 **[External Signing Guide](docs/EXTERNAL_SIGNING.md)** - Create and manage external parties
+  with user-controlled private keys
+
 ## Quick Start
 
 ```bash

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RecordSchema } from '../base';
 
 /** Interactive submission allocate party request. */
 export const InteractiveSubmissionAllocatePartyRequestSchema = z.object({
@@ -96,6 +97,126 @@ export const InteractiveSubmissionUploadDarRequestSchema = z.object({
 /** Interactive submission upload DAR response. */
 export const InteractiveSubmissionUploadDarResponseSchema = z.object({});
 
+const CreateCommandSchema = z.object({
+  CreateCommand: z.object({
+    templateId: z.string(),
+    createArguments: RecordSchema,
+  }),
+});
+
+const ExerciseCommandSchema = z.object({
+  ExerciseCommand: z.object({
+    templateId: z.string(),
+    contractId: z.string(),
+    choice: z.string(),
+    choiceArgument: RecordSchema,
+  }),
+});
+
+const CreateAndExerciseCommandSchema = z.object({
+  CreateAndExerciseCommand: z.object({
+    templateId: z.string(),
+    createArguments: RecordSchema,
+    choice: z.string(),
+    choiceArgument: RecordSchema,
+  }),
+});
+
+const ExerciseByKeyCommandSchema = z.object({
+  ExerciseByKeyCommand: z.object({
+    templateId: z.string(),
+    contractKey: RecordSchema,
+    choice: z.string(),
+    choiceArgument: RecordSchema,
+  }),
+});
+
+const CommandSchema = z.union([
+  CreateCommandSchema,
+  ExerciseCommandSchema,
+  CreateAndExerciseCommandSchema,
+  ExerciseByKeyCommandSchema,
+]);
+
+const DisclosedContractSchema = z.object({
+  contractId: z.string(),
+  templateId: z.string(),
+  createdEventBlob: z.string().optional(),
+  synchronizerId: z.string(),
+  metadata: z.unknown().optional(),
+});
+
+const PackagePreferenceSchema = z.object({
+  packageId: z.string().optional(),
+  packageName: z.string().optional(),
+});
+
+/** Interactive submission prepare request. */
+export const InteractiveSubmissionPrepareRequestSchema = z.object({
+  commands: z.array(CommandSchema),
+  commandId: z.string(),
+  userId: z.string(),
+  actAs: z.array(z.string()),
+  readAs: z.array(z.string()),
+  disclosedContracts: z.array(DisclosedContractSchema).optional(),
+  synchronizerId: z.string(),
+  verboseHashing: z.boolean().optional(),
+  packageIdSelectionPreference: z.array(PackagePreferenceSchema).optional(),
+});
+
+/** Interactive submission prepare response. */
+export const InteractiveSubmissionPrepareResponseSchema = z.object({
+  preparedTransactionHash: z.string(),
+  preparedTransaction: z.string().optional(),
+  hashingSchemeVersion: z.enum(['HASHING_SCHEME_VERSION_UNSPECIFIED', 'HASHING_SCHEME_VERSION_V2']).optional(),
+  hashingDetails: z.string().optional(),
+});
+
+const DeduplicationPeriodSchema = z.union([
+  z.object({ Empty: z.object({}) }),
+  z.object({
+    DeduplicationDuration: z.object({
+      value: z.object({
+        duration: z.string(),
+      }),
+    }),
+  }),
+  z.object({
+    DeduplicationOffset: z.object({
+      value: z.object({
+        offset: z.string(),
+      }),
+    }),
+  }),
+]);
+
+const PartySignatureSchema = z.object({
+  party: z.string(),
+  signatures: z.array(
+    z.object({
+      signature: z.string(),
+      signedBy: z.string(),
+      format: z.string(),
+      signingAlgorithmSpec: z.string(),
+    })
+  ),
+});
+
+/** Interactive submission execute request. */
+export const InteractiveSubmissionExecuteRequestSchema = z.object({
+  userId: z.string(),
+  preparedTransaction: z.string(),
+  hashingSchemeVersion: z.string(),
+  submissionId: z.string(),
+  deduplicationPeriod: DeduplicationPeriodSchema.optional(),
+  partySignatures: z.object({
+    signatures: z.array(PartySignatureSchema),
+  }),
+});
+
+/** Interactive submission execute response. */
+export const InteractiveSubmissionExecuteResponseSchema = z.object({});
+
 // Export types
 export type InteractiveSubmissionAllocatePartyRequest = z.infer<typeof InteractiveSubmissionAllocatePartyRequestSchema>;
 export type InteractiveSubmissionAllocatePartyResponse = z.infer<
@@ -105,3 +226,7 @@ export type InteractiveSubmissionCreateUserRequest = z.infer<typeof InteractiveS
 export type InteractiveSubmissionCreateUserResponse = z.infer<typeof InteractiveSubmissionCreateUserResponseSchema>;
 export type InteractiveSubmissionUploadDarRequest = z.infer<typeof InteractiveSubmissionUploadDarRequestSchema>;
 export type InteractiveSubmissionUploadDarResponse = z.infer<typeof InteractiveSubmissionUploadDarResponseSchema>;
+export type InteractiveSubmissionPrepareRequest = z.infer<typeof InteractiveSubmissionPrepareRequestSchema>;
+export type InteractiveSubmissionPrepareResponse = z.infer<typeof InteractiveSubmissionPrepareResponseSchema>;
+export type InteractiveSubmissionExecuteRequest = z.infer<typeof InteractiveSubmissionExecuteRequestSchema>;
+export type InteractiveSubmissionExecuteResponse = z.infer<typeof InteractiveSubmissionExecuteResponseSchema>;
