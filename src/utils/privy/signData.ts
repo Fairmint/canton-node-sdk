@@ -49,10 +49,11 @@ export async function signWithWallet(privyClient: PrivyClient, options: SignOpti
   }
 
   // Sign using Privy's rawSign API
+  console.log(`signWithWallet request: ${JSON.stringify({ walletId, hexData })}`);
   const { signature, encoding } = await privyClient.wallets().rawSign(walletId, {
     params: { hash: `0x${hexData}` },
   });
-
+  console.log(`signWithWallet response: ${JSON.stringify({ signature, encoding })}`);
   // Remove 0x prefix and convert to base64
   const signatureHex = signature.startsWith('0x') ? signature.slice(2) : signature;
   const signatureBase64 = Buffer.from(signatureHex, 'hex').toString('base64');

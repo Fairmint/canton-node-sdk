@@ -17,6 +17,8 @@ export interface CreateExternalPartyPrivyParams {
   wallet?: StellarWallet;
   /** Optional: user ID to link the wallet to (format: did:privy:...) */
   userId?: string;
+  /** Optional: validator client to use for topology operations. If not provided, creates a new one from environment */
+  validatorClient?: ValidatorApiClient;
   /** If true, the local participant will only observe, not confirm (default: false) */
   localParticipantObservationOnly?: boolean;
   /** Other participant UIDs that should confirm for this party */
@@ -77,10 +79,10 @@ export interface CreateExternalPartyPrivyResult {
 export async function createExternalPartyPrivy(
   params: CreateExternalPartyPrivyParams
 ): Promise<CreateExternalPartyPrivyResult> {
-  const { privyClient, partyName, wallet: existingWallet, userId } = params;
+  const { privyClient, partyName, wallet: existingWallet, userId, validatorClient: providedValidatorClient } = params;
 
-  // Initialize Validator API client
-  const validatorClient = new ValidatorApiClient();
+  // Use provided validator client or create a new one from environment
+  const validatorClient = providedValidatorClient ?? new ValidatorApiClient();
 
   // Step 1: Get or create Privy wallet
   let wallet: StellarWallet;
