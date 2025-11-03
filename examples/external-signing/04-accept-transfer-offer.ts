@@ -223,7 +223,7 @@ async function main() {
   // Step 3c: Get current synchronizer ID from mining rounds
   console.log('\n3️⃣c Getting synchronizer ID...');
   const miningRounds = await validatorClient.getOpenAndIssuingMiningRounds();
-  if (miningRounds.open_mining_rounds?.length === 0) {
+  if (miningRounds.open_mining_rounds.length === 0) {
     throw new Error('No open mining rounds found. Ensure the network is running.');
   }
   const firstRound = miningRounds.open_mining_rounds[0];
