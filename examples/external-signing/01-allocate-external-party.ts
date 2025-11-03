@@ -30,6 +30,8 @@ import {
   EnvLoader,
   FileLogger,
   type ClientConfig,
+  type NetworkType,
+  type ProviderType,
 } from '../../src';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -49,19 +51,21 @@ function printUsage(): void {
 
 function createLedgerClient(network: string, provider: string): LedgerJsonApiClient {
   const envLoader = EnvLoader.getInstance();
+  const networkType = network as NetworkType;
+  const providerType = provider as ProviderType;
   return new LedgerJsonApiClient({
-    network: network as any,
-    provider: provider as any,
-    authUrl: envLoader.getAuthUrl(network as any, provider as any),
+    network: networkType,
+    provider: providerType,
+    authUrl: envLoader.getAuthUrl(networkType, providerType),
     apis: {
       LEDGER_JSON_API: {
-        apiUrl: envLoader.getApiUri('LEDGER_JSON_API', network as any, provider as any) ?? '',
+        apiUrl: envLoader.getApiUri('LEDGER_JSON_API', networkType, providerType) ?? '',
         auth: {
-          clientId: envLoader.getApiClientId('LEDGER_JSON_API', network as any, provider as any) ?? '',
-          clientSecret: envLoader.getApiClientSecret('LEDGER_JSON_API', network as any, provider as any) ?? '',
+          clientId: envLoader.getApiClientId('LEDGER_JSON_API', networkType, providerType) ?? '',
+          clientSecret: envLoader.getApiClientSecret('LEDGER_JSON_API', networkType, providerType) ?? '',
           grantType: 'client_credentials',
         },
-        partyId: envLoader.getPartyId(network as any, provider as any),
+        partyId: envLoader.getPartyId(networkType, providerType),
       },
     },
     logger: new FileLogger(),
