@@ -12,7 +12,7 @@ async function main(): Promise<void> {
     console.log('Fetching identity provider configs...\n');
     const result = await client.listIdentityProviderConfigs({});
 
-    if (!result.identityProviderConfigs || result.identityProviderConfigs.length === 0) {
+    if (result.identityProviderConfigs?.length === 0) {
       console.log('No identity providers configured.');
       return;
     }

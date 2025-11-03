@@ -161,7 +161,7 @@ async function main() {
   console.log('\n3️⃣  Getting synchronizer ID...');
   const miningRounds = await validatorClient.getOpenAndIssuingMiningRounds();
 
-  if (!miningRounds.open_mining_rounds || miningRounds.open_mining_rounds.length === 0) {
+  if (miningRounds.open_mining_rounds?.length === 0) {
     throw new Error('No open mining rounds found. Ensure the network is running.');
   }
 

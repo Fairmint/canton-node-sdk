@@ -168,9 +168,7 @@ export const InteractiveSubmissionPrepareRequestSchema = z.object({
 export const InteractiveSubmissionPrepareResponseSchema = z.object({
   preparedTransactionHash: z.string(),
   preparedTransaction: z.string().optional(),
-  hashingSchemeVersion: z
-    .enum(['HASHING_SCHEME_VERSION_UNSPECIFIED', 'HASHING_SCHEME_VERSION_V2'])
-    .optional(),
+  hashingSchemeVersion: z.enum(['HASHING_SCHEME_VERSION_UNSPECIFIED', 'HASHING_SCHEME_VERSION_V2']).optional(),
   hashingDetails: z.string().optional(),
 });
 

@@ -17,6 +17,7 @@ const eslintConfig = [
       '**/artifacts/**',
       '**/generated/**',
       '**/*.generated.*',
+      '**/*.example.ts',
       '**/*.js',
       '**/*.mjs',
     ],
@@ -173,9 +174,9 @@ const eslintConfig = [
       'no-array-constructor': 'off',
     },
   },
-  // Override rules for scripts, simulations, and test directories
+  // Override rules for scripts, simulations, examples, and test directories
   {
-    files: ['scripts/**/*', 'simulations/**/*', 'test/**/*'],
+    files: ['scripts/**/*', 'simulations/**/*', 'examples/**/*', 'test/**/*'],
     rules: {
       'no-console': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
