@@ -47,16 +47,17 @@
  */
 
 import {
+  ClientCredentialOAuthController,
+  LedgerController,
+  TokenStandardController,
+  TopologyController,
+  UnsafeAuthController,
   WalletSDKImpl,
   localNetAuthDefault,
   localNetLedgerDefault,
   localNetStaticConfig,
   localNetTokenStandardDefault,
   localNetTopologyDefault,
-  LedgerController,
-  TopologyController,
-  TokenStandardController,
-  UnsafeAuthController,
 } from '@canton-network/wallet-sdk';
 import dotenv from 'dotenv';
 import { pino } from 'pino';
@@ -135,7 +136,7 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
 
     // Use provided scan proxy URL or default from env
     const finalScanProxyUrl =
-      scanProxyUrl || process.env['CANTON_SCAN_PROXY_URL'] || localNetStaticConfig.LOCALNET_SCAN_PROXY_API_URL;
+      scanProxyUrl ?? process.env['CANTON_SCAN_PROXY_URL'] ?? localNetStaticConfig.LOCALNET_SCAN_PROXY_API_URL;
 
     console.log('  Connecting to scan proxy:', finalScanProxyUrl);
 
@@ -145,71 +146,147 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
 
     if (finalScanProxyUrl.includes('devnet')) {
       // DevNet configuration
-      const baseUrl = 'https://wallet.validator.devnet.transfer-agent.xyz/api/validator/v0';
-      console.log('  Network: DevNet');
+      // Check if OAuth credentials are available
+      const oauthClientId = process.env['CANTON_OAUTH_CLIENT_ID'];
+      const oauthClientSecret = process.env['CANTON_OAUTH_CLIENT_SECRET'];
+      const oauthAuthority =
+        process.env['CANTON_OAUTH_AUTHORITY'] ?? 'https://auth.transfer-agent.xyz/application/o/validator-devnet/';
+      const oauthAudience = process.env['CANTON_OAUTH_AUDIENCE'] ?? 'validator-devnet-m2m';
+      const oauthScope = process.env['CANTON_OAUTH_SCOPE'] ?? 'openid';
+      const hasOAuthCredentials = Boolean(oauthClientId && oauthClientSecret);
 
-      // For devnet, use unsafe auth (similar to localnet)
+      // Use custom base URL if provided, otherwise default (note: no /v0/ for devnet with OAuth)
+      const baseUrl =
+        process.env['CANTON_BASE_URL'] ??
+        (hasOAuthCredentials
+          ? 'https://wallet.validator.devnet.transfer-agent.xyz/api/validator'
+          : 'https://wallet.validator.devnet.transfer-agent.xyz/api/validator/v0');
+
+      console.log('  Network: DevNet');
+      console.log('  Base URL:', baseUrl);
+      console.log('  OAuth Credentials:', hasOAuthCredentials ? '✓ Available' : '✗ Not available (using unsafe auth)');
+
+      if (hasOAuthCredentials) {
+        console.log('  OAuth Authority:', oauthAuthority);
+        console.log('  OAuth Client ID:', oauthClientId);
+        console.log('  OAuth Audience:', oauthAudience);
+      }
+
+      console.log('  Auth endpoint:', `${baseUrl}/auth`);
+      console.log('  Ledger endpoint:', `${baseUrl}/ledger`);
+      console.log('  Topology endpoint:', `${baseUrl}/topology`);
+      console.log('  Admin endpoint:', `${baseUrl}/admin`);
+
+      // Use OAuth if credentials are available, otherwise unsafe auth
       authFactory = () => {
+        if (hasOAuthCredentials) {
+          const auth = new ClientCredentialOAuthController(oauthAuthority, logger);
+          auth.userId = oauthClientId;
+          auth.userSecret = oauthClientSecret;
+          auth.adminId = oauthClientId;
+          auth.adminSecret = oauthClientSecret;
+          auth.audience = oauthAudience;
+          auth.scope = oauthScope;
+          console.log('  Auth factory: ClientCredentialOAuthController configured');
+          return auth;
+        }
         const auth = new UnsafeAuthController(logger);
         auth.userId = 'ledger-api-user';
         auth.adminId = 'ledger-api-admin';
         auth.audience = 'https://canton.network.global';
         auth.unsafeSecret = 'test';
+        console.log('  Auth factory: UnsafeAuthController configured (fallback)');
         return auth;
       };
 
-      ledgerFactory = (userId: string, authTokenProvider: any, isAdmin: boolean) =>
-        new LedgerController(userId, new URL(`${baseUrl}/ledger`), undefined, isAdmin, authTokenProvider);
+      ledgerFactory = (uid: string, authTokenProvider: any, isAdmin: boolean) => {
+        console.log(`  Creating LedgerController: userId=${uid}, isAdmin=${isAdmin}`);
+        return new LedgerController(uid, new URL(`${baseUrl}/ledger`), undefined, isAdmin, authTokenProvider);
+      };
 
-      topologyFactory = (userId: string, authTokenProvider: any, synchronizerId: any) =>
-        new TopologyController(
+      topologyFactory = (uid: string, authTokenProvider: any, synchronizerId: any) => {
+        console.log(`  Creating TopologyController: userId=${uid}, synchronizerId=${synchronizerId}`);
+        return new TopologyController(
           `${baseUrl}/admin`,
           new URL(`${baseUrl}/topology`),
-          userId,
+          uid,
           synchronizerId,
           undefined,
           authTokenProvider
         );
+      };
 
-      tokenStandardFactory = (userId: string, authTokenProvider: any, isAdmin: boolean) =>
-        new TokenStandardController(
-          userId,
+      tokenStandardFactory = (uid: string, authTokenProvider: any, isAdmin: boolean) => {
+        console.log(`  Creating TokenStandardController: userId=${uid}, isAdmin=${isAdmin}`);
+        return new TokenStandardController(
+          uid,
           new URL(`${baseUrl}/token-standard`),
           new URL(`${baseUrl}/validator`),
           undefined,
           authTokenProvider,
           isAdmin
         );
+      };
     } else if (finalScanProxyUrl.includes('testnet')) {
       // TestNet configuration
-      const baseUrl = 'https://wallet.validator.testnet.transfer-agent.xyz/api/validator/v0';
-      console.log('  Network: TestNet');
+      // Check if OAuth credentials are available
+      const oauthClientId = process.env['CANTON_OAUTH_CLIENT_ID'];
+      const oauthClientSecret = process.env['CANTON_OAUTH_CLIENT_SECRET'];
+      const oauthAuthority =
+        process.env['CANTON_OAUTH_AUTHORITY'] ?? 'https://auth.transfer-agent.xyz/application/o/validator-testnet/';
+      const oauthAudience = process.env['CANTON_OAUTH_AUDIENCE'] ?? 'validator-testnet-m2m';
+      const oauthScope = process.env['CANTON_OAUTH_SCOPE'] ?? 'openid';
+      const hasOAuthCredentials = Boolean(oauthClientId && oauthClientSecret);
 
+      // Use custom base URL if provided, otherwise default (note: no /v0/ for testnet with OAuth)
+      const baseUrl =
+        process.env['CANTON_BASE_URL'] ??
+        (hasOAuthCredentials
+          ? 'https://wallet.validator.testnet.transfer-agent.xyz/api/validator'
+          : 'https://wallet.validator.testnet.transfer-agent.xyz/api/validator/v0');
+
+      console.log('  Network: TestNet');
+      console.log('  Base URL:', baseUrl);
+      console.log('  OAuth Credentials:', hasOAuthCredentials ? '✓ Available' : '✗ Not available (using unsafe auth)');
+
+      // Use OAuth if credentials are available, otherwise unsafe auth
       authFactory = () => {
+        if (hasOAuthCredentials) {
+          const auth = new ClientCredentialOAuthController(oauthAuthority, logger);
+          auth.userId = oauthClientId;
+          auth.userSecret = oauthClientSecret;
+          auth.adminId = oauthClientId;
+          auth.adminSecret = oauthClientSecret;
+          auth.audience = oauthAudience;
+          auth.scope = oauthScope;
+          console.log('  Auth factory: ClientCredentialOAuthController configured');
+          return auth;
+        }
         const auth = new UnsafeAuthController(logger);
         auth.userId = 'ledger-api-user';
         auth.adminId = 'ledger-api-admin';
         auth.audience = 'https://canton.network.global';
         auth.unsafeSecret = 'test';
+        console.log('  Auth factory: UnsafeAuthController configured (fallback)');
         return auth;
       };
 
-      ledgerFactory = (userId: string, authTokenProvider: any, isAdmin: boolean) =>
-        new LedgerController(userId, new URL(`${baseUrl}/ledger`), undefined, isAdmin, authTokenProvider);
+      ledgerFactory = (uid: string, authTokenProvider: any, isAdmin: boolean) =>
+        new LedgerController(uid, new URL(`${baseUrl}/ledger`), undefined, isAdmin, authTokenProvider);
 
-      topologyFactory = (userId: string, authTokenProvider: any, synchronizerId: any) =>
+      topologyFactory = (uid: string, authTokenProvider: any, synchronizerId: any) =>
         new TopologyController(
           `${baseUrl}/admin`,
           new URL(`${baseUrl}/topology`),
-          userId,
+          uid,
           synchronizerId,
           undefined,
           authTokenProvider
         );
 
-      tokenStandardFactory = (userId: string, authTokenProvider: any, isAdmin: boolean) =>
+      tokenStandardFactory = (uid: string, authTokenProvider: any, isAdmin: boolean) =>
         new TokenStandardController(
-          userId,
+          uid,
           new URL(`${baseUrl}/token-standard`),
           new URL(`${baseUrl}/validator`),
           undefined,
@@ -235,7 +312,11 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
 
     await sdk.connect();
     await sdk.connectAdmin();
-    await sdk.connectTopology(finalScanProxyUrl);
+
+    // Note: connectTopology() requires a synchronizer ID, not a URL
+    // For now, we skip topology connection and will set synchronizer ID directly if needed
+    // TODO: Get the correct synchronizer ID from Canton Network team
+    console.log('  ⚠ Skipping topology connection (synchronizer ID required)');
 
     console.log('✓ Canton SDK initialized');
     console.log();
@@ -277,8 +358,7 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
         params: { hash: `0x${hexEncoded}` },
       });
 
-      signature = signResult.signature;
-      encoding = signResult.encoding;
+      ({ signature, encoding } = signResult);
 
       console.log('✓ Hash signed successfully');
       console.log('  Signature:', signature);
@@ -395,11 +475,11 @@ async function main() {
     if (firstArg.startsWith('did:privy:')) {
       // First argument is a user ID
       userId = firstArg;
-      partyHint = secondArg || 'privy-user';
+      partyHint = secondArg ?? 'privy-user';
     } else {
       // First argument is a wallet ID
       walletId = firstArg;
-      partyHint = secondArg || 'privy-user';
+      partyHint = secondArg ?? 'privy-user';
     }
   }
 

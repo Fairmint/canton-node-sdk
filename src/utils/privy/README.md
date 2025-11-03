@@ -37,6 +37,8 @@ const privy = createPrivyClient({
 
 ### Create a Stellar Wallet
 
+**Option 1: Create an unlinked wallet (new user)**
+
 ```typescript
 import { createStellarWallet } from '@fairmint/canton-node-sdk';
 
@@ -45,12 +47,44 @@ const wallet = await createStellarWallet(privy);
 console.log('Wallet ID:', wallet.id);
 console.log('Stellar Address:', wallet.address);
 console.log('Public Key (base64):', wallet.publicKeyBase64);
-
-// Create a wallet linked to a Privy user
-const userWallet = await createStellarWallet(privy, {
-  userId: 'did:privy:...',
-});
 ```
+
+**Option 2: Add wallet to existing Privy user (common use case)**
+
+This is the common use case when users already exist in your database with a Privy ID and possibly
+other wallets (Solana, Ethereum, etc.).
+
+```typescript
+// User already exists with Privy ID from your database
+const existingPrivyUserId = 'did:privy:cm94jlli5020iky0lbo19pwf3';
+
+// Create a Stellar embedded wallet linked to this existing user
+const userWallet = await createStellarWallet(privy, {
+  userId: existingPrivyUserId,
+});
+
+console.log('Wallet ID:', userWallet.id);
+console.log('Stellar Address:', userWallet.address);
+
+// The wallet is now linked to the user in Privy's system
+// Verify in the Privy Dashboard under the user's wallets
+
+// Save to your database
+// UPDATE users SET stellar_wallet_address = userWallet.address WHERE privy_user_id = existingPrivyUserId
+```
+
+**Important Notes:**
+
+- The `owner` property may not be returned in the API response, but the wallet IS linked to the user
+  in Privy's system
+- You can verify the linkage in the Privy Dashboard
+- Embedded wallets require user authentication for signing (cannot be done server-side only)
+- Use Privy's client SDK in your frontend for transaction signing
+
+// Create a wallet linked to a Privy user const userWallet = await createStellarWallet(privy, {
+userId: 'did:privy:...', });
+
+````
 
 ### Retrieve an Existing Wallet
 
@@ -59,7 +93,7 @@ import { getStellarWallet } from '@fairmint/canton-node-sdk';
 
 const wallet = await getStellarWallet(privy, 'wallet-id-here');
 console.log('Address:', wallet.address);
-```
+````
 
 ### Sign Data
 
@@ -159,6 +193,14 @@ interface SignResult {
 }
 ```
 
+## Running the Examples
+
+Two complete working examples are available:
+
+### Example 1: Creating a New Wallet (`test/privy.example.ts`)
+
+Creates a standalone wallet (not linked to a user). To run it:
+
 ## Running the Example
 
 A complete working example is available in `test/privy.example.ts`. To run it:
@@ -180,8 +222,33 @@ tsx test/privy.example.ts
 
 The example will create a real Stellar wallet, retrieve it, and sign test data.
 
+### Example 2: Adding Stellar Wallet to Existing User (`test/privy.add-stellar-wallet.example.ts`)
+
+Demonstrates how to add a Stellar wallet to an existing Privy user (common use case for users with
+existing Solana/Ethereum wallets). To run it:
+
+```bash
+# Run with a Privy user ID from your database
+npx tsx test/privy.add-stellar-wallet.example.ts did:privy:YOUR_USER_ID
+
+# Example
+npx tsx test/privy.add-stellar-wallet.example.ts did:privy:cm94jlli5020iky0lbo19pwf3
+```
+
+The example will:
+
+1. Create a new Stellar embedded wallet linked to the specified user
+2. Verify the wallet can be retrieved
+3. Show database update SQL example
+4. Explain how to use the wallet for signing (client-side)
+
 **Note**: Due to ESM compatibility issues with Jest, the Privy utilities are tested using the
+<<<<<<< HEAD
 example file with `tsx` rather than Jest unit tests.
+=======
+example files with `tsx` rather than Jest unit tests. **Note**: Due to ESM compatibility issues with
+Jest, the Privy utilities are tested using the example file with `tsx` rather than Jest unit tests.
+>>>>>>> e877810eda8d1cdc3a1753bfe7d294eb4beb6f3c
 
 ## Canton Network Integration
 
