@@ -33,20 +33,23 @@
 **Current Status**: The script needs the actual synchronizer ID for Canton DevNet.
 
 **What We Know**:
+
 - Format is correct: `global::{hash}`
 - Example: `global::122041068e66805bb07d7468f314076fc5ffef76bb8b2bf29af83c23f88ceb0829c1`
 - The participant is not connected to the test synchronizer ID
 
-**How to Get It**:
-Contact the Digital Assets / Canton Network team and ask for:
+**How to Get It**: Contact the Digital Assets / Canton Network team and ask for:
+
 - The synchronizer ID (or domain ID) for Canton DevNet
 - Or access to an API endpoint that lists available synchronizers
 
-**Alternative**: If there's a way to discover synchronizers without a party ID, we can add that logic to the script.
+**Alternative**: If there's a way to discover synchronizers without a party ID, we can add that
+logic to the script.
 
 ### 2. Update Script Once We Have the Synchronizer ID
 
-Once you have the correct synchronizer ID, update line 412 in `test/canton-party-from-privy-wallet.example.ts`:
+Once you have the correct synchronizer ID, update line 412 in
+`test/canton-party-from-privy-wallet.example.ts`:
 
 ```typescript
 const synchronizerId = 'global::{correct-hash-here}';
@@ -62,11 +65,13 @@ const synchronizerId = 'global::{correct-hash-here}';
 4. **`canton-node-sdk/test/privy.add-stellar-wallet.example.ts`** - Add wallet to user examples
 5. **`canton-node-sdk/example.env`** - Updated with all necessary environment variables
 6. **`canton-node-sdk/CANTON_DEVNET_SETUP.md`** - Setup documentation
-7. **`canton-node-sdk/package.json`** - Added dependencies (`@privy-io/node`, `@stellar/stellar-base`, `@canton-network/wallet-sdk`, `pino`)
+7. **`canton-node-sdk/package.json`** - Added dependencies (`@privy-io/node`,
+   `@stellar/stellar-base`, `@canton-network/wallet-sdk`, `pino`)
 
 ### Configuration Auto-Detection
 
 The script now automatically detects and uses (in priority order):
+
 1. `CANTON_DEVNET_5N_*` variables (5N provider)
 2. `CANTON_DEVNET_INTELLECT_*` variables (Intellect provider)
 3. `CANTON_OAUTH_*` variables (generic fallback)
@@ -74,8 +79,11 @@ The script now automatically detects and uses (in priority order):
 ### OAuth Authority Handling
 
 The script correctly handles different auth URL formats:
-- `https://auth.example.com/application/o/token` → `https://auth.example.com/application/o/{clientId}/`
-- `https://keycloak.example.com/auth/realms/realm/protocol/openid-connect/token` → `https://keycloak.example.com/auth/realms/realm/protocol/openid-connect/`
+
+- `https://auth.example.com/application/o/token` →
+  `https://auth.example.com/application/o/{clientId}/`
+- `https://keycloak.example.com/auth/realms/realm/protocol/openid-connect/token` →
+  `https://keycloak.example.com/auth/realms/realm/protocol/openid-connect/`
 
 ## 🚀 Next Steps
 
@@ -106,6 +114,7 @@ npx tsx test/canton-party-from-privy-wallet.example.ts <wallet-id> <party-hint>
 ## 🔍 Debugging
 
 The script includes extensive logging:
+
 - OAuth token acquisition
 - SDK initialization steps
 - Ledger controller creation
