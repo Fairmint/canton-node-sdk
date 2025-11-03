@@ -146,19 +146,52 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
 
     if (finalScanProxyUrl.includes('devnet')) {
       // DevNet configuration
-      // Check if OAuth credentials are available
-      const oauthClientId = process.env['CANTON_OAUTH_CLIENT_ID'];
-      const oauthClientSecret = process.env['CANTON_OAUTH_CLIENT_SECRET'];
-      const oauthAuthority = process.env['CANTON_OAUTH_AUTHORITY'] || 'https://auth.transfer-agent.xyz/application/o/validator-devnet/';
-      const oauthAudience = process.env['CANTON_OAUTH_AUDIENCE'] || 'validator-devnet-m2m';
-      const oauthScope = process.env['CANTON_OAUTH_SCOPE'] || 'openid';
+      // Priority 1: Check for existing Canton devnet variables (5N or Intellect)
+      const validatorApiUri = process.env['CANTON_DEVNET_5N_VALIDATOR_API_URI'] ?? process.env['CANTON_DEVNET_INTELLECT_VALIDATOR_API_URI'];
+      const validatorClientId = process.env['CANTON_DEVNET_5N_VALIDATOR_API_CLIENT_ID'] ?? process.env['CANTON_DEVNET_INTELLECT_VALIDATOR_API_CLIENT_ID'];
+      const validatorClientSecret = process.env['CANTON_DEVNET_5N_VALIDATOR_API_CLIENT_SECRET'] ?? process.env['CANTON_DEVNET_INTELLECT_VALIDATOR_API_PASSWORD'];
+      const authUrlRaw = process.env['CANTON_DEVNET_5N_AUTH_URL'] ?? process.env['CANTON_DEVNET_INTELLECT_AUTH_URL'];
+      const ledgerApiUri = process.env['CANTON_DEVNET_5N_LEDGER_JSON_API_URI'] ?? process.env['CANTON_DEVNET_INTELLECT_LEDGER_JSON_API_URI'];
+
+      // Priority 2: Check for generic OAuth credentials (fallback)
+      const oauthClientId = validatorClientId ?? process.env['CANTON_OAUTH_CLIENT_ID'];
+      const oauthClientSecret = validatorClientSecret ?? process.env['CANTON_OAUTH_CLIENT_SECRET'];
+
+      // Convert token endpoint URL to OAuth authority base URL
+      // e.g., https://auth.example.com/application/o/token → https://auth.example.com/application/o/{clientId}/
+      let oauthAuthority: string;
+      if (authUrlRaw) {
+        // Strip /token suffix
+        let authority = authUrlRaw.replace(/\/token\/?$/, '/');
+        // Also handle protocol/openid-connect/token format (Keycloak)
+        authority = authority.replace(/\/protocol\/openid-connect\/token\/?$/, '/protocol/openid-connect/');
+
+        // If authority ends with /application/o/ (authentik pattern without provider slug),
+        // append the client ID to construct the correct authority
+        if (authority.endsWith('/application/o/') && oauthClientId) {
+          authority = `${authority}${oauthClientId}/`;
+        }
+
+        oauthAuthority = authority;
+      } else {
+        oauthAuthority = process.env['CANTON_OAUTH_AUTHORITY'] ?? 'https://auth.transfer-agent.xyz/application/o/validator-devnet/';
+      }
+
+      const oauthAudience = process.env['CANTON_OAUTH_AUDIENCE'] ?? 'validator-devnet-m2m';
+      const oauthScope = process.env['CANTON_OAUTH_SCOPE'] ?? 'openid';
       const hasOAuthCredentials = Boolean(oauthClientId && oauthClientSecret);
 
-      // Use custom base URL if provided, otherwise default (note: no /v0/ for devnet with OAuth)
-      const baseUrl = process.env['CANTON_BASE_URL'] ||
-        (hasOAuthCredentials
-          ? 'https://wallet.validator.devnet.transfer-agent.xyz/api/validator'
-          : 'https://wallet.validator.devnet.transfer-agent.xyz/api/validator/v0');
+      // Use custom base URL if provided, otherwise derive from validator API URI or default
+      let baseUrl: string;
+      if (validatorApiUri) {
+        // Extract base URL from validator API URI (remove trailing slashes and paths)
+        baseUrl = validatorApiUri.replace(/\/+$/, '');
+      } else {
+        baseUrl = process.env['CANTON_BASE_URL'] ||
+          (hasOAuthCredentials
+            ? 'https://wallet.validator.devnet.transfer-agent.xyz/api/validator'
+            : 'https://wallet.validator.devnet.transfer-agent.xyz/api/validator/v0');
+      }
 
       console.log('  Network: DevNet');
       console.log('  Base URL:', baseUrl);
@@ -168,6 +201,10 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
         console.log('  OAuth Authority:', oauthAuthority);
         console.log('  OAuth Client ID:', oauthClientId);
         console.log('  OAuth Audience:', oauthAudience);
+      }
+
+      if (ledgerApiUri) {
+        console.log('  Ledger JSON API URI:', ledgerApiUri);
       }
 
       console.log('  Auth endpoint:', `${baseUrl}/auth`);
@@ -200,7 +237,10 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
 
       ledgerFactory = (userId: string, authTokenProvider: any, isAdmin: boolean) => {
         console.log(`  Creating LedgerController: userId=${userId}, isAdmin=${isAdmin}`);
-        return new LedgerController(userId, new URL(`${baseUrl}/ledger`), undefined, isAdmin, authTokenProvider);
+        // Use dedicated ledger API URI if available, otherwise fall back to base URL
+        const ledgerUrl = ledgerApiUri ?? `${baseUrl}/ledger`;
+        console.log(`    Ledger URL: ${ledgerUrl}`);
+        return new LedgerController(userId, new URL(ledgerUrl), undefined, isAdmin, authTokenProvider);
       };
 
       topologyFactory = (userId: string, authTokenProvider: any, synchronizerId: any) => {
@@ -366,7 +406,19 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
     console.log('Step 3.6: Connecting Canton SDK...');
     await sdk.connect();
     await sdk.connectAdmin();
-    await sdk.connectTopology(finalScanProxyUrl);
+
+    // Set synchronizer ID directly on the ledger controller
+    // For devnet, use "global" as the default synchronizer domain
+    const synchronizerId = 'global::122041068e66805bb07d7468f314076fc5ffef76bb8b2bf29af83c23f88ceb0829c1';
+    console.log(`  Setting synchronizer ID: ${synchronizerId}`);
+
+    try {
+      sdk.userLedger?.setSynchronizerId(synchronizerId);
+      sdk.adminLedger?.setSynchronizerId(synchronizerId);
+      console.log('  ✓ Synchronizer ID set');
+    } catch (err) {
+      console.log('  ⚠ Could not set synchronizer ID:', err instanceof Error ? err.message : String(err));
+    }
 
     console.log('✓ Canton SDK initialized');
     console.log();
