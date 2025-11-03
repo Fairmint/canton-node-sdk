@@ -4,7 +4,8 @@ A command-line script to grant user rights on a specific network and provider.
 
 ## Features
 
-- **Network/Provider Configuration**: Target specific network/provider or use current from environment
+- **Network/Provider Configuration**: Target specific network/provider or use current from
+  environment
 - **Auto-detect User**: Automatically fetches authenticated user ID if not provided
 - **Multiple right types**: Support for admin rights and party-specific rights
 - **Verification**: Lists current rights before and after granting
@@ -57,15 +58,15 @@ npm run grant-user-rights -- --user-id "5" --admin --identity-provider "default"
 
 ## Command Line Options
 
-| Option | Description | Required |
-|--------|-------------|----------|
-| `--user-id <id>` | User ID to grant rights to (auto-detects authenticated user if not provided) | No |
-| `--party-id <id>` | Party ID for party-specific rights | No |
-| `--admin` | Grant ParticipantAdmin rights (default if no --party-id) | No |
-| `--identity-provider <id>` | Identity provider ID | No |
-| `--network <network>` | Target network (devnet\|testnet\|mainnet, defaults to CANTON_CURRENT_NETWORK) | No |
-| `--provider <provider>` | Target provider (defaults to CANTON_CURRENT_PROVIDER) | No |
-| `--help, -h` | Show help message | No |
+| Option                     | Description                                                                   | Required |
+| -------------------------- | ----------------------------------------------------------------------------- | -------- |
+| `--user-id <id>`           | User ID to grant rights to (auto-detects authenticated user if not provided)  | No       |
+| `--party-id <id>`          | Party ID for party-specific rights                                            | No       |
+| `--admin`                  | Grant ParticipantAdmin rights (default if no --party-id)                      | No       |
+| `--identity-provider <id>` | Identity provider ID                                                          | No       |
+| `--network <network>`      | Target network (devnet\|testnet\|mainnet, defaults to CANTON_CURRENT_NETWORK) | No       |
+| `--provider <provider>`    | Target provider (defaults to CANTON_CURRENT_PROVIDER)                         | No       |
+| `--help, -h`               | Show help message                                                             | No       |
 
 ## Rights Types
 
@@ -76,7 +77,10 @@ By default (or with `--admin` flag), the script grants **ParticipantAdmin** righ
 ```typescript
 {
   kind: {
-    ParticipantAdmin: { value: {} }
+    ParticipantAdmin: {
+      value: {
+      }
+    }
   }
 }
 ```
@@ -89,33 +93,37 @@ When `--party-id` is specified, the script grants **CanActAs** and **CanReadAs**
 [
   {
     kind: {
-      CanActAs: { value: { party: "alice::party1" } }
-    }
+      CanActAs: { value: { party: 'alice::party1' } },
+    },
   },
   {
     kind: {
-      CanReadAs: { value: { party: "alice::party1" } }
-    }
-  }
-]
+      CanReadAs: { value: { party: 'alice::party1' } },
+    },
+  },
+];
 ```
 
 ## Environment Variables
 
-The script uses the standard Canton SDK environment variables. If `--network` and `--provider` are not specified, it uses:
+The script uses the standard Canton SDK environment variables. If `--network` and `--provider` are
+not specified, it uses:
+
 - `CANTON_CURRENT_NETWORK` - The current network (devnet|testnet|mainnet)
 - `CANTON_CURRENT_PROVIDER` - The current provider
 
 Required environment variables pattern:
+
 - `CANTON_{NETWORK}_{PROVIDER}_LEDGER_JSON_API_URI` - API endpoint URL
 - `CANTON_{NETWORK}_{PROVIDER}_LEDGER_JSON_API_CLIENT_ID` - OAuth client ID
-- `CANTON_{NETWORK}_{PROVIDER}_LEDGER_JSON_API_CLIENT_SECRET` - OAuth client secret (for client_credentials)
-  OR
+- `CANTON_{NETWORK}_{PROVIDER}_LEDGER_JSON_API_CLIENT_SECRET` - OAuth client secret (for
+  client_credentials) OR
 - `CANTON_{NETWORK}_{PROVIDER}_LEDGER_JSON_API_USERNAME` - Username (for password grant)
 - `CANTON_{NETWORK}_{PROVIDER}_LEDGER_JSON_API_PASSWORD` - Password (for password grant)
 - `CANTON_{NETWORK}_{PROVIDER}_AUTH_URL` - OAuth authorization URL
 
 Optional:
+
 - `CANTON_{NETWORK}_{PROVIDER}_USER_ID` - Default user ID for this combination
 
 ## Examples
@@ -127,6 +135,7 @@ npm run grant-user-rights -- --admin
 ```
 
 Output:
+
 ```
 === Grant User Rights Utility ===
 
@@ -180,6 +189,7 @@ npm run grant-user-rights -- --party-id "alice::party1"
 ## Error Handling
 
 The script will:
+
 - Display detailed error messages on failure
 - Show stack trace for debugging
 - Exit with code 1 on failure
@@ -187,8 +197,10 @@ The script will:
 
 ## Related Files
 
-- **Simulation**: `/Volumes/980/Code/Fairmint/workspace/canton-node-sdk/simulations/ledger-json-api/v2/users/list-user-rights.ts`
-- **SDK Implementation**: `/Volumes/980/Code/Fairmint/workspace/canton-node-sdk/src/clients/ledger-json-api/operations/v2/users/grant-user-rights.ts`
+- **Simulation**:
+  `/Volumes/980/Code/Fairmint/workspace/canton-node-sdk/simulations/ledger-json-api/v2/users/list-user-rights.ts`
+- **SDK Implementation**:
+  `/Volumes/980/Code/Fairmint/workspace/canton-node-sdk/src/clients/ledger-json-api/operations/v2/users/grant-user-rights.ts`
 
 ## See Also
 

@@ -9,7 +9,8 @@ A TypeScript SDK for interacting with Canton blockchain nodes.
 
 ### Specialized Guides
 
-- 🔐 **[External Signing Guide](docs/EXTERNAL_SIGNING.md)** - Create and manage external parties with user-controlled private keys
+- 🔐 **[External Signing Guide](docs/EXTERNAL_SIGNING.md)** - Create and manage external parties
+  with user-controlled private keys
 
 ## Quick Start
 

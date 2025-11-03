@@ -3,8 +3,8 @@ import { Keypair } from '@stellar/stellar-base';
 /**
  * Converts a Stellar public key to base64 format for Canton
  *
- * Stellar Ed25519 keys can be used for Canton external signing.
- * This function extracts the raw 32-byte public key and converts it to base64.
+ * Stellar Ed25519 keys can be used for Canton external signing. This function extracts the raw 32-byte public key and
+ * converts it to base64.
  *
  * @param keypair - Stellar Keypair object
  * @returns Base64-encoded public key

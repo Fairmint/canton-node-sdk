@@ -1,13 +1,10 @@
 #!/usr/bin/env tsx
 import 'dotenv/config';
-import { LedgerJsonApiClient, EnvLoader, ValidatorApiClient } from '../src';
-import type { NetworkType } from '../src/core/types';
+import { EnvLoader, LedgerJsonApiClient, ValidatorApiClient } from '../src';
 import type { Right } from '../src/clients/ledger-json-api/schemas/api/users';
+import type { NetworkType } from '../src/core/types';
 
-/**
- * Create default admin rights for a user
- * Note: The grant API expects a nested "value" wrapper structure
- */
+/** Create default admin rights for a user Note: The grant API expects a nested "value" wrapper structure */
 function createAdminRights(): Right[] {
   return [
     {
@@ -18,10 +15,7 @@ function createAdminRights(): Right[] {
   ] as unknown as Right[];
 }
 
-/**
- * Create CanExecuteAsAnyParty rights for a user
- * Note: The grant API expects a nested "value" wrapper structure
- */
+/** Create CanExecuteAsAnyParty rights for a user Note: The grant API expects a nested "value" wrapper structure */
 function createExecuteAsAnyPartyRights(): Right[] {
   return [
     {
@@ -32,10 +26,7 @@ function createExecuteAsAnyPartyRights(): Right[] {
   ] as unknown as Right[];
 }
 
-/**
- * Create party-specific rights for a user
- * Note: The grant API expects a nested "value" wrapper structure
- */
+/** Create party-specific rights for a user Note: The grant API expects a nested "value" wrapper structure */
 function createPartyRights(partyId: string): Right[] {
   return [
     {
@@ -166,7 +157,7 @@ Examples:
     // (from responses) and grantUserRights params schema (which expects value wrapper)
     const result = await client.grantUserRights({
       userId: resolvedUserId,
-      rights: rights as any,  
+      rights: rights as any,
     });
 
     console.log(`\n✓ Successfully granted ${result.newlyGrantedRights?.length ?? 0} new rights`);
@@ -185,7 +176,6 @@ Examples:
     console.log(`Final rights count: ${finalRights.rights?.length ?? 0}`);
 
     console.log('\n✓ Done!');
-
   } catch (error) {
     console.error('\n✗ Failed to grant rights:');
     console.error(`  ${error instanceof Error ? error.message : String(error)}`);

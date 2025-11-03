@@ -16,9 +16,7 @@ export async function signWithPrivyWallet(
   const { signWithWallet } = await import('../privy/signData');
 
   // Convert data to hex
-  const hexData = typeof data === 'string'
-    ? Buffer.from(data, 'base64').toString('hex')
-    : data.toString('hex');
+  const hexData = typeof data === 'string' ? Buffer.from(data, 'base64').toString('hex') : data.toString('hex');
 
   const signResult = await signWithWallet(privyClient, {
     walletId,
@@ -29,9 +27,7 @@ export async function signWithPrivyWallet(
   return signResult.signatureBase64;
 }
 
-/**
- * Wallet info stored in key files for Privy-based external parties
- */
+/** Wallet info stored in key files for Privy-based external parties */
 export interface PrivyWalletKeyData {
   partyName: string;
   partyId: string;

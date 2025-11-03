@@ -3,9 +3,7 @@ import type { LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { ValidatorApiClient } from '../../clients/validator-api';
 import type { StellarWallet } from '../privy/types';
 
-/**
- * Parameters for creating an external party with Privy
- */
+/** Parameters for creating an external party with Privy */
 export interface CreateExternalPartyPrivyParams {
   /** Privy client instance */
   privyClient: PrivyClient;
@@ -29,9 +27,7 @@ export interface CreateExternalPartyPrivyParams {
   observingParticipantUids?: string[];
 }
 
-/**
- * Result of creating an external party with Privy
- */
+/** Result of creating an external party with Privy */
 export interface CreateExternalPartyPrivyResult {
   /** Generated party ID (e.g., "alice::12abc...") */
   partyId: string;
@@ -49,30 +45,31 @@ export interface CreateExternalPartyPrivyResult {
  * Creates an external party in Canton using Privy for key management
  *
  * This function combines wallet creation (if needed) and party onboarding:
+ *
  * 1. Creates a new Privy Stellar wallet (or uses provided wallet)
  * 2. Generates topology transactions with the wallet's public key
  * 3. Signs the topology transactions via Privy
  * 4. Submits the signed transactions to allocate the party
  *
  * @example
- * ```typescript
- * import { createPrivyClient, createExternalPartyPrivy } from '@fairmint/canton-node-sdk';
+ *   ```typescript
+ *   import { createPrivyClient, createExternalPartyPrivy } from '@fairmint/canton-node-sdk';
  *
- * const privy = createPrivyClient({
- *   appId: process.env.PRIVY_APP_ID!,
- *   appSecret: process.env.PRIVY_APP_SECRET!
- * });
+ *   const privy = createPrivyClient({
+ *     appId: process.env.PRIVY_APP_ID!,
+ *     appSecret: process.env.PRIVY_APP_SECRET!
+ *   });
  *
- * const party = await createExternalPartyPrivy({
- *   privyClient: privy,
- *   ledgerClient,
- *   partyName: 'alice',
- *   synchronizerId: 'global-synchronizer',
- * });
+ *   const party = await createExternalPartyPrivy({
+ *     privyClient: privy,
+ *     ledgerClient,
+ *     partyName: 'alice',
+ *     synchronizerId: 'global-synchronizer',
+ *   });
  *
- * console.log('Party ID:', party.partyId);
- * console.log('Wallet ID:', party.wallet.id);
- * ```
+ *   console.log('Party ID:', party.partyId);
+ *   console.log('Wallet ID:', party.wallet.id);
+ *   ```;
  *
  * @param params - Configuration for external party creation
  * @returns Party details including party ID, wallet info, and key fingerprint
@@ -125,9 +122,7 @@ export async function createExternalPartyPrivy(
       });
 
       // Convert signature from hex (with 0x prefix) to hex without prefix
-      const signatureHex = signResult.signature.startsWith('0x')
-        ? signResult.signature.slice(2)
-        : signResult.signature;
+      const signatureHex = signResult.signature.startsWith('0x') ? signResult.signature.slice(2) : signResult.signature;
 
       return {
         topology_tx: tx.topology_tx,

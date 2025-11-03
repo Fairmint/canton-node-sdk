@@ -14,12 +14,11 @@ export const GrantUserRights = createApiOperation<GrantUserRightsParams, GrantUs
   paramsSchema: GrantUserRightsParamsSchema,
   method: 'POST',
   buildUrl: (params, apiUrl) => `${apiUrl}/v2/users/${params.userId}/rights`,
-  buildRequestData: (params) => 
+  buildRequestData: (params) =>
     // Canton API expects userId in both the URL path AND the request body
     // Always inject empty string for identityProviderId
-     ({
+    ({
       ...params,
       identityProviderId: '',
-    })
-  ,
+    }),
 });

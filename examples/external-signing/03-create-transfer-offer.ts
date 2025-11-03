@@ -1,33 +1,22 @@
 /**
  * Example 3: Create Transfer Offer to External Party
  *
- * This example demonstrates creating a transfer offer to an external party.
- * The offer is created by an internal party (with funds) and can be accepted
- * by the external party using example 04.
+ * This example demonstrates creating a transfer offer to an external party. The offer is created by an internal party
+ * (with funds) and can be accepted by the external party using example 04.
  *
- * Usage:
- *   npx tsx examples/external-signing/03-create-transfer-offer.ts <party-id-file> [amount] [network] [provider]
+ * Usage: npx tsx examples/external-signing/03-create-transfer-offer.ts <party-id-file> [amount] [network] [provider]
  *
- * Arguments:
- *   party-id-file  Path to the key file (required)
- *   amount         Amount to transfer (optional, default: 10.0)
- *   network        Network to use: 'devnet' or 'mainnet' (optional, defaults to value in key file)
- *   provider       Provider to use: '5n' or 'intellect' (optional, defaults to value in key file)
+ * Arguments: party-id-file Path to the key file (required) amount Amount to transfer (optional, default: 10.0) network
+ * Network to use: 'devnet' or 'mainnet' (optional, defaults to value in key file) provider Provider to use: '5n' or
+ * 'intellect' (optional, defaults to value in key file)
  *
- * Examples:
- *   npx tsx examples/external-signing/03-create-transfer-offer.ts ../keys/alice--12abc.json 10.0
- *   npx tsx examples/external-signing/03-create-transfer-offer.ts ../keys/alice--12abc.json 10.0 devnet 5n
+ * Examples: npx tsx examples/external-signing/03-create-transfer-offer.ts ../keys/alice--12abc.json 10.0 npx tsx
+ * examples/external-signing/03-create-transfer-offer.ts ../keys/alice--12abc.json 10.0 devnet 5n
  */
 
-import {
-  ValidatorApiClient,
-  EnvLoader,
-  FileLogger,
-  type ClientConfig,
-  type NetworkType,
-} from '../../src';
 import * as fs from 'fs';
 import * as path from 'path';
+import { EnvLoader, FileLogger, ValidatorApiClient, type ClientConfig, type NetworkType } from '../../src';
 
 interface KeyData {
   partyName: string;
@@ -119,9 +108,7 @@ async function main() {
   console.log('\n💰 Creating Transfer Offer to External Party\n');
   console.log(`1️⃣  Reading external party info: ${keyFilePath}`);
 
-  const absolutePath = path.isAbsolute(keyFilePath)
-    ? keyFilePath
-    : path.join(process.cwd(), keyFilePath);
+  const absolutePath = path.isAbsolute(keyFilePath) ? keyFilePath : path.join(process.cwd(), keyFilePath);
 
   if (!fs.existsSync(absolutePath)) {
     console.error(`\n❌ Error: Key file not found: ${absolutePath}`);
@@ -189,7 +176,7 @@ async function main() {
     fs.writeFileSync(offerFile, JSON.stringify(offerData, null, 2));
 
     // Step 5: Display results
-    console.log(`\n${  '═'.repeat(70)}`);
+    console.log(`\n${'═'.repeat(70)}`);
     console.log('✅ SUCCESS! Transfer Offer Created');
     console.log('═'.repeat(70));
     console.log(`\n📋 Offer Details:`);

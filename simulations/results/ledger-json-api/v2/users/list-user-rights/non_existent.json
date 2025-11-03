@@ -18,12 +18,7 @@
         "tid": "PLACEHOLDER_TID",
         "category": "11"
       },
-      "resources": [
-        [
-          "ErrorResource(USER)",
-          "non_existent_user_12345"
-        ]
-      ],
+      "resources": [["ErrorResource(USER)", "non_existent_user_12345"]],
       "errorCategory": 11,
       "grpcCodeValue": 5,
       "retryInfo": null,

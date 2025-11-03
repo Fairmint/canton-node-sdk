@@ -12,9 +12,7 @@ type GeneratedRequest =
 type GeneratedResponse =
   paths['/v2/interactive-submission/prepare']['post']['responses'][200]['content']['application/json'];
 
-/**
- * Prepare an interactive submission transaction for external signing.
- */
+/** Prepare an interactive submission transaction for external signing. */
 export const InteractiveSubmissionPrepare = createApiOperation<
   InteractiveSubmissionPrepareRequest,
   InteractiveSubmissionPrepareResponse
@@ -23,8 +21,7 @@ export const InteractiveSubmissionPrepare = createApiOperation<
   method: 'POST',
   buildUrl: (_params: InteractiveSubmissionPrepareRequest, apiUrl: string) =>
     `${apiUrl}/v2/interactive-submission/prepare`,
-  buildRequestData: (params: InteractiveSubmissionPrepareRequest) =>
-    params as unknown as GeneratedRequest,
+  buildRequestData: (params: InteractiveSubmissionPrepareRequest) => params as unknown as GeneratedRequest,
   transformResponse: (response: GeneratedResponse): InteractiveSubmissionPrepareResponse => {
     const result: InteractiveSubmissionPrepareResponse = {
       preparedTransactionHash: response.preparedTransactionHash,

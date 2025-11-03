@@ -1,39 +1,33 @@
 /**
  * Example 1: Allocate External Party
  *
- * This example demonstrates how to allocate (onboard) an external party using Privy for key management.
- * The wallet is created via Privy and signing happens through their secure API.
+ * This example demonstrates how to allocate (onboard) an external party using Privy for key management. The wallet is
+ * created via Privy and signing happens through their secure API.
  *
- * Usage:
- *   npx tsx examples/external-signing/01-allocate-external-party.ts <party-name> [network] [provider]
+ * Usage: npx tsx examples/external-signing/01-allocate-external-party.ts <party-name> [network] [provider]
  *
- * Arguments:
- *   party-name  Name for the party (default: 'alice')
- *   network     Network to use: 'devnet' or 'mainnet' (default: 'devnet')
- *   provider    Provider to use: '5n' or 'intellect' (default: '5n')
+ * Arguments: party-name Name for the party (default: 'alice') network Network to use: 'devnet' or 'mainnet' (default:
+ * 'devnet') provider Provider to use: '5n' or 'intellect' (default: '5n')
  *
- * Examples:
- *   npx tsx examples/external-signing/01-allocate-external-party.ts alice
- *   npx tsx examples/external-signing/01-allocate-external-party.ts alice devnet 5n
- *   npx tsx examples/external-signing/01-allocate-external-party.ts alice mainnet intellect
+ * Examples: npx tsx examples/external-signing/01-allocate-external-party.ts alice npx tsx
+ * examples/external-signing/01-allocate-external-party.ts alice devnet 5n npx tsx
+ * examples/external-signing/01-allocate-external-party.ts alice mainnet intellect
  *
- * Environment variables required:
- *   PRIVY_APP_ID      - Your Privy App ID
- *   PRIVY_APP_SECRET  - Your Privy App Secret
+ * Environment variables required: PRIVY_APP_ID - Your Privy App ID PRIVY_APP_SECRET - Your Privy App Secret
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import {
-  LedgerJsonApiClient,
-  ValidatorApiClient,
   createExternalPartyPrivy,
   createPrivyClientFromEnv,
   EnvLoader,
   FileLogger,
+  LedgerJsonApiClient,
+  ValidatorApiClient,
   type ClientConfig,
   type NetworkType,
 } from '../../src';
-import * as fs from 'fs';
-import * as path from 'path';
 
 function printUsage(): void {
   console.log('\nUsage:');
@@ -167,11 +161,11 @@ async function main() {
   console.log('\n3️⃣  Getting synchronizer ID...');
   const miningRounds = await validatorClient.getOpenAndIssuingMiningRounds();
 
-  if (miningRounds.open_mining_rounds?.length === 0) {
+  if (!miningRounds.open_mining_rounds || miningRounds.open_mining_rounds.length === 0) {
     throw new Error('No open mining rounds found. Ensure the network is running.');
   }
 
-  const synchronizerId = miningRounds.open_mining_rounds[0]?.domain_id;
+  const synchronizerId = miningRounds.open_mining_rounds[0].domain_id;
   if (!synchronizerId) {
     throw new Error('No synchronizer ID found in mining rounds.');
   }
@@ -220,7 +214,7 @@ async function main() {
   fs.writeFileSync(keyFile, JSON.stringify(keyData, null, 2));
 
   // Step 6: Display results
-  console.log(`\n${  '═'.repeat(70)}`);
+  console.log(`\n${'═'.repeat(70)}`);
   console.log('✅ SUCCESS! External Party Onboarded');
   console.log('═'.repeat(70));
   console.log(`\n📋 Party Details:`);

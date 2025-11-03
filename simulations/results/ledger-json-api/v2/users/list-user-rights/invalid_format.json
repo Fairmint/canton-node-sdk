@@ -18,12 +18,7 @@
         "tid": "PLACEHOLDER_TID",
         "category": "11"
       },
-      "resources": [
-        [
-          "ErrorResource(USER)",
-          "rights"
-        ]
-      ],
+      "resources": [["ErrorResource(USER)", "rights"]],
       "errorCategory": 11,
       "grpcCodeValue": 5,
       "retryInfo": null,

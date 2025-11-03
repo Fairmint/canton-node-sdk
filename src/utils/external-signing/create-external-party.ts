@@ -1,11 +1,9 @@
 import type { Keypair } from '@stellar/stellar-base';
 import type { LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { ValidatorApiClient } from '../../clients/validator-api';
-import { stellarPublicKeyToHex, signHexWithStellarKeypair } from './stellar-utils';
+import { signHexWithStellarKeypair, stellarPublicKeyToHex } from './stellar-utils';
 
-/**
- * Parameters for creating an external party
- */
+/** Parameters for creating an external party */
 export interface CreateExternalPartyParams {
   /** Ledger JSON API client instance */
   ledgerClient: LedgerJsonApiClient;
@@ -25,9 +23,7 @@ export interface CreateExternalPartyParams {
   observingParticipantUids?: string[];
 }
 
-/**
- * Result of creating an external party
- */
+/** Result of creating an external party */
 export interface CreateExternalPartyResult {
   /** Generated party ID (e.g., "alice::12abc...") */
   partyId: string;
@@ -47,36 +43,34 @@ export interface CreateExternalPartyResult {
  * Creates an external party in Canton
  *
  * This is a convenience function that combines the three-step process:
+ *
  * 1. Generate topology transactions
  * 2. Sign the multi-hash
  * 3. Allocate the party
  *
- * The keypair's private key is used to sign the onboarding transactions,
- * proving ownership of the public key.
+ * The keypair's private key is used to sign the onboarding transactions, proving ownership of the public key.
  *
  * @example
- * ```typescript
- * import { Keypair } from '@stellar/stellar-base';
- * import { createExternalParty } from '@fairmint/canton-node-sdk';
+ *   ```typescript
+ *   import { Keypair } from '@stellar/stellar-base';
+ *   import { createExternalParty } from '@fairmint/canton-node-sdk';
  *
- * const keypair = Keypair.random();
- * const party = await createExternalParty({
- *   ledgerClient,
- *   keypair,
- *   partyName: 'alice',
- *   synchronizerId: 'global-synchronizer',
- * });
+ *   const keypair = Keypair.random();
+ *   const party = await createExternalParty({
+ *     ledgerClient,
+ *     keypair,
+ *     partyName: 'alice',
+ *     synchronizerId: 'global-synchronizer',
+ *   });
  *
- * console.log('Party ID:', party.partyId);
- * console.log('Public Key Fingerprint:', party.publicKeyFingerprint);
- * ```
+ *   console.log('Party ID:', party.partyId);
+ *   console.log('Public Key Fingerprint:', party.publicKeyFingerprint);
+ *   ```;
  *
  * @param params - Configuration for external party creation
  * @returns Party details including party ID and key fingerprint
  */
-export async function createExternalParty(
-  params: CreateExternalPartyParams
-): Promise<CreateExternalPartyResult> {
+export async function createExternalParty(params: CreateExternalPartyParams): Promise<CreateExternalPartyResult> {
   const { keypair, partyName } = params;
 
   // Initialize Validator API client

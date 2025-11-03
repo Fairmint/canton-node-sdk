@@ -2,9 +2,7 @@
 import 'dotenv/config';
 import { LedgerJsonApiClient } from '../src';
 
-/**
- * List all configured identity providers in the Canton system
- */
+/** List all configured identity providers in the Canton system */
 async function main(): Promise<void> {
   console.log('=== List Identity Providers ===\n');
 
@@ -14,7 +12,7 @@ async function main(): Promise<void> {
     console.log('Fetching identity provider configs...\n');
     const result = await client.listIdentityProviderConfigs({});
 
-    if (result.identityProviderConfigs?.length === 0) {
+    if (!result.identityProviderConfigs || result.identityProviderConfigs.length === 0) {
       console.log('No identity providers configured.');
       return;
     }
@@ -31,7 +29,6 @@ async function main(): Promise<void> {
     });
 
     console.log('✓ Done!');
-
   } catch (error) {
     console.error('\n✗ Failed to list identity providers:');
     console.error(`  ${error instanceof Error ? error.message : String(error)}`);

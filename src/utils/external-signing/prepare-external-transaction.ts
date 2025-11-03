@@ -22,9 +22,7 @@ export interface PrepareExternalTransactionResult extends InteractiveSubmissionP
   commandId: string;
 }
 
-/**
- * Convenience helper for preparing an interactive submission that will be signed off-ledger.
- */
+/** Convenience helper for preparing an interactive submission that will be signed off-ledger. */
 export async function prepareExternalTransaction(
   options: PrepareExternalTransactionOptions
 ): Promise<PrepareExternalTransactionResult> {

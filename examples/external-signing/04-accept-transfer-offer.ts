@@ -2,45 +2,41 @@
  * Example 4: Accept Transfer Offer with External Signing
  *
  * This example demonstrates the external signing workflow for accepting a transfer offer:
+ *
  * 1. Load the external party's Privy wallet info from file
  * 2. Load the transfer offer info (created by example 03)
  * 3. Prepare a transaction to accept the offer
  * 4. Sign the transaction via Privy
  * 5. Execute the signed transaction
  *
- * Usage:
- *   npx tsx examples/external-signing/04-accept-transfer-offer.ts <party-id-file> [network] [provider]
+ * Usage: npx tsx examples/external-signing/04-accept-transfer-offer.ts <party-id-file> [network] [provider]
  *
- * Arguments:
- *   party-id-file  Path to the key file (required)
- *   network        Network to use: 'devnet' or 'mainnet' (optional, defaults to value in key file)
- *   provider       Provider to use: '5n' or 'intellect' (optional, defaults to value in key file)
+ * Arguments: party-id-file Path to the key file (required) network Network to use: 'devnet' or 'mainnet' (optional,
+ * defaults to value in key file) provider Provider to use: '5n' or 'intellect' (optional, defaults to value in key
+ * file)
  *
- * Examples:
- *   npx tsx examples/external-signing/04-accept-transfer-offer.ts ../keys/alice--12abc.json
- *   npx tsx examples/external-signing/04-accept-transfer-offer.ts ../keys/alice--12abc.json devnet 5n
+ * Examples: npx tsx examples/external-signing/04-accept-transfer-offer.ts ../keys/alice--12abc.json npx tsx
+ * examples/external-signing/04-accept-transfer-offer.ts ../keys/alice--12abc.json devnet 5n
  *
  * Note: Run examples 01, 02, and 03 first!
  *
- * Environment variables required:
- *   PRIVY_APP_ID      - Your Privy App ID
- *   PRIVY_APP_SECRET  - Your Privy App Secret
+ * Environment variables required: PRIVY_APP_ID - Your Privy App ID PRIVY_APP_SECRET - Your Privy App Secret
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import {
-  LedgerJsonApiClient,
-  ValidatorApiClient,
-  prepareExternalTransaction,
-  executeExternalTransaction,
-  signWithPrivyWallet,
   createPrivyClientFromEnv,
   EnvLoader,
+  executeExternalTransaction,
   FileLogger,
+  LedgerJsonApiClient,
+  prepareExternalTransaction,
+  signWithPrivyWallet,
+  ValidatorApiClient,
   type ClientConfig,
   type NetworkType,
 } from '../../src';
-import * as fs from 'fs';
-import * as path from 'path';
 
 interface KeyData {
   partyName: string;
@@ -162,9 +158,7 @@ async function main() {
   console.log('\n✍️  Accepting Transfer Offer with External Signing\n');
   console.log(`1️⃣  Reading key file: ${keyFilePath}`);
 
-  const absolutePath = path.isAbsolute(keyFilePath)
-    ? keyFilePath
-    : path.join(process.cwd(), keyFilePath);
+  const absolutePath = path.isAbsolute(keyFilePath) ? keyFilePath : path.join(process.cwd(), keyFilePath);
 
   if (!fs.existsSync(absolutePath)) {
     console.error(`\n❌ Error: Key file not found: ${absolutePath}`);
@@ -229,10 +223,10 @@ async function main() {
   // Step 3c: Get current synchronizer ID from mining rounds
   console.log('\n3️⃣c Getting synchronizer ID...');
   const miningRounds = await validatorClient.getOpenAndIssuingMiningRounds();
-  if (miningRounds.open_mining_rounds?.length === 0) {
+  if (!miningRounds.open_mining_rounds || miningRounds.open_mining_rounds.length === 0) {
     throw new Error('No open mining rounds found. Ensure the network is running.');
   }
-  const synchronizerId = miningRounds.open_mining_rounds[0]?.domain_id;
+  const synchronizerId = miningRounds.open_mining_rounds[0].domain_id;
   if (!synchronizerId) {
     throw new Error('No synchronizer ID found in mining rounds.');
   }
@@ -305,11 +299,7 @@ async function main() {
 
     // Step 6: Sign the transaction hash via Privy
     console.log('\n6️⃣  Signing transaction hash via Privy...');
-    const signature = await signWithPrivyWallet(
-      privyClient,
-      keyData.walletId,
-      prepared.preparedTransactionHash
-    );
+    const signature = await signWithPrivyWallet(privyClient, keyData.walletId, prepared.preparedTransactionHash);
     console.log(`   ✓ Signature: ${signature.substring(0, 40)}...`);
 
     // Step 7: Execute the signed transaction
@@ -345,7 +335,7 @@ async function main() {
     console.log('   ✓ Transaction submitted successfully!');
 
     // Step 8: Display results
-    console.log(`\n${  '═'.repeat(70)}`);
+    console.log(`\n${'═'.repeat(70)}`);
     console.log('✅ SUCCESS! Transfer Accepted with External Signature');
     console.log('═'.repeat(70));
     console.log(`\n📋 Transaction Details:`);

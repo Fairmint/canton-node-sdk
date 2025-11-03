@@ -16,9 +16,7 @@ export interface ExecuteExternalTransactionOptions {
   deduplicationPeriod?: InteractiveSubmissionExecuteRequest['deduplicationPeriod'];
 }
 
-/**
- * Submit a previously prepared and externally signed interactive submission to the ledger.
- */
+/** Submit a previously prepared and externally signed interactive submission to the ledger. */
 export async function executeExternalTransaction(
   options: ExecuteExternalTransactionOptions
 ): Promise<InteractiveSubmissionExecuteResponse> {

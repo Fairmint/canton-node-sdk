@@ -15,9 +15,7 @@ export interface GenerateExternalPartyOptions {
   observingParticipantUids?: string[];
 }
 
-/**
- * Helper that invokes the external party topology generation endpoint.
- */
+/** Helper that invokes the external party topology generation endpoint. */
 export async function generateExternalPartyTopology(
   options: GenerateExternalPartyOptions
 ): Promise<GenerateExternalPartyTopologyResponse> {

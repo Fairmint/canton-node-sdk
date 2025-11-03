@@ -12,9 +12,7 @@ export interface AllocateExternalPartyOptions {
   multiHashSignatures?: AllocateExternalPartyParams['multiHashSignatures'];
 }
 
-/**
- * Helper that submits the signed external party topology to the ledger.
- */
+/** Helper that submits the signed external party topology to the ledger. */
 export async function allocateExternalParty(
   options: AllocateExternalPartyOptions
 ): Promise<AllocateExternalPartyResponse> {
