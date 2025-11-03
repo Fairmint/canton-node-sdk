@@ -313,10 +313,28 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
     await sdk.connect();
     await sdk.connectAdmin();
 
-    // Note: connectTopology() requires a synchronizer ID, not a URL
-    // For now, we skip topology connection and will set synchronizer ID directly if needed
-    // TODO: Get the correct synchronizer ID from Canton Network team
-    console.log('  ⚠ Skipping topology connection (synchronizer ID required)');
+    // Connect to topology - handle synchronizer ID
+    // For localnet, the SDK handles this automatically
+    // For devnet/testnet, we need the synchronizer ID from env or use scan proxy URL as fallback
+    const synchronizerId = process.env['CANTON_SYNCHRONIZER_ID'] ?? finalScanProxyUrl;
+
+    try {
+      console.log(`  Connecting to topology (synchronizer: ${synchronizerId})...`);
+      await sdk.connectTopology(synchronizerId);
+      console.log('  ✓ Topology connected');
+    } catch (error) {
+      console.error('  ⚠ Failed to connect topology:', error instanceof Error ? error.message : String(error));
+
+      if (finalScanProxyUrl.includes('devnet') || finalScanProxyUrl.includes('testnet')) {
+        console.error();
+        console.error('  For DevNet/TestNet, you need to set CANTON_SYNCHRONIZER_ID in your .env file');
+        console.error('  The synchronizer ID should be in the format: global::{hash}');
+        console.error('  Contact the Canton Network team to get the correct synchronizer ID');
+        console.error();
+        throw new Error('Canton topology connection failed - synchronizer ID required for devnet/testnet');
+      }
+      throw error;
+    }
 
     console.log('✓ Canton SDK initialized');
     console.log();
