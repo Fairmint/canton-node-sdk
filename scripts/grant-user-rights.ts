@@ -121,8 +121,12 @@ Examples:
   console.log(`  Rights Type: ${rightsType}\n`);
 
   try {
-    const client = new LedgerJsonApiClient(EnvLoader.getConfig('LEDGER_JSON_API', { network, provider }));
-    const validatorClient = new ValidatorApiClient(EnvLoader.getConfig('VALIDATOR_API', { network, provider }));
+    const configOptions = {
+      ...(network !== undefined && { network }),
+      ...(provider !== undefined && { provider }),
+    };
+    const client = new LedgerJsonApiClient(EnvLoader.getConfig('LEDGER_JSON_API', configOptions));
+    const validatorClient = new ValidatorApiClient(EnvLoader.getConfig('VALIDATOR_API', configOptions));
 
     console.log(`Connected to Ledger JSON API`);
 

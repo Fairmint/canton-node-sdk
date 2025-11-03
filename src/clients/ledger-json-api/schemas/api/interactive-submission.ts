@@ -168,9 +168,10 @@ export const InteractiveSubmissionPrepareRequestSchema = z.object({
 export const InteractiveSubmissionPrepareResponseSchema = z.object({
   preparedTransactionHash: z.string(),
   preparedTransaction: z.string().optional(),
-  submissionId: z.string().optional(),
-  hashingSchemeVersion: z.string().optional(),
-  verboseHashing: z.boolean().optional(),
+  hashingSchemeVersion: z
+    .enum(['HASHING_SCHEME_VERSION_UNSPECIFIED', 'HASHING_SCHEME_VERSION_V2'])
+    .optional(),
+  hashingDetails: z.string().optional(),
 });
 
 const DeduplicationPeriodSchema = z.union([
@@ -216,9 +217,7 @@ export const InteractiveSubmissionExecuteRequestSchema = z.object({
 });
 
 /** Interactive submission execute response. */
-export const InteractiveSubmissionExecuteResponseSchema = z.object({
-  submissionId: z.string().optional(),
-});
+export const InteractiveSubmissionExecuteResponseSchema = z.object({});
 
 // Export types
 export type InteractiveSubmissionAllocatePartyRequest = z.infer<typeof InteractiveSubmissionAllocatePartyRequestSchema>;

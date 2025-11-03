@@ -226,7 +226,11 @@ async function main() {
   if (!miningRounds.open_mining_rounds || miningRounds.open_mining_rounds.length === 0) {
     throw new Error('No open mining rounds found. Ensure the network is running.');
   }
-  const synchronizerId = miningRounds.open_mining_rounds[0].domain_id;
+  const firstRound = miningRounds.open_mining_rounds[0];
+  if (!firstRound) {
+    throw new Error('Unable to access first mining round.');
+  }
+  const synchronizerId = firstRound.domain_id;
   if (!synchronizerId) {
     throw new Error('No synchronizer ID found in mining rounds.');
   }

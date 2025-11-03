@@ -9,9 +9,6 @@ import {
 type GeneratedRequest =
   paths['/v2/interactive-submission/execute']['post']['requestBody']['content']['application/json'];
 
-type GeneratedResponse =
-  paths['/v2/interactive-submission/execute']['post']['responses'][200]['content']['application/json'];
-
 /** Execute an interactive submission that has been previously prepared and signed. */
 export const InteractiveSubmissionExecute = createApiOperation<
   InteractiveSubmissionExecuteRequest,
@@ -22,5 +19,4 @@ export const InteractiveSubmissionExecute = createApiOperation<
   buildUrl: (_params: InteractiveSubmissionExecuteRequest, apiUrl: string) =>
     `${apiUrl}/v2/interactive-submission/execute`,
   buildRequestData: (params: InteractiveSubmissionExecuteRequest) => params as unknown as GeneratedRequest,
-  transformResponse: (_response: GeneratedResponse): InteractiveSubmissionExecuteResponse => ({}),
 });
