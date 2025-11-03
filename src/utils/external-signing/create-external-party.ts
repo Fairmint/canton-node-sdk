@@ -97,7 +97,7 @@ export async function createExternalParty(
     throw new Error('No party ID returned from topology generation');
   }
 
-  if (!topology_txs || topology_txs.length === 0) {
+  if (topology_txs?.length === 0) {
     throw new Error('No topology transactions returned from topology generation');
   }
 

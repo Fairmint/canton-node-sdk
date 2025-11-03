@@ -31,7 +31,6 @@ import {
   FileLogger,
   type ClientConfig,
   type NetworkType,
-  type ProviderType,
 } from '../../src';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -52,7 +51,7 @@ function printUsage(): void {
 function createLedgerClient(network: string, provider: string): LedgerJsonApiClient {
   const envLoader = EnvLoader.getInstance();
   const networkType = network as NetworkType;
-  const providerType = provider as ProviderType;
+  const providerType = provider;
   return new LedgerJsonApiClient({
     network: networkType,
     provider: providerType,
@@ -75,7 +74,7 @@ function createLedgerClient(network: string, provider: string): LedgerJsonApiCli
 function createValidatorClient(network: string, provider: string): ValidatorApiClient {
   const envLoader = EnvLoader.getInstance();
   const networkType = network as NetworkType;
-  const providerType = provider as ProviderType;
+  const providerType = provider;
   const apiUrl = envLoader.getApiUri('VALIDATOR_API', networkType, providerType);
   const clientId = envLoader.getApiClientId('VALIDATOR_API', networkType, providerType);
   const clientSecret = envLoader.getApiClientSecret('VALIDATOR_API', networkType, providerType);
@@ -168,7 +167,7 @@ async function main() {
   console.log('\n3️⃣  Getting synchronizer ID...');
   const miningRounds = await validatorClient.getOpenAndIssuingMiningRounds();
 
-  if (!miningRounds.open_mining_rounds || miningRounds.open_mining_rounds.length === 0) {
+  if (miningRounds.open_mining_rounds?.length === 0) {
     throw new Error('No open mining rounds found. Ensure the network is running.');
   }
 

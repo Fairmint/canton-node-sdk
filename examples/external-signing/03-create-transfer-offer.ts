@@ -25,7 +25,6 @@ import {
   FileLogger,
   type ClientConfig,
   type NetworkType,
-  type ProviderType,
 } from '../../src';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -46,7 +45,7 @@ interface KeyData {
 function createValidatorClient(network: string, provider: string): ValidatorApiClient {
   const envLoader = EnvLoader.getInstance();
   const networkType = network as NetworkType;
-  const providerType = provider as ProviderType;
+  const providerType = provider;
   const apiUrl = envLoader.getApiUri('VALIDATOR_API', networkType, providerType);
   const clientId = envLoader.getApiClientId('VALIDATOR_API', networkType, providerType);
   const clientSecret = envLoader.getApiClientSecret('VALIDATOR_API', networkType, providerType);

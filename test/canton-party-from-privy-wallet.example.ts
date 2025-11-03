@@ -136,7 +136,7 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
 
     // Use provided scan proxy URL or default from env
     const finalScanProxyUrl =
-      scanProxyUrl || process.env['CANTON_SCAN_PROXY_URL'] || localNetStaticConfig.LOCALNET_SCAN_PROXY_API_URL;
+      scanProxyUrl ?? process.env['CANTON_SCAN_PROXY_URL'] ?? localNetStaticConfig.LOCALNET_SCAN_PROXY_API_URL;
 
     console.log('  Connecting to scan proxy:', finalScanProxyUrl);
 
@@ -150,14 +150,14 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
       const oauthClientId = process.env['CANTON_OAUTH_CLIENT_ID'];
       const oauthClientSecret = process.env['CANTON_OAUTH_CLIENT_SECRET'];
       const oauthAuthority =
-        process.env['CANTON_OAUTH_AUTHORITY'] || 'https://auth.transfer-agent.xyz/application/o/validator-devnet/';
-      const oauthAudience = process.env['CANTON_OAUTH_AUDIENCE'] || 'validator-devnet-m2m';
-      const oauthScope = process.env['CANTON_OAUTH_SCOPE'] || 'openid';
+        process.env['CANTON_OAUTH_AUTHORITY'] ?? 'https://auth.transfer-agent.xyz/application/o/validator-devnet/';
+      const oauthAudience = process.env['CANTON_OAUTH_AUDIENCE'] ?? 'validator-devnet-m2m';
+      const oauthScope = process.env['CANTON_OAUTH_SCOPE'] ?? 'openid';
       const hasOAuthCredentials = Boolean(oauthClientId && oauthClientSecret);
 
       // Use custom base URL if provided, otherwise default (note: no /v0/ for devnet with OAuth)
       const baseUrl =
-        process.env['CANTON_BASE_URL'] ||
+        process.env['CANTON_BASE_URL'] ??
         (hasOAuthCredentials
           ? 'https://wallet.validator.devnet.transfer-agent.xyz/api/validator'
           : 'https://wallet.validator.devnet.transfer-agent.xyz/api/validator/v0');
@@ -233,14 +233,14 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
       const oauthClientId = process.env['CANTON_OAUTH_CLIENT_ID'];
       const oauthClientSecret = process.env['CANTON_OAUTH_CLIENT_SECRET'];
       const oauthAuthority =
-        process.env['CANTON_OAUTH_AUTHORITY'] || 'https://auth.transfer-agent.xyz/application/o/validator-testnet/';
-      const oauthAudience = process.env['CANTON_OAUTH_AUDIENCE'] || 'validator-testnet-m2m';
-      const oauthScope = process.env['CANTON_OAUTH_SCOPE'] || 'openid';
+        process.env['CANTON_OAUTH_AUTHORITY'] ?? 'https://auth.transfer-agent.xyz/application/o/validator-testnet/';
+      const oauthAudience = process.env['CANTON_OAUTH_AUDIENCE'] ?? 'validator-testnet-m2m';
+      const oauthScope = process.env['CANTON_OAUTH_SCOPE'] ?? 'openid';
       const hasOAuthCredentials = Boolean(oauthClientId && oauthClientSecret);
 
       // Use custom base URL if provided, otherwise default (note: no /v0/ for testnet with OAuth)
       const baseUrl =
-        process.env['CANTON_BASE_URL'] ||
+        process.env['CANTON_BASE_URL'] ??
         (hasOAuthCredentials
           ? 'https://wallet.validator.testnet.transfer-agent.xyz/api/validator'
           : 'https://wallet.validator.testnet.transfer-agent.xyz/api/validator/v0');
@@ -528,11 +528,11 @@ async function main() {
     if (firstArg.startsWith('did:privy:')) {
       // First argument is a user ID
       userId = firstArg;
-      partyHint = secondArg || 'privy-user';
+      partyHint = secondArg ?? 'privy-user';
     } else {
       // First argument is a wallet ID
       walletId = firstArg;
-      partyHint = secondArg || 'privy-user';
+      partyHint = secondArg ?? 'privy-user';
     }
   }
 
