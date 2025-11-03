@@ -243,8 +243,11 @@ The example will:
 4. Explain how to use the wallet for signing (client-side)
 
 **Note**: Due to ESM compatibility issues with Jest, the Privy utilities are tested using the
-example files with `tsx` rather than Jest unit tests. **Note**: Due to ESM compatibility issues with
-Jest, the Privy utilities are tested using the example file with `tsx` rather than Jest unit tests.
+<<<<<<< HEAD example file with `tsx` rather than Jest unit tests. ======= example files with `tsx`
+rather than Jest unit tests. **Note**: Due to ESM compatibility issues with Jest, the Privy
+utilities are tested using the example file with `tsx` rather than Jest unit tests.
+
+> > > > > > > e877810eda8d1cdc3a1753bfe7d294eb4beb6f3c
 
 ## Canton Network Integration
 

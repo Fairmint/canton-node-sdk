@@ -199,27 +199,27 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
         return auth;
       };
 
-      ledgerFactory = (userId: string, authTokenProvider: any, isAdmin: boolean) => {
-        console.log(`  Creating LedgerController: userId=${userId}, isAdmin=${isAdmin}`);
-        return new LedgerController(userId, new URL(`${baseUrl}/ledger`), undefined, isAdmin, authTokenProvider);
+      ledgerFactory = (uid: string, authTokenProvider: any, isAdmin: boolean) => {
+        console.log(`  Creating LedgerController: userId=${uid}, isAdmin=${isAdmin}`);
+        return new LedgerController(uid, new URL(`${baseUrl}/ledger`), undefined, isAdmin, authTokenProvider);
       };
 
-      topologyFactory = (userId: string, authTokenProvider: any, synchronizerId: any) => {
-        console.log(`  Creating TopologyController: userId=${userId}, synchronizerId=${synchronizerId}`);
+      topologyFactory = (uid: string, authTokenProvider: any, synchronizerId: any) => {
+        console.log(`  Creating TopologyController: userId=${uid}, synchronizerId=${synchronizerId}`);
         return new TopologyController(
           `${baseUrl}/admin`,
           new URL(`${baseUrl}/topology`),
-          userId,
+          uid,
           synchronizerId,
           undefined,
           authTokenProvider
         );
       };
 
-      tokenStandardFactory = (userId: string, authTokenProvider: any, isAdmin: boolean) => {
-        console.log(`  Creating TokenStandardController: userId=${userId}, isAdmin=${isAdmin}`);
+      tokenStandardFactory = (uid: string, authTokenProvider: any, isAdmin: boolean) => {
+        console.log(`  Creating TokenStandardController: userId=${uid}, isAdmin=${isAdmin}`);
         return new TokenStandardController(
-          userId,
+          uid,
           new URL(`${baseUrl}/token-standard`),
           new URL(`${baseUrl}/validator`),
           undefined,
@@ -271,22 +271,22 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
         return auth;
       };
 
-      ledgerFactory = (userId: string, authTokenProvider: any, isAdmin: boolean) =>
-        new LedgerController(userId, new URL(`${baseUrl}/ledger`), undefined, isAdmin, authTokenProvider);
+      ledgerFactory = (uid: string, authTokenProvider: any, isAdmin: boolean) =>
+        new LedgerController(uid, new URL(`${baseUrl}/ledger`), undefined, isAdmin, authTokenProvider);
 
-      topologyFactory = (userId: string, authTokenProvider: any, synchronizerId: any) =>
+      topologyFactory = (uid: string, authTokenProvider: any, synchronizerId: any) =>
         new TopologyController(
           `${baseUrl}/admin`,
           new URL(`${baseUrl}/topology`),
-          userId,
+          uid,
           synchronizerId,
           undefined,
           authTokenProvider
         );
 
-      tokenStandardFactory = (userId: string, authTokenProvider: any, isAdmin: boolean) =>
+      tokenStandardFactory = (uid: string, authTokenProvider: any, isAdmin: boolean) =>
         new TokenStandardController(
-          userId,
+          uid,
           new URL(`${baseUrl}/token-standard`),
           new URL(`${baseUrl}/validator`),
           undefined,
@@ -302,10 +302,6 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
       tokenStandardFactory = localNetTokenStandardDefault;
     }
 
-    // Step 3.5: Debug - Test API endpoints BEFORE SDK connection
-    console.log();
-    console.log('Step 3.5: Testing devnet API endpoints directly (before SDK connect)...');
-
     const sdk = new WalletSDKImpl().configure({
       logger,
       authFactory,
@@ -314,61 +310,31 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
       tokenStandardFactory,
     });
 
-    // Get OAuth token first if using OAuth
-    let authToken = '';
-    if (finalScanProxyUrl.includes('devnet') || finalScanProxyUrl.includes('testnet')) {
-      const oauthClientId = process.env['CANTON_OAUTH_CLIENT_ID'];
-      const oauthClientSecret = process.env['CANTON_OAUTH_CLIENT_SECRET'];
-      if (oauthClientId && oauthClientSecret) {
-        try {
-          console.log('  Getting OAuth token for API tests...');
-          const token = await sdk.auth.getUserToken();
-          authToken = token.token;
-          console.log('  ✓ OAuth token obtained');
-        } catch (err) {
-          console.log('  ⚠ Could not get OAuth token:', err instanceof Error ? err.message : String(err));
-        }
-      }
-    }
-    try {
-      const baseUrlForTests = finalScanProxyUrl.replace('/scan-proxy', '').replace('/v0', '');
-      const testEndpoints = [
-        `${baseUrlForTests}/ledger/version`,
-        `${baseUrlForTests}/ledger/v1/version`,
-        `${baseUrlForTests}/ledger`,
-        `${baseUrlForTests}/topology`,
-        finalScanProxyUrl,
-      ];
-
-      for (const endpoint of testEndpoints) {
-        try {
-          console.log(`  Testing: ${endpoint}`);
-          const headers: Record<string, string> = {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-          };
-
-          if (authToken) {
-            headers['Authorization'] = `Bearer ${authToken}`;
-          }
-
-          const response = await fetch(endpoint, { headers });
-          console.log(`    Status: ${response.status} ${response.statusText}`);
-          const text = await response.text();
-          console.log(`    Response: ${text.substring(0, 300)}${text.length > 300 ? '...' : ''}`);
-        } catch (err) {
-          console.log(`    Error: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-    } catch (error) {
-      console.log('  Could not test endpoints:', error);
-    }
-    console.log();
-
-    console.log('Step 3.6: Connecting Canton SDK...');
     await sdk.connect();
     await sdk.connectAdmin();
-    await sdk.connectTopology(finalScanProxyUrl);
+
+    // Connect to topology - handle synchronizer ID
+    // For localnet, the SDK handles this automatically
+    // For devnet/testnet, we need the synchronizer ID from env or use scan proxy URL as fallback
+    const synchronizerId = process.env['CANTON_SYNCHRONIZER_ID'] ?? finalScanProxyUrl;
+
+    try {
+      console.log(`  Connecting to topology (synchronizer: ${synchronizerId})...`);
+      await sdk.connectTopology(synchronizerId);
+      console.log('  ✓ Topology connected');
+    } catch (error) {
+      console.error('  ⚠ Failed to connect topology:', error instanceof Error ? error.message : String(error));
+
+      if (finalScanProxyUrl.includes('devnet') || finalScanProxyUrl.includes('testnet')) {
+        console.error();
+        console.error('  For DevNet/TestNet, you need to set CANTON_SYNCHRONIZER_ID in your .env file');
+        console.error('  The synchronizer ID should be in the format: global::{hash}');
+        console.error('  Contact the Canton Network team to get the correct synchronizer ID');
+        console.error();
+        throw new Error('Canton topology connection failed - synchronizer ID required for devnet/testnet');
+      }
+      throw error;
+    }
 
     console.log('✓ Canton SDK initialized');
     console.log();
@@ -410,8 +376,7 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
         params: { hash: `0x${hexEncoded}` },
       });
 
-      signature = signResult.signature;
-      encoding = signResult.encoding;
+      ({ signature, encoding } = signResult);
 
       console.log('✓ Hash signed successfully');
       console.log('  Signature:', signature);
