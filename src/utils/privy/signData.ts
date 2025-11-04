@@ -52,7 +52,6 @@ export async function signWithWallet(privyClient: PrivyClient, options: SignOpti
   const { signature, encoding } = await privyClient.wallets().rawSign(walletId, {
     params: { hash: `0x${hexData}` },
   });
-
   // Remove 0x prefix and convert to base64
   const signatureHex = signature.startsWith('0x') ? signature.slice(2) : signature;
   const signatureBase64 = Buffer.from(signatureHex, 'hex').toString('base64');

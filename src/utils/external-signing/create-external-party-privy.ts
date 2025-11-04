@@ -1,6 +1,5 @@
 import type { PrivyClient } from '@privy-io/node';
 import type { LedgerJsonApiClient } from '../../clients/ledger-json-api';
-import { ValidatorApiClient } from '../../clients/validator-api';
 import type { StellarWallet } from '../privy/types';
 
 /** Parameters for creating an external party with Privy */
@@ -13,6 +12,8 @@ export interface CreateExternalPartyPrivyParams {
   partyName: string;
   /** Synchronizer ID to onboard the party on */
   synchronizerId: string;
+  /** Identity provider ID (default: 'default') */
+  identityProviderId?: string;
   /** Optional: existing Privy wallet to use. If not provided, creates a new one */
   wallet?: StellarWallet;
   /** Optional: user ID to link the wallet to (format: did:privy:...) */
@@ -77,10 +78,19 @@ export interface CreateExternalPartyPrivyResult {
 export async function createExternalPartyPrivy(
   params: CreateExternalPartyPrivyParams
 ): Promise<CreateExternalPartyPrivyResult> {
-  const { privyClient, partyName, wallet: existingWallet, userId } = params;
-
-  // Initialize Validator API client
-  const validatorClient = new ValidatorApiClient();
+  const {
+    privyClient,
+    ledgerClient,
+    partyName,
+    synchronizerId,
+    identityProviderId = '',
+    wallet: existingWallet,
+    userId,
+    localParticipantObservationOnly,
+    otherConfirmingParticipantUids,
+    confirmationThreshold,
+    observingParticipantUids,
+  } = params;
 
   // Step 1: Get or create Privy wallet
   let wallet: StellarWallet;
@@ -92,65 +102,94 @@ export async function createExternalPartyPrivy(
     wallet = await createStellarWallet(privyClient, userId ? { userId } : undefined);
   }
 
-  // Step 2: Convert public key from base64 to hex for Validator API
-  const publicKeyHex = Buffer.from(wallet.publicKeyBase64, 'base64').toString('hex');
+  // Step 2: Wrap the raw public key in DER X.509 SubjectPublicKeyInfo format
+  // wallet.publicKeyBase64 is the raw 32-byte Ed25519 public key
+  // Canton's Ledger API requires it to be wrapped in DER format
+  const { wrapEd25519PublicKeyInDER } = await import('./stellar-utils');
+  const rawPublicKey = Buffer.from(wallet.publicKeyBase64, 'base64');
+  const derWrappedPublicKey = wrapEd25519PublicKeyInDER(rawPublicKey);
+  const derPublicKeyBase64 = derWrappedPublicKey.toString('base64');
 
-  // Step 3: Generate external party topology using Validator API
-  const topology = await validatorClient.generateExternalPartyTopology({
-    party_hint: partyName,
-    public_key: publicKeyHex,
+  // Also keep hex version for return value (from raw key, not DER-wrapped)
+  const publicKeyHex = rawPublicKey.toString('hex');
+
+  // Step 3: Generate external party topology using Ledger JSON API
+  const topology = await ledgerClient.generateExternalPartyTopology({
+    synchronizer: synchronizerId,
+    partyHint: partyName,
+    publicKey: {
+      format: 'CRYPTO_KEY_FORMAT_DER_X509_SUBJECT_PUBLIC_KEY_INFO',
+      keyData: derPublicKeyBase64,
+      keySpec: 'SIGNING_KEY_SPEC_EC_CURVE25519',
+    },
+    localParticipantObservationOnly,
+    otherConfirmingParticipantUids,
+    confirmationThreshold,
+    observingParticipantUids,
   });
 
-  const { party_id, topology_txs } = topology;
+  const { partyId, multiHash, topologyTransactions } = topology;
 
-  if (!party_id) {
+  if (!partyId) {
     throw new Error('No party ID returned from topology generation');
   }
 
-  if (topology_txs.length === 0) {
+  if (!multiHash) {
+    throw new Error('No multi-hash returned from topology generation');
+  }
+
+  if (!topologyTransactions || topologyTransactions.length === 0) {
     throw new Error('No topology transactions returned from topology generation');
   }
 
-  // Step 4: Sign each topology transaction hash using Privy
+  // Step 4: Sign the multi-hash using Privy
+  // The multiHash from Canton is in base64 format, but signWithWallet expects hex
+  const multiHashBuffer = Buffer.from(multiHash, 'base64');
+  const multiHashHex = multiHashBuffer.toString('hex');
+
   const { signWithWallet } = await import('../privy/signData');
 
-  const signedTopologyTxs = await Promise.all(
-    topology_txs.map(async (tx) => {
-      const signResult = await signWithWallet(privyClient, {
-        walletId: wallet.id,
-        data: tx.hash,
-      });
-
-      // Convert signature from hex (with 0x prefix) to hex without prefix
-      const signatureHex = signResult.signature.startsWith('0x') ? signResult.signature.slice(2) : signResult.signature;
-
-      return {
-        topology_tx: tx.topology_tx,
-        signed_hash: signatureHex,
-      };
-    })
-  );
-
-  // Step 5: Submit the signed topology transactions using Validator API
-  const submitResult = await validatorClient.submitExternalPartyTopology({
-    public_key: publicKeyHex,
-    signed_topology_txs: signedTopologyTxs,
+  const signResult = await signWithWallet(privyClient, {
+    walletId: wallet.id,
+    data: multiHashHex,
   });
 
-  if (!submitResult.party_id) {
-    throw new Error('Failed to submit external party topology - no party ID returned');
+  // Convert signature from hex (with 0x prefix) to base64 for Canton
+  const signatureHex = signResult.signature.startsWith('0x') ? signResult.signature.slice(2) : signResult.signature;
+  const signatureBase64 = Buffer.from(signatureHex, 'hex').toString('base64');
+
+  // Step 5: Allocate the party using Ledger JSON API
+  // We need to pass both the topology transactions and the multi-hash signature
+  // Transform the topology transactions (array of strings) into the expected format
+  const onboardingTransactions = topologyTransactions.map((transaction) => ({ transaction }));
+
+  const allocateResult = await ledgerClient.allocateExternalParty({
+    synchronizer: synchronizerId,
+    identityProviderId,
+    onboardingTransactions,
+    multiHashSignatures: [
+      {
+        format: 'SIGNATURE_FORMAT_RAW',
+        signature: signatureBase64,
+        signedBy: partyId.split('::')[1] ?? '', // fingerprint
+        signingAlgorithmSpec: 'SIGNING_ALGORITHM_SPEC_ED25519',
+      },
+    ],
+  });
+
+  if (!allocateResult.partyId) {
+    throw new Error('Failed to allocate external party - no party ID returned');
   }
 
   // Note: For external parties, we don't need to create a separate user or grant rights.
   // When preparing transactions, we'll use the validator operator's user ID (fetched automatically
-  // by prepareExternalTransaction from the validator API). The external signature itself provides
-  // the authorization for the transaction.
+  // by prepareExternalTransaction). The external signature itself provides the authorization.
 
   return {
-    partyId: submitResult.party_id,
+    partyId: allocateResult.partyId,
     userId: '', // Will be resolved automatically when preparing transactions
     publicKey: publicKeyHex,
-    publicKeyFingerprint: party_id.split('::')[1] ?? '', // Extract fingerprint from party ID
+    publicKeyFingerprint: partyId.split('::')[1] ?? '', // Extract fingerprint from party ID
     wallet,
   };
 }

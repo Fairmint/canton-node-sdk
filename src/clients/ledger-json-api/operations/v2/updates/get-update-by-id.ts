@@ -34,12 +34,28 @@ export const GetUpdateById = createApiOperation<GetUpdateByIdParams, GetUpdateBy
         includeTransactions: {
           eventFormat: {
             verbose: true,
+            filtersByParty: Object.fromEntries(
+              params.readAs.map((party) => [
+                party,
+                {
+                  cumulative: [
+                    {
+                      identifierFilter: {
+                        WildcardFilter: {
+                          value: {
+                            includeCreatedEventBlob: true,
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+              ])
+            ),
           },
-          transactionShape: 'TRANSACTION_SHAPE_UNSPECIFIED',
+          transactionShape: 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
         },
       },
-      // Include requestingParties if readAs is provided
-      ...(params.readAs.length > 0 && { requestingParties: params.readAs }),
     };
   },
 });

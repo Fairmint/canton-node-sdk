@@ -1,16 +1,44 @@
 import { Keypair } from '@stellar/stellar-base';
 
 /**
- * Converts a Stellar public key to base64 format for Canton
+ * Wraps a raw Ed25519 public key in DER X.509 SubjectPublicKeyInfo format
  *
- * Stellar Ed25519 keys can be used for Canton external signing. This function extracts the raw 32-byte public key and
- * converts it to base64.
+ * The DER structure for Ed25519 public keys is: SEQUENCE { SEQUENCE { OBJECT IDENTIFIER id-Ed25519 (1.3.101.112) } BIT
+ * STRING (raw public key) }
+ *
+ * @param rawPublicKey - Raw 32-byte Ed25519 public key
+ * @returns DER-encoded public key in X.509 SubjectPublicKeyInfo format
+ */
+export function wrapEd25519PublicKeyInDER(rawPublicKey: Buffer): Buffer {
+  if (rawPublicKey.length !== 32) {
+    throw new Error(`Invalid Ed25519 public key length: ${rawPublicKey.length}, expected 32 bytes`);
+  }
+
+  // DER prefix for Ed25519 public keys in X.509 SubjectPublicKeyInfo format
+  // 30 2a: SEQUENCE, length 42 (0x2a)
+  // 30 05: SEQUENCE, length 5
+  // 06 03: OBJECT IDENTIFIER, length 3
+  // 2b 65 70: OID 1.3.101.112 (id-Ed25519)
+  // 03 21: BIT STRING, length 33 (0x21)
+  // 00: no unused bits
+  const derPrefix = Buffer.from('302a300506032b6570032100', 'hex');
+
+  return Buffer.concat([derPrefix, rawPublicKey]);
+}
+
+/**
+ * Converts a Stellar public key to base64 format for Canton (DER-wrapped)
+ *
+ * Stellar Ed25519 keys can be used for Canton external signing. This function extracts the raw 32-byte public key,
+ * wraps it in DER X.509 SubjectPublicKeyInfo format, and converts to base64.
  *
  * @param keypair - Stellar Keypair object
- * @returns Base64-encoded public key
+ * @returns Base64-encoded DER-wrapped public key in X.509 SubjectPublicKeyInfo format
  */
 export function stellarPublicKeyToBase64(keypair: Keypair): string {
-  return keypair.rawPublicKey().toString('base64');
+  const rawPublicKey = keypair.rawPublicKey();
+  const derWrapped = wrapEd25519PublicKeyInDER(rawPublicKey);
+  return derWrapped.toString('base64');
 }
 
 /**
