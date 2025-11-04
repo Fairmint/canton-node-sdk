@@ -9,7 +9,7 @@ import { type operations } from '../../../../../generated/apps/validator/src/mai
  *   ```typescript
  *   const result = await client.listExternalPartySetupProposals();
  *   console.log('Proposals:', result.contracts);
- *   ```
+ *   ```;
  */
 export const ListExternalPartySetupProposals = createApiOperation<
   void,
@@ -20,4 +20,3 @@ export const ListExternalPartySetupProposals = createApiOperation<
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/admin/external-party/setup-proposal`,
   buildRequestData: () => ({}),
 });
-

@@ -9,7 +9,7 @@ import { type operations } from '../../../../../generated/apps/validator/src/mai
  *   ```typescript
  *   const result = await client.listUsers();
  *   console.log('Usernames:', result.usernames);
- *   ```
+ *   ```;
  */
 export const ListUsers = createApiOperation<
   void,
@@ -20,4 +20,3 @@ export const ListUsers = createApiOperation<
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/admin/users`,
   buildRequestData: () => ({}),
 });
-

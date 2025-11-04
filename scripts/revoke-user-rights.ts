@@ -120,7 +120,9 @@ Examples:
     rights = createAdminRightsForRevoke();
     rightsType = 'ParticipantAdmin';
   } else {
-    console.error('Error: You must specify which rights to revoke (--admin, --execute-any-party, --read-any-party, or --party-id)');
+    console.error(
+      'Error: You must specify which rights to revoke (--admin, --execute-any-party, --read-any-party, or --party-id)'
+    );
     process.exit(1);
   }
 
@@ -176,7 +178,7 @@ Examples:
     console.log('\nRevoking rights...');
     const result = await client.revokeUserRights({
       userId: resolvedUserId,
-      rights: rights,
+      rights,
     });
 
     console.log(`\n✓ Successfully revoked ${result.newlyRevokedRights?.length ?? 0} rights`);

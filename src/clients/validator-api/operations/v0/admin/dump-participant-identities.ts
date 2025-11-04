@@ -9,7 +9,7 @@ import { type operations } from '../../../../../generated/apps/validator/src/mai
  *   ```typescript
  *   const result = await client.dumpParticipantIdentities();
  *   console.log('Participant ID:', result.id);
- *   ```
+ *   ```;
  */
 export const DumpParticipantIdentities = createApiOperation<
   void,
@@ -20,4 +20,3 @@ export const DumpParticipantIdentities = createApiOperation<
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/admin/participant/identities`,
   buildRequestData: () => ({}),
 });
-

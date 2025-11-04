@@ -12,10 +12,7 @@ export const ListPartiesParamsSchema = z.object({
 export type ListPartiesParams = z.infer<typeof ListPartiesParamsSchema>;
 export type ListPartiesResponse = paths[typeof endpoint]['get']['responses']['200']['content']['application/json'];
 
-/**
- * List all parties known to the participant
- * Alias for getParties for consistency with other list operations
- */
+/** List all parties known to the participant Alias for getParties for consistency with other list operations */
 export const ListParties = createApiOperation<ListPartiesParams, ListPartiesResponse>({
   paramsSchema: ListPartiesParamsSchema,
   method: 'GET',
@@ -26,4 +23,3 @@ export const ListParties = createApiOperation<ListPartiesParams, ListPartiesResp
     return url.toString();
   },
 });
-

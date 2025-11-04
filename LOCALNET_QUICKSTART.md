@@ -127,6 +127,3 @@ https://app.circleci.com/pipelines/github/YOUR_ORG/canton-node-sdk
 ---
 
 **Need help?** See [LOCALNET_TESTING.md](./docs/LOCALNET_TESTING.md) for detailed troubleshooting.
-
-
-

@@ -3,13 +3,8 @@ import { Keypair } from '@stellar/stellar-base';
 /**
  * Wraps a raw Ed25519 public key in DER X.509 SubjectPublicKeyInfo format
  *
- * The DER structure for Ed25519 public keys is:
- * SEQUENCE {
- *   SEQUENCE {
- *     OBJECT IDENTIFIER id-Ed25519 (1.3.101.112)
- *   }
- *   BIT STRING (raw public key)
- * }
+ * The DER structure for Ed25519 public keys is: SEQUENCE { SEQUENCE { OBJECT IDENTIFIER id-Ed25519 (1.3.101.112) } BIT
+ * STRING (raw public key) }
  *
  * @param rawPublicKey - Raw 32-byte Ed25519 public key
  * @returns DER-encoded public key in X.509 SubjectPublicKeyInfo format
