@@ -1,93 +1,87 @@
 #!/usr/bin/env tsx
 import 'dotenv/config';
 import { EnvLoader, LedgerJsonApiClient, ValidatorApiClient } from '../src';
-import type { Right } from '../src/clients/ledger-json-api/schemas/api/users';
 import type { NetworkType } from '../src/core/types';
 
-/** Create default admin rights for a user Note: The grant API expects a nested "value" wrapper structure */
-function createAdminRights(): Right[] {
-  return [
-    {
-      kind: {
-        ParticipantAdmin: { value: {} },
-      },
-    },
-  ] as unknown as Right[];
-}
-
-/** Create CanExecuteAsAnyParty rights for a user Note: The grant API expects a nested "value" wrapper structure */
-function createExecuteAsAnyPartyRights(): Right[] {
-  return [
-    {
-      kind: {
-        CanExecuteAsAnyParty: { value: {} },
-      },
-    },
-  ] as unknown as Right[];
-}
-
-/** Create CanReadAsAnyParty rights for a user Note: The grant API expects a nested "value" wrapper structure */
-function createReadAsAnyPartyRights(): Right[] {
-  return [
-    {
-      kind: {
-        CanReadAsAnyParty: { value: {} },
-      },
-    },
-  ] as unknown as Right[];
-}
-
-/** Create party-specific rights for a user Note: The grant API expects a nested "value" wrapper structure */
-function createPartyRights(partyId: string): Right[] {
+/** Create party-specific rights with value wrapper for revoke operation */
+function createPartyRightsForRevoke(partyId: string): any[] {
   return [
     {
       kind: {
         CanActAs: { value: { party: partyId } },
       },
     },
-    // {
-    //   kind: {
-    //     CanReadAs: { value: { party: partyId } },
-    //   },
-    // },
-  ] as unknown as Right[];
+  ];
+}
+
+/** Create admin rights with value wrapper for revoke operation */
+function createAdminRightsForRevoke(): any[] {
+  return [
+    {
+      kind: {
+        ParticipantAdmin: { value: {} },
+      },
+    },
+  ];
+}
+
+/** Create CanExecuteAsAnyParty rights with value wrapper for revoke operation */
+function createExecuteAsAnyPartyRightsForRevoke(): any[] {
+  return [
+    {
+      kind: {
+        CanExecuteAsAnyParty: { value: {} },
+      },
+    },
+  ];
+}
+
+/** Create CanReadAsAnyParty rights with value wrapper for revoke operation */
+function createReadAsAnyPartyRightsForRevoke(): any[] {
+  return [
+    {
+      kind: {
+        CanReadAsAnyParty: { value: {} },
+      },
+    },
+  ];
 }
 
 async function main(): Promise<void> {
-  console.log('=== Grant User Rights Utility ===\n');
+  console.log('=== Revoke User Rights Utility ===\n');
 
   // Parse command line arguments
   const args = process.argv.slice(2);
 
   if (args.includes('--help') || args.includes('-h')) {
     console.log(`
-Usage: tsx scripts/grant-user-rights.ts [options]
+Usage: tsx scripts/revoke-user-rights.ts [options]
 
 Options:
-  --user-id <id>              User ID to grant rights to (defaults to authenticated user)
+  --user-id <id>              User ID to revoke rights from (defaults to authenticated user)
   --party-id <id>             Party ID for party-specific rights (optional)
-  --admin                     Grant ParticipantAdmin rights (default if no other right specified)
-  --execute-any-party         Grant CanExecuteAsAnyParty rights
-  --read-any-party            Grant CanReadAsAnyParty rights
+  --admin                     Revoke ParticipantAdmin rights
+  --execute-any-party         Revoke CanExecuteAsAnyParty rights
+  --read-any-party            Revoke CanReadAsAnyParty rights
   --network <network>         Target network (devnet|testnet|mainnet, defaults to CANTON_CURRENT_NETWORK)
   --provider <provider>       Target provider (defaults to CANTON_CURRENT_PROVIDER)
   --help, -h                  Show this help message
 
 Examples:
-  # Grant admin rights to authenticated user (uses current network/provider from env)
-  npm run grant-user-rights -- --admin
+  # Revoke admin rights from authenticated user (uses current network/provider from env)
+  npm run revoke-user-rights -- --admin
 
-  # Grant CanExecuteAsAnyParty rights to authenticated user
-  npm run grant-user-rights -- --execute-any-party
+  # Revoke CanExecuteAsAnyParty rights from authenticated user
+  npm run revoke-user-rights -- --execute-any-party
 
-  # Grant CanReadAsAnyParty rights to authenticated user
-  npm run grant-user-rights -- --read-any-party
+  # Revoke CanReadAsAnyParty rights from authenticated user
+  npm run revoke-user-rights -- --read-any-party
 
-  # Grant admin rights to specific user on devnet/intellect
-  npm run grant-user-rights -- --user-id "5" --admin --network devnet --provider intellect
+  # Revoke admin rights from specific user on devnet/intellect
+  npm run revoke-user-rights -- --user-id "5" --admin --network devnet --provider intellect
 
-  # Grant party rights to authenticated user
-  npm run grant-user-rights -- --party-id "alice::party1"
+  # Revoke party rights from authenticated user
+  npm run revoke-user-rights -- --party-id "alice::party1"
     `);
     process.exit(0);
   }
@@ -99,6 +93,7 @@ Examples:
   const partyIdIndex = args.indexOf('--party-id');
   const partyId = partyIdIndex !== -1 ? args[partyIdIndex + 1] : undefined;
 
+  const admin = args.includes('--admin');
   const executeAnyParty = args.includes('--execute-any-party');
   const readAnyParty = args.includes('--read-any-party');
 
@@ -108,22 +103,25 @@ Examples:
   const providerIndex = args.indexOf('--provider');
   const provider = providerIndex !== -1 ? args[providerIndex + 1] : undefined;
 
-  // Determine which rights to grant
-  let rights: Right[];
+  // Determine which rights to revoke
+  let rights: any[];
   let rightsType: string;
 
   if (partyId) {
-    rights = createPartyRights(partyId);
+    rights = createPartyRightsForRevoke(partyId);
     rightsType = 'Party Rights (CanActAs)';
   } else if (executeAnyParty) {
-    rights = createExecuteAsAnyPartyRights();
+    rights = createExecuteAsAnyPartyRightsForRevoke();
     rightsType = 'CanExecuteAsAnyParty';
   } else if (readAnyParty) {
-    rights = createReadAsAnyPartyRights();
+    rights = createReadAsAnyPartyRightsForRevoke();
     rightsType = 'CanReadAsAnyParty';
-  } else {
-    rights = createAdminRights();
+  } else if (admin) {
+    rights = createAdminRightsForRevoke();
     rightsType = 'ParticipantAdmin';
+  } else {
+    console.error('Error: You must specify which rights to revoke (--admin, --execute-any-party, --read-any-party, or --party-id)');
+    process.exit(1);
   }
 
   console.log('Configuration:');
@@ -161,7 +159,7 @@ Examples:
       console.log(`Target user: ${resolvedUserId}`);
     }
 
-    console.log(`\nRights to grant: ${JSON.stringify(rights, null, 2)}`);
+    console.log(`\nRights to revoke: ${JSON.stringify(rights, null, 2)}`);
 
     // Check current rights
     console.log('\nChecking current rights...');
@@ -174,21 +172,19 @@ Examples:
       console.log(`Could not list current rights: ${error instanceof Error ? error.message : String(error)}`);
     }
 
-    // Grant the rights
-    console.log('\nGranting rights...');
-    // Note: Type assertion needed due to discrepancy between SDK's Right type
-    // (from responses) and grantUserRights params schema (which expects value wrapper)
-    const result = await client.grantUserRights({
+    // Revoke the rights
+    console.log('\nRevoking rights...');
+    const result = await client.revokeUserRights({
       userId: resolvedUserId,
-      rights: rights as any,
+      rights: rights,
     });
 
-    console.log(`\n✓ Successfully granted ${result.newlyGrantedRights?.length ?? 0} new rights`);
-    if (result.newlyGrantedRights && result.newlyGrantedRights.length > 0) {
-      console.log(`\nNewly granted rights:`);
-      console.log(JSON.stringify(result.newlyGrantedRights, null, 2));
+    console.log(`\n✓ Successfully revoked ${result.newlyRevokedRights?.length ?? 0} rights`);
+    if (result.newlyRevokedRights && result.newlyRevokedRights.length > 0) {
+      console.log(`\nNewly revoked rights:`);
+      console.log(JSON.stringify(result.newlyRevokedRights, null, 2));
     } else {
-      console.log('\n(Rights may have already existed)');
+      console.log('\n(No rights were revoked - they may not have existed)');
     }
 
     // Verify by listing rights again
@@ -200,7 +196,7 @@ Examples:
 
     console.log('\n✓ Done!');
   } catch (error) {
-    console.error('\n✗ Failed to grant rights:');
+    console.error('\n✗ Failed to revoke rights:');
     console.error(`  ${error instanceof Error ? error.message : String(error)}`);
     if (error instanceof Error && error.stack) {
       console.error(`\nStack trace:`);
