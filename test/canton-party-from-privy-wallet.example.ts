@@ -146,24 +146,53 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
 
     if (finalScanProxyUrl.includes('devnet')) {
       // DevNet configuration
-      // Check if OAuth credentials are available
-      const oauthClientId = process.env['CANTON_OAUTH_CLIENT_ID'];
-      const oauthClientSecret = process.env['CANTON_OAUTH_CLIENT_SECRET'];
-      const oauthAuthority =
-        process.env['CANTON_OAUTH_AUTHORITY'] ?? 'https://auth.transfer-agent.xyz/application/o/validator-devnet/';
+      // Check if OAuth credentials are available (auto-detect from multiple sources)
+      const validatorClientId = process.env['CANTON_DEVNET_5N_VALIDATOR_API_CLIENT_ID'] ?? process.env['CANTON_DEVNET_INTELLECT_VALIDATOR_API_CLIENT_ID'];
+      const validatorClientSecret = process.env['CANTON_DEVNET_5N_VALIDATOR_API_CLIENT_SECRET'] ?? process.env['CANTON_DEVNET_INTELLECT_VALIDATOR_API_PASSWORD'];
+      const authUrlRaw = process.env['CANTON_DEVNET_5N_AUTH_URL'] ?? process.env['CANTON_DEVNET_INTELLECT_AUTH_URL'];
+
+      const oauthClientId = validatorClientId ?? process.env['CANTON_OAUTH_CLIENT_ID'];
+      const oauthClientSecret = validatorClientSecret ?? process.env['CANTON_OAUTH_CLIENT_SECRET'];
+
+      // Convert token endpoint to OAuth authority base URL
+      let oauthAuthority: string;
+      if (authUrlRaw) {
+        // Strip /token suffix and add client ID for authentik
+        let authority = authUrlRaw.replace(/\/token\/?$/, '/');
+        authority = authority.replace(/\/protocol\/openid-connect\/token\/?$/, '/protocol/openid-connect/');
+        if (authority.endsWith('/application/o/') && oauthClientId) {
+          authority = `${authority}${oauthClientId}/`;
+        }
+        oauthAuthority = authority;
+      } else {
+        oauthAuthority = process.env['CANTON_OAUTH_AUTHORITY'] ?? 'https://auth.transfer-agent.xyz/application/o/validator-devnet/';
+      }
+
       const oauthAudience = process.env['CANTON_OAUTH_AUDIENCE'] ?? 'validator-devnet-m2m';
       const oauthScope = process.env['CANTON_OAUTH_SCOPE'] ?? 'openid';
       const hasOAuthCredentials = Boolean(oauthClientId && oauthClientSecret);
 
-      // Use custom base URL if provided, otherwise default (note: no /v0/ for devnet with OAuth)
-      const baseUrl =
-        process.env['CANTON_BASE_URL'] ??
-        (hasOAuthCredentials
-          ? 'https://wallet.validator.devnet.transfer-agent.xyz/api/validator'
-          : 'https://wallet.validator.devnet.transfer-agent.xyz/api/validator/v0');
+      // Use custom base URL if provided, otherwise derive from validator API URI or default
+      const validatorApiUri = process.env['CANTON_DEVNET_5N_VALIDATOR_API_URI'] ?? process.env['CANTON_DEVNET_INTELLECT_VALIDATOR_API_URI'];
+      let baseUrl: string;
+      if (validatorApiUri) {
+        // Remove trailing slashes and append /api/validator
+        const cleanUri = validatorApiUri.replace(/\/+$/, '');
+        baseUrl = `${cleanUri}/api/validator`;
+      } else {
+        baseUrl = process.env['CANTON_BASE_URL'] ??
+          (hasOAuthCredentials
+            ? 'https://wallet.validator.devnet.transfer-agent.xyz/api/validator'
+            : 'https://wallet.validator.devnet.transfer-agent.xyz/api/validator/v0');
+      }
+
+      // Get ledger API URI (may be different from validator API)
+      const ledgerApiUri = process.env['CANTON_DEVNET_5N_LEDGER_JSON_API_URI'] ?? process.env['CANTON_DEVNET_INTELLECT_LEDGER_JSON_API_URI'];
+      const ledgerBaseUrl = ledgerApiUri?.replace(/\/+$/, '') ?? baseUrl;
 
       console.log('  Network: DevNet');
       console.log('  Base URL:', baseUrl);
+      console.log('  Ledger Base URL:', ledgerBaseUrl);
       console.log('  OAuth Credentials:', hasOAuthCredentials ? '✓ Available' : '✗ Not available (using unsafe auth)');
 
       if (hasOAuthCredentials) {
@@ -173,7 +202,7 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
       }
 
       console.log('  Auth endpoint:', `${baseUrl}/auth`);
-      console.log('  Ledger endpoint:', `${baseUrl}/ledger`);
+      console.log('  Ledger endpoint:', `${ledgerBaseUrl}`);
       console.log('  Topology endpoint:', `${baseUrl}/topology`);
       console.log('  Admin endpoint:', `${baseUrl}/admin`);
 
@@ -201,7 +230,7 @@ async function generateCantonPartyFromPrivyWallet(options: GeneratePartyOptions)
 
       ledgerFactory = (uid: string, authTokenProvider: any, isAdmin: boolean) => {
         console.log(`  Creating LedgerController: userId=${uid}, isAdmin=${isAdmin}`);
-        return new LedgerController(uid, new URL(`${baseUrl}/ledger`), undefined, isAdmin, authTokenProvider);
+        return new LedgerController(uid, new URL(ledgerBaseUrl), undefined, isAdmin, authTokenProvider);
       };
 
       topologyFactory = (uid: string, authTokenProvider: any, synchronizerId: any) => {
