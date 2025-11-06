@@ -23,5 +23,3 @@ export const ListParties = createApiOperation<ListPartiesParams, ListPartiesResp
     return url.toString();
   },
 });
-
-

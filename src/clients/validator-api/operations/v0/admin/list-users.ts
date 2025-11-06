@@ -20,5 +20,3 @@ export const ListUsers = createApiOperation<
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/admin/users`,
   buildRequestData: () => ({}),
 });
-
-

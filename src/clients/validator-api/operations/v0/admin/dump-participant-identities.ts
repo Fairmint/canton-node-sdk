@@ -20,5 +20,3 @@ export const DumpParticipantIdentities = createApiOperation<
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/admin/participant/identities`,
   buildRequestData: () => ({}),
 });
-
-
