@@ -40,7 +40,7 @@ export class GetMemberTrafficStatus extends ApiOperation<
     // Auto-determine memberId if not provided
     const memberId = params.memberId ?? (this.client as { getPartyId: () => string }).getPartyId();
 
-    const url = `${this.getApiUrl()}/api/validator/v0/scan-proxy/v0/domains/${encodeURIComponent(domainId)}/members/${encodeURIComponent(memberId)}/traffic-status`;
+    const url = `${this.getApiUrl()}/api/validator/v0/scan-proxy/domains/${encodeURIComponent(domainId)}/members/${encodeURIComponent(memberId)}/traffic-status`;
 
     return this.makeGetRequest<operations['getMemberTrafficStatus']['responses']['200']['content']['application/json']>(
       url
