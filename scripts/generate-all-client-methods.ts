@@ -175,11 +175,7 @@ function generateClientFile(clientConfig: ClientConfig): void {
 
   // Fix API type for ledger client
   const apiType =
-    name === 'LedgerJsonApiClient'
-      ? 'LEDGER_JSON_API'
-      : name === 'ValidatorApiClient'
-        ? 'VALIDATOR_API'
-        : undefined;
+    name === 'LedgerJsonApiClient' ? 'LEDGER_JSON_API' : name === 'ValidatorApiClient' ? 'VALIDATOR_API' : undefined;
 
   const needsWsImports = allOps.some((op) => op.kind === 'ws');
   const wsImports = needsWsImports ? `\nimport { WebSocketHandlers, WebSocketSubscription } from '../../core/ws';` : '';

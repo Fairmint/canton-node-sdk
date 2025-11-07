@@ -2,13 +2,7 @@ import { config } from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ConfigurationError } from '../errors';
-import {
-  type ApiConfig,
-  type AuthConfig,
-  type ClientConfig,
-  type NetworkType,
-  type ProviderType,
-} from '../types';
+import { type ApiConfig, type AuthConfig, type ClientConfig, type NetworkType, type ProviderType } from '../types';
 
 // Load environment variables with fallback to parent directory
 const currentEnvPath = '.env';
