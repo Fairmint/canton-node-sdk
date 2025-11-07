@@ -6,7 +6,6 @@ import {
   type ApiConfig,
   type AuthConfig,
   type ClientConfig,
-  type LighthouseApiConfig,
   type NetworkType,
   type ProviderType,
 } from '../types';
@@ -387,22 +386,6 @@ export class EnvLoader {
     provider?: ProviderType
   ): ApiConfig | LighthouseApiConfig | undefined {
     const apiUrl = this.getApiUri(apiType, network, provider);
-
-    // Special case for APIs that don't require authentication
-    if (apiType === 'LIGHTHOUSE_API') {
-      if (!apiUrl) {
-        return undefined;
-      }
-
-      const lighthouseConfig: LighthouseApiConfig = {
-        apiUrl,
-      };
-
-      // Lighthouse API doesn't require party ID at client level
-      // Party ID will be provided in individual API calls
-
-      return lighthouseConfig;
-    }
 
     if (!provider) {
       return undefined; // Non-Lighthouse APIs require a provider

@@ -64,7 +64,6 @@ function generateTestContent(operation: OperationInfo): string {
   const configPath = path.relative(path.dirname(operation.testPath), 'test/config').replace(/\\/g, '/');
 
   const isValidatorApi = operation.filePath.includes('validator-api');
-  const isLighthouseApi = operation.filePath.includes('lighthouse-api');
 
   let mockClientClass = 'MockLedgerJsonApiClient';
   let apiUrlKey = 'LEDGER_JSON_API';
@@ -72,9 +71,6 @@ function generateTestContent(operation: OperationInfo): string {
   if (isValidatorApi) {
     mockClientClass = 'MockValidatorApiClient';
     apiUrlKey = 'VALIDATOR_API';
-  } else if (isLighthouseApi) {
-    mockClientClass = 'MockLighthouseApiClient';
-    apiUrlKey = 'LIGHTHOUSE_API';
   }
 
   return `import { ${mockClientClass} } from '${mockClientPath}';
@@ -97,7 +93,7 @@ describe('${operation.name} Operation', () => {
       const params = ${operation.paramsSchema === 'z.any()' ? '{}' : '{}'};
       const mockResponse = {};
       const expectedUrl = \`\${mockApiUrls.${apiUrlKey}}${operation.endpoint}\`;
-      
+
       mockClient.setMockResponse(expectedUrl, mockResponse);
 
       // Act
@@ -105,10 +101,10 @@ describe('${operation.name} Operation', () => {
 
       // Assert
       expect(result).toEqual(mockResponse);
-      
+
       const requests = mockClient.getRequests();
       expect(requests).toHaveLength(1);
-      
+
       const request = requests[0];
       expect(request).toBeDefined();
       expect(request!.method).toBe('${operation.method}');
@@ -120,7 +116,7 @@ describe('${operation.name} Operation', () => {
       const params = ${operation.paramsSchema === 'z.any()' ? '{}' : '{}'};
       const mockResponse = {};
       const expectedUrl = \`\${mockApiUrls.${apiUrlKey}}${operation.endpoint}\`;
-      
+
       mockClient.setMockResponse(expectedUrl, mockResponse);
 
       // Act
@@ -139,12 +135,12 @@ describe('${operation.name} Operation', () => {
       const params = ${operation.paramsSchema === 'z.any()' ? '{}' : '{}'};
       const expectedUrl = \`\${mockApiUrls.${apiUrlKey}}${operation.endpoint}\`;
       const networkError = new Error('Network error');
-      
+
       mockClient.setMockError(expectedUrl, networkError);
 
       // Act & Assert
       await expect(operation.execute(params)).rejects.toThrow('Network error');
-      
+
       const requests = mockClient.getRequests();
       expect(requests).toHaveLength(1);
     });
@@ -156,7 +152,7 @@ describe('${operation.name} Operation', () => {
       const params = ${operation.paramsSchema === 'z.any()' ? '{}' : '{}'};
       const mockResponse = {};
       const expectedUrl = \`\${mockApiUrls.${apiUrlKey}}${operation.endpoint}\`;
-      
+
       mockClient.setMockResponse(expectedUrl, mockResponse);
 
       // Act & Assert

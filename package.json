@@ -1,6 +1,6 @@
 {
   "name": "@fairmint/canton-node-sdk",
-  "version": "0.0.1",
+  "version": "0.0.127",
   "description": "Canton Node SDK",
   "keywords": [
     "canton",
@@ -90,9 +90,6 @@
     "ts-jest": "29.4.5",
     "tsx": "4.20.6",
     "typescript": "5.9.3"
-  },
-  "optionalDependencies": {
-    "@privy-io/node": "^0.3.0"
   },
   "engines": {
     "node": ">=18.0.0"

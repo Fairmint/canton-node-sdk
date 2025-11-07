@@ -20,11 +20,6 @@ export interface ApiConfig {
   userId?: string;
 }
 
-// Simplified config for Lighthouse API which doesn't require auth
-export interface LighthouseApiConfig {
-  apiUrl: string;
-}
-
 export interface ProviderConfig {
   providerName: string;
   authUrl: string;

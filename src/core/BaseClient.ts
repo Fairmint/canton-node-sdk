@@ -6,7 +6,6 @@ import { FileLogger } from './logging/FileLogger';
 import {
   type ApiType,
   type ClientConfig,
-  type LighthouseApiConfig,
   type NetworkType,
   type PartialProviderConfig,
   type ProviderType,
@@ -190,7 +189,6 @@ export abstract class SimpleBaseClient {
   protected apiType: ApiType;
   protected clientConfig: ClientConfig;
   protected httpClient: HttpClient;
-  protected apiConfig: LighthouseApiConfig;
 
   constructor(apiType: ApiType, config?: ClientConfig) {
     this.apiType = apiType;
