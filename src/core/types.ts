@@ -39,7 +39,7 @@ export interface RequestConfig {
 
 export interface ClientConfig {
   network: NetworkType;
-  provider?: ProviderType; // Made optional for Lighthouse API
+  provider?: ProviderType;
   logger?: import('./logging').Logger;
 
   // Direct configuration options
