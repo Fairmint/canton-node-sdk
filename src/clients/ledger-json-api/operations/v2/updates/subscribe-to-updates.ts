@@ -43,7 +43,16 @@ const SubscribeToUpdatesParamsSchema = z.object({
   includeCreatedEventBlob: z.boolean().optional(),
   /** Beginning of the requested ledger section. Defaults to ledger end if not provided. */
   beginExclusive: z.number().optional(),
-  /** End of the requested ledger section (optional). */
+  /**
+   * End of the requested ledger section (optional).
+   *
+   * When specified: Creates a bounded subscription that closes after reaching this offset. When omitted: Creates a
+   * persistent streaming connection that remains open indefinitely, delivering real-time updates as they occur on the
+   * ledger. The connection will remain active until manually closed or an error occurs.
+   *
+   * Use bounded subscriptions (with endInclusive) when catching up on historical data. Use unbounded subscriptions
+   * (without endInclusive) for real-time streaming.
+   */
   endInclusive: z.number().optional(),
   /** Include reassignments in the stream (default true). */
   includeReassignments: z.boolean().optional(),
@@ -64,6 +73,36 @@ export type UpdatesWsMessage =
   | z.infer<typeof JsCantonErrorSchema>
   | z.infer<typeof WsCantonErrorSchema>;
 
+/**
+ * Subscribes to ledger updates via WebSocket connection.
+ *
+ * Supports two modes of operation:
+ *
+ * 1. **Bounded subscription**: Specify both `beginExclusive` and `endInclusive` to fetch a specific range of historical
+ *    transactions. The connection closes after reaching `endInclusive`.
+ * 2. **Persistent streaming**: Specify only `beginExclusive` (or omit both) to create a long-lived WebSocket connection
+ *    that streams real-time updates indefinitely. The connection remains open until manually closed via the returned
+ *    subscription object or an error occurs.
+ *
+ * @example
+ *   ```typescript
+ *   // Bounded subscription (historical data)
+ *   await client.subscribeToUpdates({
+ *     beginExclusive: 1000,
+ *     endInclusive: 2000,
+ *     parties: ['party1'],
+ *     onMessage: (msg) => console.log(msg)
+ *   });
+ *
+ *   // Persistent streaming (real-time updates)
+ *   await client.subscribeToUpdates({
+ *     beginExclusive: 2000,
+ *     // endInclusive omitted - connection stays open
+ *     parties: ['party1'],
+ *     onMessage: (msg) => console.log(msg)
+ *   });
+ *   ```;
+ */
 export class SubscribeToUpdates {
   constructor(private readonly client: LedgerJsonApiClient) {}
 

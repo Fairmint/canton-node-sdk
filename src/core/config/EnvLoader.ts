@@ -2,14 +2,7 @@ import { config } from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ConfigurationError } from '../errors';
-import {
-  type ApiConfig,
-  type AuthConfig,
-  type ClientConfig,
-  type LighthouseApiConfig,
-  type NetworkType,
-  type ProviderType,
-} from '../types';
+import { type ApiConfig, type AuthConfig, type ClientConfig, type NetworkType, type ProviderType } from '../types';
 
 // Load environment variables with fallback to parent directory
 const currentEnvPath = '.env';
@@ -139,16 +132,10 @@ export class EnvLoader {
     const envVars: Record<string, string | undefined> = {};
     const missingVars: string[] = [];
 
-    // Collect all relevant environment variables
-    if (apiType === 'LIGHTHOUSE_API') {
-      const uriKey = `CANTON_${network.toUpperCase()}_${apiType.toUpperCase()}_URI`;
-      envVars[uriKey] = envLoader.env[uriKey];
-      if (!envVars[uriKey]) {
-        missingVars.push(uriKey);
-      }
-    } else if (provider) {
-      // Non-Lighthouse APIs
-      const baseKey = `CANTON_${network.toUpperCase()}_${provider.toUpperCase()}`;
+    if (provider) {
+      const upperNetwork = network.toUpperCase();
+      const upperProvider = provider.toUpperCase();
+      const baseKey = `CANTON_${upperNetwork}_${upperProvider}`;
 
       // API-specific variables
       envVars[`${baseKey}_${apiType.toUpperCase()}_URI`] = envLoader.env[`${baseKey}_${apiType.toUpperCase()}_URI`];
@@ -166,7 +153,6 @@ export class EnvLoader {
       envVars[`${baseKey}_PARTY_ID`] = envLoader.env[`${baseKey}_PARTY_ID`];
       envVars[`${baseKey}_USER_ID`] = envLoader.env[`${baseKey}_USER_ID`];
 
-      // Check for missing required variables
       if (!envVars[`${baseKey}_${apiType.toUpperCase()}_URI`]) {
         missingVars.push(`${baseKey}_${apiType.toUpperCase()}_URI`);
       }
@@ -381,28 +367,8 @@ export class EnvLoader {
     return contractId;
   }
 
-  private loadApiConfig(
-    apiType: string,
-    network: NetworkType,
-    provider?: ProviderType
-  ): ApiConfig | LighthouseApiConfig | undefined {
+  private loadApiConfig(apiType: string, network: NetworkType, provider?: ProviderType): ApiConfig | undefined {
     const apiUrl = this.getApiUri(apiType, network, provider);
-
-    // Special case for APIs that don't require authentication
-    if (apiType === 'LIGHTHOUSE_API') {
-      if (!apiUrl) {
-        return undefined;
-      }
-
-      const lighthouseConfig: LighthouseApiConfig = {
-        apiUrl,
-      };
-
-      // Lighthouse API doesn't require party ID at client level
-      // Party ID will be provided in individual API calls
-
-      return lighthouseConfig;
-    }
 
     if (!provider) {
       return undefined; // Non-Lighthouse APIs require a provider

@@ -1,7 +1,7 @@
 export type NetworkType = 'devnet' | 'testnet' | 'mainnet';
 export type ProviderType = string;
 
-export type ApiType = 'LEDGER_JSON_API' | 'VALIDATOR_API' | 'SCAN_API' | 'LIGHTHOUSE_API';
+export type ApiType = 'LEDGER_JSON_API' | 'VALIDATOR_API' | 'SCAN_API';
 
 export interface AuthConfig {
   grantType: string;
@@ -18,11 +18,6 @@ export interface ApiConfig {
   auth: AuthConfig;
   partyId?: string;
   userId?: string;
-}
-
-// Simplified config for Lighthouse API which doesn't require auth
-export interface LighthouseApiConfig {
-  apiUrl: string;
 }
 
 export interface ProviderConfig {
@@ -56,6 +51,5 @@ export interface ClientConfig {
     LEDGER_JSON_API?: ApiConfig;
     VALIDATOR_API?: ApiConfig;
     SCAN_API?: ApiConfig;
-    LIGHTHOUSE_API?: LighthouseApiConfig; // Use simplified config
   };
 }

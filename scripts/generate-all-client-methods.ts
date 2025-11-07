@@ -23,12 +23,6 @@ const CLIENTS: ClientConfig[] = [
     operationsDir: path.join(__dirname, '../src/clients/ledger-json-api/operations/v2'),
     baseClass: 'BaseClient',
   },
-  {
-    name: 'LighthouseApiClient',
-    clientFile: path.join(__dirname, '../src/clients/lighthouse-api/LighthouseApiClient.generated.ts'),
-    operationsDir: path.join(__dirname, '../src/clients/lighthouse-api/operations'),
-    baseClass: 'SimpleBaseClient',
-  },
 ];
 
 // Recursively get all .ts files in a directory
@@ -181,11 +175,7 @@ function generateClientFile(clientConfig: ClientConfig): void {
 
   // Fix API type for ledger client
   const apiType =
-    name === 'LedgerJsonApiClient'
-      ? 'LEDGER_JSON_API'
-      : name === 'ValidatorApiClient'
-        ? 'VALIDATOR_API'
-        : 'LIGHTHOUSE_API';
+    name === 'LedgerJsonApiClient' ? 'LEDGER_JSON_API' : name === 'ValidatorApiClient' ? 'VALIDATOR_API' : undefined;
 
   const needsWsImports = allOps.some((op) => op.kind === 'ws');
   const wsImports = needsWsImports ? `\nimport { WebSocketHandlers, WebSocketSubscription } from '../../core/ws';` : '';

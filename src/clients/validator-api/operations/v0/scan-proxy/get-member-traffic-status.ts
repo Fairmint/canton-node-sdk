@@ -1,7 +1,7 @@
 import { ApiOperation } from '../../../../../core/operations/ApiOperation';
 import { type operations } from '../../../../../generated/apps/scan/src/main/openapi/scan';
 import { getCurrentMiningRoundDomainId } from '../../../../../utils/mining/mining-rounds';
-import { type GetMemberTrafficStatusParams } from '../../../schemas/operations';
+import { GetMemberTrafficStatusParamsSchema, type GetMemberTrafficStatusParams } from '../../../schemas/operations';
 import { type ValidatorApiClient } from '../../../ValidatorApiClient.generated';
 
 /**
@@ -31,19 +31,24 @@ export class GetMemberTrafficStatus extends ApiOperation<
   operations['getMemberTrafficStatus']['responses']['200']['content']['application/json']
 > {
   async execute(
-    params: GetMemberTrafficStatusParams
+    params: GetMemberTrafficStatusParams = {}
   ): Promise<operations['getMemberTrafficStatus']['responses']['200']['content']['application/json']> {
+    const validatedParams = this.validateParams(params, GetMemberTrafficStatusParamsSchema);
+
     // Auto-determine domainId if not provided
     const domainId =
-      params.domainId ?? (await getCurrentMiningRoundDomainId(this.client as unknown as ValidatorApiClient));
+      validatedParams.domainId ?? (await getCurrentMiningRoundDomainId(this.client as unknown as ValidatorApiClient));
 
     // Auto-determine memberId if not provided
-    const memberId = params.memberId ?? (this.client as { getPartyId: () => string }).getPartyId();
+    const memberId = validatedParams.memberId ?? (this.client as { getPartyId: () => string }).getPartyId();
 
     const url = `${this.getApiUrl()}/api/validator/v0/scan-proxy/domains/${encodeURIComponent(domainId)}/members/${encodeURIComponent(memberId)}/traffic-status`;
 
     return this.makeGetRequest<operations['getMemberTrafficStatus']['responses']['200']['content']['application/json']>(
-      url
+      url,
+      {
+        includeBearerToken: true,
+      }
     );
   }
 }
