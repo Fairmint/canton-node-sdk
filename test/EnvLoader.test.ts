@@ -15,7 +15,6 @@ describe('EnvLoader', () => {
     delete process.env['CANTON_AMULET_RULES_CONTRACT_ID_DEVNET'];
     delete process.env['CANTON_VALIDATOR_WALLET_APP_INSTALL_CONTRACT_ID_DEVNET'];
     delete process.env['CANTON_CURRENT_NETWORK'];
-    delete process.env['CANTON_MAINNET_LIGHTHOUSE_API_URI'];
   });
 
   describe('getAmuletRulesContractId', () => {
@@ -92,9 +91,8 @@ describe('EnvLoader', () => {
       process.env['CANTON_AMULET_RULES_CONTRACT_ID_MAINNET'] = 'test-amulet-rules-contract';
       process.env['CANTON_VALIDATOR_WALLET_APP_INSTALL_CONTRACT_ID_MAINNET'] =
         'test-validator-wallet-app-install-contract';
-      process.env['CANTON_MAINNET_LIGHTHOUSE_API_URI'] = 'http://localhost:3000';
 
-      const summary = EnvLoader.getConfigSummary('LIGHTHOUSE_API');
+      const summary = EnvLoader.getConfigSummary('VALIDATOR_API');
 
       expect(summary.envVars['CANTON_WALLET_TEMPLATE_ID_MAINNET']).toBe('test-wallet-template');
       expect(summary.envVars['CANTON_PREAPPROVAL_TEMPLATE_ID_MAINNET']).toBe('test-preapproval-template');
@@ -108,7 +106,7 @@ describe('EnvLoader', () => {
     it('should detect missing template and contract IDs', () => {
       process.env['CANTON_CURRENT_NETWORK'] = 'mainnet';
 
-      const summary = EnvLoader.getConfigSummary('LIGHTHOUSE_API');
+      const summary = EnvLoader.getConfigSummary('VALIDATOR_API');
 
       expect(summary.missingVars).toContain('CANTON_WALLET_TEMPLATE_ID_MAINNET');
       expect(summary.missingVars).toContain('CANTON_PREAPPROVAL_TEMPLATE_ID_MAINNET');

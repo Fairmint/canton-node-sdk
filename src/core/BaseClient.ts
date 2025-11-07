@@ -25,7 +25,7 @@ export abstract class BaseClient {
     // If no config provided, use default configuration with EnvLoader and FileLogger
     this.clientConfig =
       config ??
-      ((): ClientConfig => {
+      (() => {
         const defaultConfig = EnvLoader.getConfig(apiType);
         defaultConfig.logger = new FileLogger();
         return defaultConfig;
@@ -177,76 +177,6 @@ export abstract class BaseClient {
 
   public getAuthUrl(): string {
     return this.config.authUrl;
-  }
-
-  public getApiType(): ApiType {
-    return this.apiType;
-  }
-}
-
-/** Simplified base class for APIs that don't require authentication or provider configuration */
-export abstract class SimpleBaseClient {
-  protected apiType: ApiType;
-  protected clientConfig: ClientConfig;
-  protected httpClient: HttpClient;
-
-  constructor(apiType: ApiType, config?: ClientConfig) {
-    this.apiType = apiType;
-
-    // If no config provided, use default configuration with EnvLoader and FileLogger
-    this.clientConfig =
-      config ??
-      ((): ClientConfig => {
-        const defaultConfig = EnvLoader.getConfig(apiType);
-        defaultConfig.logger = new FileLogger();
-        return defaultConfig;
-      })();
-
-    // Validate that the required API configuration is present
-    if (!this.clientConfig.apis?.[apiType]) {
-      throw new ConfigurationError(`API configuration not found for ${apiType}`);
-    }
-
-    // Get the API config
-    const apiConfig = this.clientConfig.apis[apiType];
-
-    // For Lighthouse API, we expect LighthouseApiConfig
-    if (apiType === 'LIGHTHOUSE_API') {
-      this.apiConfig = apiConfig as LighthouseApiConfig;
-    } else {
-      throw new ConfigurationError(`Invalid API type for SimpleBaseClient: ${apiType}`);
-    }
-
-    // Initialize HTTP client with logger
-    this.httpClient = new HttpClient(this.clientConfig.logger);
-  }
-
-  public async makeGetRequest<T>(url: string, config: { contentType?: string } = {}): Promise<T> {
-    return this.httpClient.makeGetRequest<T>(url, config);
-  }
-
-  public async makePostRequest<T>(url: string, data: unknown, config: { contentType?: string } = {}): Promise<T> {
-    return this.httpClient.makePostRequest<T>(url, data, config);
-  }
-
-  public async makeDeleteRequest<T>(url: string, config: { contentType?: string } = {}): Promise<T> {
-    return this.httpClient.makeDeleteRequest<T>(url, config);
-  }
-
-  public async makePatchRequest<T>(url: string, data: unknown, config: { contentType?: string } = {}): Promise<T> {
-    return this.httpClient.makePatchRequest<T>(url, data, config);
-  }
-
-  public getApiUrl(): string {
-    return this.apiConfig.apiUrl;
-  }
-
-  public getPartyId(): string {
-    return this.clientConfig.partyId ?? '';
-  }
-
-  public getNetwork(): NetworkType {
-    return this.clientConfig.network;
   }
 
   public getApiType(): ApiType {
