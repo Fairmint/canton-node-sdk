@@ -60,7 +60,7 @@ function extractOperationInfo(fileContent: string): OperationInfo | null {
   }
 
   // Class-based operations: export class OperationName { ... execute(...) }
-  const classRegex = /export class (\w+)\s*{[\s\S]*?public async (execute|connect)\(/s;
+  const classRegex = /export class (\w+)[^{]*{[\s\S]*?public async (execute|connect)\(/s;
   const classMatch = classRegex.exec(fileContent);
   if (classMatch?.[1]) {
     const methodName = classMatch[2]; // 'execute' or 'connect'
