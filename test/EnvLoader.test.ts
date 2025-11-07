@@ -86,11 +86,15 @@ describe('EnvLoader', () => {
   describe('getConfigSummary includes template and contract IDs', () => {
     it('should include template and contract IDs in config summary', () => {
       process.env['CANTON_CURRENT_NETWORK'] = 'mainnet';
+      process.env['CANTON_CURRENT_PROVIDER'] = '5n';
       process.env['CANTON_WALLET_TEMPLATE_ID_MAINNET'] = 'test-wallet-template';
       process.env['CANTON_PREAPPROVAL_TEMPLATE_ID_MAINNET'] = 'test-preapproval-template';
       process.env['CANTON_AMULET_RULES_CONTRACT_ID_MAINNET'] = 'test-amulet-rules-contract';
       process.env['CANTON_VALIDATOR_WALLET_APP_INSTALL_CONTRACT_ID_MAINNET'] =
         'test-validator-wallet-app-install-contract';
+      process.env['CANTON_MAINNET_5N_VALIDATOR_API_URI'] = 'https://validator.example';
+      process.env['CANTON_MAINNET_5N_VALIDATOR_API_CLIENT_ID'] = 'validator-client';
+      process.env['CANTON_MAINNET_5N_AUTH_URL'] = 'https://auth.example';
 
       const summary = EnvLoader.getConfigSummary('VALIDATOR_API');
 
