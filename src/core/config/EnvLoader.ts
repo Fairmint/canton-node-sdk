@@ -367,11 +367,7 @@ export class EnvLoader {
     return contractId;
   }
 
-  private loadApiConfig(
-    apiType: string,
-    network: NetworkType,
-    provider?: ProviderType
-  ): ApiConfig | undefined {
+  private loadApiConfig(apiType: string, network: NetworkType, provider?: ProviderType): ApiConfig | undefined {
     const apiUrl = this.getApiUri(apiType, network, provider);
 
     if (!provider) {
