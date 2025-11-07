@@ -59,39 +59,23 @@ export class EnvLoader {
     // Determine which values to use - prioritize options over environment
     const network = options?.network ?? envLoader.getCurrentNetwork();
     const provider = options?.provider ?? envLoader.getCurrentProvider();
-
-    // For Lighthouse API, provider is optional
-    let authUrl: string | undefined;
-
-    if (apiType === 'LIGHTHOUSE_API') {
-      // Lighthouse API doesn't require provider or auth URL
-    } else {
-      // Non-Lighthouse APIs require both network and provider
-      if (!provider) {
-        throw new ConfigurationError(
-          `Provider is required for ${apiType}. Either specify it in options or set CANTON_CURRENT_PROVIDER in environment.`
-        );
-      }
-      authUrl = envLoader.getAuthUrl(network, provider);
+    if (!provider) {
+      throw new ConfigurationError(
+        `Provider is required for ${apiType}. Either specify it in options or set CANTON_CURRENT_PROVIDER in environment.`
+      );
     }
+    const authUrl = envLoader.getAuthUrl(network, provider);
 
     // Get API-specific configuration using the determined network and provider
     const apiConfig = envLoader.loadApiConfig(apiType, network, provider || undefined);
     if (!apiConfig) {
-      if (apiType === 'LIGHTHOUSE_API') {
-        throw new ConfigurationError(
-          `Missing required environment variable for ${apiType}. ` +
-            `Required: CANTON_${network.toUpperCase()}_${apiType.toUpperCase()}_URI`
-        );
-      } else {
-        const providerStr = provider ? provider.toUpperCase() : 'PROVIDER';
-        throw new ConfigurationError(
-          `Missing required environment variables for ${apiType}. ` +
-            `Required: CANTON_${network.toUpperCase()}_${providerStr}_${apiType.toUpperCase()}_URI, ` +
-            `CANTON_${network.toUpperCase()}_${providerStr}_${apiType.toUpperCase()}_CLIENT_ID, ` +
-            `and either CLIENT_SECRET (for client_credentials) or USERNAME/PASSWORD (for password grant)`
-        );
-      }
+      const providerStr = provider ? provider.toUpperCase() : 'PROVIDER';
+      throw new ConfigurationError(
+        `Missing required environment variables for ${apiType}. ` +
+          `Required: CANTON_${network.toUpperCase()}_${providerStr}_${apiType.toUpperCase()}_URI, ` +
+          `CANTON_${network.toUpperCase()}_${providerStr}_${apiType.toUpperCase()}_CLIENT_ID, ` +
+          `and either CLIENT_SECRET (for client_credentials) or USERNAME/PASSWORD (for password grant)`
+      );
     }
 
     const clientConfig: ClientConfig = {
@@ -101,13 +85,8 @@ export class EnvLoader {
       },
     };
 
-    // Only add provider and authUrl if they exist
-    if (provider) {
-      clientConfig.provider = provider;
-    }
-    if (authUrl) {
-      clientConfig.authUrl = authUrl;
-    }
+    clientConfig.provider = provider;
+    clientConfig.authUrl = authUrl;
 
     return clientConfig;
   }
@@ -371,7 +350,7 @@ export class EnvLoader {
     const apiUrl = this.getApiUri(apiType, network, provider);
 
     if (!provider) {
-      return undefined; // Non-Lighthouse APIs require a provider
+      return undefined; // Provider must be specified to load this API configuration
     }
 
     const clientId = this.getApiClientId(apiType, network, provider);
