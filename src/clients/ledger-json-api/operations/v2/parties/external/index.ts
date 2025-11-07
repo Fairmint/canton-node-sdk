@@ -8,5 +8,3 @@ export {
   type GenerateExternalPartyTopologyParams,
   type GenerateExternalPartyTopologyResponse,
 } from './generate-topology';
-
-

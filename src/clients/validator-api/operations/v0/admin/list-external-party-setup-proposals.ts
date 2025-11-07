@@ -20,5 +20,3 @@ export const ListExternalPartySetupProposals = createApiOperation<
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/admin/external-party/setup-proposal`,
   buildRequestData: () => ({}),
 });
-
-
