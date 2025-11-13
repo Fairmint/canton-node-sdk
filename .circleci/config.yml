@@ -257,6 +257,29 @@ jobs:
           name: Check Formatting
           command: npm run format
 
+  # Quickstart integration tests (smoke tests, no LocalNet required)
+  test-quickstart-integration:
+    executor: node-docker
+    steps:
+      - checkout
+      - restore_node_modules
+      - run:
+          name: Install Dependencies
+          command: npm install
+      - save_node_modules
+      - run:
+          name: Clone Splice Artifacts
+          command: npm run artifacts:clone-splice
+      - run:
+          name: Build SDK
+          command: npm run build:core
+      - run:
+          name: Run Quickstart Integration Tests
+          command: |
+            echo "Running quickstart integration tests..."
+            npm run test:integration
+            echo "✓ Quickstart integration tests completed"
+
   # Integration tests with LocalNet
   test-localnet:
     executor: ubuntu-machine
@@ -384,21 +407,6 @@ jobs:
             echo "✓ All regression tests passed"
           no_output_timeout: 10m
 
-      # Run integration tests (quickstart-style)
-      - run:
-          name: Run Integration Tests
-          command: |
-            # Ensure Node.js is available
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-            nvm use 20
-
-            echo "Running integration tests against LocalNet..."
-            npm run test:integration
-
-            echo "✓ Integration tests completed"
-          no_output_timeout: 5m
-
       # Save test results
       - store_artifacts:
           path: simulations/results
@@ -419,6 +427,10 @@ workflows:
     jobs:
       - lint
       - test
+      - test-quickstart-integration:
+          requires:
+            - lint
+            - test
       - test-localnet:
           requires:
             - lint
