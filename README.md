@@ -35,6 +35,9 @@ environment.
 The SDK includes comprehensive integration testing against a local Splice network (LocalNet). See
 the [LocalNet Testing Guide](./docs/LOCALNET_TESTING.md) for detailed instructions.
 
+We also provide integration tests following the [cn-quickstart](https://github.com/digital-asset/cn-quickstart) approach.
+See [test/integration/quickstart/README.md](./test/integration/quickstart/README.md) for details.
+
 ### Quick Start
 
 ```bash
@@ -45,11 +48,17 @@ npm run localnet:setup
 export LOCALNET_DIR="/tmp/splice-localnet/splice-node/docker-compose/localnet"
 export IMAGE_TAG="0.4.22"
 
+# Configure SDK environment
+cp example.env.localnet .env
+
 # Start LocalNet
 npm run localnet:start
 
 # Run regression tests
 npm run test:regression
+
+# Or run quickstart-style integration tests
+npm run test:integration
 
 # Stop LocalNet
 npm run localnet:stop
@@ -61,6 +70,7 @@ npm run localnet:stop
 - `npm run localnet:start` - Start LocalNet services
 - `npm run localnet:stop` - Stop LocalNet services
 - `npm run localnet:status` - Check LocalNet status
+- `npm run test:integration` - Run quickstart-style integration tests
 - `npm run test:localnet` - Run tests against LocalNet
 - `npm run test:regression` - Alias for test:localnet
 
