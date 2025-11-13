@@ -41,12 +41,12 @@ See [test/integration/quickstart/README.md](./test/integration/quickstart/README
 ### Quick Start
 
 ```bash
-# Setup LocalNet
-npm run localnet:setup
+# Setup CN-Quickstart LocalNet (recommended)
+npm run localnet:quickstart
 
 # Set environment variables (shown by setup script)
-export LOCALNET_DIR="/tmp/splice-localnet/splice-node/docker-compose/localnet"
-export IMAGE_TAG="0.4.22"
+export LOCALNET_DIR="/tmp/cn-quickstart/quickstart/docker/modules/localnet"
+export IMAGE_TAG="0.4.17"
 
 # Configure SDK environment
 cp example.env.localnet .env
@@ -66,7 +66,8 @@ npm run localnet:stop
 
 ### Available Commands
 
-- `npm run localnet:setup` - Download and setup LocalNet
+- `npm run localnet:quickstart` - Setup CN-Quickstart LocalNet (recommended)
+- `npm run localnet:setup` - Download and setup Splice LocalNet (alternative)
 - `npm run localnet:start` - Start LocalNet services
 - `npm run localnet:stop` - Stop LocalNet services
 - `npm run localnet:status` - Check LocalNet status

@@ -27,24 +27,24 @@ For SDK testing, we focus on:
 
 ## Setup
 
-### 1. Download and Setup LocalNet
+### 1. Download and Setup CN-Quickstart LocalNet
 
 ```bash
-npm run localnet:setup
+npm run localnet:quickstart
 ```
 
-This downloads the Splice LocalNet bundle (version 0.4.22 by default).
+This clones the cn-quickstart repository and sets up the localnet module.
 
 ### 2. Configure Environment Variables
 
 ```bash
 # Set environment variables (required)
-export LOCALNET_DIR="/tmp/splice-localnet/splice-node/docker-compose/localnet"
-export IMAGE_TAG="0.4.22"
+export LOCALNET_DIR="/tmp/cn-quickstart/quickstart/docker/modules/localnet"
+export IMAGE_TAG="0.4.17"
 
 # Or add to your shell profile
-echo 'export LOCALNET_DIR="/tmp/splice-localnet/splice-node/docker-compose/localnet"' >> ~/.bashrc
-echo 'export IMAGE_TAG="0.4.22"' >> ~/.bashrc
+echo 'export LOCALNET_DIR="/tmp/cn-quickstart/quickstart/docker/modules/localnet"' >> ~/.bashrc
+echo 'export IMAGE_TAG="0.4.17"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -54,8 +54,8 @@ source ~/.bashrc
 # Copy the localnet example configuration
 cp example.env.localnet .env
 
-# The .env file contains the necessary configuration for connecting to localnet
-# All values are pre-configured for the default localnet setup
+# The .env file contains the necessary configuration for connecting to cn-quickstart localnet
+# All values are pre-configured for the cn-quickstart setup
 ```
 
 ## Running Tests
@@ -101,13 +101,23 @@ npm run localnet:stop
 
 ### GetVersion Test (`get-version.test.ts`)
 
-Tests the simplest API endpoint - GetVersion. This validates:
+Tests the simplest JSON API endpoint - GetVersion. This validates:
 - SDK can connect to localnet JSON API
 - Authentication works correctly
 - API returns expected response structure
 - Version information is properly formatted
 
-This is the baseline test that proves end-to-end connectivity works.
+**Note**: This test is for environments that expose the JSON API. CN-Quickstart by default does not expose the JSON API ports.
+
+### GetUserStatus Test (`validator-get-user-status.test.ts`)
+
+Tests the Validator API GetUserStatus endpoint. This is the recommended test for cn-quickstart as it uses the Validator API which is exposed by default on port 3903 (app-provider). This validates:
+- SDK can connect to cn-quickstart localnet Validator API
+- Authentication works correctly
+- API returns expected response structure with party_id
+- User status information is properly formatted
+
+This is the baseline test that proves end-to-end connectivity works with cn-quickstart.
 
 ## Test Structure
 
@@ -135,15 +145,15 @@ describe('API Integration Test', () => {
 
 Once LocalNet is running:
 
-### JSON APIs
-- **App Provider**: http://localhost:39750/v2/...
-- **App User**: http://localhost:29750/v2/...
-- **Super Validator**: http://localhost:49750/v2/...
-
 ### Validator APIs
-- **App Provider**: http://localhost:39030/api/validator/...
-- **App User**: http://localhost:29030/api/validator/...
-- **Super Validator**: http://localhost:49030/api/validator/...
+- **App Provider**: http://localhost:3903/api/validator/...
+- **App User**: http://localhost:2903/api/validator/...
+- **Super Validator**: http://localhost:4903/api/validator/...
+
+### JSON APIs (if exposed)
+- **App Provider**: http://localhost:39750/v2/... (not exposed in cn-quickstart by default)
+- **App User**: http://localhost:29750/v2/... (not exposed in cn-quickstart by default)
+- **Super Validator**: http://localhost:49750/v2/... (not exposed in cn-quickstart by default)
 
 ### Web UIs
 - **App Provider Wallet**: http://wallet.localhost:3000
@@ -180,7 +190,10 @@ docker compose -f $LOCALNET_DIR/compose.yaml logs -f app-provider
 Ensure LocalNet is running and healthy:
 
 ```bash
-# Check if JSON API is responding
+# For Validator API (cn-quickstart):
+curl http://localhost:3903/api/validator/v0/wallet/balance
+
+# For JSON API (if exposed):
 curl http://localhost:39750/v2/version
 ```
 
