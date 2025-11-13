@@ -55,16 +55,23 @@ describe('GetVersion Integration Test', () => {
     // This test actually attempts to call the API
     // Without localnet running, it will fail with connection/auth error
     // But it proves the SDK method works and can be called
+    console.log('=== Testing getVersion API Call ===');
+    console.log('Attempting to call: client.getVersion()');
+    console.log('Target URL: http://localhost:39750');
+
     try {
       const response = await client.getVersion();
       // If localnet is running, validate the response
       expect(response).toBeDefined();
       expect(response).toHaveProperty('features');
-      console.log('✓ Successfully connected to localnet and got version:', response);
+      console.log('✅ SUCCESS! API call completed successfully');
+      console.log('Version response received:', JSON.stringify(response, null, 2));
+      console.log('Response has features property:', Object.keys(response));
     } catch (error) {
       // Expected in CI without localnet - verify it's a connection/auth error
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.log('Connection attempt result:', errorMessage);
+      console.log('❌ API call failed (expected without localnet)');
+      console.log('Error details:', errorMessage);
 
       // Verify the error is a known connectivity/auth issue (not a code error)
       const isExpectedError =
@@ -76,7 +83,8 @@ describe('GetVersion Integration Test', () => {
         errorMessage.includes('405 Not Allowed');
 
       expect(isExpectedError).toBe(true);
-      console.log('✓ SDK method works correctly (failed to connect as expected without localnet)');
+      console.log('✅ Test passed: SDK method works correctly (connection failed as expected)');
     }
+    console.log('=================================\n');
   }, 10000);
 });
