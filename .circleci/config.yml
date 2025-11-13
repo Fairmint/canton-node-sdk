@@ -308,17 +308,22 @@ jobs:
       - run:
           name: Install Dependencies
           command: |
+            set -e
             # Ensure Node.js is available
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-            nvm use 20
+
+            # Use Node.js 20
+            nvm use 20 || nvm install 20
 
             # Verify Node.js and npm are available
             echo "Node version: $(node --version)"
             echo "npm version: $(npm --version)"
+            echo "Current directory: $(pwd)"
+            echo "package.json exists: $(ls -la package.json)"
 
-            # Install dependencies
-            npm install
+            # Clean install to avoid cache issues
+            npm ci || npm install
       - save_node_modules
       # Clone Splice artifacts for type generation
       - run:
