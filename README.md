@@ -35,8 +35,9 @@ environment.
 The SDK includes comprehensive integration testing against a local Splice network (LocalNet). See
 the [LocalNet Testing Guide](./docs/LOCALNET_TESTING.md) for detailed instructions.
 
-We also provide integration tests following the [cn-quickstart](https://github.com/digital-asset/cn-quickstart) approach.
-See [test/integration/quickstart/README.md](./test/integration/quickstart/README.md) for details.
+We also provide integration tests following the
+[cn-quickstart](https://github.com/digital-asset/cn-quickstart) approach. See
+[test/integration/quickstart/README.md](./test/integration/quickstart/README.md) for details.
 
 ### Quick Start
 

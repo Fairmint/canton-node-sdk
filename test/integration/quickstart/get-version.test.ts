@@ -1,14 +1,16 @@
 /**
  * Integration test for GetVersion API
  *
- * This test validates the canton-node-sdk against a running localnet instance.
- * It follows the cn-quickstart approach of testing against real services.
+ * This test validates the canton-node-sdk against a running localnet instance. It follows the cn-quickstart approach of
+ * testing against real services.
  *
  * Prerequisites:
+ *
  * - LocalNet must be running (use npm run localnet:start)
  * - Environment variables must be configured (copy example.env.localnet to .env)
  *
  * This test verifies:
+ *
  * - SDK can connect to localnet JSON API
  * - GetVersion API returns expected response structure
  * - Response contains valid version information
@@ -24,7 +26,7 @@ describe.skip('GetVersion Integration Test', () => {
   // 1. Configure OAuth2 in cn-quickstart (enable keycloak module)
   // 2. Or modify SDK to support shared-secret authentication for localnet
   // 3. Update CANTON_LOCALNET_APP_PROVIDER_AUTH_URL accordingly
-  
+
   let client: LedgerJsonApiClient;
 
   beforeAll(() => {

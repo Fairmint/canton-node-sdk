@@ -1,20 +1,22 @@
 /**
  * Integration test for Validator API - GetUserStatus
  *
- * This test validates the canton-node-sdk against a running cn-quickstart localnet.
- * It follows the cn-quickstart approach of testing against real Canton services.
+ * This test validates the canton-node-sdk against a running cn-quickstart localnet. It follows the cn-quickstart
+ * approach of testing against real Canton services.
  *
  * Prerequisites:
+ *
  * - LocalNet must be running (use npm run localnet:quickstart)
  * - Environment variables must be configured (copy example.env.localnet to .env)
  *
  * This test verifies:
+ *
  * - SDK can connect to cn-quickstart localnet Validator API
  * - GetUserStatus API returns expected response structure
  * - Response contains valid user status information
  *
- * Note: CN-Quickstart uses the Validator API, not the JSON API.
- * The Validator API is exposed on ports 2903, 3903, 4903 for different participants.
+ * Note: CN-Quickstart uses the Validator API, not the JSON API. The Validator API is exposed on ports 2903, 3903, 4903
+ * for different participants.
  */
 
 import { ValidatorApiClient } from '../../../src/clients/validator-api';
@@ -27,13 +29,13 @@ describe.skip('GetUserStatus Integration Test (CN-Quickstart)', () => {
   // 1. Configure OAuth2 in cn-quickstart (enable keycloak module)
   // 2. Or modify SDK to support shared-secret authentication for localnet
   // 3. Update CANTON_LOCALNET_APP_PROVIDER_AUTH_URL accordingly
-  //  
+  //
   // Example with keycloak:
   // - Run: cd /tmp/cn-quickstart/quickstart && make setup
   // - Enable OAuth2 authentication option
   // - Start: make start
   // - Update .env with correct AUTH_URL
-  
+
   let client: ValidatorApiClient;
 
   beforeAll(() => {

@@ -1,20 +1,26 @@
 # Quickstart Integration Tests
 
-This directory contains integration tests for the canton-node-sdk that run against a live localnet instance, following the principles and approach from the [cn-quickstart](https://github.com/digital-asset/cn-quickstart) repository.
+This directory contains integration tests for the canton-node-sdk that run against a live localnet
+instance, following the principles and approach from the
+[cn-quickstart](https://github.com/digital-asset/cn-quickstart) repository.
 
 ## Overview
 
-The cn-quickstart repository provides a comprehensive example of how to build applications on Canton Network. These integration tests apply those principles to validate the canton-node-sdk against real Canton services.
+The cn-quickstart repository provides a comprehensive example of how to build applications on Canton
+Network. These integration tests apply those principles to validate the canton-node-sdk against real
+Canton services.
 
 ## What's Different from cn-quickstart?
 
 The cn-quickstart repository includes:
+
 - A complete demo application (backend + frontend)
 - Licensing workflow examples
 - Multiple Docker modules (keycloak, PQS, observability)
 - Splice LocalNet for the Canton infrastructure
 
 For SDK testing, we focus on:
+
 - **Just the Splice LocalNet module** - the core Canton infrastructure
 - **Simple API validation** - testing SDK operations work correctly
 - **Lightweight setup** - minimal overhead for testing
@@ -67,6 +73,7 @@ npm run localnet:start
 ```
 
 This starts:
+
 - Canton nodes (app-provider, app-user, sv)
 - PostgreSQL database
 - JSON API endpoints (ports 39750, 29750, 49750)
@@ -102,16 +109,20 @@ npm run localnet:stop
 ### GetVersion Test (`get-version.test.ts`)
 
 Tests the simplest JSON API endpoint - GetVersion. This validates:
+
 - SDK can connect to localnet JSON API
 - Authentication works correctly
 - API returns expected response structure
 - Version information is properly formatted
 
-**Note**: This test is for environments that expose the JSON API. CN-Quickstart by default does not expose the JSON API ports.
+**Note**: This test is for environments that expose the JSON API. CN-Quickstart by default does not
+expose the JSON API ports.
 
 ### GetUserStatus Test (`validator-get-user-status.test.ts`)
 
-Tests the Validator API GetUserStatus endpoint. This is the recommended test for cn-quickstart as it uses the Validator API which is exposed by default on port 3903 (app-provider). This validates:
+Tests the Validator API GetUserStatus endpoint. This is the recommended test for cn-quickstart as it
+uses the Validator API which is exposed by default on port 3903 (app-provider). This validates:
+
 - SDK can connect to cn-quickstart localnet Validator API
 - Authentication works correctly
 - API returns expected response structure with party_id
@@ -146,16 +157,19 @@ describe('API Integration Test', () => {
 Once LocalNet is running:
 
 ### Validator APIs
+
 - **App Provider**: http://localhost:3903/api/validator/...
 - **App User**: http://localhost:2903/api/validator/...
 - **Super Validator**: http://localhost:4903/api/validator/...
 
 ### JSON APIs (if exposed)
+
 - **App Provider**: http://localhost:39750/v2/... (not exposed in cn-quickstart by default)
 - **App User**: http://localhost:29750/v2/... (not exposed in cn-quickstart by default)
 - **Super Validator**: http://localhost:49750/v2/... (not exposed in cn-quickstart by default)
 
 ### Web UIs
+
 - **App Provider Wallet**: http://wallet.localhost:3000
 - **App User Wallet**: http://wallet.localhost:2000
 - **Scan UI**: http://scan.localhost:4000
@@ -200,6 +214,7 @@ curl http://localhost:39750/v2/version
 ### Test Timeouts
 
 Integration tests have 30-second timeouts. If tests are timing out:
+
 1. Verify LocalNet is fully started
 2. Check no other services are using the required ports
 3. Look at Docker logs for errors
