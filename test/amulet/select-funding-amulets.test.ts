@@ -14,11 +14,11 @@ const buildAmulet = (overrides: Partial<LockedAmulet>): LockedAmulet => ({
 });
 
 describe('selectLockedAmuletForAmount', () => {
-const amulets: LockedAmulet[] = [
-  buildAmulet({ contractId: 'small', effectiveAmount: 50 }),
-  buildAmulet({ contractId: 'medium', effectiveAmount: 250 }),
-  buildAmulet({ contractId: 'large', effectiveAmount: 600 }),
-];
+  const amulets: LockedAmulet[] = [
+    buildAmulet({ contractId: 'small', effectiveAmount: 50 }),
+    buildAmulet({ contractId: 'medium', effectiveAmount: 250 }),
+    buildAmulet({ contractId: 'large', effectiveAmount: 600 }),
+  ];
 
   it('returns the smallest amulet that satisfies the amount', () => {
     const selected = selectLockedAmuletForAmount(amulets, 120);
@@ -44,4 +44,3 @@ const amulets: LockedAmulet[] = [
     expect(selected).toBeNull();
   });
 });
-

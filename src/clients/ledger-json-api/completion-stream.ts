@@ -9,7 +9,9 @@ export interface WaitForCompletionParams {
   timeoutMs?: number;
 }
 
-function extractCompletion(message: CompletionsWsMessage): { submissionId?: string; statusCode?: number; statusMessage?: string; updateId?: string } | null {
+function extractCompletion(
+  message: CompletionsWsMessage
+): { submissionId?: string; statusCode?: number; statusMessage?: string; updateId?: string } | null {
   if (
     'completionResponse' in message &&
     message.completionResponse &&
@@ -27,9 +29,7 @@ function extractCompletion(message: CompletionsWsMessage): { submissionId?: stri
   return null;
 }
 
-/**
- * Wait for a specific completion using the ledger's WebSocket completions stream.
- */
+/** Wait for a specific completion using the ledger's WebSocket completions stream. */
 export async function waitForCompletion(
   ledgerClient: LedgerJsonApiClient,
   params: WaitForCompletionParams
@@ -109,4 +109,3 @@ export async function waitForCompletion(
       .catch(handleError);
   });
 }
-

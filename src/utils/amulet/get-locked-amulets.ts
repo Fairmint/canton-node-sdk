@@ -38,7 +38,7 @@ type LockedAmuletEntry = GetAmuletsResponse['locked_amulets'][number];
 
 function toLockedAmulet(entry: LockedAmuletEntry, index: number): LockedAmulet {
   const label = `locked amulet #${index + 1}`;
-  const contract = entry.contract.contract;
+  const { contract } = entry.contract;
   const payload = (contract.payload ?? {}) as Record<string, unknown>;
   const amuletPayload = (payload.amulet ?? {}) as Record<string, unknown>;
   const lockPayload = (payload.lock ?? {}) as Record<string, unknown>;
@@ -65,8 +65,8 @@ function toLockedAmulet(entry: LockedAmuletEntry, index: number): LockedAmulet {
 }
 
 /**
- * Fetch locked amulets for the authenticated validator and filter them for the provided party ID.
- * This intentionally enforces the canonical JsActiveContract shape so unexpected API responses fail fast.
+ * Fetch locked amulets for the authenticated validator and filter them for the provided party ID. This intentionally
+ * enforces the canonical JsActiveContract shape so unexpected API responses fail fast.
  */
 export async function getLockedAmuletsForParty(
   validatorClient: ValidatorApiClient,
@@ -80,4 +80,3 @@ export async function getLockedAmuletsForParty(
     .map((entry, index) => toLockedAmulet(entry, index))
     .filter((amulet) => amulet.owner.toLowerCase() === normalizedOwner);
 }
-

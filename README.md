@@ -64,9 +64,9 @@ npm run test:integration
 npm run localnet:stop
 ```
 
-> ℹ️ If you run `npm run localnet:setup` instead of the quickstart, make sure you have
-> a `GITHUB_TOKEN` (or `SPLICE_GITHUB_TOKEN`) with read access to the Splice releases
-> exported so the bundle download can succeed.
+> ℹ️ If you run `npm run localnet:setup` instead of the quickstart, make sure you have a
+> `GITHUB_TOKEN` (or `SPLICE_GITHUB_TOKEN`) with read access to the Splice releases exported so the
+> bundle download can succeed.
 
 ### Available Commands
 

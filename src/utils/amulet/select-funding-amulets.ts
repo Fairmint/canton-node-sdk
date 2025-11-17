@@ -12,8 +12,8 @@ function isExpired(lockExpiresAt: string | null, nowMs: number): boolean {
 }
 
 /**
- * Select a locked amulet that can fund the required amount.
- * By default the smallest qualifying amulet is returned to avoid overspending.
+ * Select a locked amulet that can fund the required amount. By default the smallest qualifying amulet is returned to
+ * avoid overspending.
  */
 export function selectLockedAmuletForAmount(
   amulets: LockedAmulet[],
@@ -24,11 +24,7 @@ export function selectLockedAmuletForAmount(
     throw new Error('selectLockedAmuletForAmount requires a positive amountNeeded');
   }
 
-  const {
-    requireExclusiveHolder = true,
-    rejectExpiredLocks = true,
-    nowMs = Date.now(),
-  } = options;
+  const { requireExclusiveHolder = true, rejectExpiredLocks = true, nowMs = Date.now() } = options;
 
   const candidates = amulets
     .filter((amulet) => amulet.effectiveAmount >= amountNeeded)
@@ -45,4 +41,3 @@ export function selectLockedAmuletForAmount(
 
   return candidates.length > 0 ? candidates[0]! : null;
 }
-

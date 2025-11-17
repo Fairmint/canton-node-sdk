@@ -11,18 +11,12 @@ export interface LockedAmulet {
 
 export interface LockedAmuletSelectionOptions {
   /**
-   * When true, reject locked amulets that list multiple holders.
-   * Defaults to true because multi-holder locks require extra coordination.
+   * When true, reject locked amulets that list multiple holders. Defaults to true because multi-holder locks require
+   * extra coordination.
    */
   requireExclusiveHolder?: boolean;
-  /**
-   * When true, reject locks that have already expired (based on lockExpiresAt timestamp).
-   * Defaults to true.
-   */
+  /** When true, reject locks that have already expired (based on lockExpiresAt timestamp). Defaults to true. */
   rejectExpiredLocks?: boolean;
-  /**
-   * Override the clock used for expiration checks (defaults to Date.now()).
-   */
+  /** Override the clock used for expiration checks (defaults to Date.now()). */
   nowMs?: number;
 }
-

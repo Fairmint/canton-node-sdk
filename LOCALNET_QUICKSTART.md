@@ -10,21 +10,19 @@
 npm run localnet:setup
 ```
 
-> ℹ️ If the Splice releases are private for your organization, export `GITHUB_TOKEN`
-> (or `SPLICE_GITHUB_TOKEN`) with read access before running the setup command so the
-> download succeeds.
+> ℹ️ If the Splice releases are private for your organization, export `GITHUB_TOKEN` (or
+> `SPLICE_GITHUB_TOKEN`) with read access before running the setup command so the download succeeds.
 
 ### 2. Store Environment Variables
 
-The setup script writes `LOCALNET_DIR` and `IMAGE_TAG` to `.env.localnet`, which
-the LocalNet helpers load automatically.
+The setup script writes `LOCALNET_DIR` and `IMAGE_TAG` to `.env.localnet`, which the LocalNet
+helpers load automatically.
 
 ```bash
 cat .env.localnet
 ```
 
-If you prefer a single `.env`, copy the entries from `.env.localnet` after
-running the setup script.
+If you prefer a single `.env`, copy the entries from `.env.localnet` after running the setup script.
 
 ### 3. Configure Environment
 
