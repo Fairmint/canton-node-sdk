@@ -39,5 +39,6 @@ export function selectLockedAmuletForAmount(
     })
     .sort((a, b) => a.effectiveAmount - b.effectiveAmount);
 
-  return candidates.length > 0 ? candidates[0]! : null;
+  const [selected] = candidates;
+  return selected ?? null;
 }

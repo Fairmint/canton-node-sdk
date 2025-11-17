@@ -40,14 +40,15 @@ function toLockedAmulet(entry: LockedAmuletEntry, index: number): LockedAmulet {
   const label = `locked amulet #${index + 1}`;
   const { contract } = entry.contract;
   const payload = (contract.payload ?? {}) as Record<string, unknown>;
-  const amuletPayload = (payload.amulet ?? {}) as Record<string, unknown>;
-  const lockPayload = (payload.lock ?? {}) as Record<string, unknown>;
+  const amuletPayload = (payload['amulet'] ?? {}) as Record<string, unknown>;
+  const lockPayload = (payload['lock'] ?? {}) as Record<string, unknown>;
 
   const contractId = assertString(contract.contract_id, `${label} contract_id`);
   const templateId = assertString(contract.template_id, `${label} template_id`);
-  const owner = assertString(amuletPayload.owner, `${label} owner`);
-  const holders = parseHolders(lockPayload.holders);
-  const lockExpiresAt = typeof lockPayload.expiresAt === 'string' ? lockPayload.expiresAt : null;
+  const owner = assertString(amuletPayload['owner'], `${label} owner`);
+  const holders = parseHolders(lockPayload['holders']);
+  const { expiresAt } = lockPayload;
+  const lockExpiresAt = typeof expiresAt === 'string' ? expiresAt : null;
   const effectiveAmount = parseEffectiveAmount(entry.effective_amount, `${label} effective_amount`);
   const domainId = assertString(entry.contract.domain_id, `${label} domain_id`);
   const createdEventBlob = assertString(contract.created_event_blob, `${label} created_event_blob`);
@@ -73,7 +74,7 @@ export async function getLockedAmuletsForParty(
   ownerPartyId: string
 ): Promise<LockedAmulet[]> {
   const response = await validatorClient.getAmulets();
-  const lockedEntries = response.locked_amulets ?? [];
+  const lockedEntries = response.locked_amulets;
   const normalizedOwner = ownerPartyId.toLowerCase();
 
   return lockedEntries

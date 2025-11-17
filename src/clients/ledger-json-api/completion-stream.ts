@@ -9,24 +9,45 @@ export interface WaitForCompletionParams {
   timeoutMs?: number;
 }
 
-function extractCompletion(
-  message: CompletionsWsMessage
-): { submissionId?: string; statusCode?: number; statusMessage?: string; updateId?: string } | null {
-  if (
-    'completionResponse' in message &&
-    message.completionResponse &&
-    'Completion' in message.completionResponse &&
-    message.completionResponse.Completion
-  ) {
-    const completion = message.completionResponse.Completion.value;
-    return {
-      submissionId: completion.submissionId,
-      statusCode: completion.status?.code,
-      statusMessage: completion.status?.message,
-      updateId: completion.updateId,
-    };
+interface CompletionDetails {
+  submissionId?: string;
+  statusCode?: number;
+  statusMessage?: string;
+  updateId?: string;
+}
+
+function extractCompletion(message: CompletionsWsMessage): CompletionDetails | null {
+  if (!('completionResponse' in message)) {
+    return null;
   }
-  return null;
+
+  const { completionResponse } = message;
+  if (!('Completion' in completionResponse)) {
+    return null;
+  }
+
+  const completion = completionResponse.Completion.value;
+  if (typeof completion.submissionId !== 'string') {
+    return null;
+  }
+
+  const details: CompletionDetails = {
+    submissionId: completion.submissionId,
+  };
+
+  if (typeof completion.status?.code === 'number') {
+    details.statusCode = completion.status.code;
+  }
+
+  if (typeof completion.status?.message === 'string') {
+    details.statusMessage = completion.status.message;
+  }
+
+  if (typeof completion.updateId === 'string') {
+    details.updateId = completion.updateId;
+  }
+
+  return details;
 }
 
 /** Wait for a specific completion using the ledger's WebSocket completions stream. */
