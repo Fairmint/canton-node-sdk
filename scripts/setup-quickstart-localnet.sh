@@ -11,6 +11,11 @@
 
 set -e
 
+# Determine repository root for writing env files
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+LOCALNET_ENV_FILE="$REPO_ROOT/.env.localnet"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -50,22 +55,34 @@ else
     SPLICE_VERSION="0.4.17"
 fi
 
+# Persist environment variables to .env.localnet
+TMP_ENV_FILE="$(mktemp)"
+{
+    if [ -f "$LOCALNET_ENV_FILE" ]; then
+        grep -vE '^(LOCALNET_DIR|IMAGE_TAG)=' "$LOCALNET_ENV_FILE" || true
+    fi
+    echo "LOCALNET_DIR=\"$LOCALNET_DIR\""
+    echo "IMAGE_TAG=\"$SPLICE_VERSION\""
+} > "$TMP_ENV_FILE"
+mv "$TMP_ENV_FILE" "$LOCALNET_ENV_FILE"
+
+echo ""
+echo "Updated environment file:"
+echo "  $LOCALNET_ENV_FILE"
+echo ""
+echo "The LocalNet scripts will automatically load this file. To share the"
+echo "configuration with other tooling, copy these entries into your project's"
+echo ".env if needed."
+
 echo ""
 echo -e "${GREEN}=== LocalNet Setup Complete ===${NC}"
 echo ""
 echo "LocalNet directory: $LOCALNET_DIR"
 echo "Splice version: $SPLICE_VERSION"
 echo ""
-echo "To use LocalNet, set these environment variables:"
-echo ""
-echo "  export LOCALNET_DIR=\"$LOCALNET_DIR\""
-echo "  export IMAGE_TAG=\"$SPLICE_VERSION\""
-echo ""
-echo "Or add them to your shell profile:"
-echo ""
-echo "  echo 'export LOCALNET_DIR=\"$LOCALNET_DIR\"' >> ~/.bashrc"
-echo "  echo 'export IMAGE_TAG=\"$SPLICE_VERSION\"' >> ~/.bashrc"
-echo "  source ~/.bashrc"
+echo "Environment variables saved:"
+echo "  LOCALNET_DIR=\"$LOCALNET_DIR\""
+echo "  IMAGE_TAG=\"$SPLICE_VERSION\""
 echo ""
 echo "Then use the following scripts:"
 echo "  ./scripts/start-localnet.sh    # Start LocalNet"

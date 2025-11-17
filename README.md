@@ -45,9 +45,8 @@ We also provide integration tests following the
 # Setup CN-Quickstart LocalNet (recommended)
 npm run localnet:quickstart
 
-# Set environment variables (shown by setup script)
-export LOCALNET_DIR="/tmp/cn-quickstart/quickstart/docker/modules/localnet"
-export IMAGE_TAG="0.4.17"
+# Environment variables are written to .env.localnet
+cat .env.localnet
 
 # Configure SDK environment
 cp example.env.localnet .env
@@ -64,6 +63,10 @@ npm run test:integration
 # Stop LocalNet
 npm run localnet:stop
 ```
+
+> ℹ️ If you run `npm run localnet:setup` instead of the quickstart, make sure you have
+> a `GITHUB_TOKEN` (or `SPLICE_GITHUB_TOKEN`) with read access to the Splice releases
+> exported so the bundle download can succeed.
 
 ### Available Commands
 

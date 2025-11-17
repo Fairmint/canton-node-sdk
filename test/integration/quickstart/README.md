@@ -44,14 +44,12 @@ This clones the cn-quickstart repository and sets up the localnet module.
 ### 2. Configure Environment Variables
 
 ```bash
-# Set environment variables (required)
-export LOCALNET_DIR="/tmp/cn-quickstart/quickstart/docker/modules/localnet"
-export IMAGE_TAG="0.4.17"
+# Environment variables are written to .env.localnet
+cat .env.localnet
 
-# Or add to your shell profile
-echo 'export LOCALNET_DIR="/tmp/cn-quickstart/quickstart/docker/modules/localnet"' >> ~/.bashrc
-echo 'export IMAGE_TAG="0.4.17"' >> ~/.bashrc
-source ~/.bashrc
+# For a single shell session you can still export manually:
+export LOCALNET_DIR
+export IMAGE_TAG
 ```
 
 ### 3. Configure SDK Environment
