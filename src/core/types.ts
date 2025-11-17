@@ -1,4 +1,4 @@
-export type NetworkType = 'devnet' | 'testnet' | 'mainnet';
+export type NetworkType = 'devnet' | 'testnet' | 'mainnet' | 'localnet';
 export type ProviderType = string;
 
 export type ApiType = 'LEDGER_JSON_API' | 'VALIDATOR_API' | 'SCAN_API';

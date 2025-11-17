@@ -10,20 +10,19 @@
 npm run localnet:setup
 ```
 
-### 2. Set Environment Variables
+> ℹ️ If the Splice releases are private for your organization, export `GITHUB_TOKEN` (or
+> `SPLICE_GITHUB_TOKEN`) with read access before running the setup command so the download succeeds.
 
-Add to `~/.bashrc` or `~/.zshrc`:
+### 2. Store Environment Variables
 
-```bash
-export LOCALNET_DIR="/tmp/splice-localnet/splice-node/docker-compose/localnet"
-export IMAGE_TAG="0.4.22"
-```
-
-Then reload:
+The setup script writes `LOCALNET_DIR` and `IMAGE_TAG` to `.env.localnet`, which the LocalNet
+helpers load automatically.
 
 ```bash
-source ~/.bashrc  # or ~/.zshrc
+cat .env.localnet
 ```
+
+If you prefer a single `.env`, copy the entries from `.env.localnet` after running the setup script.
 
 ### 3. Configure Environment
 
@@ -87,10 +86,16 @@ npm run localnet:status
 ### "LOCALNET_DIR not set"
 
 ```bash
-# Add to shell profile and reload:
-export LOCALNET_DIR="/tmp/splice-localnet/splice-node/docker-compose/localnet"
-export IMAGE_TAG="0.4.22"
-source ~/.bashrc
+# Refresh your env file if needed:
+./scripts/setup-localnet.sh
+
+# or ensure ./.env.localnet (or .env) contains:
+LOCALNET_DIR="/tmp/splice-localnet/splice-node/docker-compose/localnet"
+IMAGE_TAG="0.4.22"
+
+# For a single shell session you can still export manually:
+export LOCALNET_DIR
+export IMAGE_TAG
 ```
 
 ## 📚 Full Documentation

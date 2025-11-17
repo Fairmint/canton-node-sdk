@@ -41,6 +41,7 @@
     "lint:fix": "eslint . --fix",
     "lint:npm": "npmPkgJsonLint . --fix",
     "lint:npm:check": "npmPkgJsonLint .",
+    "localnet:quickstart": "./scripts/setup-quickstart-localnet.sh",
     "localnet:setup": "./scripts/setup-localnet.sh",
     "localnet:start": "./scripts/start-localnet.sh",
     "localnet:status": "./scripts/localnet-status.sh",
@@ -51,7 +52,8 @@
     "revoke-user-rights": "tsx scripts/revoke-user-rights.ts",
     "simulate": "tsx --tsconfig tsconfig.lint.json scripts/run-simulations.ts",
     "simulate:events": "tsx --tsconfig tsconfig.lint.json scripts/run-events-simulation.ts",
-    "test": "jest",
+    "test": "jest --testPathIgnorePatterns='/test/integration/'",
+    "test:integration": "jest test/integration/quickstart",
     "test:localnet": "npm run build:core && npm run simulate",
     "test:regression": "npm run test:localnet",
     "test:watch": "jest --watch"

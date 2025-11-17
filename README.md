@@ -35,15 +35,21 @@ environment.
 The SDK includes comprehensive integration testing against a local Splice network (LocalNet). See
 the [LocalNet Testing Guide](./docs/LOCALNET_TESTING.md) for detailed instructions.
 
+We also provide integration tests following the
+[cn-quickstart](https://github.com/digital-asset/cn-quickstart) approach. See
+[test/integration/quickstart/README.md](./test/integration/quickstart/README.md) for details.
+
 ### Quick Start
 
 ```bash
-# Setup LocalNet
-npm run localnet:setup
+# Setup CN-Quickstart LocalNet (recommended)
+npm run localnet:quickstart
 
-# Set environment variables (shown by setup script)
-export LOCALNET_DIR="/tmp/splice-localnet/splice-node/docker-compose/localnet"
-export IMAGE_TAG="0.4.22"
+# Environment variables are written to .env.localnet
+cat .env.localnet
+
+# Configure SDK environment
+cp example.env.localnet .env
 
 # Start LocalNet
 npm run localnet:start
@@ -51,16 +57,25 @@ npm run localnet:start
 # Run regression tests
 npm run test:regression
 
+# Or run quickstart-style integration tests
+npm run test:integration
+
 # Stop LocalNet
 npm run localnet:stop
 ```
 
+> ℹ️ If you run `npm run localnet:setup` instead of the quickstart, make sure you have a
+> `GITHUB_TOKEN` (or `SPLICE_GITHUB_TOKEN`) with read access to the Splice releases exported so the
+> bundle download can succeed.
+
 ### Available Commands
 
-- `npm run localnet:setup` - Download and setup LocalNet
+- `npm run localnet:quickstart` - Setup CN-Quickstart LocalNet (recommended)
+- `npm run localnet:setup` - Download and setup Splice LocalNet (alternative)
 - `npm run localnet:start` - Start LocalNet services
 - `npm run localnet:stop` - Stop LocalNet services
 - `npm run localnet:status` - Check LocalNet status
+- `npm run test:integration` - Run quickstart-style integration tests
 - `npm run test:localnet` - Run tests against LocalNet
 - `npm run test:regression` - Alias for test:localnet
 
