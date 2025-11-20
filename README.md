@@ -57,6 +57,9 @@ npm run localnet:start
 # Run regression tests
 npm run test:regression
 
+# Or run end-to-end tests
+npm run test:e2e
+
 # Or run quickstart-style integration tests
 npm run test:integration
 
@@ -75,6 +78,7 @@ npm run localnet:stop
 - `npm run localnet:start` - Start LocalNet services
 - `npm run localnet:stop` - Stop LocalNet services
 - `npm run localnet:status` - Check LocalNet status
+- `npm run test:e2e` - Run end-to-end tests with real API calls
 - `npm run test:integration` - Run quickstart-style integration tests
 - `npm run test:localnet` - Run tests against LocalNet
 - `npm run test:regression` - Alias for test:localnet
