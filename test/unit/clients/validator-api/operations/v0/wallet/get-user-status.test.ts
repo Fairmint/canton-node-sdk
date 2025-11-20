@@ -39,12 +39,11 @@ describe('GetUserStatus operation', () => {
       has_featured_app_right: false,
     };
 
-    const makeGetRequest = jest.fn().mockResolvedValue(mockResponse);
-    mockClient.makeGetRequest = makeGetRequest;
+    (mockClient.makeGetRequest as jest.Mock).mockResolvedValue(mockResponse);
 
     await operation.execute();
 
-    expect(makeGetRequest).toHaveBeenCalledWith(url, {
+    expect(mockClient.makeGetRequest).toHaveBeenCalledWith(url, {
       contentType: 'application/json',
       includeBearerToken: true,
     });
