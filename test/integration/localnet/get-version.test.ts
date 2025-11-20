@@ -1,10 +1,13 @@
+import type { GetLedgerApiVersionResponse } from '../../../src/clients/ledger-json-api/schemas/api/state';
 import { testClients } from '../../setup';
 
 describe('LocalNet GetVersion', () => {
-  it('getVersion', async () => {
-    const response = await testClients.ledgerJsonApi.getVersion();
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
 
-    expect(response).toEqual({
+  it('getVersion', async () => {
+    const mockResponse: GetLedgerApiVersionResponse = {
       version: '3.3.0-SNAPSHOT',
       features: {
         experimental: {
@@ -33,6 +36,19 @@ describe('LocalNet GetVersion', () => {
           },
         },
       },
+    };
+
+    const apiUrl = testClients.ledgerJsonApi.getApiUrl();
+    const getRequestSpy = jest
+      .spyOn(testClients.ledgerJsonApi, 'makeGetRequest')
+      .mockResolvedValue(mockResponse);
+
+    const response = await testClients.ledgerJsonApi.getVersion();
+
+    expect(getRequestSpy).toHaveBeenCalledWith(`${apiUrl}/v2/version`, {
+      contentType: 'application/json',
+      includeBearerToken: true,
     });
+    expect(response).toEqual(mockResponse);
   });
 });

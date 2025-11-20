@@ -1,17 +1,6 @@
 import { z } from 'zod';
 import { type BaseClient, createApiOperation } from '../../../../../core';
-import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
-import { type AllocatePartyResponse } from '../../../schemas/api';
-
-// Type aliases for better readability and to avoid repetition
-type GeneratedAllocatePartyRequest = paths['/v2/parties']['post']['requestBody']['content']['application/json'];
-
-// Extended type to support both old and new API versions
-
-type AllocatePartyRequest = GeneratedAllocatePartyRequest & {
-  synchronizerId?: string;
-  userId?: string;
-};
+import { type AllocatePartyRequest, type AllocatePartyResponse } from '../../../schemas/api';
 
 // Schema for the parameters
 export const AllocatePartyParamsSchema = z.object({
