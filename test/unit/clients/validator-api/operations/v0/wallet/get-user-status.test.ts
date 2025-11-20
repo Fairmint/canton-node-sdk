@@ -2,16 +2,15 @@ import { z } from 'zod';
 import { createApiOperation } from '../../../../../../../src/core';
 import { type BaseClient } from '../../../../../../../src/core/BaseClient';
 
+interface UserStatusResponse {
+  party_id: string;
+  user_onboarded: boolean;
+  user_wallet_installed: boolean;
+  has_featured_app_right: boolean;
+}
+
 // Simple mock of GetUserStatus operation without requiring generated types
-const GetUserStatus = createApiOperation<
-  void,
-  {
-    party_id: string;
-    user_onboarded: boolean;
-    user_wallet_installed: boolean;
-    has_featured_app_right: boolean;
-  }
->({
+const GetUserStatus = createApiOperation<void, UserStatusResponse>({
   paramsSchema: z.void(),
   method: 'GET',
   buildUrl: (_params: void, apiUrl: string) => `${apiUrl}/api/validator/v0/wallet/user-status`,
@@ -50,7 +49,7 @@ describe('GetUserStatus operation', () => {
   });
 
   it('returns user status when user is onboarded', async () => {
-    const mockResponse = {
+    const mockResponse: UserStatusResponse = {
       party_id: 'test-party-456',
       user_onboarded: true,
       user_wallet_installed: true,
@@ -61,14 +60,11 @@ describe('GetUserStatus operation', () => {
 
     const result = await operation.execute();
 
-    expect(result.party_id).toBe('test-party-456');
-    expect(result.user_onboarded).toBe(true);
-    expect(result.user_wallet_installed).toBe(true);
-    expect(result.has_featured_app_right).toBe(true);
+    expect(result).toEqual(mockResponse);
   });
 
   it('returns user status when user is not onboarded', async () => {
-    const mockResponse = {
+    const mockResponse: UserStatusResponse = {
       party_id: 'test-party-789',
       user_onboarded: false,
       user_wallet_installed: false,
@@ -79,9 +75,6 @@ describe('GetUserStatus operation', () => {
 
     const result = await operation.execute();
 
-    expect(result.party_id).toBe('test-party-789');
-    expect(result.user_onboarded).toBe(false);
-    expect(result.user_wallet_installed).toBe(false);
-    expect(result.has_featured_app_right).toBe(false);
+    expect(result).toEqual(mockResponse);
   });
 });
