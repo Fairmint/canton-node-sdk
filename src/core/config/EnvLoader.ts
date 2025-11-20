@@ -58,7 +58,19 @@ export class EnvLoader {
 
     // Determine which values to use - prioritize options over environment
     const network = options?.network ?? envLoader.getCurrentNetwork();
-    const provider = options?.provider ?? envLoader.getCurrentProvider();
+
+    // Get provider, with special handling for localnet
+    let provider = options?.provider;
+    if (!provider) {
+      // For localnet, default to 'app-provider' if not specified
+      if (network === 'localnet') {
+        provider = 'app-provider';
+      } else {
+        // For other networks, require provider from environment
+        provider = envLoader.getCurrentProvider();
+      }
+    }
+
     if (!provider) {
       throw new ConfigurationError(
         `Provider is required for ${apiType}. Either specify it in options or set CANTON_CURRENT_PROVIDER in environment.`
@@ -264,6 +276,16 @@ export class EnvLoader {
     const envKey = `CANTON_${targetNetwork.toUpperCase()}_${targetProvider.toUpperCase()}_AUTH_URL`;
     const authUrl = this.env[envKey];
 
+    // Provide localnet defaults for cn-quickstart
+    if (!authUrl && targetNetwork === 'localnet') {
+      if (targetProvider === 'app-provider') {
+        return 'http://localhost:8082/realms/AppProvider/protocol/openid-connect/token';
+      }
+      if (targetProvider === 'app-user') {
+        return 'http://localhost:8082/realms/AppUser/protocol/openid-connect/token';
+      }
+    }
+
     if (!authUrl) {
       throw new ConfigurationError(`Missing required environment variable: ${envKey}`);
     }
@@ -346,13 +368,60 @@ export class EnvLoader {
     return contractId;
   }
 
-  private loadApiConfig(apiType: string, network: NetworkType, provider?: ProviderType): ApiConfig | undefined {
-    const apiUrl = this.getApiUri(apiType, network, provider);
+  /**
+   * Get localnet defaults for cn-quickstart These are the standard OAuth2 credentials and URLs for cn-quickstart with
+   * OAuth2 enabled
+   */
+  private getLocalnetDefaults(apiType: string, provider: ProviderType): ApiConfig | undefined {
+    if (provider !== 'app-provider' && provider !== 'app-user') {
+      return undefined;
+    }
 
+    const portPrefix = provider === 'app-provider' ? '3' : '2';
+
+    // Default OAuth2 credentials for cn-quickstart
+    const auth: AuthConfig = {
+      grantType: 'client_credentials',
+      clientId: `${provider}-validator`,
+      clientSecret:
+        provider === 'app-provider' ? 'AL8648b9SfdTFImq7FV56Vd0KHifHBuC' : 'k1YVWeC1vjQcqzlqzY98WVxJc6e4IIdZ',
+    };
+
+    // Map API types to their port suffixes
+    const apiUrlMap: Record<string, string> = {
+      VALIDATOR_API: `http://localhost:${portPrefix}903`,
+      LEDGER_JSON_API: `http://localhost:${portPrefix}975`,
+      SCAN_API: `http://localhost:4000/api/scan`,
+    };
+
+    const apiUrl = apiUrlMap[apiType];
+    if (!apiUrl) {
+      return undefined;
+    }
+
+    return {
+      apiUrl,
+      auth,
+    };
+  }
+
+  private loadApiConfig(apiType: string, network: NetworkType, provider?: ProviderType): ApiConfig | undefined {
     if (!provider) {
       return undefined; // Provider must be specified to load this API configuration
     }
 
+    // For localnet, try defaults first if environment variables are not set
+    if (network === 'localnet') {
+      const apiUrl = this.getApiUri(apiType, network, provider);
+      const clientId = this.getApiClientId(apiType, network, provider);
+
+      // If no environment variables are set, use localnet defaults
+      if (!apiUrl && !clientId) {
+        return this.getLocalnetDefaults(apiType, provider);
+      }
+    }
+
+    const apiUrl = this.getApiUri(apiType, network, provider);
     const clientId = this.getApiClientId(apiType, network, provider);
     const clientSecret = this.getApiClientSecret(apiType, network, provider);
     const username = this.getApiUsername(apiType, network, provider);

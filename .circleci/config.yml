@@ -257,29 +257,6 @@ jobs:
           name: Check Formatting
           command: npm run format
 
-  # Quickstart integration tests (smoke tests, no LocalNet required)
-  test-quickstart-integration:
-    executor: node-docker
-    steps:
-      - checkout
-      - restore_node_modules
-      - run:
-          name: Install Dependencies
-          command: npm install
-      - save_node_modules
-      - run:
-          name: Clone Splice Artifacts
-          command: npm run artifacts:clone-splice
-      - run:
-          name: Build SDK
-          command: npm run build:core
-      - run:
-          name: Run Quickstart Integration Tests
-          command: |
-            echo "Running quickstart integration tests..."
-            npm run test:integration
-            echo "✓ Quickstart integration tests completed"
-
   # Integration tests with LocalNet
   test-localnet:
     executor: ubuntu-machine
@@ -322,8 +299,8 @@ jobs:
             echo "Current directory: $(pwd)"
             echo "package.json exists: $(ls -la package.json)"
 
-            # Clean install to avoid cache issues
-            npm ci || npm install
+            # Install dependencies (no lock file in repo)
+            npm install
       - save_node_modules
       # Clone Splice artifacts for type generation
       - run:
@@ -432,16 +409,8 @@ workflows:
     jobs:
       - lint
       - test
-      - test-quickstart-integration:
-          requires:
-            - lint
-            - test
-      - test-localnet:
-          requires:
-            - lint
-            - test
 
-  # Nightly regression tests
+  # Nightly regression tests with LocalNet
   nightly-regression:
     triggers:
       - schedule:

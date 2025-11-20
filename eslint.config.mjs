@@ -20,6 +20,7 @@ const eslintConfig = [
       '**/*.example.ts',
       '**/*.js',
       '**/*.mjs',
+      '**/cn-quickstart/**',
     ],
   },
   // Main configuration for TypeScript files

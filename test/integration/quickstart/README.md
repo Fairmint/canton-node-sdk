@@ -1,261 +1,187 @@
-# Quickstart Integration Tests
+# CN-Quickstart Integration Tests
 
-This directory contains integration tests for the canton-node-sdk that run against a live localnet
-instance, following the principles and approach from the
-[cn-quickstart](https://github.com/digital-asset/cn-quickstart) repository.
+This directory contains integration tests that validate the Canton Node SDK works correctly with
+cn-quickstart.
 
-## Overview
+## Test Files
 
-The cn-quickstart repository provides a comprehensive example of how to build applications on Canton
-Network. These integration tests apply those principles to validate the canton-node-sdk against real
-Canton services.
+### `smoke-test.ts`
 
-## What's Different from cn-quickstart?
+A comprehensive smoke test that validates:
 
-The cn-quickstart repository includes:
+- ✅ OAuth2 authentication with Keycloak
+- ✅ Validator API connectivity and operations
+- ✅ Ledger JSON API connectivity and operations
+- ✅ SDK's built-in localnet defaults work correctly
 
-- A complete demo application (backend + frontend)
-- Licensing workflow examples
-- Multiple Docker modules (keycloak, PQS, observability)
-- Splice LocalNet for the Canton infrastructure
-
-For SDK testing, we focus on:
-
-- **Just the Splice LocalNet module** - the core Canton infrastructure
-- **Simple API validation** - testing SDK operations work correctly
-- **Lightweight setup** - minimal overhead for testing
-
-## Prerequisites
-
-1. **Docker and Docker Compose** installed and running
-2. **Node.js 18+** installed
-3. **LocalNet environment variables** configured
-
-## Setup
-
-### 1. Download and Setup CN-Quickstart LocalNet
+**Run locally:**
 
 ```bash
-npm run localnet:quickstart
+# Prerequisites: cn-quickstart must be running
+cd quickstart && make start
+
+# Run the smoke test
+npm run test:smoke
 ```
 
-This clones the cn-quickstart repository and sets up the localnet module.
+### `localnet-connection.test.ts`
 
-### 2. Configure Environment Variables
-
-```bash
-# Environment variables are written to .env.localnet
-cat .env.localnet
-
-# For a single shell session you can still export manually:
-export LOCALNET_DIR
-export IMAGE_TAG
-```
-
-### 3. Configure SDK Environment
-
-```bash
-# Copy the localnet example configuration
-cp example.env.localnet .env
-
-# The .env file contains the necessary configuration for connecting to cn-quickstart localnet
-# All values are pre-configured for the cn-quickstart setup
-```
+Jest-based integration tests (requires SDK to be built).
 
 ## Running Tests
 
-### Start LocalNet
+### Local Development
 
-```bash
-npm run localnet:start
-```
+1. **Start CN-Quickstart:**
 
-This starts:
+   ```bash
+   cd cn-quickstart/quickstart
+   make start
+   ```
 
-- Canton nodes (app-provider, app-user, sv)
-- PostgreSQL database
-- JSON API endpoints (ports 39750, 29750, 49750)
-- Validator API endpoints (ports 39030, 29030, 49030)
-- Web UIs (if profiles enabled)
+2. **Run smoke tests:**
+   ```bash
+   npm run test:smoke
+   ```
 
-Wait ~1-2 minutes for all services to be fully initialized.
+### CI/CD
 
-### Check LocalNet Status
+Tests run automatically in CI on:
 
-```bash
-npm run localnet:status
-```
+- Every commit (CircleCI & GitHub Actions)
+- Pull requests
 
-### Run Integration Tests
+## Test Architecture
 
-```bash
-# Run all tests including integration tests
-npm test
+### Smoke Test Design
 
-# Or run just the integration tests
-npm test -- test/integration/quickstart
-```
-
-### Stop LocalNet
-
-```bash
-npm run localnet:stop
-```
-
-## Available Tests
-
-### GetVersion Test (`get-version.test.ts`)
-
-Tests the simplest JSON API endpoint - GetVersion. This validates:
-
-- SDK can connect to localnet JSON API
-- Authentication works correctly
-- API returns expected response structure
-- Version information is properly formatted
-
-**Note**: This test is for environments that expose the JSON API. CN-Quickstart by default does not
-expose the JSON API ports.
-
-### GetUserStatus Test (`validator-get-user-status.test.ts`)
-
-Tests the Validator API GetUserStatus endpoint. This is the recommended test for cn-quickstart as it
-uses the Validator API which is exposed by default on port 3903 (app-provider). This validates:
-
-- SDK can connect to cn-quickstart localnet Validator API
-- Authentication works correctly
-- API returns expected response structure with party_id
-- User status information is properly formatted
-
-This is the baseline test that proves end-to-end connectivity works with cn-quickstart.
-
-## Test Structure
-
-Each integration test follows this pattern:
+The smoke test uses a simple, self-contained approach:
 
 ```typescript
-describe('API Integration Test', () => {
-  let client: LedgerJsonApiClient;
+import { ValidatorApiClient, LedgerJsonApiClient } from '../../../src';
 
-  beforeAll(() => {
-    // Load configuration from environment
-    const config = EnvLoader.getConfig('LEDGER_JSON_API');
-    client = new LedgerJsonApiClient(config);
-  });
-
-  it('should perform operation', async () => {
-    const response = await client.someOperation();
-    expect(response).toBeDefined();
-    // Additional validations...
-  }, 30000); // Allow 30s for network operations
+// Simple configuration - SDK handles the rest
+const validatorClient = new ValidatorApiClient({
+  network: 'localnet',
 });
+
+const jsonClient = new LedgerJsonApiClient({
+  network: 'localnet',
+});
+
+// Run tests
+await validatorClient.authenticate();
+await validatorClient.getUserStatus();
+// ... more tests
 ```
 
-## LocalNet Endpoints
+**Benefits:**
 
-Once LocalNet is running:
+- ✅ No external test framework dependencies
+- ✅ Fast execution (~200ms total)
+- ✅ Clear pass/fail with exit codes
+- ✅ Detailed error messages
+- ✅ Easy to run in any CI system
 
-### Validator APIs
+### What Gets Tested
 
-- **App Provider**: http://localhost:3903/api/validator/...
-- **App User**: http://localhost:2903/api/validator/...
-- **Super Validator**: http://localhost:4903/api/validator/...
+1. **SDK Configuration Defaults**
+   - Validates `{ network: 'localnet' }` auto-configures everything
+   - Confirms OAuth2 URL, API endpoints, credentials are set correctly
 
-### JSON APIs (if exposed)
+2. **OAuth2 Authentication**
+   - Connects to Keycloak at `localhost:8082`
+   - Obtains JWT access token using client credentials grant
+   - Validates token is cached and reused
 
-- **App Provider**: http://localhost:39750/v2/... (not exposed in cn-quickstart by default)
-- **App User**: http://localhost:29750/v2/... (not exposed in cn-quickstart by default)
-- **Super Validator**: http://localhost:49750/v2/... (not exposed in cn-quickstart by default)
+3. **Validator API Operations**
+   - `getUserStatus()` - validates response structure
+   - `getDsoPartyId()` - confirms DSO party is accessible
 
-### Web UIs
-
-- **App Provider Wallet**: http://wallet.localhost:3000
-- **App User Wallet**: http://wallet.localhost:2000
-- **Scan UI**: http://scan.localhost:4000
-- **SV UI**: http://sv.localhost:4000
+4. **Ledger JSON API Operations**
+   - `getVersion()` - validates Canton version format
+   - `getLedgerEnd()` - confirms ledger is accessible
 
 ## Troubleshooting
 
-### Port Already in Use
+### Tests Fail with "Connection Refused"
+
+**Cause:** CN-Quickstart is not running or services aren't ready.
+
+**Fix:**
 
 ```bash
-npm run localnet:stop
-# Wait a few seconds
-npm run localnet:start
+# Check if services are running
+docker ps | grep -E "splice|keycloak"
+
+# Check service logs
+cd cn-quickstart/quickstart
+make logs
+
+# Restart services
+make restart
 ```
 
-### Services Not Ready
+### Tests Fail with "401 Unauthorized"
 
-LocalNet can take 1-2 minutes to fully initialize. Check status:
+**Cause:** OAuth2 authentication is not working.
+
+**Fix:**
 
 ```bash
-npm run localnet:status
+# Verify Keycloak is accessible
+curl http://localhost:8082/realms/AppProvider
+
+# Check OAuth2 token endpoint
+curl -X POST http://localhost:8082/realms/AppProvider/protocol/openid-connect/token \
+  -d 'grant_type=client_credentials' \
+  -d 'client_id=app-provider-validator' \
+  -d 'client_secret=AL8648b9SfdTFImq7FV56Vd0KHifHBuC'
 ```
 
-Or check specific service logs:
+### CI Tests Timeout
 
-```bash
-docker compose -f $LOCALNET_DIR/compose.yaml logs -f app-provider
-```
+**Cause:** Services take too long to start.
 
-### Connection Refused
+**Fix:** Increase timeouts in CI config:
 
-Ensure LocalNet is running and healthy:
+- CircleCI: Add `no_output_timeout: 20m` to steps
+- GitHub Actions: Increase `timeout-minutes` on job or step
 
-```bash
-# For Validator API (cn-quickstart):
-curl http://localhost:3903/api/validator/v0/wallet/balance
+### Local CircleCI Test Fails
 
-# For JSON API (if exposed):
-curl http://localhost:39750/v2/version
-```
+**Note:** `circleci local execute` has limitations:
 
-### Test Timeouts
-
-Integration tests have 30-second timeouts. If tests are timing out:
-
-1. Verify LocalNet is fully started
-2. Check no other services are using the required ports
-3. Look at Docker logs for errors
-
-## Development Workflow
-
-1. **Start LocalNet once**: `npm run localnet:start`
-2. **Leave it running** while developing
-3. **Run tests multiple times**: `npm test -- test/integration/quickstart`
-4. **Stop when done**: `npm run localnet:stop`
-
-This avoids the 1-2 minute startup time between test runs.
+- Doesn't support `ubuntu-machine` executor perfectly
+- May have Docker-in-Docker issues
+- Use `act` for GitHub Actions or push to a branch for real CI testing
 
 ## Adding New Tests
 
-To add a new integration test:
-
-1. Create a new file in `test/integration/quickstart/`
-2. Follow the existing test pattern
-3. Test a specific SDK operation end-to-end
-4. Document what the test validates
-5. Use descriptive test names
-
-Example:
+To add a new test to the smoke test:
 
 ```typescript
-// test/integration/quickstart/list-packages.test.ts
-describe('ListPackages Integration Test', () => {
-  // Test implementation...
+await runTest('Test Name', async () => {
+  const result = await client.someMethod();
+  if (!result) {
+    throw new Error('Expected result to be defined');
+  }
 });
 ```
 
-## References
+The `runTest` helper:
 
-- [cn-quickstart Repository](https://github.com/digital-asset/cn-quickstart)
-- [cn-quickstart Documentation](https://github.com/digital-asset/cn-quickstart/blob/main/README.md)
-- [Splice LocalNet Documentation](https://github.com/hyperledger-labs/splice)
-- [Canton Network Documentation](https://www.canton.network/)
+- Catches errors automatically
+- Tracks timing
+- Reports pass/fail
+- Accumulates results for summary
 
-## Notes
+## Performance
 
-- These tests require a running LocalNet instance
-- Tests are not included in the standard `npm test` run by default
-- Tests use real network calls and have longer timeouts (30s)
-- Tests validate the SDK works against actual Canton services
-- Configuration comes from environment variables, same as production usage
+Typical smoke test execution time:
+
+- **Authentication:** ~70ms (first call)
+- **API Calls:** ~15-40ms each (with cached token)
+- **Total:** ~200ms
+
+The SDK automatically caches OAuth2 tokens, so subsequent API calls are fast.

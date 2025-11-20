@@ -5,6 +5,6 @@ coverage
 docs
 temp
 artifacts
+cn-quickstart
 *.lock
 *.log
-

@@ -61,7 +61,7 @@ pids
 *.tgz
 
 # Yarn Integrity file
-.yarn-integrity 
+.yarn-integrity
 
 # Auto-generated
 CHANGELOG.md
@@ -75,3 +75,4 @@ artifacts/splice/
 wip/
 src/generated/
 temp/
+cn-quickstart/

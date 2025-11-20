@@ -22,14 +22,34 @@ export abstract class BaseClient {
   constructor(apiType: ApiType, config?: ClientConfig) {
     this.apiType = apiType;
 
-    // If no config provided, use default configuration with EnvLoader and FileLogger
-    this.clientConfig =
-      config ??
-      (() => {
-        const defaultConfig = EnvLoader.getConfig(apiType);
-        defaultConfig.logger = new FileLogger();
-        return defaultConfig;
-      })();
+    // If no config provided, or config missing APIs, use EnvLoader to get defaults
+    if (!config) {
+      // No config at all - use EnvLoader defaults
+      const defaultConfig = EnvLoader.getConfig(apiType);
+      defaultConfig.logger = new FileLogger();
+      this.clientConfig = defaultConfig;
+    } else if (!config.apis?.[apiType]) {
+      // Config provided but missing API configuration - merge with EnvLoader defaults
+      const options: { network?: NetworkType; provider?: ProviderType } = {
+        network: config.network,
+      };
+      if (config.provider) {
+        options.provider = config.provider;
+      }
+      const defaultConfig = EnvLoader.getConfig(apiType, options);
+      this.clientConfig = {
+        ...defaultConfig,
+        ...config,
+        apis: {
+          ...defaultConfig.apis,
+          ...config.apis,
+        },
+        logger: config.logger ?? new FileLogger(),
+      };
+    } else {
+      // Config fully provided
+      this.clientConfig = config;
+    }
 
     // Validate that the required API configuration is present
     if (!this.clientConfig.apis?.[apiType]) {
