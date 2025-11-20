@@ -15,22 +15,26 @@ Simple examples for connecting to Canton Network LocalNet using the Canton Node 
 **Status**: ✅ **Working** - This is the recommended example!
 
 Demonstrates how to:
+
 - Connect to cn-quickstart with OAuth2/Keycloak authentication
 - Use the SDK's built-in authentication manager
 - Make authenticated API calls to the Validator API
 
 **Run it:**
+
 ```bash
 npm run example:oauth2
 ```
 
 **What it does:**
+
 1. Authenticates with Keycloak using client credentials
 2. Gets an OAuth2 access token
 3. Makes an authenticated API call to get user status
 4. The SDK handles all token management automatically!
 
 **Key Features:**
+
 - ✅ Automatic token acquisition
 - ✅ Automatic token refresh when expired
 - ✅ Bearer token automatically included in requests
@@ -110,7 +114,8 @@ cd quickstart && make restart
 
 ### Wrong Credentials
 
-The credentials in the example (`app-provider-validator` / `AL8648b9SfdTFImq7FV56Vd0KHifHBuC`) are the default values for cn-quickstart. If you've customized your setup, check:
+The credentials in the example (`app-provider-validator` / `AL8648b9SfdTFImq7FV56Vd0KHifHBuC`) are
+the default values for cn-quickstart. If you've customized your setup, check:
 
 - `quickstart/docker/modules/keycloak/env/app-provider/on/oauth2.env`
 

@@ -2,24 +2,25 @@
 /**
  * Example: Canton Network LocalNet with OAuth2 Authentication
  *
- * This example demonstrates how to connect to cn-quickstart with OAuth2/Keycloak
- * authentication using the Canton Node SDK.
+ * This example demonstrates how to connect to cn-quickstart with OAuth2/Keycloak authentication using the Canton Node
+ * SDK.
  *
  * Prerequisites:
- * - cn-quickstart is running with OAuth2 enabled
+ *
+ * - Cn-quickstart is running with OAuth2 enabled
  * - Run `cd quickstart && make setup` and choose "with OAuth2"
  * - Run `cd quickstart && make start`
  *
  * The SDK automatically handles:
+ *
  * - OAuth2 token acquisition
  * - Token refresh
  * - Bearer token injection in API calls
  *
- * Usage:
- *   npx tsx canton-node-sdk/examples/localnet-with-oauth2.ts
+ * Usage: npx tsx canton-node-sdk/examples/localnet-with-oauth2.ts
  */
 
-import { ValidatorApiClient, LedgerJsonApiClient } from '../src';
+import { LedgerJsonApiClient, ValidatorApiClient } from '../src';
 
 async function main(): Promise<void> {
   console.log('🔌 Connecting to Canton Network LocalNet with OAuth2...\n');
@@ -101,4 +102,4 @@ async function main(): Promise<void> {
 }
 
 // Run the main function
-main();
+void main();

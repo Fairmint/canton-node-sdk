@@ -7,6 +7,7 @@ import { type AllocatePartyResponse } from '../../../schemas/api';
 type GeneratedAllocatePartyRequest = paths['/v2/parties']['post']['requestBody']['content']['application/json'];
 
 // Extended type to support both old and new API versions
+// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
 type AllocatePartyRequest = GeneratedAllocatePartyRequest & {
   synchronizerId?: string;
   userId?: string;

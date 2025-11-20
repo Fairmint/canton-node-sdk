@@ -40,7 +40,7 @@ export async function fetchAllParties(
       aggregatedPartyDetails.push(...response.partyDetails);
     }
 
-    const nextToken = (response.nextPageToken || '').trim();
+    const nextToken = (response.nextPageToken ?? '').trim();
     if (nextToken.length === 0) {
       break;
     }

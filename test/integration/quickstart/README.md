@@ -1,18 +1,21 @@
 # CN-Quickstart Integration Tests
 
-This directory contains integration tests that validate the Canton Node SDK works correctly with cn-quickstart.
+This directory contains integration tests that validate the Canton Node SDK works correctly with
+cn-quickstart.
 
 ## Test Files
 
 ### `smoke-test.ts`
 
 A comprehensive smoke test that validates:
+
 - ✅ OAuth2 authentication with Keycloak
 - ✅ Validator API connectivity and operations
 - ✅ Ledger JSON API connectivity and operations
 - ✅ SDK's built-in localnet defaults work correctly
 
 **Run locally:**
+
 ```bash
 # Prerequisites: cn-quickstart must be running
 cd quickstart && make start
@@ -30,6 +33,7 @@ Jest-based integration tests (requires SDK to be built).
 ### Local Development
 
 1. **Start CN-Quickstart:**
+
    ```bash
    cd cn-quickstart/quickstart
    make start
@@ -43,6 +47,7 @@ Jest-based integration tests (requires SDK to be built).
 ### CI/CD
 
 Tests run automatically in CI on:
+
 - Every commit (CircleCI & GitHub Actions)
 - Pull requests
 - Nightly at 2 AM UTC
@@ -50,6 +55,7 @@ Tests run automatically in CI on:
 #### CircleCI
 
 See `.circleci/config.yml` - the `test-cn-quickstart` job:
+
 1. Sets up ubuntu machine with Docker support
 2. Installs Node.js 20
 3. Runs `npm run localnet:quickstart` to download and setup cn-quickstart
@@ -60,6 +66,7 @@ See `.circleci/config.yml` - the `test-cn-quickstart` job:
 #### GitHub Actions
 
 See `.github/workflows/test-cn-quickstart.yml`:
+
 - Same flow as CircleCI
 - Uses GitHub Actions marketplace actions for setup
 - Runs on `ubuntu-latest` runner
@@ -67,6 +74,7 @@ See `.github/workflows/test-cn-quickstart.yml`:
 ### Validating CI Configuration
 
 **CircleCI:**
+
 ```bash
 # Install CircleCI CLI
 brew install circleci
@@ -79,6 +87,7 @@ circleci local execute --job test-cn-quickstart
 ```
 
 **GitHub Actions:**
+
 ```bash
 # Install act (GitHub Actions local runner)
 brew install act
@@ -112,6 +121,7 @@ await validatorClient.getUserStatus();
 ```
 
 **Benefits:**
+
 - ✅ No external test framework dependencies
 - ✅ Fast execution (~200ms total)
 - ✅ Clear pass/fail with exit codes
@@ -144,6 +154,7 @@ await validatorClient.getUserStatus();
 **Cause:** CN-Quickstart is not running or services aren't ready.
 
 **Fix:**
+
 ```bash
 # Check if services are running
 docker ps | grep -E "splice|keycloak"
@@ -161,6 +172,7 @@ make restart
 **Cause:** OAuth2 authentication is not working.
 
 **Fix:**
+
 ```bash
 # Verify Keycloak is accessible
 curl http://localhost:8082/realms/AppProvider
@@ -177,12 +189,14 @@ curl -X POST http://localhost:8082/realms/AppProvider/protocol/openid-connect/to
 **Cause:** Services take too long to start.
 
 **Fix:** Increase timeouts in CI config:
+
 - CircleCI: Add `no_output_timeout: 20m` to steps
 - GitHub Actions: Increase `timeout-minutes` on job or step
 
 ### Local CircleCI Test Fails
 
 **Note:** `circleci local execute` has limitations:
+
 - Doesn't support `ubuntu-machine` executor perfectly
 - May have Docker-in-Docker issues
 - Use `act` for GitHub Actions or push to a branch for real CI testing
@@ -201,6 +215,7 @@ await runTest('Test Name', async () => {
 ```
 
 The `runTest` helper:
+
 - Catches errors automatically
 - Tracks timing
 - Reports pass/fail
@@ -209,6 +224,7 @@ The `runTest` helper:
 ## Performance
 
 Typical smoke test execution time:
+
 - **Authentication:** ~70ms (first call)
 - **API Calls:** ~15-40ms each (with cached token)
 - **Total:** ~200ms

@@ -5,6 +5,7 @@ This document describes the CI/CD setup for testing the Canton Node SDK against 
 ## Overview
 
 We've added automated testing that:
+
 1. ✅ Downloads and sets up cn-quickstart
 2. ✅ Starts the full cn-quickstart environment with OAuth2
 3. ✅ Runs comprehensive smoke tests validating SDK connectivity
@@ -14,6 +15,7 @@ We've added automated testing that:
 ## Test Coverage
 
 The smoke test validates:
+
 - **OAuth2 Authentication**: Connects to Keycloak, obtains JWT tokens
 - **Validator API**: `getUserStatus()`, `getDsoPartyId()`
 - **Ledger JSON API**: `getVersion()`, `getLedgerEnd()`
@@ -30,6 +32,7 @@ The smoke test validates:
 **Workflow:** Runs on every commit and nightly at 2 AM UTC
 
 **Steps:**
+
 1. Uses `ubuntu-machine` executor (for Docker support)
 2. Installs Node.js 20 via nvm
 3. Installs npm dependencies
@@ -49,6 +52,7 @@ The smoke test validates:
 **Workflow Name:** Test CN-Quickstart Integration
 
 **Triggers:**
+
 - Push to `main`/`master`
 - Pull requests
 - Nightly at 2 AM UTC
@@ -71,6 +75,7 @@ npm run test:smoke
 ```
 
 Expected output:
+
 ```
 🧪 Running CN-Quickstart LocalNet Smoke Tests
 
@@ -91,6 +96,7 @@ Total: 5 | Passed: 5 | Failed: 0
 ### Full Local CI Simulation
 
 **CircleCI:**
+
 ```bash
 # Install CircleCI CLI
 brew install circleci
@@ -103,6 +109,7 @@ circleci local execute --job test-cn-quickstart
 ```
 
 **GitHub Actions:**
+
 ```bash
 # Install act
 brew install act
@@ -111,16 +118,19 @@ brew install act
 act -j test-cn-quickstart
 ```
 
-**Note:** Local CI runners have limitations with Docker-in-Docker. Best approach is to push to a test branch and let actual CI run.
+**Note:** Local CI runners have limitations with Docker-in-Docker. Best approach is to push to a
+test branch and let actual CI run.
 
 ## Validating Configuration
 
 ### Check CircleCI Config Syntax
+
 ```bash
 circleci config validate
 ```
 
 ### Check GitHub Actions Workflow
+
 ```bash
 # GitHub validates on push, or use:
 # https://rhysd.github.io/actionlint/
@@ -133,22 +143,25 @@ actionlint .github/workflows/test-cn-quickstart.yml
 ### For CircleCI Users
 
 The config is already integrated! It will run automatically on:
+
 - ✅ Every commit (as part of `build-test` workflow)
 - ✅ Pull requests
 - ✅ Nightly (as part of `nightly-regression` workflow)
 
 To disable cn-quickstart tests on every commit (only run nightly):
+
 ```yaml
 # In .circleci/config.yml, remove from build-test workflow:
-      - test-cn-quickstart:
-          requires:
-            - lint
-            - test
+- test-cn-quickstart:
+    requires:
+      - lint
+      - test
 ```
 
 ### For GitHub Actions Users
 
 The workflow file is ready to use! Enable it by:
+
 1. Commit `.github/workflows/test-cn-quickstart.yml`
 2. Push to your repository
 3. GitHub Actions will automatically detect and run it
@@ -160,6 +173,7 @@ The workflow file is ready to use! Enable it by:
 **Symptoms:** CI job exceeds time limits
 
 **Solutions:**
+
 - Increase `no_output_timeout` in CircleCI
 - Increase `timeout-minutes` in GitHub Actions
 - Current timeouts: 20min setup, 15min start, 60min total
@@ -169,6 +183,7 @@ The workflow file is ready to use! Enable it by:
 **Symptoms:** Tests fail with "Connection Refused"
 
 **Solutions:**
+
 - Increase wait time in "Wait for Services" step
 - Check Docker container status in logs
 - Verify ports are not already in use
@@ -178,6 +193,7 @@ The workflow file is ready to use! Enable it by:
 **Symptoms:** Docker containers crash, services won't start
 
 **Solutions:**
+
 - Use `large` resource class in CircleCI (already configured)
 - Ensure GitHub runner has enough memory
 - Consider using self-hosted runners for resource-intensive jobs
@@ -187,6 +203,7 @@ The workflow file is ready to use! Enable it by:
 **Symptoms:** "toomanyrequests: You have reached your pull rate limit"
 
 **Solutions:**
+
 - Add Docker Hub credentials to CI environment variables
 - Use authenticated Docker pulls
 - Consider caching Docker images
@@ -209,15 +226,15 @@ The workflow file is ready to use! Enable it by:
 
 Typical execution times:
 
-| Step | Duration |
-|------|----------|
-| Setup Node.js | ~30s |
-| Install Dependencies | ~2min |
-| Setup CN-Quickstart | ~10-15min |
-| Start Services | ~5-10min |
-| Wait for Health | ~2-3min |
-| Run Smoke Tests | ~5s |
-| **Total** | **~20-30min** |
+| Step                 | Duration      |
+| -------------------- | ------------- |
+| Setup Node.js        | ~30s          |
+| Install Dependencies | ~2min         |
+| Setup CN-Quickstart  | ~10-15min     |
+| Start Services       | ~5-10min      |
+| Wait for Health      | ~2-3min       |
+| Run Smoke Tests      | ~5s           |
+| **Total**            | **~20-30min** |
 
 The smoke tests themselves are fast (~200ms), but cn-quickstart setup and startup take time.
 
@@ -283,6 +300,7 @@ await runTest('New Test Name', async () => {
 ## Support
 
 For CI issues:
+
 1. Check logs in CI dashboard
 2. Review `test/integration/quickstart/README.md`
 3. Run tests locally first

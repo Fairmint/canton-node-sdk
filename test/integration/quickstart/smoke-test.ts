@@ -2,10 +2,11 @@
 /**
  * CN-Quickstart LocalNet Smoke Test
  *
- * This is a simple smoke test that validates the SDK can connect to cn-quickstart
- * and perform basic operations. It's designed to run in CI.
+ * This is a simple smoke test that validates the SDK can connect to cn-quickstart and perform basic operations. It's
+ * designed to run in CI.
  *
  * Exit codes:
+ *
  * - 0: All tests passed
  * - 1: Tests failed
  */
@@ -59,7 +60,7 @@ async function main(): Promise<void> {
   // Test 1: Authentication
   await runTest('OAuth2 Authentication', async () => {
     const token = await validatorClient.authenticate();
-    if (!token || token.length === 0) {
+    if (token.length === 0) {
       throw new Error('Token is empty');
     }
   });
@@ -80,7 +81,7 @@ async function main(): Promise<void> {
     }
     // getDsoPartyId returns an object or string depending on the API version
     const partyIdStr = typeof dsoPartyId === 'string' ? dsoPartyId : JSON.stringify(dsoPartyId);
-    if (!partyIdStr || partyIdStr.length === 0) {
+    if (partyIdStr.length === 0) {
       throw new Error(`Invalid DSO party ID: ${partyIdStr}`);
     }
   });
@@ -88,7 +89,7 @@ async function main(): Promise<void> {
   // Test 4: Ledger JSON API - getVersion
   await runTest('Ledger JSON API - getVersion()', async () => {
     const version = await jsonClient.getVersion();
-    if (!version || !version.version) {
+    if (!version.version) {
       throw new Error('Invalid version response');
     }
     if (!/^\d+\.\d+\.\d+/.test(version.version)) {
@@ -109,7 +110,7 @@ async function main(): Promise<void> {
   });
 
   // Print summary
-  console.log('\n' + '='.repeat(60));
+  console.log(`\n${'='.repeat(60)}`);
   console.log('Test Results Summary');
   console.log('='.repeat(60));
 

@@ -1,14 +1,16 @@
 /**
  * Integration test: CN-Quickstart LocalNet Connection
  *
- * This test validates that the SDK can connect to cn-quickstart localnet
- * with OAuth2 authentication using the built-in defaults.
+ * This test validates that the SDK can connect to cn-quickstart localnet with OAuth2 authentication using the built-in
+ * defaults.
  *
  * Prerequisites:
- * - cn-quickstart must be running with OAuth2 enabled
+ *
+ * - Cn-quickstart must be running with OAuth2 enabled
  * - Test assumes standard cn-quickstart ports (3903, 3975, 8082)
  *
  * This test verifies:
+ *
  * - SDK can use { network: 'localnet' } with no other configuration
  * - OAuth2 authentication works automatically
  * - Validator API and Ledger JSON API are both accessible
@@ -74,8 +76,8 @@ describe('CN-Quickstart LocalNet Connection', () => {
       const version = await jsonClient.getVersion();
       expect(version.features).toBeDefined();
       expect(version.features).toHaveProperty('userManagement');
-      expect(version.features?.userManagement).toHaveProperty('supported');
-      expect(version.features?.userManagement?.supported).toBe(true);
+      expect(version.features.userManagement).toHaveProperty('supported');
+      expect(version.features.userManagement.supported).toBe(true);
     }, 30000);
 
     it('should call getLedgerEnd', async () => {

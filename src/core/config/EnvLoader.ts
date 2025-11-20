@@ -280,7 +280,8 @@ export class EnvLoader {
     if (!authUrl && targetNetwork === 'localnet') {
       if (targetProvider === 'app-provider') {
         return 'http://localhost:8082/realms/AppProvider/protocol/openid-connect/token';
-      } else if (targetProvider === 'app-user') {
+      }
+      if (targetProvider === 'app-user') {
         return 'http://localhost:8082/realms/AppUser/protocol/openid-connect/token';
       }
     }
@@ -368,8 +369,8 @@ export class EnvLoader {
   }
 
   /**
-   * Get localnet defaults for cn-quickstart
-   * These are the standard OAuth2 credentials and URLs for cn-quickstart with OAuth2 enabled
+   * Get localnet defaults for cn-quickstart These are the standard OAuth2 credentials and URLs for cn-quickstart with
+   * OAuth2 enabled
    */
   private getLocalnetDefaults(apiType: string, provider: ProviderType): ApiConfig | undefined {
     if (provider !== 'app-provider' && provider !== 'app-user') {
@@ -382,9 +383,8 @@ export class EnvLoader {
     const auth: AuthConfig = {
       grantType: 'client_credentials',
       clientId: `${provider}-validator`,
-      clientSecret: provider === 'app-provider'
-        ? 'AL8648b9SfdTFImq7FV56Vd0KHifHBuC'
-        : 'k1YVWeC1vjQcqzlqzY98WVxJc6e4IIdZ',
+      clientSecret:
+        provider === 'app-provider' ? 'AL8648b9SfdTFImq7FV56Vd0KHifHBuC' : 'k1YVWeC1vjQcqzlqzY98WVxJc6e4IIdZ',
     };
 
     // Map API types to their port suffixes
