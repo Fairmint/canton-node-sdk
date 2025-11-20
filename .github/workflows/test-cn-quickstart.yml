@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -31,21 +33,13 @@ jobs:
           java-version: '21'
 
       - name: Install Dependencies
-        run: npm ci || npm install
+        run: npm install
 
       - name: Clone Splice Artifacts (for SDK codegen)
         run: npm run artifacts:clone-splice
 
       - name: Build SDK
         run: npm run build:core
-
-      - name: Clone CN-Quickstart
-        run: |
-          rm -rf cn-quickstart
-          echo "Cloning CN-Quickstart..."
-          git clone https://github.com/digital-asset/cn-quickstart.git cn-quickstart
-          echo "✓ CN-Quickstart cloned"
-        timeout-minutes: 10
 
       - name: Setup CN-Quickstart
         run: |
