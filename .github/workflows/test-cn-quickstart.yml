@@ -146,7 +146,7 @@ jobs:
       - name: Run Smoke Tests
         run: |
           echo "Running smoke tests..."
-          npm run test:smoke
+          npm run test
           echo "✓ Smoke tests passed!"
 
       - name: Show Logs on Failure

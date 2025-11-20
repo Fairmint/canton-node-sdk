@@ -1,23 +1,7 @@
-/**
- * LocalNet Integration Test for GetVersion API
- *
- * This test validates connectivity to a running LocalNet instance by calling the getVersion API and validating the full
- * response structure.
- *
- * Prerequisites:
- *
- * - LocalNet must be running (set up by CircleCI or manually via scripts)
- *
- * This test verifies:
- *
- * - SDK can connect to LocalNet JSON API
- * - GetVersion API returns the expected response
- */
-
 import { testClients } from '../../setup';
 
-describe('LocalNet GetVersion Integration Test', () => {
-  it('should successfully call getVersion and validate full response', async () => {
+describe('LocalNet GetVersion', () => {
+  it('getVersion', async () => {
     const response = await testClients.ledgerJsonApi.getVersion();
 
     expect(response).toEqual({
@@ -50,5 +34,5 @@ describe('LocalNet GetVersion Integration Test', () => {
         },
       },
     });
-  }, 30000);
+  });
 });

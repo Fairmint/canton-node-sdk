@@ -1,6 +1,14 @@
 import { LedgerJsonApiClient, ValidatorApiClient } from '../src';
 
-// Global test clients - constructed once and shared across all tests
+/**
+ * Global test clients - constructed once and shared across all tests
+ *
+ * Prerequisites:
+ * - LocalNet must be running (set up by CI or manually via scripts)
+ *
+ * These clients are configured to connect to LocalNet and are used by integration tests
+ * to validate SDK connectivity and operations.
+ */
 export const testClients = {
   ledgerJsonApi: new LedgerJsonApiClient({
     network: 'localnet',
