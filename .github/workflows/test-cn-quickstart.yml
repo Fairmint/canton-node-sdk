@@ -54,19 +54,19 @@ jobs:
           key: quickstart-prep-${{ runner.os }}-${{ hashFiles('package.json', 'package-lock.json', '.git/modules/cn-quickstart/HEAD') }}
 
       - name: Install Dependencies
-        if: steps.quickstart-prep-cache.outputs.cache-hit != 'true'
+        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
         run: npm install
 
       - name: Clone Splice Artifacts (for SDK codegen)
-        if: steps.quickstart-prep-cache.outputs.cache-hit != 'true'
+        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
         run: npm run artifacts:clone-splice
 
       - name: Build SDK
-        if: steps.quickstart-prep-cache.outputs.cache-hit != 'true'
+        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
         run: npm run build:core
 
       - name: Setup CN-Quickstart
-        if: steps.quickstart-prep-cache.outputs.cache-hit != 'true'
+        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
         run: |
           cd cn-quickstart/quickstart
           echo "Running setup with OAuth2..."
@@ -76,7 +76,7 @@ jobs:
         timeout-minutes: 15
 
       - name: Install Daml SDK
-        if: steps.quickstart-prep-cache.outputs.cache-hit != 'true'
+        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
         run: |
           cd cn-quickstart/quickstart
           make install-daml-sdk
@@ -165,15 +165,4 @@ jobs:
           echo "==================== Canton Logs ===================="
           if [ -f cn-quickstart/quickstart/logs/canton.log ]; then
             tail -100 cn-quickstart/quickstart/logs/canton.log
-          fi
-
-      - name: Stop CN-Quickstart
-        if: always()
-        run: |
-          if [ -d "cn-quickstart/quickstart" ]; then
-            cd cn-quickstart/quickstart
-            make stop || true
-            echo "✓ CN-Quickstart stopped"
-          else
-            echo "CN-Quickstart directory not found, skipping cleanup"
           fi
