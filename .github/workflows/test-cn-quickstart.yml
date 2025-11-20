@@ -61,10 +61,6 @@ jobs:
         if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
         run: npm run artifacts:clone-splice
 
-      - name: Build SDK
-        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
-        run: npm run build:core
-
       - name: Setup CN-Quickstart
         if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
         run: |
@@ -143,6 +139,9 @@ jobs:
             /home/runner/.daml
             /home/runner/.gradle
           key: ${{ steps.quickstart-prep-cache-restore.outputs.cache-primary-key }}
+
+      - name: Build SDK
+        run: npm run build
 
       - name: Run Smoke Tests
         run: |
