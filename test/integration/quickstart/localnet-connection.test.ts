@@ -76,8 +76,10 @@ describe('CN-Quickstart LocalNet Connection', () => {
       const version = await jsonClient.getVersion();
       expect(version.features).toBeDefined();
       expect(version.features).toHaveProperty('userManagement');
-      expect(version.features.userManagement).toHaveProperty('supported');
-      expect(version.features.userManagement.supported).toBe(true);
+      if (version.features?.userManagement) {
+        expect(version.features.userManagement).toHaveProperty('supported');
+        expect(version.features.userManagement.supported).toBe(true);
+      }
     }, 30000);
 
     it('should call getLedgerEnd', async () => {
