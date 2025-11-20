@@ -1,0 +1,3 @@
+[submodule "cn-quickstart"]
+	path = cn-quickstart
+	url = https://github.com/digital-asset/cn-quickstart
