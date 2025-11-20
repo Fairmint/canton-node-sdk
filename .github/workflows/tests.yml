@@ -1,4 +1,4 @@
-name: Test CN-Quickstart Integration
+name: Tests
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-cn-quickstart:
+  tests:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
