@@ -26,7 +26,8 @@ describe('LocalNet GetVersion', () => {
 
 ### Write Operations with Read-Back Verification
 
-See `user-management.test.ts` for an example of testing write operations with read-back verification:
+See `user-management.test.ts` for an example of testing write operations with read-back
+verification:
 
 ```typescript
 import { testClients } from '../../setup';

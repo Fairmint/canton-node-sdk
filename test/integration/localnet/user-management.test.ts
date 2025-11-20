@@ -2,6 +2,7 @@ import { testClients } from '../../setup';
 
 describe('LocalNet User Management', () => {
   it('should create a user, retrieve it, and list users', async () => {
+    // Note: For production tests, consider adding cleanup with deleteUser in afterEach
     const userId = `test-user-${Date.now()}`;
 
     const createResponse = await testClients.ledgerJsonApi.createUser({
