@@ -33,6 +33,9 @@ jobs:
       - name: Install Dependencies
         run: npm ci || npm install
 
+      - name: Clone Splice Artifacts (for SDK codegen)
+        run: npm run artifacts:clone-splice
+
       - name: Build SDK
         run: npm run build:core
 
