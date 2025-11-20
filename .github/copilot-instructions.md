@@ -18,3 +18,10 @@ Tests should be informal and non-exhaustive:
 - Focus on happy cases (include some error cases)
 - Demonstrate the format of information in and out of SDK functions
 - Keep tests simple and clear
+
+## Development
+
+**Fix warnings and errors** when making changes by running `npm run fix` (auto-formats with
+Prettier).
+
+**Refer to GitHub Actions scripts** in `.github/workflows/` for setup and test commands available.
