@@ -8,6 +8,20 @@ const endpoint = '/v2/users' as const;
 export type CreateUserParams = z.infer<typeof CreateUserParamsSchema>;
 export type CreateUserResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
+/**
+ * Create a new user on the ledger
+ *
+ * @example
+ *   ```typescript
+ *   const result = await client.createUser({
+ *     user: {
+ *       id: 'alice',
+ *       primaryParty: 'Alice::1220'
+ *     }
+ *   });
+ *
+ *   ```;
+ */
 export const CreateUser = createApiOperation<CreateUserParams, CreateUserResponse>({
   paramsSchema: CreateUserParamsSchema,
   method: 'POST',

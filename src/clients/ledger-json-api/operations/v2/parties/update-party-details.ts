@@ -10,6 +10,20 @@ export type UpdatePartyDetailsParams = z.infer<typeof UpdatePartyDetailsParamsSc
 
 export type UpdatePartyDetailsResponse = paths[Endpoint]['patch']['responses']['200']['content']['application/json'];
 
+/**
+ * Update party details including local metadata
+ *
+ * @example
+ *   ```typescript
+ *   const result = await client.updatePartyDetails({
+ *     party: 'Alice::1220',
+ *     partyDetails: {
+ *       localMetadata: { annotations: { key: 'value' } }
+ *     }
+ *   });
+ *
+ *   ```;
+ */
 export const UpdatePartyDetails = createApiOperation<UpdatePartyDetailsParams, UpdatePartyDetailsResponse>({
   paramsSchema: UpdatePartyDetailsParamsSchema,
   method: 'PATCH',

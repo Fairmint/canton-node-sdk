@@ -11,6 +11,19 @@ export type UpdateUserIdentityProviderParams = z.infer<typeof UpdateUserIdentity
 export type UpdateUserIdentityProviderResponse =
   paths[Endpoint]['patch']['responses']['200']['content']['application/json'];
 
+/**
+ * Update the identity provider for a user
+ *
+ * @example
+ *   ```typescript
+ *   const result = await client.updateUserIdentityProvider({
+ *     userId: 'alice',
+ *     sourceIdentityProviderId: 'old-idp',
+ *     targetIdentityProviderId: 'new-idp'
+ *   });
+ *
+ *   ```;
+ */
 export const UpdateUserIdentityProvider = createApiOperation<
   UpdateUserIdentityProviderParams,
   UpdateUserIdentityProviderResponse

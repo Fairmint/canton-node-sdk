@@ -9,6 +9,18 @@ export type GetUpdateByOffsetParams = z.infer<typeof GetUpdateByOffsetParamsSche
 export type GetUpdateByOffsetResponse =
   paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
+/**
+ * Get an update by its ledger offset
+ *
+ * @example
+ *   ```typescript
+ *   const result = await client.getUpdateByOffset({
+ *     offset: '00000000000000000000',
+ *     parties: ['party1']
+ *   });
+ *
+ *   ```;
+ */
 export const GetUpdateByOffset = createApiOperation<GetUpdateByOffsetParams, GetUpdateByOffsetResponse>({
   paramsSchema: GetUpdateByOffsetParamsSchema,
   method: 'POST',

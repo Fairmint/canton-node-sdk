@@ -16,6 +16,17 @@ export type CompletionsParams = z.infer<typeof CompletionsParamsSchema>;
 export type CompletionsRequest = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
 export type CompletionsResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
+/**
+ * Get command completions for tracking command execution status
+ *
+ * @example
+ *   ```typescript
+ *   const result = await client.completions({
+ *     beginExclusive: '00000000000000000000'
+ *   });
+ *
+ *   ```;
+ */
 export const Completions = createApiOperation<CompletionsParams, CompletionsResponse>({
   paramsSchema: CompletionsParamsSchema,
   method: 'POST',
