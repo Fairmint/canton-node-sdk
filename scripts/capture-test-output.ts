@@ -1,11 +1,9 @@
 #!/usr/bin/env tsx
 /**
- * Helper script to capture actual API responses for integration tests
- * Run this script against LocalNet to get the actual output that should be used in tests
+ * Helper script to capture actual API responses for integration tests Run this script against LocalNet to get the
+ * actual output that should be used in tests
  *
- * Usage:
- *   npm run localnet:start
- *   tsx scripts/capture-test-output.ts
+ * Usage: npm run localnet:start tsx scripts/capture-test-output.ts
  */
 
 import { LedgerJsonApiClient } from '../src';
