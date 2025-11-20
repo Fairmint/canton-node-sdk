@@ -61,7 +61,7 @@ pids
 *.tgz
 
 # Yarn Integrity file
-.yarn-integrity 
+.yarn-integrity
 
 # Auto-generated
 CHANGELOG.md
