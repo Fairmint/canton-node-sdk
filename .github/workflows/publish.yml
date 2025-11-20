@@ -20,6 +20,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          submodules: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -30,8 +31,8 @@ jobs:
       - name: Install dependencies
         run: npm i
 
-      - name: Clone Splice
-        run: npm run artifacts:clone-splice
+      - name: Initialize Splice Submodule
+        run: git submodule update --init --depth 1 libs/splice
 
       - name: Build package
         run: npm run build
