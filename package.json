@@ -57,6 +57,7 @@
     "test:integration": "jest test/integration/quickstart",
     "test:localnet": "npm run build:core && npm run simulate",
     "test:regression": "npm run test:localnet",
+    "test:smoke": "tsx test/integration/quickstart/smoke-test.ts",
     "test:watch": "jest --watch"
   },
   "dependencies": {

@@ -30,10 +30,13 @@ export abstract class BaseClient {
       this.clientConfig = defaultConfig;
     } else if (!config.apis?.[apiType]) {
       // Config provided but missing API configuration - merge with EnvLoader defaults
-      const defaultConfig = EnvLoader.getConfig(apiType, {
+      const options: { network?: NetworkType; provider?: ProviderType } = {
         network: config.network,
-        provider: config.provider,
-      });
+      };
+      if (config.provider) {
+        options.provider = config.provider;
+      }
+      const defaultConfig = EnvLoader.getConfig(apiType, options);
       this.clientConfig = {
         ...defaultConfig,
         ...config,
