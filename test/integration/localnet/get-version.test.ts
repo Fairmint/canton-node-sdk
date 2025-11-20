@@ -14,20 +14,11 @@
  * - GetVersion API returns the expected response
  */
 
-import { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
+import { testClients } from '../../setup';
 
 describe('LocalNet GetVersion Integration Test', () => {
-  let client: LedgerJsonApiClient;
-
-  beforeAll(() => {
-    // Simple configuration - SDK handles the rest
-    client = new LedgerJsonApiClient({
-      network: 'localnet',
-    });
-  });
-
   it('should successfully call getVersion and validate full response', async () => {
-    const response = await client.getVersion();
+    const response = await testClients.ledgerJsonApi.getVersion();
 
     expect(response).toEqual({
       version: '3.3.0-SNAPSHOT',

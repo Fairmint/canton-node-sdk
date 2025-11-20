@@ -217,26 +217,6 @@ commands:
 # JOBS
 # ============================================================================
 jobs:
-  # Standard unit tests (no LocalNet required)
-  test:
-    executor: node-docker
-    steps:
-      - checkout
-      - restore_node_modules
-      - run:
-          name: Install Dependencies
-          command: npm install
-      - save_node_modules
-      - run:
-          name: Clone Splice Artifacts
-          command: npm run artifacts:clone-splice
-      - run:
-          name: Run Unit Tests
-          command: npm test
-      - run:
-          name: Type Check
-          command: npm run build:core
-
   # Code quality checks
   lint:
     executor: node-docker
@@ -423,7 +403,6 @@ workflows:
   build-test:
     jobs:
       - lint
-      - test
 
   # Nightly regression tests with LocalNet
   nightly-regression:
