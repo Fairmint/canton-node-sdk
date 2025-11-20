@@ -40,18 +40,18 @@ jobs:
             ${{ github.workspace }}/node_modules
             ${{ github.workspace }}/artifacts
             ${{ github.workspace }}/build
-            ${{ github.workspace }}/cn-quickstart/quickstart/.env.local
-            ${{ github.workspace }}/cn-quickstart/quickstart/.gradle
-            ${{ github.workspace }}/cn-quickstart/quickstart/.daml
-            ${{ github.workspace }}/cn-quickstart/quickstart/.config
-            ${{ github.workspace }}/cn-quickstart/quickstart/.cache
-            ${{ github.workspace }}/cn-quickstart/quickstart/frontend/node_modules
-            ${{ github.workspace }}/cn-quickstart/quickstart/frontend/dist
-            ${{ github.workspace }}/cn-quickstart/quickstart/backend/build
-            ${{ github.workspace }}/cn-quickstart/quickstart/integration-test/node_modules
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.env.local
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.gradle
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.daml
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.config
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.cache
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/frontend/node_modules
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/frontend/dist
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/backend/build
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/integration-test/node_modules
             /home/runner/.daml
             /home/runner/.gradle
-          key: quickstart-prep-${{ runner.os }}-${{ hashFiles('package.json', 'package-lock.json', '.git/modules/cn-quickstart/HEAD') }}
+          key: quickstart-prep-${{ runner.os }}-${{ hashFiles('package.json', 'package-lock.json', '.git/modules/libs/cn-quickstart/HEAD') }}
 
       - name: Install Dependencies
         if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
@@ -78,14 +78,14 @@ jobs:
           git commit -m "chore: auto-fix linting issues [skip ci]"
           git push
 
-      - name: Clone Splice Artifacts (for SDK codegen)
+      - name: Initialize Splice Submodule (for SDK codegen)
         if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
-        run: npm run artifacts:clone-splice
+        run: git submodule update --init --depth 1 libs/splice
 
       - name: Setup CN-Quickstart
         if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
         run: |
-          cd cn-quickstart/quickstart
+          cd libs/cn-quickstart/quickstart
           echo "Running setup with OAuth2..."
           # Setup with OAuth2 non-interactively
           echo "2" | make setup || true  # Select option 2 (with OAuth2)
@@ -95,7 +95,7 @@ jobs:
       - name: Install Daml SDK
         if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
         run: |
-          cd cn-quickstart/quickstart
+          cd libs/cn-quickstart/quickstart
           make install-daml-sdk
         timeout-minutes: 15
 
@@ -104,7 +104,7 @@ jobs:
 
       - name: Start CN-Quickstart
         run: |
-          cd cn-quickstart/quickstart
+          cd libs/cn-quickstart/quickstart
           make start
           echo "✓ CN-Quickstart started"
         timeout-minutes: 15
@@ -137,7 +137,7 @@ jobs:
       # This cache will be invalidated when:
       # - package.json changes (dependency additions/removals)
       # - package-lock.json changes (exact dependency versions)
-      # - cn-quickstart submodule HEAD changes (submodule updated to different commit)
+      # - libs/cn-quickstart submodule HEAD changes (submodule updated to different commit)
       # - Runner OS changes (unlikely in practice)
       - name: Save Quickstart Preparation Cache
         if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
@@ -148,15 +148,15 @@ jobs:
             ${{ github.workspace }}/node_modules
             ${{ github.workspace }}/artifacts
             ${{ github.workspace }}/build
-            ${{ github.workspace }}/cn-quickstart/quickstart/.env.local
-            ${{ github.workspace }}/cn-quickstart/quickstart/.gradle
-            ${{ github.workspace }}/cn-quickstart/quickstart/.daml
-            ${{ github.workspace }}/cn-quickstart/quickstart/.config
-            ${{ github.workspace }}/cn-quickstart/quickstart/.cache
-            ${{ github.workspace }}/cn-quickstart/quickstart/frontend/node_modules
-            ${{ github.workspace }}/cn-quickstart/quickstart/frontend/dist
-            ${{ github.workspace }}/cn-quickstart/quickstart/backend/build
-            ${{ github.workspace }}/cn-quickstart/quickstart/integration-test/node_modules
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.env.local
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.gradle
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.daml
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.config
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.cache
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/frontend/node_modules
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/frontend/dist
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/backend/build
+            ${{ github.workspace }}/libs/cn-quickstart/quickstart/integration-test/node_modules
             /home/runner/.daml
             /home/runner/.gradle
           key: ${{ steps.quickstart-prep-cache-restore.outputs.cache-primary-key }}
@@ -177,12 +177,12 @@ jobs:
           docker ps -a || true
 
           echo "==================== Docker Compose Logs ===================="
-          if [ -d "cn-quickstart/quickstart" ]; then
-            cd cn-quickstart/quickstart
+          if [ -d "libs/cn-quickstart/quickstart" ]; then
+            cd libs/cn-quickstart/quickstart
             docker compose logs --tail=100 || true
           fi
 
           echo "==================== Canton Logs ===================="
-          if [ -f cn-quickstart/quickstart/logs/canton.log ]; then
-            tail -100 cn-quickstart/quickstart/logs/canton.log
+          if [ -f libs/cn-quickstart/quickstart/logs/canton.log ]; then
+            tail -100 libs/cn-quickstart/quickstart/logs/canton.log
           fi

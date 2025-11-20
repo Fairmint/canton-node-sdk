@@ -30,8 +30,8 @@ jobs:
       - name: Install dependencies
         run: npm i
 
-      - name: Clone Splice
-        run: npm run artifacts:clone-splice
+      - name: Initialize Splice Submodule
+        run: git submodule update --init --depth 1 libs/splice
 
       - name: Build package
         run: npm run build
