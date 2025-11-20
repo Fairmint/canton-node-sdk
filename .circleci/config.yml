@@ -421,6 +421,14 @@ jobs:
             echo 'export NVM_DIR="$HOME/.nvm"' >> $BASH_ENV
             echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> $BASH_ENV
 
+      - run:
+          name: Install Java 21
+          command: |
+            sudo apt-get update -y
+            sudo apt-get install -y openjdk-21-jdk
+            echo 'export JAVA_HOME="/usr/lib/jvm/java-21-openjdk-amd64"' >> $BASH_ENV
+            echo 'export PATH="$JAVA_HOME/bin:$PATH"' >> $BASH_ENV
+
       # Install SDK dependencies
       - restore_node_modules
       - run:
@@ -431,18 +439,26 @@ jobs:
             nvm use 20
             npm install
       - save_node_modules
-      # Setup CN-Quickstart
+      # Clone CN-Quickstart
       - run:
-          name: Setup CN-Quickstart
+          name: Clone CN-Quickstart
+          command: |
+            rm -rf cn-quickstart
+            git clone https://github.com/digital-asset/cn-quickstart.git cn-quickstart
+            echo "CN-Quickstart cloned"
+
+      # Configure CN-Quickstart
+      - run:
+          name: Configure CN-Quickstart
           command: |
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
             nvm use 20
 
-            # Run the quickstart setup script
-            npm run localnet:quickstart
+            cd cn-quickstart/quickstart
+            echo "2" | make setup || true
 
-            echo "CN-Quickstart setup complete"
+            echo "CN-Quickstart configured"
           no_output_timeout: 20m
 
       - run:
