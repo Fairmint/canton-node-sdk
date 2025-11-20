@@ -43,6 +43,13 @@ jobs:
           echo "✓ CN-Quickstart setup complete"
         timeout-minutes: 15
 
+      - name: Install Daml SDK
+        run: |
+          cd cn-quickstart/quickstart
+          make install-daml-sdk
+          echo "$HOME/.daml/bin" >> $GITHUB_PATH
+        timeout-minutes: 15
+
       - name: Start CN-Quickstart
         run: |
           cd cn-quickstart/quickstart

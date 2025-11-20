@@ -445,6 +445,19 @@ jobs:
             echo "CN-Quickstart setup complete"
           no_output_timeout: 20m
 
+      - run:
+          name: Install Daml SDK
+          command: |
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            nvm use 20
+
+            cd cn-quickstart/quickstart
+            make install-daml-sdk
+
+            echo 'export PATH="$HOME/.daml/bin:$PATH"' >> $BASH_ENV
+          no_output_timeout: 20m
+
       # Start CN-Quickstart
       - run:
           name: Start CN-Quickstart
