@@ -11,4 +11,6 @@ module.exports = {
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   moduleFileExtensions: ['ts', 'js', 'json'],
+  // Longer timeout for e2e tests
+  testTimeout: 30000,
 };
