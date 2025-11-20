@@ -45,6 +45,10 @@ jobs:
             ${{ github.workspace }}/cn-quickstart/quickstart/.daml
             ${{ github.workspace }}/cn-quickstart/quickstart/.config
             ${{ github.workspace }}/cn-quickstart/quickstart/.cache
+            ${{ github.workspace }}/cn-quickstart/quickstart/frontend/node_modules
+            ${{ github.workspace }}/cn-quickstart/quickstart/frontend/dist
+            ${{ github.workspace }}/cn-quickstart/quickstart/backend/build
+            ${{ github.workspace }}/cn-quickstart/quickstart/integration-test/node_modules
             /home/runner/.daml
             /home/runner/.gradle
           key: quickstart-prep-${{ runner.os }}-${{ hashFiles('package.json', 'package-lock.json', '.git/modules/cn-quickstart/HEAD') }}
@@ -78,6 +82,22 @@ jobs:
           make install-daml-sdk
         timeout-minutes: 15
 
+      - name: Add Daml CLI to PATH
+        run: echo "$HOME/.daml/bin" >> $GITHUB_PATH
+
+      - name: Start CN-Quickstart
+        run: |
+          cd cn-quickstart/quickstart
+          make start
+          echo "✓ CN-Quickstart started"
+        timeout-minutes: 15
+
+      # Cache the prepared quickstart environment to speed up subsequent runs.
+      # This cache will be invalidated when:
+      # - package.json changes (dependency additions/removals)
+      # - package-lock.json changes (exact dependency versions)
+      # - cn-quickstart submodule HEAD changes (submodule updated to different commit)
+      # - Runner OS changes (unlikely in practice)
       - name: Save Quickstart Preparation Cache
         if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
         id: quickstart-prep-cache-save
@@ -92,19 +112,13 @@ jobs:
             ${{ github.workspace }}/cn-quickstart/quickstart/.daml
             ${{ github.workspace }}/cn-quickstart/quickstart/.config
             ${{ github.workspace }}/cn-quickstart/quickstart/.cache
+            ${{ github.workspace }}/cn-quickstart/quickstart/frontend/node_modules
+            ${{ github.workspace }}/cn-quickstart/quickstart/frontend/dist
+            ${{ github.workspace }}/cn-quickstart/quickstart/backend/build
+            ${{ github.workspace }}/cn-quickstart/quickstart/integration-test/node_modules
             /home/runner/.daml
             /home/runner/.gradle
           key: ${{ steps.quickstart-prep-cache-restore.outputs.cache-primary-key }}
-
-      - name: Add Daml CLI to PATH
-        run: echo "$HOME/.daml/bin" >> $GITHUB_PATH
-
-      - name: Start CN-Quickstart
-        run: |
-          cd cn-quickstart/quickstart
-          make start
-          echo "✓ CN-Quickstart started"
-        timeout-minutes: 15
 
       - name: Wait for Services
         run: |
