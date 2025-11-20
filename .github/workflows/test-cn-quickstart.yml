@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -30,24 +32,37 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      - name: Restore Quickstart Preparation Cache
+        id: quickstart-prep-cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ github.workspace }}/node_modules
+            ${{ github.workspace }}/artifacts
+            ${{ github.workspace }}/build
+            ${{ github.workspace }}/cn-quickstart/quickstart/.env.local
+            ${{ github.workspace }}/cn-quickstart/quickstart/.gradle
+            ${{ github.workspace }}/cn-quickstart/quickstart/.daml
+            ${{ github.workspace }}/cn-quickstart/quickstart/.config
+            ${{ github.workspace }}/cn-quickstart/quickstart/.cache
+            ${{ github.workspace }}/cn-quickstart/quickstart/frontend/node_modules
+            ${{ github.workspace }}/cn-quickstart/quickstart/frontend/dist
+            ${{ github.workspace }}/cn-quickstart/quickstart/backend/build
+            ${{ github.workspace }}/cn-quickstart/quickstart/integration-test/node_modules
+            /home/runner/.daml
+            /home/runner/.gradle
+          key: quickstart-prep-${{ runner.os }}-${{ hashFiles('package.json', 'package-lock.json', '.git/modules/cn-quickstart/HEAD') }}
+
       - name: Install Dependencies
-        run: npm ci || npm install
+        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
+        run: npm install
 
       - name: Clone Splice Artifacts (for SDK codegen)
+        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
         run: npm run artifacts:clone-splice
 
-      - name: Build SDK
-        run: npm run build:core
-
-      - name: Clone CN-Quickstart
-        run: |
-          rm -rf cn-quickstart
-          echo "Cloning CN-Quickstart..."
-          git clone https://github.com/digital-asset/cn-quickstart.git cn-quickstart
-          echo "✓ CN-Quickstart cloned"
-        timeout-minutes: 10
-
       - name: Setup CN-Quickstart
+        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
         run: |
           cd cn-quickstart/quickstart
           echo "Running setup with OAuth2..."
@@ -57,11 +72,14 @@ jobs:
         timeout-minutes: 15
 
       - name: Install Daml SDK
+        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
         run: |
           cd cn-quickstart/quickstart
           make install-daml-sdk
-          echo "$HOME/.daml/bin" >> $GITHUB_PATH
         timeout-minutes: 15
+
+      - name: Add Daml CLI to PATH
+        run: echo "$HOME/.daml/bin" >> $GITHUB_PATH
 
       - name: Start CN-Quickstart
         run: |
@@ -94,6 +112,37 @@ jobs:
 
           echo "✓ All services are ready!"
 
+      # Cache the prepared quickstart environment to speed up subsequent runs.
+      # This cache will be invalidated when:
+      # - package.json changes (dependency additions/removals)
+      # - package-lock.json changes (exact dependency versions)
+      # - cn-quickstart submodule HEAD changes (submodule updated to different commit)
+      # - Runner OS changes (unlikely in practice)
+      - name: Save Quickstart Preparation Cache
+        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
+        id: quickstart-prep-cache-save
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ github.workspace }}/node_modules
+            ${{ github.workspace }}/artifacts
+            ${{ github.workspace }}/build
+            ${{ github.workspace }}/cn-quickstart/quickstart/.env.local
+            ${{ github.workspace }}/cn-quickstart/quickstart/.gradle
+            ${{ github.workspace }}/cn-quickstart/quickstart/.daml
+            ${{ github.workspace }}/cn-quickstart/quickstart/.config
+            ${{ github.workspace }}/cn-quickstart/quickstart/.cache
+            ${{ github.workspace }}/cn-quickstart/quickstart/frontend/node_modules
+            ${{ github.workspace }}/cn-quickstart/quickstart/frontend/dist
+            ${{ github.workspace }}/cn-quickstart/quickstart/backend/build
+            ${{ github.workspace }}/cn-quickstart/quickstart/integration-test/node_modules
+            /home/runner/.daml
+            /home/runner/.gradle
+          key: ${{ steps.quickstart-prep-cache-restore.outputs.cache-primary-key }}
+
+      - name: Build SDK
+        run: npm run build
+
       - name: Run Smoke Tests
         run: |
           echo "Running smoke tests..."
@@ -115,15 +164,4 @@ jobs:
           echo "==================== Canton Logs ===================="
           if [ -f cn-quickstart/quickstart/logs/canton.log ]; then
             tail -100 cn-quickstart/quickstart/logs/canton.log
-          fi
-
-      - name: Stop CN-Quickstart
-        if: always()
-        run: |
-          if [ -d "cn-quickstart/quickstart" ]; then
-            cd cn-quickstart/quickstart
-            make stop || true
-            echo "✓ CN-Quickstart stopped"
-          else
-            echo "CN-Quickstart directory not found, skipping cleanup"
           fi

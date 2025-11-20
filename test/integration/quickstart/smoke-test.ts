@@ -72,7 +72,7 @@ async function main(): Promise<void> {
   // Test 2: Validator API - getUserStatus
   await runTest('Validator API - getUserStatus()', async () => {
     const userStatusResponse: unknown = await validatorClient.getUserStatus();
-    if (!isRecord(userStatusResponse) || typeof userStatusResponse.user_onboarded !== 'boolean') {
+    if (!isRecord(userStatusResponse) || typeof userStatusResponse['user_onboarded'] !== 'boolean') {
       throw new Error('Invalid user status response');
     }
   });
