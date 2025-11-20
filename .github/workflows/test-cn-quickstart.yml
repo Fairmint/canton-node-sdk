@@ -27,11 +27,21 @@ jobs:
       - name: Install Dependencies
         run: npm ci || npm install
 
+      - name: Clone CN-Quickstart
+        run: |
+          echo "Cloning CN-Quickstart..."
+          git clone https://github.com/digital-asset/cn-quickstart.git cn-quickstart
+          echo "✓ CN-Quickstart cloned"
+        timeout-minutes: 10
+
       - name: Setup CN-Quickstart
         run: |
-          npm run localnet:quickstart
+          cd cn-quickstart/quickstart
+          echo "Running setup with OAuth2..."
+          # Setup with OAuth2 non-interactively
+          echo "2" | make setup || true  # Select option 2 (with OAuth2)
           echo "✓ CN-Quickstart setup complete"
-        timeout-minutes: 20
+        timeout-minutes: 15
 
       - name: Start CN-Quickstart
         run: |
@@ -74,13 +84,13 @@ jobs:
         if: failure()
         run: |
           echo "==================== Docker Containers ===================="
-          docker ps -a
+          docker ps -a || true
 
-          echo "==================== Splice Logs ===================="
-          docker logs splice --tail=100 || true
-
-          echo "==================== Keycloak Logs ===================="
-          docker logs keycloak --tail=100 || true
+          echo "==================== Docker Compose Logs ===================="
+          if [ -d "cn-quickstart/quickstart" ]; then
+            cd cn-quickstart/quickstart
+            docker compose logs --tail=100 || true
+          fi
 
           echo "==================== Canton Logs ===================="
           if [ -f cn-quickstart/quickstart/logs/canton.log ]; then
@@ -90,5 +100,10 @@ jobs:
       - name: Stop CN-Quickstart
         if: always()
         run: |
-          cd cn-quickstart/quickstart || true
-          make stop || true
+          if [ -d "cn-quickstart/quickstart" ]; then
+            cd cn-quickstart/quickstart
+            make stop || true
+            echo "✓ CN-Quickstart stopped"
+          else
+            echo "CN-Quickstart directory not found, skipping cleanup"
+          fi

@@ -257,7 +257,6 @@ jobs:
           name: Check Formatting
           command: npm run format
 
-
   # Integration tests with LocalNet
   test-localnet:
     executor: ubuntu-machine
