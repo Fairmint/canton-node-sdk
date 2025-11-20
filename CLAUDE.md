@@ -16,8 +16,6 @@ repository.
 - `npm test` - Run unit tests
 - `npm run test:watch` - Run tests in watch mode
 - `npm run test:coverage` - Run tests with coverage report
-- `npm run simulate` - Run API simulation tests
-- `npm run test:all` - Run all tests (unit + simulation + integration)
 
 ### Lint Commands
 
@@ -89,8 +87,7 @@ Custom error hierarchy:
 ### Test Types
 
 1. **Unit Tests** (`/test`) - Jest tests for individual components
-2. **Simulation Tests** (`/simulations`) - API response simulations
-3. **Integration Tests** - End-to-end testing with real APIs
+2. **Integration Tests** - End-to-end testing with real APIs
 
 ### Running Specific Tests
 
