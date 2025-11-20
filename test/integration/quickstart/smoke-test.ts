@@ -95,6 +95,7 @@ async function main(): Promise<void> {
     if (!/^\d+\.\d+\.\d+/.test(version.version)) {
       throw new Error(`Invalid version format: ${version.version}`);
     }
+    console.log('Version:', version.version);
   });
 
   // Test 5: Ledger JSON API - getLedgerEnd
