@@ -399,7 +399,7 @@ jobs:
             nvm use 20
 
             echo "Running LocalNet integration tests..."
-            npm run test:integration:localnet
+            npm test
 
             echo "✓ LocalNet integration tests passed"
           no_output_timeout: 5m
