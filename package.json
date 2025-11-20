@@ -55,6 +55,7 @@
     "simulate:events": "tsx --tsconfig tsconfig.lint.json scripts/run-events-simulation.ts",
     "test": "jest --testPathIgnorePatterns='/test/integration/'",
     "test:integration": "jest test/integration/quickstart",
+    "test:integration:localnet": "jest test/integration/localnet",
     "test:localnet": "npm run build:core && npm run simulate",
     "test:regression": "npm run test:localnet",
     "test:smoke": "tsx test/integration/quickstart/smoke-test.ts",
