@@ -32,9 +32,9 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Cache Quickstart Preparation
-        id: quickstart-prep-cache
-        uses: actions/cache@v4
+      - name: Restore Quickstart Preparation Cache
+        id: quickstart-prep-cache-restore
+        uses: actions/cache/restore@v4
         with:
           path: |
             ${{ github.workspace }}/node_modules
@@ -77,6 +77,24 @@ jobs:
           cd cn-quickstart/quickstart
           make install-daml-sdk
         timeout-minutes: 15
+
+      - name: Save Quickstart Preparation Cache
+        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
+        id: quickstart-prep-cache-save
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ github.workspace }}/node_modules
+            ${{ github.workspace }}/artifacts
+            ${{ github.workspace }}/build
+            ${{ github.workspace }}/cn-quickstart/quickstart/.env.local
+            ${{ github.workspace }}/cn-quickstart/quickstart/.gradle
+            ${{ github.workspace }}/cn-quickstart/quickstart/.daml
+            ${{ github.workspace }}/cn-quickstart/quickstart/.config
+            ${{ github.workspace }}/cn-quickstart/quickstart/.cache
+            /home/runner/.daml
+            /home/runner/.gradle
+          key: ${{ steps.quickstart-prep-cache-restore.outputs.cache-primary-key }}
 
       - name: Add Daml CLI to PATH
         run: echo "$HOME/.daml/bin" >> $GITHUB_PATH
