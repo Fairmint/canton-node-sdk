@@ -32,16 +32,37 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      - name: Cache Quickstart Preparation
+        id: quickstart-prep-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/node_modules
+            ${{ github.workspace }}/artifacts
+            ${{ github.workspace }}/build
+            ${{ github.workspace }}/cn-quickstart/quickstart/.env.local
+            ${{ github.workspace }}/cn-quickstart/quickstart/.gradle
+            ${{ github.workspace }}/cn-quickstart/quickstart/.daml
+            ${{ github.workspace }}/cn-quickstart/quickstart/.config
+            ${{ github.workspace }}/cn-quickstart/quickstart/.cache
+            /home/runner/.daml
+            /home/runner/.gradle
+          key: quickstart-prep-${{ runner.os }}-${{ hashFiles('package.json', 'package-lock.json', '.git/modules/cn-quickstart/HEAD') }}
+
       - name: Install Dependencies
+        if: steps.quickstart-prep-cache.outputs.cache-hit != 'true'
         run: npm install
 
       - name: Clone Splice Artifacts (for SDK codegen)
+        if: steps.quickstart-prep-cache.outputs.cache-hit != 'true'
         run: npm run artifacts:clone-splice
 
       - name: Build SDK
+        if: steps.quickstart-prep-cache.outputs.cache-hit != 'true'
         run: npm run build:core
 
       - name: Setup CN-Quickstart
+        if: steps.quickstart-prep-cache.outputs.cache-hit != 'true'
         run: |
           cd cn-quickstart/quickstart
           echo "Running setup with OAuth2..."
@@ -51,11 +72,14 @@ jobs:
         timeout-minutes: 15
 
       - name: Install Daml SDK
+        if: steps.quickstart-prep-cache.outputs.cache-hit != 'true'
         run: |
           cd cn-quickstart/quickstart
           make install-daml-sdk
-          echo "$HOME/.daml/bin" >> $GITHUB_PATH
         timeout-minutes: 15
+
+      - name: Add Daml CLI to PATH
+        run: echo "$HOME/.daml/bin" >> $GITHUB_PATH
 
       - name: Start CN-Quickstart
         run: |
