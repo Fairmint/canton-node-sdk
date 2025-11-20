@@ -22,6 +22,10 @@ interface TestResult {
 
 const results: TestResult[] = [];
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 async function runTest(name: string, testFn: () => Promise<void>): Promise<void> {
   const start = Date.now();
   try {
@@ -67,8 +71,8 @@ async function main(): Promise<void> {
 
   // Test 2: Validator API - getUserStatus
   await runTest('Validator API - getUserStatus()', async () => {
-    const userStatus = await validatorClient.getUserStatus();
-    if (!userStatus || typeof userStatus.user_onboarded !== 'boolean') {
+    const userStatusResponse: unknown = await validatorClient.getUserStatus();
+    if (!isRecord(userStatusResponse) || typeof userStatusResponse.user_onboarded !== 'boolean') {
       throw new Error('Invalid user status response');
     }
   });
@@ -76,9 +80,6 @@ async function main(): Promise<void> {
   // Test 3: Validator API - getDsoPartyId
   await runTest('Validator API - getDsoPartyId()', async () => {
     const dsoPartyId = await validatorClient.getDsoPartyId();
-    if (!dsoPartyId) {
-      throw new Error('DSO party ID is empty');
-    }
     // getDsoPartyId returns an object or string depending on the API version
     const partyIdStr = typeof dsoPartyId === 'string' ? dsoPartyId : JSON.stringify(dsoPartyId);
     if (partyIdStr.length === 0) {
@@ -100,12 +101,8 @@ async function main(): Promise<void> {
 
   // Test 5: Ledger JSON API - getLedgerEnd
   await runTest('Ledger JSON API - getLedgerEnd()', async () => {
-    const ledgerEnd = await jsonClient.getLedgerEnd({});
-    if (!ledgerEnd) {
-      throw new Error('Ledger end response is empty');
-    }
-    // Check if response has offset property (could be string or object)
-    if (!('offset' in ledgerEnd)) {
+    const ledgerEndResponse: unknown = await jsonClient.getLedgerEnd({});
+    if (!isRecord(ledgerEndResponse) || !('offset' in ledgerEndResponse)) {
       throw new Error(`Invalid ledger end response - missing offset property`);
     }
   });

@@ -20,5 +20,3 @@ export interface LockedAmuletSelectionOptions {
   /** Override the clock used for expiration checks (defaults to Date.now()). */
   nowMs?: number;
 }
-
-
