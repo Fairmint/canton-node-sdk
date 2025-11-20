@@ -25,38 +25,17 @@ async function main(): Promise<void> {
   console.log('🔌 Connecting to Canton Network LocalNet with OAuth2...\n');
 
   try {
-    // Configure the client with OAuth2 credentials
-    // These are the default credentials for cn-quickstart with OAuth2 enabled
+    // ✨ Simple configuration! The SDK now has cn-quickstart defaults built-in
+    // Just specify the network and it automatically configures:
+    // - OAuth2 auth URL (Keycloak)
+    // - API endpoints (ports 3903, 3975, etc.)
+    // - Client credentials (app-provider-validator)
     const validatorClient = new ValidatorApiClient({
       network: 'localnet',
-      provider: 'app-provider',
-      authUrl: 'http://localhost:8082/realms/AppProvider/protocol/openid-connect/token',
-      apis: {
-        VALIDATOR_API: {
-          apiUrl: 'http://localhost:3903',
-          auth: {
-            grantType: 'client_credentials',
-            clientId: 'app-provider-validator',
-            clientSecret: 'AL8648b9SfdTFImq7FV56Vd0KHifHBuC',
-          },
-        },
-      },
     });
 
     const jsonClient = new LedgerJsonApiClient({
       network: 'localnet',
-      provider: 'app-provider',
-      authUrl: 'http://localhost:8082/realms/AppProvider/protocol/openid-connect/token',
-      apis: {
-        LEDGER_JSON_API: {
-          apiUrl: 'http://localhost:3975',
-          auth: {
-            grantType: 'client_credentials',
-            clientId: 'app-provider-validator',
-            clientSecret: 'AL8648b9SfdTFImq7FV56Vd0KHifHBuC',
-          },
-        },
-      },
     });
 
     console.log('🔐 Authenticating with OAuth2...');
@@ -77,11 +56,13 @@ async function main(): Promise<void> {
     console.log(JSON.stringify(userStatus, null, 2));
 
     console.log('\n✨ Connection test successful!');
-    console.log('\n📚 What the SDK did for you:');
-    console.log('   1. Connected to Keycloak OAuth2 server');
-    console.log('   2. Used client_credentials grant to get access token');
-    console.log('   3. Automatically included Bearer token in API request');
-    console.log('   4. Will auto-refresh token when it expires');
+    console.log('\n📚 What the SDK did for you with just { network: "localnet" }:');
+    console.log('   1. Auto-configured OAuth2 URL (http://localhost:8082/realms/AppProvider/...)');
+    console.log('   2. Auto-configured API endpoints (Validator: 3903, JSON API: 3975)');
+    console.log('   3. Auto-configured client credentials (app-provider-validator)');
+    console.log('   4. Connected to Keycloak and got access token');
+    console.log('   5. Automatically included Bearer token in all API requests');
+    console.log('   6. Will auto-refresh token when it expires');
 
     console.log('\n📡 Testing Ledger JSON API: getVersion()...');
     const version = await jsonClient.getVersion();
