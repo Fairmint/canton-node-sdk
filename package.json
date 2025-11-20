@@ -54,6 +54,7 @@
     "simulate": "tsx --tsconfig tsconfig.lint.json scripts/run-simulations.ts",
     "simulate:events": "tsx --tsconfig tsconfig.lint.json scripts/run-events-simulation.ts",
     "test": "jest",
+    "test:smoke": "tsx test/integration/quickstart/smoke-test.ts",
     "test:watch": "jest --watch"
   },
   "dependencies": {
