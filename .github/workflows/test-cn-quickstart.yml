@@ -19,7 +19,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -40,6 +40,7 @@ jobs:
             ${{ github.workspace }}/node_modules
             ${{ github.workspace }}/artifacts
             ${{ github.workspace }}/build
+            ${{ github.workspace }}/libs/splice
             ${{ github.workspace }}/libs/cn-quickstart/quickstart/.env.local
             ${{ github.workspace }}/libs/cn-quickstart/quickstart/.gradle
             ${{ github.workspace }}/libs/cn-quickstart/quickstart/.daml
@@ -51,7 +52,7 @@ jobs:
             ${{ github.workspace }}/libs/cn-quickstart/quickstart/integration-test/node_modules
             /home/runner/.daml
             /home/runner/.gradle
-          key: quickstart-prep-${{ runner.os }}-${{ hashFiles('package.json', 'package-lock.json', '.git/modules/libs/cn-quickstart/HEAD') }}
+          key: quickstart-prep-${{ runner.os }}-${{ hashFiles('package.json', 'package-lock.json', '.git/modules/libs/cn-quickstart/HEAD', '.git/modules/libs/splice/HEAD') }}
 
       - name: Install Dependencies
         if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
@@ -78,9 +79,11 @@ jobs:
           git commit -m "chore: auto-fix linting issues [skip ci]"
           git push
 
-      - name: Initialize Splice Submodule (for SDK codegen)
+      - name: Initialize Submodules
         if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
-        run: git submodule update --init --depth 1 libs/splice
+        run: |
+          git submodule update --init --depth 1 libs/splice
+          git submodule update --init --recursive libs/cn-quickstart
 
       - name: Setup CN-Quickstart
         if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
@@ -138,6 +141,7 @@ jobs:
       # - package.json changes (dependency additions/removals)
       # - package-lock.json changes (exact dependency versions)
       # - libs/cn-quickstart submodule HEAD changes (submodule updated to different commit)
+      # - libs/splice submodule HEAD changes (submodule updated to different commit)
       # - Runner OS changes (unlikely in practice)
       - name: Save Quickstart Preparation Cache
         if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
@@ -148,6 +152,7 @@ jobs:
             ${{ github.workspace }}/node_modules
             ${{ github.workspace }}/artifacts
             ${{ github.workspace }}/build
+            ${{ github.workspace }}/libs/splice
             ${{ github.workspace }}/libs/cn-quickstart/quickstart/.env.local
             ${{ github.workspace }}/libs/cn-quickstart/quickstart/.gradle
             ${{ github.workspace }}/libs/cn-quickstart/quickstart/.daml

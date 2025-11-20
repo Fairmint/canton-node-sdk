@@ -20,6 +20,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          submodules: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
