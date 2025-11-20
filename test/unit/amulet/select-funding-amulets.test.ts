@@ -1,5 +1,5 @@
-import { selectLockedAmuletForAmount } from '../../src/utils/amulet/select-funding-amulets';
-import type { LockedAmulet } from '../../src/utils/amulet/types';
+import { selectLockedAmuletForAmount } from '../../../src/utils/amulet/select-funding-amulets';
+import type { LockedAmulet } from '../../../src/utils/amulet/types';
 
 const buildAmulet = (overrides: Partial<LockedAmulet>): LockedAmulet => ({
   contractId: 'cid',

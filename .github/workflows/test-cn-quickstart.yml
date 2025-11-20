@@ -57,6 +57,27 @@ jobs:
         if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
         run: npm install
 
+      - name: Run Linter
+        run: npm run fix
+
+      - name: Check for Lint Changes
+        id: lint-changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and Push Lint Fixes
+        if: steps.lint-changes.outputs.has_changes == 'true' && github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "chore: auto-fix linting issues [skip ci]"
+          git push
+
       - name: Clone Splice Artifacts (for SDK codegen)
         if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
         run: npm run artifacts:clone-splice
@@ -145,9 +166,9 @@ jobs:
 
       - name: Run Smoke Tests
         run: |
-          echo "Running smoke tests..."
-          npm run test:smoke
-          echo "✓ Smoke tests passed!"
+          echo "Running tests..."
+          npm run test
+          echo "✓ Tests passed!"
 
       - name: Show Logs on Failure
         if: failure()

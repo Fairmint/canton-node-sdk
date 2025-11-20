@@ -1,0 +1,38 @@
+import { testClients } from '../../setup';
+
+describe('LocalNet GetVersion', () => {
+  it('getVersion', async () => {
+    const response = await testClients.ledgerJsonApi.getVersion();
+
+    expect(response).toEqual({
+      version: '3.3.0-SNAPSHOT',
+      features: {
+        experimental: {
+          staticTime: {
+            supported: false,
+          },
+          commandInspectionService: {
+            supported: true,
+          },
+        },
+        userManagement: {
+          supported: true,
+          maxRightsPerUser: 1000,
+          maxUsersPageSize: 1000,
+        },
+        partyManagement: {
+          maxPartiesPageSize: 10000,
+        },
+        offsetCheckpoint: {
+          maxOffsetCheckpointEmissionDelay: {
+            seconds: 75,
+            nanos: 0,
+            unknownFields: {
+              fields: {},
+            },
+          },
+        },
+      },
+    });
+  });
+});

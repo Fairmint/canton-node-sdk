@@ -1,4 +1,4 @@
-import { EnvLoader } from '../src/core/config/EnvLoader';
+import { EnvLoader } from '../../../src/core/config/EnvLoader';
 
 describe('EnvLoader', () => {
   beforeEach(() => {
