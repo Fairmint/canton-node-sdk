@@ -50,8 +50,6 @@
     "prepare-release": "tsx scripts/prepare-release.ts",
     "prepublishOnly": "npm run prepack",
     "revoke-user-rights": "tsx scripts/revoke-user-rights.ts",
-    "simulate": "tsx --tsconfig tsconfig.lint.json scripts/run-simulations.ts",
-    "simulate:events": "tsx --tsconfig tsconfig.lint.json scripts/run-events-simulation.ts",
     "test": "jest",
     "test:watch": "jest --watch"
   },
