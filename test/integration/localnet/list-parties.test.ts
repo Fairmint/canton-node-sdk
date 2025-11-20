@@ -19,8 +19,8 @@ describe('LocalNet ListParties', () => {
     expect(firstParty).toBeDefined();
     expect(firstParty).toHaveProperty('party');
     expect(firstParty).toHaveProperty('isLocal');
-    expect(typeof firstParty!.party).toBe('string');
-    expect(typeof firstParty!.isLocal).toBe('boolean');
+    expect(typeof firstParty?.party).toBe('string');
+    expect(typeof firstParty?.isLocal).toBe('boolean');
 
     // TODO: Once LocalNet output is stable, replace with exact expected output
     // Run: tsx scripts/capture-test-output.ts

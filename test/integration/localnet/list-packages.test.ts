@@ -17,7 +17,7 @@ describe('LocalNet ListPackages', () => {
     const firstPackageId = response.packageIds[0];
     expect(firstPackageId).toBeDefined();
     expect(typeof firstPackageId).toBe('string');
-    expect(firstPackageId!.length).toBeGreaterThan(0);
+    expect(firstPackageId?.length).toBeGreaterThan(0);
 
     // TODO: Once LocalNet output is stable, replace with exact expected output
     // Run: tsx scripts/capture-test-output.ts
