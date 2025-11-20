@@ -206,8 +206,18 @@ class OperationDocGenerator {
       if (ts.isVariableStatement(node) && node.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)) {
         for (const declaration of node.declarationList.declarations) {
           if (ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name)) {
-            operationInfo.name = declaration.name.text;
+            // Only set operation name if it doesn't end with Schema (to avoid picking up schema exports)
+            if (!declaration.name.text.endsWith('Schema')) {
+              operationInfo.name = declaration.name.text;
+            }
           }
+        }
+      }
+
+      // Look for exported class declarations (class-based operations)
+      if (ts.isClassDeclaration(node) && node.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)) {
+        if (node.name && ts.isIdentifier(node.name)) {
+          operationInfo.name = node.name.text;
         }
       }
 
@@ -215,10 +225,37 @@ class OperationDocGenerator {
       const jsDoc = ts.getJSDocCommentsAndTags(node);
       for (const tag of jsDoc) {
         if (ts.isJSDoc(tag)) {
-          // Skip JSDoc containers, look for actual tags
+          // Extract the main comment text as description if we don't have one yet
+          if (!operationInfo.description && tag.comment) {
+            const commentText = typeof tag.comment === 'string' ? tag.comment : tag.comment.map((c) => c.text).join('');
+            operationInfo.description = commentText.trim();
+          }
+          // Process tags within the JSDoc
+          if (tag.tags) {
+            for (const docTag of tag.tags) {
+              if (docTag.tagName.text === 'description') {
+                // Explicit @description tag overrides the main comment
+                operationInfo.description = docTag.comment ? docTag.comment.toString().trim() : '';
+              } else if (docTag.tagName.text === 'example') {
+                operationInfo.examples ??= [];
+                const exampleText = docTag.comment?.toString().trim() ?? '';
+                // Clean up the example text
+                const cleanExample = exampleText
+                  .replace(/```typescript\n?/g, '')
+                  .replace(/```\n?/g, '')
+                  .trim();
+
+                // Only add if not already present (prevent duplicates)
+                if (cleanExample && !operationInfo.examples.includes(cleanExample)) {
+                  operationInfo.examples.push(cleanExample);
+                }
+              }
+            }
+          }
           continue;
         }
 
+        // Handle standalone JSDoc tags (non-JSDoc container)
         if ('tagName' in tag) {
           if (tag.tagName.text === 'description') {
             operationInfo.description = tag.comment ? tag.comment.toString().trim() : '';
@@ -274,6 +311,40 @@ class OperationDocGenerator {
         const importPath = (node.moduleSpecifier as ts.StringLiteral).text;
         if (importPath.includes('schemas')) {
           this.extractResponseType(node, operationInfo);
+        }
+      }
+
+      // Look for exported type aliases (e.g., export type GetPartiesResponse = ...)
+      if (ts.isTypeAliasDeclaration(node) && node.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)) {
+        if (ts.isIdentifier(node.name) && node.name.text.includes('Response')) {
+          operationInfo.responseType = node.name.text;
+        }
+      }
+
+      // Look for exported interfaces (e.g., export interface GetValidatorUserInfoResponse)
+      if (ts.isInterfaceDeclaration(node) && node.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)) {
+        if (ts.isIdentifier(node.name) && node.name.text.includes('Response')) {
+          operationInfo.responseType = node.name.text;
+        }
+      }
+
+      // Look for type re-exports (e.g., export type { GetPartiesResponse })
+      if (ts.isExportDeclaration(node)) {
+        if (node.exportClause && ts.isNamedExports(node.exportClause)) {
+          for (const element of node.exportClause.elements) {
+            const exportName = element.name.text;
+            if (exportName.includes('Response')) {
+              operationInfo.responseType = exportName;
+            }
+          }
+        }
+      }
+
+      // For WebSocket operations, look for WsMessage types
+      if (ts.isTypeAliasDeclaration(node) && node.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)) {
+        if (ts.isIdentifier(node.name) && node.name.text.includes('WsMessage')) {
+          operationInfo.responseType = node.name.text;
+          operationInfo.method = 'WebSocket';
         }
       }
 
@@ -911,6 +982,11 @@ ${categories.map((category) => this.generateCategorySection(apiType, category)).
         `Missing operation name in file "${operation.filePath}". ` +
           `This operation must have a name exported as a constant.`
       );
+    }
+
+    // Default method to GET if not specified (for class-based operations)
+    if (!operation.method) {
+      operation.method = 'GET';
     }
 
     // Validate that response type information is available
