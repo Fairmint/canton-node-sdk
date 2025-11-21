@@ -4,3 +4,6 @@
 [submodule "libs/splice"]
 	path = libs/splice
 	url = https://github.com/hyperledger-labs/splice
+[submodule "libs/cn-quickstart"]
+	path = libs/cn-quickstart
+	url = https://github.com/digital-asset/cn-quickstart
