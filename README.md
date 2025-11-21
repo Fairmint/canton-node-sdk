@@ -30,10 +30,24 @@ const version = await client.getVersion();
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for information about setting up the development
 environment.
 
+### Reproducing CI Locally
+
+Our `.github/workflows/test-cn-quickstart.yml` job is the source of truth for lint/build/test. To
+mirror it locally:
+
+1. `npm install`
+2. `git submodule update --init --depth 1 libs/splice libs/cn-quickstart`
+3. Inside `libs/cn-quickstart/quickstart`: run `echo 2 | make setup`, then `make install-daml-sdk`,
+   add `~/.daml/bin` to your `PATH`, and run `make start` (requires Docker + Compose)
+4. In the repo root: `npm run build && npm test`
+
+> ℹ️ Run `npm run lint` before cloning submodules (or pass `--ignore-pattern 'libs/splice/**'`
+> etc.) to avoid ESLint parsing files outside this SDK.
+
 ## Testing with LocalNet
 
-The SDK includes comprehensive integration testing against a local Splice network (LocalNet). See
-the [LocalNet Testing Guide](./docs/LOCALNET_TESTING.md) for detailed instructions.
+Integration tests target the CN-Quickstart LocalNet described above. Bring it up via `make start` in
+`libs/cn-quickstart/quickstart`, then run `npm test` from the repo root to execute the suites.
 
 We also provide integration tests following the
 [cn-quickstart](https://github.com/digital-asset/cn-quickstart) approach. See
