@@ -10,8 +10,8 @@ describe('LocalNet GetParticipantId', () => {
     expect(typeof response.participantId).toBe('string');
     expect(response.participantId.length).toBeGreaterThan(0);
 
-    // TODO: Once LocalNet output is stable, replace with exact expected output
-    // Run: tsx scripts/capture-test-output.ts
-    // Then copy the actual response here for regression testing
+    // Participant ID should follow a pattern (though we don't enforce exact format)
+    // Typically looks like: PAR::participant_name::participant_id_suffix
+    expect(response.participantId).toMatch(/^[A-Za-z0-9:_-]+$/);
   });
 });

@@ -14,16 +14,16 @@ describe('LocalNet ListParties', () => {
     expect(response.partyDetails).not.toBeNull();
     expect(response.partyDetails!.length).toBeGreaterThan(0);
 
-    // Validate party structure
-    const firstParty = response.partyDetails![0];
-    expect(firstParty).toBeDefined();
-    expect(firstParty).toHaveProperty('party');
-    expect(firstParty).toHaveProperty('isLocal');
-    expect(typeof firstParty?.party).toBe('string');
-    expect(typeof firstParty?.isLocal).toBe('boolean');
+    // Validate party structure - all parties should have these properties
+    response.partyDetails!.forEach((party) => {
+      expect(party).toHaveProperty('party');
+      expect(party).toHaveProperty('isLocal');
+      expect(typeof party.party).toBe('string');
+      expect(party.party.length).toBeGreaterThan(0);
+      expect(typeof party.isLocal).toBe('boolean');
+    });
 
-    // TODO: Once LocalNet output is stable, replace with exact expected output
-    // Run: tsx scripts/capture-test-output.ts
-    // Then copy the actual response here for regression testing
+    // Validate nextPageToken is a string (can be empty)
+    expect(typeof response.nextPageToken).toBe('string');
   });
 });

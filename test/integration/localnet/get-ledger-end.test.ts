@@ -8,10 +8,10 @@ describe('LocalNet GetLedgerEnd', () => {
     expect(response).toBeDefined();
     expect(response).toHaveProperty('offset');
     expect(typeof response.offset).toBe('number');
-    expect(response.offset).toBeGreaterThanOrEqual(0);
 
-    // TODO: Once LocalNet output is stable, replace with exact expected output
-    // Run: tsx scripts/capture-test-output.ts
-    // Then copy the actual response here for regression testing
+    // Offset should be non-negative and will increase as transactions are processed
+    // In a fresh LocalNet it may be 0, in an active one it will be > 0
+    expect(response.offset).toBeGreaterThanOrEqual(0);
+    expect(Number.isInteger(response.offset)).toBe(true);
   });
 });

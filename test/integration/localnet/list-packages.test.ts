@@ -13,14 +13,10 @@ describe('LocalNet ListPackages', () => {
     expect(response.packageIds).not.toBeNull();
     expect(response.packageIds.length).toBeGreaterThan(0);
 
-    // Validate package ID format (should be strings)
-    const firstPackageId = response.packageIds[0];
-    expect(firstPackageId).toBeDefined();
-    expect(typeof firstPackageId).toBe('string');
-    expect(firstPackageId?.length).toBeGreaterThan(0);
-
-    // TODO: Once LocalNet output is stable, replace with exact expected output
-    // Run: tsx scripts/capture-test-output.ts
-    // Then copy the actual response here for regression testing
+    // Validate all package IDs are non-empty strings
+    response.packageIds.forEach((packageId) => {
+      expect(typeof packageId).toBe('string');
+      expect(packageId.length).toBeGreaterThan(0);
+    });
   });
 });
