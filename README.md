@@ -30,6 +30,21 @@ const version = await client.getVersion();
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for information about setting up the development
 environment.
 
+### Reproducing CI Locally
+
+Our `.github/workflows/test-cn-quickstart.yml` job is the source of truth for lint/build/test. To
+mirror it on a fresh checkout (including for AI agents), follow the same high-level steps:
+
+1. Install dependencies: `npm install`
+2. Pull the required submodules so generated types exist:  
+   `git submodule update --init --depth 1 libs/splice libs/cn-quickstart`
+3. Build the SDK (runs `generate:openapi-types`, client generation, and `tsc`): `npm run build`
+4. Run the Jest suite: `npm test`
+
+> ℹ️ Integration suites expect a running CN-Quickstart LocalNet exactly as started in the workflow
+> (`libs/cn-quickstart/quickstart` with option 2/OAuth2). Follow the [LocalNet Testing Guide](./docs/LOCALNET_TESTING.md)
+> if you need to bring those services up before running step 4.
+
 ## Testing with LocalNet
 
 The SDK includes comprehensive integration testing against a local Splice network (LocalNet). See
