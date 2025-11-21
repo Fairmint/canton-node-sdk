@@ -19,7 +19,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          submodules: false
+          submodules: recursive
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -78,12 +78,6 @@ jobs:
           git add .
           git commit -m "chore: auto-fix linting issues [skip ci]"
           git push
-
-      - name: Initialize Submodules
-        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
-        run: |
-          git submodule update --init --depth 1 libs/splice
-          git submodule update --init --recursive libs/cn-quickstart
 
       - name: Setup CN-Quickstart
         if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
