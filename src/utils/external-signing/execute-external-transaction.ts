@@ -20,7 +20,7 @@ export interface ExecuteExternalTransactionOptions {
 export async function executeExternalTransaction(
   options: ExecuteExternalTransactionOptions
 ): Promise<InteractiveSubmissionExecuteResponse> {
-  return options.ledgerClient.interactiveSubmissionExecute({
+  return await options.ledgerClient.interactiveSubmissionExecute({
     userId: options.userId,
     preparedTransaction: options.preparedTransaction,
     hashingSchemeVersion: options.hashingSchemeVersion ?? 'HASHING_SCHEME_VERSION_V2',

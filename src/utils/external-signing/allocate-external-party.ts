@@ -16,7 +16,7 @@ export interface AllocateExternalPartyOptions {
 export async function allocateExternalParty(
   options: AllocateExternalPartyOptions
 ): Promise<AllocateExternalPartyResponse> {
-  return options.ledgerClient.allocateExternalParty({
+  return await options.ledgerClient.allocateExternalParty({
     synchronizer: options.synchronizerId,
     identityProviderId: options.identityProviderId,
     onboardingTransactions: options.onboardingTransactions,

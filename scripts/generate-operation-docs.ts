@@ -7,7 +7,7 @@ import * as ts from 'typescript';
 interface OperationInfo {
   name: string;
   filePath: string;
-  method: 'GET' | 'POST' | 'WebSocket';
+  method?: 'GET' | 'POST' | 'WebSocket';
   description?: string;
   examples?: string[];
   parameters?: string;
@@ -985,9 +985,7 @@ ${categories.map((category) => this.generateCategorySection(apiType, category)).
     }
 
     // Default method to GET if not specified (for class-based operations)
-    if (!operation.method) {
-      operation.method = 'GET';
-    }
+    operation.method ??= 'GET';
 
     // Validate that response type information is available
     if (!operation.responseSchema && !operation.responseType) {
