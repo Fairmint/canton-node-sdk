@@ -77,7 +77,7 @@ export async function createTransferOffer(params: CreateTransferOfferParams): Pr
  * @param params - Parameters for accepting the transfer offer
  * @returns Promise resolving when the offer is accepted
  */
-// eslint-disable-next-line @typescript-eslint/require-await
+// eslint-disable-next-line @typescript-eslint/require-await -- Async signature maintained for API consistency
 export async function acceptTransferOffer(
   params: AcceptTransferOfferParams
 ): Promise<SubmitAndWaitForTransactionTreeResponse> {
