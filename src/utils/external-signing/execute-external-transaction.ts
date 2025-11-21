@@ -17,6 +17,7 @@ export interface ExecuteExternalTransactionOptions {
 }
 
 /** Submit a previously prepared and externally signed interactive submission to the ledger. */
+// eslint-disable-next-line @typescript-eslint/require-await
 export async function executeExternalTransaction(
   options: ExecuteExternalTransactionOptions
 ): Promise<InteractiveSubmissionExecuteResponse> {

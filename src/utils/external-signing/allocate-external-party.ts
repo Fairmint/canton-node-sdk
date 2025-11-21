@@ -13,6 +13,7 @@ export interface AllocateExternalPartyOptions {
 }
 
 /** Helper that submits the signed external party topology to the ledger. */
+// eslint-disable-next-line @typescript-eslint/require-await
 export async function allocateExternalParty(
   options: AllocateExternalPartyOptions
 ): Promise<AllocateExternalPartyResponse> {
