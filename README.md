@@ -32,18 +32,19 @@ environment.
 
 ### Reproducing CI Locally
 
-Our `.github/workflows/test-cn-quickstart.yml` job is the source of truth for lint/build/test. To
-mirror it on a fresh checkout (including for AI agents), follow the same high-level steps:
+Our `.github/workflows/test-cn-quickstart.yml` job is the source of truth for lint/build/test. Mimic
+it locally with:
 
 1. Install dependencies: `npm install`
-2. Pull the required submodules so generated types exist:  
-   `git submodule update --init --depth 1 libs/splice libs/cn-quickstart`
-3. Build the SDK (runs `generate:openapi-types`, client generation, and `tsc`): `npm run build`
-4. Run the Jest suite: `npm test`
+2. Fetch the Quickstart + Splice submodules: `npm run artifacts:clone-splice`
+3. Follow [docs/LOCALNET_TESTING.md](./docs/LOCALNET_TESTING.md) to run `make setup`,
+   `make install-daml-sdk`, and `make start` inside `libs/cn-quickstart/quickstart` (Docker + DAML
+   required)
+4. Build the SDK: `npm run build`
+5. Run the Jest suite: `npm test`
 
-> ℹ️ Integration suites expect a running CN-Quickstart LocalNet exactly as started in the workflow
-> (`libs/cn-quickstart/quickstart` with option 2/OAuth2). Follow the [LocalNet Testing Guide](./docs/LOCALNET_TESTING.md)
-> if you need to bring those services up before running step 4.
+> ℹ️ If Docker is unavailable, integration suites will fail with `Authentication failed` because the
+> OAuth2/Keycloak services are unreachable. See the LocalNet guide for troubleshooting tips.
 
 ## Testing with LocalNet
 
