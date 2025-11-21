@@ -5,10 +5,10 @@ describe('LocalNet GetUserStatus', () => {
     const response = await testClients.validatorApi.getUserStatus();
 
     expect(response).toEqual({
-      party_id: expect.any(String),
-      user_onboarded: expect.any(Boolean),
-      user_wallet_installed: expect.any(Boolean),
-      has_featured_app_right: expect.any(Boolean),
+      party_id: expect.stringMatching(/^PAR::/),
+      user_onboarded: true,
+      user_wallet_installed: true,
+      has_featured_app_right: false,
     });
   });
 });
