@@ -82,7 +82,7 @@ export async function acceptTransferOffer(
 ): Promise<SubmitAndWaitForTransactionTreeResponse> {
   const { ledgerClient, transferOfferContractId, acceptingPartyId } = params;
 
-  return ledgerClient.submitAndWaitForTransactionTree({
+  return await ledgerClient.submitAndWaitForTransactionTree({
     commands: [
       {
         ExerciseCommand: {

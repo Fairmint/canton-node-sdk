@@ -10,6 +10,18 @@ export type RevokeUserRightsParams = z.infer<typeof RevokeUserRightsParamsSchema
 
 export type RevokeUserRightsResponse = paths[Endpoint]['patch']['responses']['200']['content']['application/json'];
 
+/**
+ * Revoke rights from a user
+ *
+ * @example
+ *   ```typescript
+ *   const result = await client.revokeUserRights({
+ *     userId: 'alice',
+ *     rights: [{ kind: { CanActAs: { party: 'Alice::1220' } } }]
+ *   });
+ *
+ *   ```;
+ */
 export const RevokeUserRights = createApiOperation<RevokeUserRightsParams, RevokeUserRightsResponse>({
   paramsSchema: RevokeUserRightsParamsSchema,
   method: 'PATCH',

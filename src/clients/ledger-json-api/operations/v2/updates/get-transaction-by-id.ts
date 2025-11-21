@@ -9,6 +9,18 @@ export type GetTransactionByIdParams = z.infer<typeof GetTransactionByIdParamsSc
 export type GetTransactionByIdResponse =
   paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
+/**
+ * Get a transaction by its update ID
+ *
+ * @example
+ *   ```typescript
+ *   const result = await client.getTransactionById({
+ *     updateId: '00000000000000000000',
+ *     parties: ['party1']
+ *   });
+ *
+ *   ```;
+ */
 export const GetTransactionById = createApiOperation<GetTransactionByIdParams, GetTransactionByIdResponse>({
   paramsSchema: GetTransactionByIdParamsSchema,
   method: 'POST',

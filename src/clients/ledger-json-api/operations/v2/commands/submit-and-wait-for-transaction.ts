@@ -14,6 +14,17 @@ export type SubmitAndWaitForTransactionParams = z.infer<typeof SubmitAndWaitForT
 export type SubmitAndWaitForTransactionResponse =
   paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
+/**
+ * Submit a command and wait for the transaction result
+ *
+ * @example
+ *   ```typescript
+ *   const result = await client.submitAndWaitForTransaction({
+ *     commands: [{ ... }]
+ *   });
+ *
+ *   ```;
+ */
 export const SubmitAndWaitForTransaction = createApiOperation<
   SubmitAndWaitForTransactionParams,
   SubmitAndWaitForTransactionResponse

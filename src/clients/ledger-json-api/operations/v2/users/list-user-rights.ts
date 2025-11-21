@@ -11,6 +11,15 @@ export const ListUserRightsParamsSchema = z.object({
 export type ListUserRightsParams = z.infer<typeof ListUserRightsParamsSchema>;
 export type ListUserRightsResponse = paths[Endpoint]['get']['responses']['200']['content']['application/json'];
 
+/**
+ * List rights granted to a user
+ *
+ * @example
+ *   ```typescript
+ *   const result = await client.listUserRights({ userId: 'alice' });
+ *
+ *   ```;
+ */
 export const ListUserRights = createApiOperation<ListUserRightsParams, ListUserRightsResponse>({
   paramsSchema: ListUserRightsParamsSchema,
   method: 'GET',

@@ -10,6 +10,18 @@ export type GrantUserRightsParams = z.infer<typeof GrantUserRightsParamsSchema>;
 
 export type GrantUserRightsResponse = paths[Endpoint]['post']['responses']['200']['content']['application/json'];
 
+/**
+ * Grant rights to a user
+ *
+ * @example
+ *   ```typescript
+ *   const result = await client.grantUserRights({
+ *     userId: 'alice',
+ *     rights: [{ kind: { CanActAs: { party: 'Alice::1220' } } }]
+ *   });
+ *
+ *   ```;
+ */
 export const GrantUserRights = createApiOperation<GrantUserRightsParams, GrantUserRightsResponse>({
   paramsSchema: GrantUserRightsParamsSchema,
   method: 'POST',

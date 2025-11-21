@@ -15,6 +15,20 @@ export type CompletionsWsMessage =
   | z.infer<typeof JsCantonErrorSchema>
   | z.infer<typeof WsCantonErrorSchema>;
 
+/**
+ * Subscribe to command completions via WebSocket to track command execution status in real-time
+ *
+ * @example
+ *   ```typescript
+ *   const subscription = await client.subscribeToCompletions.subscribe({
+ *     parties: ['party1'],
+ *     beginExclusive: '00000000000000000000'
+ *   }, {
+ *     onMessage: (msg) => console.log(msg)
+ *   });
+ *
+ *   ```;
+ */
 export const SubscribeToCompletions = createWebSocketOperation<
   CompletionsWsParams,
   CompletionStreamRequest,

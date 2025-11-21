@@ -9,6 +9,16 @@ export type GetConnectedSynchronizersParams = z.infer<typeof GetConnectedSynchro
 export type GetConnectedSynchronizersResponse =
   paths[typeof endpoint]['get']['responses']['200']['content']['application/json'];
 
+/**
+ * Get the list of synchronizers connected to the participant
+ *
+ * @example
+ *   ```typescript
+ *   const result = await client.getConnectedSynchronizers({});
+ *   console.log('Connected synchronizers:', result.connectedSynchronizers);
+ *
+ *   ```;
+ */
 export const GetConnectedSynchronizers = createApiOperation<
   GetConnectedSynchronizersParams,
   GetConnectedSynchronizersResponse

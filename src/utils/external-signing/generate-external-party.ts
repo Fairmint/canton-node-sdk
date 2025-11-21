@@ -19,7 +19,7 @@ export interface GenerateExternalPartyOptions {
 export async function generateExternalPartyTopology(
   options: GenerateExternalPartyOptions
 ): Promise<GenerateExternalPartyTopologyResponse> {
-  return options.ledgerClient.generateExternalPartyTopology({
+  return await options.ledgerClient.generateExternalPartyTopology({
     synchronizer: options.synchronizerId,
     partyHint: options.partyHint,
     publicKey: options.publicKey,

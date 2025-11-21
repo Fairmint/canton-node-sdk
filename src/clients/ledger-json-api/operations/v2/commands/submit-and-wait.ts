@@ -13,6 +13,17 @@ export type SubmitAndWaitParams = z.infer<typeof SubmitAndWaitParamsSchema>;
 
 export type SubmitAndWaitResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
+/**
+ * Submit a command and wait for the result
+ *
+ * @example
+ *   ```typescript
+ *   const result = await client.submitAndWait({
+ *     commands: [{ ... }]
+ *   });
+ *
+ *   ```;
+ */
 export const SubmitAndWait = createApiOperation<SubmitAndWaitParams, SubmitAndWaitResponse>({
   paramsSchema: SubmitAndWaitParamsSchema,
   method: 'POST',

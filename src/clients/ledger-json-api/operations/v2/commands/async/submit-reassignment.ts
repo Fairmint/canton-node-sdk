@@ -14,6 +14,17 @@ export type AsyncSubmitReassignmentRequest =
 export type AsyncSubmitReassignmentResponse =
   paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
+/**
+ * Submit a reassignment command asynchronously without waiting for the result
+ *
+ * @example
+ *   ```typescript
+ *   const result = await client.asyncSubmitReassignment({
+ *     reassignmentCommands: [{ ... }]
+ *   });
+ *
+ *   ```;
+ */
 export const AsyncSubmitReassignment = createApiOperation<
   AsyncSubmitReassignmentParams,
   AsyncSubmitReassignmentResponse

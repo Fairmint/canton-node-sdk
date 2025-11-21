@@ -10,6 +10,18 @@ export type UpdateUserParams = z.infer<typeof UpdateUserParamsSchema>;
 
 export type UpdateUserResponse = paths[Endpoint]['patch']['responses']['200']['content']['application/json'];
 
+/**
+ * Update user details
+ *
+ * @example
+ *   ```typescript
+ *   const result = await client.updateUser({
+ *     userId: 'alice',
+ *     user: { isDeactivated: true }
+ *   });
+ *
+ *   ```;
+ */
 export const UpdateUser = createApiOperation<UpdateUserParams, UpdateUserResponse>({
   paramsSchema: UpdateUserParamsSchema,
   method: 'PATCH',

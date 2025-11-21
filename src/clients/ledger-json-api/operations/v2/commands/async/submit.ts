@@ -13,6 +13,17 @@ export type AsyncSubmitParams = z.infer<typeof AsyncSubmitParamsSchema>;
 
 export type AsyncSubmitResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
+/**
+ * Submit a command asynchronously without waiting for the result
+ *
+ * @example
+ *   ```typescript
+ *   const result = await client.asyncSubmit({
+ *     commands: [{ ... }]
+ *   });
+ *
+ *   ```;
+ */
 export const AsyncSubmit = createApiOperation<AsyncSubmitParams, AsyncSubmitResponse>({
   paramsSchema: AsyncSubmitParamsSchema,
   method: 'POST',

@@ -12,6 +12,15 @@ export const ListUsersParamsSchema = z.object({
 export type ListUsersParams = z.infer<typeof ListUsersParamsSchema>;
 export type ListUsersResponse = paths[Endpoint]['get']['responses']['200']['content']['application/json'];
 
+/**
+ * List all users on the ledger
+ *
+ * @example
+ *   ```typescript
+ *   const result = await client.listUsers({});
+ *
+ *   ```;
+ */
 export const ListUsers = createApiOperation<ListUsersParams, ListUsersResponse>({
   paramsSchema: ListUsersParamsSchema,
   method: 'GET',

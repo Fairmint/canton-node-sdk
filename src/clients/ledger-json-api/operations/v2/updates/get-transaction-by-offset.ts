@@ -9,6 +9,18 @@ export type GetTransactionByOffsetParams = z.infer<typeof GetTransactionByOffset
 export type GetTransactionByOffsetResponse =
   paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
+/**
+ * Get a transaction by its ledger offset
+ *
+ * @example
+ *   ```typescript
+ *   const result = await client.getTransactionByOffset({
+ *     offset: '00000000000000000000',
+ *     parties: ['party1']
+ *   });
+ *
+ *   ```;
+ */
 export const GetTransactionByOffset = createApiOperation<GetTransactionByOffsetParams, GetTransactionByOffsetResponse>({
   paramsSchema: GetTransactionByOffsetParamsSchema,
   method: 'POST',

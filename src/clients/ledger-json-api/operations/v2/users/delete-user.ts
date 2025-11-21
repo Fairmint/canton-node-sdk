@@ -11,6 +11,15 @@ export const DeleteUserParamsSchema = z.object({
 export type DeleteUserParams = z.infer<typeof DeleteUserParamsSchema>;
 export type DeleteUserResponse = paths[Endpoint]['delete']['responses']['200']['content']['application/json'];
 
+/**
+ * Delete a user from the ledger
+ *
+ * @example
+ *   ```typescript
+ *   await client.deleteUser({ userId: 'alice' });
+ *
+ *   ```;
+ */
 export const DeleteUser = createApiOperation<DeleteUserParams, DeleteUserResponse>({
   paramsSchema: DeleteUserParamsSchema,
   method: 'DELETE',
