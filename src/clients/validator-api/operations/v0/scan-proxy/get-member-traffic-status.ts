@@ -30,7 +30,7 @@ export class GetMemberTrafficStatus extends ApiOperation<
   GetMemberTrafficStatusParams,
   operations['getMemberTrafficStatus']['responses']['200']['content']['application/json']
 > {
-  async execute(
+  public async execute(
     params: GetMemberTrafficStatusParams = {}
   ): Promise<operations['getMemberTrafficStatus']['responses']['200']['content']['application/json']> {
     const validatedParams = this.validateParams(params, GetMemberTrafficStatusParamsSchema);
