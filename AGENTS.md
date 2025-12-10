@@ -1,37 +1,21 @@
 # AGENTS.md
 
-This file provides guidance to OpenAI Codex and other AI agents when working with this repository.
+This file provides guidance to AI agents (OpenAI Codex, etc.) when working with code in this repository.
 
 ## Context
 
-**Read `llms.txt` first** for complete project context, architecture decisions,
-and coding conventions.
+**Read `llms.txt` first** for complete project context, architecture decisions, and coding conventions. The `llms.txt` file references the human-focused documentation (README.md and DEVELOPER_GUIDE.md) which contain all the detailed information.
 
-## Project Overview
+## Quick Reference
 
-The Canton Node SDK is a TypeScript SDK for interacting with Canton blockchain nodes. It provides type-safe, OAuth2-authenticated clients for Ledger JSON API, Validator API, and other Canton services.
+- **Project Context**: See [llms.txt](llms.txt)
+- **Human Documentation**: See [README.md](README.md) and [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)
+- **Development Workflow**: After changes, run `npm run lint && npm run build && npm test`
 
-## Key Commands
-
-- `npm run build` - Full build (includes linting and TypeScript compilation)
-- `npm run build:core` - Generate client methods, OpenAPI types, and compile TypeScript
-- `npm test` - Run unit tests
-- `npm run lint` - Run all linting (ESLint + Prettier)
-- `npm run generate:openapi-types` - Generate TypeScript types from OpenAPI specs
-
-## Important Notes
+## Key Principles
 
 - Follow patterns in `llms.txt`
-- Use strict TypeScript - no `any` types
-- Always provide explicit return types
-- Use `EnvLoader` for configuration, never access `process.env` directly
+- Reference README.md and DEVELOPER_GUIDE.md for detailed instructions
+- Use strict TypeScript (no `any`, explicit return types)
 - Extend `ApiOperation` or `SimpleApiOperation` for new endpoints
-- Use Zod schemas for validation
-- Use generated OpenAPI types instead of manually defining API types
-
-## Development Workflow
-
-After making code changes, always run:
-```bash
-npm run lint && npm run build && npm test
-```
+- Use `EnvLoader` for configuration, never access `process.env` directly

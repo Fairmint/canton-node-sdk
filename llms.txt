@@ -2,6 +2,13 @@
 
 > A TypeScript SDK for interacting with Canton blockchain nodes. Provides type-safe, OAuth2-authenticated clients for Ledger JSON API, Validator API, and other Canton services.
 
+## 📖 Human Documentation (Read These First)
+
+- **[README.md](README.md)** - Project overview, quick start, and user-facing documentation
+- **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** - Comprehensive development guide with setup, workflows, and best practices
+
+**Important**: All human-focused documentation lives in these files. This file (`llms.txt`) provides AI-specific context and patterns. When in doubt, refer to the human documentation.
+
 ## Key Technical Details
 
 - **Language**: TypeScript 5.9.3
@@ -264,170 +271,28 @@ See `docs/ledger-json-api-operations.md` and `docs/validator-api-operations.md` 
 
 ## Development Workflow
 
-### Build Commands
+**See [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) for complete workflow details.**
 
-- `npm run build` - Full build (lint + compile)
-- `npm run build:core` - Generate types, client methods, compile
-- `npm run clean` - Remove build directory
+Quick reference:
+- Build: `npm run build` (full) or `npm run build:core` (core only)
+- Test: `npm test` or `npm run test:watch`
+- Lint: `npm run lint` or `npm run lint:fix`
+- After changes: `npm run lint && npm run build && npm test`
 
-### Test Commands
+## Common Development Tasks
 
-- `npm test` - Run all tests
-- `npm run test:watch` - Watch mode
-- `npm run test:coverage` - Coverage report
+**See [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) for detailed task instructions.**
 
-### Lint Commands
-
-- `npm run lint` - Run ESLint
-- `npm run lint:fix` - Auto-fix ESLint issues
-- `npm run format:fix` - Format with Prettier
-
-### Code Generation
-
-- `npm run generate:openapi-types` - Generate TypeScript types from OpenAPI specs
-- `npm run build:core:generate-client-methods` - Generate client method wrappers
-
-### Development Workflow
-
-After making changes, always run:
-```bash
-npm run lint && npm run build && npm test
-```
-
-## Adding New API Clients
-
-1. Add OpenAPI spec to `libs/splice/` (or ensure it exists)
-2. Run `npm run generate:openapi-types` to generate types
-3. Create client class extending `BaseClient` or `SimpleBaseClient`
-4. Implement operations in `operations/` subdirectory
-5. Export client from `src/clients/register.ts`
-6. Add environment variable configuration pattern
-
-## Adding New Operations
-
-1. Create operation class extending `ApiOperation` or `SimpleApiOperation`
-2. Implement `execute(params)` method
-3. Add Zod validation schemas if needed
-4. Use `makeGetRequest`, `makePostRequest`, etc. from base class
-5. Export from operations `index.ts`
-
-## Environment Variables
-
-### Configuration Pattern
-
-```
-CANTON_{NETWORK}_{PROVIDER}_{API_TYPE}_{SETTING}
-```
-
-Examples:
-- `CANTON_TESTNET_5N_LEDGER_JSON_API_URI`
-- `CANTON_DEVNET_BNS_VALIDATOR_API_CLIENT_ID`
-- `CANTON_MAINNET_BNS_SCAN_API_CLIENT_SECRET`
-
-### Current Selection
-
-- `CANTON_CURRENT_NETWORK` - Active network (devnet/testnet/mainnet/localnet)
-- `CANTON_CURRENT_PROVIDER` - Active provider (e.g., `5n`, `bns`)
-
-### Authentication
-
-For each API, configure either:
-
-**Client Credentials (machine-to-machine):**
-- `CLIENT_ID` + `CLIENT_SECRET`
-
-**Password Grant (user authentication):**
-- `CLIENT_ID` + `USERNAME` + `PASSWORD`
-
-## Testing
-
-### Test Structure
-
-- **Unit Tests**: `test/unit/` - Jest tests for individual components
-- **Integration Tests**: `test/integration/` - End-to-end with real APIs
-
-### Test Configuration
-
-- Jest config: `jest.config.js`
-- Test setup: `test/setup.ts` loads `.env.test`
-- Timeout: 30 seconds for async operations
-
-### Running Tests
-
-```bash
-# Run all tests
-npm test
-
-# Run specific test file
-npm test path/to/test.spec.ts
-
-# Run tests matching pattern
-npm test -- --testNamePattern="pattern"
-
-# Watch mode
-npm run test:watch
-```
-
-## TypeScript Configuration
-
-### Strict Settings
-
-- `noImplicitAny` - No implicit `any` types
-- `noImplicitReturns` - All code paths must return
-- `noImplicitThis` - Explicit `this` binding
-- `exactOptionalPropertyTypes` - Strict optional properties
-- `noUncheckedIndexedAccess` - Safe array/object access
-- `noPropertyAccessFromIndexSignature` - Explicit property access
-
-### Type Safety Rules
-
-- **Never use `any`** - Use precise types or `unknown` with type guards
-- **Always provide explicit return types** for public functions
-- **Use generated OpenAPI types** instead of manually defining API types
+Quick reference:
+- Adding API clients: See "Common Development Tasks" in DEVELOPER_GUIDE.md
+- Adding operations: See "Common Development Tasks" in DEVELOPER_GUIDE.md
+- Environment setup: See "Development Environment Setup" in DEVELOPER_GUIDE.md
+- Testing: See "Testing" section in DEVELOPER_GUIDE.md
 
 ## Documentation Links
 
-- [README](README.md) - Project overview and quick start
-- [Developer Guide](DEVELOPER_GUIDE.md) - Comprehensive development guide
-- [Contributing](CONTRIBUTING.md) - Publishing and contribution guidelines
-- [External Signing Guide](docs/EXTERNAL_SIGNING.md) - External party management
+- [README.md](README.md) - Project overview and quick start
+- [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) - Comprehensive development guide
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Publishing and contribution guidelines
+- [docs/EXTERNAL_SIGNING.md](docs/EXTERNAL_SIGNING.md) - External party management
 - [API Documentation](https://sdk.canton.fairmint.com/) - Full API reference
-
-## Key Dependencies
-
-- `@canton-network/wallet-sdk` - Canton wallet SDK for external parties
-- `axios` - HTTP client
-- `zod` - Schema validation
-- `openapi-typescript` - OpenAPI type generation
-- `openapi-fetch` - Type-safe API client (used internally)
-- `ws` - WebSocket support
-- `pino` - Logging
-
-## Common Tasks
-
-### Adding a New Endpoint
-
-1. Check if OpenAPI spec includes the endpoint
-2. Generate types: `npm run generate:openapi-types`
-3. Create operation class in appropriate `operations/` directory
-4. Implement `execute()` method using generated types
-5. Add Zod validation if needed
-6. Export from operations `index.ts`
-7. Write tests
-8. Update documentation
-
-### Updating OpenAPI Types
-
-1. Update OpenAPI spec file in `libs/splice/`
-2. Run `npm run generate:openapi-types`
-3. Review generated types in `src/clients/*/generated/`
-4. Update operations using the types
-5. Run tests to verify compatibility
-
-### Debugging Authentication Issues
-
-1. Check environment variables are set correctly
-2. Verify OAuth credentials are valid
-3. Check token expiration (tokens auto-refresh)
-4. Review `AuthenticationManager` logs
-5. Test with explicit config to isolate EnvLoader issues
