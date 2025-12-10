@@ -1,0 +1,433 @@
+# Canton Node SDK
+
+> A TypeScript SDK for interacting with Canton blockchain nodes. Provides type-safe, OAuth2-authenticated clients for Ledger JSON API, Validator API, and other Canton services.
+
+## Key Technical Details
+
+- **Language**: TypeScript 5.9.3
+- **Runtime**: Node.js >= 18.0.0
+- **Package Manager**: npm
+- **Build Tool**: TypeScript Compiler (tsc)
+- **Testing**: Jest 30.2.0
+- **Linting**: ESLint 9.38.0 + Prettier 3.6.2
+- **Authentication**: OAuth2 (client_credentials and password grants)
+- **HTTP Client**: axios 1.12.2
+- **Type Generation**: openapi-typescript 7.10.1
+- **Validation**: zod 4.1.12
+
+## Architecture Patterns
+
+### Client Architecture
+
+- **Base Classes**: `BaseClient` (OAuth2) and `SimpleBaseClient` (no auth)
+- **Client Instantiation**: Direct instantiation with optional config
+  ```typescript
+  const client = new LedgerJsonApiClient(config);
+  // Or use EnvLoader defaults:
+  const client = new LedgerJsonApiClient();
+  ```
+- **Client Registration**: All clients exported from `src/clients/register.ts`
+- **Type Safety**: Full TypeScript types generated from OpenAPI specs
+
+### Operation Pattern
+
+- **Base Classes**: `ApiOperation<Params, Response>` and `SimpleApiOperation<Params, Response>`
+- **Structure**: Each API endpoint is a class extending the operation base
+- **Organization**: Operations in `src/clients/{api-name}/operations/`
+- **Validation**: Zod schemas for request/response validation
+- **Execution**: `execute(params)` method handles the full request flow
+
+### Configuration Management
+
+- **Pattern**: `CANTON_{NETWORK}_{PROVIDER}_{SETTING}`
+- **Example**: `CANTON_TESTNET_BNS_LEDGER_API_URL`
+- **Networks**: `devnet`, `testnet`, `mainnet`, `localnet`
+- **Providers**: Varies by network (e.g., `5n`, `bns`, `app-provider`)
+- **Singleton**: `EnvLoader` manages all environment variables
+- **Auto-detection**: Clients can use EnvLoader defaults or explicit config
+
+### Authentication
+
+- **Manager**: `AuthenticationManager` handles OAuth2 token lifecycle
+- **Grant Types**: `client_credentials` (machine-to-machine) and `password` (user)
+- **Auto-refresh**: Tokens automatically refreshed before expiration
+- **Bearer Injection**: Tokens automatically added to request headers
+
+### Code Generation
+
+- **OpenAPI Specs**: Located in `libs/splice/**/openapi/**/*.yaml`
+- **Type Generation**: `npm run generate:openapi-types` creates TypeScript types
+- **Client Methods**: `npm run build:core:generate-client-methods` generates client wrappers
+- **Generated Files**: `src/clients/*/generated/` (git-ignored, generated on build)
+
+### Error Handling
+
+Custom error hierarchy (all extend `CantonError`):
+
+- `ConfigurationError` - Missing/invalid environment configuration
+- `AuthenticationError` - OAuth2 authentication failures
+- `ApiError` - HTTP API request failures (includes status code, response body)
+- `ValidationError` - Zod schema validation failures
+- `NetworkError` - Network connectivity issues
+
+## File Structure Overview
+
+```
+src/
+├── clients/                    # API client implementations
+│   ├── register.ts            # Client exports
+│   ├── ledger-json-api/       # Ledger JSON API client
+│   │   ├── operations/        # API endpoint operations
+│   │   └── schemas/           # Request/response schemas
+│   └── validator-api/         # Validator API client
+│       └── operations/        # API endpoint operations
+├── core/                      # Core SDK functionality
+│   ├── BaseClient.ts         # Base client with OAuth2
+│   ├── SimpleBaseClient.ts   # Base client without auth
+│   ├── auth/                 # Authentication manager
+│   ├── config/               # Environment loader
+│   ├── errors.ts             # Error classes
+│   ├── http/                 # HTTP client wrapper
+│   ├── operations/           # Operation base classes
+│   └── ws/                   # WebSocket client
+└── utils/                     # Utility functions
+    ├── amulet/               # Amulet (token) utilities
+    ├── contracts/            # Contract utilities
+    ├── external-signing/     # External party management
+    ├── mining/               # Mining utilities
+    ├── parsers/              # Data parsers
+    └── party/                # Party management
+
+test/
+├── unit/                     # Unit tests
+└── integration/             # Integration tests
+
+scripts/                      # Build and generation scripts
+├── generate-openapi-types.ts
+├── generate-all-client-methods.ts
+└── generate-operation-docs.ts
+```
+
+## ADR Quick Reference
+
+| ADR | Decision | What This Means for Development |
+|-----|----------|--------------------------------|
+| (None yet) | - | ADRs will be added as architectural decisions are made |
+
+## Code Patterns (Do / Don't)
+
+### ✅ DO: Use EnvLoader for Configuration
+
+```typescript
+// ✅ DO: Let EnvLoader handle defaults
+const client = new LedgerJsonApiClient();
+
+// ✅ DO: Explicit config when needed
+const client = new LedgerJsonApiClient({
+  network: 'testnet',
+  provider: '5n',
+  apis: {
+    ledgerJsonApi: {
+      uri: 'https://custom-url.com',
+      clientId: '...',
+      clientSecret: '...',
+    },
+  },
+});
+```
+
+### ❌ DON'T: Access process.env Directly
+
+```typescript
+// ❌ DON'T: Direct environment access
+const apiUrl = process.env.CANTON_TESTNET_5N_LEDGER_API_URL;
+
+// ✅ DO: Use EnvLoader
+const config = EnvLoader.getConfig('ledgerJsonApi');
+const apiUrl = config.apis.ledgerJsonApi.uri;
+```
+
+### ✅ DO: Extend Operation Base Classes
+
+```typescript
+// ✅ DO: Extend ApiOperation for authenticated endpoints
+export class GetUserOperation extends ApiOperation<GetUserParams, User> {
+  async execute(params: GetUserParams): Promise<User> {
+    return this.makeGetRequest(`/v2/users/${params.userId}`);
+  }
+}
+```
+
+### ❌ DON'T: Create Operations Without Base Classes
+
+```typescript
+// ❌ DON'T: Standalone operation classes
+export class GetUserOperation {
+  // Missing validation, error handling, auth injection
+}
+```
+
+### ✅ DO: Use Zod for Validation
+
+```typescript
+// ✅ DO: Validate with Zod schemas
+const paramsSchema = z.object({
+  userId: z.string().min(1),
+});
+
+export class GetUserOperation extends ApiOperation<GetUserParams, User> {
+  async execute(params: GetUserParams): Promise<User> {
+    const validated = this.validateParams(params, paramsSchema);
+    return this.makeGetRequest(`/v2/users/${validated.userId}`);
+  }
+}
+```
+
+### ✅ DO: Use Generated Types from OpenAPI
+
+```typescript
+// ✅ DO: Import types from generated OpenAPI types
+import type { paths } from '../../../generated/canton/.../openapi';
+
+type GetUserResponse = paths['/v2/users/{userId}']['get']['responses']['200']['content']['application/json'];
+```
+
+### ❌ DON'T: Manually Define Types That Exist in OpenAPI
+
+```typescript
+// ❌ DON'T: Redefine types that OpenAPI already provides
+interface User {
+  id: string;
+  // ... manually defined
+}
+```
+
+### ✅ DO: Throw Appropriate Error Types
+
+```typescript
+// ✅ DO: Use specific error types
+if (!config.apis?.ledgerJsonApi?.uri) {
+  throw new ConfigurationError('Missing LEDGER_API_URL');
+}
+
+if (response.status === 401) {
+  throw new AuthenticationError('Invalid credentials');
+}
+```
+
+### ❌ DON'T: Use Generic Errors
+
+```typescript
+// ❌ DON'T: Generic errors
+throw new Error('Something went wrong');
+```
+
+### ✅ DO: Provide Explicit Return Types
+
+```typescript
+// ✅ DO: Always specify return types
+export async function getUser(userId: string): Promise<User> {
+  // ...
+}
+```
+
+### ❌ DON'T: Rely on Type Inference for Public APIs
+
+```typescript
+// ❌ DON'T: Let TypeScript infer return types for public methods
+export async function getUser(userId: string) {
+  // Return type should be explicit
+}
+```
+
+## API Endpoints
+
+### Ledger JSON API
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/v2/version` | Get API version |
+| GET | `/v2/users/{userId}` | Get user details |
+| POST | `/v2/users` | Create user |
+| GET | `/v2/parties` | List parties |
+| POST | `/v2/commands/submit` | Submit command |
+| GET | `/v2/updates` | Subscribe to updates |
+
+### Validator API
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/v0/register` | Register external party |
+| GET | `/v0/scan-proxy/...` | Various scan proxy endpoints |
+
+See `docs/ledger-json-api-operations.md` and `docs/validator-api-operations.md` for complete API reference.
+
+## Development Workflow
+
+### Build Commands
+
+- `npm run build` - Full build (lint + compile)
+- `npm run build:core` - Generate types, client methods, compile
+- `npm run clean` - Remove build directory
+
+### Test Commands
+
+- `npm test` - Run all tests
+- `npm run test:watch` - Watch mode
+- `npm run test:coverage` - Coverage report
+
+### Lint Commands
+
+- `npm run lint` - Run ESLint
+- `npm run lint:fix` - Auto-fix ESLint issues
+- `npm run format:fix` - Format with Prettier
+
+### Code Generation
+
+- `npm run generate:openapi-types` - Generate TypeScript types from OpenAPI specs
+- `npm run build:core:generate-client-methods` - Generate client method wrappers
+
+### Development Workflow
+
+After making changes, always run:
+```bash
+npm run lint && npm run build && npm test
+```
+
+## Adding New API Clients
+
+1. Add OpenAPI spec to `libs/splice/` (or ensure it exists)
+2. Run `npm run generate:openapi-types` to generate types
+3. Create client class extending `BaseClient` or `SimpleBaseClient`
+4. Implement operations in `operations/` subdirectory
+5. Export client from `src/clients/register.ts`
+6. Add environment variable configuration pattern
+
+## Adding New Operations
+
+1. Create operation class extending `ApiOperation` or `SimpleApiOperation`
+2. Implement `execute(params)` method
+3. Add Zod validation schemas if needed
+4. Use `makeGetRequest`, `makePostRequest`, etc. from base class
+5. Export from operations `index.ts`
+
+## Environment Variables
+
+### Configuration Pattern
+
+```
+CANTON_{NETWORK}_{PROVIDER}_{API_TYPE}_{SETTING}
+```
+
+Examples:
+- `CANTON_TESTNET_5N_LEDGER_JSON_API_URI`
+- `CANTON_DEVNET_BNS_VALIDATOR_API_CLIENT_ID`
+- `CANTON_MAINNET_BNS_SCAN_API_CLIENT_SECRET`
+
+### Current Selection
+
+- `CANTON_CURRENT_NETWORK` - Active network (devnet/testnet/mainnet/localnet)
+- `CANTON_CURRENT_PROVIDER` - Active provider (e.g., `5n`, `bns`)
+
+### Authentication
+
+For each API, configure either:
+
+**Client Credentials (machine-to-machine):**
+- `CLIENT_ID` + `CLIENT_SECRET`
+
+**Password Grant (user authentication):**
+- `CLIENT_ID` + `USERNAME` + `PASSWORD`
+
+## Testing
+
+### Test Structure
+
+- **Unit Tests**: `test/unit/` - Jest tests for individual components
+- **Integration Tests**: `test/integration/` - End-to-end with real APIs
+
+### Test Configuration
+
+- Jest config: `jest.config.js`
+- Test setup: `test/setup.ts` loads `.env.test`
+- Timeout: 30 seconds for async operations
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run specific test file
+npm test path/to/test.spec.ts
+
+# Run tests matching pattern
+npm test -- --testNamePattern="pattern"
+
+# Watch mode
+npm run test:watch
+```
+
+## TypeScript Configuration
+
+### Strict Settings
+
+- `noImplicitAny` - No implicit `any` types
+- `noImplicitReturns` - All code paths must return
+- `noImplicitThis` - Explicit `this` binding
+- `exactOptionalPropertyTypes` - Strict optional properties
+- `noUncheckedIndexedAccess` - Safe array/object access
+- `noPropertyAccessFromIndexSignature` - Explicit property access
+
+### Type Safety Rules
+
+- **Never use `any`** - Use precise types or `unknown` with type guards
+- **Always provide explicit return types** for public functions
+- **Use generated OpenAPI types** instead of manually defining API types
+
+## Documentation Links
+
+- [README](README.md) - Project overview and quick start
+- [Developer Guide](DEVELOPER_GUIDE.md) - Comprehensive development guide
+- [Contributing](CONTRIBUTING.md) - Publishing and contribution guidelines
+- [External Signing Guide](docs/EXTERNAL_SIGNING.md) - External party management
+- [API Documentation](https://sdk.canton.fairmint.com/) - Full API reference
+
+## Key Dependencies
+
+- `@canton-network/wallet-sdk` - Canton wallet SDK for external parties
+- `axios` - HTTP client
+- `zod` - Schema validation
+- `openapi-typescript` - OpenAPI type generation
+- `openapi-fetch` - Type-safe API client (used internally)
+- `ws` - WebSocket support
+- `pino` - Logging
+
+## Common Tasks
+
+### Adding a New Endpoint
+
+1. Check if OpenAPI spec includes the endpoint
+2. Generate types: `npm run generate:openapi-types`
+3. Create operation class in appropriate `operations/` directory
+4. Implement `execute()` method using generated types
+5. Add Zod validation if needed
+6. Export from operations `index.ts`
+7. Write tests
+8. Update documentation
+
+### Updating OpenAPI Types
+
+1. Update OpenAPI spec file in `libs/splice/`
+2. Run `npm run generate:openapi-types`
+3. Review generated types in `src/clients/*/generated/`
+4. Update operations using the types
+5. Run tests to verify compatibility
+
+### Debugging Authentication Issues
+
+1. Check environment variables are set correctly
+2. Verify OAuth credentials are valid
+3. Check token expiration (tokens auto-refresh)
+4. Review `AuthenticationManager` logs
+5. Test with explicit config to isolate EnvLoader issues
