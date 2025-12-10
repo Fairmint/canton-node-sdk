@@ -16,7 +16,8 @@ export interface GenerateExternalPartyOptions {
 }
 
 /** Helper that invokes the external party topology generation endpoint. */
-export async function generateExternalPartyTopology(
+// eslint-disable-next-line @typescript-eslint/promise-function-async
+export function generateExternalPartyTopology(
   options: GenerateExternalPartyOptions
 ): Promise<GenerateExternalPartyTopologyResponse> {
   return options.ledgerClient.generateExternalPartyTopology({

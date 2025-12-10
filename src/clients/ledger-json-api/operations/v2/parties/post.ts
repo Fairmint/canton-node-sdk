@@ -4,10 +4,11 @@ import type { paths } from '../../../../../generated/canton/community/ledger/led
 import { type AllocatePartyResponse } from '../../../schemas/api';
 
 // Type aliases for better readability and to avoid repetition
-type GeneratedAllocatePartyRequest = paths['/v2/parties']['post']['requestBody']['content']['application/json'];
+type GeneratedAllocatePartyRequest =
+  paths['/v2/parties']['post']['requestBody']['content']['application/json'];
 
 // Extended type to support both old and new API versions
-
+// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
 type AllocatePartyRequest = GeneratedAllocatePartyRequest & {
   synchronizerId?: string;
   userId?: string;
