@@ -27,8 +27,8 @@ const version = await client.getVersion();
 
 ## For Contributors
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for information about setting up the development
-environment.
+- **[Developer Guide](./DEVELOPER_GUIDE.md)** - Comprehensive guide for developers working on the SDK
+- **[Contributing Guide](./CONTRIBUTING.md)** - Information about publishing and contributing
 
 ## Testing with LocalNet
 
