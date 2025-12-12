@@ -40,6 +40,15 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      - name: Initialize Submodules
+        run: |
+          # If a previous cache restore created a submodule worktree without its gitdir (stored in .git/modules),
+          # `git submodule update` can fail with "could not get a repository handle".
+          rm -rf libs/splice .git/modules/libs/splice .git/modules/splice
+          git submodule sync --recursive
+          git submodule update --init --depth 1 libs/splice
+          git submodule update --init --recursive libs/cn-quickstart
+
       - name: Restore Quickstart Preparation Cache
         id: quickstart-prep-cache-restore
         uses: actions/cache/restore@v4
@@ -60,15 +69,6 @@ jobs:
             /home/runner/.daml
             /home/runner/.gradle
           key: quickstart-prep-${{ runner.os }}-${{ hashFiles('package.json', 'package-lock.json') }}-${{ steps.submodule-cache-key.outputs.value }}
-
-      - name: Initialize Submodules
-        run: |
-          # If a previous cache restore created a submodule worktree without its gitdir (stored in .git/modules),
-          # `git submodule update` can fail with "could not get a repository handle".
-          rm -rf libs/splice .git/modules/libs/splice .git/modules/splice
-          git submodule sync --recursive
-          git submodule update --init --depth 1 libs/splice
-          git submodule update --init --recursive libs/cn-quickstart
 
       - name: Verify Cached Prerequisites
         id: verify-cache
