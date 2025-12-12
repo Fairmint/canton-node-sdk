@@ -8,6 +8,7 @@ const eslintConfig = [
   // Global ignores (replaces .eslintignore)
   {
     ignores: [
+      '**/libs/**',
       '**/build/**',
       '**/dist/**',
       '**/node_modules/**',
