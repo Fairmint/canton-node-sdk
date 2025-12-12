@@ -2,32 +2,30 @@
 
 ## Development workflow
 
-- **Read first**: `README.md` (project + LocalNet testing) and `CLAUDE.md` (repo-specific engineering + AI workflow notes).
+- **Read**: `README.md` (human overview) and `llms.txt` (AI context + links).
 - **Install**: `npm install`
-- **Checks (run before opening a PR)**:
-  - `npm run lint`
-  - `npm run build`
-  - `npm test`
-  - `npx tsc --noEmit`
+- **Before opening a PR**: run `yarn lint && yarn build && yarn test` and `npx tsc --noEmit`.
 
-## Minimal documentation requirements
+## Documentation (minimal requirements)
 
-Keep docs sparse and non-redundant; prefer linking to existing docs over duplicating them.
+Keep docs sparse and avoid redundancy by following this hierarchy:
 
-- **When changing public behavior or public API**: update the relevant docs under `docs/` and/or add/update an example under `examples/`.
-- **When adding a new client/operation**: ensure it is discoverable from the main docs entry points (start with a link; expand later).
-- **No “drive-by” docs**: avoid large speculative documentation; add only what is necessary for the change.
+1. `llms.txt` (AI reads first; links to deeper docs)
+2. `README.md` (humans read first)
+3. `docs/` (deep technical / user guides)
+
+Update documentation when you:
+- change public behavior / public API → update `docs/` and/or `examples/`
+- add new clients/operations → ensure discoverability via links (start small; expand later)
+- change setup/commands → update `README.md` and `llms.txt`
 
 ## Testing policy (do not skip tests)
 
-Tests must not be skipped or disabled to get a PR “green”.
+**Tests must not be skipped** to get a PR green.
 
-- **Never**:
-  - comment out tests,
-  - add ignore patterns to hide failing tests,
-  - change CI/test config to avoid running tests,
-  - merge with failing tests.
-- **If tests are failing**: fix the bug, fix the test, or explicitly document and address required prerequisites (e.g. LocalNet) rather than skipping.
+- Don’t comment out tests or add ignore patterns to hide failures.
+- Don’t change test config/CI to avoid running tests.
+- If a test needs prerequisites (e.g. LocalNet), document the prerequisite and keep the test running.
 
 ## Publishing
 

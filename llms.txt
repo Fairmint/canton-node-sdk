@@ -1,0 +1,29 @@
+# Canton Node SDK
+
+> TypeScript SDK for interacting with Canton blockchain nodes.
+
+## Read order (documentation hierarchy)
+
+1. **This file** (`llms.txt`) — AI context + links
+2. `README.md` — human overview
+3. `docs/` — deeper guides
+
+## Key commands
+
+- `yarn lint && yarn build && yarn test`
+- `npx tsc --noEmit`
+
+## Testing policy
+
+**Do not skip tests** to get a PR green.
+
+- Do not comment out tests.
+- Do not add ignore patterns to hide failures.
+- If a test has prerequisites (e.g. LocalNet), document the prerequisite and keep the test running.
+
+## Repo pointers
+
+- Agent instructions: `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`
+- Package scripts: `package.json`
+- Clients: `src/clients/`
+- Core (auth/config/http): `src/core/`
