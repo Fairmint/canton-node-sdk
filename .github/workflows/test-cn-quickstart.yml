@@ -21,6 +21,14 @@ jobs:
         with:
           submodules: false
 
+      - name: Compute Submodule Cache Key
+        id: submodule-cache-key
+        run: |
+          set -euo pipefail
+          # Works even when submodules are not initialized: uses gitlinks recorded in this repo.
+          key="$(git submodule status --recursive | tr -s ' ' | cut -d' ' -f1-2 | sha256sum | cut -d' ' -f1)"
+          echo "value=$key" >> $GITHUB_OUTPUT
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -52,10 +60,38 @@ jobs:
             ${{ github.workspace }}/libs/cn-quickstart/quickstart/integration-test/node_modules
             /home/runner/.daml
             /home/runner/.gradle
-          key: quickstart-prep-${{ runner.os }}-${{ hashFiles('package.json', 'package-lock.json', '.git/modules/libs/cn-quickstart/HEAD', '.git/modules/libs/splice/HEAD') }}
+          key: quickstart-prep-${{ runner.os }}-${{ hashFiles('package.json', 'package-lock.json') }}-${{ steps.submodule-cache-key.outputs.value }}
+
+      - name: Initialize Submodules
+        run: |
+          git submodule update --init --depth 1 libs/splice
+          git submodule update --init --recursive libs/cn-quickstart
+
+      - name: Verify Cached Prerequisites
+        id: verify-cache
+        run: |
+          set -euo pipefail
+
+          if [ -d "node_modules" ]; then
+            echo "has_node_modules=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_node_modules=false" >> $GITHUB_OUTPUT
+          fi
+
+          if [ -f "libs/cn-quickstart/quickstart/.env.local" ]; then
+            echo "has_quickstart_env=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_quickstart_env=false" >> $GITHUB_OUTPUT
+          fi
+
+          if [ -x "$HOME/.daml/bin/daml" ]; then
+            echo "has_daml=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_daml=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Install Dependencies
-        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
+        if: steps.verify-cache.outputs.has_node_modules != 'true'
         run: npm install
 
       - name: Run Linter
@@ -79,14 +115,8 @@ jobs:
           git commit -m "chore: auto-fix linting issues [skip ci]"
           git push
 
-      - name: Initialize Submodules
-        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
-        run: |
-          git submodule update --init --depth 1 libs/splice
-          git submodule update --init --recursive libs/cn-quickstart
-
       - name: Setup CN-Quickstart
-        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
+        if: steps.verify-cache.outputs.has_quickstart_env != 'true'
         run: |
           cd libs/cn-quickstart/quickstart
           echo "Running setup with OAuth2..."
@@ -96,7 +126,7 @@ jobs:
         timeout-minutes: 15
 
       - name: Install Daml SDK
-        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
+        if: steps.verify-cache.outputs.has_daml != 'true'
         run: |
           cd libs/cn-quickstart/quickstart
           make install-daml-sdk
