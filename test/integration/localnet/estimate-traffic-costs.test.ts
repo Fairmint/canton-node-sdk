@@ -2,10 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { testClients } from '../../setup';
 
-const describeLocalnet =
-  process.env['RUN_LOCALNET_INTEGRATION_TESTS'] === '1' ? describe : describe.skip;
-
-describeLocalnet('LocalNet Interactive Submission traffic cost estimation', () => {
+describe('LocalNet Interactive Submission traffic cost estimation', () => {
   it('estimates traffic cost for a prepared transaction', async () => {
     // 1) Allocate a fresh party (requires admin privileges, provided by localnet defaults).
     const allocatePartyResp = await testClients.ledgerJsonApi.interactiveSubmissionAllocateParty({
@@ -61,8 +58,19 @@ describeLocalnet('LocalNet Interactive Submission traffic cost estimation', () =
       userId: 'ledger-api-user',
     });
 
-    expect(Number.isFinite(estimate.trafficCost)).toBe(true);
-    expect(estimate.trafficCost).toBeGreaterThanOrEqual(0);
+    // Log the full response so we can lock down exact expectations (and understand units) in CI output.
+    console.log('interactiveSubmissionEstimateTrafficCosts:', JSON.stringify(estimate));
+
+    const expectedTrafficCostRaw = process.env['EXPECTED_TRAFFIC_COST'];
+    const expectedTrafficCost = expectedTrafficCostRaw ? Number(expectedTrafficCostRaw) : Number.NaN;
+
+    if (!Number.isFinite(expectedTrafficCost)) {
+      throw new Error(
+        'EXPECTED_TRAFFIC_COST must be set to the exact trafficCost value printed by this test (see log output).'
+      );
+    }
+
+    expect(estimate).toEqual({ trafficCost: expectedTrafficCost });
   });
 });
 
