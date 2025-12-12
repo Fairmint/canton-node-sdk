@@ -2,7 +2,7 @@ import { testClients } from '../../setup';
 
 describe('LocalNet GetMemberTrafficStatus', () => {
   it('should get traffic status for current party', async () => {
-    const response = await testClients.validatorApi.getMemberTrafficStatus();
+    const response = await testClients.validatorApi.getMemberTrafficStatus({});
 
     // Log the full response for debugging
     console.log('Traffic Status Response:', JSON.stringify(response, null, 2));
