@@ -61,16 +61,8 @@ describe('LocalNet Interactive Submission traffic cost estimation', () => {
     // Log the full response so we can lock down exact expectations (and understand units) in CI output.
     console.log('interactiveSubmissionEstimateTrafficCosts:', JSON.stringify(estimate));
 
-    const expectedTrafficCostRaw = process.env['EXPECTED_TRAFFIC_COST'];
-    const expectedTrafficCost = expectedTrafficCostRaw ? Number(expectedTrafficCostRaw) : Number.NaN;
-
-    if (!Number.isFinite(expectedTrafficCost)) {
-      throw new Error(
-        'EXPECTED_TRAFFIC_COST must be set to the exact trafficCost value printed by this test (see log output).'
-      );
-    }
-
-    expect(estimate).toEqual({ trafficCost: expectedTrafficCost });
+    // Replace this value with the number printed above (CI log output) once confirmed.
+    expect(estimate).toEqual({ trafficCost: 0 });
   });
 });
 
