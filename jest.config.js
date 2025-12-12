@@ -1,5 +1,3 @@
-const runIntegrationTests = process.env.RUN_INTEGRATION_TESTS === 'true';
-
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
@@ -7,7 +5,7 @@ module.exports = {
   testMatch: ['**/*.test.ts', '**/*.spec.ts'],
   testPathIgnorePatterns: [
     '/node_modules/',
-    ...(runIntegrationTests ? [] : ['/test/integration/']),
+    ...(process.env.RUN_INTEGRATION_TESTS === 'true' ? [] : ['/test/integration/']),
   ],
   transform: {
     '^.+\\.ts$': 'ts-jest',
