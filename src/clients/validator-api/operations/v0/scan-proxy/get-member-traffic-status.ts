@@ -1,4 +1,6 @@
 import { ApiOperation } from '../../../../../core/operations/ApiOperation';
+import { EnvLoader } from '../../../../../core/config/EnvLoader';
+import { BaseClient } from '../../../../../core/BaseClient';
 import { type operations } from '../../../../../generated/apps/scan/src/main/openapi/scan';
 import { getCurrentMiningRoundDomainId } from '../../../../../utils/mining/mining-rounds';
 import { GetMemberTrafficStatusParamsSchema, type GetMemberTrafficStatusParams } from '../../../schemas/operations';
@@ -42,7 +44,20 @@ export class GetMemberTrafficStatus extends ApiOperation<
     // Auto-determine memberId if not provided
     const memberId = validatedParams.memberId ?? (this.client as { getPartyId: () => string }).getPartyId();
 
-    const url = `${this.getApiUrl()}/api/validator/v0/scan-proxy/domains/${encodeURIComponent(domainId)}/members/${encodeURIComponent(memberId)}/traffic-status`;
+    // Workaround: The traffic-status endpoint is not exposed via the validator scan-proxy.
+    // We must access the Scan API directly.
+    const baseClient = this.client as unknown as BaseClient;
+    const scanConfig = EnvLoader.getConfig('SCAN_API', {
+      network: baseClient.getNetwork(),
+      provider: baseClient.getProvider(),
+    });
+    const scanApiUrl = scanConfig.apis['SCAN_API']?.apiUrl;
+
+    if (!scanApiUrl) {
+      throw new Error('SCAN_API URL not configured');
+    }
+
+    const url = `${scanApiUrl}/v0/domains/${encodeURIComponent(domainId)}/members/${encodeURIComponent(memberId)}/traffic-status`;
 
     return this.makeGetRequest<operations['getMemberTrafficStatus']['responses']['200']['content']['application/json']>(
       url,
