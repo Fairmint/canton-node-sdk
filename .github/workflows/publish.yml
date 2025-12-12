@@ -32,7 +32,10 @@ jobs:
         run: npm i
 
       - name: Initialize Splice Submodule
-        run: git submodule update --init --depth 1 libs/splice
+        run: |
+          rm -rf libs/splice .git/modules/libs/splice .git/modules/splice
+          git submodule sync --recursive
+          git submodule update --init --depth 1 libs/splice
 
       - name: Build package
         run: npm run build

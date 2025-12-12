@@ -36,7 +36,7 @@ export class HttpClient {
       if (axios.isAxiosError(error)) {
         await this.logRequestResponse(url, { method: 'GET' }, error.response?.data ?? error.message);
       }
-      throw this.handleRequestError(error);
+      throw this.handleRequestError(error, { method: 'GET', url });
     }
   }
 
@@ -63,7 +63,7 @@ export class HttpClient {
       if (axios.isAxiosError(error)) {
         await this.logRequestResponse(url, { method: 'POST', data }, error.response?.data ?? error.message);
       }
-      throw this.handleRequestError(error);
+      throw this.handleRequestError(error, { method: 'POST', url });
     }
   }
 
@@ -89,7 +89,7 @@ export class HttpClient {
       if (axios.isAxiosError(error)) {
         await this.logRequestResponse(url, { method: 'DELETE' }, error.response?.data ?? error.message);
       }
-      throw this.handleRequestError(error);
+      throw this.handleRequestError(error, { method: 'DELETE', url });
     }
   }
 
@@ -121,7 +121,7 @@ export class HttpClient {
       if (axios.isAxiosError(error)) {
         await this.logRequestResponse(url, { method: 'PATCH', data }, error.response?.data ?? error.message);
       }
-      throw this.handleRequestError(error);
+      throw this.handleRequestError(error, { method: 'PATCH', url });
     }
   }
 
@@ -156,12 +156,13 @@ export class HttpClient {
     }
   }
 
-  private handleRequestError(error: unknown): Error {
+  private handleRequestError(error: unknown, request?: { method: 'GET' | 'POST' | 'DELETE' | 'PATCH'; url: string }): Error {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
       const data = error.response?.data ?? {};
       const { code } = data as { code?: string };
-      const msg = code ? `HTTP ${status}: ${code}` : `HTTP ${status}`;
+      const requestPrefix = request ? `${request.method} ${request.url} - ` : '';
+      const msg = code ? `${requestPrefix}HTTP ${status}: ${code}` : `${requestPrefix}HTTP ${status}`;
       const err = new ApiError(msg, status, error.response?.statusText) as ApiError & { response: unknown };
       err.response = data;
       return err;
