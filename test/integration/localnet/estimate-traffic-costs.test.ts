@@ -52,11 +52,21 @@ describe('LocalNet Interactive Submission traffic cost estimation', () => {
     }
 
     // 4) Estimate traffic cost for the prepared transaction.
-    const estimate = await testClients.ledgerJsonApi.interactiveSubmissionEstimateTrafficCosts({
-      preparedTransaction: prepareResp.preparedTransaction,
-      hashingSchemeVersion: prepareResp.hashingSchemeVersion,
-      userId: 'ledger-api-user',
-    });
+    let estimate: unknown;
+    try {
+      estimate = await testClients.ledgerJsonApi.interactiveSubmissionEstimateTrafficCosts({
+        preparedTransaction: prepareResp.preparedTransaction,
+        hashingSchemeVersion: prepareResp.hashingSchemeVersion,
+        userId: 'ledger-api-user',
+      });
+    } catch (e) {
+      // Ensure we get actionable output in CI even when the endpoint 404s.
+      console.error('interactiveSubmissionEstimateTrafficCosts failed:', e);
+      if (e && typeof e === 'object' && 'response' in e) {
+        console.error('interactiveSubmissionEstimateTrafficCosts error response:', JSON.stringify((e as { response?: unknown }).response));
+      }
+      throw e;
+    }
 
     // Log the full response so we can lock down exact expectations (and understand units) in CI output.
     console.log('interactiveSubmissionEstimateTrafficCosts:', JSON.stringify(estimate));
