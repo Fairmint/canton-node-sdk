@@ -1,6 +1,9 @@
 import { testClients } from '../../setup';
 
-describe('LocalNet GetVersion', () => {
+const describeLocalnet =
+  process.env['RUN_LOCALNET_INTEGRATION_TESTS'] === '1' ? describe : describe.skip;
+
+describeLocalnet('LocalNet GetVersion', () => {
   it('getVersion', async () => {
     const response = await testClients.ledgerJsonApi.getVersion();
 

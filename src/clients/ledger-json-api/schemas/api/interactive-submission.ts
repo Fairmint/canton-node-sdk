@@ -217,6 +217,29 @@ export const InteractiveSubmissionExecuteRequestSchema = z.object({
 /** Interactive submission execute response. */
 export const InteractiveSubmissionExecuteResponseSchema = z.object({});
 
+/** Interactive submission estimate traffic costs request. */
+export const InteractiveSubmissionEstimateTrafficCostsRequestSchema = z.object({
+  /** Prepared transaction to be submitted (typically from `prepare`). */
+  preparedTransaction: z.string(),
+  /**
+   * Hashing scheme version used for the prepared transaction.
+   * Optional because the server can typically infer it from the prepared transaction metadata.
+   */
+  hashingSchemeVersion: z.string().optional(),
+  /** User ID (optional). */
+  userId: z.string().optional(),
+});
+
+/** Interactive submission estimate traffic costs response. */
+export const InteractiveSubmissionEstimateTrafficCostsResponseSchema = z.object({
+  /**
+   * Estimated traffic cost for submitting the prepared transaction.
+   *
+   * Units are determined by the participant (typically "traffic bytes").
+   */
+  trafficCost: z.number(),
+});
+
 // Export types
 export type InteractiveSubmissionAllocatePartyRequest = z.infer<typeof InteractiveSubmissionAllocatePartyRequestSchema>;
 export type InteractiveSubmissionAllocatePartyResponse = z.infer<
@@ -230,3 +253,9 @@ export type InteractiveSubmissionPrepareRequest = z.infer<typeof InteractiveSubm
 export type InteractiveSubmissionPrepareResponse = z.infer<typeof InteractiveSubmissionPrepareResponseSchema>;
 export type InteractiveSubmissionExecuteRequest = z.infer<typeof InteractiveSubmissionExecuteRequestSchema>;
 export type InteractiveSubmissionExecuteResponse = z.infer<typeof InteractiveSubmissionExecuteResponseSchema>;
+export type InteractiveSubmissionEstimateTrafficCostsRequest = z.infer<
+  typeof InteractiveSubmissionEstimateTrafficCostsRequestSchema
+>;
+export type InteractiveSubmissionEstimateTrafficCostsResponse = z.infer<
+  typeof InteractiveSubmissionEstimateTrafficCostsResponseSchema
+>;
