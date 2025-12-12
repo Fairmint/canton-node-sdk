@@ -4,18 +4,21 @@ describe('LocalNet GetMemberTrafficStatus', () => {
   it('should get traffic status for current party', async () => {
     const response = await testClients.validatorApi.getMemberTrafficStatus();
 
-    // Verify response structure
-    expect(response).toHaveProperty('traffic_status');
-    expect(response.traffic_status).toHaveProperty('actual');
-    expect(response.traffic_status).toHaveProperty('target');
-    expect(response.traffic_status.actual).toHaveProperty('total_consumed');
-    expect(response.traffic_status.actual).toHaveProperty('total_limit');
-    expect(response.traffic_status.target).toHaveProperty('total_purchased');
+    // Log the full response for debugging
+    console.log('Traffic Status Response:', JSON.stringify(response, null, 2));
 
-    // Verify types
-    expect(typeof response.traffic_status.actual.total_consumed).toBe('number');
-    expect(typeof response.traffic_status.actual.total_limit).toBe('number');
-    expect(typeof response.traffic_status.target.total_purchased).toBe('number');
+    // Verify full response structure
+    expect(response).toEqual({
+      traffic_status: {
+        actual: {
+          total_consumed: expect.any(Number),
+          total_limit: expect.any(Number),
+        },
+        target: {
+          total_purchased: expect.any(Number),
+        },
+      },
+    });
   });
 
   it('should get traffic status with optional parameters', async () => {
@@ -28,8 +31,18 @@ describe('LocalNet GetMemberTrafficStatus', () => {
       memberId: partyId,
     });
 
-    expect(response).toHaveProperty('traffic_status');
-    expect(response.traffic_status.actual).toHaveProperty('total_consumed');
-    expect(response.traffic_status.actual).toHaveProperty('total_limit');
+    console.log('Traffic Status Response (with params):', JSON.stringify(response, null, 2));
+
+    expect(response).toEqual({
+      traffic_status: {
+        actual: {
+          total_consumed: expect.any(Number),
+          total_limit: expect.any(Number),
+        },
+        target: {
+          total_purchased: expect.any(Number),
+        },
+      },
+    });
   });
 });
