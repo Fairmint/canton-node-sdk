@@ -20,6 +20,7 @@ const eslintConfig = [
       '**/*.example.ts',
       '**/*.js',
       '**/*.mjs',
+      '**/libs/**',
       '**/cn-quickstart/**',
     ],
   },
