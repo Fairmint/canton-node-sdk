@@ -51,6 +51,7 @@
     "prepublishOnly": "npm run prepack",
     "revoke-user-rights": "tsx scripts/revoke-user-rights.ts",
     "test": "jest",
+    "test:integration": "RUN_INTEGRATION_TESTS=true jest",
     "test:watch": "jest --watch"
   },
   "dependencies": {

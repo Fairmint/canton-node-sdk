@@ -11,6 +11,7 @@
 ## Key commands
 
 - `yarn lint && yarn build && yarn test`
+- `RUN_INTEGRATION_TESTS=true yarn test`
 - `npx tsc --noEmit`
 
 ## Testing policy
@@ -19,7 +20,14 @@
 
 - Do not comment out tests.
 - Do not add ignore patterns to hide failures.
-- If a test has prerequisites (e.g. LocalNet), document the prerequisite and keep the test running.
+- If a test has prerequisites (e.g. LocalNet), document the prerequisite and keep the test running in CI.
+
+## PR focus (keep changes targeted)
+
+Keep PRs targeted to the task at hand.
+
+- Avoid unrelated refactors, sweeping reformatting, or test rewrites “while we’re here”.
+- If you notice adjacent issues, **call them out as follow-ups** to tackle in a separate PR.
 
 ## Repo pointers
 

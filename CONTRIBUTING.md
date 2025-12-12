@@ -4,7 +4,10 @@
 
 - **Read**: `README.md` (human overview) and `llms.txt` (AI context + links).
 - **Install**: `npm install`
-- **Before opening a PR**: run `yarn lint && yarn build && yarn test` and `npx tsc --noEmit`.
+- **Before opening a PR**:
+  - `yarn lint && yarn build && yarn test`
+  - `RUN_INTEGRATION_TESTS=true yarn test` (requires LocalNet prerequisites)
+  - `npx tsc --noEmit`
 
 ## Documentation (minimal requirements)
 
@@ -25,7 +28,7 @@ Update documentation when you:
 
 - Don’t comment out tests or add ignore patterns to hide failures.
 - Don’t change test config/CI to avoid running tests.
-- If a test needs prerequisites (e.g. LocalNet), document the prerequisite and keep the test running.
+- If a test needs prerequisites (e.g. LocalNet), document the prerequisite and keep the test running (CI should provide prerequisites).
 
 ## Publishing
 
