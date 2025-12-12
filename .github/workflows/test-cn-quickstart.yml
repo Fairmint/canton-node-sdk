@@ -82,7 +82,12 @@ jobs:
       - name: Initialize Submodules
         if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
         run: |
-          git submodule update --init --depth 1 libs/splice
+          # The cache restores `libs/splice` without `.git/modules`, which can leave the submodule
+          # in a broken state when the cache key changes (e.g. dependency bumps).
+          # Ensure a clean slate before initializing.
+          rm -rf libs/splice .git/modules/libs/splice
+          git submodule sync -- libs/splice
+          git submodule update --init --depth 1 --force libs/splice
           git submodule update --init --recursive libs/cn-quickstart
 
       - name: Setup CN-Quickstart
