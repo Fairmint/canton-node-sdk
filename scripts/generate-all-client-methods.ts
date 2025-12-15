@@ -23,6 +23,12 @@ const CLIENTS: ClientConfig[] = [
     operationsDir: path.join(__dirname, '../src/clients/ledger-json-api/operations/v2'),
     baseClass: 'BaseClient',
   },
+  {
+    name: 'ScanApiClient',
+    clientFile: path.join(__dirname, '../src/clients/scan-api/ScanApiClient.generated.ts'),
+    operationsDir: path.join(__dirname, '../src/clients/scan-api/operations/v0'),
+    baseClass: 'BaseClient',
+  },
 ];
 
 // Recursively get all .ts files in a directory
@@ -46,17 +52,23 @@ type OperationInfo =
   | { kind: 'ws'; operationName: string; paramsType: string; requestType: string; messageType: string };
 
 // Extract operation info from a file (supports REST, WebSocket, and class-based operations)
-function extractOperationInfo(fileContent: string): OperationInfo | null {
+function extractOperationInfos(fileContent: string): OperationInfo[] {
+  const results: OperationInfo[] = [];
+
   // REST operations: createApiOperation or createSimpleApiOperation
-  const apiRegex = /export const (\w+) = create(?:Simple)?ApiOperation<\s*([^,]+),\s*([^>]+)\s*>/s;
-  const apiMatch = apiRegex.exec(fileContent);
-  if (apiMatch?.[1] && apiMatch[2] && apiMatch[3]) {
-    return {
-      kind: 'api',
-      operationName: apiMatch[1],
-      paramsType: apiMatch[2].trim(),
-      responseType: apiMatch[3].trim(),
-    };
+  const apiRegex = /export const (\w+)\s*=\s*create(?:Simple)?ApiOperation<\s*([^,]+),\s*([^>]+)\s*>/gs;
+  for (const match of fileContent.matchAll(apiRegex)) {
+    const operationName = match[1];
+    const paramsType = match[2];
+    const responseType = match[3];
+    if (operationName && paramsType && responseType) {
+      results.push({
+        kind: 'api',
+        operationName,
+        paramsType: paramsType.trim(),
+        responseType: responseType.trim(),
+      });
+    }
   }
 
   // Class-based operations: export class OperationName { ... execute(...) }
@@ -64,13 +76,13 @@ function extractOperationInfo(fileContent: string): OperationInfo | null {
   const classMatch = classRegex.exec(fileContent);
   if (classMatch?.[1]) {
     const methodName = classMatch[2]; // 'execute' or 'connect'
-    return {
+    results.push({
       kind: 'api',
       operationName: classMatch[1],
       paramsType: 'unknown',
       responseType: 'unknown',
       ...(methodName && { methodName }), // Only include if defined
-    };
+    });
   }
 
   // WebSocket operations: createWebSocketOperation<Params, RequestMessage, InboundMessage>
@@ -80,16 +92,16 @@ function extractOperationInfo(fileContent: string): OperationInfo | null {
   const wsNameRegex = /export const (\w+)\s*=\s*createWebSocketOperation</s;
   const wsNameMatch = wsNameRegex.exec(fileContent);
   if (wsNameMatch?.[1]) {
-    return {
+    results.push({
       kind: 'ws',
       operationName: wsNameMatch[1],
       paramsType: 'unknown',
       requestType: 'unknown',
       messageType: 'unknown',
-    };
+    });
   }
 
-  return null;
+  return results;
 }
 
 function relativeImportPath(from: string, to: string): string {
@@ -151,14 +163,12 @@ function generateClientFile(clientConfig: ClientConfig): void {
   const allOps = files
     .map((file) => {
       const content = fs.readFileSync(file, 'utf8');
-      const info = extractOperationInfo(content);
-      if (!info) return null;
       return {
-        ...info,
+        infos: extractOperationInfos(content),
         importPath: relativeImportPath(clientFile, file),
       };
     })
-    .filter(Boolean) as Array<OperationInfo & { importPath: string }>;
+    .flatMap((item) => item.infos.map((info) => ({ ...info, importPath: item.importPath })));
 
   if (allOps.length === 0) {
     return;
@@ -175,7 +185,13 @@ function generateClientFile(clientConfig: ClientConfig): void {
 
   // Fix API type for ledger client
   const apiType =
-    name === 'LedgerJsonApiClient' ? 'LEDGER_JSON_API' : name === 'ValidatorApiClient' ? 'VALIDATOR_API' : undefined;
+    name === 'LedgerJsonApiClient'
+      ? 'LEDGER_JSON_API'
+      : name === 'ValidatorApiClient'
+        ? 'VALIDATOR_API'
+        : name === 'ScanApiClient'
+          ? 'SCAN_API'
+          : undefined;
 
   const needsWsImports = allOps.some((op) => op.kind === 'ws');
   const wsImports = needsWsImports ? `\nimport { WebSocketHandlers, WebSocketSubscription } from '../../core/ws';` : '';

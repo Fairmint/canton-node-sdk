@@ -3,14 +3,29 @@ import { ApiError, NetworkError } from '../errors';
 import { type Logger } from '../logging';
 import { type RequestConfig } from '../types';
 
+export interface HttpClientRetryConfig {
+  /** Number of retries after the initial attempt */
+  maxRetries: number;
+  /** Delay between retries */
+  delayMs: number;
+}
+
 /** Handles HTTP requests with authentication, logging, and error handling */
 export class HttpClient {
   private readonly axiosInstance: AxiosInstance;
   private readonly logger: Logger | undefined;
+  private retryConfig: HttpClientRetryConfig = { maxRetries: 3, delayMs: 6000 };
 
   constructor(logger?: Logger) {
     this.axiosInstance = axios.create();
     this.logger = logger;
+  }
+
+  public setRetryConfig(config: Partial<HttpClientRetryConfig>): void {
+    this.retryConfig = {
+      maxRetries: config.maxRetries ?? this.retryConfig.maxRetries,
+      delayMs: config.delayMs ?? this.retryConfig.delayMs,
+    };
   }
 
   public async makeGetRequest<T>(url: string, config: RequestConfig = {}, _retryCount = 0): Promise<T> {
@@ -22,13 +37,15 @@ export class HttpClient {
       return response.data;
     } catch (error) {
       // Attempt up to 3 retries for transient errors
-      if (_retryCount < 3 && this.isRetryableError(error)) {
+      if (_retryCount < this.retryConfig.maxRetries && this.isRetryableError(error)) {
         await this.logRequestResponse(
           url,
           { method: 'GET', retry: _retryCount + 1 },
-          `Retrying after error (attempt ${_retryCount + 1}/3): ${axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)}`
+          `Retrying after error (attempt ${_retryCount + 1}/${this.retryConfig.maxRetries}): ${
+            axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)
+          }`
         );
-        await this.sleep(6000);
+        await this.sleep(this.retryConfig.delayMs);
         return this.makeGetRequest(url, config, _retryCount + 1);
       }
 
@@ -48,13 +65,15 @@ export class HttpClient {
       await this.logRequestResponse(url, { method: 'POST', headers, data }, response.data);
       return response.data;
     } catch (error) {
-      if (_retryCount < 3 && this.isRetryableError(error)) {
+      if (_retryCount < this.retryConfig.maxRetries && this.isRetryableError(error)) {
         await this.logRequestResponse(
           url,
           { method: 'POST', retry: _retryCount + 1, data },
-          `Retrying after error (attempt ${_retryCount + 1}/3): ${axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)}`
+          `Retrying after error (attempt ${_retryCount + 1}/${this.retryConfig.maxRetries}): ${
+            axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)
+          }`
         );
-        await this.sleep(6000);
+        await this.sleep(this.retryConfig.delayMs);
         const retryData = this.prepareDataForRetry(data);
         return this.makePostRequest(url, retryData, config, _retryCount + 1);
       }
@@ -75,13 +94,15 @@ export class HttpClient {
       await this.logRequestResponse(url, { method: 'DELETE', headers }, response.data);
       return response.data;
     } catch (error) {
-      if (_retryCount < 3 && this.isRetryableError(error)) {
+      if (_retryCount < this.retryConfig.maxRetries && this.isRetryableError(error)) {
         await this.logRequestResponse(
           url,
           { method: 'DELETE', retry: _retryCount + 1 },
-          `Retrying after error (attempt ${_retryCount + 1}/3): ${axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)}`
+          `Retrying after error (attempt ${_retryCount + 1}/${this.retryConfig.maxRetries}): ${
+            axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)
+          }`
         );
-        await this.sleep(6000);
+        await this.sleep(this.retryConfig.delayMs);
         return this.makeDeleteRequest(url, config, _retryCount + 1);
       }
 
@@ -106,13 +127,15 @@ export class HttpClient {
       await this.logRequestResponse(url, { method: 'PATCH', headers, data }, response.data);
       return response.data;
     } catch (error) {
-      if (_retryCount < 3 && this.isRetryableError(error)) {
+      if (_retryCount < this.retryConfig.maxRetries && this.isRetryableError(error)) {
         await this.logRequestResponse(
           url,
           { method: 'PATCH', retry: _retryCount + 1, data },
-          `Retrying after error (attempt ${_retryCount + 1}/3): ${axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)}`
+          `Retrying after error (attempt ${_retryCount + 1}/${this.retryConfig.maxRetries}): ${
+            axios.isAxiosError(error) ? (error.response?.status ?? 'network error') : String(error)
+          }`
         );
-        await this.sleep(6000);
+        await this.sleep(this.retryConfig.delayMs);
         const retryData = this.prepareDataForRetry(data);
         return this.makePatchRequest(url, retryData, config, _retryCount + 1);
       }
