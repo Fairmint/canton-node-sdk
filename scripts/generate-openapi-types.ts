@@ -13,7 +13,10 @@ function ensureDirectoryExists(filePath: string): void {
 }
 
 function generateForFile(yamlPath: string): void {
-  const relativePath = yamlPath.replace(/^libs\/splice\//, '').replace(/\.yaml$/, '.ts');
+  const relativePath = yamlPath
+    .replace(/^libs\/splice\//, '')
+    .replace(/^specs\//, '')
+    .replace(/\.yaml$/, '.ts');
   const outputPath = path.join('src/generated', relativePath);
   ensureDirectoryExists(outputPath);
 
@@ -29,9 +32,12 @@ function main(): void {
   const openapiRootFiles = glob.sync('libs/splice/**/openapi.yaml', {
     nodir: true,
   });
+  const specsFiles = glob.sync('specs/scan.yaml', {
+    nodir: true,
+  });
 
   // Merge and de-duplicate
-  const allFiles = Array.from(new Set([...openapiUnderDir, ...openapiRootFiles]));
+  const allFiles = Array.from(new Set([...openapiUnderDir, ...openapiRootFiles, ...specsFiles]));
 
   if (allFiles.length === 0) {
     return;

@@ -1,0 +1,21 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { z } from 'zod';
+import { createApiOperation } from '../../../../../../core';
+import { type paths } from '../../../../../../generated/scan';
+
+export interface GetUpdateByIdV1Params {
+  update_id: string;
+  daml_value_encoding?: any;
+}
+
+export const GetUpdateByIdV1 = createApiOperation<GetUpdateByIdV1Params, paths['/v1/updates/{update_id}']['get']['responses']['200']['content']['application/json']>({
+  paramsSchema: z.any(),
+  method: 'GET',
+  buildUrl: (params, apiUrl) => {
+    let url = `${apiUrl}/v1/updates/${params.update_id}`;
+    const queryParams = new URLSearchParams();
+    if (params['daml_value_encoding'] !== undefined) queryParams.append('daml_value_encoding', String(params['daml_value_encoding']));
+    if (Array.from(queryParams).length > 0) url += `?${queryParams.toString()}`;
+    return url;
+  },
+});

@@ -8,6 +8,7 @@ interface ClientConfig {
   clientFile: string;
   operationsDir: string;
   baseClass: string;
+  baseClassImportPath?: string;
 }
 
 const CLIENTS: ClientConfig[] = [
@@ -22,6 +23,13 @@ const CLIENTS: ClientConfig[] = [
     clientFile: path.join(__dirname, '../src/clients/ledger-json-api/LedgerJsonApiClient.generated.ts'),
     operationsDir: path.join(__dirname, '../src/clients/ledger-json-api/operations/v2'),
     baseClass: 'BaseClient',
+  },
+  {
+    name: 'ScanClient',
+    clientFile: path.join(__dirname, '../src/clients/scan/ScanClient.generated.ts'),
+    operationsDir: path.join(__dirname, '../src/clients/scan/operations'),
+    baseClass: 'ScanBaseClient',
+    baseClassImportPath: './ScanBaseClient',
   },
 ];
 
@@ -170,17 +178,24 @@ function generateClientFile(clientConfig: ClientConfig): void {
   const opImports = generateOperationImports(allOps);
 
   // 3. Generate the complete client file content
-  const baseClassImport = baseClass === 'SimpleBaseClient' ? 'SimpleBaseClient' : 'BaseClient';
-  const baseClassPath = baseClass === 'SimpleBaseClient' ? '../../core' : '../../core';
+  const baseClassImport = clientConfig.baseClass;
+  const baseClassPath = clientConfig.baseClassImportPath ?? (baseClass === 'SimpleBaseClient' ? '../../core' : '../../core');
 
   // Fix API type for ledger client
   const apiType =
-    name === 'LedgerJsonApiClient' ? 'LEDGER_JSON_API' : name === 'ValidatorApiClient' ? 'VALIDATOR_API' : undefined;
+    name === 'LedgerJsonApiClient'
+      ? 'LEDGER_JSON_API'
+      : name === 'ValidatorApiClient'
+        ? 'VALIDATOR_API'
+        : name === 'ScanClient'
+          ? 'SCAN_API'
+          : undefined;
 
   const needsWsImports = allOps.some((op) => op.kind === 'ws');
   const wsImports = needsWsImports ? `\nimport { WebSocketHandlers, WebSocketSubscription } from '../../core/ws';` : '';
 
-  const content = `import { ${baseClassImport}, ClientConfig } from '${baseClassPath}';
+  const content = `import { ClientConfig } from '../../core';
+import { ${baseClassImport} } from '${baseClassPath}';
 ${opImports}
 ${wsImports}
 
