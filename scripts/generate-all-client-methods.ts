@@ -8,15 +8,8 @@ interface ClientConfig {
   clientFile: string;
   operationsDir: string;
   baseClass: string;
-  /** Multiple operation directories to scan */
-  operationsDirs?: string[];
-  /** Custom base class import path */
   baseClassImportPath?: string;
-  /** Custom config type name */
   configTypeName?: string;
-  /** Custom constructor parameter name */
-  constructorParamName?: string;
-  /** API type to pass to super constructor */
   apiType?: string;
 }
 
@@ -26,12 +19,14 @@ const CLIENTS: ClientConfig[] = [
     clientFile: path.join(__dirname, '../src/clients/validator-api/ValidatorApiClient.generated.ts'),
     operationsDir: path.join(__dirname, '../src/clients/validator-api/operations/v0'),
     baseClass: 'BaseClient',
+    apiType: 'VALIDATOR_API',
   },
   {
     name: 'LedgerJsonApiClient',
     clientFile: path.join(__dirname, '../src/clients/ledger-json-api/LedgerJsonApiClient.generated.ts'),
     operationsDir: path.join(__dirname, '../src/clients/ledger-json-api/operations/v2'),
     baseClass: 'BaseClient',
+    apiType: 'LEDGER_JSON_API',
   },
   {
     name: 'ScanApiClient',
@@ -40,7 +35,6 @@ const CLIENTS: ClientConfig[] = [
     baseClass: 'ScanApiClientBase',
     baseClassImportPath: './ScanApiClientBase',
     configTypeName: 'ScanApiConfig',
-    constructorParamName: 'config',
   },
 ];
 
@@ -82,20 +76,17 @@ function extractOperationInfo(fileContent: string): OperationInfo | null {
   const classRegex = /export class (\w+)[^{]*{[\s\S]*?(?:public\s+)?async (execute|connect)\(/s;
   const classMatch = classRegex.exec(fileContent);
   if (classMatch?.[1]) {
-    const methodName = classMatch[2]; // 'execute' or 'connect'
+    const methodName = classMatch[2];
     return {
       kind: 'api',
       operationName: classMatch[1],
       paramsType: 'unknown',
       responseType: 'unknown',
-      ...(methodName && { methodName }), // Only include if defined
+      ...(methodName && { methodName }),
     };
   }
 
-  // WebSocket operations: createWebSocketOperation<Params, RequestMessage, InboundMessage>
-  // Note: Generic types can contain nested angle brackets (e.g., z.infer<...>),
-  // which are hard to parse reliably with a simple regex. We only need the
-  // operation name for generation, so match by name and ignore generic details.
+  // WebSocket operations
   const wsNameRegex = /export const (\w+)\s*=\s*createWebSocketOperation</s;
   const wsNameMatch = wsNameRegex.exec(fileContent);
   if (wsNameMatch?.[1]) {
@@ -130,7 +121,6 @@ function generateMethodDeclarations(ops: Array<OperationInfo & { importPath: str
         }
         return `  public ${methodName}!: (params: ${methodParamsType}) => ${methodReturnType};`;
       }
-      // WebSocket subscribe methods
       const paramsType = `Parameters<InstanceType<typeof ${op.operationName}>['subscribe']>[0]`;
       const messageType = `Parameters<Parameters<InstanceType<typeof ${op.operationName}>['subscribe']>[1]['onMessage']>[0]`;
       return `  public ${methodName}!: (params: ${paramsType}, handlers: WebSocketHandlers<${messageType}>) => Promise<WebSocketSubscription>;`;
@@ -156,66 +146,45 @@ function generateOperationImports(opFiles: Array<{ operationName: string; import
   return opFiles.map((op) => `import { ${op.operationName} } from '${op.importPath}';`).join('\n');
 }
 
-// Convert operation name to method name (e.g., GetEventsByContractId -> getEventsByContractId)
 function operationNameToMethodName(operationName: string): string {
   return operationName.charAt(0).toLowerCase() + operationName.slice(1);
 }
 
-function generateClientFile(clientConfig: ClientConfig): void {
-  const { name, clientFile, operationsDir, baseClass, operationsDirs, baseClassImportPath, configTypeName, constructorParamName } = clientConfig;
-
-  // 1. Scan all operation files from all operation directories
-  const dirs = operationsDirs ?? [operationsDir];
-  const files = dirs.flatMap((dir) => getAllTsFiles(dir));
+function generateClientFile(config: ClientConfig): void {
+  const files = getAllTsFiles(config.operationsDir);
 
   const allOps = files
     .map((file) => {
       const content = fs.readFileSync(file, 'utf8');
       const info = extractOperationInfo(content);
       if (!info) return null;
-      return {
-        ...info,
-        importPath: relativeImportPath(clientFile, file),
-      };
+      return { ...info, importPath: relativeImportPath(config.clientFile, file) };
     })
     .filter(Boolean) as Array<OperationInfo & { importPath: string }>;
 
-  if (allOps.length === 0) {
-    return;
-  }
+  if (allOps.length === 0) return;
 
-  // 2. Generate method declarations, implementations, and imports
   const methodDecls = generateMethodDeclarations(allOps);
   const methodImpls = generateMethodImplementations(allOps);
   const opImports = generateOperationImports(allOps);
 
-  // 3. Generate the complete client file content
-  const baseClassImport = baseClass;
-  const baseClassPath = baseClassImportPath ?? (baseClass === 'SimpleBaseClient' ? '../../core' : '../../core');
-  const configType = configTypeName ?? 'ClientConfig';
-  const paramName = constructorParamName ?? 'clientConfig';
-
-  // Fix API type for ledger client
-  const apiType = clientConfig.apiType ??
-    (name === 'LedgerJsonApiClient' ? 'LEDGER_JSON_API' : name === 'ValidatorApiClient' ? 'VALIDATOR_API' : undefined);
+  const baseClassPath = config.baseClassImportPath ?? '../../core';
+  const configType = config.configTypeName ?? 'ClientConfig';
+  const paramOptional = config.apiType ? '?' : '';
+  const superCall = config.apiType ? `super('${config.apiType}', config);` : `super(config);`;
 
   const needsWsImports = allOps.some((op) => op.kind === 'ws');
   const wsImports = needsWsImports ? `\nimport { WebSocketHandlers, WebSocketSubscription } from '../../core/ws';` : '';
 
-  // For ScanApiClient, we don't pass apiType to super
-  const superCall = apiType ? `super('${apiType}', ${paramName});` : `super(${paramName});`;
-  // Make param optional for clients that use BaseClient (have apiType)
-  const paramOptional = apiType ? '?' : '';
-
-  const content = `import { ${baseClassImport}, ${configType} } from '${baseClassPath}';
+  const content = `import { ${config.baseClass}, ${configType} } from '${baseClassPath}';
 ${opImports}
 ${wsImports}
 
-/** Client for interacting with Canton's ${name.replace('Client', '')} */
-export class ${name} extends ${baseClass} {
+/** Client for interacting with Canton's ${config.name.replace('Client', '')} */
+export class ${config.name} extends ${config.baseClass} {
 ${methodDecls}
 
-  constructor(${paramName}${paramOptional}: ${configType}) {
+  constructor(config${paramOptional}: ${configType}) {
     ${superCall}
     this.initializeMethods();
   }
@@ -226,21 +195,18 @@ ${methodImpls}
 }
 `;
 
-  // 4. Write the generated file
-  fs.writeFileSync(clientFile, content);
+  fs.writeFileSync(config.clientFile, content);
 }
 
 function generateAllClients(): void {
   console.log('Generating all client files...');
-
-  CLIENTS.forEach((clientConfig) => {
+  CLIENTS.forEach((config) => {
     try {
-      generateClientFile(clientConfig);
-    } catch (_error) {
-      console.error(`Error generating ${clientConfig.name}:`, _error);
+      generateClientFile(config);
+    } catch (error) {
+      console.error(`Error generating ${config.name}:`, error);
     }
   });
-
   console.log('Client generation complete');
 }
 

@@ -1,21 +1,15 @@
-import { z } from 'zod';
 import { type operations } from '../../../../../generated/apps/scan/src/main/openapi/scan';
 import { ScanApiOperation } from '../../../ScanApiOperation';
 
-const ParamsSchema = z
-  .object({
-    /** A `next_page_token` from a prior response; if absent, return the first page */
-    after: z.number().optional(),
-    /** Maximum number of elements to return, 1000 by default */
-    limit: z.number().optional(),
-  })
-  .optional();
+interface Params {
+  after?: number;
+  limit?: number;
+}
 
-type Params = z.infer<typeof ParamsSchema>;
 type Response = operations['listValidatorLicenses']['responses']['200']['content']['application/json'];
 
 /** List all validators currently approved by members of the DSO */
-export class ListValidatorLicenses extends ScanApiOperation<Params, Response> {
+export class ListValidatorLicenses extends ScanApiOperation<Params | undefined, Response> {
   async execute(params?: Params): Promise<Response> {
     const validated = params ?? {};
     const queryParts: string[] = [];
