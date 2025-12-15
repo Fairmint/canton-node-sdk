@@ -1,14 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from 'zod';
 import { createApiOperation } from '../../../../../../core';
 import { type paths } from '../../../../../../generated/scan';
 
-export interface GetMigrationInfoParams {
-  body: any;
-}
-
-export const GetMigrationInfo = createApiOperation<GetMigrationInfoParams, paths['/v0/backfilling/migration-info']['post']['responses']['200']['content']['application/json']>({
-  paramsSchema: z.any(),
+export const GetMigrationInfo = createApiOperation<{ body: paths['/v0/backfilling/migration-info']['post']['requestBody']['content']['application/json'] }, paths['/v0/backfilling/migration-info']['post']['responses']['200']['content']['application/json']>({
+  paramsSchema: z.object({
+    body: z.unknown()
+  }),
   method: 'POST',
   buildUrl: (params, apiUrl) => {
     const url = `${apiUrl}/v0/backfilling/migration-info`;
