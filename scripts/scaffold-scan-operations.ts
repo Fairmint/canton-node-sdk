@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 
-const SPEC_PATH = 'specs/scan.yaml';
+const SPEC_PATH = 'libs/splice/apps/scan/src/main/openapi/scan.yaml';
 const OUTPUT_DIR = 'src/clients/scan/operations';
 
 // Helper to convert kebab-case/snake_case to CamelCase
