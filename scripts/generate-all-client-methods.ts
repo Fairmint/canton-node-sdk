@@ -8,6 +8,16 @@ interface ClientConfig {
   clientFile: string;
   operationsDir: string;
   baseClass: string;
+  /** Multiple operation directories to scan */
+  operationsDirs?: string[];
+  /** Custom base class import path */
+  baseClassImportPath?: string;
+  /** Custom config type name */
+  configTypeName?: string;
+  /** Custom constructor parameter name */
+  constructorParamName?: string;
+  /** API type to pass to super constructor */
+  apiType?: string;
 }
 
 const CLIENTS: ClientConfig[] = [
@@ -22,6 +32,15 @@ const CLIENTS: ClientConfig[] = [
     clientFile: path.join(__dirname, '../src/clients/ledger-json-api/LedgerJsonApiClient.generated.ts'),
     operationsDir: path.join(__dirname, '../src/clients/ledger-json-api/operations/v2'),
     baseClass: 'BaseClient',
+  },
+  {
+    name: 'ScanApiClient',
+    clientFile: path.join(__dirname, '../src/clients/scan-api/ScanApiClient.generated.ts'),
+    operationsDir: path.join(__dirname, '../src/clients/scan-api/operations'),
+    baseClass: 'ScanApiClientBase',
+    baseClassImportPath: './ScanApiClientBase',
+    configTypeName: 'ScanApiConfig',
+    constructorParamName: 'config',
   },
 ];
 
@@ -60,7 +79,7 @@ function extractOperationInfo(fileContent: string): OperationInfo | null {
   }
 
   // Class-based operations: export class OperationName { ... execute(...) }
-  const classRegex = /export class (\w+)[^{]*{[\s\S]*?public async (execute|connect)\(/s;
+  const classRegex = /export class (\w+)[^{]*{[\s\S]*?(?:public\s+)?async (execute|connect)\(/s;
   const classMatch = classRegex.exec(fileContent);
   if (classMatch?.[1]) {
     const methodName = classMatch[2]; // 'execute' or 'connect'
@@ -143,10 +162,11 @@ function operationNameToMethodName(operationName: string): string {
 }
 
 function generateClientFile(clientConfig: ClientConfig): void {
-  const { name, clientFile, operationsDir, baseClass } = clientConfig;
+  const { name, clientFile, operationsDir, baseClass, operationsDirs, baseClassImportPath, configTypeName, constructorParamName } = clientConfig;
 
-  // 1. Scan all operation files
-  const files = getAllTsFiles(operationsDir);
+  // 1. Scan all operation files from all operation directories
+  const dirs = operationsDirs ?? [operationsDir];
+  const files = dirs.flatMap((dir) => getAllTsFiles(dir));
 
   const allOps = files
     .map((file) => {
@@ -170,17 +190,24 @@ function generateClientFile(clientConfig: ClientConfig): void {
   const opImports = generateOperationImports(allOps);
 
   // 3. Generate the complete client file content
-  const baseClassImport = baseClass === 'SimpleBaseClient' ? 'SimpleBaseClient' : 'BaseClient';
-  const baseClassPath = baseClass === 'SimpleBaseClient' ? '../../core' : '../../core';
+  const baseClassImport = baseClass;
+  const baseClassPath = baseClassImportPath ?? (baseClass === 'SimpleBaseClient' ? '../../core' : '../../core');
+  const configType = configTypeName ?? 'ClientConfig';
+  const paramName = constructorParamName ?? 'clientConfig';
 
   // Fix API type for ledger client
-  const apiType =
-    name === 'LedgerJsonApiClient' ? 'LEDGER_JSON_API' : name === 'ValidatorApiClient' ? 'VALIDATOR_API' : undefined;
+  const apiType = clientConfig.apiType ??
+    (name === 'LedgerJsonApiClient' ? 'LEDGER_JSON_API' : name === 'ValidatorApiClient' ? 'VALIDATOR_API' : undefined);
 
   const needsWsImports = allOps.some((op) => op.kind === 'ws');
   const wsImports = needsWsImports ? `\nimport { WebSocketHandlers, WebSocketSubscription } from '../../core/ws';` : '';
 
-  const content = `import { ${baseClassImport}, ClientConfig } from '${baseClassPath}';
+  // For ScanApiClient, we don't pass apiType to super
+  const superCall = apiType ? `super('${apiType}', ${paramName});` : `super(${paramName});`;
+  // Make param optional for clients that use BaseClient (have apiType)
+  const paramOptional = apiType ? '?' : '';
+
+  const content = `import { ${baseClassImport}, ${configType} } from '${baseClassPath}';
 ${opImports}
 ${wsImports}
 
@@ -188,8 +215,8 @@ ${wsImports}
 export class ${name} extends ${baseClass} {
 ${methodDecls}
 
-  constructor(clientConfig?: ClientConfig) {
-    super('${apiType}', clientConfig);
+  constructor(${paramName}${paramOptional}: ${configType}) {
+    ${superCall}
     this.initializeMethods();
   }
 
