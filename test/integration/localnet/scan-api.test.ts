@@ -1,20 +1,15 @@
-import { ScanApiClient } from '../../../src';
+import { testClients } from '../../setup';
 
 /**
  * Integration tests for the Scan API client against localnet.
  *
- * These tests run against the cn-quickstart localnet which exposes
+ * These tests run against cn-quickstart localnet which exposes
  * the Scan API at http://scan.localhost:4000/api/scan
+ *
+ * @see https://github.com/digital-asset/cn-quickstart
  */
 describe('Scan API Client (localnet)', () => {
-  let client: ScanApiClient;
-
-  beforeAll(() => {
-    client = new ScanApiClient({
-      network: 'localnet',
-      endpoints: [{ name: 'localnet', url: 'http://scan.localhost:4000' }],
-    });
-  });
+  const client = testClients.scanApi;
 
   describe('Health endpoints', () => {
     it('getVersion returns version info', async () => {
