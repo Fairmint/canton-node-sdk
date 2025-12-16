@@ -3,6 +3,11 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this
 repository.
 
+## Context
+
+**Read `llms.txt` first** for complete project context, architecture decisions,
+and coding conventions.
+
 ## Commands
 
 ### Build Commands
