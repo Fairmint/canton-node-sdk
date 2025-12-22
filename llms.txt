@@ -1,0 +1,128 @@
+# Canton Node SDK (`@fairmint/canton-node-sdk`)
+
+> Low-level TypeScript SDK for interacting with Canton blockchain nodes.
+
+## Quick Commands
+
+```bash
+npm run lint && npm run build && npm test   # After any change
+npm run build:core                          # Generate + compile only
+npm run test:watch                          # Dev mode
+```
+
+## Architecture
+
+### Client Hierarchy
+
+```
+BaseClient (OAuth2 auth)         SimpleBaseClient (no auth)
+     │                                   │
+     ├── LedgerJsonApiClient            └── LighthouseClient
+     ├── ValidatorApiClient
+     └── ScanApiClient
+```
+
+### Operation Pattern
+
+Each API endpoint is a class extending `ApiOperation` or `SimpleApiOperation`:
+
+```typescript
+// src/clients/ledger-json-api/operations/GetVersion.ts
+export class GetVersion extends ApiOperation<GetVersionRequest, GetVersionResponse> {
+  protected readonly path = '/version';
+  protected readonly method = 'GET';
+}
+```
+
+### Configuration
+
+Environment variables follow: `CANTON_{NETWORK}_{PROVIDER}_{SETTING}`
+
+```
+CANTON_DEVNET_5N_LEDGER_JSON_API_URI=https://...
+CANTON_DEVNET_5N_LEDGER_JSON_API_CLIENT_ID=...
+CANTON_DEVNET_5N_LEDGER_JSON_API_CLIENT_SECRET=...
+```
+
+Use `EnvLoader.getConfig()` to load programmatically.
+
+## File Structure
+
+```
+src/
+├── clients/
+│   ├── register.ts           # All client exports
+│   ├── ledger-json-api/      # Ledger JSON API client
+│   │   ├── LedgerJsonApiClient.ts
+│   │   ├── operations/       # One class per endpoint
+│   │   └── schemas/          # Zod schemas, generated types
+│   ├── validator-api/        # Validator API client
+│   └── scan-api/             # Scan API client
+├── utils/                    # Utility functions (createParty, etc.)
+├── auth/                     # AuthenticationManager (OAuth2)
+└── errors/                   # Custom error classes
+```
+
+## Adding a New API Client
+
+1. Add OpenAPI spec to `specs/`
+2. Run `npm run generate:openapi`
+3. Create client class extending `BaseClient` or `SimpleBaseClient`
+4. Implement operations in `operations/`
+5. Export from `src/clients/register.ts`
+
+## Adding a New Operation
+
+1. Create class in `src/clients/{api}/operations/`
+2. Extend `ApiOperation` or `SimpleApiOperation`
+3. Define `path`, `method`, request/response schemas
+4. Add to client class and export
+
+## Error Hierarchy
+
+```typescript
+CantonError                 // Base
+├── ConfigurationError      // Missing/invalid config
+├── AuthenticationError     // OAuth2 failures
+├── ApiError               // HTTP errors
+├── ValidationError        // Schema validation
+└── NetworkError           // Connection issues
+```
+
+## External Signing
+
+For user-controlled private keys (wallets):
+
+1. Generate keypair (`@stellar/stellar-base`)
+2. `createExternalParty()` - Onboard party
+3. `prepareExternalTransaction()` - Get hash to sign
+4. Sign with private key
+5. `executeExternalTransaction()` - Submit
+
+See [docs/EXTERNAL_SIGNING.md](docs/EXTERNAL_SIGNING.md) for details.
+
+## TypeScript Strictness
+
+- `noImplicitAny`, `noImplicitReturns`, `exactOptionalPropertyTypes`
+- Always provide explicit return types
+- Never use `any`
+
+## Testing
+
+- Unit tests in `test/unit/`
+- Integration tests require LocalNet: `npm run localnet:start`
+- Run specific test: `npm test path/to/test.spec.ts`
+
+## Related Repos
+
+| Repo | Purpose |
+|------|---------|
+| `ocp-canton-sdk` | High-level OCP SDK (uses this SDK) |
+| `canton` | Trading infrastructure, ADRs |
+| `open-captable-protocol-daml` | DAML contracts |
+
+## Docs
+
+- End-user docs: [sdk.canton.fairmint.com](https://sdk.canton.fairmint.com/)
+- API reference: `docs/` (Jekyll site)
+- External signing: [docs/EXTERNAL_SIGNING.md](docs/EXTERNAL_SIGNING.md)
