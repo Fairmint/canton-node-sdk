@@ -2,6 +2,15 @@
 
 > Low-level TypeScript SDK for interacting with Canton blockchain nodes.
 
+## Living Document
+
+**This file is a living document.** Update it automatically when:
+- A best practice or pattern is established during AI conversations
+- An important architectural or coding decision is made
+- The user communicates a preference that applies beyond the current task
+
+Keep content concise but comprehensive. Avoid verbosity—capture the essence.
+
 ## Quick Commands
 
 ```bash
