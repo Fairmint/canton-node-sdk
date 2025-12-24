@@ -17,7 +17,7 @@ When writing PR reviews, use this format:
 ```markdown
 ## Issues
 
-- **[File:Line]** Description of issue or improvement
+- **File:Line** Description of issue or improvement
 
 ---
 
@@ -29,4 +29,4 @@ When writing PR reviews, use this format:
 </details>
 ```
 
-Keep the visible portion brief and actionable. The collapsed section is for context if needed.
+Keep the visible portion brief and actionable. The collapsed section is for comprehensive details and rationale.
