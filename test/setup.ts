@@ -1,4 +1,4 @@
-import { LedgerJsonApiClient, ValidatorApiClient } from '../src';
+import { LedgerJsonApiClient, ScanApiClient, ValidatorApiClient } from '../src';
 
 /**
  * Global test clients - constructed once and shared across all tests
@@ -16,5 +16,9 @@ export const testClients = {
   }),
   validatorApi: new ValidatorApiClient({
     network: 'localnet',
+  }),
+  scanApi: new ScanApiClient({
+    network: 'localnet',
+    endpoints: [{ name: 'localnet', url: 'http://scan.localhost:4000' }],
   }),
 };
