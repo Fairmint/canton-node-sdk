@@ -54,7 +54,7 @@
     "test:watch": "jest --watch"
   },
   "dependencies": {
-    "@canton-network/wallet-sdk": "0.18.1",
+    "@canton-network/wallet-sdk": "0.19.1",
     "@stellar/stellar-base": "14.0.4",
     "axios": "1.13.2",
     "dotenv": "17.2.3",
