@@ -55,7 +55,7 @@
   },
   "dependencies": {
     "@canton-network/wallet-sdk": "0.18.1",
-    "@stellar/stellar-base": "14.0.3",
+    "@stellar/stellar-base": "14.0.4",
     "axios": "1.13.2",
     "dotenv": "17.2.3",
     "glob": "13.0.0",
