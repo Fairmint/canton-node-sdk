@@ -8,11 +8,15 @@ This file exists only for discoverability.
 
 When writing PR reviews, use this format:
 
-1. **Issues and improvements first** — Call out any problems, bugs, or suggested improvements at the top, outside any collapsed sections. This is the only feedback reviewers need to see immediately.
-   - **Issue**: Something that should be fixed — bugs, security problems, incorrect logic, violations of project standards
-   - **Improvement**: Something that could be better — performance, readability, maintainability, edge cases
+1. **Issues and improvements first** — Call out any problems, bugs, or suggested improvements at the
+   top, outside any collapsed sections. This is the only feedback reviewers need to see immediately.
+   - **Issue**: Something that should be fixed — bugs, security problems, incorrect logic,
+     violations of project standards
+   - **Improvement**: Something that could be better — performance, readability, maintainability,
+     edge cases
 
-2. **Collapse the rest** — Put the full analysis and any positive remarks inside a collapsed `<details>` section:
+2. **Collapse the rest** — Put the full analysis and any positive remarks inside a collapsed
+   `<details>` section:
 
 ```markdown
 ## Issues
@@ -29,4 +33,5 @@ When writing PR reviews, use this format:
 </details>
 ```
 
-Keep the visible portion brief and actionable. The collapsed section is for comprehensive details and rationale.
+Keep the visible portion brief and actionable. The collapsed section is for comprehensive details
+and rationale.

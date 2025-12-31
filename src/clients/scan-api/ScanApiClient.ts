@@ -1,4 +1,11 @@
-import { ApiError, ConfigurationError, NetworkError, type ClientConfig, type NetworkType, type ProviderType } from '../../core';
+import {
+  ApiError,
+  ConfigurationError,
+  NetworkError,
+  type ClientConfig,
+  type NetworkType,
+  type ProviderType,
+} from '../../core';
 import { resolveScanApiUrls } from './scan-endpoints';
 import { ScanApiClient as ScanApiClientGenerated } from './ScanApiClient.generated';
 
@@ -32,8 +39,8 @@ function shouldRotateOnError(error: unknown): boolean {
 /**
  * Public Scan API client.
  *
- * These endpoints are unauthenticated but rate-limited and may be intermittently unavailable.
- * This client supports rotating across known public scan endpoints on transient failures.
+ * These endpoints are unauthenticated but rate-limited and may be intermittently unavailable. This client supports
+ * rotating across known public scan endpoints on transient failures.
  */
 export class ScanApiClient extends ScanApiClientGenerated {
   private readonly scanApiUrls: readonly string[];
@@ -111,10 +118,7 @@ export class ScanApiClient extends ScanApiClientGenerated {
     return null;
   }
 
-  private async rotateRequest<T>(
-    fullUrl: string,
-    doRequest: (url: string) => Promise<T>
-  ): Promise<T> {
+  private async rotateRequest<T>(fullUrl: string, doRequest: (url: string) => Promise<T>): Promise<T> {
     if (this.scanApiUrls.length <= 1) {
       return doRequest(fullUrl);
     }
