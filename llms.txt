@@ -129,9 +129,10 @@ The package `@fairmint/canton-node-sdk` is automatically published to NPM when c
 ### How It Works
 
 1. **Create a PR** with your changes
-2. **Open the PR** in browser for review: `open <PR_URL>`
-3. **Get it reviewed** and approved
-4. **Merge to main** - CI automatically:
+2. **Monitor CI status** (see below)
+3. **Open the PR** in browser for review: `open <PR_URL>`
+4. **Get it reviewed** and approved
+5. **Merge to main** - CI automatically:
    - Builds the package
    - Increments the patch version in `package.json`
    - Generates a changelog from commits since last release
@@ -155,6 +156,23 @@ npm publish               # Publishes to NPM (requires NPM_TOKEN)
 
 The publish workflow requires:
 - `NPM_TOKEN` secret configured in GitHub repository settings
+
+### Monitoring PR CI Status (Required)
+
+**Always check CI status after creating a PR.** Use the GitHub CLI:
+
+```bash
+gh pr checks <PR_NUMBER>              # Check all CI checks
+gh run view <RUN_ID> --log-failed     # View failed job logs
+gh run view --job=<JOB_ID>            # View specific job details
+```
+
+**Workflow:**
+1. Create PR and push
+2. Wait ~30 seconds for CI to start
+3. Run `gh pr checks <PR_NUMBER>` to monitor
+4. If CI fails, view logs and fix issues
+5. Push fixes and re-check until CI passes
 
 ## Related Repos
 
