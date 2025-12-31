@@ -155,6 +155,14 @@ export abstract class BaseClient {
     return this.clientConfig.partyId ?? '';
   }
 
+  /**
+   * Set the party ID for this client. Useful for LocalNet where party ID is discovered at runtime after client
+   * initialization.
+   */
+  public setPartyId(partyId: string): void {
+    this.clientConfig.partyId = partyId;
+  }
+
   public getUserId(): string | undefined {
     // Use provided configuration first, fall back to API config
     const apiConfig = this.config.apis[this.apiType];

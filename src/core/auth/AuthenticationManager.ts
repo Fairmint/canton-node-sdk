@@ -27,14 +27,29 @@ export class AuthenticationManager {
     if (this.isTokenValid() && this.bearerToken) {
       return this.bearerToken;
     }
-    // Check if authentication credentials are provided
+
+    // Check for static bearer token first
+    if (this.authConfig.bearerToken) {
+      this.bearerToken = this.authConfig.bearerToken;
+      return this.bearerToken;
+    }
+
+    // Check for token generator function
+    if (this.authConfig.tokenGenerator) {
+      this.bearerToken = await this.authConfig.tokenGenerator();
+      // Tokens from generator may have short expiry, so don't cache for long
+      this.tokenExpiry = Date.now() + 60 * 1000; // 1 minute cache
+      return this.bearerToken;
+    }
+
+    // Check if OAuth2 authentication credentials are provided
     if (!this.authConfig.clientId || this.authConfig.clientId.trim() === '') {
       // No authentication credentials provided, skip authentication
       this.bearerToken = null;
       return '';
     }
 
-    // Validate required auth configuration
+    // Validate required auth configuration for OAuth2
     this.validateAuthConfig();
 
     const formData = new URLSearchParams();
