@@ -129,8 +129,9 @@ The package `@fairmint/canton-node-sdk` is automatically published to NPM when c
 ### How It Works
 
 1. **Create a PR** with your changes
-2. **Get it reviewed** and approved
-3. **Merge to main** - CI automatically:
+2. **Open the PR** in browser for review: `open <PR_URL>`
+3. **Get it reviewed** and approved
+4. **Merge to main** - CI automatically:
    - Builds the package
    - Increments the patch version in `package.json`
    - Generates a changelog from commits since last release
