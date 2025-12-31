@@ -5,12 +5,19 @@ export type ApiType = 'LEDGER_JSON_API' | 'VALIDATOR_API' | 'SCAN_API';
 
 export interface AuthConfig {
   grantType: string;
-  clientId: string;
+  clientId?: string;
   clientSecret?: string;
   username?: string;
   password?: string;
   audience?: string;
   scope?: string;
+  /**
+   * Static bearer token for auth modes that don't use OAuth2. If provided, this token is used directly without OAuth2
+   * exchange.
+   */
+  bearerToken?: string;
+  /** Async function to generate a bearer token dynamically. Used for shared-secret JWT generation. */
+  tokenGenerator?: () => Promise<string>;
 }
 
 export interface ApiConfig {
