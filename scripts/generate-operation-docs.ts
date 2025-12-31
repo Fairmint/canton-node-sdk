@@ -157,7 +157,7 @@ class OperationDocGenerator {
 * **rights**: array (optional) - Array of user rights containing:
   * **kind**: object - One of:
     * **CanActAs**: { party: string } - Can act as the specified party
-    * **CanReadAs**: { party: string } - Can read as the specified party  
+    * **CanReadAs**: { party: string } - Can read as the specified party
     * **CanReadAsAnyParty**: {} - Can read as any party
     * **ParticipantAdmin**: {} - Participant administrator rights
     * **IdentityProviderAdmin**: {} - Identity provider administrator rights`;
@@ -202,11 +202,23 @@ class OperationDocGenerator {
 
   private extractMetadata(sourceFile: ts.SourceFile, operationInfo: Partial<OperationInfo>): void {
     const visit = (node: ts.Node): void => {
+      // Look for exported class declarations (e.g., class GetParties extends ApiOperation)
+      if (ts.isClassDeclaration(node) && node.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)) {
+        if (node.name) {
+          operationInfo.name = node.name.text;
+        }
+      }
+
       // Look for exported constant declarations (function names)
+      // Skip schema exports (ending with "Schema") as those are not operations
       if (ts.isVariableStatement(node) && node.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)) {
         for (const declaration of node.declarationList.declarations) {
           if (ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name)) {
-            operationInfo.name = declaration.name.text;
+            const name = declaration.name.text;
+            // Skip schema exports - they're not operations
+            if (!name.endsWith('Schema')) {
+              operationInfo.name = name;
+            }
           }
         }
       }
@@ -274,6 +286,40 @@ class OperationDocGenerator {
         const importPath = (node.moduleSpecifier as ts.StringLiteral).text;
         if (importPath.includes('schemas')) {
           this.extractResponseType(node, operationInfo);
+        }
+      }
+
+      // Look for re-exported types (e.g., export type { GetPartiesResponse };)
+      if (ts.isExportDeclaration(node) && node.exportClause && ts.isNamedExports(node.exportClause)) {
+        for (const element of node.exportClause.elements) {
+          const name = element.name.text;
+          if (name.includes('Response')) {
+            operationInfo.responseType = name;
+            // For re-exported types, use a generic response schema
+            operationInfo.responseSchema = `{ /* Re-exported response type: ${name} */ }`;
+          }
+        }
+      }
+
+      // Look for exported type aliases (e.g., export type UpdatesWsMessage = ...)
+      if (ts.isTypeAliasDeclaration(node) && node.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)) {
+        const name = node.name.text;
+        // Capture types that look like response types (Response, Message suffix)
+        if (name.includes('Response') || name.endsWith('Message')) {
+          operationInfo.responseType = name;
+          operationInfo.responseSchema = `{ /* Type alias: ${name} */ }`;
+        }
+      }
+
+      // Look for exported interface declarations (e.g., export interface GetValidatorUserInfoResponse {...})
+      if (
+        ts.isInterfaceDeclaration(node) &&
+        node.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)
+      ) {
+        const name = node.name.text;
+        if (name.includes('Response')) {
+          operationInfo.responseType = name;
+          operationInfo.responseSchema = `{ /* Interface: ${name} */ }`;
         }
       }
 
@@ -1006,13 +1052,13 @@ const subscription = await client.${operation.name.toLowerCase()}.subscribe(
   },
   {
     onMessage: (message) => {
-      
+
     },
     onError: (error) => {
-      
+
     },
     onClose: () => {
-      
+
     }
   }
 );
