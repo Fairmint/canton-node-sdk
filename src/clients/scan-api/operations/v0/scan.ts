@@ -21,7 +21,10 @@ export const GetHealthStatus = createApiOperation<
   requestConfig: publicRequestConfig,
 });
 
-export const GetVersion = createApiOperation<void, operations['getVersion']['responses']['200']['content']['application/json']>({
+export const GetVersion = createApiOperation<
+  void,
+  operations['getVersion']['responses']['200']['content']['application/json']
+>({
   paramsSchema: z.void(),
   method: 'GET',
   buildUrl: (_params, apiUrl) => `${apiUrl}/version`,
@@ -43,14 +46,15 @@ export const IsLive = createApiOperation<void, void>({
 });
 
 /** Scan endpoints */
-export const GetDsoInfo = createApiOperation<void, operations['getDsoInfo']['responses']['200']['content']['application/json']>(
-  {
-    paramsSchema: z.void(),
-    method: 'GET',
-    buildUrl: (_params, apiUrl) => `${apiUrl}/v0/dso`,
-    requestConfig: publicRequestConfig,
-  }
-);
+export const GetDsoInfo = createApiOperation<
+  void,
+  operations['getDsoInfo']['responses']['200']['content']['application/json']
+>({
+  paramsSchema: z.void(),
+  method: 'GET',
+  buildUrl: (_params, apiUrl) => `${apiUrl}/v0/dso`,
+  requestConfig: publicRequestConfig,
+});
 
 const GetValidatorFaucetsByValidatorParamsSchema = z.object({
   validatorIds: z.array(z.string()).min(1),
@@ -72,7 +76,10 @@ export const GetValidatorFaucetsByValidator = createApiOperation<
   requestConfig: publicRequestConfig,
 });
 
-export const ListDsoScans = createApiOperation<void, operations['listDsoScans']['responses']['200']['content']['application/json']>({
+export const ListDsoScans = createApiOperation<
+  void,
+  operations['listDsoScans']['responses']['200']['content']['application/json']
+>({
   paramsSchema: z.void(),
   method: 'GET',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/scans`,
@@ -99,7 +106,10 @@ export const ListValidatorLicenses = createApiOperation<
   requestConfig: publicRequestConfig,
 });
 
-export const ListDsoSequencers = createApiOperation<void, operations['listDsoSequencers']['responses']['200']['content']['application/json']>({
+export const ListDsoSequencers = createApiOperation<
+  void,
+  operations['listDsoSequencers']['responses']['200']['content']['application/json']
+>({
   paramsSchema: z.void(),
   method: 'GET',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/dso-sequencers`,
@@ -148,14 +158,15 @@ export const GetMemberTrafficStatus = createApiOperation<
   requestConfig: publicRequestConfig,
 });
 
-export const GetClosedRounds = createApiOperation<void, operations['getClosedRounds']['responses']['200']['content']['application/json']>(
-  {
-    paramsSchema: z.void(),
-    method: 'GET',
-    buildUrl: (_params, apiUrl) => `${apiUrl}/v0/closed-rounds`,
-    requestConfig: publicRequestConfig,
-  }
-);
+export const GetClosedRounds = createApiOperation<
+  void,
+  operations['getClosedRounds']['responses']['200']['content']['application/json']
+>({
+  paramsSchema: z.void(),
+  method: 'GET',
+  buildUrl: (_params, apiUrl) => `${apiUrl}/v0/closed-rounds`,
+  requestConfig: publicRequestConfig,
+});
 
 type GetOpenAndIssuingMiningRoundsRequest =
   operations['getOpenAndIssuingMiningRounds']['requestBody']['content']['application/json'];
@@ -357,14 +368,15 @@ export const LookupAnsEntryByName = createApiOperation<
   requestConfig: publicRequestConfig,
 });
 
-export const GetDsoPartyId = createApiOperation<void, operations['getDsoPartyId']['responses']['200']['content']['application/json']>(
-  {
-    paramsSchema: z.void(),
-    method: 'GET',
-    buildUrl: (_params, apiUrl) => `${apiUrl}/v0/dso-party-id`,
-    requestConfig: publicRequestConfig,
-  }
-);
+export const GetDsoPartyId = createApiOperation<
+  void,
+  operations['getDsoPartyId']['responses']['200']['content']['application/json']
+>({
+  paramsSchema: z.void(),
+  method: 'GET',
+  buildUrl: (_params, apiUrl) => `${apiUrl}/v0/dso-party-id`,
+  requestConfig: publicRequestConfig,
+});
 
 type GetAmuletRulesRequest = operations['getAmuletRules']['requestBody']['content']['application/json'];
 const GetAmuletRulesParamsSchema = z.object({ body: z.custom<GetAmuletRulesRequest>() });
@@ -398,15 +410,16 @@ export const GetExternalPartyAmuletRules = createApiOperation<
 type GetAnsRulesRequest = operations['getAnsRules']['requestBody']['content']['application/json'];
 const GetAnsRulesParamsSchema = z.object({ body: z.custom<GetAnsRulesRequest>() });
 export type GetAnsRulesParams = z.infer<typeof GetAnsRulesParamsSchema>;
-export const GetAnsRules = createApiOperation<GetAnsRulesParams, operations['getAnsRules']['responses']['200']['content']['application/json']>(
-  {
-    paramsSchema: GetAnsRulesParamsSchema,
-    method: 'POST',
-    buildUrl: (_params, apiUrl) => `${apiUrl}/v0/ans-rules`,
-    buildRequestData: (params) => params.body,
-    requestConfig: publicRequestConfig,
-  }
-);
+export const GetAnsRules = createApiOperation<
+  GetAnsRulesParams,
+  operations['getAnsRules']['responses']['200']['content']['application/json']
+>({
+  paramsSchema: GetAnsRulesParamsSchema,
+  method: 'POST',
+  buildUrl: (_params, apiUrl) => `${apiUrl}/v0/ans-rules`,
+  buildRequestData: (params) => params.body,
+  requestConfig: publicRequestConfig,
+});
 
 export const ListFeaturedAppRights = createApiOperation<
   void,

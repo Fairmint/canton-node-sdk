@@ -4,12 +4,14 @@
  *
  * Demonstrates calling the public Scan API `traffic-status` endpoint with endpoint rotation.
  *
- * Usage:
- *   npx tsx examples/scan-traffic-status.ts --network devnet --provider "Cumberland-1" --domainId <domain_id> --partyId <party_id>
+ * Usage: npx tsx examples/scan-traffic-status.ts --network devnet --provider "Cumberland-1" --domainId <domain_id>
+ * --partyId <party_id>
  *
  * Notes:
+ *
  * - The scan endpoints are public (no OAuth2).
- * - You can obtain the provider's partyId via the Ledger JSON API (e.g. `getParty()`), then use Scan to map it to a participant.
+ * - You can obtain the provider's partyId via the Ledger JSON API (e.g. `getParty()`), then use Scan to map it to a
+ *   participant.
  */
 
 import { ScanApiClient } from '../src';
