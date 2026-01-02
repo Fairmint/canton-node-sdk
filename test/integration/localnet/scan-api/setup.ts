@@ -14,10 +14,8 @@ let client: ScanApiClient | null = null;
 export function getClient(): ScanApiClient {
   if (!client) {
     const config = buildIntegrationTestClientConfig();
-    client = new ScanApiClient({
-      ...config,
-      scanApiUrls: [config.apis?.SCAN_API?.apiUrl ?? 'http://localhost:4000/api/scan'],
-    });
+    // SDK's localnet defaults include the correct scan API URL with /api/scan path
+    client = new ScanApiClient(config);
   }
   return client;
 }
