@@ -15,10 +15,11 @@ export function getClient(): ScanApiClient {
   if (!client) {
     const config = buildIntegrationTestClientConfig();
     // LocalNet doesn't have default scan endpoints - must provide explicitly
-    // cn-quickstart runs scan at localhost:4000 with /api/scan path
+    // cn-quickstart routes scan API via nginx virtual host at scan.localhost:4000
+    // Using 'scan.localhost' hostname is required for nginx to route correctly
     client = new ScanApiClient({
       ...config,
-      scanApiUrls: ['http://localhost:4000/api/scan'],
+      scanApiUrls: ['http://scan.localhost:4000/api/scan'],
     });
   }
   return client;
