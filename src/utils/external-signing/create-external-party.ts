@@ -28,8 +28,6 @@ export interface CreateExternalPartyParams {
 export interface CreateExternalPartyResult {
   /** Generated party ID (e.g., "alice::12abc...") */
   partyId: string;
-  /** User ID for preparing transactions */
-  userId: string;
   /** Base64-encoded public key */
   publicKey: string;
   /** Fingerprint of the public key */
@@ -145,15 +143,15 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
     throw new Error('Failed to allocate external party - no party ID returned');
   }
 
-  // Note: For external parties, we don't need to create a separate user or grant rights.
-  // When preparing transactions, we'll use the validator operator's user ID (fetched automatically
-  // by prepareExternalTransaction). The external signature itself provides the authorization.
+  const publicKeyFingerprint = partyId.split('::')[1];
+  if (!publicKeyFingerprint) {
+    throw new Error('Failed to extract public key fingerprint from party ID');
+  }
 
   return {
     partyId: allocateResult.partyId,
-    userId: '', // Will be resolved automatically when preparing transactions
     publicKey: publicKeyHex,
-    publicKeyFingerprint: partyId.split('::')[1] ?? '', // Extract fingerprint from party ID
+    publicKeyFingerprint,
     stellarAddress: keypair.publicKey(),
     stellarSecret: keypair.secret(),
   };
