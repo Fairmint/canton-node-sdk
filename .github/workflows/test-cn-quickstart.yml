@@ -131,7 +131,25 @@ jobs:
         if: steps.verify-cache.outputs.has_daml != 'true'
         run: |
           cd libs/cn-quickstart/quickstart
-          make install-daml-sdk
+          # Retry logic for transient Maven Central 403 errors
+          max_attempts=3
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            echo "Attempt $attempt of $max_attempts: Installing Daml SDK..."
+            if make install-daml-sdk; then
+              echo "✓ Daml SDK installed successfully"
+              exit 0
+            fi
+            echo "Attempt $attempt failed"
+            if [ $attempt -lt $max_attempts ]; then
+              sleep_time=$((30 * attempt))
+              echo "Waiting ${sleep_time}s before retry..."
+              sleep $sleep_time
+            fi
+            attempt=$((attempt + 1))
+          done
+          echo "All $max_attempts attempts failed"
+          exit 1
         timeout-minutes: 15
 
       - name: Add Daml CLI to PATH
