@@ -26,8 +26,10 @@ import type { ClientConfig } from '../../src';
 export function buildIntegrationTestClientConfig(): ClientConfig {
   // Use SDK's built-in localnet defaults with OAuth2
   // This matches cn-quickstart setup with "make setup" option 2 (with OAuth2)
+  // Must specify provider to get the correct API endpoints and credentials
   return {
     network: 'localnet',
+    provider: 'app-provider',
   };
 }
 
