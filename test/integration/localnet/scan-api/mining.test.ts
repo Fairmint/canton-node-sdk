@@ -16,7 +16,10 @@ describe('ScanApiClient / Mining', () => {
 
     expect(response).toBeDefined();
     expect(response.open_mining_rounds).toBeDefined();
-    expect(Array.isArray(response.open_mining_rounds)).toBe(true);
+    // Scan API returns open_mining_rounds as an object/map (contract IDs as keys), not an array
+    // This is different from the validator's scan-proxy which returns an array
+    expect(typeof response.open_mining_rounds).toBe('object');
+    expect(response.open_mining_rounds).not.toBeNull();
   });
 
   test('getRoundOfLatestData returns latest round info', async () => {

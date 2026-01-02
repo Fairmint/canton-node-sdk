@@ -167,6 +167,13 @@ jobs:
           echo "✓ CN-Quickstart started"
         timeout-minutes: 15
 
+      - name: Configure Hosts
+        run: |
+          # cn-quickstart nginx uses virtual host routing for different services
+          # These hostnames must resolve to localhost for the tests to work
+          echo "127.0.0.1 scan.localhost sv.localhost wallet.localhost" | sudo tee -a /etc/hosts
+          echo "✓ Added virtual host entries to /etc/hosts"
+
       - name: Wait for Services
         run: |
           echo "Waiting for Keycloak..."
@@ -187,6 +194,16 @@ jobs:
             fi
             echo "Waiting for Validator API... ($i/30)"
             sleep 10
+          done
+
+          echo "Waiting for Scan API..."
+          for i in {1..30}; do
+            if curl -f http://scan.localhost:4000/api/scan/v0/dso-party-id 2>/dev/null; then
+              echo "✓ Scan API is responding"
+              break
+            fi
+            echo "Waiting for Scan API... ($i/30)"
+            sleep 5
           done
 
           echo "✓ All services are ready!"
