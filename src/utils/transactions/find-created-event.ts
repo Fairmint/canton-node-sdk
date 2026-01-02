@@ -19,7 +19,8 @@ export function findCreatedEventByTemplateName(
   for (const event of Object.values(transactionTree.eventsById)) {
     // Check if this is a CreatedTreeEvent
     if ('CreatedTreeEvent' in event) {
-      const createdEvent = event.CreatedTreeEvent.value;
+      const typedEvent = event as { CreatedTreeEvent: { value: { templateId: string } } };
+      const createdEvent = typedEvent.CreatedTreeEvent.value;
       const fullTemplateId = createdEvent.templateId;
 
       // Extract the template name part (after the last colon)

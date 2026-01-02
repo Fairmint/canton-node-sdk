@@ -125,7 +125,7 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
   // Step 4: Allocate the party using Ledger JSON API
   // We need to pass both the topology transactions and the multi-hash signature
   // Transform the topology transactions (array of strings) into the expected format
-  const onboardingTransactions = topologyTransactions.map((transaction) => ({ transaction }));
+  const onboardingTransactions = topologyTransactions.map((transaction: string) => ({ transaction }));
 
   const allocateResult = await ledgerClient.allocateExternalParty({
     synchronizer: synchronizerId,
