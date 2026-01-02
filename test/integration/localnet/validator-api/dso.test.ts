@@ -2,11 +2,9 @@
  * ValidatorApiClient integration tests: DSO Information
  */
 
-import { getClient, TEST_TIMEOUT } from './setup';
+import { getClient } from './setup';
 
 describe('ValidatorApiClient / DSO', () => {
-  jest.setTimeout(TEST_TIMEOUT);
-
   test('getDsoPartyId returns DSO party identifier', async () => {
     const client = getClient();
     const response = await client.getDsoPartyId();

@@ -2,11 +2,9 @@
  * LedgerJsonApiClient integration tests: Version API
  */
 
-import { getClient, TEST_TIMEOUT } from './setup';
+import { getClient } from './setup';
 
 describe('LedgerJsonApiClient / Version', () => {
-  jest.setTimeout(TEST_TIMEOUT);
-
   test('getVersion returns valid version info', async () => {
     const client = getClient();
     const version = await client.getVersion();

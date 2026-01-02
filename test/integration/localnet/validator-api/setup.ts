@@ -18,8 +18,3 @@ export function getClient(): ValidatorApiClient {
   }
   return client;
 }
-
-/**
- * Standard test timeout for LocalNet operations.
- */
-export const TEST_TIMEOUT = 60_000;

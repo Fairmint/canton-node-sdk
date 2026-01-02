@@ -11,6 +11,15 @@
 
 Keep content concise but comprehensive. Avoid verbosity—capture the essence.
 
+## Dependencies
+
+When adding dependencies, always use **pinned versions** (no `^` or `~` prefixes). This ensures reproducible builds.
+
+```bash
+npm install package@1.2.3 --save-exact    # For dependencies
+npm install package@1.2.3 --save-dev --save-exact  # For devDependencies
+```
+
 ## Quick Commands
 
 ```bash

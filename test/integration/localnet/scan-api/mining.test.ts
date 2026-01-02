@@ -2,11 +2,9 @@
  * ScanApiClient integration tests: Mining Round Information
  */
 
-import { getClient, TEST_TIMEOUT } from './setup';
+import { getClient } from './setup';
 
 describe('ScanApiClient / Mining', () => {
-  jest.setTimeout(TEST_TIMEOUT);
-
   test('getOpenAndIssuingMiningRounds returns mining rounds', async () => {
     const client = getClient();
     const response = await client.getOpenAndIssuingMiningRounds({

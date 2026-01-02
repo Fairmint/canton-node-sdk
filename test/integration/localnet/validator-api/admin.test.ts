@@ -2,11 +2,9 @@
  * ValidatorApiClient integration tests: Admin Operations
  */
 
-import { getClient, TEST_TIMEOUT } from './setup';
+import { getClient } from './setup';
 
 describe('ValidatorApiClient / Admin', () => {
-  jest.setTimeout(TEST_TIMEOUT);
-
   test('dumpParticipantIdentities returns identities', async () => {
     const client = getClient();
     const response = await client.dumpParticipantIdentities();

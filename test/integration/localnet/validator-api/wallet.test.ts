@@ -2,11 +2,9 @@
  * ValidatorApiClient integration tests: Wallet Operations
  */
 
-import { getClient, TEST_TIMEOUT } from './setup';
+import { getClient } from './setup';
 
 describe('ValidatorApiClient / Wallet', () => {
-  jest.setTimeout(TEST_TIMEOUT);
-
   test('getWalletBalance returns balance information', async () => {
     const client = getClient();
     const response = await client.getWalletBalance();

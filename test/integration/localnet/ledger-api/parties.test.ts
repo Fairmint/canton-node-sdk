@@ -2,11 +2,9 @@
  * LedgerJsonApiClient integration tests: Party Management
  */
 
-import { getClient, TEST_TIMEOUT } from './setup';
+import { getClient } from './setup';
 
 describe('LedgerJsonApiClient / Parties', () => {
-  jest.setTimeout(TEST_TIMEOUT);
-
   test('listParties returns party list', async () => {
     const client = getClient();
     const response = await client.listParties({});

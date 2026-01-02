@@ -2,11 +2,9 @@
  * ScanApiClient integration tests: DSO Information
  */
 
-import { getClient, TEST_TIMEOUT } from './setup';
+import { getClient } from './setup';
 
 describe('ScanApiClient / DSO', () => {
-  jest.setTimeout(TEST_TIMEOUT);
-
   test('getDsoInfo returns DSO information', async () => {
     const client = getClient();
     const response = await client.getDsoInfo();

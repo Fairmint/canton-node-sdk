@@ -137,7 +137,7 @@ jobs:
         run: |
           cd libs/cn-quickstart/quickstart
           # Retry logic for transient Maven Central 403 errors
-          max_attempts=3
+          max_attempts=5
           attempt=1
           while [ $attempt -le $max_attempts ]; do
             echo "Attempt $attempt of $max_attempts: Installing Daml SDK..."

@@ -2,11 +2,9 @@
  * ValidatorApiClient integration tests: Mining Rounds
  */
 
-import { getClient, TEST_TIMEOUT } from './setup';
+import { getClient } from './setup';
 
 describe('ValidatorApiClient / Mining', () => {
-  jest.setTimeout(TEST_TIMEOUT);
-
   test('getOpenAndIssuingMiningRounds returns mining round info', async () => {
     const client = getClient();
     const response = await client.getOpenAndIssuingMiningRounds();

@@ -2,11 +2,9 @@
  * ScanApiClient integration tests: Amulet Rules
  */
 
-import { getClient, TEST_TIMEOUT } from './setup';
+import { getClient } from './setup';
 
 describe('ScanApiClient / Amulet', () => {
-  jest.setTimeout(TEST_TIMEOUT);
-
   test('getAmuletRules returns amulet configuration', async () => {
     const client = getClient();
     const response = await client.getAmuletRules({ body: {} });
