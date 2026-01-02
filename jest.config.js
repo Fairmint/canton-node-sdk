@@ -11,4 +11,6 @@ module.exports = {
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   moduleFileExtensions: ['ts', 'js', 'json'],
+  // Default timeout for integration tests against LocalNet
+  testTimeout: 60000,
 };

@@ -39,6 +39,11 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
       - name: Restore Quickstart Preparation Cache
         id: quickstart-prep-cache-restore
         uses: actions/cache/restore@v4
@@ -131,7 +136,25 @@ jobs:
         if: steps.verify-cache.outputs.has_daml != 'true'
         run: |
           cd libs/cn-quickstart/quickstart
-          make install-daml-sdk
+          # Retry logic for transient Maven Central 403 errors
+          max_attempts=5
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            echo "Attempt $attempt of $max_attempts: Installing Daml SDK..."
+            if make install-daml-sdk; then
+              echo "✓ Daml SDK installed successfully"
+              exit 0
+            fi
+            echo "Attempt $attempt failed"
+            if [ $attempt -lt $max_attempts ]; then
+              sleep_time=$((30 * attempt))
+              echo "Waiting ${sleep_time}s before retry..."
+              sleep $sleep_time
+            fi
+            attempt=$((attempt + 1))
+          done
+          echo "All $max_attempts attempts failed"
+          exit 1
         timeout-minutes: 15
 
       - name: Add Daml CLI to PATH
@@ -143,6 +166,13 @@ jobs:
           make start
           echo "✓ CN-Quickstart started"
         timeout-minutes: 15
+
+      - name: Configure Hosts
+        run: |
+          # cn-quickstart nginx uses virtual host routing for different services
+          # These hostnames must resolve to localhost for the tests to work
+          echo "127.0.0.1 scan.localhost sv.localhost wallet.localhost" | sudo tee -a /etc/hosts
+          echo "✓ Added virtual host entries to /etc/hosts"
 
       - name: Wait for Services
         run: |
@@ -164,6 +194,16 @@ jobs:
             fi
             echo "Waiting for Validator API... ($i/30)"
             sleep 10
+          done
+
+          echo "Waiting for Scan API..."
+          for i in {1..30}; do
+            if curl -f http://scan.localhost:4000/api/scan/v0/dso-party-id 2>/dev/null; then
+              echo "✓ Scan API is responding"
+              break
+            fi
+            echo "Waiting for Scan API... ($i/30)"
+            sleep 5
           done
 
           echo "✓ All services are ready!"
