@@ -1,126 +1,159 @@
-# Canton Node SDK - LocalNet Examples
+# Canton Node SDK - Examples
 
-Simple examples for connecting to Canton Network LocalNet using the Canton Node SDK.
+Examples demonstrating common workflows with the Canton Node SDK.
 
 ## Prerequisites
 
-- cn-quickstart is running (see https://github.com/digital-asset/cn-quickstart)
-- cn-quickstart is configured with OAuth2 enabled
-- Dependencies installed: `npm install`
+- cn-quickstart running with OAuth2 enabled
+  - Clone: `https://github.com/digital-asset/cn-quickstart`
+  - Setup: `cd quickstart && make setup` (choose "with OAuth2")
+  - Start: `cd quickstart && make start`
+- SDK dependencies: `npm install`
 
 ## Examples
 
-### `localnet-with-oauth2.ts` - OAuth2 Authentication ✅
+### `canton-quickstart.ts` - Unified Client
 
-**Status**: ✅ **Working** - This is the recommended example!
-
-Demonstrates how to:
-
-- Connect to cn-quickstart with OAuth2/Keycloak authentication
-- Use the SDK's built-in authentication manager
-- Make authenticated API calls to the Validator API
-
-**Run it:**
+Demonstrates the `Canton` class which provides a unified entry point for all API clients:
 
 ```bash
-npm run example:oauth2
+npx tsx examples/canton-quickstart.ts
 ```
 
-**What it does:**
+- Initializes all clients with shared configuration
+- Shows how to use ledger, validator, and scan APIs
+- Demonstrates dynamic party ID updates
 
-1. Authenticates with Keycloak using client credentials
-2. Gets an OAuth2 access token
-3. Makes an authenticated API call to get user status
-4. The SDK handles all token management automatically!
+### `localnet-with-oauth2.ts` - OAuth2 Authentication
 
-**Key Features:**
+Shows how OAuth2 authentication works:
 
-- ✅ Automatic token acquisition
-- ✅ Automatic token refresh when expired
-- ✅ Bearer token automatically included in requests
-- ✅ No manual token management needed
+```bash
+npx tsx examples/localnet-with-oauth2.ts
+```
 
-### Configuration
+- Automatic token acquisition and refresh
+- Bearer token injection in requests
+- Keycloak/OAuth2 integration
 
-The example uses the default cn-quickstart OAuth2 configuration:
+### `create-party.ts` - Create and Fund a Party
+
+Creates a new party with funding and transfer preapproval:
+
+```bash
+npx tsx examples/create-party.ts [party-name] [amount]
+npx tsx examples/create-party.ts alice 100
+```
+
+- Creates user via Validator API
+- Funds party via transfer offer
+- Creates transfer preapproval contract
+
+### `transfer-amulets.ts` - Transfer via Offer
+
+Demonstrates the transfer offer workflow:
+
+```bash
+npx tsx examples/transfer-amulets.ts <receiver-party-id> [amount]
+npx tsx examples/transfer-amulets.ts alice::12345... 10
+```
+
+- Creates a transfer offer
+- Accepts the offer as receiver
+- Shows the two-step transfer flow
+
+### `external-signing.ts` - User-Controlled Keys
+
+Shows how to create parties with externally-managed keys:
+
+```bash
+npx tsx examples/external-signing.ts
+```
+
+- Generates Ed25519 keypair
+- Creates external party on ledger
+- Demonstrates the external signing flow
+
+### `scan-traffic-status.ts` - Network Monitoring
+
+Shows how to monitor network traffic:
+
+```bash
+npx tsx examples/scan-traffic-status.ts
+```
+
+## Quick Reference
+
+### Using the Canton Class
 
 ```typescript
-{
-  authUrl: 'http://localhost:8082/realms/AppProvider/protocol/openid-connect/token',
-  apis: {
-    VALIDATOR_API: {
-      apiUrl: 'http://localhost:3903',
-      auth: {
-        grantType: 'client_credentials',
-        clientId: 'app-provider-validator',
-        clientSecret: 'AL8648b9SfdTFImq7FV56Vd0KHifHBuC',
-      },
-    },
-  },
-}
+import { Canton } from '@fairmint/canton-node-sdk';
+
+const canton = new Canton({ network: 'localnet' });
+
+// Access clients
+const version = await canton.ledger.getVersion();
+const balance = await canton.validator.getWalletBalance();
+const health = await canton.scan.getHealthStatus();
 ```
 
-## Try Other API Methods
-
-Once you have a working client, you can call any Validator API method:
+### Creating a Party
 
 ```typescript
-// Get wallet balance
-const balance = await client.getWalletBalance();
+import { Canton, createParty } from '@fairmint/canton-node-sdk';
 
-// Get amulets
-const amulets = await client.getAmulets();
+const canton = new Canton({ network: 'localnet' });
 
-// Get DSO party ID
-const dsoPartyId = await client.getDsoPartyId();
-
-// Get amulet rules
-const rules = await client.getAmuletRules();
-
-// List ANS entries
-const entries = await client.listAnsEntries();
+const { partyId, preapprovalContractId } = await createParty({
+  ledgerClient: canton.ledger,
+  validatorClient: canton.validator,
+  partyName: 'alice',
+  amount: '100',
+});
 ```
 
-## Next Steps
+### Transferring Amulets
 
-1. **Explore the SDK**: Check out the full API documentation at https://sdk.canton.fairmint.com/
-2. **Stream Updates**: See `scripts/examples/` for streaming and subscription examples
-3. **Integration Tests**: Look at `test/integration/quickstart/` for more complex examples
-4. **Web UIs**: Explore the running services:
-   - Wallet: http://wallet.localhost:3000
-   - Scan: http://scan.localhost:4000
+```typescript
+import { Canton, createTransferOffer, acceptTransferOffer } from '@fairmint/canton-node-sdk';
 
-## Troubleshooting
+const canton = new Canton({ network: 'localnet' });
 
-### Authentication Failed
+// Create offer
+const offerId = await createTransferOffer({
+  ledgerClient: canton.ledger,
+  receiverPartyId: 'bob::123...',
+  amount: '50',
+  description: 'Payment',
+});
 
-```bash
-# Verify Keycloak is running
-curl http://localhost:8082/realms/AppProvider
-
-# Check cn-quickstart OAuth2 setup
-cd quickstart && make setup  # Ensure "with OAuth2" is selected
+// Accept offer
+await acceptTransferOffer({
+  ledgerClient: canton.ledger,
+  transferOfferContractId: offerId,
+  acceptingPartyId: 'bob::123...',
+});
 ```
 
-### Connection Refused
+### External Signing
 
-```bash
-# Check if services are running
-cd quickstart && make status
+```typescript
+import { Keypair } from '@stellar/stellar-base';
+import { Canton, createExternalParty } from '@fairmint/canton-node-sdk';
 
-# Restart if needed
-cd quickstart && make restart
+const canton = new Canton({ network: 'localnet' });
+const keypair = Keypair.random();
+
+const { partyId } = await createExternalParty({
+  ledgerClient: canton.ledger,
+  keypair,
+  partyName: 'external-alice',
+  synchronizerId: 'global-synchronizer::...',
+});
 ```
-
-### Wrong Credentials
-
-The credentials in the example (`app-provider-validator` / `AL8648b9SfdTFImq7FV56Vd0KHifHBuC`) are
-the default values for cn-quickstart. If you've customized your setup, check:
-
-- `quickstart/docker/modules/keycloak/env/app-provider/on/oauth2.env`
 
 ## More Resources
 
-- Main README: `../../examples/README.md`
-- SDK Documentation: https://sdk.canton.fairmint.com/
-- cn-quickstart: https://github.com/digital-asset/cn-quickstart
+- [SDK Documentation](https://sdk.canton.fairmint.com/)
+- [External Signing Guide](../docs/EXTERNAL_SIGNING.md)
+- [Integration Tests](../test/integration/) - More complex examples
