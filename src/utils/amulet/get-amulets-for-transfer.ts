@@ -248,7 +248,8 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
         effectiveAmount = String(amtObj);
       } else if (amtObj && typeof amtObj === 'object') {
         const nestedObj = amtObj as Record<string, unknown>;
-        effectiveAmount = extractString(nestedObj['initialAmount']) ?? '0';
+        const nestedAmount = extractNumericValue(nestedObj['initialAmount']);
+        effectiveAmount = nestedAmount !== undefined ? String(nestedAmount) : '0';
       }
     }
 
