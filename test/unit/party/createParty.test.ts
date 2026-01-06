@@ -3,10 +3,12 @@ import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
 import type { ValidatorApiClient } from '../../../src/clients/validator-api';
 import * as offersModule from '../../../src/utils/amulet/offers';
 import * as preApproveModule from '../../../src/utils/amulet/pre-approve-transfers';
+import * as getAmuletsModule from '../../../src/utils/amulet/get-amulets-for-transfer';
 
 // Mock dependencies
 jest.mock('../../../src/utils/amulet/offers');
 jest.mock('../../../src/utils/amulet/pre-approve-transfers');
+jest.mock('../../../src/utils/amulet/get-amulets-for-transfer');
 
 const createMockLedgerClient = (): jest.Mocked<LedgerJsonApiClient> =>
   ({}) as unknown as jest.Mocked<LedgerJsonApiClient>;
@@ -39,6 +41,10 @@ describe('createParty', () => {
       domainId: 'domain-123',
       amuletPaid: '0',
     });
+    // Mock getAmuletsForTransfer to return amulets (simulating transfer settled)
+    (getAmuletsModule.getAmuletsForTransfer as jest.Mock).mockResolvedValue([
+      { contractId: 'amulet-123', templateId: 'Amulet', effectiveAmount: '100', owner: 'alice::fingerprint' },
+    ]);
   });
 
   afterEach(() => {
@@ -79,8 +85,8 @@ describe('createParty', () => {
       amount: '100',
     });
 
-    // Fast forward past the 30 second wait
-    await jest.advanceTimersByTimeAsync(30000);
+    // Allow the async operations to resolve (polling succeeds on first check since mock returns amulets)
+    await jest.runAllTimersAsync();
 
     const result = await resultPromise;
 
@@ -147,7 +153,7 @@ describe('createParty', () => {
       amount: '100.5',
     });
 
-    await jest.advanceTimersByTimeAsync(30000);
+    await jest.runAllTimersAsync();
     await resultPromise;
 
     expect(offersModule.createTransferOffer).toHaveBeenCalledWith(
@@ -165,7 +171,7 @@ describe('createParty', () => {
       amount: '50',
     });
 
-    await jest.advanceTimersByTimeAsync(30000);
+    await jest.runAllTimersAsync();
     await resultPromise;
 
     expect(offersModule.createTransferOffer).toHaveBeenCalledWith(

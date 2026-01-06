@@ -1,6 +1,8 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { type ValidatorApiClient } from '../../clients/validator-api';
+import { waitForCondition } from '../../core/utils/polling';
 import { acceptTransferOffer, createTransferOffer } from '../amulet/offers';
+import { getAmuletsForTransfer } from '../amulet/get-amulets-for-transfer';
 import { preApproveTransfers } from '../amulet/pre-approve-transfers';
 
 export interface CreatePartyOptions {
@@ -62,8 +64,21 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
     acceptingPartyId: result.partyId,
   });
 
-  // Wait 30 seconds for transfer to settle
-  await new Promise((resolve) => setTimeout(resolve, 30000));
+  // Poll until amulets are available (transfer has settled)
+  await waitForCondition(
+    async () => {
+      const amulets = await getAmuletsForTransfer({
+        jsonApiClient: ledgerClient,
+        readAs: [result.partyId],
+      });
+      return amulets.length > 0 ? amulets : null;
+    },
+    {
+      timeout: 60000,
+      interval: 2000,
+      timeoutMessage: `Timeout waiting for transfer to settle for party ${result.partyId}`,
+    }
+  );
 
   // Create transfer preapproval
   const preapprovalResult = await preApproveTransfers(ledgerClient, validatorClient, {

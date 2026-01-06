@@ -6,4 +6,5 @@ export * from './http';
 export * from './logging';
 export * from './operations';
 export * from './types';
+export * from './utils';
 export * from './ws';
