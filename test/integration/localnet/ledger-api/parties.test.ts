@@ -25,25 +25,6 @@ describe('LedgerJsonApiClient / Parties', () => {
 
   // Skip: Requires admin permissions (returns HTTP 403 in cn-quickstart)
   test.skip('getConnectedSynchronizers returns synchronizer list', async () => {
-    const client = getClient();
-
-    // Get parties first to use as the party filter
-    const parties = await client.listParties({});
-    const partyDetails = parties.partyDetails ?? [];
-
-    if (partyDetails.length === 0) {
-      console.warn('No parties available, skipping getConnectedSynchronizers test');
-      return;
-    }
-
-    const firstParty = partyDetails[0];
-    if (!firstParty) {
-      console.warn('First party is undefined, skipping getConnectedSynchronizers test');
-      return;
-    }
-    const response = await client.getConnectedSynchronizers({ party: firstParty.party });
-
-    expect(response).toBeDefined();
-    expect(Array.isArray(response.connectedSynchronizers)).toBe(true);
+    // This test requires admin permissions not available in cn-quickstart
   });
 });
