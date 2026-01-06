@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { ApiError } from '../../../../../core/errors';
 import { WebSocketClient } from '../../../../../core/ws/WebSocketClient';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
-import { type JsCantonErrorSchema, type WsCantonErrorSchema } from '../../../schemas/api/errors';
+import { type JsCantonError, type WsCantonError } from '../../../schemas/api/errors';
 import { type JsUpdateSchema, type WsUpdateSchema } from '../../../schemas/api/updates';
 import { buildEventFormat } from '../utils/event-format-builder';
 
@@ -70,8 +71,8 @@ export type SubscribeToUpdatesParams = z.infer<typeof SubscribeToUpdatesParamsSc
 export type UpdatesWsMessage =
   | { update: z.infer<typeof JsUpdateSchema> }
   | { update: z.infer<typeof WsUpdateSchema> }
-  | z.infer<typeof JsCantonErrorSchema>
-  | z.infer<typeof WsCantonErrorSchema>;
+  | JsCantonError
+  | WsCantonError;
 
 /**
  * Subscribes to ledger updates via WebSocket connection.
@@ -181,37 +182,42 @@ export class SubscribeToUpdates {
     return new Promise<void>((resolve, reject) => {
       let settled = false;
 
+      /** Convert a Canton error response to a proper Error object */
+      const toError = (errorResponse: JsCantonError | WsCantonError): Error => {
+        if ('cause' in errorResponse) {
+          // WsCantonError
+          return new ApiError(`WebSocket error [${errorResponse.code}]: ${errorResponse.cause}`);
+        }
+        // JsCantonError
+        const codeStr = JSON.stringify(errorResponse.code);
+        return new ApiError(`WebSocket error [${codeStr}]: ${errorResponse.message}`);
+      };
+
+      /** Check if a message is a Canton error response */
+      const isErrorMessage = (msg: UpdatesWsMessage): msg is JsCantonError | WsCantonError => {
+        return typeof msg === 'object' && ('cause' in msg || ('code' in msg && 'message' in msg && !('update' in msg)));
+      };
+
       void wsClient
-        .connect<typeof requestMessage, unknown>(path, requestMessage, {
-          onMessage: (raw) => {
-            try {
-              // Skip Zod validation for response types - just use the raw parsed JSON
-              // Zod validation is only needed for input types, not outputs
-              const parsed = raw as UpdatesWsMessage;
+        .connect<typeof requestMessage, UpdatesWsMessage>(path, requestMessage, {
+          onMessage: (parsed) => {
+            // Call user's onMessage callback if provided
+            if (typeof params.onMessage === 'function') {
+              params.onMessage(parsed);
+            }
 
-              // Call user's onMessage callback if provided
-              if (typeof params.onMessage === 'function') {
-                params.onMessage(parsed);
-              }
-
-              // Check if it's an error
-              if (typeof parsed === 'object' && ('errors' in parsed || 'error' in parsed)) {
-                if (!settled) {
-                  settled = true;
-                  reject(parsed as unknown as Error);
-                }
-              }
-            } catch (e) {
+            // Check if it's an error
+            if (isErrorMessage(parsed)) {
               if (!settled) {
                 settled = true;
-                reject(e as Error);
+                reject(toError(parsed));
               }
             }
           },
           onError: (err) => {
             if (!settled) {
               settled = true;
-              reject(err as Error);
+              reject(err instanceof Error ? err : new Error(String(err)));
             }
           },
           onClose: () => {
@@ -221,10 +227,10 @@ export class SubscribeToUpdates {
             }
           },
         })
-        .catch((err) => {
+        .catch((err: unknown) => {
           if (!settled) {
             settled = true;
-            reject(err as Error);
+            reject(err instanceof Error ? err : new Error(String(err)));
           }
         });
     });

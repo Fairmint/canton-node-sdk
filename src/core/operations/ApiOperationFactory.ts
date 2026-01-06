@@ -3,11 +3,17 @@ import { type BaseClient } from '../BaseClient';
 import { type RequestConfig } from '../types';
 import { ApiOperation } from './ApiOperation';
 
+/** Type for the request data builder function - can return any JSON-serializable value or compatible object */
+export type RequestDataBuilder<Params> = (
+  params: Params,
+  client: BaseClient
+) => Record<string, unknown> | Buffer | undefined | Promise<Record<string, unknown> | Buffer | undefined>;
+
 export interface ApiOperationConfig<Params, Response> {
   paramsSchema: z.ZodSchema<Params>;
   method: 'GET' | 'POST' | 'DELETE' | 'PATCH';
   buildUrl: (params: Params, apiUrl: string, client: BaseClient) => string;
-  buildRequestData?: (params: Params, client: BaseClient) => unknown;
+  buildRequestData?: RequestDataBuilder<Params>;
   requestConfig?: RequestConfig;
   transformResponse?: (response: Response) => Response;
 }

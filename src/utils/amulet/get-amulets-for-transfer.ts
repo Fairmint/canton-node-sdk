@@ -61,6 +61,40 @@ interface ContractData {
   payload: Record<string, unknown>;
 }
 
+/** Type guard to check if a contract is a JsGetActiveContractsResponseItem with JsActiveContract */
+function isJsActiveContractItem(ctr: unknown): ctr is JsGetActiveContractsResponseItem & {
+  contractEntry: { JsActiveContract: { createdEvent: { templateId: string; contractId: string; createArgument: Record<string, unknown> } } };
+} {
+  if (!ctr || typeof ctr !== 'object') return false;
+  const obj = ctr as Record<string, unknown>;
+  const entry = obj['contractEntry'];
+  if (!entry || typeof entry !== 'object') return false;
+  const entryObj = entry as Record<string, unknown>;
+  const jsActive = entryObj['JsActiveContract'];
+  if (!jsActive || typeof jsActive !== 'object') return false;
+  const jsActiveObj = jsActive as Record<string, unknown>;
+  return 'createdEvent' in jsActiveObj;
+}
+
+/** Type guard to check if a contract is a LegacyContract with contract property */
+function isLegacyContractWithContract(ctr: unknown): ctr is LegacyContract & { contract: NonNullable<LegacyContract['contract']> } {
+  if (!ctr || typeof ctr !== 'object') return false;
+  const obj = ctr as Record<string, unknown>;
+  const contract = obj['contract'];
+  return contract !== undefined && typeof contract === 'object' && contract !== null;
+}
+
+/** Safely extract a string from an unknown value */
+function extractString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+/** Safely extract a number or string from an unknown value */
+function extractNumericValue(value: unknown): string | number | undefined {
+  if (typeof value === 'string' || typeof value === 'number') return value;
+  return undefined;
+}
+
 /**
  * Gets unlocked amulets owned by the sender party that can be used for transfers. Optionally returns all valid transfer
  * inputs (Amulet, AppRewardCoupon, ValidatorRewardCoupon).
@@ -95,18 +129,20 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
   const contractsArr = Array.isArray(activeContracts) ? activeContracts : [];
 
   contractsArr.forEach((ctr) => {
-    const typedCtr = ctr as JsGetActiveContractsResponseItem | LegacyContract;
     let payload: Record<string, unknown> | undefined;
     let templateId: string | undefined;
     let contractId: string | undefined;
 
-    if ('contractEntry' in typedCtr && 'JsActiveContract' in typedCtr.contractEntry) {
-      const { createdEvent } = typedCtr.contractEntry.JsActiveContract;
+    // Use type guards for proper runtime validation
+    if (isJsActiveContractItem(ctr)) {
+      const jsActiveContract = ctr.contractEntry['JsActiveContract'];
+      const { createdEvent } = jsActiveContract;
       payload = createdEvent.createArgument;
-      ({ templateId, contractId } = createdEvent);
-    } else if ('contract' in typedCtr) {
-      const { contract } = typedCtr;
-      ({ payload } = contract);
+      templateId = createdEvent.templateId;
+      contractId = createdEvent.contractId;
+    } else if (isLegacyContractWithContract(ctr)) {
+      const { contract } = ctr;
+      payload = contract.payload;
       templateId = contract.contract?.template_id ?? contract.template_id;
       contractId = contract.contract?.contract_id ?? contract.contract_id;
     }
@@ -125,51 +161,59 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
 
   // Helper to extract owner/beneficiary and numeric amount from diverse contract shapes
   const extract = (contract: ContractData | LegacyContract) => {
-    const contractPayload = 'payload' in contract ? contract.payload : undefined;
-    const payload = contractPayload ?? (contract as LegacyContract).contract?.contract?.payload ?? {};
+    // Get payload using type-safe access
+    let payload: Record<string, unknown>;
+    if ('templateId' in contract && 'payload' in contract) {
+      // ContractData - has payload directly
+      payload = contract.payload;
+    } else if ('contract' in contract && contract.contract) {
+      // LegacyContract with nested structure
+      payload = contract.contract.contract?.payload ?? contract.contract.payload ?? {};
+    } else {
+      payload = {};
+    }
 
-    const contractRecord = contract as Record<string, unknown>;
+    // Get templateId using type-safe access
     const templateId = 'templateId' in contract ? contract.templateId : undefined;
 
-    // Extract owner/beneficiary based on contract type
+    // Extract owner/beneficiary based on contract type using safe extraction
     let ownerFull = '';
     if (templateId?.includes('AppRewardCoupon') || templateId?.includes('ValidatorRewardCoupon')) {
       // For coupons, beneficiary is optional and falls back to provider
-      const beneficiary = payload['beneficiary'] as string | undefined;
-      const provider = payload['provider'] as string | undefined;
-      ownerFull = beneficiary ?? provider ?? '';
+      ownerFull = extractString(payload['beneficiary']) ?? extractString(payload['provider']) ?? '';
     } else {
-      // For amulets, use owner field
+      // For amulets, use owner field - check multiple possible locations
       ownerFull =
-        (payload['owner'] as string | undefined) ??
-        (contractRecord['owner'] as string | undefined) ??
-        (contractRecord['partyId'] as string | undefined) ??
-        (contractRecord['party_id'] as string | undefined) ??
+        extractString(payload['owner']) ??
+        extractString(payload['partyId']) ??
+        extractString(payload['party_id']) ??
         '';
     }
 
     // Extract amount based on contract type
-    let rawAmount: unknown = '0';
+    let rawAmount: string | number = '0';
     if (templateId?.includes('AppRewardCoupon') || templateId?.includes('ValidatorRewardCoupon')) {
       // For coupons, amount is directly in payload
-      rawAmount = payload['amount'] ?? '0';
+      rawAmount = extractNumericValue(payload['amount']) ?? '0';
     } else {
       // For amulets, amount might be nested
       const rawAmountCandidate =
         payload['amount'] ??
-        contractRecord['amount'] ??
-        contractRecord['effective_amount'] ??
-        contractRecord['effectiveAmount'] ??
-        contractRecord['initialAmount'] ??
-        '0';
+        payload['effective_amount'] ??
+        payload['effectiveAmount'] ??
+        payload['initialAmount'];
 
-      rawAmount = rawAmountCandidate;
-      if (typeof rawAmountCandidate === 'object') {
-        rawAmount = (rawAmountCandidate as Record<string, unknown>)['initialAmount'] ?? '0';
+      const directValue = extractNumericValue(rawAmountCandidate);
+      if (directValue !== undefined) {
+        rawAmount = directValue;
+      } else if (rawAmountCandidate && typeof rawAmountCandidate === 'object') {
+        // Amount might be nested in an object with initialAmount
+        const nestedObj = rawAmountCandidate as Record<string, unknown>;
+        rawAmount = extractNumericValue(nestedObj['initialAmount']) ?? '0';
       }
     }
 
-    const numericAmount = parseFloat(rawAmount as string);
+    const numericAmount = typeof rawAmount === 'number' ? rawAmount : parseFloat(rawAmount);
     return { owner: ownerFull, numericAmount };
   };
 
@@ -190,16 +234,24 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
   const result = partyContracts.map((c) => {
     const { payload, templateId } = c;
 
-    // Extract amount based on contract type
+    // Extract amount based on contract type using safe extraction
     let effectiveAmount = '0';
     if (templateId.includes('AppRewardCoupon') || templateId.includes('ValidatorRewardCoupon')) {
       // For coupons, amount is directly in payload
-      effectiveAmount = (payload['amount'] as string | undefined) ?? '0';
+      const couponAmount = extractNumericValue(payload['amount']);
+      effectiveAmount = couponAmount !== undefined ? String(couponAmount) : '0';
     } else {
       // For amulets, amount might be nested
-      const amtObj = payload['amount'] ?? {};
-      const intAmount = typeof amtObj === 'object' ? (amtObj as Record<string, unknown>)['initialAmount'] : amtObj;
-      effectiveAmount = (intAmount as string | undefined) ?? '0';
+      const amtObj = payload['amount'];
+      if (typeof amtObj === 'string') {
+        effectiveAmount = amtObj;
+      } else if (typeof amtObj === 'number') {
+        effectiveAmount = String(amtObj);
+      } else if (amtObj && typeof amtObj === 'object') {
+        const nestedObj = amtObj as Record<string, unknown>;
+        const nestedAmount = extractNumericValue(nestedObj['initialAmount']);
+        effectiveAmount = nestedAmount !== undefined ? String(nestedAmount) : '0';
+      }
     }
 
     return {

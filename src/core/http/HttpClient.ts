@@ -182,10 +182,10 @@ export class HttpClient {
   private handleRequestError(error: unknown): Error {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
-      const data = error.response?.data ?? {};
-      const { code } = data as { code?: string };
+      const data = (error.response?.data ?? {}) as Record<string, unknown>;
+      const code = typeof data['code'] === 'string' ? data['code'] : undefined;
       const msg = code ? `HTTP ${status}: ${code}` : `HTTP ${status}`;
-      const err = new ApiError(msg, status, error.response?.statusText) as ApiError & { response: unknown };
+      const err = new ApiError(msg, status, error.response?.statusText);
       err.response = data;
       return err;
     }

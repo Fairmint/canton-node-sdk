@@ -44,6 +44,27 @@ const createLegacyContract = (
   },
 });
 
+// Contract with numeric initialAmount (number instead of string)
+const createJsActiveContractWithNumericAmount = (
+  contractId: string,
+  templateId: string,
+  owner: string,
+  amount: number
+) => ({
+  contractEntry: {
+    JsActiveContract: {
+      createdEvent: {
+        contractId,
+        templateId,
+        createArgument: {
+          owner,
+          amount: { initialAmount: amount },
+        },
+      },
+    },
+  },
+});
+
 const createAppRewardCoupon = (
   contractId: string,
   beneficiary: string,
@@ -301,6 +322,46 @@ describe('getAmuletsForTransfer', () => {
       });
 
       expect(result).toHaveLength(2);
+    });
+  });
+
+  describe('numeric amount handling', () => {
+    it('handles numeric initialAmount in nested amount object', async () => {
+      const mockClient = createMockLedgerClient([
+        createJsActiveContractWithNumericAmount('amulet-1', 'pkg:Splice.Amulet:Amulet', 'alice::fp', 100.5),
+      ]);
+
+      const result = await getAmuletsForTransfer({
+        jsonApiClient: mockClient,
+        readAs: ['alice::fp'],
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        contractId: 'amulet-1',
+        templateId: 'pkg:Splice.Amulet:Amulet',
+        effectiveAmount: '100.5',
+        owner: 'alice::fp',
+      });
+    });
+
+    it('handles mixed string and numeric amounts correctly', async () => {
+      const mockClient = createMockLedgerClient([
+        createJsActiveContract('amulet-string', 'pkg:Splice.Amulet:Amulet', 'alice::fp', '200'),
+        createJsActiveContractWithNumericAmount('amulet-numeric', 'pkg:Splice.Amulet:Amulet', 'alice::fp', 150),
+      ]);
+
+      const result = await getAmuletsForTransfer({
+        jsonApiClient: mockClient,
+        readAs: ['alice::fp'],
+      });
+
+      expect(result).toHaveLength(2);
+      // Sorted by amount descending
+      expect(result[0]?.contractId).toBe('amulet-string');
+      expect(result[0]?.effectiveAmount).toBe('200');
+      expect(result[1]?.contractId).toBe('amulet-numeric');
+      expect(result[1]?.effectiveAmount).toBe('150');
     });
   });
 

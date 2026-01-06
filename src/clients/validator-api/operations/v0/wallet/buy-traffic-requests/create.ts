@@ -1,9 +1,19 @@
-import { createApiOperation } from '../../../../../../core';
+import { type BaseClient, createApiOperation } from '../../../../../../core';
 import { type CreateBuyTrafficRequestResponse } from '../../../../schemas/api';
 import {
   CreateBuyTrafficRequestParamsSchema,
   type CreateBuyTrafficRequestParams,
 } from '../../../../schemas/operations';
+
+/** Interface for clients that can fetch amulet rules */
+interface AmuletRulesClient extends BaseClient {
+  getAmuletRules: () => Promise<{ amulet_rules: { domain_id: string } }>;
+}
+
+/** Type guard to check if a client has the getAmuletRules method */
+function hasAmuletRulesMethod(client: BaseClient): client is AmuletRulesClient {
+  return 'getAmuletRules' in client && typeof (client as AmuletRulesClient).getAmuletRules === 'function';
+}
 
 /**
  * Create a new buy traffic request to purchase traffic from another validator
@@ -30,13 +40,12 @@ export const CreateBuyTrafficRequest = createApiOperation<
   method: 'POST',
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/wallet/buy-traffic-requests`,
   buildRequestData: async (params, client) => {
-    // Cast client to ValidatorApiClient to access getAmuletRules
-    const validatorClient = client as unknown as {
-      getAmuletRules: () => Promise<{ amulet_rules: { domain_id: string } }>;
-    };
+    if (!hasAmuletRulesMethod(client)) {
+      throw new Error('Client does not support getAmuletRules - use ValidatorApiClient');
+    }
 
     // Get domain_id from amulet rules
-    const amuletRules = await validatorClient.getAmuletRules();
+    const amuletRules = await client.getAmuletRules();
     const { domain_id } = amuletRules.amulet_rules;
 
     if (!domain_id) {

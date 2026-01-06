@@ -28,6 +28,9 @@ export class AuthenticationError extends CantonError {
 
 /** Error thrown when API requests fail */
 export class ApiError extends CantonError {
+  /** The response data from the failed request, if available */
+  public response?: Record<string, unknown>;
+
   constructor(
     message: string,
     public readonly status?: number,
