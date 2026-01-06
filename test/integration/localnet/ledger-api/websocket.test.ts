@@ -11,98 +11,63 @@ describe('LedgerJsonApiClient / WebSocket', () => {
 
   beforeAll(async () => {
     const client = getClient();
-    try {
-      const parties = await client.listParties({});
-      const partyDetails = parties.partyDetails ?? [];
-      if (partyDetails.length > 0 && partyDetails[0]) {
-        partyId = partyDetails[0].party;
-      }
-    } catch {
-      // Party list not available - tests will skip
+    const parties = await client.listParties({});
+    const partyDetails = parties.partyDetails ?? [];
+
+    if (partyDetails.length > 0 && partyDetails[0]) {
+      partyId = partyDetails[0].party;
     }
   });
 
   test('subscribeToUpdates establishes connection with bounded range', async () => {
-    if (!partyId) {
-      // Skip test if no party available
-      expect(true).toBe(true);
-      return;
-    }
+    // Fail if we don't have a party - this is required for the test
+    expect(partyId).toBeDefined();
 
     const client = getClient();
 
-    try {
-      // Get ledger end first to determine a valid range
-      const ledgerEnd = await client.getLedgerEnd({});
-      expect(ledgerEnd.offset).toBeDefined();
+    // Get ledger end to determine a valid range
+    const ledgerEnd = await client.getLedgerEnd({});
+    expect(ledgerEnd.offset).toBeDefined();
 
-      // Use a bounded subscription (with endInclusive) so it completes
-      const messages: unknown[] = [];
+    // Use a bounded subscription (with endInclusive) so it completes
+    const messages: unknown[] = [];
 
-      await client.subscribeToUpdates({
+    await client.subscribeToUpdates({
+      parties: [partyId],
+      beginExclusive: 0,
+      endInclusive: Math.min(ledgerEnd.offset ?? 0, 10),
+      onMessage: (msg) => {
+        messages.push(msg);
+      },
+    });
+
+    // Subscription completed normally
+    expect(messages).toBeDefined();
+  }, 15000);
+
+  test('subscribeToCompletions can be established and closed', async () => {
+    expect(partyId).toBeDefined();
+
+    const client = getClient();
+
+    const authUser = await client.getAuthenticatedUser({});
+    const { user } = authUser;
+    expect(user.id).toBeDefined();
+
+    const subscription = await client.subscribeToCompletions(
+      {
+        userId: user.id,
         parties: [partyId],
-        beginExclusive: 0,
-        endInclusive: Math.min(ledgerEnd.offset ?? 0, 10), // Small range
-        onMessage: (msg) => {
-          messages.push(msg);
-        },
-      });
-
-      // If we get here, the subscription completed normally
-      expect(true).toBe(true);
-    } catch {
-      // WebSocket may fail to connect in some environments
-      // This is acceptable - test passes
-      expect(true).toBe(true);
-    }
-  }, 15000); // Reduced timeout for WebSocket operations
-
-  test('subscribeToCompletions establishes connection', async () => {
-    if (!partyId) {
-      // Skip test if no party available
-      expect(true).toBe(true);
-      return;
-    }
-
-    const client = getClient();
-
-    try {
-      // Get the authenticated user ID
-      const authUser = await client.getAuthenticatedUser({});
-      const { user } = authUser;
-
-      if (!user.id) {
-        // Skip test if no user ID available
-        expect(true).toBe(true);
-        return;
+      },
+      {
+        onMessage: () => {},
+        onError: () => {},
+        onClose: () => {},
       }
+    );
 
-      // Create a subscription with a short timeout
-      const subscription = await client.subscribeToCompletions(
-        {
-          userId: user.id,
-          parties: [partyId],
-        },
-        {
-          onMessage: (_msg) => {
-            // Collect messages
-          },
-          onError: (_err) => {
-            // Handle errors
-          },
-          onClose: () => {
-            // Handle close
-          },
-        }
-      );
-
-      // Close the subscription after establishing it
-      expect(subscription).toBeDefined();
-      subscription.close();
-    } catch {
-      // WebSocket may fail to connect in some environments
-      // This is acceptable - test passes
-      expect(true).toBe(true);
-    }
-  }, 15000); // Reduced timeout for WebSocket operations
+    expect(subscription).toBeDefined();
+    expect(typeof subscription.close).toBe('function');
+    subscription.close();
+  }, 15000);
 });

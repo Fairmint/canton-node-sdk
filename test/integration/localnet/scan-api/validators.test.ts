@@ -10,48 +10,32 @@ describe('ScanApiClient / Validators', () => {
   test('getTopValidatorsByValidatorFaucets returns top validators', async () => {
     const client = getClient();
 
-    try {
-      const response = await client.getTopValidatorsByValidatorFaucets();
-      expect(response).toBeDefined();
-    } catch (error) {
-      // May not be available
-      console.warn('getTopValidatorsByValidatorFaucets failed:', error);
-    }
+    const response = await client.getTopValidatorsByValidatorFaucets();
+
+    expect(response).toBeDefined();
   });
 
   test('getTopValidatorsByValidatorRewards returns top validators by rewards', async () => {
     const client = getClient();
 
-    try {
-      const response = await client.getTopValidatorsByValidatorRewards();
-      expect(response).toBeDefined();
-    } catch (error) {
-      // May not be available
-      console.warn('getTopValidatorsByValidatorRewards failed:', error);
-    }
+    const response = await client.getTopValidatorsByValidatorRewards();
+
+    expect(response).toBeDefined();
   });
 
   test('getTopValidatorsByPurchasedTraffic returns top validators by traffic', async () => {
     const client = getClient();
 
-    try {
-      const response = await client.getTopValidatorsByPurchasedTraffic();
-      expect(response).toBeDefined();
-    } catch (error) {
-      // May not be available
-      console.warn('getTopValidatorsByPurchasedTraffic failed:', error);
-    }
+    const response = await client.getTopValidatorsByPurchasedTraffic();
+
+    expect(response).toBeDefined();
   });
 
   test('getTopProvidersByAppRewards returns top providers', async () => {
     const client = getClient();
 
-    try {
-      const response = await client.getTopProvidersByAppRewards();
-      expect(response).toBeDefined();
-    } catch (error) {
-      // May not be available
-      console.warn('getTopProvidersByAppRewards failed:', error);
-    }
+    const response = await client.getTopProvidersByAppRewards();
+
+    expect(response).toBeDefined();
   });
 });

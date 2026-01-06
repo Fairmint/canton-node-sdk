@@ -9,6 +9,7 @@ import { getClient } from './setup';
 describe('ScanApiClient / Network', () => {
   test('getDsoPartyId returns DSO party identifier', async () => {
     const client = getClient();
+
     const response = await client.getDsoPartyId();
 
     expect(response).toBeDefined();
@@ -19,87 +20,59 @@ describe('ScanApiClient / Network', () => {
   test('listDsoScans returns DSO scan list', async () => {
     const client = getClient();
 
-    try {
-      const response = await client.listDsoScans();
-      expect(response).toBeDefined();
-    } catch (error) {
-      // May not be available
-      console.warn('listDsoScans failed:', error);
-    }
+    const response = await client.listDsoScans();
+
+    expect(response).toBeDefined();
   });
 
   test('listValidatorLicenses returns validator licenses', async () => {
     const client = getClient();
 
-    try {
-      const response = await client.listValidatorLicenses({});
-      expect(response).toBeDefined();
-    } catch (error) {
-      // May not be available
-      console.warn('listValidatorLicenses failed:', error);
-    }
+    const response = await client.listValidatorLicenses({});
+
+    expect(response).toBeDefined();
   });
 
   test('listDsoSequencers returns sequencer list', async () => {
     const client = getClient();
 
-    try {
-      const response = await client.listDsoSequencers();
-      expect(response).toBeDefined();
-    } catch (error) {
-      // May not be available
-      console.warn('listDsoSequencers failed:', error);
-    }
+    const response = await client.listDsoSequencers();
+
+    expect(response).toBeDefined();
   });
 
   test('getSpliceInstanceNames returns instance names', async () => {
     const client = getClient();
 
-    try {
-      const response = await client.getSpliceInstanceNames();
-      expect(response).toBeDefined();
-    } catch (error) {
-      // May not be available
-      console.warn('getSpliceInstanceNames failed:', error);
-    }
+    const response = await client.getSpliceInstanceNames();
+
+    expect(response).toBeDefined();
   });
 
   test('listFeaturedAppRights returns featured app rights', async () => {
     const client = getClient();
 
-    try {
-      const response = await client.listFeaturedAppRights();
-      expect(response).toBeDefined();
-      expect(response.featured_apps).toBeDefined();
-    } catch (error) {
-      // May not be available
-      console.warn('listFeaturedAppRights failed:', error);
-    }
+    const response = await client.listFeaturedAppRights();
+
+    expect(response).toBeDefined();
+    expect(response.featured_apps).toBeDefined();
   });
 
   test('getClosedRounds returns closed rounds info', async () => {
     const client = getClient();
 
-    try {
-      const response = await client.getClosedRounds();
-      expect(response).toBeDefined();
-    } catch (error) {
-      // May not be available
-      console.warn('getClosedRounds failed:', error);
-    }
+    const response = await client.getClosedRounds();
+
+    expect(response).toBeDefined();
   });
 
   test('getAnsRules returns ANS rules', async () => {
     const client = getClient();
 
-    try {
-      const response = await client.getAnsRules({
-        body: {},
-      });
-      expect(response).toBeDefined();
-    } catch (error) {
-      // May not be available
-      console.warn('getAnsRules failed:', error);
-    }
+    const response = await client.getAnsRules({
+      body: {},
+    });
+
+    expect(response).toBeDefined();
   });
 });

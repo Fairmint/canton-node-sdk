@@ -21,29 +21,23 @@ describe('ScanApiClient / Health', () => {
     expect(response).toBeDefined();
   });
 
-  test('isReady returns readiness status', async () => {
+  test('isReady completes without error', async () => {
     const client = getClient();
-    // isReady returns void (200 OK with no body)
+    // isReady returns void (200 OK with no body) - test passes if no error thrown
     await client.isReady();
-    expect(true).toBe(true); // Success if no error thrown
   });
 
-  test('isLive returns liveness status', async () => {
+  test('isLive completes without error', async () => {
     const client = getClient();
-    // isLive returns void (200 OK with no body)
+    // isLive returns void (200 OK with no body) - test passes if no error thrown
     await client.isLive();
-    expect(true).toBe(true); // Success if no error thrown
   });
 
   test('featureSupport returns supported features', async () => {
     const client = getClient();
 
-    try {
-      const response = await client.featureSupport();
-      expect(response).toBeDefined();
-    } catch (error) {
-      // May not be available in all setups
-      console.warn('featureSupport failed:', error);
-    }
+    const response = await client.featureSupport();
+
+    expect(response).toBeDefined();
   });
 });

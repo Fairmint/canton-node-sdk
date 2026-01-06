@@ -10,40 +10,28 @@ describe('ScanApiClient / Voting', () => {
   test('listAmuletPriceVotes returns price votes', async () => {
     const client = getClient();
 
-    try {
-      const response = await client.listAmuletPriceVotes();
-      expect(response).toBeDefined();
-    } catch (error) {
-      // May not be available
-      console.warn('listAmuletPriceVotes failed:', error);
-    }
+    const response = await client.listAmuletPriceVotes();
+
+    expect(response).toBeDefined();
   });
 
   test('listDsoRulesVoteRequests returns vote requests', async () => {
     const client = getClient();
 
-    try {
-      const response = await client.listDsoRulesVoteRequests();
-      expect(response).toBeDefined();
-    } catch (error) {
-      // May not be available
-      console.warn('listDsoRulesVoteRequests failed:', error);
-    }
+    const response = await client.listDsoRulesVoteRequests();
+
+    expect(response).toBeDefined();
   });
 
   test('listVoteRequestResults returns vote results', async () => {
     const client = getClient();
 
-    try {
-      const response = await client.listVoteRequestResults({
-        body: {
-          limit: 10,
-        },
-      });
-      expect(response).toBeDefined();
-    } catch (error) {
-      // May not be available
-      console.warn('listVoteRequestResults failed:', error);
-    }
+    const response = await client.listVoteRequestResults({
+      body: {
+        limit: 10,
+      },
+    });
+
+    expect(response).toBeDefined();
   });
 });

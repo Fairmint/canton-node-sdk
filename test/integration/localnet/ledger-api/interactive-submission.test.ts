@@ -19,46 +19,28 @@ describe('LedgerJsonApiClient / InteractiveSubmission', () => {
   });
 
   test('interactiveSubmissionGetPreferredPackages returns package info', async () => {
-    if (!partyId) {
-      console.warn('No party available for interactiveSubmissionGetPreferredPackages test');
-      return;
-    }
+    expect(partyId).toBeDefined();
 
     const client = getClient();
 
-    // Get the amulet rules to find the synchronizer ID
-    // First, we need a valid synchronizer ID
-    try {
-      const response = await client.interactiveSubmissionGetPreferredPackages({
-        packageVettingRequirements: [],
-      });
+    const response = await client.interactiveSubmissionGetPreferredPackages({
+      packageVettingRequirements: [],
+    });
 
-      expect(response).toBeDefined();
-      // Response structure depends on packages available
-    } catch (error) {
-      // May fail if no synchronizer is connected
-      expect(error).toBeDefined();
-    }
+    expect(response).toBeDefined();
   });
 
-  test('interactiveSubmissionGetPreferredPackageVersion returns version info', async () => {
-    if (!partyId) {
-      console.warn('No party available for interactiveSubmissionGetPreferredPackageVersion test');
-      return;
-    }
+  test('interactiveSubmissionGetPreferredPackageVersion returns error for unknown package', async () => {
+    expect(partyId).toBeDefined();
 
     const client = getClient();
 
-    try {
-      const response = await client.interactiveSubmissionGetPreferredPackageVersion({
+    // Unknown package name should return error
+    await expect(
+      client.interactiveSubmissionGetPreferredPackageVersion({
         parties: [partyId],
-        packageName: 'splice-amulet',
-      });
-
-      expect(response).toBeDefined();
-    } catch (error) {
-      // May fail if package is not found
-      expect(error).toBeDefined();
-    }
+        packageName: 'non-existent-package',
+      })
+    ).rejects.toThrow();
   });
 });
