@@ -149,10 +149,11 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
     }
 
     // Extract amount based on contract type
-    let rawAmount: unknown = '0';
+    let rawAmount: string | number = '0';
     if (templateId?.includes('AppRewardCoupon') || templateId?.includes('ValidatorRewardCoupon')) {
       // For coupons, amount is directly in payload
-      rawAmount = payload['amount'] ?? '0';
+      const amount = payload['amount'];
+      rawAmount = typeof amount === 'string' || typeof amount === 'number' ? amount : '0';
     } else {
       // For amulets, amount might be nested
       const rawAmountCandidate =
@@ -160,16 +161,17 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
         contractRecord['amount'] ??
         contractRecord['effective_amount'] ??
         contractRecord['effectiveAmount'] ??
-        contractRecord['initialAmount'] ??
-        '0';
+        contractRecord['initialAmount'];
 
-      rawAmount = rawAmountCandidate;
-      if (typeof rawAmountCandidate === 'object') {
-        rawAmount = (rawAmountCandidate as Record<string, unknown>)['initialAmount'] ?? '0';
+      if (typeof rawAmountCandidate === 'string' || typeof rawAmountCandidate === 'number') {
+        rawAmount = rawAmountCandidate;
+      } else if (rawAmountCandidate && typeof rawAmountCandidate === 'object') {
+        const nested = (rawAmountCandidate as Record<string, unknown>)['initialAmount'];
+        rawAmount = typeof nested === 'string' || typeof nested === 'number' ? nested : '0';
       }
     }
 
-    const numericAmount = parseFloat(rawAmount as string);
+    const numericAmount = typeof rawAmount === 'number' ? rawAmount : parseFloat(rawAmount);
     return { owner: ownerFull, numericAmount };
   };
 

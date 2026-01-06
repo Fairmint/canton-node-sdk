@@ -1,8 +1,20 @@
+import { type BaseClient } from '../../../../../core';
 import { ApiOperation } from '../../../../../core/operations/ApiOperation';
 import { type operations } from '../../../../../generated/apps/scan/src/main/openapi/scan';
-import { getCurrentMiningRoundDomainId } from '../../../../../utils/mining/mining-rounds';
+import { getCurrentMiningRoundDomainId, type MiningRoundClient } from '../../../../../utils/mining/mining-rounds';
 import { GetMemberTrafficStatusParamsSchema, type GetMemberTrafficStatusParams } from '../../../schemas/operations';
-import { type ValidatorApiClient } from '../../../ValidatorApiClient.generated';
+
+/** Response type for getMemberTrafficStatus operation */
+type GetMemberTrafficStatusResponse =
+  operations['getMemberTrafficStatus']['responses']['200']['content']['application/json'];
+
+/** Type guard to check if a client has mining round methods */
+function hasMiningRoundMethods(client: BaseClient): client is BaseClient & MiningRoundClient {
+  return (
+    'getOpenAndIssuingMiningRounds' in client &&
+    typeof (client as MiningRoundClient).getOpenAndIssuingMiningRounds === 'function'
+  );
+}
 
 /**
  * Get a member's traffic status as reported by the sequencer
@@ -26,29 +38,26 @@ import { type ValidatorApiClient } from '../../../ValidatorApiClient.generated';
  *
  *   ```;
  */
-export class GetMemberTrafficStatus extends ApiOperation<
-  GetMemberTrafficStatusParams,
-  operations['getMemberTrafficStatus']['responses']['200']['content']['application/json']
-> {
-  async execute(
-    params: GetMemberTrafficStatusParams = {}
-  ): Promise<operations['getMemberTrafficStatus']['responses']['200']['content']['application/json']> {
+export class GetMemberTrafficStatus extends ApiOperation<GetMemberTrafficStatusParams, GetMemberTrafficStatusResponse> {
+  async execute(params: GetMemberTrafficStatusParams = {}): Promise<GetMemberTrafficStatusResponse> {
     const validatedParams = this.validateParams(params, GetMemberTrafficStatusParamsSchema);
 
     // Auto-determine domainId if not provided
-    const domainId =
-      validatedParams.domainId ?? (await getCurrentMiningRoundDomainId(this.client as unknown as ValidatorApiClient));
+    let { domainId } = validatedParams;
+    if (!domainId) {
+      if (!hasMiningRoundMethods(this.client)) {
+        throw new Error('Client does not support getOpenAndIssuingMiningRounds - use ValidatorApiClient');
+      }
+      domainId = await getCurrentMiningRoundDomainId(this.client);
+    }
 
     // Auto-determine memberId if not provided
-    const memberId = validatedParams.memberId ?? (this.client as { getPartyId: () => string }).getPartyId();
+    const memberId = validatedParams.memberId ?? this.client.getPartyId();
 
     const url = `${this.getApiUrl()}/api/validator/v0/scan-proxy/domains/${encodeURIComponent(domainId)}/members/${encodeURIComponent(memberId)}/traffic-status`;
 
-    return this.makeGetRequest<operations['getMemberTrafficStatus']['responses']['200']['content']['application/json']>(
-      url,
-      {
-        includeBearerToken: true,
-      }
-    );
+    return this.makeGetRequest<GetMemberTrafficStatusResponse>(url, {
+      includeBearerToken: true,
+    });
   }
 }

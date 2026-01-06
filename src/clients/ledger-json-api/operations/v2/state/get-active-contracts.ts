@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { ApiError } from '../../../../../core/errors';
 import { WebSocketClient } from '../../../../../core/ws/WebSocketClient';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
-import { type JsCantonErrorSchema, type WsCantonErrorSchema } from '../../../schemas/api/errors';
+import { type JsCantonError, type WsCantonError } from '../../../schemas/api/errors';
 import { type JsGetActiveContractsResponse, type JsGetActiveContractsResponseItem } from '../../../schemas/api/state';
 import { buildEventFormat } from '../utils/event-format-builder';
 
@@ -37,10 +38,12 @@ export class GetActiveContracts {
     const validated = ActiveContractsParamsSchema.parse(params);
 
     // Determine activeAtOffset (default to ledger end if not specified)
-    let { activeAtOffset } = validated;
-    if (activeAtOffset === undefined) {
+    let activeAtOffset: number;
+    if (validated.activeAtOffset !== undefined) {
+      ({ activeAtOffset } = validated);
+    } else {
       const ledgerEnd = await this.client.getLedgerEnd({});
-      activeAtOffset = ledgerEnd.offset;
+      ({ offset: activeAtOffset } = ledgerEnd);
     }
 
     // Build party list - default to client's party list if not provided
@@ -56,13 +59,23 @@ export class GetActiveContracts {
       }),
     });
 
-    // Build request message
-    const requestMessage = {
-      filter: undefined as unknown,
+    // Request message type for the active contracts WebSocket endpoint
+    interface ActiveContractsRequestMessage {
+      filter?: undefined;
+      verbose: boolean;
+      activeAtOffset: number;
+      eventFormat: ReturnType<typeof buildEventFormat>;
+    }
+
+    // Response message can be a contract item or an error
+    type ActiveContractsResponseMessage = JsGetActiveContractsResponseItem | JsCantonError | WsCantonError;
+
+    const requestMessage: ActiveContractsRequestMessage = {
+      filter: undefined,
       verbose: false,
       activeAtOffset,
       eventFormat,
-    } as const;
+    };
 
     const wsClient = new WebSocketClient(this.client);
 
@@ -70,40 +83,38 @@ export class GetActiveContracts {
       const results: JsGetActiveContractsResponse = [];
       let settled = false;
 
-      void wsClient
-        .connect<typeof requestMessage, unknown>(path, requestMessage, {
-          onMessage: (raw) => {
-            try {
-              // Skip Zod validation for response types - just use the raw parsed JSON
-              // Zod validation is only needed for input types, not outputs
-              const parsed = raw as
-                | JsGetActiveContractsResponseItem
-                | z.infer<typeof JsCantonErrorSchema>
-                | z.infer<typeof WsCantonErrorSchema>;
+      /** Convert a Canton error response to a proper Error object */
+      const toError = (errorResponse: JsCantonError | WsCantonError): Error => {
+        // JsCantonError has 'message' string, WsCantonError has 'cause' string
+        // JsCantonError has code as object, WsCantonError has code as string
+        if ('cause' in errorResponse) {
+          // WsCantonError
+          return new ApiError(`WebSocket error [${errorResponse.code}]: ${errorResponse.cause}`);
+        }
+        // JsCantonError
+        const codeStr = JSON.stringify(errorResponse.code);
+        return new ApiError(`WebSocket error [${codeStr}]: ${errorResponse.message}`);
+      };
 
-              // Distinguish item vs error union members
-              if (typeof parsed === 'object' && 'contractEntry' in parsed) {
-                const item = parsed;
-                results.push(item);
-                if (typeof params.onItem === 'function') {
-                  params.onItem(item);
-                }
-              } else if (!settled) {
-                // Treat any non-item as an error message
-                settled = true;
-                reject(parsed as unknown as Error);
+      void wsClient
+        .connect<ActiveContractsRequestMessage, ActiveContractsResponseMessage>(path, requestMessage, {
+          onMessage: (parsed) => {
+            // Distinguish item vs error union members
+            if (typeof parsed === 'object' && 'contractEntry' in parsed) {
+              results.push(parsed);
+              if (typeof params.onItem === 'function') {
+                params.onItem(parsed);
               }
-            } catch (e) {
-              if (!settled) {
-                settled = true;
-                reject(e as Error);
-              }
+            } else if (!settled) {
+              // Treat any non-item as an error message
+              settled = true;
+              reject(toError(parsed));
             }
           },
           onError: (err) => {
             if (!settled) {
               settled = true;
-              reject(err as Error);
+              reject(err instanceof Error ? err : new Error(String(err)));
             }
           },
           onClose: () => {
@@ -113,10 +124,10 @@ export class GetActiveContracts {
             }
           },
         })
-        .catch((err) => {
+        .catch((err: unknown) => {
           if (!settled) {
             settled = true;
-            reject(err as Error);
+            reject(err instanceof Error ? err : new Error(String(err)));
           }
         });
     });

@@ -1,10 +1,14 @@
 import { type DisclosedContract } from '../../clients/ledger-json-api/schemas';
-import { type ValidatorApiClient } from '../../clients/validator-api';
 import {
   type GetOpenAndIssuingMiningRoundsResponse,
   type IssuingMiningRound,
   type OpenMiningRound,
 } from '../../clients/validator-api/schemas/api';
+
+/** Client interface required for mining round operations */
+export interface MiningRoundClient {
+  getOpenAndIssuingMiningRounds: () => Promise<GetOpenAndIssuingMiningRoundsResponse>;
+}
 
 /** Sleep utility function */
 async function sleep(ms: number): Promise<void> {
@@ -55,7 +59,7 @@ export interface MiningRoundContext {
  *
  * @throws Error if no mining round satisfies the criteria
  */
-export async function getCurrentMiningRoundContext(validatorClient: ValidatorApiClient): Promise<MiningRoundContext> {
+export async function getCurrentMiningRoundContext(validatorClient: MiningRoundClient): Promise<MiningRoundContext> {
   const miningRoundsResponse: GetOpenAndIssuingMiningRoundsResponse =
     await validatorClient.getOpenAndIssuingMiningRounds();
 
@@ -106,11 +110,11 @@ export async function getCurrentMiningRoundContext(validatorClient: ValidatorApi
  * Gets the domain ID from the current mining round context. This is useful for operations that need to automatically
  * determine the domain ID.
  *
- * @param validatorClient - Validator API client for getting mining round information
+ * @param validatorClient - Client with mining round access for getting mining round information
  * @returns Promise resolving to the domain ID string
  * @throws Error if no mining round satisfies the criteria
  */
-export async function getCurrentMiningRoundDomainId(validatorClient: ValidatorApiClient): Promise<string> {
+export async function getCurrentMiningRoundDomainId(validatorClient: MiningRoundClient): Promise<string> {
   const miningRoundContext = await getCurrentMiningRoundContext(validatorClient);
   return miningRoundContext.openMiningRoundContract.synchronizerId;
 }
@@ -118,11 +122,11 @@ export async function getCurrentMiningRoundDomainId(validatorClient: ValidatorAp
 /**
  * Gets the current mining round number by fetching the latest open mining round
  *
- * @param validatorClient Validator API client to fetch round information
+ * @param validatorClient Client with mining round access to fetch round information
  * @returns Promise resolving to the current round number
  * @throws Error if no open mining rounds are found
  */
-export async function getCurrentRoundNumber(validatorClient: ValidatorApiClient): Promise<number> {
+export async function getCurrentRoundNumber(validatorClient: MiningRoundClient): Promise<number> {
   const miningRoundsResponse = await validatorClient.getOpenAndIssuingMiningRounds();
   const currentOpenMiningRounds = miningRoundsResponse.open_mining_rounds;
 
@@ -141,12 +145,12 @@ export async function getCurrentRoundNumber(validatorClient: ValidatorApiClient)
 /**
  * Wait until the mining round has actually changed, confirming the change
  *
- * @param validatorClient Validator API client to fetch round information
+ * @param validatorClient Client with mining round access to fetch round information
  * @param maxWaitTime Maximum time to wait in milliseconds (default: 20 minutes)
  * @returns Promise that resolves when the round has changed
  */
 export async function waitForRoundChange(
-  validatorClient: ValidatorApiClient,
+  validatorClient: MiningRoundClient,
   maxWaitTime: number = 20 * 60 * 1000 // 20 minutes default
 ): Promise<void> {
   const startTime = Date.now();
