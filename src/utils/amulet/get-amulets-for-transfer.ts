@@ -238,7 +238,8 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
     let effectiveAmount = '0';
     if (templateId.includes('AppRewardCoupon') || templateId.includes('ValidatorRewardCoupon')) {
       // For coupons, amount is directly in payload
-      effectiveAmount = extractString(payload['amount']) ?? '0';
+      const couponAmount = extractNumericValue(payload['amount']);
+      effectiveAmount = couponAmount !== undefined ? String(couponAmount) : '0';
     } else {
       // For amulets, amount might be nested
       const amtObj = payload['amount'];
