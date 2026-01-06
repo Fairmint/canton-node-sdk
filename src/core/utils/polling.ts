@@ -8,11 +8,14 @@ export interface WaitForConditionOptions {
 }
 
 /**
- * Polls a condition function until it returns a truthy value or times out.
+ * Polls a condition function until it returns a non-null/non-undefined value or times out.
  *
- * @param check - Function that returns a value or null/undefined. Resolves when a truthy value is returned.
+ * Return `null` or `undefined` from the check function to indicate the condition is not yet met.
+ * Any other value (including falsy values like `0`, `false`, or `""`) is considered a successful result.
+ *
+ * @param check - Function that returns a value, or null/undefined if the condition is not yet met.
  * @param options - Configuration options
- * @returns The first truthy value returned by the check function
+ * @returns The first non-null/non-undefined value returned by the check function
  * @throws Error if the condition is not met within the timeout period
  *
  * @example
@@ -43,7 +46,7 @@ export async function waitForCondition<T>(
 
   while (Date.now() - startTime < timeout) {
     const result = await check();
-    if (result != null) {
+    if (result !== null && result !== undefined) {
       return result;
     }
     await new Promise((resolve) => setTimeout(resolve, interval));
