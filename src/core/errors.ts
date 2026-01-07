@@ -43,8 +43,8 @@ export class ApiError extends CantonError {
 
 /** Error thrown when parameter validation fails */
 export class ValidationError extends CantonError {
-  constructor(message: string) {
-    super(message, 'VALIDATION_ERROR');
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, 'VALIDATION_ERROR', context);
     this.name = 'ValidationError';
   }
 }
@@ -54,5 +54,31 @@ export class NetworkError extends CantonError {
   constructor(message: string) {
     super(message, 'NETWORK_ERROR');
     this.name = 'NetworkError';
+  }
+}
+
+/** Error codes for operation-specific errors */
+export const OperationErrorCode = {
+  MISSING_CONTRACT: 'MISSING_CONTRACT',
+  MISSING_DOMAIN_ID: 'MISSING_DOMAIN_ID',
+  INSUFFICIENT_FUNDS: 'INSUFFICIENT_FUNDS',
+  INVALID_AMOUNT: 'INVALID_AMOUNT',
+  INVALID_PARAMETER: 'INVALID_PARAMETER',
+  MINING_ROUND_NOT_FOUND: 'MINING_ROUND_NOT_FOUND',
+  PARTY_CREATION_FAILED: 'PARTY_CREATION_FAILED',
+  TRANSACTION_FAILED: 'TRANSACTION_FAILED',
+} as const;
+
+export type OperationErrorCodeType = (typeof OperationErrorCode)[keyof typeof OperationErrorCode];
+
+/** Error thrown when SDK operations fail */
+export class OperationError extends CantonError {
+  constructor(
+    message: string,
+    code: OperationErrorCodeType,
+    context?: Record<string, unknown>
+  ) {
+    super(message, code, context);
+    this.name = 'OperationError';
   }
 }

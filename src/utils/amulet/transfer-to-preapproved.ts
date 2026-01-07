@@ -5,6 +5,7 @@ import {
 } from '../../clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction-tree';
 import { type DisclosedContract, type ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/commands';
 import { type ValidatorApiClient } from '../../clients/validator-api';
+import { OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
 import { getCurrentMiningRoundContext } from '../mining/mining-rounds';
 import { getAmuletsForTransfer } from './get-amulets-for-transfer';
 
@@ -73,7 +74,7 @@ export async function transferToPreapproved(
   params: TransferToPreapprovedParams
 ): Promise<TransferToPreapprovedResult> {
   if (params.transfers.length === 0) {
-    throw new Error('At least one transfer must be provided');
+    throw new ValidationError('At least one transfer must be provided', { transfersCount: 0 });
   }
 
   // Get network information
@@ -92,7 +93,11 @@ export async function transferToPreapproved(
   });
 
   if (amulets.length === 0) {
-    throw new Error(`No unlocked amulets found for sender party ${params.senderPartyId}`);
+    throw new OperationError(
+      `No unlocked amulets found for sender party ${params.senderPartyId}`,
+      OperationErrorCode.INSUFFICIENT_FUNDS,
+      { partyId: params.senderPartyId }
+    );
   }
 
   // Convert amulets to input format
@@ -134,7 +139,11 @@ export async function transferToPreapproved(
     const transferPreapprovalContractId = transferPreapprovalContract.contract_id;
 
     if (!transfer_preapproval.domain_id) {
-      throw new Error(`No domain ID found for transfer preapproval for party ${transfer.recipientPartyId}`);
+      throw new OperationError(
+        `No domain ID found for transfer preapproval for party ${transfer.recipientPartyId}`,
+        OperationErrorCode.MISSING_DOMAIN_ID,
+        { partyId: transfer.recipientPartyId, contractId: transferPreapprovalContractId }
+      );
     }
 
     // Look up featured app right for the recipient
@@ -143,7 +152,11 @@ export async function transferToPreapproved(
     });
 
     if (!featuredAppRight.featured_app_right?.contract_id) {
-      throw new Error(`No featured app right found for party ${transfer.recipientPartyId}`);
+      throw new OperationError(
+        `No featured app right found for party ${transfer.recipientPartyId}`,
+        OperationErrorCode.MISSING_CONTRACT,
+        { partyId: transfer.recipientPartyId, contractType: 'FeaturedAppRight' }
+      );
     }
 
     const featuredAppRightContractId = featuredAppRight.featured_app_right.contract_id;
@@ -192,7 +205,11 @@ export async function transferToPreapproved(
     };
 
     if (!amuletRules.amulet_rules.domain_id) {
-      throw new Error('Amulet rules domain ID is required');
+      throw new OperationError(
+        'Amulet rules domain ID is required',
+        OperationErrorCode.MISSING_DOMAIN_ID,
+        { contractId: amuletRules.amulet_rules.contract.contract_id }
+      );
     }
 
     // Submit the command

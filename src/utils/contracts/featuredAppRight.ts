@@ -1,12 +1,18 @@
 import { type ValidatorApiClient } from '../../clients';
 import { type DisclosedContract } from '../../clients/ledger-json-api/schemas';
+import { OperationError, OperationErrorCode } from '../../core/errors';
 
 export async function getFeaturedAppRightContractDetails(validatorApi: ValidatorApiClient): Promise<DisclosedContract> {
+  const partyId = validatorApi.getPartyId();
   const featuredAppRight = await validatorApi.lookupFeaturedAppRight({
-    partyId: validatorApi.getPartyId(),
+    partyId,
   });
   if (!featuredAppRight.featured_app_right) {
-    throw new Error(`No featured app right found for party ${validatorApi.getPartyId()}`);
+    throw new OperationError(
+      `No featured app right found for party ${partyId}`,
+      OperationErrorCode.MISSING_CONTRACT,
+      { partyId, contractType: 'FeaturedAppRight' }
+    );
   }
   // The featured-apps endpoint may not include the synchronizer/domain id.
   // Get domain_id from amulet rules which reliably expose it.

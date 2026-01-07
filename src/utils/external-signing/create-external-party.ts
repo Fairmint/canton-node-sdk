@@ -1,5 +1,6 @@
 import type { Keypair } from '@stellar/stellar-base';
 import type { LedgerJsonApiClient } from '../../clients/ledger-json-api';
+import { OperationError, OperationErrorCode } from '../../core/errors';
 import { signHexWithStellarKeypair, stellarPublicKeyToBase64, stellarPublicKeyToHex } from './stellar-utils';
 
 /** Parameters for creating an external party */
@@ -104,15 +105,27 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
   const { partyId, multiHash, topologyTransactions } = topology;
 
   if (!partyId) {
-    throw new Error('No party ID returned from topology generation');
+    throw new OperationError(
+      'No party ID returned from topology generation',
+      OperationErrorCode.PARTY_CREATION_FAILED,
+      { partyName, synchronizerId }
+    );
   }
 
   if (!multiHash) {
-    throw new Error('No multi-hash returned from topology generation');
+    throw new OperationError(
+      'No multi-hash returned from topology generation',
+      OperationErrorCode.PARTY_CREATION_FAILED,
+      { partyName, synchronizerId, partyId }
+    );
   }
 
   if (!topologyTransactions || topologyTransactions.length === 0) {
-    throw new Error('No topology transactions returned from topology generation');
+    throw new OperationError(
+      'No topology transactions returned from topology generation',
+      OperationErrorCode.PARTY_CREATION_FAILED,
+      { partyName, synchronizerId, partyId }
+    );
   }
 
   // Step 3: Sign the multi-hash using the Stellar keypair
@@ -140,12 +153,20 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
   });
 
   if (!allocateResult.partyId) {
-    throw new Error('Failed to allocate external party - no party ID returned');
+    throw new OperationError(
+      'Failed to allocate external party - no party ID returned',
+      OperationErrorCode.PARTY_CREATION_FAILED,
+      { partyName, synchronizerId }
+    );
   }
 
   const publicKeyFingerprint = partyId.split('::')[1];
   if (!publicKeyFingerprint) {
-    throw new Error('Failed to extract public key fingerprint from party ID');
+    throw new OperationError(
+      'Failed to extract public key fingerprint from party ID',
+      OperationErrorCode.PARTY_CREATION_FAILED,
+      { partyId, partyName }
+    );
   }
 
   return {

@@ -1,4 +1,5 @@
 import { Keypair } from '@stellar/stellar-base';
+import { ValidationError } from '../../core/errors';
 
 /**
  * Wraps a raw Ed25519 public key in DER X.509 SubjectPublicKeyInfo format
@@ -11,7 +12,10 @@ import { Keypair } from '@stellar/stellar-base';
  */
 export function wrapEd25519PublicKeyInDER(rawPublicKey: Buffer): Buffer {
   if (rawPublicKey.length !== 32) {
-    throw new Error(`Invalid Ed25519 public key length: ${rawPublicKey.length}, expected 32 bytes`);
+    throw new ValidationError(
+      `Invalid Ed25519 public key length: ${rawPublicKey.length}, expected 32 bytes`,
+      { actualLength: rawPublicKey.length, expectedLength: 32 }
+    );
   }
 
   // DER prefix for Ed25519 public keys in X.509 SubjectPublicKeyInfo format
