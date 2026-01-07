@@ -1,10 +1,11 @@
 import { type ValidatorApiClient } from '../../clients/validator-api';
 import type { GetAmuletsResponse } from '../../clients/validator-api/schemas/api/wallet';
+import { ValidationError } from '../../core/errors';
 import { type LockedAmulet } from './types';
 
 function assertString(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.trim() === '') {
-    throw new Error(`${label} must be a non-empty string`);
+    throw new ValidationError(`${label} must be a non-empty string`, { label, value: String(value) });
   }
   return value;
 }
@@ -12,7 +13,7 @@ function assertString(value: unknown, label: string): string {
 function parseEffectiveAmount(raw: string | undefined, label: string): number {
   const parsed = Number.parseFloat(raw ?? '0');
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`${label} has an invalid effective amount (${raw ?? 'undefined'})`);
+    throw new ValidationError(`${label} has an invalid effective amount`, { label, rawValue: raw });
   }
   return parsed;
 }

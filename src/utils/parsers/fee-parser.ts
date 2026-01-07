@@ -1,6 +1,7 @@
 /** Types for fee-related data structures */
 
 import { type TreeEvent } from '../../clients/ledger-json-api/schemas/api/events';
+import { ValidationError } from '../../core/errors';
 
 export interface BalanceChange {
   party: string;
@@ -136,7 +137,9 @@ export function parseFeesFromEventTree(eventTree: Record<string, TreeEvent>): Fe
   const amuletRulesEvent = findAmuletRulesTransferEvent(eventTree);
 
   if (!amuletRulesEvent) {
-    throw new Error('No AmuletRules_Transfer event found in event tree');
+    throw new ValidationError('No AmuletRules_Transfer event found in event tree', {
+      eventCount: Object.keys(eventTree).length,
+    });
   }
 
   return parseFeesFromUpdate(amuletRulesEvent);
@@ -151,20 +154,27 @@ export function parseFeesFromEventTree(eventTree: Record<string, TreeEvent>): Fe
 export function parseFeesFromUpdate(treeEvent: TreeEvent): FeeAnalysis {
   // Check if this is an exercised event that contains fee information
   if (!('ExercisedTreeEvent' in treeEvent)) {
-    throw new Error('No fee information found in TreeEvent - only exercised events contain fee data');
+    throw new ValidationError('No fee information found in TreeEvent - only exercised events contain fee data', {
+      eventType: Object.keys(treeEvent)[0],
+    });
   }
 
   const exercisedEvent = treeEvent.ExercisedTreeEvent.value;
 
   // Check if this is an AmuletRules_Transfer choice which contains fee information
   if (exercisedEvent.choice !== 'AmuletRules_Transfer') {
-    throw new Error('No fee information found in TreeEvent - only AmuletRules_Transfer choices contain fee data');
+    throw new ValidationError(
+      'No fee information found in TreeEvent - only AmuletRules_Transfer choices contain fee data',
+      { choice: exercisedEvent.choice }
+    );
   }
 
   const { exerciseResult } = exercisedEvent;
 
   if (!isExerciseResult(exerciseResult) || !isExerciseResultSummary(exerciseResult.summary)) {
-    throw new Error('No fee information found in exercise result');
+    throw new ValidationError('No fee information found in exercise result', {
+      hasResult: exerciseResult !== null && exerciseResult !== undefined,
+    });
   }
 
   const { summary } = exerciseResult;

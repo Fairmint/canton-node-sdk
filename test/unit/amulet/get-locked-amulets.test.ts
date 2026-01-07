@@ -1,6 +1,7 @@
 import { getLockedAmuletsForParty } from '../../../src/utils/amulet/get-locked-amulets';
 import type { ValidatorApiClient } from '../../../src/clients/validator-api';
 import type { GetAmuletsResponse } from '../../../src/clients/validator-api/schemas/api/wallet';
+import { ValidationError } from '../../../src/core/errors';
 
 const createMockValidatorClient = (response: GetAmuletsResponse): ValidatorApiClient =>
   ({
@@ -217,25 +218,27 @@ describe('getLockedAmuletsForParty', () => {
     );
   });
 
-  it('throws on invalid effective_amount', async () => {
+  it('throws ValidationError on invalid effective_amount', async () => {
     const mockClient = createMockValidatorClient({
       amulets: [],
       locked_amulets: [createLockedAmuletEntry('alice::fingerprint', '-100')],
     });
 
+    await expect(getLockedAmuletsForParty(mockClient, 'alice::fingerprint')).rejects.toThrow(ValidationError);
     await expect(getLockedAmuletsForParty(mockClient, 'alice::fingerprint')).rejects.toThrow(
-      'locked amulet #1 effective_amount has an invalid effective amount (-100)'
+      'locked amulet #1 effective_amount has an invalid effective amount'
     );
   });
 
-  it('throws on zero effective_amount', async () => {
+  it('throws ValidationError on zero effective_amount', async () => {
     const mockClient = createMockValidatorClient({
       amulets: [],
       locked_amulets: [createLockedAmuletEntry('alice::fingerprint', '0')],
     });
 
+    await expect(getLockedAmuletsForParty(mockClient, 'alice::fingerprint')).rejects.toThrow(ValidationError);
     await expect(getLockedAmuletsForParty(mockClient, 'alice::fingerprint')).rejects.toThrow(
-      'locked amulet #1 effective_amount has an invalid effective amount (0)'
+      'locked amulet #1 effective_amount has an invalid effective amount'
     );
   });
 });

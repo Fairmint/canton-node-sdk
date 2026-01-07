@@ -1,3 +1,5 @@
+import { OperationError, OperationErrorCode } from '../errors';
+
 export interface WaitForConditionOptions {
   /** Maximum time to wait in milliseconds (default: 30000) */
   timeout?: number;
@@ -52,5 +54,5 @@ export async function waitForCondition<T>(
     await new Promise((resolve) => setTimeout(resolve, interval));
   }
 
-  throw new Error(timeoutMessage);
+  throw new OperationError(timeoutMessage, OperationErrorCode.TRANSACTION_FAILED, { timeoutMs: timeout });
 }

@@ -48,8 +48,63 @@ function getAllTsFiles(dir: string): string[] {
 }
 
 type OperationInfo =
-  | { kind: 'api'; operationName: string; paramsType: string; responseType: string; methodName?: string }
-  | { kind: 'ws'; operationName: string; paramsType: string; requestType: string; messageType: string };
+  | { kind: 'api'; operationName: string; paramsType: string; responseType: string; methodName?: string | undefined; jsdoc?: string | undefined }
+  | { kind: 'ws'; operationName: string; paramsType: string; requestType: string; messageType: string; jsdoc?: string | undefined };
+
+/**
+ * Extracts JSDoc comment that directly precedes an export declaration (no code between them)
+ */
+function extractJsDoc(fileContent: string, operationName: string): string | undefined {
+  // Match JSDoc comment that is immediately before export const/class (only whitespace allowed between)
+  // Must not have any code between the JSDoc closing */ and the export
+  const jsdocRegex = new RegExp(
+    `(/\\*\\*(?:(?!\\*/).)*.?\\*/)\\s*\\nexport (?:const|class) ${operationName}\\b`,
+    's'
+  );
+  const match = jsdocRegex.exec(fileContent);
+  const jsdoc = match?.[1];
+
+  // Validate it's actually a JSDoc (starts with /** and ends with */)
+  if (jsdoc && jsdoc.startsWith('/**') && jsdoc.includes('*/')) {
+    // Make sure it doesn't contain code-like patterns that indicate it's not a pure JSDoc
+    if (jsdoc.includes('z.string()') || jsdoc.includes('z.object(')) {
+      return undefined;
+    }
+    return jsdoc;
+  }
+  return undefined;
+}
+
+/**
+ * Generate a human-readable description from an operation name
+ */
+function generateDescriptionFromName(operationName: string): string {
+  // Split camelCase/PascalCase into words
+  const words = operationName
+    .replace(/([A-Z])/g, ' $1')
+    .trim()
+    .toLowerCase()
+    .split(' ');
+
+  // Handle common prefixes
+  const prefix = words[0];
+  const rest = words.slice(1).join(' ');
+
+  if (prefix === 'get') return `Gets ${rest}`;
+  if (prefix === 'list') return `Lists ${rest}`;
+  if (prefix === 'create') return `Creates ${rest}`;
+  if (prefix === 'delete') return `Deletes ${rest}`;
+  if (prefix === 'update') return `Updates ${rest}`;
+  if (prefix === 'submit') return `Submits ${rest}`;
+  if (prefix === 'subscribe') return `Subscribes to ${rest}`;
+  if (prefix === 'allocate') return `Allocates ${rest}`;
+  if (prefix === 'lookup') return `Looks up ${rest}`;
+  if (prefix === 'revoke') return `Revokes ${rest}`;
+  if (prefix === 'grant') return `Grants ${rest}`;
+
+  // Default: just capitalize first letter
+  return operationName.charAt(0).toUpperCase() + operationName.slice(1).replace(/([A-Z])/g, ' $1').trim();
+}
 
 // Extract operation info from a file (supports REST, WebSocket, and class-based operations)
 function extractOperationInfos(fileContent: string): OperationInfo[] {
@@ -67,6 +122,7 @@ function extractOperationInfos(fileContent: string): OperationInfo[] {
         operationName,
         paramsType: paramsType.trim(),
         responseType: responseType.trim(),
+        jsdoc: extractJsDoc(fileContent, operationName),
       });
     }
   }
@@ -82,6 +138,7 @@ function extractOperationInfos(fileContent: string): OperationInfo[] {
       paramsType: 'unknown',
       responseType: 'unknown',
       ...(methodName && { methodName }), // Only include if defined
+      jsdoc: extractJsDoc(fileContent, classMatch[1]),
     });
   }
 
@@ -98,6 +155,7 @@ function extractOperationInfos(fileContent: string): OperationInfo[] {
       paramsType: 'unknown',
       requestType: 'unknown',
       messageType: 'unknown',
+      jsdoc: extractJsDoc(fileContent, wsNameMatch[1]),
     });
   }
 
@@ -110,23 +168,48 @@ function relativeImportPath(from: string, to: string): string {
   return rel.replace(/\.ts$/, '');
 }
 
+/**
+ * Extract the first line of a JSDoc comment (the description)
+ */
+function extractJsDocDescription(jsdoc: string | undefined): string | undefined {
+  if (!jsdoc) return undefined;
+
+  // Remove /** and */ and trim
+  const content = jsdoc
+    .replace(/^\/\*\*\s*/s, '')
+    .replace(/\s*\*\/$/s, '')
+    .split('\n')
+    .map((line) => line.replace(/^\s*\*\s?/, ''))
+    .join('\n')
+    .trim();
+
+  // Get first paragraph (up to first blank line or @tag)
+  const firstParagraph = content.split(/\n\s*\n|\n\s*@/)[0];
+  return firstParagraph?.trim();
+}
+
 function generateMethodDeclarations(ops: Array<OperationInfo & { importPath: string }>): string {
   return ops
     .map((op) => {
       const methodName = operationNameToMethodName(op.operationName);
+      const description = extractJsDocDescription(op.jsdoc) ?? generateDescriptionFromName(op.operationName);
+
+      // Generate JSDoc for the method
+      const jsdocComment = `  /** ${description} */`;
+
       if (op.kind === 'api') {
         const opMethodName = op.methodName ?? 'execute';
         const methodParamsType = `Parameters<InstanceType<typeof ${op.operationName}>['${opMethodName}']>[0]`;
         const methodReturnType = `ReturnType<InstanceType<typeof ${op.operationName}>['${opMethodName}']>`;
         if (op.paramsType === 'void') {
-          return `  public ${methodName}!: () => ${methodReturnType};`;
+          return `${jsdocComment}\n  public ${methodName}!: () => ${methodReturnType};`;
         }
-        return `  public ${methodName}!: (params: ${methodParamsType}) => ${methodReturnType};`;
+        return `${jsdocComment}\n  public ${methodName}!: (params: ${methodParamsType}) => ${methodReturnType};`;
       }
       // WebSocket subscribe methods
       const paramsType = `Parameters<InstanceType<typeof ${op.operationName}>['subscribe']>[0]`;
       const messageType = `Parameters<Parameters<InstanceType<typeof ${op.operationName}>['subscribe']>[1]['onMessage']>[0]`;
-      return `  public ${methodName}!: (params: ${paramsType}, handlers: WebSocketHandlers<${messageType}>) => Promise<WebSocketSubscription>;`;
+      return `${jsdocComment}\n  public ${methodName}!: (params: ${paramsType}, handlers: WebSocketHandlers<${messageType}>) => Promise<WebSocketSubscription>;`;
     })
     .join('\n');
 }

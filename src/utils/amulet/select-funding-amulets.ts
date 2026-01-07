@@ -1,3 +1,4 @@
+import { ValidationError } from '../../core/errors';
 import { type LockedAmulet, type LockedAmuletSelectionOptions } from './types';
 
 function isExpired(lockExpiresAt: string | null, nowMs: number): boolean {
@@ -21,7 +22,7 @@ export function selectLockedAmuletForAmount(
   options: LockedAmuletSelectionOptions = {}
 ): LockedAmulet | null {
   if (!Number.isFinite(amountNeeded) || amountNeeded <= 0) {
-    throw new Error('selectLockedAmuletForAmount requires a positive amountNeeded');
+    throw new ValidationError('selectLockedAmuletForAmount requires a positive amountNeeded', { amountNeeded });
   }
 
   const { requireExclusiveHolder = true, rejectExpiredLocks = true, nowMs = Date.now() } = options;

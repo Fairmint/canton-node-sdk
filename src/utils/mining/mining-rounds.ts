@@ -4,6 +4,7 @@ import {
   type IssuingMiningRound,
   type OpenMiningRound,
 } from '../../clients/validator-api/schemas/api';
+import { OperationError, OperationErrorCode } from '../../core/errors';
 
 /** Client interface required for mining round operations */
 export interface MiningRoundClient {
@@ -77,14 +78,22 @@ export async function getCurrentMiningRoundContext(validatorClient: MiningRoundC
   });
 
   if (validOpenRounds.length === 0) {
-    throw new Error('No open mining rounds found with opensAt <= now');
+    throw new OperationError(
+      'No open mining rounds found with opensAt <= now',
+      OperationErrorCode.MINING_ROUND_NOT_FOUND,
+      { totalRounds: miningRoundsResponse.open_mining_rounds.length, filterTime: now.toISOString() }
+    );
   }
 
   // Use the *last* round that has opened (the most recent open one)
   const lastOpenRound = validOpenRounds[validOpenRounds.length - 1];
 
   if (!lastOpenRound) {
-    throw new Error('No valid open mining round found');
+    throw new OperationError(
+      'No valid open mining round found',
+      OperationErrorCode.MINING_ROUND_NOT_FOUND,
+      { validRoundsCount: validOpenRounds.length }
+    );
   }
 
   const openMiningRoundContract: DisclosedContract = {
@@ -131,12 +140,19 @@ export async function getCurrentRoundNumber(validatorClient: MiningRoundClient):
   const currentOpenMiningRounds = miningRoundsResponse.open_mining_rounds;
 
   if (currentOpenMiningRounds.length === 0) {
-    throw new Error('No open mining rounds found');
+    throw new OperationError(
+      'No open mining rounds found',
+      OperationErrorCode.MINING_ROUND_NOT_FOUND
+    );
   }
 
   const latestRound = findLatestMiningRound(currentOpenMiningRounds);
   if (!latestRound) {
-    throw new Error('No valid mining rounds found');
+    throw new OperationError(
+      'No valid mining rounds found',
+      OperationErrorCode.MINING_ROUND_NOT_FOUND,
+      { roundsCount: currentOpenMiningRounds.length }
+    );
   }
 
   return getRoundNumber(latestRound);
@@ -188,7 +204,9 @@ export async function waitForRoundChange(
     }
   }
 
-  throw new Error(
-    `Timeout waiting for mining round to change from ${initialRoundNumber} after ${maxWaitTime / 1000} seconds`
+  throw new OperationError(
+    `Timeout waiting for mining round to change from ${initialRoundNumber} after ${maxWaitTime / 1000} seconds`,
+    OperationErrorCode.MINING_ROUND_NOT_FOUND,
+    { initialRoundNumber, maxWaitTimeMs: maxWaitTime }
   );
 }

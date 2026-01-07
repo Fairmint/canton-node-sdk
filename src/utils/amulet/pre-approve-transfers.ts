@@ -2,6 +2,7 @@ import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { type SubmitAndWaitForTransactionTreeParams } from '../../clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction-tree';
 import { type DisclosedContract, type ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/commands';
 import { type ValidatorApiClient } from '../../clients/validator-api';
+import { OperationError, OperationErrorCode } from '../../core/errors';
 import { getCurrentMiningRoundContext } from '../mining/mining-rounds';
 import { getAmuletsForTransfer } from './get-amulets-for-transfer';
 
@@ -96,7 +97,11 @@ export async function preApproveTransfers(
   });
 
   if (amulets.length === 0) {
-    throw new Error(`No unlocked amulets found for provider party ${params.receiverPartyId}`);
+    throw new OperationError(
+      `No unlocked amulets found for provider party ${params.receiverPartyId}`,
+      OperationErrorCode.INSUFFICIENT_FUNDS,
+      { partyId: params.receiverPartyId }
+    );
   }
 
   // Convert amulets to input format
@@ -157,7 +162,11 @@ export async function preApproveTransfers(
   }
 
   if (!contractId) {
-    throw new Error('Failed to create TransferPreapproval contract');
+    throw new OperationError(
+      'Failed to create TransferPreapproval contract',
+      OperationErrorCode.TRANSACTION_FAILED,
+      { receiverPartyId: params.receiverPartyId, updateId: result.transactionTree.updateId }
+    );
   }
 
   return {
