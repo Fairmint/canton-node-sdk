@@ -49,6 +49,13 @@ export interface ClientConfig {
   provider?: ProviderType;
   logger?: import('./logging').Logger;
 
+  /**
+   * Enable debug mode with verbose console logging.
+   * When true, logs all API requests/responses to console.
+   * Can also be enabled via CANTON_DEBUG=1 environment variable.
+   */
+  debug?: boolean;
+
   // Direct configuration options
   authUrl?: string;
   partyId?: string;

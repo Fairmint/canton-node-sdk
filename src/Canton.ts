@@ -13,6 +13,12 @@ export interface CantonConfig {
   provider?: ProviderType;
   /** Optional logger instance */
   logger?: Logger;
+  /**
+   * Enable debug mode with verbose console logging.
+   * When true, logs all API requests/responses to console.
+   * Can also be enabled via CANTON_DEBUG=1 environment variable.
+   */
+  debug?: boolean;
   /** Party ID for authenticated operations */
   partyId?: string;
   /** User ID for authenticated operations */
@@ -98,6 +104,9 @@ export class Canton {
     if (config.logger !== undefined) {
       clientConfig.logger = config.logger;
     }
+    if (config.debug !== undefined) {
+      clientConfig.debug = config.debug;
+    }
     if (config.partyId !== undefined) {
       clientConfig.partyId = config.partyId;
     }
@@ -119,7 +128,7 @@ export class Canton {
     this.validator = new ValidatorApiClient(clientConfig);
 
     // Scan API client config (subset of options)
-    const scanConfig: { network: NetworkType; provider?: ProviderType; logger?: Logger } = {
+    const scanConfig: { network: NetworkType; provider?: ProviderType; logger?: Logger; debug?: boolean } = {
       network: config.network,
     };
     if (config.provider !== undefined) {
@@ -127,6 +136,9 @@ export class Canton {
     }
     if (config.logger !== undefined) {
       scanConfig.logger = config.logger;
+    }
+    if (config.debug !== undefined) {
+      scanConfig.debug = config.debug;
     }
 
     this.scan = new ScanApiClient(scanConfig);

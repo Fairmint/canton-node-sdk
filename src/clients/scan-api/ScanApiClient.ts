@@ -66,6 +66,7 @@ export class ScanApiClient extends ScanApiClientGenerated {
       network,
       ...(provider !== undefined ? { provider } : {}),
       ...(config?.logger !== undefined ? { logger: config.logger } : {}),
+      ...(config?.debug !== undefined ? { debug: config.debug } : {}),
       ...(config?.partyId !== undefined ? { partyId: config.partyId } : {}),
       ...(config?.userId !== undefined ? { userId: config.userId } : {}),
       ...(config?.managedParties !== undefined ? { managedParties: config.managedParties } : {}),
