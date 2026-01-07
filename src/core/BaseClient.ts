@@ -2,7 +2,7 @@ import { AuthenticationManager } from './auth/AuthenticationManager';
 import { EnvLoader } from './config/EnvLoader';
 import { ConfigurationError } from './errors';
 import { HttpClient } from './http/HttpClient';
-import { FileLogger } from './logging/FileLogger';
+import { CompositeLogger, ConsoleLogger, FileLogger, type Logger } from './logging';
 import {
   type ApiType,
   type ClientConfig,
@@ -26,7 +26,7 @@ export abstract class BaseClient {
     if (!config) {
       // No config at all - use EnvLoader defaults
       const defaultConfig = EnvLoader.getConfig(apiType);
-      defaultConfig.logger = new FileLogger();
+      defaultConfig.logger = this.createLogger(undefined, this.isDebugEnabled(undefined));
       this.clientConfig = defaultConfig;
     } else if (!config.apis?.[apiType]) {
       // Config provided but missing API configuration - merge with EnvLoader defaults
@@ -44,11 +44,14 @@ export abstract class BaseClient {
           ...defaultConfig.apis,
           ...config.apis,
         },
-        logger: config.logger ?? new FileLogger(),
+        logger: config.logger ?? this.createLogger(undefined, this.isDebugEnabled(config.debug)),
       };
     } else {
-      // Config fully provided
-      this.clientConfig = config;
+      // Config fully provided - create logger if not provided
+      this.clientConfig = {
+        ...config,
+        logger: config.logger ?? this.createLogger(undefined, this.isDebugEnabled(config.debug)),
+      };
     }
 
     // Validate that the required API configuration is present
@@ -209,5 +212,35 @@ export abstract class BaseClient {
 
   public getApiType(): ApiType {
     return this.apiType;
+  }
+
+  /**
+   * Checks if debug mode is enabled via config or environment variable.
+   */
+  private isDebugEnabled(configDebug: boolean | undefined): boolean {
+    if (configDebug !== undefined) {
+      return configDebug;
+    }
+    const envDebug = process.env['CANTON_DEBUG'];
+    return envDebug !== undefined && ['1', 'true', 'yes', 'on'].includes(envDebug.toLowerCase());
+  }
+
+  /**
+   * Creates a logger based on configuration.
+   * When debug is enabled, uses a CompositeLogger with both file and console logging.
+   */
+  private createLogger(existingLogger: Logger | undefined, debug: boolean): Logger {
+    if (existingLogger) {
+      return existingLogger;
+    }
+
+    const fileLogger = new FileLogger();
+
+    if (debug) {
+      const consoleLogger = new ConsoleLogger({ logLevel: 'debug' });
+      return new CompositeLogger([fileLogger, consoleLogger]);
+    }
+
+    return fileLogger;
   }
 }
