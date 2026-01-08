@@ -6,8 +6,7 @@
  * all Canton API clients with shared configuration.
  *
  * Prerequisites:
- * - cn-quickstart running with OAuth2 enabled
- * - Run `cd quickstart && make setup` and choose "with OAuth2"
+ * - cn-quickstart running
  * - Run `cd quickstart && make start`
  *
  * Usage: npx tsx examples/canton-quickstart.ts

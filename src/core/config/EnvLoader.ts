@@ -1,6 +1,7 @@
 import { config } from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
+import { createLocalnetTokenGenerator } from '../auth/localnet-jwt';
 import { ConfigurationError } from '../errors';
 import { type ApiConfig, type AuthConfig, type ClientConfig, type NetworkType, type ProviderType } from '../types';
 
@@ -369,8 +370,10 @@ export class EnvLoader {
   }
 
   /**
-   * Get localnet defaults for cn-quickstart These are the standard OAuth2 credentials and URLs for cn-quickstart with
-   * OAuth2 enabled
+   * Get localnet defaults for cn-quickstart.
+   *
+   * Uses JWT authentication (unsafe-auth mode) which is the production-like approach.
+   * JWTs are generated dynamically using HMAC-HS256 with the well-known secret "unsafe".
    */
   private getLocalnetDefaults(apiType: string, provider: ProviderType): ApiConfig | undefined {
     if (provider !== 'app-provider' && provider !== 'app-user') {
@@ -379,12 +382,14 @@ export class EnvLoader {
 
     const portPrefix = provider === 'app-provider' ? '3' : '2';
 
-    // Default OAuth2 credentials for cn-quickstart
+    // Use JWT authentication (unsafe-auth mode) - this is production-like
+    // JWTs are generated dynamically with the "unsafe" secret
     const auth: AuthConfig = {
-      grantType: 'client_credentials',
-      clientId: `${provider}-validator`,
-      clientSecret:
-        provider === 'app-provider' ? 'AL8648b9SfdTFImq7FV56Vd0KHifHBuC' : 'k1YVWeC1vjQcqzlqzY98WVxJc6e4IIdZ',
+      grantType: 'jwt', // Indicates JWT-based auth, not OAuth2
+      tokenGenerator: createLocalnetTokenGenerator({
+        userId: 'ledger-api-user',
+        audience: 'https://canton.network.global',
+      }),
     };
 
     // Map API types to their port suffixes

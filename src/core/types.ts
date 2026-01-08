@@ -16,7 +16,7 @@ export interface AuthConfig {
    * exchange.
    */
   bearerToken?: string;
-  /** Async function to generate a bearer token dynamically. Used for shared-secret JWT generation. */
+  /** Async function to generate a bearer token dynamically. Used for JWT-based authentication. */
   tokenGenerator?: () => Promise<string>;
 }
 

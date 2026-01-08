@@ -1,36 +1,32 @@
 #!/usr/bin/env tsx
 /**
- * Example: Canton Network LocalNet with OAuth2 Authentication
+ * Example: Canton Network LocalNet Quickstart
  *
- * This example demonstrates how to connect to cn-quickstart with OAuth2/Keycloak authentication using the Canton Node
- * SDK.
+ * This example demonstrates how to connect to cn-quickstart using the Canton Node SDK.
  *
  * Prerequisites:
  *
- * - Cn-quickstart is running with OAuth2 enabled
- * - Run `cd quickstart && make setup` and choose "with OAuth2"
+ * - Cn-quickstart is running
  * - Run `cd quickstart && make start`
  *
  * The SDK automatically handles:
  *
- * - OAuth2 token acquisition
- * - Token refresh
+ * - JWT token generation (using unsafe-auth mode)
  * - Bearer token injection in API calls
  *
- * Usage: npx tsx canton-node-sdk/examples/localnet-with-oauth2.ts
+ * Usage: npx tsx examples/localnet-quickstart.ts
  */
 
 import { LedgerJsonApiClient, ValidatorApiClient } from '../src';
 
 async function main(): Promise<void> {
-  console.log('🔌 Connecting to Canton Network LocalNet with OAuth2...\n');
+  console.log('🔌 Connecting to Canton Network LocalNet...\n');
 
   try {
-    // ✨ Simple configuration! The SDK now has cn-quickstart defaults built-in
+    // ✨ Simple configuration! The SDK has cn-quickstart defaults built-in
     // Just specify the network and it automatically configures:
-    // - OAuth2 auth URL (Keycloak)
+    // - JWT authentication (unsafe-auth mode)
     // - API endpoints (ports 3903, 3975, etc.)
-    // - Client credentials (app-provider-validator)
     const validatorClient = new ValidatorApiClient({
       network: 'localnet',
     });
@@ -39,7 +35,7 @@ async function main(): Promise<void> {
       network: 'localnet',
     });
 
-    console.log('🔐 Authenticating with OAuth2...');
+    console.log('🔐 Authenticating with JWT...');
 
     // The SDK will automatically call authenticate() before API calls,
     // but we can also call it explicitly to test authentication
@@ -58,12 +54,9 @@ async function main(): Promise<void> {
 
     console.log('\n✨ Connection test successful!');
     console.log('\n📚 What the SDK did for you with just { network: "localnet" }:');
-    console.log('   1. Auto-configured OAuth2 URL (http://localhost:8082/realms/AppProvider/...)');
-    console.log('   2. Auto-configured API endpoints (Validator: 3903, JSON API: 3975)');
-    console.log('   3. Auto-configured client credentials (app-provider-validator)');
-    console.log('   4. Connected to Keycloak and got access token');
-    console.log('   5. Automatically included Bearer token in all API requests');
-    console.log('   6. Will auto-refresh token when it expires');
+    console.log('   1. Auto-configured API endpoints (Validator: 3903, JSON API: 3975)');
+    console.log('   2. Generated JWT token using unsafe-auth mode');
+    console.log('   3. Automatically included Bearer token in all API requests');
 
     console.log('\n📡 Testing Ledger JSON API: getVersion()...');
     const version = await jsonClient.getVersion();
@@ -74,7 +67,6 @@ async function main(): Promise<void> {
     console.log('\n💡 Next steps:');
     console.log('   - Try other Validator API methods: getWalletBalance(), getAmulets(), etc.');
     console.log('   - Try Ledger JSON API methods: listUsers(), getLedgerEnd(), etc.');
-    console.log('   - Check out canton-node-sdk/scripts/examples/ for more examples');
     console.log('   - Explore the web UIs:');
     console.log('     • Wallet: http://wallet.localhost:3000');
     console.log('     • Scan:   http://scan.localhost:4000');
@@ -88,11 +80,7 @@ async function main(): Promise<void> {
         console.log('\n💡 Make sure cn-quickstart is running:');
         console.log('   cd quickstart && make start');
       } else if (error.message.includes('401') || error.message.includes('authentication')) {
-        console.log('\n💡 Authentication failed. This could mean:');
-        console.log('   1. cn-quickstart is not configured with OAuth2');
-        console.log('      → Run: cd quickstart && make setup (choose "with OAuth2")');
-        console.log('   2. Keycloak is not accessible');
-        console.log('      → Check: http://localhost:8082');
+        console.log('\n💡 Authentication failed. Make sure cn-quickstart is running properly.');
       }
     } else {
       console.error(error);

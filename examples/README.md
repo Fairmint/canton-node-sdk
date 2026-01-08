@@ -4,9 +4,8 @@ Examples demonstrating common workflows with the Canton Node SDK.
 
 ## Prerequisites
 
-- cn-quickstart running with OAuth2 enabled
+- cn-quickstart running
   - Clone: `https://github.com/digital-asset/cn-quickstart`
-  - Setup: `cd quickstart && make setup` (choose "with OAuth2")
   - Start: `cd quickstart && make start`
 - SDK dependencies: `npm install`
 
@@ -24,17 +23,17 @@ npx tsx examples/canton-quickstart.ts
 - Shows how to use ledger, validator, and scan APIs
 - Demonstrates dynamic party ID updates
 
-### `localnet-with-oauth2.ts` - OAuth2 Authentication
+### `localnet-quickstart.ts` - LocalNet Authentication
 
-Shows how OAuth2 authentication works:
+Shows how JWT authentication works with localnet:
 
 ```bash
-npx tsx examples/localnet-with-oauth2.ts
+npx tsx examples/localnet-quickstart.ts
 ```
 
-- Automatic token acquisition and refresh
+- Automatic JWT token generation (unsafe-auth mode)
 - Bearer token injection in requests
-- Keycloak/OAuth2 integration
+- Simple configuration with built-in defaults
 
 ### `create-party.ts` - Create and Fund a Party
 

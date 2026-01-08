@@ -31,7 +31,7 @@
     "docs": "tsx scripts/update-docs-version.ts && tsx scripts/generate-operation-docs.ts",
     "docs:build": "npm run docs && cd docs && bundle exec jekyll build",
     "docs:dev": "npm run docs && cd docs && bundle exec jekyll serve --livereload --port 4000",
-    "example:connect": "tsx examples/localnet-with-oauth2.ts",
+    "example:connect": "tsx examples/localnet-quickstart.ts",
     "fix": "npm run lint:fix && npm run format:fix",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",

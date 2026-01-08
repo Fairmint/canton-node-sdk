@@ -1,7 +1,7 @@
 /**
  * Shared test configuration utilities for integration tests.
  *
- * Tests use the SDK's built-in localnet defaults with OAuth2 authentication (cn-quickstart with OAuth2).
+ * Tests use the SDK's built-in localnet defaults with JWT authentication (cn-quickstart).
  *
  * @example
  *   LocalNet usage (default)
@@ -15,18 +15,17 @@ import type { ClientConfig } from '../../src';
 /**
  * Build a ClientConfig for integration tests.
  *
- * Returns LocalNet configuration using SDK's built-in OAuth2 defaults for cn-quickstart.
+ * Returns LocalNet configuration using SDK's built-in JWT defaults for cn-quickstart.
  * The SDK automatically configures:
- * - OAuth2 auth URL (Keycloak at localhost:8082)
+ * - JWT authentication (unsafe-auth mode with dynamic token generation)
  * - API endpoints (Validator: 3903, JSON API: 3975, Scan: 4000/api/scan)
- * - Client credentials (app-provider-validator)
  *
  * @returns ClientConfig for use with SDK clients
  */
 export function buildIntegrationTestClientConfig(): ClientConfig {
-  // Use SDK's built-in localnet defaults with OAuth2
-  // This matches cn-quickstart setup with "make setup" option 2 (with OAuth2)
-  // Must specify provider to get the correct API endpoints and credentials
+  // Use SDK's built-in localnet defaults with JWT authentication
+  // This uses the "unsafe-auth" mode which generates JWTs with the well-known secret
+  // Must specify provider to get the correct API endpoints
   return {
     network: 'localnet',
     provider: 'app-provider',
