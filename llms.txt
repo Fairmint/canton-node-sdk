@@ -155,8 +155,131 @@ See [docs/EXTERNAL_SIGNING.md](docs/EXTERNAL_SIGNING.md) for details.
 ## Testing
 
 - Unit tests in `test/unit/`
-- Integration tests require LocalNet: `npm run localnet:start`
+- Integration tests require LocalNet (see below)
 - Run specific test: `npm test path/to/test.spec.ts`
+
+## LocalNet (cn-quickstart)
+
+The SDK includes cn-quickstart as a git submodule for local development and testing against a real Canton Network.
+
+### Location
+
+```
+libs/cn-quickstart/quickstart/   # cn-quickstart directory
+```
+
+### Prerequisites
+
+- **Docker Desktop** running with at least 8GB RAM allocated
+- **DAML SDK** (installed via `make install-daml-sdk`)
+
+### First-Time Setup
+
+```bash
+# Initialize submodule (if not already done)
+git submodule update --init --recursive
+
+# Navigate to cn-quickstart
+cd libs/cn-quickstart/quickstart
+
+# Run interactive setup (creates .env.local)
+make setup
+# Choose: OAuth2 mode or shared-secret mode
+# Set party hint (e.g., "quickstart-dev-1")
+
+# Install DAML SDK (if not already installed)
+make install-daml-sdk
+```
+
+### Starting LocalNet
+
+```bash
+cd libs/cn-quickstart/quickstart
+make start   # Builds and starts all containers (~4-5 min first time)
+```
+
+Wait for all services to become healthy:
+
+```bash
+docker ps --format "table {{.Names}}\t{{.Status}}"
+# All services should show "healthy" before running tests
+```
+
+### Stopping LocalNet
+
+```bash
+cd libs/cn-quickstart/quickstart
+make stop              # Stop all containers
+make clean-all-docker  # Full reset (removes all containers/volumes)
+```
+
+### LocalNet Services and Ports
+
+| Service | Port | Description |
+|---------|------|-------------|
+| App-Provider JSON API | 3975 | Ledger API for app_provider participant |
+| App-Provider Validator | 3903 | Validator API for app_provider |
+| App-User JSON API | 2975 | Ledger API for app_user participant |
+| SV JSON API | 4975 | Ledger API for super validator |
+| Keycloak | 8082 | OAuth2 authentication |
+| Scan API | scan.localhost:4000 | Network-wide contract queries |
+| Swagger UI | 9090 | API documentation |
+| Grafana | 3030 | Observability dashboard |
+
+### OAuth2 Credentials (app-provider)
+
+Default LocalNet OAuth2 credentials:
+
+```
+Auth URL: http://localhost:8082/realms/AppProvider/protocol/openid-connect/token
+Client ID: app-provider-validator
+Client Secret: AL8648b9SfdTFImq7FV56Vd0KHifHBuC
+```
+
+### Troubleshooting
+
+#### "Cannot connect to Docker daemon"
+```bash
+# Start Docker Desktop, then verify
+docker ps
+```
+
+#### "HTTP 503" or "Connection refused"
+Services aren't ready yet. Wait for all containers to show "healthy":
+```bash
+docker ps --format "table {{.Names}}\t{{.Status}}" | grep -v healthy
+# Should return nothing when ready
+```
+
+#### "Container keeps restarting"
+Reset everything:
+```bash
+cd libs/cn-quickstart/quickstart
+make clean-all-docker  # Remove all containers and volumes
+make start
+```
+
+#### "Port already in use"
+```bash
+make stop              # Stop LocalNet containers
+lsof -i :3975          # Find what's using JSON API port
+```
+
+### Useful Make Targets
+
+```bash
+make status            # Show container status
+make logs              # View all logs
+make tail              # Tail logs in real-time
+make restart           # Stop and start
+make canton-console    # Interactive Canton console
+```
+
+### Known Limitations
+
+1. **First-time startup**: Takes longer as it builds images and compiles DAML code
+2. **Resource usage**: Runs ~20+ containers, requires 8GB+ RAM for Docker
+3. **State persistence**: Canton restarts clear all ledger state (DARs, contracts)
 
 ## NPM Publishing
 
