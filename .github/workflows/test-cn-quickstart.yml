@@ -127,10 +127,12 @@ jobs:
         run: |
           cd libs/cn-quickstart/quickstart
           echo "Running setup with shared-secret auth (JWT mode)..."
-          # Setup with shared-secret auth for JWT authentication
-          # Answer 'n' to "Enable OAUTH2? (Y/n)" to use shared-secret mode
-          # This uses the "unsafe" secret for JWT validation, matching our SDK's JWT implementation
-          echo "n" | make setup || true
+          # Setup prompts (in order):
+          # 1. Enable Observability? (Y/n) - use default (Y)
+          # 2. Enable OAUTH2? (Y/n) - answer 'n' for shared-secret/JWT mode
+          # 3. Party hint - use default (press enter)
+          # 4. Enable TEST_MODE? (y/N) - use default (N)
+          printf '\nn\n\n\n' | make setup || true
           echo "✓ CN-Quickstart setup complete"
         timeout-minutes: 15
 
