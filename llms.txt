@@ -199,11 +199,14 @@ See "PR Workflow" section above for CI monitoring instructions.
 
 ## Related Repos
 
-| Repo | Purpose |
-|------|---------|
-| `ocp-canton-sdk` | High-level OCP SDK (uses this SDK) |
-| `canton` | Trading infrastructure, ADRs |
-| `open-captable-protocol-daml` | DAML contracts |
+| Repo | Purpose | Docs |
+|------|---------|------|
+| `canton` | Trading infrastructure, ADRs | `llms.txt` |
+| `canton-explorer` | Next.js explorer UI | `llms.txt`, [cantonops.fairmint.com](https://cantonops.fairmint.com/) |
+| `canton-fairmint-sdk` | Shared TypeScript utilities | `llms.txt` |
+| `ocp-canton-sdk` | High-level OCP TypeScript SDK | `llms.txt`, [ocp.canton.fairmint.com](https://ocp.canton.fairmint.com/) |
+| `ocp-position-nft` | Soulbound NFT smart contracts | `llms.txt` |
+| `open-captable-protocol-daml` | DAML contracts (OCF impl) | `llms.txt` |
 
 ## Docs
 
