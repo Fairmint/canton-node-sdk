@@ -164,12 +164,29 @@ export const InteractiveSubmissionPrepareRequestSchema = z.object({
   packageIdSelectionPreference: z.array(PackagePreferenceSchema).optional(),
 });
 
+/** Traffic cost estimation for a prepared transaction. */
+export const CostEstimationSchema = z.object({
+  /** Timestamp at which the estimation was made (ISO 8601). */
+  estimationTimestamp: z.string().optional(),
+  /** Estimated traffic cost of the confirmation request associated with the transaction. */
+  confirmationRequestTrafficCostEstimation: z.number(),
+  /**
+   * Estimated traffic cost of the confirmation response associated with the transaction. This can also indicate the
+   * cost that other confirming nodes will incur.
+   */
+  confirmationResponseTrafficCostEstimation: z.number(),
+  /** Total estimated traffic cost (sum of request and response). */
+  totalTrafficCostEstimation: z.number(),
+});
+
 /** Interactive submission prepare response. */
 export const InteractiveSubmissionPrepareResponseSchema = z.object({
   preparedTransactionHash: z.string(),
   preparedTransaction: z.string().optional(),
   hashingSchemeVersion: z.enum(['HASHING_SCHEME_VERSION_UNSPECIFIED', 'HASHING_SCHEME_VERSION_V2']).optional(),
   hashingDetails: z.string().optional(),
+  /** Traffic cost estimation of the prepared transaction. */
+  costEstimation: CostEstimationSchema.optional(),
 });
 
 const DeduplicationPeriodSchema = z.union([
@@ -230,3 +247,4 @@ export type InteractiveSubmissionPrepareRequest = z.infer<typeof InteractiveSubm
 export type InteractiveSubmissionPrepareResponse = z.infer<typeof InteractiveSubmissionPrepareResponseSchema>;
 export type InteractiveSubmissionExecuteRequest = z.infer<typeof InteractiveSubmissionExecuteRequestSchema>;
 export type InteractiveSubmissionExecuteResponse = z.infer<typeof InteractiveSubmissionExecuteResponseSchema>;
+export type CostEstimation = z.infer<typeof CostEstimationSchema>;

@@ -15,6 +15,7 @@ The Canton Node SDK provides a comprehensive set of utility functions to simplif
 - **[Mining Utilities](/utils/mining/)** - 1 function
 - **[Parsers Utilities](/utils/parsers/)** - 1 function
 - **[Party Utilities](/utils/party/)** - 1 function
+- **[Traffic Utilities](/utils/traffic/)** - 2 functions
 
 ## Overview
 
@@ -25,6 +26,7 @@ This documentation covers all utility functions available in the SDK, organized 
 - **Mining Utilities** - Functions for mining operations and round management
 - **Party Utilities** - Tools for party creation and management
 - **Parser Utilities** - Functions for parsing and analyzing blockchain data
+- **Traffic Utilities** - Functions for traffic cost estimation and status
 
 ## Quick Examples
 
