@@ -126,9 +126,10 @@ jobs:
         if: steps.verify-cache.outputs.has_quickstart_env != 'true'
         run: |
           cd libs/cn-quickstart/quickstart
-          echo "Running setup with OAuth2..."
-          # Setup with OAuth2 non-interactively
-          echo "2" | make setup || true  # Select option 2 (with OAuth2)
+          echo "Running setup with shared-secret auth (JWT mode)..."
+          # Setup with shared-secret auth (option 1) for JWT authentication
+          # This uses the "unsafe" secret for JWT validation, matching our SDK's JWT implementation
+          echo "1" | make setup || true  # Select option 1 (shared-secret/JWT mode)
           echo "✓ CN-Quickstart setup complete"
         timeout-minutes: 15
 
@@ -176,16 +177,6 @@ jobs:
 
       - name: Wait for Services
         run: |
-          echo "Waiting for Keycloak..."
-          for i in {1..30}; do
-            if curl -f http://localhost:8082/realms/AppProvider 2>/dev/null; then
-              echo "✓ Keycloak is ready"
-              break
-            fi
-            echo "Waiting for Keycloak... ($i/30)"
-            sleep 10
-          done
-
           echo "Waiting for Validator API..."
           for i in {1..30}; do
             if curl -f http://localhost:3903/api/validator/v0/wallet/user-status 2>/dev/null || [ $? -eq 22 ]; then
