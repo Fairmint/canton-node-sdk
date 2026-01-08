@@ -39,7 +39,7 @@ function hasMiningRoundMethods(client: BaseClient): client is BaseClient & Minin
  *   ```;
  */
 export class GetMemberTrafficStatus extends ApiOperation<GetMemberTrafficStatusParams, GetMemberTrafficStatusResponse> {
-  async execute(params: GetMemberTrafficStatusParams = {}): Promise<GetMemberTrafficStatusResponse> {
+  public async execute(params: GetMemberTrafficStatusParams = {}): Promise<GetMemberTrafficStatusResponse> {
     const validatedParams = this.validateParams(params, GetMemberTrafficStatusParamsSchema);
 
     // Auto-determine domainId if not provided
