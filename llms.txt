@@ -8,8 +8,35 @@
 - A best practice or pattern is established during AI conversations
 - An important architectural or coding decision is made
 - The user communicates a preference that applies beyond the current task
+- **Creating a PR**: Before creating a PR, review the completed task for any generalizable learnings or best practices that should be added to this file. This ensures AI improves with every task.
 
 Keep content concise but comprehensive. Avoid verbosity—capture the essence.
+
+## PR Workflow (REQUIRED)
+
+### Before Commit & Push
+
+**Always run lint/format before committing:**
+
+```bash
+npm run fix    # Auto-fix lint + formatting issues (if available)
+npm run lint   # Verify no lint errors
+```
+
+### After Creating a PR
+
+1. **Open the PR to the files/changes page:**
+   ```bash
+   open <PR_URL>/files    # Review your changes
+   ```
+
+2. **Monitor CI status** and automatically investigate/fix any failures:
+   ```bash
+   gh pr checks <PR_NUMBER>              # Check CI status
+   gh run view <RUN_ID> --log-failed     # View failed logs
+   ```
+
+3. **If CI fails:** Investigate the failure, fix the issue, and push the fix. Repeat until CI passes.
 
 ## Dependencies
 
@@ -166,22 +193,9 @@ npm publish               # Publishes to NPM (requires NPM_TOKEN)
 The publish workflow requires:
 - `NPM_TOKEN` secret configured in GitHub repository settings
 
-### Monitoring PR CI Status (Required)
+### Monitoring PR CI Status
 
-**Always check CI status after creating a PR.** Use the GitHub CLI:
-
-```bash
-gh pr checks <PR_NUMBER>              # Check all CI checks
-gh run view <RUN_ID> --log-failed     # View failed job logs
-gh run view --job=<JOB_ID>            # View specific job details
-```
-
-**Workflow:**
-1. Create PR and push
-2. Wait ~30 seconds for CI to start
-3. Run `gh pr checks <PR_NUMBER>` to monitor
-4. If CI fails, view logs and fix issues
-5. Push fixes and re-check until CI passes
+See "PR Workflow" section above for CI monitoring instructions.
 
 ## Related Repos
 
