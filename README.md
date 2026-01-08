@@ -81,11 +81,11 @@ npm run localnet:stop
 
 ## CI/CD
 
-The project uses CircleCI for continuous integration:
+The project uses GitHub Actions for continuous integration:
 
 - **Unit Tests**: Run on every commit
 - **Linting**: Code quality checks on every commit
-- **Integration Tests**: LocalNet regression tests on every commit
-- **Nightly Regression**: Scheduled daily tests at 2 AM UTC
+- **Integration Tests**: LocalNet regression tests (cn-quickstart)
+- **Publish**: Automatic NPM publishing on merge to main
 
-See [.circleci/config.yml](./.circleci/config.yml) for the complete CI configuration.
+See [.github/workflows/](./.github/workflows/) for CI configurations.
