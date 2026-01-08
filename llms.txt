@@ -8,6 +8,7 @@
 - A best practice or pattern is established during AI conversations
 - An important architectural or coding decision is made
 - The user communicates a preference that applies beyond the current task
+- **Creating a PR**: Before creating a PR, review the completed task for any generalizable learnings or best practices that should be added to this file. This ensures AI improves with every task.
 
 Keep content concise but comprehensive. Avoid verbosity—capture the essence.
 
