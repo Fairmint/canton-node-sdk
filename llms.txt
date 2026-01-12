@@ -69,15 +69,37 @@ BaseClient (OAuth2 auth)         SimpleBaseClient (no auth)
 
 ### Operation Pattern
 
-Each API endpoint is a class extending `ApiOperation` or `SimpleApiOperation`:
+Use factory functions for most operations:
 
 ```typescript
-// src/clients/ledger-json-api/operations/GetVersion.ts
-export class GetVersion extends ApiOperation<GetVersionRequest, GetVersionResponse> {
-  protected readonly path = '/version';
-  protected readonly method = 'GET';
+// REST operations - use createApiOperation
+export const GetVersion = createApiOperation<void, GetVersionResponse>({
+  paramsSchema: z.void(),
+  method: 'GET',
+  buildUrl: (_params, apiUrl) => `${apiUrl}/v2/version`,
+});
+
+// WebSocket operations - use createWebSocketOperation
+export const SubscribeToCompletions = createWebSocketOperation<Params, Request, Message>({
+  paramsSchema: CompletionStreamRequestSchema,
+  buildPath: (_params, _apiUrl) => '/v2/commands/completions',
+  buildRequestMessage: (params, client) => ({ /* ... */ }),
+});
+```
+
+Use classes for complex operations needing async pre-processing or state management:
+
+```typescript
+// Class pattern for operations with async defaults
+export class GetMemberTrafficStatus extends ApiOperation<Params, Response> {
+  async execute(params: Params): Promise<Response> {
+    const domainId = params.domainId ?? await getCurrentMiningRoundDomainId(this.client);
+    // ...
+  }
 }
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed pattern guidelines.
 
 ### Configuration
 
