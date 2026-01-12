@@ -55,6 +55,17 @@ export const SubscribeToCompletions = createWebSocketOperation<Params, Request, 
 - No complex state management needed
 - Connection lifecycle is straightforward
 
+**Note:** Factory-pattern WebSocket operations still require manual connection handling via the returned subscription object. Unlike REST operations (fire-and-forget), you must manage the subscription lifecycle:
+
+```typescript
+const subscription = await client.subscribeToCompletions(params, {
+  onMessage: (msg) => console.log(msg),
+  onError: (err) => console.error(err),
+  onClose: () => console.log('Connection closed'),
+});
+// Later: subscription.close() to disconnect
+```
+
 ### Class Pattern (For Complex Operations)
 
 Use classes extending `ApiOperation` when you need:
@@ -93,10 +104,10 @@ export class SubscribeToUpdates {
 ```
 
 **Current class-based operations:**
-- `GetActiveContracts` - WebSocket-based with streaming callback support
-- `SubscribeToUpdates` - Long-running WebSocket with complex message handling
-- `GetMemberTrafficStatus` - Auto-determines domainId via async call
-- `GetParties`/`ListParties` - Custom pagination logic
+- `GetActiveContracts` — Uses WebSocket internally but exposes a simple async API; supports streaming callbacks and aggregates results until connection closes
+- `SubscribeToUpdates` — Long-running WebSocket with complex message handling, error recovery, and async pre-processing to fetch `ledgerEnd` if not provided
+- `GetMemberTrafficStatus` — Requires async call to `getCurrentMiningRoundDomainId()` before making the request when `domainId` is not provided
+- `GetParties`/`ListParties` — Uses `fetchAllParties()` helper for automatic pagination across multiple API calls
 
 ### Decision Guide
 
