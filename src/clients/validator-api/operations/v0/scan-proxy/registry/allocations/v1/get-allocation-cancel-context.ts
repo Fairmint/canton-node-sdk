@@ -12,6 +12,7 @@ const endpoint = '/api/validator/v0/scan-proxy/registry/allocations/v1';
 export const GetAllocationCancelContextParamsSchema = z.object({
   allocationId: z.string(),
   meta: z.record(z.string(), z.string()).optional(),
+  excludeDebugFields: z.boolean().optional(),
 });
 
 export type GetAllocationCancelContextParams = z.infer<typeof GetAllocationCancelContextParamsSchema>;
@@ -40,7 +41,9 @@ export const GetAllocationCancelContext = createApiOperation<
   buildUrl: (params: GetAllocationCancelContextParams, apiUrl: string) =>
     `${apiUrl}${endpoint}/${params.allocationId}/choice-contexts/cancel`,
   buildRequestData: (params: GetAllocationCancelContextParams): GetAllocationCancelContextRequest => {
-    const request: GetAllocationCancelContextRequest = {};
+    const request: GetAllocationCancelContextRequest = {
+      excludeDebugFields: params.excludeDebugFields ?? false,
+    };
     if (params.meta !== undefined) {
       request.meta = params.meta;
     }

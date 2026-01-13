@@ -11,7 +11,7 @@ const endpoint = '/api/validator/v0/scan-proxy/registry/allocation-instruction/v
 
 export const GetAllocationFactoryParamsSchema = z.object({
   choiceArguments: z.record(z.string(), z.never()),
-  excludeDebugFields: z.boolean(),
+  excludeDebugFields: z.boolean().optional(),
 });
 
 export type GetAllocationFactoryParams = z.infer<typeof GetAllocationFactoryParamsSchema>;
@@ -36,6 +36,6 @@ export const GetAllocationFactory = createApiOperation<GetAllocationFactoryParam
   buildUrl: (_params: GetAllocationFactoryParams, apiUrl: string) => `${apiUrl}${endpoint}`,
   buildRequestData: (params: GetAllocationFactoryParams): GetAllocationFactoryRequest => ({
     choiceArguments: params.choiceArguments,
-    excludeDebugFields: params.excludeDebugFields,
+    excludeDebugFields: params.excludeDebugFields ?? false,
   }),
 });

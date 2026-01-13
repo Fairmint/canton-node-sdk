@@ -12,6 +12,7 @@ const endpoint = '/api/validator/v0/scan-proxy/registry/allocations/v1';
 export const GetAllocationTransferContextParamsSchema = z.object({
   allocationId: z.string(),
   meta: z.record(z.string(), z.string()).optional(),
+  excludeDebugFields: z.boolean().optional(),
 });
 
 export type GetAllocationTransferContextParams = z.infer<typeof GetAllocationTransferContextParamsSchema>;
@@ -40,7 +41,9 @@ export const GetAllocationTransferContext = createApiOperation<
   buildUrl: (params: GetAllocationTransferContextParams, apiUrl: string) =>
     `${apiUrl}${endpoint}/${params.allocationId}/choice-contexts/execute-transfer`,
   buildRequestData: (params: GetAllocationTransferContextParams): GetAllocationTransferContextRequest => {
-    const request: GetAllocationTransferContextRequest = {};
+    const request: GetAllocationTransferContextRequest = {
+      excludeDebugFields: params.excludeDebugFields ?? false,
+    };
     if (params.meta !== undefined) {
       request.meta = params.meta;
     }

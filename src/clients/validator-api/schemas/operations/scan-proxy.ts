@@ -44,35 +44,41 @@ export const GetInstrumentParamsSchema = z.object({
 });
 export const GetAllocationFactoryParamsSchema = z.object({
   choiceArguments: z.record(z.string(), z.never()),
-  excludeDebugFields: z.boolean(),
+  excludeDebugFields: z.boolean().optional(),
 });
 export const GetAllocationTransferContextParamsSchema = z.object({
   allocationId: z.string(),
   meta: z.record(z.string(), z.string()).optional(),
+  excludeDebugFields: z.boolean().optional(),
 });
 export const GetAllocationWithdrawContextParamsSchema = z.object({
   allocationId: z.string(),
   meta: z.record(z.string(), z.string()).optional(),
+  excludeDebugFields: z.boolean().optional(),
 });
 export const GetAllocationCancelContextParamsSchema = z.object({
   allocationId: z.string(),
   meta: z.record(z.string(), z.string()).optional(),
+  excludeDebugFields: z.boolean().optional(),
 });
 export const GetTransferFactoryParamsSchema = z.object({
   choiceArguments: z.record(z.string(), z.never()),
-  excludeDebugFields: z.boolean(),
+  excludeDebugFields: z.boolean().optional(),
 });
 export const GetTransferInstructionAcceptContextParamsSchema = z.object({
   transferInstructionId: z.string(),
   meta: z.record(z.string(), z.string()).optional(),
+  excludeDebugFields: z.boolean().optional(),
 });
 export const GetTransferInstructionRejectContextParamsSchema = z.object({
   transferInstructionId: z.string(),
   meta: z.record(z.string(), z.string()).optional(),
+  excludeDebugFields: z.boolean().optional(),
 });
 export const GetTransferInstructionWithdrawContextParamsSchema = z.object({
   transferInstructionId: z.string(),
   meta: z.record(z.string(), z.string()).optional(),
+  excludeDebugFields: z.boolean().optional(),
 });
 
 export type GetMiningRoundDetailsParams = z.infer<typeof GetMiningRoundDetailsParamsSchema>;

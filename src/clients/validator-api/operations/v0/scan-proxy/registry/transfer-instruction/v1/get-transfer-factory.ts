@@ -1,9 +1,6 @@
 import { z } from 'zod';
 import { createApiOperation } from '../../../../../../../../core';
-import type {
-  components,
-  paths,
-} from '../../../../../../../../generated/token-standard/splice-api-token-transfer-instruction-v1/openapi/transfer-instruction-v1';
+import type { paths } from '../../../../../../../../generated/token-standard/splice-api-token-transfer-instruction-v1/openapi/transfer-instruction-v1';
 
 type ApiPath = '/registry/transfer-instruction/v1/transfer-factory';
 
@@ -12,10 +9,10 @@ const endpoint = '/api/validator/v0/scan-proxy/registry/transfer-instruction/v1/
 // Simple schema that matches the generated type exactly
 export const GetTransferFactoryParamsSchema = z.object({
   choiceArguments: z.record(z.string(), z.never()),
-  excludeDebugFields: z.boolean(),
+  excludeDebugFields: z.boolean().optional(),
 });
 
-export type GetTransferFactoryParams = components['schemas']['GetFactoryRequest'];
+export type GetTransferFactoryParams = z.infer<typeof GetTransferFactoryParamsSchema>;
 export type GetTransferFactoryRequest = paths[ApiPath]['post']['requestBody']['content']['application/json'];
 export type GetTransferFactoryResponse = paths[ApiPath]['post']['responses']['200']['content']['application/json'];
 
@@ -35,5 +32,8 @@ export const GetTransferFactory = createApiOperation<GetTransferFactoryParams, G
   paramsSchema: GetTransferFactoryParamsSchema,
   method: 'POST',
   buildUrl: (_params: GetTransferFactoryParams, apiUrl: string) => `${apiUrl}${endpoint}`,
-  buildRequestData: (params: GetTransferFactoryParams): GetTransferFactoryRequest => params,
+  buildRequestData: (params: GetTransferFactoryParams): GetTransferFactoryRequest => ({
+    choiceArguments: params.choiceArguments,
+    excludeDebugFields: params.excludeDebugFields ?? false,
+  }),
 });
