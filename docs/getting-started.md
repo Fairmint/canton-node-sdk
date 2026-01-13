@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Getting Started - Canton Node SDK
-sdk_version: 0.0.1
+sdk_version: 0.0.127
 ---
 
 # Getting Started
