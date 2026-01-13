@@ -46,7 +46,7 @@ jobs:
 
       - name: Restore Quickstart Preparation Cache
         id: quickstart-prep-cache-restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             ${{ github.workspace }}/node_modules
@@ -218,7 +218,7 @@ jobs:
       - name: Save Quickstart Preparation Cache
         if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
         id: quickstart-prep-cache-save
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             ${{ github.workspace }}/node_modules
