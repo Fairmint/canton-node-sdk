@@ -19,6 +19,10 @@ jobs:
         uses: actions/checkout@v6
         with:
           submodules: false
+          # For PRs: checkout the head ref so we can push lint fixes back
+          ref: ${{ github.event_name == 'pull_request' && github.head_ref || '' }}
+          # Use GITHUB_TOKEN which has write permissions for the PR branch
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compute Submodule Cache Key
         id: submodule-cache-key
@@ -101,8 +105,34 @@ jobs:
         if: steps.verify-cache.outputs.has_node_modules != 'true'
         run: npm install
 
-      - name: Run Linter
+      # On PRs: auto-fix and commit lint issues
+      # On main/schedule/dispatch: only validate (no commits allowed)
+      - name: Run Linter (Fix Mode)
+        if: github.event_name == 'pull_request'
+        run: npm run fix
+
+      - name: Run Linter (Check Mode)
+        if: github.event_name != 'pull_request'
         run: npm run lint
+
+      - name: Check for Lint Changes
+        if: github.event_name == 'pull_request'
+        id: lint-changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and Push Lint Fixes
+        if: github.event_name == 'pull_request' && steps.lint-changes.outputs.has_changes == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "chore: auto-fix linting issues [skip ci]"
+          git push
 
       - name: Setup CN-Quickstart
         if: steps.verify-cache.outputs.has_quickstart_env != 'true'
