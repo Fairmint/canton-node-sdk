@@ -6,6 +6,7 @@ import type { components } from '../../../../../../../../generated/token-standar
 export const GetTransferInstructionWithdrawContextParamsSchema = z.object({
   transferInstructionId: z.string(),
   meta: z.record(z.string(), z.string()).optional(),
+  excludeDebugFields: z.boolean().optional(),
 });
 
 export type GetTransferInstructionWithdrawContextParams = z.infer<
@@ -37,6 +38,7 @@ export const GetTransferInstructionWithdrawContext = createApiOperation<
   buildRequestData: (
     params: GetTransferInstructionWithdrawContextParams
   ): GetTransferInstructionWithdrawContextRequest => ({
+    excludeDebugFields: params.excludeDebugFields ?? false,
     ...(params.meta && { meta: params.meta }),
   }),
 });

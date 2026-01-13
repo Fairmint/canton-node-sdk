@@ -12,6 +12,7 @@ const endpoint = '/api/validator/v0/scan-proxy/registry/allocations/v1';
 export const GetAllocationWithdrawContextParamsSchema = z.object({
   allocationId: z.string(),
   meta: z.record(z.string(), z.string()).optional(),
+  excludeDebugFields: z.boolean().optional(),
 });
 
 export type GetAllocationWithdrawContextParams = z.infer<typeof GetAllocationWithdrawContextParamsSchema>;
@@ -40,7 +41,9 @@ export const GetAllocationWithdrawContext = createApiOperation<
   buildUrl: (params: GetAllocationWithdrawContextParams, apiUrl: string) =>
     `${apiUrl}${endpoint}/${params.allocationId}/choice-contexts/withdraw`,
   buildRequestData: (params: GetAllocationWithdrawContextParams): GetAllocationWithdrawContextRequest => {
-    const request: GetAllocationWithdrawContextRequest = {};
+    const request: GetAllocationWithdrawContextRequest = {
+      excludeDebugFields: params.excludeDebugFields ?? false,
+    };
     if (params.meta !== undefined) {
       request.meta = params.meta;
     }

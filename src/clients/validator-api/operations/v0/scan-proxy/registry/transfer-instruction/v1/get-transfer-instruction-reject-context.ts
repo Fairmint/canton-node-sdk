@@ -6,6 +6,7 @@ import type { components } from '../../../../../../../../generated/token-standar
 export const GetTransferInstructionRejectContextParamsSchema = z.object({
   transferInstructionId: z.string(),
   meta: z.record(z.string(), z.string()).optional(),
+  excludeDebugFields: z.boolean().optional(),
 });
 
 export type GetTransferInstructionRejectContextParams = z.infer<typeof GetTransferInstructionRejectContextParamsSchema>;
@@ -35,6 +36,7 @@ export const GetTransferInstructionRejectContext = createApiOperation<
   buildRequestData: (
     params: GetTransferInstructionRejectContextParams
   ): GetTransferInstructionRejectContextRequest => ({
+    excludeDebugFields: params.excludeDebugFields ?? false,
     ...(params.meta && { meta: params.meta }),
   }),
 });
