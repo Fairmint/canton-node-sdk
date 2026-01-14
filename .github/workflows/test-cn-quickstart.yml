@@ -2,12 +2,8 @@ name: Test CN-Quickstart Integration
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-  schedule:
-    # Run nightly at 2 AM UTC
-    - cron: '0 2 * * *'
-  workflow_dispatch:
 
 jobs:
   test-cn-quickstart:
