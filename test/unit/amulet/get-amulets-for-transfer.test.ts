@@ -1,5 +1,5 @@
-import { getAmuletsForTransfer } from '../../../src/utils/amulet/get-amulets-for-transfer';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
+import { getAmuletsForTransfer } from '../../../src/utils/amulet/get-amulets-for-transfer';
 
 const createMockLedgerClient = (activeContracts: unknown[]): LedgerJsonApiClient =>
   ({
@@ -7,12 +7,7 @@ const createMockLedgerClient = (activeContracts: unknown[]): LedgerJsonApiClient
   }) as unknown as LedgerJsonApiClient;
 
 // New format: JsActiveContract
-const createJsActiveContract = (
-  contractId: string,
-  templateId: string,
-  owner: string,
-  amount: string
-) => ({
+const createJsActiveContract = (contractId: string, templateId: string, owner: string, amount: string) => ({
   contractEntry: {
     JsActiveContract: {
       createdEvent: {
@@ -28,12 +23,7 @@ const createJsActiveContract = (
 });
 
 // Legacy format
-const createLegacyContract = (
-  contractId: string,
-  templateId: string,
-  owner: string,
-  amount: string
-) => ({
+const createLegacyContract = (contractId: string, templateId: string, owner: string, amount: string) => ({
   contract: {
     contract_id: contractId,
     template_id: templateId,
@@ -65,11 +55,7 @@ const createJsActiveContractWithNumericAmount = (
   },
 });
 
-const createAppRewardCoupon = (
-  contractId: string,
-  beneficiary: string,
-  amount: string
-) => ({
+const createAppRewardCoupon = (contractId: string, beneficiary: string, amount: string) => ({
   contractEntry: {
     JsActiveContract: {
       createdEvent: {
@@ -84,11 +70,7 @@ const createAppRewardCoupon = (
   },
 });
 
-const createValidatorRewardCoupon = (
-  contractId: string,
-  beneficiary: string,
-  amount: string
-) => ({
+const createValidatorRewardCoupon = (contractId: string, beneficiary: string, amount: string) => ({
   contractEntry: {
     JsActiveContract: {
       createdEvent: {

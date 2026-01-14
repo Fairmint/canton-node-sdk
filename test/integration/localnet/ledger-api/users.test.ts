@@ -1,6 +1,4 @@
-/**
- * LedgerJsonApiClient integration tests: User Management
- */
+/** LedgerJsonApiClient integration tests: User Management */
 
 import { getClient } from './setup';
 

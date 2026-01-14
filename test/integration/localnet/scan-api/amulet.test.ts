@@ -1,6 +1,4 @@
-/**
- * ScanApiClient integration tests: Amulet Rules
- */
+/** ScanApiClient integration tests: Amulet Rules */
 
 import { getClient } from './setup';
 

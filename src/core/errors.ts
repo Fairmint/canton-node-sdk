@@ -73,11 +73,7 @@ export type OperationErrorCodeType = (typeof OperationErrorCode)[keyof typeof Op
 
 /** Error thrown when SDK operations fail */
 export class OperationError extends CantonError {
-  constructor(
-    message: string,
-    code: OperationErrorCodeType,
-    context?: Record<string, unknown>
-  ) {
+  constructor(message: string, code: OperationErrorCodeType, context?: Record<string, unknown>) {
     super(message, code, context);
     this.name = 'OperationError';
   }

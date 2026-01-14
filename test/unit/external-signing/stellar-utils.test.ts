@@ -1,12 +1,12 @@
 import { Keypair } from '@stellar/stellar-base';
 import {
-  wrapEd25519PublicKeyInDER,
-  stellarPublicKeyToBase64,
-  signWithStellarKeypair,
-  loadStellarKeypair,
   generateStellarKeypair,
-  stellarPublicKeyToHex,
+  loadStellarKeypair,
   signHexWithStellarKeypair,
+  signWithStellarKeypair,
+  stellarPublicKeyToBase64,
+  stellarPublicKeyToHex,
+  wrapEd25519PublicKeyInDER,
 } from '../../../src/utils/external-signing/stellar-utils';
 
 describe('stellar-utils', () => {
@@ -36,12 +36,16 @@ describe('stellar-utils', () => {
 
     it('throws error for invalid key length', () => {
       const invalidKey = Buffer.alloc(16); // Wrong size
-      expect(() => wrapEd25519PublicKeyInDER(invalidKey)).toThrow('Invalid Ed25519 public key length: 16, expected 32 bytes');
+      expect(() => wrapEd25519PublicKeyInDER(invalidKey)).toThrow(
+        'Invalid Ed25519 public key length: 16, expected 32 bytes'
+      );
     });
 
     it('throws error for empty buffer', () => {
       const emptyKey = Buffer.alloc(0);
-      expect(() => wrapEd25519PublicKeyInDER(emptyKey)).toThrow('Invalid Ed25519 public key length: 0, expected 32 bytes');
+      expect(() => wrapEd25519PublicKeyInDER(emptyKey)).toThrow(
+        'Invalid Ed25519 public key length: 0, expected 32 bytes'
+      );
     });
   });
 

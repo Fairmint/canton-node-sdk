@@ -21,12 +21,14 @@ export const GetVersion = createApiOperation<void, GetVersionResponse>({
 ```
 
 **When to use:**
+
 - Simple REST endpoints (GET, POST, DELETE, PATCH)
 - No async logic needed before making the request
 - No client method calls required (e.g., `getLedgerEnd()`)
 - Response transformation is simple or not needed
 
 **Benefits:**
+
 - Concise and declarative
 - Consistent structure across operations
 - Auto-generates JSDoc from operation files
@@ -51,11 +53,14 @@ export const SubscribeToCompletions = createWebSocketOperation<Params, Request, 
 ```
 
 **When to use:**
+
 - WebSocket endpoints with simple request/response patterns
 - No complex state management needed
 - Connection lifecycle is straightforward
 
-**Note:** Factory-pattern WebSocket operations still require manual connection handling via the returned subscription object. Unlike REST operations (fire-and-forget), you must manage the subscription lifecycle:
+**Note:** Factory-pattern WebSocket operations still require manual connection handling via the
+returned subscription object. Unlike REST operations (fire-and-forget), you must manage the
+subscription lifecycle:
 
 ```typescript
 const subscription = await client.subscribeToCompletions(params, {
@@ -69,6 +74,7 @@ const subscription = await client.subscribeToCompletions(params, {
 ### Class Pattern (For Complex Operations)
 
 Use classes extending `ApiOperation` when you need:
+
 - **Async pre-processing** (e.g., fetching defaults before the main request)
 - **Client method calls** (e.g., `client.getLedgerEnd()`, `client.getPartyId()`)
 - **Complex response aggregation** (e.g., pagination, streaming results)
@@ -104,20 +110,25 @@ export class SubscribeToUpdates {
 ```
 
 **Current class-based operations:**
-- `GetActiveContracts` — Uses WebSocket internally but exposes a simple async API; supports streaming callbacks and aggregates results until connection closes
-- `SubscribeToUpdates` — Long-running WebSocket with complex message handling, error recovery, and async pre-processing to fetch `ledgerEnd` if not provided
-- `GetMemberTrafficStatus` — Requires async call to `getCurrentMiningRoundDomainId()` before making the request when `domainId` is not provided
-- `GetParties`/`ListParties` — Uses `fetchAllParties()` helper for automatic pagination across multiple API calls
+
+- `GetActiveContracts` — Uses WebSocket internally but exposes a simple async API; supports
+  streaming callbacks and aggregates results until connection closes
+- `SubscribeToUpdates` — Long-running WebSocket with complex message handling, error recovery, and
+  async pre-processing to fetch `ledgerEnd` if not provided
+- `GetMemberTrafficStatus` — Requires async call to `getCurrentMiningRoundDomainId()` before making
+  the request when `domainId` is not provided
+- `GetParties`/`ListParties` — Uses `fetchAllParties()` helper for automatic pagination across
+  multiple API calls
 
 ### Decision Guide
 
-| Scenario | Pattern |
-|----------|---------|
-| Simple REST GET/POST | Factory (`createApiOperation`) |
-| REST with async defaults | Class extending `ApiOperation` |
-| Simple WebSocket subscription | Factory (`createWebSocketOperation`) |
-| WebSocket with streaming/callbacks | Class with `connect()` method |
-| Pagination/aggregation | Class with custom `execute()` |
+| Scenario                           | Pattern                              |
+| ---------------------------------- | ------------------------------------ |
+| Simple REST GET/POST               | Factory (`createApiOperation`)       |
+| REST with async defaults           | Class extending `ApiOperation`       |
+| Simple WebSocket subscription      | Factory (`createWebSocketOperation`) |
+| WebSocket with streaming/callbacks | Class with `connect()` method        |
+| Pagination/aggregation             | Class with custom `execute()`        |
 
 ---
 

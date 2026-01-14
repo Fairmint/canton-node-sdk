@@ -48,19 +48,28 @@ function getAllTsFiles(dir: string): string[] {
 }
 
 type OperationInfo =
-  | { kind: 'api'; operationName: string; paramsType: string; responseType: string; methodName?: string | undefined; jsdoc?: string | undefined }
-  | { kind: 'ws'; operationName: string; paramsType: string; requestType: string; messageType: string; jsdoc?: string | undefined };
+  | {
+      kind: 'api';
+      operationName: string;
+      paramsType: string;
+      responseType: string;
+      methodName?: string | undefined;
+      jsdoc?: string | undefined;
+    }
+  | {
+      kind: 'ws';
+      operationName: string;
+      paramsType: string;
+      requestType: string;
+      messageType: string;
+      jsdoc?: string | undefined;
+    };
 
-/**
- * Extracts JSDoc comment that directly precedes an export declaration (no code between them)
- */
+/** Extracts JSDoc comment that directly precedes an export declaration (no code between them) */
 function extractJsDoc(fileContent: string, operationName: string): string | undefined {
   // Match JSDoc comment that is immediately before export const/class (only whitespace allowed between)
   // Must not have any code between the JSDoc closing */ and the export
-  const jsdocRegex = new RegExp(
-    `(/\\*\\*(?:(?!\\*/).)*.?\\*/)\\s*\\nexport (?:const|class) ${operationName}\\b`,
-    's'
-  );
+  const jsdocRegex = new RegExp(`(/\\*\\*(?:(?!\\*/).)*.?\\*/)\\s*\\nexport (?:const|class) ${operationName}\\b`, 's');
   const match = jsdocRegex.exec(fileContent);
   const jsdoc = match?.[1];
 
@@ -75,9 +84,7 @@ function extractJsDoc(fileContent: string, operationName: string): string | unde
   return undefined;
 }
 
-/**
- * Generate a human-readable description from an operation name
- */
+/** Generate a human-readable description from an operation name */
 function generateDescriptionFromName(operationName: string): string {
   // Split camelCase/PascalCase into words
   const words = operationName
@@ -103,7 +110,13 @@ function generateDescriptionFromName(operationName: string): string {
   if (prefix === 'grant') return `Grants ${rest}`;
 
   // Default: just capitalize first letter
-  return operationName.charAt(0).toUpperCase() + operationName.slice(1).replace(/([A-Z])/g, ' $1').trim();
+  return (
+    operationName.charAt(0).toUpperCase() +
+    operationName
+      .slice(1)
+      .replace(/([A-Z])/g, ' $1')
+      .trim()
+  );
 }
 
 // Extract operation info from a file (supports REST, WebSocket, and class-based operations)
@@ -168,9 +181,7 @@ function relativeImportPath(from: string, to: string): string {
   return rel.replace(/\.ts$/, '');
 }
 
-/**
- * Extract the first line of a JSDoc comment (the description)
- */
+/** Extract the first line of a JSDoc comment (the description) */
 function extractJsDocDescription(jsdoc: string | undefined): string | undefined {
   if (!jsdoc) return undefined;
 

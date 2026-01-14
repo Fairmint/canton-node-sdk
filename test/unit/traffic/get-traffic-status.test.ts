@@ -1,6 +1,6 @@
-import { getTrafficStatus } from '../../../src/utils/traffic/get-traffic-status';
-import type { ValidatorApiClient } from '../../../src/clients/validator-api';
 import type { ScanApiClient } from '../../../src/clients/scan-api';
+import type { ValidatorApiClient } from '../../../src/clients/validator-api';
+import { getTrafficStatus } from '../../../src/utils/traffic/get-traffic-status';
 
 describe('getTrafficStatus', () => {
   describe('with ValidatorApiClient', () => {
@@ -130,17 +130,17 @@ describe('getTrafficStatus', () => {
     it('should throw error when domainId is missing', async () => {
       const client = createMockScanClient();
 
-      await expect(
-        getTrafficStatus(client, { partyId: 'party-id::abc' } as never)
-      ).rejects.toThrow('ScanApiClient requires both domainId and partyId');
+      await expect(getTrafficStatus(client, { partyId: 'party-id::abc' } as never)).rejects.toThrow(
+        'ScanApiClient requires both domainId and partyId'
+      );
     });
 
     it('should throw error when partyId is missing', async () => {
       const client = createMockScanClient();
 
-      await expect(
-        getTrafficStatus(client, { domainId: 'domain-456' } as never)
-      ).rejects.toThrow('ScanApiClient requires both domainId and partyId');
+      await expect(getTrafficStatus(client, { domainId: 'domain-456' } as never)).rejects.toThrow(
+        'ScanApiClient requires both domainId and partyId'
+      );
     });
   });
 });

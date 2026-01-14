@@ -1,6 +1,4 @@
-/**
- * ValidatorApiClient integration tests: Mining Rounds
- */
+/** ValidatorApiClient integration tests: Mining Rounds */
 
 import { getClient } from './setup';
 

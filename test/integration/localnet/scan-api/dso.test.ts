@@ -1,6 +1,4 @@
-/**
- * ScanApiClient integration tests: DSO Information
- */
+/** ScanApiClient integration tests: DSO Information */
 
 import { getClient } from './setup';
 

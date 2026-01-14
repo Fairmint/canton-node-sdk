@@ -1,7 +1,7 @@
-import { preApproveTransfers } from '../../../src/utils/amulet/pre-approve-transfers';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import type { ValidatorApiClient } from '../../../src/clients/validator-api';
 import type { Command, ExerciseCommand } from '../../../src/clients/ledger-json-api/schemas/api/commands';
+import type { ValidatorApiClient } from '../../../src/clients/validator-api';
+import { preApproveTransfers } from '../../../src/utils/amulet/pre-approve-transfers';
 
 // Helper to safely extract ExerciseCommand from a Command
 const getExerciseCommand = (command: Command | undefined): ExerciseCommand['ExerciseCommand'] | undefined => {
@@ -60,9 +60,7 @@ const createMockValidatorClient = (): jest.Mocked<ValidatorApiClient> =>
     }),
   }) as unknown as jest.Mocked<ValidatorApiClient>;
 
-const createMockLedgerClient = (
-  transactionTreeResponse: unknown
-): jest.Mocked<LedgerJsonApiClient> =>
+const createMockLedgerClient = (transactionTreeResponse: unknown): jest.Mocked<LedgerJsonApiClient> =>
   ({
     submitAndWaitForTransactionTree: jest.fn().mockResolvedValue(transactionTreeResponse),
   }) as unknown as jest.Mocked<LedgerJsonApiClient>;
@@ -206,15 +204,11 @@ describe('preApproveTransfers', () => {
     expect(callArgs?.disclosedContracts?.length).toBeGreaterThan(0);
 
     // Should include AmuletRules contract
-    const amuletRulesContract = callArgs?.disclosedContracts?.find((c) =>
-      c.contractId === 'amulet-rules-contract-123'
-    );
+    const amuletRulesContract = callArgs?.disclosedContracts?.find((c) => c.contractId === 'amulet-rules-contract-123');
     expect(amuletRulesContract).toBeDefined();
 
     // Should include mining round contract
-    const miningRoundContract = callArgs?.disclosedContracts?.find((c) =>
-      c.contractId === 'mining-round-contract-123'
-    );
+    const miningRoundContract = callArgs?.disclosedContracts?.find((c) => c.contractId === 'mining-round-contract-123');
     expect(miningRoundContract).toBeDefined();
   });
 
@@ -224,9 +218,7 @@ describe('preApproveTransfers', () => {
     });
 
     const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
-    const featuredContract = callArgs?.disclosedContracts?.find((c) =>
-      c.contractId === 'featured-app-right-123'
-    );
+    const featuredContract = callArgs?.disclosedContracts?.find((c) => c.contractId === 'featured-app-right-123');
     expect(featuredContract).toBeDefined();
   });
 
@@ -313,8 +305,6 @@ describe('preApproveTransfers', () => {
 
     const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
     const exerciseCmd = getExerciseCommand(callArgs?.commands[0]);
-    expect(exerciseCmd?.choiceArgument['inputs']).toEqual([
-      { tag: 'InputAmulet', value: 'amulet-123' },
-    ]);
+    expect(exerciseCmd?.choiceArgument['inputs']).toEqual([{ tag: 'InputAmulet', value: 'amulet-123' }]);
   });
 });

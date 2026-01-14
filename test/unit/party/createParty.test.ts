@@ -1,9 +1,9 @@
-import { createParty } from '../../../src/utils/party/createParty';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
 import type { ValidatorApiClient } from '../../../src/clients/validator-api';
+import * as getAmuletsModule from '../../../src/utils/amulet/get-amulets-for-transfer';
 import * as offersModule from '../../../src/utils/amulet/offers';
 import * as preApproveModule from '../../../src/utils/amulet/pre-approve-transfers';
-import * as getAmuletsModule from '../../../src/utils/amulet/get-amulets-for-transfer';
+import { createParty } from '../../../src/utils/party/createParty';
 
 // Mock dependencies
 jest.mock('../../../src/utils/amulet/offers');
