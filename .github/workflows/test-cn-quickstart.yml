@@ -21,8 +21,8 @@ jobs:
           submodules: false
           # For PRs: checkout the head ref so we can push lint fixes back
           ref: ${{ github.event_name == 'pull_request' && github.head_ref || '' }}
-          # Use GITHUB_TOKEN which has write permissions for the PR branch
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Use PAT_TOKEN for pushing lint fixes (GITHUB_TOKEN can't trigger workflows)
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Compute Submodule Cache Key
         id: submodule-cache-key
