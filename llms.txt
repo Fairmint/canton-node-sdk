@@ -12,6 +12,17 @@
 
 Keep content concise but comprehensive. Avoid verbosity—capture the essence.
 
+## Task Management
+
+Task files track multi-step work in `tasks/YYYY/MM/XX/YYYY.MM.DD-description.md`.
+
+**When working on tasks:**
+- Update task status (Planning → Implementing → Testing → Completed) as work progresses
+- Update `tasks/README.md` index when task status changes
+- Mark completed tasks as Completed in both the task file header and README index
+
+See `tasks/README.md` for current task index.
+
 ## PR Workflow (REQUIRED)
 
 ### Before Commit & Push

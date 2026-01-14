@@ -1,37 +1,22 @@
 # Tasks
 
-Task files for the Canton Node SDK following the Fairmint task-driven development workflow.
+## Open Tasks
 
-## Directory Structure
+_None — all tasks completed._
 
-```
-tasks/
-├── README.md           # This file
-└── YYYY/MM/XX/         # Year/Month/Developer initials
-    └── YYYY.MM.DD-short-description.md
-```
+## Completed Tasks
 
-## Creating a Task
+| Task | Description |
+| ---- | ----------- |
+| [2026.01.12-canton-3.4-upgrade](2026/01/hd/2026.01.12-canton-3.4-upgrade.md) | Upgraded SDK for Canton 3.4 API compatibility |
+| [2026.01.02-sdk-refactoring-and-testing](2026/01/hd/2026.01.02-sdk-refactoring-and-testing.md) | Improved SDK quality, test coverage, and DX |
 
-Use the Cursor command:
+## Creating Tasks
 
-```
-/create-task-file
-Implement feature X
-[add context]
-```
-
-Or create manually following the template in the task files.
-
-## Task File Lifecycle
+Use the Cursor command `/create-task-file` or create manually:
 
 ```
-PLANNING → IMPLEMENTING → TESTING → ✅ COMPLETE
+tasks/YYYY/MM/XX/YYYY.MM.DD-short-description.md
 ```
 
-## Current Tasks
-
-| Task                                                                                           | Status      | Description                                                  |
-| ---------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------ |
-| [2026.01.12-canton-3.4-upgrade](2026/01/hd/2026.01.12-canton-3.4-upgrade.md)                   | In Progress | Upgrade SDK for Canton 3.4 API compatibility                 |
-| [2026.01.02-sdk-refactoring-and-testing](2026/01/hd/2026.01.02-sdk-refactoring-and-testing.md) | Planning    | Improve SDK quality, test coverage, and developer experience |
+Where `XX` = developer initials.
