@@ -32,11 +32,25 @@ npm run lint   # Verify no lint errors
 
 2. **Monitor CI status** and automatically investigate/fix any failures:
    ```bash
-   gh pr checks <PR_NUMBER>              # Check CI status
-   gh run view <RUN_ID> --log-failed     # View failed logs
+   gh pr checks <PR_NUMBER>              # Check all CI checks
+   gh run view <RUN_ID> --log-failed     # View failed job logs
+   gh run view --job=<JOB_ID>            # View specific job details
    ```
 
 3. **If CI fails:** Investigate the failure, fix the issue, and push the fix. Repeat until CI passes.
+
+### Git Workflow
+
+**Avoid force pushing** (`git push --force`). To update a PR branch:
+
+```bash
+git fetch origin main
+git merge origin/main
+# Resolve conflicts if any
+git push
+```
+
+This preserves commit history and makes PR review easier.
 
 ## Dependencies
 
@@ -46,6 +60,8 @@ When adding dependencies, always use **pinned versions** (no `^` or `~` prefixes
 npm install package@1.2.3 --save-exact    # For dependencies
 npm install package@1.2.3 --save-dev --save-exact  # For devDependencies
 ```
+
+**Why:** Pre-1.0 packages (like `0.x.y`) may introduce breaking changes in minor versions. Pinned versions ensure reproducible builds and prevent unexpected breakage.
 
 ## Quick Commands
 
