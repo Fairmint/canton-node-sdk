@@ -173,7 +173,7 @@ export function parseFeesFromUpdate(treeEvent: TreeEvent): FeeAnalysis {
 
   if (!isExerciseResult(exerciseResult) || !isExerciseResultSummary(exerciseResult.summary)) {
     throw new ValidationError('No fee information found in exercise result', {
-      hasResult: exerciseResult !== null && exerciseResult !== undefined,
+      hasResult: Boolean(exerciseResult),
     });
   }
 

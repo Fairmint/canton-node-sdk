@@ -37,9 +37,9 @@ async function main(): Promise<void> {
     console.log('\n📡 Getting synchronizer ID...');
     const dsoInfo = await canton.scan.getDsoInfo();
     const svNodeStates = dsoInfo.sv_node_states;
-    const firstNodeState = svNodeStates?.[0];
+    const firstNodeState = svNodeStates[0];
     // The payload is stored in the contract's payload field as a Record<string, never> (generic JSON)
-    const contractPayload = firstNodeState?.contract?.payload as Record<string, unknown> | undefined;
+    const contractPayload = firstNodeState?.contract.payload as Record<string, unknown> | undefined;
     const nodeState = contractPayload?.['state'] as Record<string, unknown> | undefined;
     const syncNodes = nodeState?.['synchronizerNodes'] as Record<string, unknown> | undefined;
     const syncNodesList = syncNodes?.['synchronizerNodes'] as Array<[string, unknown]> | undefined;
