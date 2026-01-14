@@ -155,3 +155,28 @@ The publishing workflow requires the following environment setup:
    - `packages: write` - to publish to GitHub Packages
 
 These permissions are configured in the workflow file and should not need manual setup.
+
+### Required Secrets
+
+The following repository secrets must be configured:
+
+| Secret      | Purpose                           | Required Permissions              |
+| ----------- | --------------------------------- | --------------------------------- |
+| `PAT_TOKEN` | Push lint auto-fix commits on PRs | `contents:write`, `metadata:read` |
+| `NPM_TOKEN` | Publish packages to NPM           | NPM automation token              |
+
+**PAT_TOKEN Details:**
+
+The `PAT_TOKEN` is a Personal Access Token used by the `test-cn-quickstart` workflow to push
+automatic lint fixes back to PR branches. This is required because commits made with the default
+`GITHUB_TOKEN` don't trigger subsequent workflow runs (by design, to prevent infinite loops).
+
+To create the PAT:
+
+1. Go to GitHub Settings → Developer settings → Personal access tokens → Fine-grained tokens
+2. Create a token with:
+   - **Repository access**: This repository only
+   - **Permissions**: Contents (Read and write), Metadata (Read)
+3. Add the token as a repository secret named `PAT_TOKEN`
+
+**Note**: The token should ideally be owned by a bot/service account rather than a personal account.

@@ -90,6 +90,15 @@ export abstract class BaseClient {
     return token;
   }
 
+  /**
+   * Clears the cached authentication token, forcing a refresh on the next authenticate() call. Useful when a token has
+   * expired mid-operation (e.g., during a long-running WebSocket stream).
+   */
+  public clearToken(): void {
+    this.authManager.clearToken();
+    this.httpClient.clearBearerToken();
+  }
+
   public async makeGetRequest<T>(
     url: string,
     config: { contentType?: string; includeBearerToken?: boolean } = {}
