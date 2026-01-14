@@ -17,8 +17,8 @@ jobs:
           submodules: false
           # For PRs: checkout the head ref so we can push lint fixes back
           ref: ${{ github.event_name == 'pull_request' && github.head_ref || '' }}
-          # Use GITHUB_TOKEN which has write permissions for the PR branch
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Use PAT_TOKEN for pushing lint fixes (GITHUB_TOKEN can't trigger workflows)
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Compute Submodule Cache Key
         id: submodule-cache-key
@@ -127,7 +127,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "chore: auto-fix linting issues [skip ci]"
+          git commit -m "chore: auto-fix linting issues"
           git push
 
       - name: Setup CN-Quickstart
