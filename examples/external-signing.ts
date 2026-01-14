@@ -2,16 +2,18 @@
 /**
  * Example: External Signing (User-Controlled Keys)
  *
- * Demonstrates how to create an external party where the private key is
- * controlled by the user (e.g., in a hardware wallet), not by the node.
+ * Demonstrates how to create an external party where the private key is controlled by the user (e.g., in a hardware
+ * wallet), not by the node.
  *
  * This is useful for:
+ *
  * - Hardware wallet integration
  * - Multi-signature schemes
  * - Self-custody wallets
  *
  * Prerequisites:
- * - cn-quickstart running with OAuth2 enabled
+ *
+ * - Cn-quickstart running with OAuth2 enabled
  *
  * Usage: npx tsx examples/external-signing.ts
  */

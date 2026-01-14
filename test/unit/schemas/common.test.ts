@@ -1,8 +1,8 @@
 import {
-  TraceContextSchema,
-  FilterSchema,
-  DeduplicationDurationSchema,
   ApiFeaturesSchema,
+  DeduplicationDurationSchema,
+  FilterSchema,
+  TraceContextSchema,
 } from '../../../src/clients/ledger-json-api/schemas/common';
 
 describe('Common Schemas', () => {

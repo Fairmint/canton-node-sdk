@@ -1,11 +1,11 @@
-import { getFeaturedAppRightContractDetails } from '../../../src/utils/contracts/featuredAppRight';
 import type { ValidatorApiClient } from '../../../src/clients/validator-api';
 import { OperationError } from '../../../src/core/errors';
+import { getFeaturedAppRightContractDetails } from '../../../src/utils/contracts/featuredAppRight';
 
 describe('getFeaturedAppRightContractDetails', () => {
   const createMockValidatorClient = (
     featuredAppRight: { contract_id: string; template_id: string; created_event_blob: string } | null,
-    domainId: string = 'domain-123'
+    domainId = 'domain-123'
   ): ValidatorApiClient =>
     ({
       getPartyId: jest.fn().mockReturnValue('alice::fingerprint'),

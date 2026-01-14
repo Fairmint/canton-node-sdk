@@ -312,10 +312,7 @@ class OperationDocGenerator {
       }
 
       // Look for exported interface declarations (e.g., export interface GetValidatorUserInfoResponse {...})
-      if (
-        ts.isInterfaceDeclaration(node) &&
-        node.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)
-      ) {
+      if (ts.isInterfaceDeclaration(node) && node.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)) {
         const name = node.name.text;
         if (name.includes('Response')) {
           operationInfo.responseType = name;

@@ -5,21 +5,22 @@ import { type TrafficCostEstimate } from './types';
  * Extracts traffic cost estimation from a prepared transaction response.
  *
  * The cost estimation is returned by the Ledger JSON API's `interactiveSubmissionPrepare` endpoint when preparing a
- * transaction for external signing. This provides insight into how much traffic (in bytes) the transaction will consume.
+ * transaction for external signing. This provides insight into how much traffic (in bytes) the transaction will
+ * consume.
  *
  * @example
  *   ```typescript
  *   const prepared = await prepareExternalTransaction({
- *     ledgerClient,
- *     commands,
- *     userId,
- *     actAs,
- *     synchronizerId,
+ *   ledgerClient,
+ *   commands,
+ *   userId,
+ *   actAs,
+ *   synchronizerId,
  *   });
  *
  *   const cost = getEstimatedTrafficCost(prepared);
  *   if (cost) {
- *     console.log(`Transaction will cost ~${cost.totalCost} bytes of traffic`);
+ *   console.log(`Transaction will cost ~${cost.totalCost} bytes of traffic`);
  *   }
  *   ```;
  *

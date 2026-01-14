@@ -13,8 +13,7 @@ const COLORS = {
 } as const;
 
 /**
- * Logs messages to the console with colors and formatting.
- * Useful for debugging during development.
+ * Logs messages to the console with colors and formatting. Useful for debugging during development.
  *
  * @example
  *   const canton = new Canton({

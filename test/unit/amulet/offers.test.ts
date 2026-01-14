@@ -1,7 +1,7 @@
-import { createTransferOffer, acceptTransferOffer } from '../../../src/utils/amulet/offers';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
 import type { Command, ExerciseCommand } from '../../../src/clients/ledger-json-api/schemas/api/commands';
 import { EnvLoader } from '../../../src/core/config/EnvLoader';
+import { acceptTransferOffer, createTransferOffer } from '../../../src/utils/amulet/offers';
 
 // Helper to safely extract ExerciseCommand from a Command
 const getExerciseCommand = (command: Command | undefined): ExerciseCommand['ExerciseCommand'] | undefined => {
@@ -20,9 +20,7 @@ jest.mock('../../../src/core/config/EnvLoader', () => ({
   },
 }));
 
-const createMockLedgerClient = (
-  transactionTreeResponse: unknown
-): jest.Mocked<LedgerJsonApiClient> =>
+const createMockLedgerClient = (transactionTreeResponse: unknown): jest.Mocked<LedgerJsonApiClient> =>
   ({
     getNetwork: jest.fn().mockReturnValue('localnet'),
     getPartyId: jest.fn().mockReturnValue('validator-party::fingerprint'),

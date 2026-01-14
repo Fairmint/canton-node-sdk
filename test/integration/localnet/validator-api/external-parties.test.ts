@@ -11,10 +11,7 @@ import { getClient } from './setup';
 
 describe('ValidatorApiClient / ExternalParties', () => {
   // Use a deterministic seed for reproducible test results
-  const DETERMINISTIC_SEED = Buffer.from(
-    '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-    'hex'
-  );
+  const DETERMINISTIC_SEED = Buffer.from('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', 'hex');
   const testKeypair = Keypair.fromRawEd25519Seed(DETERMINISTIC_SEED);
   const publicKey = testKeypair.rawPublicKey().toString('hex');
 

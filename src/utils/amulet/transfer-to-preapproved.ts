@@ -205,11 +205,9 @@ export async function transferToPreapproved(
     };
 
     if (!amuletRules.amulet_rules.domain_id) {
-      throw new OperationError(
-        'Amulet rules domain ID is required',
-        OperationErrorCode.MISSING_DOMAIN_ID,
-        { contractId: amuletRules.amulet_rules.contract.contract_id }
-      );
+      throw new OperationError('Amulet rules domain ID is required', OperationErrorCode.MISSING_DOMAIN_ID, {
+        contractId: amuletRules.amulet_rules.contract.contract_id,
+      });
     }
 
     // Submit the command

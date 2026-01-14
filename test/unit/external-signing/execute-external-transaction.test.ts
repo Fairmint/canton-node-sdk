@@ -1,5 +1,5 @@
-import { executeExternalTransaction } from '../../../src/utils/external-signing/execute-external-transaction';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
+import { executeExternalTransaction } from '../../../src/utils/external-signing/execute-external-transaction';
 
 const createMockLedgerClient = (): jest.Mocked<LedgerJsonApiClient> =>
   ({

@@ -91,8 +91,8 @@ export abstract class BaseClient {
   }
 
   /**
-   * Clears the cached authentication token, forcing a refresh on the next authenticate() call.
-   * Useful when a token has expired mid-operation (e.g., during a long-running WebSocket stream).
+   * Clears the cached authentication token, forcing a refresh on the next authenticate() call. Useful when a token has
+   * expired mid-operation (e.g., during a long-running WebSocket stream).
    */
   public clearToken(): void {
     this.authManager.clearToken();
@@ -223,9 +223,7 @@ export abstract class BaseClient {
     return this.apiType;
   }
 
-  /**
-   * Checks if debug mode is enabled via config or environment variable.
-   */
+  /** Checks if debug mode is enabled via config or environment variable. */
   private isDebugEnabled(configDebug: boolean | undefined): boolean {
     if (configDebug !== undefined) {
       return configDebug;
@@ -235,8 +233,8 @@ export abstract class BaseClient {
   }
 
   /**
-   * Creates a logger based on configuration.
-   * When debug is enabled, uses a CompositeLogger with both file and console logging.
+   * Creates a logger based on configuration. When debug is enabled, uses a CompositeLogger with both file and console
+   * logging.
    */
   private createLogger(existingLogger: Logger | undefined, debug: boolean): Logger {
     if (existingLogger) {

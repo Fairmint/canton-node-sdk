@@ -1,6 +1,4 @@
-/**
- * ScanApiClient integration tests: Mining Round Information
- */
+/** ScanApiClient integration tests: Mining Round Information */
 
 import { getClient } from './setup';
 

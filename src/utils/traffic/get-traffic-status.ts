@@ -36,8 +36,8 @@ function isScanApiClient(client: ValidatorApiClient | ScanApiClient): client is 
  *
  *   // Get traffic status for a specific member
  *   const status = await getTrafficStatus(validatorClient, {
- *     domainId: 'global-domain::1234...',
- *     memberId: 'PAR::party-id::fingerprint',
+ *   domainId: 'global-domain::1234...',
+ *   memberId: 'PAR::party-id::fingerprint',
  *   });
  *   ```;
  */
@@ -57,8 +57,8 @@ export async function getTrafficStatus(
  *
  *   // Get traffic status for a specific party
  *   const status = await getTrafficStatus(scanClient, {
- *     domainId: 'global-domain::1234...',
- *     partyId: 'party-id::fingerprint',
+ *   domainId: 'global-domain::1234...',
+ *   partyId: 'party-id::fingerprint',
  *   });
  *   console.log(`Consumed: ${status.consumed}, Purchased: ${status.purchased}`);
  *   ```;

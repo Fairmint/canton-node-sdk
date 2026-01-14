@@ -162,11 +162,10 @@ export async function preApproveTransfers(
   }
 
   if (!contractId) {
-    throw new OperationError(
-      'Failed to create TransferPreapproval contract',
-      OperationErrorCode.TRANSACTION_FAILED,
-      { receiverPartyId: params.receiverPartyId, updateId: result.transactionTree.updateId }
-    );
+    throw new OperationError('Failed to create TransferPreapproval contract', OperationErrorCode.TRANSACTION_FAILED, {
+      receiverPartyId: params.receiverPartyId,
+      updateId: result.transactionTree.updateId,
+    });
   }
 
   return {

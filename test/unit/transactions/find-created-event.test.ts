@@ -1,9 +1,7 @@
-import { findCreatedEventByTemplateName } from '../../../src/utils/transactions/find-created-event';
 import type { SubmitAndWaitForTransactionTreeResponse } from '../../../src/clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction-tree';
+import { findCreatedEventByTemplateName } from '../../../src/utils/transactions/find-created-event';
 
-const createMockResponse = (
-  events: Record<string, unknown>
-): SubmitAndWaitForTransactionTreeResponse =>
+const createMockResponse = (events: Record<string, unknown>): SubmitAndWaitForTransactionTreeResponse =>
   ({
     transactionTree: {
       updateId: 'update-123',

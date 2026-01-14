@@ -194,9 +194,8 @@ export class SubscribeToUpdates {
       };
 
       /** Check if a message is a Canton error response */
-      const isErrorMessage = (msg: UpdatesWsMessage): msg is JsCantonError | WsCantonError => {
-        return typeof msg === 'object' && ('cause' in msg || ('code' in msg && 'message' in msg && !('update' in msg)));
-      };
+      const isErrorMessage = (msg: UpdatesWsMessage): msg is JsCantonError | WsCantonError =>
+        typeof msg === 'object' && ('cause' in msg || ('code' in msg && 'message' in msg && !('update' in msg)));
 
       void wsClient
         .connect<typeof requestMessage, UpdatesWsMessage>(path, requestMessage, {
