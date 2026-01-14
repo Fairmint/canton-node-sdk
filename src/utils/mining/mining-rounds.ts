@@ -89,11 +89,9 @@ export async function getCurrentMiningRoundContext(validatorClient: MiningRoundC
   const lastOpenRound = validOpenRounds[validOpenRounds.length - 1];
 
   if (!lastOpenRound) {
-    throw new OperationError(
-      'No valid open mining round found',
-      OperationErrorCode.MINING_ROUND_NOT_FOUND,
-      { validRoundsCount: validOpenRounds.length }
-    );
+    throw new OperationError('No valid open mining round found', OperationErrorCode.MINING_ROUND_NOT_FOUND, {
+      validRoundsCount: validOpenRounds.length,
+    });
   }
 
   const openMiningRoundContract: DisclosedContract = {
@@ -140,19 +138,14 @@ export async function getCurrentRoundNumber(validatorClient: MiningRoundClient):
   const currentOpenMiningRounds = miningRoundsResponse.open_mining_rounds;
 
   if (currentOpenMiningRounds.length === 0) {
-    throw new OperationError(
-      'No open mining rounds found',
-      OperationErrorCode.MINING_ROUND_NOT_FOUND
-    );
+    throw new OperationError('No open mining rounds found', OperationErrorCode.MINING_ROUND_NOT_FOUND);
   }
 
   const latestRound = findLatestMiningRound(currentOpenMiningRounds);
   if (!latestRound) {
-    throw new OperationError(
-      'No valid mining rounds found',
-      OperationErrorCode.MINING_ROUND_NOT_FOUND,
-      { roundsCount: currentOpenMiningRounds.length }
-    );
+    throw new OperationError('No valid mining rounds found', OperationErrorCode.MINING_ROUND_NOT_FOUND, {
+      roundsCount: currentOpenMiningRounds.length,
+    });
   }
 
   return getRoundNumber(latestRound);

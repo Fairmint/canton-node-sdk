@@ -4,10 +4,7 @@ import { type Logger } from './Logger';
  * Combines multiple loggers, delegating all log calls to each.
  *
  * @example
- *   const logger = new CompositeLogger([
- *     new FileLogger(),
- *     new ConsoleLogger({ logLevel: 'debug' }),
- *   ]);
+ *   const logger = new CompositeLogger([new FileLogger(), new ConsoleLogger({ logLevel: 'debug' })]);
  */
 export class CompositeLogger implements Logger {
   private readonly loggers: Logger[];

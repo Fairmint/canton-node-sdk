@@ -8,11 +8,10 @@ export async function getFeaturedAppRightContractDetails(validatorApi: Validator
     partyId,
   });
   if (!featuredAppRight.featured_app_right) {
-    throw new OperationError(
-      `No featured app right found for party ${partyId}`,
-      OperationErrorCode.MISSING_CONTRACT,
-      { partyId, contractType: 'FeaturedAppRight' }
-    );
+    throw new OperationError(`No featured app right found for party ${partyId}`, OperationErrorCode.MISSING_CONTRACT, {
+      partyId,
+      contractType: 'FeaturedAppRight',
+    });
   }
   // The featured-apps endpoint may not include the synchronizer/domain id.
   // Get domain_id from amulet rules which reliably expose it.

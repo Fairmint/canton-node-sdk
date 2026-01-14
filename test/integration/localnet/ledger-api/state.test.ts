@@ -1,6 +1,4 @@
-/**
- * LedgerJsonApiClient integration tests: State Queries
- */
+/** LedgerJsonApiClient integration tests: State Queries */
 
 import { getClient } from './setup';
 

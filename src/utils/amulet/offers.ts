@@ -66,11 +66,11 @@ export async function createTransferOffer(params: CreateTransferOfferParams): Pr
   const transferOfferEvent = transferOfferCid.transactionTree.eventsById['1'];
   if (!transferOfferEvent || !('CreatedTreeEvent' in transferOfferEvent)) {
     const firstKey = transferOfferEvent ? Object.keys(transferOfferEvent)[0] : 'undefined';
-    throw new OperationError(
-      `Expected CreatedTreeEvent but got ${firstKey}`,
-      OperationErrorCode.TRANSACTION_FAILED,
-      { eventType: firstKey, receiverPartyId, amount }
-    );
+    throw new OperationError(`Expected CreatedTreeEvent but got ${firstKey}`, OperationErrorCode.TRANSACTION_FAILED, {
+      eventType: firstKey,
+      receiverPartyId,
+      amount,
+    });
   }
 
   return transferOfferEvent.CreatedTreeEvent.value.contractId;

@@ -1,7 +1,7 @@
-import { transferToPreapproved } from '../../../src/utils/amulet/transfer-to-preapproved';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import type { ValidatorApiClient } from '../../../src/clients/validator-api';
 import type { Command, ExerciseCommand } from '../../../src/clients/ledger-json-api/schemas/api/commands';
+import type { ValidatorApiClient } from '../../../src/clients/validator-api';
+import { transferToPreapproved } from '../../../src/utils/amulet/transfer-to-preapproved';
 
 // Helper to safely extract ExerciseCommand from a Command
 const getExerciseCommand = (command: Command | undefined): ExerciseCommand['ExerciseCommand'] | undefined => {
@@ -99,9 +99,7 @@ describe('transferToPreapproved', () => {
   it('transfers to single preapproved recipient', async () => {
     const result = await transferToPreapproved(mockLedgerClient, mockValidatorClient, {
       senderPartyId: 'sender::fingerprint',
-      transfers: [
-        { recipientPartyId: 'recipient::fingerprint', amount: '100', description: 'Test' },
-      ],
+      transfers: [{ recipientPartyId: 'recipient::fingerprint', amount: '100', description: 'Test' }],
     });
 
     expect(result.transferResults).toHaveLength(1);
@@ -207,9 +205,7 @@ describe('transferToPreapproved', () => {
   it('submits correct command structure', async () => {
     await transferToPreapproved(mockLedgerClient, mockValidatorClient, {
       senderPartyId: 'sender::fingerprint',
-      transfers: [
-        { recipientPartyId: 'recipient::fingerprint', amount: '100', description: 'Payment' },
-      ],
+      transfers: [{ recipientPartyId: 'recipient::fingerprint', amount: '100', description: 'Payment' }],
     });
 
     const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
@@ -273,9 +269,7 @@ describe('transferToPreapproved', () => {
 
     const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
     const exerciseCmd = getExerciseCommand(callArgs?.commands[0]);
-    expect(exerciseCmd?.choiceArgument['inputs']).toEqual([
-      { tag: 'InputAmulet', value: 'amulet-123' },
-    ]);
+    expect(exerciseCmd?.choiceArgument['inputs']).toEqual([{ tag: 'InputAmulet', value: 'amulet-123' }]);
   });
 
   it('fetches network information', async () => {

@@ -1,14 +1,15 @@
-import { TransactionBatch } from '../../../src/utils/transactions/TransactionBatch';
 import type { LedgerJsonApiClient } from '../../../src/clients';
 import type { Command, DisclosedContract } from '../../../src/clients/ledger-json-api/schemas';
+import { TransactionBatch } from '../../../src/utils/transactions/TransactionBatch';
 
-const createMockLedgerClient = (): jest.Mocked<LedgerJsonApiClient> => ({
-  submitAndWaitForTransactionTree: jest.fn().mockResolvedValue({
-    transactionTree: { updateId: 'update-123' },
-  }),
-  submitAndWait: jest.fn().mockResolvedValue({ updateId: 'update-456' }),
-  asyncSubmit: jest.fn().mockResolvedValue(undefined),
-} as unknown as jest.Mocked<LedgerJsonApiClient>);
+const createMockLedgerClient = (): jest.Mocked<LedgerJsonApiClient> =>
+  ({
+    submitAndWaitForTransactionTree: jest.fn().mockResolvedValue({
+      transactionTree: { updateId: 'update-123' },
+    }),
+    submitAndWait: jest.fn().mockResolvedValue({ updateId: 'update-456' }),
+    asyncSubmit: jest.fn().mockResolvedValue(undefined),
+  }) as unknown as jest.Mocked<LedgerJsonApiClient>;
 
 const createMockCommand = (id: string): Command => ({
   CreateCommand: {
@@ -295,10 +296,7 @@ describe('TransactionBatch', () => {
 
       expect(mockClient.submitAndWait).toHaveBeenCalledWith(
         expect.objectContaining({
-          commands: expect.arrayContaining([
-            createMockCommand('1'),
-            createMockCommand('2'),
-          ]),
+          commands: expect.arrayContaining([createMockCommand('1'), createMockCommand('2')]),
           disclosedContracts: [createMockDisclosedContract('1')],
         })
       );

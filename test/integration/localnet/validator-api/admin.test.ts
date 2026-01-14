@@ -1,6 +1,4 @@
-/**
- * ValidatorApiClient integration tests: Admin Operations
- */
+/** ValidatorApiClient integration tests: Admin Operations */
 
 import { getClient } from './setup';
 

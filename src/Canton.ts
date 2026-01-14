@@ -1,10 +1,10 @@
 import { LedgerJsonApiClient, ScanApiClient, ValidatorApiClient } from './clients';
-import { type ClientConfig, type NetworkType, type ProviderType } from './core/types';
 import { type Logger } from './core/logging';
+import { type ClientConfig, type NetworkType, type ProviderType } from './core/types';
 
 /**
- * Configuration for the Canton unified client.
- * Simplified configuration that initializes all clients with shared settings.
+ * Configuration for the Canton unified client. Simplified configuration that initializes all clients with shared
+ * settings.
  */
 export interface CantonConfig {
   /** Network to connect to */
@@ -14,9 +14,8 @@ export interface CantonConfig {
   /** Optional logger instance */
   logger?: Logger;
   /**
-   * Enable debug mode with verbose console logging.
-   * When true, logs all API requests/responses to console.
-   * Can also be enabled via CANTON_DEBUG=1 environment variable.
+   * Enable debug mode with verbose console logging. When true, logs all API requests/responses to console. Can also be
+   * enabled via CANTON_DEBUG=1 environment variable.
    */
   debug?: boolean;
   /** Party ID for authenticated operations */
@@ -34,11 +33,11 @@ export interface CantonConfig {
 /**
  * Unified entry point for Canton blockchain operations.
  *
- * The Canton class provides a simplified interface for initializing all Canton
- * API clients with shared configuration, while still allowing direct access
- * to the low-level clients.
+ * The Canton class provides a simplified interface for initializing all Canton API clients with shared configuration,
+ * while still allowing direct access to the low-level clients.
  *
  * For high-level operations, use the utility functions from `@fairmint/canton-node-sdk`:
+ *
  * - `createParty()` - Create and fund a new party
  * - `createTransferOffer()` / `acceptTransferOffer()` - Transfer amulets
  * - `preApproveTransfers()` / `transferToPreapproved()` - Pre-approved transfers
@@ -77,8 +76,6 @@ export class Canton {
   /**
    * Creates a new Canton unified client.
    *
-   * @param config - Configuration options for the Canton client
-   *
    * @example
    *   // Basic initialization
    *   const canton = new Canton({ network: 'localnet' });
@@ -89,6 +86,8 @@ export class Canton {
    *     provider: '5n',
    *     logger: new FileLogger(),
    *   });
+   *
+   * @param config - Configuration options for the Canton client
    */
   constructor(config: CantonConfig) {
     this.config = config;
@@ -144,23 +143,17 @@ export class Canton {
     this.scan = new ScanApiClient(scanConfig);
   }
 
-  /**
-   * Gets the current network.
-   */
+  /** Gets the current network. */
   public getNetwork(): NetworkType {
     return this.config.network;
   }
 
-  /**
-   * Gets the current provider.
-   */
+  /** Gets the current provider. */
   public getProvider(): ProviderType | undefined {
     return this.config.provider;
   }
 
-  /**
-   * Gets the current party ID from config or ledger client.
-   */
+  /** Gets the current party ID from config or ledger client. */
   public getPartyId(): string {
     return this.config.partyId ?? this.ledger.getPartyId();
   }
@@ -168,8 +161,7 @@ export class Canton {
   /**
    * Sets the party ID for authenticated clients.
    *
-   * Useful for LocalNet where party ID is discovered at runtime after
-   * client initialization.
+   * Useful for LocalNet where party ID is discovered at runtime after client initialization.
    */
   public setPartyId(partyId: string): void {
     this.ledger.setPartyId(partyId);

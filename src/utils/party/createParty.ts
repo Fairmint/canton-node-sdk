@@ -2,8 +2,8 @@ import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { type ValidatorApiClient } from '../../clients/validator-api';
 import { ValidationError } from '../../core/errors';
 import { waitForCondition } from '../../core/utils/polling';
-import { acceptTransferOffer, createTransferOffer } from '../amulet/offers';
 import { getAmuletsForTransfer } from '../amulet/get-amulets-for-transfer';
+import { acceptTransferOffer, createTransferOffer } from '../amulet/offers';
 import { preApproveTransfers } from '../amulet/pre-approve-transfers';
 
 export interface CreatePartyOptions {
@@ -36,10 +36,10 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
 
   const amountNum = parseFloat(options.amount);
   if (isNaN(amountNum) || amountNum < 0) {
-    throw new ValidationError(
-      `Invalid amount: "${options.amount}". Amount must be a valid non-negative number.`,
-      { amount: options.amount, partyName: options.partyName }
-    );
+    throw new ValidationError(`Invalid amount: "${options.amount}". Amount must be a valid non-negative number.`, {
+      amount: options.amount,
+      partyName: options.partyName,
+    });
   }
 
   // Create user via Validator API

@@ -1,5 +1,5 @@
-import { CompositeLogger, ConsoleLogger, FileLogger, LOG_LEVEL_VALUES } from '../../../src/core/logging';
 import type { LogLevel } from '../../../src/core/logging';
+import { CompositeLogger, ConsoleLogger, FileLogger, LOG_LEVEL_VALUES } from '../../../src/core/logging';
 
 describe('LOG_LEVEL_VALUES', () => {
   it('has correct priority order (error highest, debug lowest)', () => {

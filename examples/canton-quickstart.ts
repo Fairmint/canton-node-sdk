@@ -2,11 +2,12 @@
 /**
  * Example: Canton Unified Client
  *
- * Demonstrates the Canton class which provides a unified entry point for
- * all Canton API clients with shared configuration.
+ * Demonstrates the Canton class which provides a unified entry point for all Canton API clients with shared
+ * configuration.
  *
  * Prerequisites:
- * - cn-quickstart running with OAuth2 enabled
+ *
+ * - Cn-quickstart running with OAuth2 enabled
  * - Run `cd quickstart && make setup` and choose "with OAuth2"
  * - Run `cd quickstart && make start`
  *

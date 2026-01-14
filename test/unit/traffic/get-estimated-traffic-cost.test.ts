@@ -1,5 +1,5 @@
-import { getEstimatedTrafficCost } from '../../../src/utils/traffic/get-estimated-traffic-cost';
 import type { InteractiveSubmissionPrepareResponse } from '../../../src/clients/ledger-json-api/schemas/api/interactive-submission';
+import { getEstimatedTrafficCost } from '../../../src/utils/traffic/get-estimated-traffic-cost';
 
 describe('getEstimatedTrafficCost', () => {
   it('should return undefined when costEstimation is not present', () => {

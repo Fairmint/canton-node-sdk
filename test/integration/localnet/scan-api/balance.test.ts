@@ -1,9 +1,8 @@
 /**
  * ScanApiClient integration tests: Balance Information
  *
- * NOTE: Some balance endpoints may not be available in basic cn-quickstart setup.
- * These tests are skipped until we confirm endpoint availability.
- * See: tasks/2026/01/hd/2026.01.02-sdk-refactoring-and-testing.md (Backlog section)
+ * NOTE: Some balance endpoints may not be available in basic cn-quickstart setup. These tests are skipped until we
+ * confirm endpoint availability. See: tasks/2026/01/hd/2026.01.02-sdk-refactoring-and-testing.md (Backlog section)
  */
 
 import { getClient } from './setup';

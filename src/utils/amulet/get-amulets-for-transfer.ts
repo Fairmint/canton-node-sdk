@@ -63,7 +63,11 @@ interface ContractData {
 
 /** Type guard to check if a contract is a JsGetActiveContractsResponseItem with JsActiveContract */
 function isJsActiveContractItem(ctr: unknown): ctr is JsGetActiveContractsResponseItem & {
-  contractEntry: { JsActiveContract: { createdEvent: { templateId: string; contractId: string; createArgument: Record<string, unknown> } } };
+  contractEntry: {
+    JsActiveContract: {
+      createdEvent: { templateId: string; contractId: string; createArgument: Record<string, unknown> };
+    };
+  };
 } {
   if (!ctr || typeof ctr !== 'object') return false;
   const obj = ctr as Record<string, unknown>;
@@ -77,10 +81,11 @@ function isJsActiveContractItem(ctr: unknown): ctr is JsGetActiveContractsRespon
 }
 
 /** Type guard to check if a contract is a LegacyContract with contract property */
-function isLegacyContractWithContract(ctr: unknown): ctr is LegacyContract & { contract: NonNullable<LegacyContract['contract']> } {
+function isLegacyContractWithContract(
+  ctr: unknown
+): ctr is LegacyContract & { contract: NonNullable<LegacyContract['contract']> } {
   if (!ctr || typeof ctr !== 'object') return false;
-  const obj = ctr as Record<string, unknown>;
-  const contract = obj['contract'];
+  const { contract } = ctr as Record<string, unknown>;
   return contract !== undefined && typeof contract === 'object' && contract !== null;
 }
 
@@ -138,11 +143,10 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
       const jsActiveContract = ctr.contractEntry['JsActiveContract'];
       const { createdEvent } = jsActiveContract;
       payload = createdEvent.createArgument;
-      templateId = createdEvent.templateId;
-      contractId = createdEvent.contractId;
+      ({ templateId, contractId } = createdEvent);
     } else if (isLegacyContractWithContract(ctr)) {
       const { contract } = ctr;
-      payload = contract.payload;
+      ({ payload } = contract);
       templateId = contract.contract?.template_id ?? contract.template_id;
       contractId = contract.contract?.contract_id ?? contract.contract_id;
     }
@@ -165,8 +169,8 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
     let payload: Record<string, unknown>;
     if ('templateId' in contract && 'payload' in contract) {
       // ContractData - has payload directly
-      payload = contract.payload;
-    } else if ('contract' in contract && contract.contract) {
+      ({ payload } = contract);
+    } else if ('contract' in contract) {
       // LegacyContract with nested structure
       payload = contract.contract.contract?.payload ?? contract.contract.payload ?? {};
     } else {
@@ -198,10 +202,7 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
     } else {
       // For amulets, amount might be nested
       const rawAmountCandidate =
-        payload['amount'] ??
-        payload['effective_amount'] ??
-        payload['effectiveAmount'] ??
-        payload['initialAmount'];
+        payload['amount'] ?? payload['effective_amount'] ?? payload['effectiveAmount'] ?? payload['initialAmount'];
 
       const directValue = extractNumericValue(rawAmountCandidate);
       if (directValue !== undefined) {

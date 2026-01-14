@@ -2,16 +2,18 @@
 /**
  * Example: External Signing (User-Controlled Keys)
  *
- * Demonstrates how to create an external party where the private key is
- * controlled by the user (e.g., in a hardware wallet), not by the node.
+ * Demonstrates how to create an external party where the private key is controlled by the user (e.g., in a hardware
+ * wallet), not by the node.
  *
  * This is useful for:
+ *
  * - Hardware wallet integration
  * - Multi-signature schemes
  * - Self-custody wallets
  *
  * Prerequisites:
- * - cn-quickstart running with OAuth2 enabled
+ *
+ * - Cn-quickstart running with OAuth2 enabled
  *
  * Usage: npx tsx examples/external-signing.ts
  */
@@ -35,9 +37,9 @@ async function main(): Promise<void> {
     console.log('\n📡 Getting synchronizer ID...');
     const dsoInfo = await canton.scan.getDsoInfo();
     const svNodeStates = dsoInfo.sv_node_states;
-    const firstNodeState = svNodeStates?.[0];
+    const firstNodeState = svNodeStates[0];
     // The payload is stored in the contract's payload field as a Record<string, never> (generic JSON)
-    const contractPayload = firstNodeState?.contract?.payload as Record<string, unknown> | undefined;
+    const contractPayload = firstNodeState?.contract.payload as Record<string, unknown> | undefined;
     const nodeState = contractPayload?.['state'] as Record<string, unknown> | undefined;
     const syncNodes = nodeState?.['synchronizerNodes'] as Record<string, unknown> | undefined;
     const syncNodesList = syncNodes?.['synchronizerNodes'] as Array<[string, unknown]> | undefined;

@@ -12,10 +12,10 @@ import { ValidationError } from '../../core/errors';
  */
 export function wrapEd25519PublicKeyInDER(rawPublicKey: Buffer): Buffer {
   if (rawPublicKey.length !== 32) {
-    throw new ValidationError(
-      `Invalid Ed25519 public key length: ${rawPublicKey.length}, expected 32 bytes`,
-      { actualLength: rawPublicKey.length, expectedLength: 32 }
-    );
+    throw new ValidationError(`Invalid Ed25519 public key length: ${rawPublicKey.length}, expected 32 bytes`, {
+      actualLength: rawPublicKey.length,
+      expectedLength: 32,
+    });
   }
 
   // DER prefix for Ed25519 public keys in X.509 SubjectPublicKeyInfo format

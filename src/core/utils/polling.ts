@@ -12,13 +12,8 @@ export interface WaitForConditionOptions {
 /**
  * Polls a condition function until it returns a non-null/non-undefined value or times out.
  *
- * Return `null` or `undefined` from the check function to indicate the condition is not yet met.
- * Any other value (including falsy values like `0`, `false`, or `""`) is considered a successful result.
- *
- * @param check - Function that returns a value, or null/undefined if the condition is not yet met.
- * @param options - Configuration options
- * @returns The first non-null/non-undefined value returned by the check function
- * @throws Error if the condition is not met within the timeout period
+ * Return `null` or `undefined` from the check function to indicate the condition is not yet met. Any other value
+ * (including falsy values like `0`, `false`, or `""`) is considered a successful result.
  *
  * @example
  *   // Wait for a contract to exist
@@ -37,6 +32,11 @@ export interface WaitForConditionOptions {
  *     },
  *     { timeout: 60000 }
  *   );
+ *
+ * @param check - Function that returns a value, or null/undefined if the condition is not yet met.
+ * @param options - Configuration options
+ * @returns The first non-null/non-undefined value returned by the check function
+ * @throws Error if the condition is not met within the timeout period
  */
 export async function waitForCondition<T>(
   check: () => Promise<T | null | undefined>,

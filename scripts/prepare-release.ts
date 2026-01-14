@@ -72,12 +72,7 @@ function parseVersion(version: string): { major: number; minor: number; patch: n
 }
 
 /** Find the next available version by checking both git tags and npm registry */
-function findNextAvailableVersion(
-  packageName: string,
-  major: number,
-  minor: number,
-  startPatch: number
-): string {
+function findNextAvailableVersion(packageName: string, major: number, minor: number, startPatch: number): string {
   let patch = startPatch;
   let version: string;
 
