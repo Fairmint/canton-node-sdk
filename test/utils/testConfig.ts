@@ -15,8 +15,9 @@ import type { ClientConfig } from '../../src';
 /**
  * Build a ClientConfig for integration tests.
  *
- * Returns LocalNet configuration using SDK's built-in OAuth2 defaults for cn-quickstart.
- * The SDK automatically configures:
+ * Returns LocalNet configuration using SDK's built-in OAuth2 defaults for cn-quickstart. The SDK automatically
+ * configures:
+ *
  * - OAuth2 auth URL (Keycloak at localhost:8082)
  * - API endpoints (Validator: 3903, JSON API: 3975, Scan: 4000/api/scan)
  * - Client credentials (app-provider-validator)

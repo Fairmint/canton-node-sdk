@@ -2,12 +2,12 @@
 /**
  * Example: Create a Party with Funding
  *
- * Demonstrates how to create a new party on the Canton network using the
- * createParty utility function. This creates a party, funds it with amulets,
- * and sets up a transfer preapproval contract.
+ * Demonstrates how to create a new party on the Canton network using the createParty utility function. This creates a
+ * party, funds it with amulets, and sets up a transfer preapproval contract.
  *
  * Prerequisites:
- * - cn-quickstart running with OAuth2 enabled
+ *
+ * - Cn-quickstart running with OAuth2 enabled
  * - A funded validator party (the sender)
  *
  * Usage: npx tsx examples/create-party.ts [party-name] [amount]

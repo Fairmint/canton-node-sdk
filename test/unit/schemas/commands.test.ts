@@ -1,9 +1,9 @@
 import {
-  CreateCommandSchema,
-  ExerciseCommandSchema,
-  CommandSchema,
-  DisclosedContractSchema,
   CommandRequestSchema,
+  CommandSchema,
+  CreateCommandSchema,
+  DisclosedContractSchema,
+  ExerciseCommandSchema,
 } from '../../../src/clients/ledger-json-api/schemas/api/commands';
 
 describe('Command Schemas', () => {

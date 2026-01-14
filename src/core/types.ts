@@ -50,9 +50,8 @@ export interface ClientConfig {
   logger?: import('./logging').Logger;
 
   /**
-   * Enable debug mode with verbose console logging.
-   * When true, logs all API requests/responses to console.
-   * Can also be enabled via CANTON_DEBUG=1 environment variable.
+   * Enable debug mode with verbose console logging. When true, logs all API requests/responses to console. Can also be
+   * enabled via CANTON_DEBUG=1 environment variable.
    */
   debug?: boolean;
 

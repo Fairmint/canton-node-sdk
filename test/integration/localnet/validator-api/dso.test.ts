@@ -1,6 +1,4 @@
-/**
- * ValidatorApiClient integration tests: DSO Information
- */
+/** ValidatorApiClient integration tests: DSO Information */
 
 import { getClient } from './setup';
 

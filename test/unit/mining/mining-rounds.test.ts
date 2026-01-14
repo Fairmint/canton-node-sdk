@@ -1,22 +1,17 @@
+import type { ValidatorApiClient } from '../../../src/clients/validator-api';
+import type { GetOpenAndIssuingMiningRoundsResponse } from '../../../src/clients/validator-api/schemas/api';
 import {
   getCurrentMiningRoundContext,
   getCurrentMiningRoundDomainId,
   getCurrentRoundNumber,
 } from '../../../src/utils/mining/mining-rounds';
-import type { ValidatorApiClient } from '../../../src/clients/validator-api';
-import type { GetOpenAndIssuingMiningRoundsResponse } from '../../../src/clients/validator-api/schemas/api';
 
-const createMockValidatorClient = (
-  response: GetOpenAndIssuingMiningRoundsResponse
-): ValidatorApiClient => ({
-  getOpenAndIssuingMiningRounds: jest.fn().mockResolvedValue(response),
-} as unknown as ValidatorApiClient);
+const createMockValidatorClient = (response: GetOpenAndIssuingMiningRoundsResponse): ValidatorApiClient =>
+  ({
+    getOpenAndIssuingMiningRounds: jest.fn().mockResolvedValue(response),
+  }) as unknown as ValidatorApiClient;
 
-const createOpenMiningRound = (
-  roundNumber: number,
-  opensAt: Date,
-  contractId = `contract-${roundNumber}`
-) => ({
+const createOpenMiningRound = (roundNumber: number, opensAt: Date, contractId = `contract-${roundNumber}`) => ({
   contract: {
     contract_id: contractId,
     template_id: 'pkg:Splice.Round:OpenMiningRound',
@@ -100,10 +95,7 @@ describe('mining-rounds', () => {
 
       const mockClient = createMockValidatorClient({
         open_mining_rounds: [createOpenMiningRound(10, pastTime)],
-        issuing_mining_rounds: [
-          createIssuingMiningRound(8, 'issuing-8'),
-          createIssuingMiningRound(9, 'issuing-9'),
-        ],
+        issuing_mining_rounds: [createIssuingMiningRound(8, 'issuing-8'), createIssuingMiningRound(9, 'issuing-9')],
       });
 
       const result = await getCurrentMiningRoundContext(mockClient);
@@ -193,10 +185,7 @@ describe('mining-rounds', () => {
       const pastTime = new Date(now.getTime() - 60000);
 
       const mockClient = createMockValidatorClient({
-        open_mining_rounds: [
-          createOpenMiningRound(10, pastTime),
-          createOpenMiningRound(11, pastTime),
-        ],
+        open_mining_rounds: [createOpenMiningRound(10, pastTime), createOpenMiningRound(11, pastTime)],
         issuing_mining_rounds: [],
       });
 

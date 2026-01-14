@@ -1,7 +1,7 @@
-import { getLockedAmuletsForParty } from '../../../src/utils/amulet/get-locked-amulets';
 import type { ValidatorApiClient } from '../../../src/clients/validator-api';
 import type { GetAmuletsResponse } from '../../../src/clients/validator-api/schemas/api/wallet';
 import { ValidationError } from '../../../src/core/errors';
+import { getLockedAmuletsForParty } from '../../../src/utils/amulet/get-locked-amulets';
 
 const createMockValidatorClient = (response: GetAmuletsResponse): ValidatorApiClient =>
   ({

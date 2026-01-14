@@ -1,11 +1,11 @@
+import type { TreeEvent } from '../../../src/clients/ledger-json-api/schemas/api/events';
 import {
+  formatFeeAmount,
   parseFeesFromEventTree,
   parseFeesFromUpdate,
-  formatFeeAmount,
   validateFeeAnalysis,
   type FeeAnalysis,
 } from '../../../src/utils/parsers/fee-parser';
-import type { TreeEvent } from '../../../src/clients/ledger-json-api/schemas/api/events';
 
 // Helper to create mock events - use `as unknown as TreeEvent` to avoid strict type checking on test mocks
 const createAmuletRulesTransferEvent = (summary: Record<string, unknown>): TreeEvent =>
@@ -159,9 +159,7 @@ describe('fee-parser', () => {
         holdingFees: '10',
         outputFees: [],
         senderChangeFee: '0',
-        balanceChanges: [
-          ['alice', { changeToInitialAmountAsOfRoundZero: '-5', changeToHoldingFeesRate: '0' }],
-        ],
+        balanceChanges: [['alice', { changeToInitialAmountAsOfRoundZero: '-5', changeToHoldingFeesRate: '0' }]],
       });
 
       const result = parseFeesFromUpdate(event);

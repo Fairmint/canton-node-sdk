@@ -1,6 +1,6 @@
 import { Keypair } from '@stellar/stellar-base';
-import { createExternalParty } from '../../../src/utils/external-signing/create-external-party';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
+import { createExternalParty } from '../../../src/utils/external-signing/create-external-party';
 
 const createMockLedgerClient = (overrides?: {
   generateExternalPartyTopologyResponse?: unknown;
@@ -241,7 +241,7 @@ describe('createExternalParty', () => {
     const signatures = allocateCall?.multiHashSignatures;
     expect(signatures).toBeDefined();
     expect(signatures?.length).toBeGreaterThan(0);
-    
+
     const signature = signatures?.[0]?.signature;
     expect(signature).toBeDefined();
     // Signature should be base64-encoded

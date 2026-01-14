@@ -127,9 +127,9 @@ describe('waitForCondition', () => {
     const check = jest.fn().mockResolvedValue(null);
 
     const start = Date.now();
-    await expect(
-      waitForCondition(check, { timeout: 100, interval: 20, timeoutMessage: 'Timed out' })
-    ).rejects.toThrow('Timed out');
+    await expect(waitForCondition(check, { timeout: 100, interval: 20, timeoutMessage: 'Timed out' })).rejects.toThrow(
+      'Timed out'
+    );
     const elapsed = Date.now() - start;
 
     // Should have taken approximately the timeout duration

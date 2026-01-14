@@ -2,18 +2,18 @@
 /**
  * Example: Transfer Amulets via Transfer Offer
  *
- * Demonstrates how to transfer amulets between parties using transfer offers.
- * This is the standard way to transfer amulets when the recipient needs to
- * explicitly accept the transfer.
+ * Demonstrates how to transfer amulets between parties using transfer offers. This is the standard way to transfer
+ * amulets when the recipient needs to explicitly accept the transfer.
  *
  * Prerequisites:
- * - cn-quickstart running with OAuth2 enabled
+ *
+ * - Cn-quickstart running with OAuth2 enabled
  * - Both sender and receiver parties exist
  *
  * Usage: npx tsx examples/transfer-amulets.ts <receiver-party-id> <amount>
  */
 
-import { Canton, createTransferOffer, acceptTransferOffer } from '../src';
+import { acceptTransferOffer, Canton, createTransferOffer } from '../src';
 
 async function main(): Promise<void> {
   const receiverPartyId = process.argv[2];

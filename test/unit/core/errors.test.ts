@@ -1,12 +1,12 @@
 import {
+  ApiError,
+  AuthenticationError,
   CantonError,
   ConfigurationError,
-  AuthenticationError,
-  ApiError,
-  ValidationError,
   NetworkError,
   OperationError,
   OperationErrorCode,
+  ValidationError,
 } from '../../../src/core/errors';
 
 describe('CantonError hierarchy', () => {
@@ -116,11 +116,9 @@ describe('CantonError hierarchy', () => {
 
   describe('OperationError', () => {
     it('creates error with specific operation code', () => {
-      const error = new OperationError(
-        'No contract found',
-        OperationErrorCode.MISSING_CONTRACT,
-        { partyId: 'alice::123' }
-      );
+      const error = new OperationError('No contract found', OperationErrorCode.MISSING_CONTRACT, {
+        partyId: 'alice::123',
+      });
       expect(error.message).toBe('No contract found');
       expect(error.code).toBe('MISSING_CONTRACT');
       expect(error.name).toBe('OperationError');
