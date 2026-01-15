@@ -15,6 +15,7 @@ export interface AuthResponse {
 export class AuthenticationManager {
   private bearerToken: string | null = null;
   private tokenExpiry: number | null = null;
+  private tokenIssuedAt: number | null = null;
 
   constructor(
     private readonly authUrl: string,
@@ -38,7 +39,8 @@ export class AuthenticationManager {
     if (this.authConfig.tokenGenerator) {
       this.bearerToken = await this.authConfig.tokenGenerator();
       // Tokens from generator may have short expiry, so don't cache for long
-      this.tokenExpiry = Date.now() + 60 * 1000; // 1 minute cache
+      this.tokenIssuedAt = Date.now();
+      this.tokenExpiry = this.tokenIssuedAt + 60 * 1000; // 1 minute cache
       return this.bearerToken;
     }
 
@@ -93,10 +95,11 @@ export class AuthenticationManager {
       }
 
       this.bearerToken = response.data.access_token;
+      this.tokenIssuedAt = Date.now();
 
       // Set token expiry if provided
       if (response.data.expires_in) {
-        this.tokenExpiry = Date.now() + response.data.expires_in * 1000;
+        this.tokenExpiry = this.tokenIssuedAt + response.data.expires_in * 1000;
       }
 
       // Log success
@@ -141,6 +144,33 @@ export class AuthenticationManager {
   public clearToken(): void {
     this.bearerToken = null;
     this.tokenExpiry = null;
+    this.tokenIssuedAt = null;
+  }
+
+  /**
+   * Returns the token expiry timestamp in milliseconds since epoch, or null if not available.
+   * Use this to schedule proactive token refresh before expiration.
+   */
+  public getTokenExpiryTime(): number | null {
+    return this.tokenExpiry;
+  }
+
+  /**
+   * Returns the timestamp when the current token was issued, in milliseconds since epoch, or null if not available.
+   */
+  public getTokenIssuedAt(): number | null {
+    return this.tokenIssuedAt;
+  }
+
+  /**
+   * Returns the token lifetime in milliseconds, or null if not available. Calculated as the difference between token
+   * expiry time and issue time.
+   */
+  public getTokenLifetimeMs(): number | null {
+    if (this.tokenIssuedAt === null || this.tokenExpiry === null) {
+      return null;
+    }
+    return this.tokenExpiry - this.tokenIssuedAt;
   }
 
   private validateAuthConfig(): void {

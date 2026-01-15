@@ -99,6 +99,29 @@ export abstract class BaseClient {
     this.httpClient.clearBearerToken();
   }
 
+  /**
+   * Returns the token expiry timestamp in milliseconds since epoch, or null if not available. Use this to schedule
+   * proactive token refresh before expiration, especially for long-running WebSocket connections.
+   */
+  public getTokenExpiryTime(): number | null {
+    return this.authManager.getTokenExpiryTime();
+  }
+
+  /**
+   * Returns the timestamp when the current token was issued, in milliseconds since epoch, or null if not available.
+   */
+  public getTokenIssuedAt(): number | null {
+    return this.authManager.getTokenIssuedAt();
+  }
+
+  /**
+   * Returns the token lifetime in milliseconds, or null if not available. Useful for calculating when to schedule
+   * proactive token refresh (e.g., at 50% of lifetime or 2 minutes before expiry, whichever is later).
+   */
+  public getTokenLifetimeMs(): number | null {
+    return this.authManager.getTokenLifetimeMs();
+  }
+
   public async makeGetRequest<T>(
     url: string,
     config: { contentType?: string; includeBearerToken?: boolean } = {}

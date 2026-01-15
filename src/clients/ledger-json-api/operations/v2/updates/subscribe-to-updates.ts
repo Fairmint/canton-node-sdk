@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ApiError } from '../../../../../core/errors';
-import { WebSocketClient } from '../../../../../core/ws/WebSocketClient';
+import { WebSocketClient, type WebSocketOptions } from '../../../../../core/ws/WebSocketClient';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
 import { type JsCantonError, type WsCantonError } from '../../../schemas/api/errors';
 import { type JsUpdateSchema, type WsUpdateSchema } from '../../../schemas/api/updates';
@@ -66,6 +66,19 @@ const SubscribeToUpdatesParamsSchema = z.object({
 export type SubscribeToUpdatesParams = z.infer<typeof SubscribeToUpdatesParamsSchema> & {
   /** Optional per-message callback to consume updates as they arrive. */
   onMessage?: (message: UpdatesWsMessage) => void;
+
+  /**
+   * Called when the token is about to expire and refresh is scheduled. Use this to prepare for reconnection (e.g., save
+   * current processing state). The subscription will close shortly after this callback.
+   */
+  onTokenExpiring?: WebSocketOptions['onTokenExpiring'];
+
+  /**
+   * Called when token refresh timer fires and reconnection is needed. Return close code and reason, or void for defaults.
+   * After this callback returns, the WebSocket will close. The caller should catch the close, clear the token, and
+   * create a new subscription from the last processed offset.
+   */
+  onTokenRefreshNeeded?: WebSocketOptions['onTokenRefreshNeeded'];
 };
 
 export type UpdatesWsMessage =
@@ -179,6 +192,19 @@ export class SubscribeToUpdates {
 
     const wsClient = new WebSocketClient(this.client);
 
+    // Build WebSocket options for token refresh handling (only include defined properties)
+    let wsOptions: WebSocketOptions | undefined;
+    if (params.onTokenExpiring !== undefined || params.onTokenRefreshNeeded !== undefined) {
+      const options: WebSocketOptions = {};
+      if (params.onTokenExpiring !== undefined) {
+        options.onTokenExpiring = params.onTokenExpiring;
+      }
+      if (params.onTokenRefreshNeeded !== undefined) {
+        options.onTokenRefreshNeeded = params.onTokenRefreshNeeded;
+      }
+      wsOptions = options;
+    }
+
     return new Promise<void>((resolve, reject) => {
       let settled = false;
 
@@ -198,34 +224,39 @@ export class SubscribeToUpdates {
         typeof msg === 'object' && ('cause' in msg || ('code' in msg && 'message' in msg && !('update' in msg)));
 
       void wsClient
-        .connect<typeof requestMessage, UpdatesWsMessage>(path, requestMessage, {
-          onMessage: (parsed) => {
-            // Call user's onMessage callback if provided
-            if (typeof params.onMessage === 'function') {
-              params.onMessage(parsed);
-            }
+        .connect<typeof requestMessage, UpdatesWsMessage>(
+          path,
+          requestMessage,
+          {
+            onMessage: (parsed) => {
+              // Call user's onMessage callback if provided
+              if (typeof params.onMessage === 'function') {
+                params.onMessage(parsed);
+              }
 
-            // Check if it's an error
-            if (isErrorMessage(parsed)) {
+              // Check if it's an error
+              if (isErrorMessage(parsed)) {
+                if (!settled) {
+                  settled = true;
+                  reject(toError(parsed));
+                }
+              }
+            },
+            onError: (err) => {
               if (!settled) {
                 settled = true;
-                reject(toError(parsed));
+                reject(err instanceof Error ? err : new Error(String(err)));
               }
-            }
+            },
+            onClose: () => {
+              if (!settled) {
+                settled = true;
+                resolve();
+              }
+            },
           },
-          onError: (err) => {
-            if (!settled) {
-              settled = true;
-              reject(err instanceof Error ? err : new Error(String(err)));
-            }
-          },
-          onClose: () => {
-            if (!settled) {
-              settled = true;
-              resolve();
-            }
-          },
-        })
+          wsOptions
+        )
         .catch((err: unknown) => {
           if (!settled) {
             settled = true;
