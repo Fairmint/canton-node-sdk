@@ -2,6 +2,10 @@
 
 > Low-level TypeScript SDK for interacting with Canton blockchain nodes.
 
+## Skills
+
+For reusable [Agent Skills](https://agentskills.io), see [github.com/HardlyDifficult/ai](https://github.com/HardlyDifficult/ai).
+
 ## Living Document
 
 **This file is a living document.** Update it automatically when:
