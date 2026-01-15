@@ -74,9 +74,9 @@ export type SubscribeToUpdatesParams = z.infer<typeof SubscribeToUpdatesParamsSc
   onTokenExpiring?: WebSocketOptions['onTokenExpiring'];
 
   /**
-   * Called when token refresh timer fires and reconnection is needed. Return close code and reason, or void for defaults.
-   * After this callback returns, the WebSocket will close. The caller should catch the close, clear the token, and
-   * create a new subscription from the last processed offset.
+   * Called when token refresh timer fires and reconnection is needed. Return close code and reason, or void for
+   * defaults. After this callback returns, the WebSocket will close. The caller should catch the close, clear the
+   * token, and create a new subscription from the last processed offset.
    */
   onTokenRefreshNeeded?: WebSocketOptions['onTokenRefreshNeeded'];
 };

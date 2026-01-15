@@ -17,8 +17,8 @@ export interface WebSocketHandlers<Message, ErrorMessage = unknown> {
 
 export interface WebSocketOptions {
   /**
-   * Called when the token is about to expire and refresh is scheduled. Use this to prepare for reconnection (e.g., track
-   * current offset for resumption).
+   * Called when the token is about to expire and refresh is scheduled. Use this to prepare for reconnection (e.g.,
+   * track current offset for resumption).
    */
   onTokenExpiring?: () => void;
 

@@ -107,9 +107,7 @@ export abstract class BaseClient {
     return this.authManager.getTokenExpiryTime();
   }
 
-  /**
-   * Returns the timestamp when the current token was issued, in milliseconds since epoch, or null if not available.
-   */
+  /** Returns the timestamp when the current token was issued, in milliseconds since epoch, or null if not available. */
   public getTokenIssuedAt(): number | null {
     return this.authManager.getTokenIssuedAt();
   }

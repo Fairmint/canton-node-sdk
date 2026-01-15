@@ -148,16 +148,14 @@ export class AuthenticationManager {
   }
 
   /**
-   * Returns the token expiry timestamp in milliseconds since epoch, or null if not available.
-   * Use this to schedule proactive token refresh before expiration.
+   * Returns the token expiry timestamp in milliseconds since epoch, or null if not available. Use this to schedule
+   * proactive token refresh before expiration.
    */
   public getTokenExpiryTime(): number | null {
     return this.tokenExpiry;
   }
 
-  /**
-   * Returns the timestamp when the current token was issued, in milliseconds since epoch, or null if not available.
-   */
+  /** Returns the timestamp when the current token was issued, in milliseconds since epoch, or null if not available. */
   public getTokenIssuedAt(): number | null {
     return this.tokenIssuedAt;
   }
