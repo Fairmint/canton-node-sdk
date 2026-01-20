@@ -2,9 +2,9 @@
 
 ## Open Tasks
 
-| Task                                                                                     | Description                                   |
-| ---------------------------------------------------------------------------------------- | --------------------------------------------- |
-| [2026.01.20-health-check-integration](2026/01/backlog/2026.01.20-health-check-integration.md) | Health check utilities for service readiness  |
+| Task                                                                                          | Description                                  |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| [2026.01.20-health-check-integration](2026/01/backlog/2026.01.20-health-check-integration.md) | Health check utilities for service readiness |
 
 ## Completed Tasks
 
