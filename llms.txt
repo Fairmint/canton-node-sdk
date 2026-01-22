@@ -373,6 +373,48 @@ The publish workflow requires:
 
 See "PR Workflow" section above for CI monitoring instructions.
 
+## Linear Integration
+
+When working on Linear issues, use the Linear GraphQL API (available via `LINEAR_API_KEY` environment variable):
+
+### Fetch Issue
+
+```bash
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: $LINEAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "query { issue(id: \"ENG-XXX\") { id identifier title description state { id name } } }"}'
+```
+
+### Update Issue Status
+
+```bash
+# Get workflow states for the team first
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: $LINEAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "query { workflowStates { nodes { id name team { key } } } }"}'
+
+# Update issue status (use state ID from above)
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: $LINEAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "mutation { issueUpdate(id: \"<issue-uuid>\", input: { stateId: \"<state-uuid>\" }) { success } }"}'
+```
+
+### Auto-close via PR
+
+Include `fixes ENG-XXX` in the PR description to auto-close the Linear issue when the PR merges.
+
+### Common ENG Team States
+
+| State | Purpose |
+|-------|---------|
+| Todo | Not started |
+| In Progress | Currently being worked on |
+| In Review | PR submitted, awaiting review |
+| Done | Completed |
+
 ## Related Repos
 
 | Repo | Purpose | Docs |
