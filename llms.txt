@@ -2,19 +2,9 @@
 
 > Low-level TypeScript SDK for interacting with Canton blockchain nodes.
 
-## Skills
+## Shared Conventions
 
-For reusable [Agent Skills](https://agentskills.io), see [github.com/HardlyDifficult/ai](https://github.com/HardlyDifficult/ai).
-
-## Living Document
-
-**This file is a living document.** Update it automatically when:
-- A best practice or pattern is established during AI conversations
-- An important architectural or coding decision is made
-- The user communicates a preference that applies beyond the current task
-- **Creating a PR**: Before creating a PR, review the completed task for any generalizable learnings or best practices that should be added to this file. This ensures AI improves with every task.
-
-Keep content concise but comprehensive. Avoid verbosity—capture the essence.
+See [canton/llms.txt](https://github.com/fairmint/canton/blob/main/llms.txt#shared-conventions-all-fairmint-repos) for PR workflow, git workflow, dependencies, non-negotiables, and Linear integration.
 
 ## Task Management
 
@@ -26,57 +16,6 @@ Task files track multi-step work in `tasks/YYYY/MM/XX/YYYY.MM.DD-description.md`
 - Mark completed tasks as Completed in both the task file header and README index
 
 See `tasks/README.md` for current task index.
-
-## PR Workflow (REQUIRED)
-
-### Before Commit & Push
-
-**Always run lint/format before committing:**
-
-```bash
-npm run fix    # Auto-fix lint + formatting issues (if available)
-npm run lint   # Verify no lint errors
-```
-
-### After Creating a PR
-
-1. **Open the PR to the files/changes page:**
-   ```bash
-   open <PR_URL>/files    # Review your changes
-   ```
-
-2. **Monitor CI status** and automatically investigate/fix any failures:
-   ```bash
-   gh pr checks <PR_NUMBER>              # Check all CI checks
-   gh run view <RUN_ID> --log-failed     # View failed job logs
-   gh run view --job=<JOB_ID>            # View specific job details
-   ```
-
-3. **If CI fails:** Investigate the failure, fix the issue, and push the fix. Repeat until CI passes.
-
-### Git Workflow
-
-**Avoid force pushing** (`git push --force`). To update a PR branch:
-
-```bash
-git fetch origin main
-git merge origin/main
-# Resolve conflicts if any
-git push
-```
-
-This preserves commit history and makes PR review easier.
-
-## Dependencies
-
-When adding dependencies, always use **pinned versions** (no `^` or `~` prefixes). This ensures reproducible builds.
-
-```bash
-npm install package@1.2.3 --save-exact    # For dependencies
-npm install package@1.2.3 --save-dev --save-exact  # For devDependencies
-```
-
-**Why:** Pre-1.0 packages (like `0.x.y`) may introduce breaking changes in minor versions. Pinned versions ensure reproducible builds and prevent unexpected breakage.
 
 ## Quick Commands
 
@@ -368,52 +307,6 @@ npm publish               # Publishes to NPM (requires NPM_TOKEN)
 
 The publish workflow requires:
 - `NPM_TOKEN` secret configured in GitHub repository settings
-
-### Monitoring PR CI Status
-
-See "PR Workflow" section above for CI monitoring instructions.
-
-## Linear Integration
-
-When working on Linear issues, use the Linear GraphQL API (available via `LINEAR_API_KEY` environment variable):
-
-### Fetch Issue
-
-```bash
-curl -s -X POST https://api.linear.app/graphql \
-  -H "Authorization: $LINEAR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"query": "query { issue(id: \"ENG-XXX\") { id identifier title description state { id name } } }"}'
-```
-
-### Update Issue Status
-
-```bash
-# Get workflow states for the team first
-curl -s -X POST https://api.linear.app/graphql \
-  -H "Authorization: $LINEAR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"query": "query { workflowStates { nodes { id name team { key } } } }"}'
-
-# Update issue status (use state ID from above)
-curl -s -X POST https://api.linear.app/graphql \
-  -H "Authorization: $LINEAR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"query": "mutation { issueUpdate(id: \"<issue-uuid>\", input: { stateId: \"<state-uuid>\" }) { success } }"}'
-```
-
-### Auto-close via PR
-
-Include `fixes ENG-XXX` in the PR description to auto-close the Linear issue when the PR merges.
-
-### Common ENG Team States
-
-| State | Purpose |
-|-------|---------|
-| Todo | Not started |
-| In Progress | Currently being worked on |
-| In Review | PR submitted, awaiting review |
-| Done | Completed |
 
 ## Related Repos
 
