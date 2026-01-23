@@ -18,7 +18,8 @@ jobs:
           # For PRs: checkout the head ref so we can push lint fixes back
           ref: ${{ github.event_name == 'pull_request' && github.head_ref || '' }}
           # Use PAT_TOKEN for pushing lint fixes (GITHUB_TOKEN can't trigger workflows)
-          token: ${{ secrets.PAT_TOKEN }}
+          # Falls back to GITHUB_TOKEN for Dependabot PRs (which don't have PAT access)
+          token: ${{ secrets.PAT_TOKEN || github.token }}
 
       - name: Compute Submodule Cache Key
         id: submodule-cache-key
@@ -122,7 +123,8 @@ jobs:
           fi
 
       - name: Commit and Push Lint Fixes
-        if: github.event_name == 'pull_request' && steps.lint-changes.outputs.has_changes == 'true'
+        # Skip for Dependabot PRs (no write access without PAT_TOKEN)
+        if: github.event_name == 'pull_request' && steps.lint-changes.outputs.has_changes == 'true' && github.actor != 'dependabot[bot]'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
