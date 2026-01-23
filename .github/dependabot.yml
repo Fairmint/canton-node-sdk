@@ -8,15 +8,15 @@ updates:
       day: 'monday'
       time: '09:00'
       timezone: 'America/Los_Angeles'
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 1
     commit-message:
       prefix: 'deps'
     groups:
-      # Group all minor and patch updates
-      minor-and-patch:
+      all-dependencies:
         patterns:
           - '*'
         update-types:
+          - 'major'
           - 'minor'
           - 'patch'
 
@@ -30,3 +30,7 @@ updates:
       timezone: 'America/Los_Angeles'
     commit-message:
       prefix: 'ci'
+    groups:
+      all-actions:
+        patterns:
+          - '*'
