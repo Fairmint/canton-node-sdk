@@ -6,6 +6,19 @@
 
 See [canton/llms.txt](https://github.com/fairmint/canton/blob/main/llms.txt#shared-conventions-all-fairmint-repos) for PR workflow, git workflow, dependencies, non-negotiables, and Linear integration.
 
+## Linear API Access
+
+The `LINEAR_API_KEY` environment variable provides access to the [Linear](https://linear.app/fairmint) GraphQL API for issue tracking.
+
+```bash
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: $LINEAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ issue(id: \"ENG-XXX\") { title state { name } } }"}'
+```
+
+See [canton/llms.txt](https://github.com/fairmint/canton/blob/main/llms.txt#linear-integration) for full workflow documentation.
+
 ## Task Management
 
 Task files track multi-step work in `tasks/YYYY/MM/XX/YYYY.MM.DD-description.md`.
