@@ -4,7 +4,7 @@
 
 ## Shared Conventions
 
-See [canton/llms.txt](https://github.com/fairmint/canton/blob/main/llms.txt#shared-conventions-all-fairmint-repos) for PR workflow, git workflow, dependencies, non-negotiables, and Linear integration.
+See [canton/AGENTS.md](https://github.com/fairmint/canton/blob/main/AGENTS.md#shared-conventions-all-fairmint-repos) for PR workflow, git workflow, dependencies, non-negotiables, and Linear integration.
 
 ## Linear API Access
 
@@ -17,7 +17,7 @@ curl -s -X POST https://api.linear.app/graphql \
   -d '{"query": "{ issue(id: \"ENG-XXX\") { title state { name } } }"}'
 ```
 
-See [canton/llms.txt](https://github.com/fairmint/canton/blob/main/llms.txt#linear-integration) for full workflow documentation.
+See [canton/AGENTS.md](https://github.com/fairmint/canton/blob/main/AGENTS.md#linear-integration) for full workflow documentation.
 
 ## Task Management
 
@@ -321,16 +321,52 @@ npm publish               # Publishes to NPM (requires NPM_TOKEN)
 The publish workflow requires:
 - `NPM_TOKEN` secret configured in GitHub repository settings
 
+---
+
+## PR Review Format
+
+When writing PR reviews, use this format:
+
+1. **Issues and improvements first** — Call out any problems, bugs, or suggested improvements at the
+   top, outside any collapsed sections. This is the only feedback reviewers need to see immediately.
+   - **Issue**: Something that should be fixed — bugs, security problems, incorrect logic,
+     violations of project standards
+   - **Improvement**: Something that could be better — performance, readability, maintainability,
+     edge cases
+
+2. **Collapse the rest** — Put the full analysis and any positive remarks inside a collapsed
+   `<details>` section:
+
+```markdown
+## Issues
+
+- **File:Line** Description of issue or improvement
+
+---
+
+<details>
+<summary>Full Analysis</summary>
+
+... detailed analysis, positive remarks, etc. ...
+
+</details>
+```
+
+Keep the visible portion brief and actionable. The collapsed section is for comprehensive details
+and rationale.
+
+---
+
 ## Related Repos
 
 | Repo | Purpose | Docs |
 |------|---------|------|
-| `canton` | Trading infrastructure, ADRs | `llms.txt` |
-| `canton-explorer` | Next.js explorer UI | `llms.txt`, [cantonops.fairmint.com](https://cantonops.fairmint.com/) |
-| `canton-fairmint-sdk` | Shared TypeScript utilities | `llms.txt` |
-| `ocp-canton-sdk` | High-level OCP TypeScript SDK | `llms.txt`, [ocp.canton.fairmint.com](https://ocp.canton.fairmint.com/) |
-| `ocp-position-nft` | Soulbound NFT smart contracts | `llms.txt` |
-| `open-captable-protocol-daml` | DAML contracts (OCF impl) | `llms.txt` |
+| `canton` | Trading infrastructure, ADRs | `AGENTS.md` |
+| `canton-explorer` | Next.js explorer UI | `AGENTS.md`, [cantonops.fairmint.com](https://cantonops.fairmint.com/) |
+| `canton-fairmint-sdk` | Shared TypeScript utilities | `AGENTS.md` |
+| `ocp-canton-sdk` | High-level OCP TypeScript SDK | `AGENTS.md`, [ocp.canton.fairmint.com](https://ocp.canton.fairmint.com/) |
+| `ocp-position-nft` | Soulbound NFT smart contracts | `AGENTS.md` |
+| `open-captable-protocol-daml` | DAML contracts (OCF impl) | `AGENTS.md` |
 
 ## Docs
 
