@@ -1,12 +1,8 @@
 import { z } from 'zod';
-import { NonEmptyStringSchema } from './base';
-import {
-  CompositeCommandSchema,
-  DeduplicationPeriodSchema,
-  DisclosedContractSchema,
-} from '../api/commands';
+import { CompositeCommandSchema, DeduplicationPeriodSchema, DisclosedContractSchema } from '../api/commands';
 import { MinLedgerTimeRelSchema, PrefetchContractKeySchema } from '../common';
-import { TransactionFormatSchema, OperationEventFormatSchema } from './updates';
+import { NonEmptyStringSchema } from './base';
+import { OperationEventFormatSchema, TransactionFormatSchema } from './updates';
 
 export const SubmitAndWaitParamsSchema = z.object({
   /** Commands to submit and wait for completion. */
