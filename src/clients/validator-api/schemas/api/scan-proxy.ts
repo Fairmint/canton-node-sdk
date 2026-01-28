@@ -105,10 +105,18 @@ export type LookupTransferCommandCounterByPartyResponse = z.infer<
 >;
 export type LookupTransferCommandStatusResponse = z.infer<typeof LookupTransferCommandStatusResponseSchema>;
 
-// Transfer Preapproval Schema
+// Transfer Preapproval Schema - local contract schema for scan-proxy
+const ScanProxyTransferPreapprovalContractSchema = z.object({
+  template_id: z.string(),
+  contract_id: z.string(),
+  payload: z.unknown(), // Payload structure may vary
+  created_event_blob: z.string(),
+  created_at: z.string().optional(),
+});
+
 export const LookupTransferPreapprovalByPartyResponseSchema = z.object({
   transfer_preapproval: z.object({
-    contract: z.unknown(),
+    contract: ScanProxyTransferPreapprovalContractSchema,
     domain_id: z.string(),
   }),
 });
