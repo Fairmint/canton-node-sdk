@@ -7,11 +7,7 @@ import { EventFormatSchema } from './events';
 /** Reassignment command wrapper. */
 export const ReassignmentCommandSchema = z.object({
   /** The reassignment command. */
-  command: z.union([
-    AssignCommandSchema,
-    UnassignCommandSchema,
-    z.object({ Empty: EmptyCommandSchema }),
-  ]),
+  command: z.union([AssignCommandSchema, UnassignCommandSchema, z.object({ Empty: EmptyCommandSchema })]),
 });
 
 /** Reassignment commands container. */
