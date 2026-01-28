@@ -1,17 +1,9 @@
 import { z } from 'zod';
 import { CompositeCommandSchema, DeduplicationPeriodSchema, DisclosedContractSchema } from '../api/commands';
+import { ReassignmentCommandSchema } from '../api/reassignment';
 import { MinLedgerTimeRelSchema, PrefetchContractKeySchema } from '../common';
 import { NonEmptyStringSchema } from './base';
 import { OperationEventFormatSchema, TransactionFormatSchema } from './updates';
-
-/** Shared schema for individual reassignment command (used in operations). */
-const OperationReassignmentCommandSchema = z.object({
-  command: z.union([
-    z.object({ AssignCommand: z.object({ reassignmentId: z.string(), source: z.string(), target: z.string() }) }),
-    z.object({ UnassignCommand: z.object({ contractId: z.string(), source: z.string(), target: z.string() }) }),
-    z.object({ Empty: z.object({}) }),
-  ]),
-});
 
 export const SubmitAndWaitParamsSchema = z.object({
   /** Commands to submit and wait for completion. */
@@ -91,7 +83,7 @@ export const SubmitAndWaitForReassignmentParamsSchema = z.object({
     /** Submission ID (optional). */
     submissionId: NonEmptyStringSchema.optional(),
     /** Individual reassignment commands. */
-    commands: z.array(OperationReassignmentCommandSchema),
+    commands: z.array(ReassignmentCommandSchema),
   }),
   /** Event format (optional). */
   eventFormat: OperationEventFormatSchema.optional(),
@@ -173,7 +165,7 @@ export const AsyncSubmitReassignmentParamsSchema = z.object({
     /** Submission ID (optional). */
     submissionId: NonEmptyStringSchema.optional(),
     /** Individual reassignment commands. */
-    commands: z.array(OperationReassignmentCommandSchema),
+    commands: z.array(ReassignmentCommandSchema),
   }),
 });
 
