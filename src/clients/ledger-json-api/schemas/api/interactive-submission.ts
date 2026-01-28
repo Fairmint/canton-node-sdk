@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { RecordSchema } from '../base';
+import { DarFileSchema } from '../common';
 
 /** Interactive submission allocate party request. */
 export const InteractiveSubmissionAllocatePartyRequestSchema = z.object({
@@ -90,8 +91,8 @@ export const InteractiveSubmissionCreateUserResponseSchema = z.object({
 
 /** Interactive submission upload DAR request. */
 export const InteractiveSubmissionUploadDarRequestSchema = z.object({
-  /** DAR file content. */
-  darFile: z.any(), // Buffer or string
+  /** DAR file content (Buffer or base64 encoded string). */
+  darFile: DarFileSchema,
 });
 
 /** Interactive submission upload DAR response. */

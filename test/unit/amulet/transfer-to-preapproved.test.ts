@@ -254,7 +254,7 @@ describe('transferToPreapproved', () => {
     expect(callArgs?.disclosedContracts?.length).toBeGreaterThan(0);
 
     // Should include amulet rules, mining round, featured app right, and preapproval contracts
-    const contractIds = callArgs?.disclosedContracts?.map((c) => c.contractId) ?? [];
+    const contractIds = callArgs?.disclosedContracts?.map((c: { contractId: string }) => c.contractId) ?? [];
     expect(contractIds).toContain('amulet-rules-contract-123');
     expect(contractIds).toContain('mining-round-contract-123');
     expect(contractIds).toContain('featured-app-right-123');

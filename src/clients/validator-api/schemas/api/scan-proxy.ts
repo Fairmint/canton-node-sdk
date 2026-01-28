@@ -81,7 +81,7 @@ export const GetAmuletRulesResponseSchema = z.object({
     contract: z.object({
       template_id: z.string(),
       contract_id: z.string(),
-      payload: z.any(),
+      payload: z.unknown(),
       created_event_blob: z.string(),
       created_at: z.string(),
     }),
@@ -105,10 +105,18 @@ export type LookupTransferCommandCounterByPartyResponse = z.infer<
 >;
 export type LookupTransferCommandStatusResponse = z.infer<typeof LookupTransferCommandStatusResponseSchema>;
 
-// Transfer Preapproval Schema
+// Transfer Preapproval Schema - local contract schema for scan-proxy
+const ScanProxyTransferPreapprovalContractSchema = z.object({
+  template_id: z.string(),
+  contract_id: z.string(),
+  payload: z.unknown(), // Payload structure may vary
+  created_event_blob: z.string(),
+  created_at: z.string().optional(),
+});
+
 export const LookupTransferPreapprovalByPartyResponseSchema = z.object({
   transfer_preapproval: z.object({
-    contract: z.any(),
+    contract: ScanProxyTransferPreapprovalContractSchema,
     domain_id: z.string(),
   }),
 });
@@ -139,7 +147,7 @@ export const ListInstrumentsResponseSchema = z.object({
 export const GetInstrumentResponseSchema = InstrumentSchema;
 
 export const ChoiceContextSchema = z.object({
-  choiceContextData: z.record(z.string(), z.never()),
+  choiceContextData: z.record(z.string(), z.unknown()),
   disclosedContracts: z.array(
     z.object({
       templateId: z.string(),
@@ -147,7 +155,7 @@ export const ChoiceContextSchema = z.object({
       createdEventBlob: z.string(),
       synchronizerId: z.string(),
       debugPackageName: z.string().optional(),
-      debugPayload: z.record(z.string(), z.never()).optional(),
+      debugPayload: z.record(z.string(), z.unknown()).optional(),
       debugCreatedAt: z.string().optional(),
     })
   ),

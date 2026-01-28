@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { createApiOperation } from '../../../../../../core';
 import type { paths } from '../../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
+import { ReassignmentCommandsSchema } from '../../../../schemas/api/reassignment';
 
 const endpoint = '/v2/commands/async/submit-reassignment';
 
 export const AsyncSubmitReassignmentParamsSchema = z.object({
-  reassignmentCommands: z.any(),
+  reassignmentCommands: ReassignmentCommandsSchema,
 });
 
 export type AsyncSubmitReassignmentParams = z.infer<typeof AsyncSubmitReassignmentParamsSchema>;
@@ -21,7 +22,7 @@ export const AsyncSubmitReassignment = createApiOperation<
   paramsSchema: AsyncSubmitReassignmentParamsSchema,
   method: 'POST',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
-  buildRequestData: (params): AsyncSubmitReassignmentRequest => ({
+  buildRequestData: (params) => ({
     reassignmentCommands: params.reassignmentCommands,
   }),
 });

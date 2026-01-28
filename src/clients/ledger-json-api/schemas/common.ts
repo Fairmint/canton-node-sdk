@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/** DAR file content (Buffer or base64 encoded string). */
+export const DarFileSchema = z.union([z.instanceof(Buffer), z.string()]);
+
 /** Trace context for distributed tracing. */
 export const TraceContextSchema = z.object({
   /** Trace ID for the request. */
@@ -56,7 +59,7 @@ export const PrefetchContractKeySchema = z.object({
   /** Template ID. */
   templateId: z.string(),
   /** Contract key. */
-  contractKey: z.record(z.string(), z.any()),
+  contractKey: z.record(z.string(), z.unknown()),
 });
 
 /** Update mask for partial updates. */
@@ -104,7 +107,7 @@ export const DurationSchema = z.object({
   /** Unknown fields. */
   unknownFields: z.object({
     /** Fields object. */
-    fields: z.record(z.string(), z.any()),
+    fields: z.record(z.string(), z.unknown()),
   }),
 });
 
@@ -127,6 +130,7 @@ export const ApiFeaturesSchema = z.object({
 });
 
 // Export types
+export type DarFile = z.infer<typeof DarFileSchema>;
 export type TraceContext = z.infer<typeof TraceContextSchema>;
 export type Filter = z.infer<typeof FilterSchema>;
 export type DeduplicationDuration = z.infer<typeof DeduplicationDurationSchema>;

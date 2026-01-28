@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DarFileSchema } from '../common';
 import { NonEmptyStringSchema } from './base';
 
 /** Parameters for interactive submission allocate party. */
@@ -53,8 +54,8 @@ export const InteractiveSubmissionCreateUserParamsSchema = z.object({
 
 /** Parameters for interactive submission upload DAR. */
 export const InteractiveSubmissionUploadDarParamsSchema = z.object({
-  /** DAR file content as a buffer or string. */
-  darFile: z.any(), // Buffer or string
+  /** DAR file content as a buffer or base64 encoded string. */
+  darFile: DarFileSchema,
 });
 
 /** Parameters for interactive submission get preferred package version. */

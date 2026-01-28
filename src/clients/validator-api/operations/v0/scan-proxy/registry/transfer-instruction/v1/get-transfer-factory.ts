@@ -8,7 +8,7 @@ const endpoint = '/api/validator/v0/scan-proxy/registry/transfer-instruction/v1/
 
 // Simple schema that matches the generated type exactly
 export const GetTransferFactoryParamsSchema = z.object({
-  choiceArguments: z.record(z.string(), z.never()),
+  choiceArguments: z.record(z.string(), z.unknown()),
   excludeDebugFields: z.boolean().optional(),
 });
 
@@ -32,7 +32,7 @@ export const GetTransferFactory = createApiOperation<GetTransferFactoryParams, G
   paramsSchema: GetTransferFactoryParamsSchema,
   method: 'POST',
   buildUrl: (_params: GetTransferFactoryParams, apiUrl: string) => `${apiUrl}${endpoint}`,
-  buildRequestData: (params: GetTransferFactoryParams): GetTransferFactoryRequest => ({
+  buildRequestData: (params: GetTransferFactoryParams) => ({
     choiceArguments: params.choiceArguments,
     excludeDebugFields: params.excludeDebugFields ?? false,
   }),
