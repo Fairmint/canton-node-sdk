@@ -147,7 +147,7 @@ export const ListInstrumentsResponseSchema = z.object({
 export const GetInstrumentResponseSchema = InstrumentSchema;
 
 export const ChoiceContextSchema = z.object({
-  choiceContextData: z.record(z.string(), z.never()),
+  choiceContextData: z.record(z.string(), z.unknown()),
   disclosedContracts: z.array(
     z.object({
       templateId: z.string(),
@@ -155,7 +155,7 @@ export const ChoiceContextSchema = z.object({
       createdEventBlob: z.string(),
       synchronizerId: z.string(),
       debugPackageName: z.string().optional(),
-      debugPayload: z.record(z.string(), z.never()).optional(),
+      debugPayload: z.record(z.string(), z.unknown()).optional(),
       debugCreatedAt: z.string().optional(),
     })
   ),

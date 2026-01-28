@@ -10,7 +10,7 @@ type ApiPath = '/registry/allocation-instruction/v1/allocation-factory';
 const endpoint = '/api/validator/v0/scan-proxy/registry/allocation-instruction/v1/allocation-factory';
 
 export const GetAllocationFactoryParamsSchema = z.object({
-  choiceArguments: z.record(z.string(), z.never()),
+  choiceArguments: z.record(z.string(), z.unknown()),
   excludeDebugFields: z.boolean().optional(),
 });
 

@@ -22,7 +22,7 @@ export const AsyncSubmitReassignment = createApiOperation<
   paramsSchema: AsyncSubmitReassignmentParamsSchema,
   method: 'POST',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
-  buildRequestData: (params): AsyncSubmitReassignmentRequest => ({
+  buildRequestData: (params) => ({
     reassignmentCommands: params.reassignmentCommands,
   }),
 });

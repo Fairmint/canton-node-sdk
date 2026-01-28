@@ -8,7 +8,7 @@ const endpoint = '/api/validator/v0/scan-proxy/registry/transfer-instruction/v1/
 
 // Simple schema that matches the generated type exactly
 export const GetTransferFactoryParamsSchema = z.object({
-  choiceArguments: z.record(z.string(), z.never()),
+  choiceArguments: z.record(z.string(), z.unknown()),
   excludeDebugFields: z.boolean().optional(),
 });
 
