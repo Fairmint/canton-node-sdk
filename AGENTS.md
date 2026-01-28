@@ -4,11 +4,14 @@
 
 ## Shared Conventions
 
-See [canton/AGENTS.md](https://github.com/fairmint/canton/blob/main/AGENTS.md#shared-conventions-all-fairmint-repos) for PR workflow, git workflow, dependencies, non-negotiables, and Linear integration.
+See
+[canton/AGENTS.md](https://github.com/fairmint/canton/blob/main/AGENTS.md#shared-conventions-all-fairmint-repos)
+for PR workflow, git workflow, dependencies, non-negotiables, and Linear integration.
 
 ## Linear API Access
 
-The `LINEAR_API_KEY` environment variable provides access to the [Linear](https://linear.app/fairmint) GraphQL API for issue tracking.
+The `LINEAR_API_KEY` environment variable provides access to the
+[Linear](https://linear.app/fairmint) GraphQL API for issue tracking.
 
 ```bash
 curl -s -X POST https://api.linear.app/graphql \
@@ -17,13 +20,15 @@ curl -s -X POST https://api.linear.app/graphql \
   -d '{"query": "{ issue(id: \"ENG-XXX\") { title state { name } } }"}'
 ```
 
-See [canton/AGENTS.md](https://github.com/fairmint/canton/blob/main/AGENTS.md#linear-integration) for full workflow documentation.
+See [canton/AGENTS.md](https://github.com/fairmint/canton/blob/main/AGENTS.md#linear-integration)
+for full workflow documentation.
 
 ## Task Management
 
 Task files track multi-step work in `tasks/YYYY/MM/XX/YYYY.MM.DD-description.md`.
 
 **When working on tasks:**
+
 - Update task status (Planning → Implementing → Testing → Completed) as work progresses
 - Update `tasks/README.md` index when task status changes
 - Mark completed tasks as Completed in both the task file header and README index
@@ -66,7 +71,9 @@ export const GetVersion = createApiOperation<void, GetVersionResponse>({
 export const SubscribeToCompletions = createWebSocketOperation<Params, Request, Message>({
   paramsSchema: CompletionStreamRequestSchema,
   buildPath: (_params, _apiUrl) => '/v2/commands/completions',
-  buildRequestMessage: (params, client) => ({ /* ... */ }),
+  buildRequestMessage: (params, client) => ({
+    /* ... */
+  }),
 });
 ```
 
@@ -76,7 +83,7 @@ Use classes for complex operations needing async pre-processing or state managem
 // Class pattern for operations with async defaults
 export class GetMemberTrafficStatus extends ApiOperation<Params, Response> {
   async execute(params: Params): Promise<Response> {
-    const domainId = params.domainId ?? await getCurrentMiningRoundDomainId(this.client);
+    const domainId = params.domainId ?? (await getCurrentMiningRoundDomainId(this.client));
     // ...
   }
 }
@@ -165,7 +172,8 @@ See [docs/EXTERNAL_SIGNING.md](docs/EXTERNAL_SIGNING.md) for details.
 
 ## LocalNet (cn-quickstart)
 
-The SDK includes cn-quickstart as a git submodule for local development and testing against a real Canton Network.
+The SDK includes cn-quickstart as a git submodule for local development and testing against a real
+Canton Network.
 
 ### Location
 
@@ -220,16 +228,16 @@ make clean-all-docker  # Full reset (removes all containers/volumes)
 
 ### LocalNet Services and Ports
 
-| Service | Port | Description |
-|---------|------|-------------|
-| App-Provider JSON API | 3975 | Ledger API for app_provider participant |
-| App-Provider Validator | 3903 | Validator API for app_provider |
-| App-User JSON API | 2975 | Ledger API for app_user participant |
-| SV JSON API | 4975 | Ledger API for super validator |
-| Keycloak | 8082 | OAuth2 authentication |
-| Scan API | scan.localhost:4000 | Network-wide contract queries |
-| Swagger UI | 9090 | API documentation |
-| Grafana | 3030 | Observability dashboard |
+| Service                | Port                | Description                             |
+| ---------------------- | ------------------- | --------------------------------------- |
+| App-Provider JSON API  | 3975                | Ledger API for app_provider participant |
+| App-Provider Validator | 3903                | Validator API for app_provider          |
+| App-User JSON API      | 2975                | Ledger API for app_user participant     |
+| SV JSON API            | 4975                | Ledger API for super validator          |
+| Keycloak               | 8082                | OAuth2 authentication                   |
+| Scan API               | scan.localhost:4000 | Network-wide contract queries           |
+| Swagger UI             | 9090                | API documentation                       |
+| Grafana                | 3030                | Observability dashboard                 |
 
 ### OAuth2 Credentials (app-provider)
 
@@ -244,20 +252,25 @@ Client Secret: AL8648b9SfdTFImq7FV56Vd0KHifHBuC
 ### Troubleshooting
 
 #### "Cannot connect to Docker daemon"
+
 ```bash
 # Start Docker Desktop, then verify
 docker ps
 ```
 
 #### "HTTP 503" or "Connection refused"
+
 Services aren't ready yet. Wait for all containers to show "healthy":
+
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}" | grep -v healthy
 # Should return nothing when ready
 ```
 
 #### "Container keeps restarting"
+
 Reset everything:
+
 ```bash
 cd libs/cn-quickstart/quickstart
 make clean-all-docker  # Remove all containers and volumes
@@ -265,6 +278,7 @@ make start
 ```
 
 #### "Port already in use"
+
 ```bash
 make stop              # Stop LocalNet containers
 lsof -i :3975          # Find what's using JSON API port
@@ -288,7 +302,8 @@ make canton-console    # Interactive Canton console
 
 ## NPM Publishing
 
-The package `@fairmint/canton-node-sdk` is automatically published to NPM when changes are merged to `main`.
+The package `@fairmint/canton-node-sdk` is automatically published to NPM when changes are merged to
+`main`.
 
 ### How It Works
 
@@ -319,6 +334,7 @@ npm publish               # Publishes to NPM (requires NPM_TOKEN)
 ### CI Requirements
 
 The publish workflow requires:
+
 - `NPM_TOKEN` secret configured in GitHub repository settings
 
 ---
@@ -359,14 +375,14 @@ and rationale.
 
 ## Related Repos
 
-| Repo | Purpose | Docs |
-|------|---------|------|
-| `canton` | Trading infrastructure, ADRs | `AGENTS.md` |
-| `canton-explorer` | Next.js explorer UI | `AGENTS.md`, [cantonops.fairmint.com](https://cantonops.fairmint.com/) |
-| `canton-fairmint-sdk` | Shared TypeScript utilities | `AGENTS.md` |
-| `ocp-canton-sdk` | High-level OCP TypeScript SDK | `AGENTS.md`, [ocp.canton.fairmint.com](https://ocp.canton.fairmint.com/) |
-| `ocp-position-nft` | Soulbound NFT smart contracts | `AGENTS.md` |
-| `open-captable-protocol-daml` | DAML contracts (OCF impl) | `AGENTS.md` |
+| Repo                          | Purpose                       | Docs                                                                     |
+| ----------------------------- | ----------------------------- | ------------------------------------------------------------------------ |
+| `canton`                      | Trading infrastructure, ADRs  | `AGENTS.md`                                                              |
+| `canton-explorer`             | Next.js explorer UI           | `AGENTS.md`, [cantonops.fairmint.com](https://cantonops.fairmint.com/)   |
+| `canton-fairmint-sdk`         | Shared TypeScript utilities   | `AGENTS.md`                                                              |
+| `ocp-canton-sdk`              | High-level OCP TypeScript SDK | `AGENTS.md`, [ocp.canton.fairmint.com](https://ocp.canton.fairmint.com/) |
+| `ocp-position-nft`            | Soulbound NFT smart contracts | `AGENTS.md`                                                              |
+| `open-captable-protocol-daml` | DAML contracts (OCF impl)     | `AGENTS.md`                                                              |
 
 ## Docs
 
