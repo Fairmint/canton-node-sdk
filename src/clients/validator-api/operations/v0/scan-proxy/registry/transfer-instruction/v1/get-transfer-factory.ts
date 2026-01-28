@@ -32,7 +32,7 @@ export const GetTransferFactory = createApiOperation<GetTransferFactoryParams, G
   paramsSchema: GetTransferFactoryParamsSchema,
   method: 'POST',
   buildUrl: (_params: GetTransferFactoryParams, apiUrl: string) => `${apiUrl}${endpoint}`,
-  buildRequestData: (params: GetTransferFactoryParams): GetTransferFactoryRequest => ({
+  buildRequestData: (params: GetTransferFactoryParams) => ({
     choiceArguments: params.choiceArguments,
     excludeDebugFields: params.excludeDebugFields ?? false,
   }),

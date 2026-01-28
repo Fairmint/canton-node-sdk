@@ -34,7 +34,7 @@ export const GetAllocationFactory = createApiOperation<GetAllocationFactoryParam
   paramsSchema: GetAllocationFactoryParamsSchema,
   method: 'POST',
   buildUrl: (_params: GetAllocationFactoryParams, apiUrl: string) => `${apiUrl}${endpoint}`,
-  buildRequestData: (params: GetAllocationFactoryParams): GetAllocationFactoryRequest => ({
+  buildRequestData: (params: GetAllocationFactoryParams) => ({
     choiceArguments: params.choiceArguments,
     excludeDebugFields: params.excludeDebugFields ?? false,
   }),
