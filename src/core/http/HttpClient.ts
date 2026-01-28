@@ -184,7 +184,14 @@ export class HttpClient {
       const status = error.response?.status;
       const data = (error.response?.data ?? {}) as Record<string, unknown>;
       const code = typeof data['code'] === 'string' ? data['code'] : undefined;
-      const msg = code ? `HTTP ${status}: ${code}` : `HTTP ${status}`;
+      const message = typeof data['message'] === 'string' ? data['message'] : undefined;
+      let msg = `HTTP ${status}`;
+      if (code) {
+        msg += `: ${code}`;
+      }
+      if (message) {
+        msg += ` - ${message}`;
+      }
       const err = new ApiError(msg, status, error.response?.statusText);
       err.response = data;
       return err;
