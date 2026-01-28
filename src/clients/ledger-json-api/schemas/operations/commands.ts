@@ -1,9 +1,16 @@
 import { z } from 'zod';
 import { NonEmptyStringSchema } from './base';
+import {
+  CompositeCommandSchema,
+  DeduplicationPeriodSchema,
+  DisclosedContractSchema,
+} from '../api/commands';
+import { MinLedgerTimeRelSchema, PrefetchContractKeySchema } from '../common';
+import { TransactionFormatSchema, OperationEventFormatSchema } from './updates';
 
 export const SubmitAndWaitParamsSchema = z.object({
   /** Commands to submit and wait for completion. */
-  commands: z.array(z.any()),
+  commands: z.array(CompositeCommandSchema),
   /** Unique identifier for the command (optional, will be auto-generated if not provided). */
   commandId: NonEmptyStringSchema.optional(),
   /** Parties on whose behalf the command should be executed (optional, will use client's party ID if not provided). */
@@ -15,26 +22,26 @@ export const SubmitAndWaitParamsSchema = z.object({
   /** Workflow ID (optional). */
   workflowId: NonEmptyStringSchema.optional(),
   /** Deduplication period (optional). */
-  deduplicationPeriod: z.any().optional(),
+  deduplicationPeriod: DeduplicationPeriodSchema.optional(),
   /** Minimum ledger time absolute (optional). */
   minLedgerTimeAbs: NonEmptyStringSchema.optional(),
   /** Minimum ledger time relative (optional). */
-  minLedgerTimeRel: z.any().optional(),
+  minLedgerTimeRel: MinLedgerTimeRelSchema.optional(),
   /** Submission ID (optional). */
   submissionId: NonEmptyStringSchema.optional(),
   /** Disclosed contracts (optional). */
-  disclosedContracts: z.array(z.any()).optional(),
+  disclosedContracts: z.array(DisclosedContractSchema).optional(),
   /** Synchronizer ID (optional). */
   synchronizerId: NonEmptyStringSchema.optional(),
   /** Package ID selection preference (optional). */
   packageIdSelectionPreference: z.array(NonEmptyStringSchema).optional(),
   /** Prefetch contract keys (optional). */
-  prefetchContractKeys: z.array(z.any()).optional(),
+  prefetchContractKeys: z.array(PrefetchContractKeySchema).optional(),
 });
 
 export const SubmitAndWaitForTransactionParamsSchema = z.object({
   /** Commands to submit and wait for transaction. */
-  commands: z.array(z.any()),
+  commands: z.array(CompositeCommandSchema),
   /** Unique identifier for the command (optional, will be auto-generated if not provided). */
   commandId: NonEmptyStringSchema.optional(),
   /** Parties on whose behalf the command should be executed (optional, will use client's party ID if not provided). */
@@ -46,23 +53,23 @@ export const SubmitAndWaitForTransactionParamsSchema = z.object({
   /** Workflow ID (optional). */
   workflowId: NonEmptyStringSchema.optional(),
   /** Deduplication period (optional). */
-  deduplicationPeriod: z.any().optional(),
+  deduplicationPeriod: DeduplicationPeriodSchema.optional(),
   /** Minimum ledger time absolute (optional). */
   minLedgerTimeAbs: NonEmptyStringSchema.optional(),
   /** Minimum ledger time relative (optional). */
-  minLedgerTimeRel: z.any().optional(),
+  minLedgerTimeRel: MinLedgerTimeRelSchema.optional(),
   /** Submission ID (optional). */
   submissionId: NonEmptyStringSchema.optional(),
   /** Disclosed contracts (optional). */
-  disclosedContracts: z.array(z.any()).optional(),
+  disclosedContracts: z.array(DisclosedContractSchema).optional(),
   /** Synchronizer ID (optional). */
   synchronizerId: NonEmptyStringSchema.optional(),
   /** Package ID selection preference (optional). */
   packageIdSelectionPreference: z.array(NonEmptyStringSchema).optional(),
   /** Prefetch contract keys (optional). */
-  prefetchContractKeys: z.array(z.any()).optional(),
+  prefetchContractKeys: z.array(PrefetchContractKeySchema).optional(),
   /** Transaction format (optional). */
-  transactionFormat: z.any().optional(),
+  transactionFormat: TransactionFormatSchema.optional(),
 });
 
 export const SubmitAndWaitForReassignmentParamsSchema = z.object({
@@ -79,15 +86,25 @@ export const SubmitAndWaitForReassignmentParamsSchema = z.object({
     /** Submission ID (optional). */
     submissionId: NonEmptyStringSchema.optional(),
     /** Individual reassignment commands. */
-    commands: z.array(z.any()),
+    commands: z.array(
+      z.object({
+        command: z.union([
+          z.object({ AssignCommand: z.object({ reassignmentId: z.string(), source: z.string(), target: z.string() }) }),
+          z.object({
+            UnassignCommand: z.object({ contractId: z.string(), source: z.string(), target: z.string() }),
+          }),
+          z.object({ Empty: z.object({}) }),
+        ]),
+      })
+    ),
   }),
   /** Event format (optional). */
-  eventFormat: z.any().optional(),
+  eventFormat: OperationEventFormatSchema.optional(),
 });
 
 export const SubmitAndWaitForTransactionTreeParamsSchema = z.object({
   /** Commands to submit and wait for transaction tree. */
-  commands: z.array(z.any()),
+  commands: z.array(CompositeCommandSchema),
   /** Unique identifier for the command. */
   commandId: NonEmptyStringSchema,
   /** Parties on whose behalf the command should be executed. */
@@ -99,26 +116,26 @@ export const SubmitAndWaitForTransactionTreeParamsSchema = z.object({
   /** Workflow ID (optional). */
   workflowId: NonEmptyStringSchema.optional(),
   /** Deduplication period (optional). */
-  deduplicationPeriod: z.any().optional(),
+  deduplicationPeriod: DeduplicationPeriodSchema.optional(),
   /** Minimum ledger time absolute (optional). */
   minLedgerTimeAbs: NonEmptyStringSchema.optional(),
   /** Minimum ledger time relative (optional). */
-  minLedgerTimeRel: z.any().optional(),
+  minLedgerTimeRel: MinLedgerTimeRelSchema.optional(),
   /** Submission ID (optional). */
   submissionId: NonEmptyStringSchema.optional(),
   /** Disclosed contracts (optional). */
-  disclosedContracts: z.array(z.any()).optional(),
+  disclosedContracts: z.array(DisclosedContractSchema).optional(),
   /** Synchronizer ID (optional). */
   synchronizerId: NonEmptyStringSchema.optional(),
   /** Package ID selection preference (optional). */
   packageIdSelectionPreference: z.array(NonEmptyStringSchema).optional(),
   /** Prefetch contract keys (optional). */
-  prefetchContractKeys: z.array(z.any()).optional(),
+  prefetchContractKeys: z.array(PrefetchContractKeySchema).optional(),
 });
 
 export const AsyncSubmitParamsSchema = z.object({
   /** Commands to submit asynchronously. */
-  commands: z.array(z.any()),
+  commands: z.array(CompositeCommandSchema),
   /** Unique identifier for the command (optional, will be auto-generated if not provided). */
   commandId: NonEmptyStringSchema.optional(),
   /** Parties on whose behalf the command should be executed (optional, will use client's party ID if not provided). */
@@ -130,21 +147,21 @@ export const AsyncSubmitParamsSchema = z.object({
   /** Workflow ID (optional). */
   workflowId: NonEmptyStringSchema.optional(),
   /** Deduplication period (optional). */
-  deduplicationPeriod: z.any().optional(),
+  deduplicationPeriod: DeduplicationPeriodSchema.optional(),
   /** Minimum ledger time absolute (optional). */
   minLedgerTimeAbs: NonEmptyStringSchema.optional(),
   /** Minimum ledger time relative (optional). */
-  minLedgerTimeRel: z.any().optional(),
+  minLedgerTimeRel: MinLedgerTimeRelSchema.optional(),
   /** Submission ID (optional). */
   submissionId: NonEmptyStringSchema.optional(),
   /** Disclosed contracts (optional). */
-  disclosedContracts: z.array(z.any()).optional(),
+  disclosedContracts: z.array(DisclosedContractSchema).optional(),
   /** Synchronizer ID (optional). */
   synchronizerId: NonEmptyStringSchema.optional(),
   /** Package ID selection preference (optional). */
   packageIdSelectionPreference: z.array(NonEmptyStringSchema).optional(),
   /** Prefetch contract keys (optional). */
-  prefetchContractKeys: z.array(z.any()).optional(),
+  prefetchContractKeys: z.array(PrefetchContractKeySchema).optional(),
 });
 
 export const AsyncSubmitReassignmentParamsSchema = z.object({
@@ -161,7 +178,17 @@ export const AsyncSubmitReassignmentParamsSchema = z.object({
     /** Submission ID (optional). */
     submissionId: NonEmptyStringSchema.optional(),
     /** Individual reassignment commands. */
-    commands: z.array(z.any()),
+    commands: z.array(
+      z.object({
+        command: z.union([
+          z.object({ AssignCommand: z.object({ reassignmentId: z.string(), source: z.string(), target: z.string() }) }),
+          z.object({
+            UnassignCommand: z.object({ contractId: z.string(), source: z.string(), target: z.string() }),
+          }),
+          z.object({ Empty: z.object({}) }),
+        ]),
+      })
+    ),
   }),
 });
 

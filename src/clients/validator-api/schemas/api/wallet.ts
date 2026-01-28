@@ -14,7 +14,7 @@ export const CreateTransferOfferResponseSchema = z.object({
 });
 
 export const ListTransferOffersResponseSchema = z.object({
-  offers: z.array(z.any()),
+  offers: z.array(z.unknown()),
 });
 
 export const GetTransferOfferStatusResponseSchema = z.object({
@@ -108,7 +108,7 @@ export const AmuletContractSchema = z.object({
   contract: z.object({
     template_id: z.string(),
     contract_id: z.string(),
-    payload: z.any(),
+    payload: z.unknown(),
     created_event_blob: z.string(),
     created_at: z.string(),
   }),

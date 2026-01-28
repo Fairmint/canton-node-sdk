@@ -75,16 +75,16 @@ export const JsUpdateSchema = z.union([
 
 /** WebSocket update wrappers (per AsyncAPI) - relaxed typing to accept server payloads. */
 export const WsUpdateSchema = z.union([
-  z.object({ OffsetCheckpoint: z.any() }),
-  z.object({ Reassignment: z.any() }),
-  z.object({ TopologyTransaction: z.any() }),
-  z.object({ Transaction: z.any() }),
+  z.object({ OffsetCheckpoint: z.unknown() }),
+  z.object({ Reassignment: z.unknown() }),
+  z.object({ TopologyTransaction: z.unknown() }),
+  z.object({ Transaction: z.unknown() }),
 ]);
 
 export const WsUpdateTreesSchema = z.union([
-  z.object({ OffsetCheckpoint: z.any() }),
-  z.object({ Reassignment: z.any() }),
-  z.object({ TransactionTree: z.any() }),
+  z.object({ OffsetCheckpoint: z.unknown() }),
+  z.object({ Reassignment: z.unknown() }),
+  z.object({ TransactionTree: z.unknown() }),
 ]);
 
 /** Update stream request. */
@@ -167,9 +167,9 @@ export const GetTransactionResponseActualSchema = z.object({
     /** Collection of tree events (not update events). */
     events: z.array(
       z.union([
-        z.object({ ArchivedEvent: z.any() }),
-        z.object({ CreatedEvent: z.any() }),
-        z.object({ ExercisedEvent: z.any() }),
+        z.object({ ArchivedEvent: z.unknown() }),
+        z.object({ CreatedEvent: z.unknown() }),
+        z.object({ ExercisedEvent: z.unknown() }),
       ])
     ),
     /** Record time of the transaction. */

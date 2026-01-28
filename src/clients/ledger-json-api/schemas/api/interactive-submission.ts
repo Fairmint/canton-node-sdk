@@ -90,8 +90,8 @@ export const InteractiveSubmissionCreateUserResponseSchema = z.object({
 
 /** Interactive submission upload DAR request. */
 export const InteractiveSubmissionUploadDarRequestSchema = z.object({
-  /** DAR file content. */
-  darFile: z.any(), // Buffer or string
+  /** DAR file content (Buffer or base64 encoded string). */
+  darFile: z.union([z.instanceof(Buffer), z.string()]),
 });
 
 /** Interactive submission upload DAR response. */

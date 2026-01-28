@@ -16,19 +16,19 @@ export const CreateAnsEntryResponseSchema = z.object({
 });
 
 export const ListAnsEntriesResponseSchema = z.object({
-  entries: z.array(z.any()),
+  entries: z.array(z.unknown()),
 });
 
 export const ListAnsEntriesProxyResponseSchema = z.object({
-  entries: z.array(z.any()),
+  entries: z.array(z.unknown()),
 });
 
 export const LookupAnsEntryByNameResponseSchema = z.object({
-  entry: z.any(),
+  entry: z.unknown(),
 });
 
 export const LookupAnsEntryByPartyResponseSchema = z.object({
-  entry: z.any(),
+  entry: z.unknown(),
 });
 
 export const GetAnsRulesRequestSchema = z.object({
@@ -36,7 +36,7 @@ export const GetAnsRulesRequestSchema = z.object({
 });
 
 export const GetAnsRulesResponseSchema = z.object({
-  rules: z.array(z.any()),
+  rules: z.array(z.unknown()),
 });
 
 export type CreateAnsEntryRequest = z.infer<typeof CreateAnsEntryRequestSchema>;

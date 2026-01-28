@@ -81,7 +81,7 @@ export const GetAmuletRulesResponseSchema = z.object({
     contract: z.object({
       template_id: z.string(),
       contract_id: z.string(),
-      payload: z.any(),
+      payload: z.unknown(),
       created_event_blob: z.string(),
       created_at: z.string(),
     }),
@@ -108,7 +108,7 @@ export type LookupTransferCommandStatusResponse = z.infer<typeof LookupTransferC
 // Transfer Preapproval Schema
 export const LookupTransferPreapprovalByPartyResponseSchema = z.object({
   transfer_preapproval: z.object({
-    contract: z.any(),
+    contract: z.unknown(),
     domain_id: z.string(),
   }),
 });
