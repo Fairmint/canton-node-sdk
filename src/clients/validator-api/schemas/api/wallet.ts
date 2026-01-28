@@ -13,8 +13,28 @@ export const CreateTransferOfferResponseSchema = z.object({
   offer_contract_id: z.string(),
 });
 
+/** Schema for a transfer offer in list responses. Uses passthrough() to allow additional server fields. */
+export const TransferOfferSchema = z
+  .object({
+    /** Contract ID of the offer */
+    contract_id: z.string(),
+    /** Party ID of the receiver */
+    receiver_party_id: z.string(),
+    /** Amount to transfer */
+    amount: z.string(),
+    /** Description of the transfer */
+    description: z.string(),
+    /** Expiration timestamp */
+    expires_at: z.number(),
+    /** Tracking ID for the offer */
+    tracking_id: z.string(),
+    /** Status of the offer */
+    status: z.string().optional(),
+  })
+  .passthrough();
+
 export const ListTransferOffersResponseSchema = z.object({
-  offers: z.array(z.any()),
+  offers: z.array(TransferOfferSchema),
 });
 
 export const GetTransferOfferStatusResponseSchema = z.object({
@@ -39,6 +59,7 @@ export const WithdrawTransferOfferResponseSchema = z.object({
 
 export type CreateTransferOfferRequest = z.infer<typeof CreateTransferOfferRequestSchema>;
 export type CreateTransferOfferResponse = z.infer<typeof CreateTransferOfferResponseSchema>;
+export type TransferOffer = z.infer<typeof TransferOfferSchema>;
 export type ListTransferOffersResponse = z.infer<typeof ListTransferOffersResponseSchema>;
 export type GetTransferOfferStatusResponse = z.infer<typeof GetTransferOfferStatusResponseSchema>;
 export type AcceptTransferOfferResponse = z.infer<typeof AcceptTransferOfferResponseSchema>;
@@ -108,7 +129,7 @@ export const AmuletContractSchema = z.object({
   contract: z.object({
     template_id: z.string(),
     contract_id: z.string(),
-    payload: z.any(),
+    payload: z.unknown(),
     created_event_blob: z.string(),
     created_at: z.string(),
   }),

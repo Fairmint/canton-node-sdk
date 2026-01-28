@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { createApiOperation } from '../../../../../core';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
-import { CommandSchema } from '../../../schemas/api/commands';
+import { CommandSchema, DeduplicationPeriodSchema, DisclosedContractSchema } from '../../../schemas/api/commands';
+import { MinLedgerTimeRelSchema, PrefetchContractKeySchema } from '../../../schemas/common';
 
 const endpoint = '/v2/commands/submit-and-wait-for-transaction-tree' as const;
 
@@ -20,21 +21,21 @@ export const SubmitAndWaitForTransactionTreeParamsSchema = z.object({
   /** Workflow ID (optional). */
   workflowId: z.string().optional(),
   /** Deduplication period (optional). */
-  deduplicationPeriod: z.any().optional(),
+  deduplicationPeriod: DeduplicationPeriodSchema.optional(),
   /** Minimum ledger time absolute (optional). */
   minLedgerTimeAbs: z.string().optional(),
   /** Minimum ledger time relative (optional). */
-  minLedgerTimeRel: z.any().optional(),
+  minLedgerTimeRel: MinLedgerTimeRelSchema.optional(),
   /** Submission ID (optional). */
   submissionId: z.string().optional(),
   /** Disclosed contracts (optional). */
-  disclosedContracts: z.array(z.any()).optional(),
+  disclosedContracts: z.array(DisclosedContractSchema).optional(),
   /** Synchronizer ID (optional). */
   synchronizerId: z.string().optional(),
   /** Package ID selection preference (optional). */
   packageIdSelectionPreference: z.array(z.string()).optional(),
   /** Prefetch contract keys (optional). */
-  prefetchContractKeys: z.array(z.any()).optional(),
+  prefetchContractKeys: z.array(PrefetchContractKeySchema).optional(),
 });
 
 // Extended type with optional commandId and actAs

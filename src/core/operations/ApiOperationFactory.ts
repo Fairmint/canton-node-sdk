@@ -7,7 +7,12 @@ import { ApiOperation } from './ApiOperation';
 export type RequestDataBuilder<Params> = (
   params: Params,
   client: BaseClient
-) => Record<string, unknown> | Buffer | undefined | Promise<Record<string, unknown> | Buffer | undefined>;
+) =>
+  | Record<string, unknown>
+  | Buffer
+  | string
+  | undefined
+  | Promise<Record<string, unknown> | Buffer | string | undefined>;
 
 export interface ApiOperationConfig<Params, Response> {
   paramsSchema: z.ZodSchema<Params>;

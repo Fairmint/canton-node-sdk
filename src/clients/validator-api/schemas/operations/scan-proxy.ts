@@ -43,7 +43,7 @@ export const GetInstrumentParamsSchema = z.object({
   instrumentId: z.string(),
 });
 export const GetAllocationFactoryParamsSchema = z.object({
-  choiceArguments: z.record(z.string(), z.never()),
+  choiceArguments: z.record(z.string(), z.unknown()),
   excludeDebugFields: z.boolean().optional(),
 });
 export const GetAllocationTransferContextParamsSchema = z.object({
@@ -62,7 +62,7 @@ export const GetAllocationCancelContextParamsSchema = z.object({
   excludeDebugFields: z.boolean().optional(),
 });
 export const GetTransferFactoryParamsSchema = z.object({
-  choiceArguments: z.record(z.string(), z.never()),
+  choiceArguments: z.record(z.string(), z.unknown()),
   excludeDebugFields: z.boolean().optional(),
 });
 export const GetTransferInstructionAcceptContextParamsSchema = z.object({
