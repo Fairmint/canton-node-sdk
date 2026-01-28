@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/** DAR file content (Buffer or base64 encoded string). */
+export const DarFileSchema = z.union([z.instanceof(Buffer), z.string()]);
+
 /** Trace context for distributed tracing. */
 export const TraceContextSchema = z.object({
   /** Trace ID for the request. */
@@ -127,6 +130,7 @@ export const ApiFeaturesSchema = z.object({
 });
 
 // Export types
+export type DarFile = z.infer<typeof DarFileSchema>;
 export type TraceContext = z.infer<typeof TraceContextSchema>;
 export type Filter = z.infer<typeof FilterSchema>;
 export type DeduplicationDuration = z.infer<typeof DeduplicationDurationSchema>;

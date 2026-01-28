@@ -8,8 +8,8 @@ import { EventFormatSchema } from './events';
 export const ReassignmentCommandSchema = z.object({
   /** The reassignment command. */
   command: z.union([
-    z.object({ AssignCommand: AssignCommandSchema }),
-    z.object({ UnassignCommand: UnassignCommandSchema }),
+    AssignCommandSchema,
+    UnassignCommandSchema,
     z.object({ Empty: EmptyCommandSchema }),
   ]),
 });
