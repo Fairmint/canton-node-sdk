@@ -5,7 +5,6 @@ import { SubmitAndWaitForTransactionTreeParamsSchema } from '../../../schemas/op
 
 const endpoint = '/v2/commands/submit-and-wait-for-transaction-tree' as const;
 
-// Extended type with optional commandId and actAs
 export type SubmitAndWaitForTransactionTreeParams = z.infer<typeof SubmitAndWaitForTransactionTreeParamsSchema>;
 
 export type SubmitAndWaitForTransactionTreeResponse =
