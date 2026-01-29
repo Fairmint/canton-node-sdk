@@ -13,6 +13,25 @@ export interface WebSocketHandlers<Message, ErrorMessage = unknown> {
   onMessage: (msg: Message) => void;
   onError?: (err: Error | ErrorMessage) => void;
   onClose?: (code: number, reason: string) => void;
+  /**
+   * Optional validator for incoming messages. If provided, this function is called
+   * with the parsed JSON data and should return the validated message or throw an error.
+   * This enables strict runtime type checking for WebSocket messages.
+   */
+  validateMessage?: (data: unknown) => Message;
+}
+
+/** Type guard to check if a value is an Error instance */
+function isError(value: unknown): value is Error {
+  return value instanceof Error;
+}
+
+/** Converts an unknown error to an Error instance */
+function toError(value: unknown): Error {
+  if (isError(value)) {
+    return value;
+  }
+  return new Error(typeof value === 'string' ? value : String(value));
 }
 
 export interface WebSocketOptions {
@@ -145,8 +164,9 @@ export class WebSocketClient {
           await log('send', requestMessage);
           if (handlers.onOpen) handlers.onOpen();
         } catch (err) {
-          await log('send_error', err instanceof Error ? { message: err.message } : String(err));
-          if (handlers.onError) handlers.onError(err as Error);
+          const error = toError(err);
+          await log('send_error', { message: error.message });
+          if (handlers.onError) handlers.onError(error);
           socket.close();
         }
       })();
@@ -166,13 +186,23 @@ export class WebSocketClient {
         try {
           const parsed = WebSocketErrorUtils.safeJsonParse(dataString, 'WebSocket message');
           await log('message', parsed);
-          handlers.onMessage(parsed as InboundMessage);
+
+          // Use validator if provided for strict runtime type checking
+          if (handlers.validateMessage) {
+            const validated = handlers.validateMessage(parsed);
+            handlers.onMessage(validated);
+          } else {
+            // Type assertion is necessary here as JSON.parse returns unknown and
+            // the WebSocket client is generic. Callers can provide validateMessage
+            // for strict runtime type checking.
+            handlers.onMessage(parsed as InboundMessage);
+          }
         } catch (err) {
-          const errorMessage = err instanceof Error ? err.message : String(err);
-          await log('parse_error', { raw: dataString, error: errorMessage });
+          const error = toError(err);
+          await log('parse_error', { raw: dataString, error: error.message });
           // Close connection on JSON parse failure to prevent inconsistent state
           socket.close(1003, 'Invalid JSON received');
-          if (handlers.onError) handlers.onError(err as Error);
+          if (handlers.onError) handlers.onError(error);
         }
       })();
     });

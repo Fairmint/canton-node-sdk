@@ -61,6 +61,16 @@ interface ContractData {
   payload: Record<string, unknown>;
 }
 
+/** Type guard to check if a value is a non-null object */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** Type guard to check if a value has a specific property */
+function hasProperty<K extends string>(obj: unknown, key: K): obj is Record<K, unknown> {
+  return isRecord(obj) && key in obj;
+}
+
 /** Type guard to check if a contract is a JsGetActiveContractsResponseItem with JsActiveContract */
 function isJsActiveContractItem(ctr: unknown): ctr is JsGetActiveContractsResponseItem & {
   contractEntry: {
@@ -69,24 +79,23 @@ function isJsActiveContractItem(ctr: unknown): ctr is JsGetActiveContractsRespon
     };
   };
 } {
-  if (!ctr || typeof ctr !== 'object') return false;
-  const obj = ctr as Record<string, unknown>;
-  const entry = obj['contractEntry'];
-  if (!entry || typeof entry !== 'object') return false;
-  const entryObj = entry as Record<string, unknown>;
-  const jsActive = entryObj['JsActiveContract'];
-  if (!jsActive || typeof jsActive !== 'object') return false;
-  const jsActiveObj = jsActive as Record<string, unknown>;
-  return 'createdEvent' in jsActiveObj;
+  if (!isRecord(ctr)) return false;
+
+  const entry = ctr['contractEntry'];
+  if (!isRecord(entry)) return false;
+
+  const jsActive = entry['JsActiveContract'];
+  if (!isRecord(jsActive)) return false;
+
+  return hasProperty(jsActive, 'createdEvent');
 }
 
 /** Type guard to check if a contract is a LegacyContract with contract property */
 function isLegacyContractWithContract(
   ctr: unknown
 ): ctr is LegacyContract & { contract: NonNullable<LegacyContract['contract']> } {
-  if (!ctr || typeof ctr !== 'object') return false;
-  const { contract } = ctr as Record<string, unknown>;
-  return contract !== undefined && typeof contract === 'object' && contract !== null;
+  if (!isRecord(ctr)) return false;
+  return isRecord(ctr['contract']);
 }
 
 /** Safely extract a string from an unknown value */
@@ -207,10 +216,9 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
       const directValue = extractNumericValue(rawAmountCandidate);
       if (directValue !== undefined) {
         rawAmount = directValue;
-      } else if (rawAmountCandidate && typeof rawAmountCandidate === 'object') {
+      } else if (isRecord(rawAmountCandidate)) {
         // Amount might be nested in an object with initialAmount
-        const nestedObj = rawAmountCandidate as Record<string, unknown>;
-        rawAmount = extractNumericValue(nestedObj['initialAmount']) ?? '0';
+        rawAmount = extractNumericValue(rawAmountCandidate['initialAmount']) ?? '0';
       }
     }
 
@@ -248,9 +256,8 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
         effectiveAmount = amtObj;
       } else if (typeof amtObj === 'number') {
         effectiveAmount = String(amtObj);
-      } else if (amtObj && typeof amtObj === 'object') {
-        const nestedObj = amtObj as Record<string, unknown>;
-        const nestedAmount = extractNumericValue(nestedObj['initialAmount']);
+      } else if (isRecord(amtObj)) {
+        const nestedAmount = extractNumericValue(amtObj['initialAmount']);
         effectiveAmount = nestedAmount !== undefined ? String(nestedAmount) : '0';
       }
     }

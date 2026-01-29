@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RecordSchema } from '../base';
 
 export const ErrorResponseSchema = z.object({
   /** Error message describing the problem. */
@@ -204,8 +205,8 @@ export const JsCantonErrorSchema = z.object({
   code: JsErrorCodeSchema,
   /** Error message. */
   message: z.string(),
-  /** Error details (optional). */
-  details: z.record(z.string(), z.unknown()).optional(),
+  /** Error details (optional) - structure varies by error code */
+  details: RecordSchema.optional(),
 });
 
 /** Generic error details. */
@@ -214,8 +215,8 @@ export const JsErrorSchema = z.object({
   code: JsErrorCodeSchema,
   /** Error message. */
   message: z.string(),
-  /** Error details (optional). */
-  details: z.record(z.string(), z.unknown()).optional(),
+  /** Error details (optional) - structure varies by error code */
+  details: RecordSchema.optional(),
 });
 
 // Export types
@@ -243,7 +244,8 @@ export const WsCantonErrorSchema = z.object({
   cause: z.string(),
   correlationId: z.string().nullable().optional(),
   traceId: z.string().nullable().optional(),
-  context: z.record(z.string(), z.unknown()).nullable().optional(),
+  /** Error context - additional contextual information about the error */
+  context: RecordSchema.nullable().optional(),
   resources: z
     .array(z.tuple([z.string(), z.string()]))
     .nullable()

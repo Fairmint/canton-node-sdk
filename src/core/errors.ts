@@ -1,9 +1,28 @@
+/** JSON-serializable context for error details */
+export type ErrorContext = Record<string, unknown>;
+
+/** Error type discriminators for exhaustive type checking */
+export const ErrorType = {
+  CANTON: 'CANTON',
+  CONFIGURATION: 'CONFIGURATION',
+  AUTHENTICATION: 'AUTHENTICATION',
+  API: 'API',
+  VALIDATION: 'VALIDATION',
+  NETWORK: 'NETWORK',
+  OPERATION: 'OPERATION',
+} as const;
+
+export type ErrorTypeValue = (typeof ErrorType)[keyof typeof ErrorType];
+
 /** Base error class for all Canton SDK errors */
 export class CantonError extends Error {
+  /** Discriminator for type narrowing */
+  readonly type: ErrorTypeValue = ErrorType.CANTON;
+
   constructor(
     message: string,
     public readonly code: string,
-    public readonly context?: Record<string, unknown>
+    public readonly context?: ErrorContext
   ) {
     super(message);
     this.name = 'CantonError';
@@ -12,6 +31,8 @@ export class CantonError extends Error {
 
 /** Error thrown when configuration is invalid or missing */
 export class ConfigurationError extends CantonError {
+  override readonly type = ErrorType.CONFIGURATION;
+
   constructor(message: string) {
     super(message, 'CONFIGURATION_ERROR');
     this.name = 'ConfigurationError';
@@ -20,6 +41,8 @@ export class ConfigurationError extends CantonError {
 
 /** Error thrown when authentication fails */
 export class AuthenticationError extends CantonError {
+  override readonly type = ErrorType.AUTHENTICATION;
+
   constructor(message: string) {
     super(message, 'AUTHENTICATION_ERROR');
     this.name = 'AuthenticationError';
@@ -28,8 +51,10 @@ export class AuthenticationError extends CantonError {
 
 /** Error thrown when API requests fail */
 export class ApiError extends CantonError {
+  override readonly type = ErrorType.API;
+
   /** The response data from the failed request, if available */
-  public response?: Record<string, unknown>;
+  public response?: ErrorContext;
 
   constructor(
     message: string,
@@ -43,7 +68,9 @@ export class ApiError extends CantonError {
 
 /** Error thrown when parameter validation fails */
 export class ValidationError extends CantonError {
-  constructor(message: string, context?: Record<string, unknown>) {
+  override readonly type = ErrorType.VALIDATION;
+
+  constructor(message: string, context?: ErrorContext) {
     super(message, 'VALIDATION_ERROR', context);
     this.name = 'ValidationError';
   }
@@ -51,6 +78,8 @@ export class ValidationError extends CantonError {
 
 /** Error thrown when network requests fail */
 export class NetworkError extends CantonError {
+  override readonly type = ErrorType.NETWORK;
+
   constructor(message: string) {
     super(message, 'NETWORK_ERROR');
     this.name = 'NetworkError';
@@ -73,8 +102,32 @@ export type OperationErrorCodeType = (typeof OperationErrorCode)[keyof typeof Op
 
 /** Error thrown when SDK operations fail */
 export class OperationError extends CantonError {
-  constructor(message: string, code: OperationErrorCodeType, context?: Record<string, unknown>) {
+  override readonly type = ErrorType.OPERATION;
+
+  constructor(message: string, code: OperationErrorCodeType, context?: ErrorContext) {
     super(message, code, context);
     this.name = 'OperationError';
   }
+}
+
+/** Union type of all SDK errors for exhaustive type checking */
+export type SdkError =
+  | ConfigurationError
+  | AuthenticationError
+  | ApiError
+  | ValidationError
+  | NetworkError
+  | OperationError;
+
+/** Type guard to check if an error is a Canton SDK error */
+export function isCantonError(error: unknown): error is CantonError {
+  return error instanceof CantonError;
+}
+
+/** Type guard to check if an error is a specific SDK error type */
+export function isSdkErrorOfType<T extends SdkError>(
+  error: unknown,
+  errorType: T['type']
+): error is T {
+  return isCantonError(error) && error.type === errorType;
 }

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createApiOperation } from '../../../../../../../../core';
+import { RecordSchema } from '../../../../../../../ledger-json-api/schemas/base';
 import type { paths } from '../../../../../../../../generated/token-standard/splice-api-token-transfer-instruction-v1/openapi/transfer-instruction-v1';
 
 type ApiPath = '/registry/transfer-instruction/v1/transfer-factory';
@@ -8,7 +9,8 @@ const endpoint = '/api/validator/v0/scan-proxy/registry/transfer-instruction/v1/
 
 // Simple schema that matches the generated type exactly
 export const GetTransferFactoryParamsSchema = z.object({
-  choiceArguments: z.record(z.string(), z.unknown()),
+  /** Arguments for the transfer choice execution - structure depends on the specific choice being invoked */
+  choiceArguments: RecordSchema,
   excludeDebugFields: z.boolean().optional(),
 });
 

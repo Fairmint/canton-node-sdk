@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RecordSchema } from '../../../ledger-json-api/schemas/base';
 
 // DSO Party ID Response
 export const GetDsoPartyIdResponseSchema = z.object({
@@ -81,7 +82,8 @@ export const GetAmuletRulesResponseSchema = z.object({
     contract: z.object({
       template_id: z.string(),
       contract_id: z.string(),
-      payload: z.unknown(),
+      /** Amulet rules contract payload */
+      payload: RecordSchema,
       created_event_blob: z.string(),
       created_at: z.string(),
     }),
@@ -109,7 +111,8 @@ export type LookupTransferCommandStatusResponse = z.infer<typeof LookupTransferC
 const ScanProxyTransferPreapprovalContractSchema = z.object({
   template_id: z.string(),
   contract_id: z.string(),
-  payload: z.unknown(), // Payload structure may vary
+  /** Transfer preapproval contract payload - structure varies by version */
+  payload: RecordSchema,
   created_event_blob: z.string(),
   created_at: z.string().optional(),
 });
@@ -147,7 +150,8 @@ export const ListInstrumentsResponseSchema = z.object({
 export const GetInstrumentResponseSchema = InstrumentSchema;
 
 export const ChoiceContextSchema = z.object({
-  choiceContextData: z.record(z.string(), z.unknown()),
+  /** Context data for the choice execution */
+  choiceContextData: RecordSchema,
   disclosedContracts: z.array(
     z.object({
       templateId: z.string(),
@@ -155,7 +159,8 @@ export const ChoiceContextSchema = z.object({
       createdEventBlob: z.string(),
       synchronizerId: z.string(),
       debugPackageName: z.string().optional(),
-      debugPayload: z.record(z.string(), z.unknown()).optional(),
+      /** Debug payload for disclosed contract - optional diagnostic information */
+      debugPayload: RecordSchema.optional(),
       debugCreatedAt: z.string().optional(),
     })
   ),

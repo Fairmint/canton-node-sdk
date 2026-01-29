@@ -1,5 +1,6 @@
 export * from './auth';
 export * from './BaseClient';
+export * from './branded-types';
 export * from './config';
 export * from './errors';
 export * from './http';
