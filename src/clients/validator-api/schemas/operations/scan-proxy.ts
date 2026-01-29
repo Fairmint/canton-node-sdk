@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RecordSchema } from '../../../ledger-json-api/schemas/base';
 
 // Mining Round Parameters
 export const GetMiningRoundDetailsParamsSchema = z.object({
@@ -43,7 +44,8 @@ export const GetInstrumentParamsSchema = z.object({
   instrumentId: z.string(),
 });
 export const GetAllocationFactoryParamsSchema = z.object({
-  choiceArguments: z.record(z.string(), z.unknown()),
+  /** Arguments for the choice execution */
+  choiceArguments: RecordSchema,
   excludeDebugFields: z.boolean().optional(),
 });
 export const GetAllocationTransferContextParamsSchema = z.object({
@@ -62,7 +64,8 @@ export const GetAllocationCancelContextParamsSchema = z.object({
   excludeDebugFields: z.boolean().optional(),
 });
 export const GetTransferFactoryParamsSchema = z.object({
-  choiceArguments: z.record(z.string(), z.unknown()),
+  /** Arguments for the transfer choice execution */
+  choiceArguments: RecordSchema,
   excludeDebugFields: z.boolean().optional(),
 });
 export const GetTransferInstructionAcceptContextParamsSchema = z.object({

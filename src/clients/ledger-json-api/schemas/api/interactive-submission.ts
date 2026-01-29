@@ -144,7 +144,8 @@ const DisclosedContractSchema = z.object({
   templateId: z.string(),
   createdEventBlob: z.string().optional(),
   synchronizerId: z.string(),
-  metadata: z.unknown().optional(),
+  /** Optional metadata for the disclosed contract */
+  metadata: RecordSchema.optional(),
 });
 
 const PackagePreferenceSchema = z.object({

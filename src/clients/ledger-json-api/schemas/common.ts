@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RecordSchema } from './base';
 
 /** DAR file content (Buffer or base64 encoded string). */
 export const DarFileSchema = z.union([z.instanceof(Buffer), z.string()]);
@@ -58,8 +59,8 @@ export const MinLedgerTimeRelSchema = z.object({
 export const PrefetchContractKeySchema = z.object({
   /** Template ID. */
   templateId: z.string(),
-  /** Contract key. */
-  contractKey: z.record(z.string(), z.unknown()),
+  /** Contract key value - structure depends on the contract key definition */
+  contractKey: RecordSchema,
 });
 
 /** Update mask for partial updates. */
@@ -104,10 +105,10 @@ export const DurationSchema = z.object({
   seconds: z.number(),
   /** Duration in nanoseconds. */
   nanos: z.number(),
-  /** Unknown fields. */
+  /** Unknown fields for forward compatibility. */
   unknownFields: z.object({
-    /** Fields object. */
-    fields: z.record(z.string(), z.unknown()),
+    /** Additional fields not explicitly defined in the schema */
+    fields: RecordSchema,
   }),
 });
 

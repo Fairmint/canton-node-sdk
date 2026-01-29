@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RecordSchema } from '../../../ledger-json-api/schemas/base';
 
 // Transfer Offer Schemas
 export const CreateTransferOfferRequestSchema = z.object({
@@ -129,7 +130,8 @@ export const AmuletContractSchema = z.object({
   contract: z.object({
     template_id: z.string(),
     contract_id: z.string(),
-    payload: z.unknown(),
+    /** Contract payload - structure varies by contract type (Amulet, LockedAmulet, etc.) */
+    payload: RecordSchema,
     created_event_blob: z.string(),
     created_at: z.string(),
   }),

@@ -108,8 +108,8 @@ export const StatusDetailsSchema = z.object({
   code: z.number(),
   /** Error message. */
   message: z.string(),
-  /** Additional error details. */
-  details: z.record(z.string(), z.unknown()).optional(),
+  /** Additional error details - structure varies by error type */
+  details: RecordSchema.optional(),
 });
 
 // Export types

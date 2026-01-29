@@ -4,13 +4,15 @@ import type {
   components,
   paths,
 } from '../../../../../../../../generated/token-standard/splice-api-token-allocation-instruction-v1/openapi/allocation-instruction-v1';
+import { RecordSchema } from '../../../../../../../ledger-json-api/schemas/base';
 
 type ApiPath = '/registry/allocation-instruction/v1/allocation-factory';
 
 const endpoint = '/api/validator/v0/scan-proxy/registry/allocation-instruction/v1/allocation-factory';
 
 export const GetAllocationFactoryParamsSchema = z.object({
-  choiceArguments: z.record(z.string(), z.unknown()),
+  /** Arguments for the choice execution - structure depends on the specific choice being invoked */
+  choiceArguments: RecordSchema,
   excludeDebugFields: z.boolean().optional(),
 });
 

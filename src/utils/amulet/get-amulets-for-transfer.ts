@@ -1,5 +1,6 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { type JsGetActiveContractsResponseItem } from '../../clients/ledger-json-api/schemas/api/state';
+import { isRecord } from '../../core/utils';
 
 export interface AmuletForTransfer {
   contractId: string;
@@ -69,24 +70,23 @@ function isJsActiveContractItem(ctr: unknown): ctr is JsGetActiveContractsRespon
     };
   };
 } {
-  if (!ctr || typeof ctr !== 'object') return false;
-  const obj = ctr as Record<string, unknown>;
-  const entry = obj['contractEntry'];
-  if (!entry || typeof entry !== 'object') return false;
-  const entryObj = entry as Record<string, unknown>;
-  const jsActive = entryObj['JsActiveContract'];
-  if (!jsActive || typeof jsActive !== 'object') return false;
-  const jsActiveObj = jsActive as Record<string, unknown>;
-  return 'createdEvent' in jsActiveObj;
+  if (!isRecord(ctr)) return false;
+
+  const entry = ctr['contractEntry'];
+  if (!isRecord(entry)) return false;
+
+  const jsActive = entry['JsActiveContract'];
+  if (!isRecord(jsActive)) return false;
+
+  return 'createdEvent' in jsActive;
 }
 
 /** Type guard to check if a contract is a LegacyContract with contract property */
 function isLegacyContractWithContract(
   ctr: unknown
 ): ctr is LegacyContract & { contract: NonNullable<LegacyContract['contract']> } {
-  if (!ctr || typeof ctr !== 'object') return false;
-  const { contract } = ctr as Record<string, unknown>;
-  return contract !== undefined && typeof contract === 'object' && contract !== null;
+  if (!isRecord(ctr)) return false;
+  return isRecord(ctr['contract']);
 }
 
 /** Safely extract a string from an unknown value */
@@ -207,10 +207,9 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
       const directValue = extractNumericValue(rawAmountCandidate);
       if (directValue !== undefined) {
         rawAmount = directValue;
-      } else if (rawAmountCandidate && typeof rawAmountCandidate === 'object') {
+      } else if (isRecord(rawAmountCandidate)) {
         // Amount might be nested in an object with initialAmount
-        const nestedObj = rawAmountCandidate as Record<string, unknown>;
-        rawAmount = extractNumericValue(nestedObj['initialAmount']) ?? '0';
+        rawAmount = extractNumericValue(rawAmountCandidate['initialAmount']) ?? '0';
       }
     }
 
@@ -248,9 +247,8 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
         effectiveAmount = amtObj;
       } else if (typeof amtObj === 'number') {
         effectiveAmount = String(amtObj);
-      } else if (amtObj && typeof amtObj === 'object') {
-        const nestedObj = amtObj as Record<string, unknown>;
-        const nestedAmount = extractNumericValue(nestedObj['initialAmount']);
+      } else if (isRecord(amtObj)) {
+        const nestedAmount = extractNumericValue(amtObj['initialAmount']);
         effectiveAmount = nestedAmount !== undefined ? String(nestedAmount) : '0';
       }
     }

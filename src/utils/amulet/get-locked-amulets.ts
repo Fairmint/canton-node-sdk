@@ -1,7 +1,23 @@
 import { type ValidatorApiClient } from '../../clients/validator-api';
 import type { GetAmuletsResponse } from '../../clients/validator-api/schemas/api/wallet';
 import { ValidationError } from '../../core/errors';
+import { isRecord } from '../../core/utils';
 import { type LockedAmulet } from './types';
+
+/**
+ * Type alias for working with contract payloads at runtime. Note: RecordSchema produces Record<string, JsonValue>, but
+ * we use Record<string, unknown> here since we access properties dynamically with type guards.
+ */
+type PayloadRecord = Record<string, unknown>;
+
+/** Type guard for holder object with owner property */
+interface HolderWithOwner {
+  owner: string;
+}
+
+function isHolderWithOwner(value: unknown): value is HolderWithOwner {
+  return isRecord(value) && typeof value['owner'] === 'string';
+}
 
 function assertString(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.trim() === '') {
@@ -23,12 +39,12 @@ function parseHolders(raw: unknown): string[] {
     return [];
   }
   return raw
-    .map((holder) => {
+    .map((holder: unknown) => {
       if (typeof holder === 'string') {
         return holder;
       }
-      if (holder && typeof holder === 'object' && typeof (holder as { owner?: string }).owner === 'string') {
-        return (holder as { owner: string }).owner;
+      if (isHolderWithOwner(holder)) {
+        return holder.owner;
       }
       return null;
     })
@@ -37,12 +53,20 @@ function parseHolders(raw: unknown): string[] {
 
 type LockedAmuletEntry = GetAmuletsResponse['locked_amulets'][number];
 
+/** Safely extracts a nested record from a payload */
+function getNestedRecord(payload: PayloadRecord, key: string): PayloadRecord {
+  const value = payload[key];
+  return isRecord(value) ? value : {};
+}
+
 function toLockedAmulet(entry: LockedAmuletEntry, index: number): LockedAmulet {
   const label = `locked amulet #${index + 1}`;
   const { contract } = entry.contract;
-  const payload = (contract.payload ?? {}) as Record<string, unknown>;
-  const amuletPayload = (payload['amulet'] ?? {}) as Record<string, unknown>;
-  const lockPayload = (payload['lock'] ?? {}) as Record<string, unknown>;
+
+  // contract.payload is typed as JsonRecord (via RecordSchema)
+  const { payload } = contract;
+  const amuletPayload = getNestedRecord(payload, 'amulet');
+  const lockPayload = getNestedRecord(payload, 'lock');
 
   const contractId = assertString(contract.contract_id, `${label} contract_id`);
   const templateId = assertString(contract.template_id, `${label} template_id`);

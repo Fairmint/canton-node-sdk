@@ -1,9 +1,12 @@
+/** JSON-serializable context for error details */
+export type ErrorContext = Record<string, unknown>;
+
 /** Base error class for all Canton SDK errors */
 export class CantonError extends Error {
   constructor(
     message: string,
     public readonly code: string,
-    public readonly context?: Record<string, unknown>
+    public readonly context?: ErrorContext
   ) {
     super(message);
     this.name = 'CantonError';
@@ -29,7 +32,7 @@ export class AuthenticationError extends CantonError {
 /** Error thrown when API requests fail */
 export class ApiError extends CantonError {
   /** The response data from the failed request, if available */
-  public response?: Record<string, unknown>;
+  public response?: ErrorContext;
 
   constructor(
     message: string,
@@ -43,7 +46,7 @@ export class ApiError extends CantonError {
 
 /** Error thrown when parameter validation fails */
 export class ValidationError extends CantonError {
-  constructor(message: string, context?: Record<string, unknown>) {
+  constructor(message: string, context?: ErrorContext) {
     super(message, 'VALIDATION_ERROR', context);
     this.name = 'ValidationError';
   }
@@ -73,7 +76,7 @@ export type OperationErrorCodeType = (typeof OperationErrorCode)[keyof typeof Op
 
 /** Error thrown when SDK operations fail */
 export class OperationError extends CantonError {
-  constructor(message: string, code: OperationErrorCodeType, context?: Record<string, unknown>) {
+  constructor(message: string, code: OperationErrorCodeType, context?: ErrorContext) {
     super(message, code, context);
     this.name = 'OperationError';
   }
