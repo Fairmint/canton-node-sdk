@@ -121,30 +121,4 @@ describe('findCreatedEventByTemplateId', () => {
     expect(result).toBeDefined();
     expect(result?.CreatedTreeEvent.value.contractId).toBe('contract-1');
   });
-
-  it('handles nested transaction structure', () => {
-    // Some responses may have eventsById nested under transaction
-    const response = {
-      transactionTree: {
-        updateId: 'update-123',
-        commandId: 'cmd-123',
-        effectiveAt: '2026-01-01T00:00:00Z',
-        offset: '100',
-        transaction: {
-          eventsById: {
-            '1': createCreatedTreeEvent('contract-1', 'pkg:Module:Target'),
-          },
-        },
-        rootEventIds: ['1'],
-        synchronizerId: 'sync-123',
-        traceContext: undefined,
-        recordTime: '2026-01-01T00:00:00Z',
-      },
-    } as unknown as SubmitAndWaitForTransactionTreeResponse;
-
-    const result = findCreatedEventByTemplateId(response, 'pkg:Module:Target');
-
-    expect(result).toBeDefined();
-    expect(result?.CreatedTreeEvent.value.contractId).toBe('contract-1');
-  });
 });

@@ -38,23 +38,6 @@ export interface GetAmuletsForTransferParams {
   includeAllTransferInputs?: boolean;
 }
 
-/** Legacy contract format for backward compatibility */
-interface LegacyContract {
-  payload?: Record<string, unknown>;
-  contract?: {
-    template_id?: string;
-    contract_id?: string;
-    payload?: Record<string, unknown>;
-    contract?: {
-      template_id?: string;
-      contract_id?: string;
-      payload?: Record<string, unknown>;
-    };
-  };
-  template_id?: string;
-  contract_id?: string;
-}
-
 /** Internal contract representation with extracted data */
 interface ContractData {
   contractId: string;
@@ -81,14 +64,6 @@ function isJsActiveContractItem(ctr: unknown): ctr is JsGetActiveContractsRespon
   return 'createdEvent' in jsActive;
 }
 
-/** Type guard to check if a contract is a LegacyContract with contract property */
-function isLegacyContractWithContract(
-  ctr: unknown
-): ctr is LegacyContract & { contract: NonNullable<LegacyContract['contract']> } {
-  if (!isRecord(ctr)) return false;
-  return isRecord(ctr['contract']);
-}
-
 /** Safely extract a string from an unknown value */
 function extractString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
@@ -98,6 +73,40 @@ function extractString(value: unknown): string | undefined {
 function extractNumericValue(value: unknown): string | number | undefined {
   if (typeof value === 'string' || typeof value === 'number') return value;
   return undefined;
+}
+
+/**
+ * Extract the effective amount from a contract payload. For Amulets: amount is nested as { initialAmount: string } For
+ * Coupons: amount is directly a string
+ */
+function extractAmount(payload: Record<string, unknown>, templateId: string): string {
+  if (templateId.includes('AppRewardCoupon') || templateId.includes('ValidatorRewardCoupon')) {
+    // For coupons, amount is directly in payload
+    const amount = extractNumericValue(payload['amount']);
+    return amount !== undefined ? String(amount) : '0';
+  }
+
+  // For amulets, amount is nested: { initialAmount: string }
+  const amountObj = payload['amount'];
+  if (isRecord(amountObj)) {
+    const initialAmount = extractNumericValue(amountObj['initialAmount']);
+    return initialAmount !== undefined ? String(initialAmount) : '0';
+  }
+
+  // Direct amount value (shouldn't happen with current API but handle gracefully)
+  const directAmount = extractNumericValue(amountObj);
+  return directAmount !== undefined ? String(directAmount) : '0';
+}
+
+/** Extract the owner from a contract payload. For Amulets: owner field For Coupons: beneficiary or provider field */
+function extractOwner(payload: Record<string, unknown>, templateId: string): string {
+  if (templateId.includes('AppRewardCoupon') || templateId.includes('ValidatorRewardCoupon')) {
+    // For coupons, beneficiary is optional and falls back to provider
+    return extractString(payload['beneficiary']) ?? extractString(payload['provider']) ?? '';
+  }
+
+  // For amulets, use owner field
+  return extractString(payload['owner']) ?? '';
 }
 
 /**
@@ -133,94 +142,37 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
   const allContracts: ContractData[] = [];
   const contractsArr = Array.isArray(activeContracts) ? activeContracts : [];
 
-  contractsArr.forEach((ctr) => {
-    let payload: Record<string, unknown> | undefined;
-    let templateId: string | undefined;
-    let contractId: string | undefined;
-
-    // Use type guards for proper runtime validation
-    if (isJsActiveContractItem(ctr)) {
-      const jsActiveContract = ctr.contractEntry['JsActiveContract'];
-      const { createdEvent } = jsActiveContract;
-      payload = createdEvent.createArgument;
-      ({ templateId, contractId } = createdEvent);
-    } else if (isLegacyContractWithContract(ctr)) {
-      const { contract } = ctr;
-      ({ payload } = contract);
-      templateId = contract.contract?.template_id ?? contract.template_id;
-      contractId = contract.contract?.contract_id ?? contract.contract_id;
+  for (const ctr of contractsArr) {
+    // Only handle the canonical JsActiveContract format
+    if (!isJsActiveContractItem(ctr)) {
+      continue;
     }
 
-    if (!payload || !templateId || !contractId) return;
+    const { createdEvent } = ctr.contractEntry.JsActiveContract;
+    const { templateId, contractId, createArgument: payload } = createdEvent;
+
+    // Skip contracts with missing required fields
+    if (!contractId || !templateId || !payload) {
+      continue;
+    }
 
     // Filter for valid transfer input contracts
     const isUnlockedAmulet = templateId.includes('Splice.Amulet:Amulet') && !templateId.includes('LockedAmulet');
     const isAppRewardCoupon = templateId.includes('AppRewardCoupon');
     const isValidatorRewardCoupon = templateId.includes('ValidatorRewardCoupon');
 
-    if (!isUnlockedAmulet && !isAppRewardCoupon && !isValidatorRewardCoupon) return;
+    if (!isUnlockedAmulet && !isAppRewardCoupon && !isValidatorRewardCoupon) {
+      continue;
+    }
 
     allContracts.push({ contractId, templateId, payload });
-  });
+  }
 
-  // Helper to extract owner/beneficiary and numeric amount from diverse contract shapes
-  const extract = (contract: ContractData | LegacyContract) => {
-    // Get payload using type-safe access
-    let payload: Record<string, unknown>;
-    if ('templateId' in contract && 'payload' in contract) {
-      // ContractData - has payload directly
-      ({ payload } = contract);
-    } else if ('contract' in contract) {
-      // LegacyContract with nested structure
-      payload = contract.contract.contract?.payload ?? contract.contract.payload ?? {};
-    } else {
-      payload = {};
-    }
-
-    // Get templateId using type-safe access
-    const templateId = 'templateId' in contract ? contract.templateId : undefined;
-
-    // Extract owner/beneficiary based on contract type using safe extraction
-    let ownerFull = '';
-    if (templateId?.includes('AppRewardCoupon') || templateId?.includes('ValidatorRewardCoupon')) {
-      // For coupons, beneficiary is optional and falls back to provider
-      ownerFull = extractString(payload['beneficiary']) ?? extractString(payload['provider']) ?? '';
-    } else {
-      // For amulets, use owner field - check multiple possible locations
-      ownerFull =
-        extractString(payload['owner']) ??
-        extractString(payload['partyId']) ??
-        extractString(payload['party_id']) ??
-        '';
-    }
-
-    // Extract amount based on contract type
-    let rawAmount: string | number = '0';
-    if (templateId?.includes('AppRewardCoupon') || templateId?.includes('ValidatorRewardCoupon')) {
-      // For coupons, amount is directly in payload
-      rawAmount = extractNumericValue(payload['amount']) ?? '0';
-    } else {
-      // For amulets, amount might be nested
-      const rawAmountCandidate =
-        payload['amount'] ?? payload['effective_amount'] ?? payload['effectiveAmount'] ?? payload['initialAmount'];
-
-      const directValue = extractNumericValue(rawAmountCandidate);
-      if (directValue !== undefined) {
-        rawAmount = directValue;
-      } else if (isRecord(rawAmountCandidate)) {
-        // Amount might be nested in an object with initialAmount
-        rawAmount = extractNumericValue(rawAmountCandidate['initialAmount']) ?? '0';
-      }
-    }
-
-    const numericAmount = typeof rawAmount === 'number' ? rawAmount : parseFloat(rawAmount);
-    return { owner: ownerFull, numericAmount };
-  };
-
-  // Filter contracts owned by sender (readAs[0]) and with positive balance
+  // Filter contracts owned by sender and with positive balance
   const partyContracts = allContracts.filter((c) => {
-    const { owner, numericAmount } = extract(c);
-    return numericAmount > 0 && owner === senderParty;
+    const owner = extractOwner(c.payload, c.templateId);
+    const amount = parseFloat(extractAmount(c.payload, c.templateId));
+    return amount > 0 && owner === senderParty;
   });
 
   if (partyContracts.length === 0) {
@@ -228,38 +180,17 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
   }
 
   // Sort biggest → smallest so we pick high-value contracts first
-  partyContracts.sort((a, b) => extract(b).numericAmount - extract(a).numericAmount);
-
-  // Map to the structure expected by buildAmuletInputs (maintaining backward compatibility)
-  const result = partyContracts.map((c) => {
-    const { payload, templateId } = c;
-
-    // Extract amount based on contract type using safe extraction
-    let effectiveAmount = '0';
-    if (templateId.includes('AppRewardCoupon') || templateId.includes('ValidatorRewardCoupon')) {
-      // For coupons, amount is directly in payload
-      const couponAmount = extractNumericValue(payload['amount']);
-      effectiveAmount = couponAmount !== undefined ? String(couponAmount) : '0';
-    } else {
-      // For amulets, amount might be nested
-      const amtObj = payload['amount'];
-      if (typeof amtObj === 'string') {
-        effectiveAmount = amtObj;
-      } else if (typeof amtObj === 'number') {
-        effectiveAmount = String(amtObj);
-      } else if (isRecord(amtObj)) {
-        const nestedAmount = extractNumericValue(amtObj['initialAmount']);
-        effectiveAmount = nestedAmount !== undefined ? String(nestedAmount) : '0';
-      }
-    }
-
-    return {
-      contractId: c.contractId,
-      templateId: c.templateId,
-      effectiveAmount,
-      owner: extract(c).owner,
-    };
+  partyContracts.sort((a, b) => {
+    const amountA = parseFloat(extractAmount(a.payload, a.templateId));
+    const amountB = parseFloat(extractAmount(b.payload, b.templateId));
+    return amountB - amountA;
   });
 
-  return result;
+  // Map to the output structure
+  return partyContracts.map((c) => ({
+    contractId: c.contractId,
+    templateId: c.templateId,
+    effectiveAmount: extractAmount(c.payload, c.templateId),
+    owner: extractOwner(c.payload, c.templateId),
+  }));
 }

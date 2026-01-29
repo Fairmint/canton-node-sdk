@@ -17,7 +17,7 @@ const createOpenMiningRound = (roundNumber: number, opensAt: Date, contractId = 
     template_id: 'pkg:Splice.Round:OpenMiningRound',
     created_event_blob: 'blob-123',
     payload: {
-      roundNumber,
+      round_number: roundNumber,
       opensAt: opensAt.toISOString(),
     },
   },
@@ -27,9 +27,6 @@ const createOpenMiningRound = (roundNumber: number, opensAt: Date, contractId = 
 const createIssuingMiningRound = (roundNumber: number, contractId = `issuing-${roundNumber}`) => ({
   round_number: roundNumber,
   contract_id: contractId,
-  contract: {
-    contract_id: contractId,
-  },
 });
 
 describe('mining-rounds', () => {
@@ -129,7 +126,9 @@ describe('mining-rounds', () => {
       );
     });
 
-    it('handles rounds without opensAt field', async () => {
+    it('filters out rounds with malformed opensAt field', async () => {
+      // Even with strict typing, the runtime may receive malformed data
+      // The code defensively filters these out
       const mockClient = createMockValidatorClient({
         open_mining_rounds: [
           {
@@ -138,8 +137,8 @@ describe('mining-rounds', () => {
               template_id: 'pkg:Splice.Round:OpenMiningRound',
               created_event_blob: 'blob-123',
               payload: {
-                roundNumber: 10,
-                // opensAt is missing
+                round_number: 10,
+                opensAt: '', // Empty string - invalid
               },
             },
             domain_id: 'domain-123',
@@ -202,34 +201,6 @@ describe('mining-rounds', () => {
       });
 
       await expect(getCurrentRoundNumber(mockClient)).rejects.toThrow('No open mining rounds found');
-    });
-
-    it('handles various round number formats', async () => {
-      const now = new Date();
-      const pastTime = new Date(now.getTime() - 60000);
-
-      // Test with round.number format
-      const mockClient = createMockValidatorClient({
-        open_mining_rounds: [
-          {
-            contract: {
-              contract_id: 'contract-10',
-              template_id: 'pkg:Splice.Round:OpenMiningRound',
-              created_event_blob: 'blob-123',
-              payload: {
-                round: { number: '15' },
-                opensAt: pastTime.toISOString(),
-              },
-            },
-            domain_id: 'domain-123',
-          },
-        ],
-        issuing_mining_rounds: [],
-      });
-
-      const roundNumber = await getCurrentRoundNumber(mockClient);
-
-      expect(roundNumber).toBe(15);
     });
   });
 

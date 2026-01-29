@@ -1,16 +1,21 @@
 import { type SubmitAndWaitForTransactionTreeResponse } from '../../clients/ledger-json-api/operations';
 
+/** Canonical CreatedTreeEvent value structure from the Ledger JSON API */
 export interface CreatedTreeEventValue {
   contractId: string;
   templateId: string;
-  contractKey?: unknown;
-  createArgument?: unknown;
-  createdEventBlob?: string;
-  witnessParties?: string[];
-  signatories?: string[];
-  observers?: string[];
-  createdAt?: string;
-  packageName?: string;
+  contractKey: string | null;
+  createArgument: Record<string, unknown>;
+  createdEventBlob: string;
+  witnessParties: string[];
+  signatories: string[];
+  observers: string[];
+  createdAt: string;
+  packageName: string;
+  offset: number;
+  nodeId: number;
+  interfaceViews: string[];
+  implementedInterfaces?: string[];
 }
 
 export interface CreatedTreeEventWrapper {
@@ -29,18 +34,15 @@ export function findCreatedEventByTemplateId(
   response: SubmitAndWaitForTransactionTreeResponse,
   expectedTemplateId: string
 ): CreatedTreeEventWrapper | undefined {
-  // Handle both direct structure and nested transaction structure
-  interface TransactionTreeStructure {
-    eventsById?: Record<string, unknown>;
-    transaction?: {
-      eventsById?: Record<string, unknown>;
-    };
+  // Canonical structure: transactionTree.eventsById
+  const { transactionTree } = response;
+
+  const { eventsById } = transactionTree as { eventsById?: Record<string, unknown> };
+  if (!eventsById || typeof eventsById !== 'object') {
+    return undefined;
   }
 
-  const transactionTree = response.transactionTree as TransactionTreeStructure | undefined;
-  const eventsById = transactionTree?.eventsById ?? transactionTree?.transaction?.eventsById ?? {};
-
-  // Extract the part after the first ':' from the expected template ID
+  // Extract the part after the first ':' from the expected template ID for matching
   const expectedTemplateIdSuffix = expectedTemplateId.includes(':')
     ? expectedTemplateId.substring(expectedTemplateId.indexOf(':') + 1)
     : expectedTemplateId;
