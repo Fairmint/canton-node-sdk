@@ -20,14 +20,9 @@ export interface WebSocketHandlers<Message, ErrorMessage = unknown> {
   validateMessage?: (data: unknown) => Message;
 }
 
-/** Type guard to check if a value is an Error instance */
-function isError(value: unknown): value is Error {
-  return value instanceof Error;
-}
-
 /** Converts an unknown error to an Error instance */
 function toError(value: unknown): Error {
-  if (isError(value)) {
+  if (value instanceof Error) {
     return value;
   }
   return new Error(typeof value === 'string' ? value : String(value));
