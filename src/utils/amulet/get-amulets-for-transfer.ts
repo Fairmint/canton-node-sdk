@@ -62,11 +62,6 @@ interface ContractData {
   payload: Record<string, unknown>;
 }
 
-/** Type guard to check if a value has a specific property */
-function hasProperty<K extends string>(obj: unknown, key: K): obj is Record<K, unknown> {
-  return isRecord(obj) && key in obj;
-}
-
 /** Type guard to check if a contract is a JsGetActiveContractsResponseItem with JsActiveContract */
 function isJsActiveContractItem(ctr: unknown): ctr is JsGetActiveContractsResponseItem & {
   contractEntry: {
@@ -83,7 +78,7 @@ function isJsActiveContractItem(ctr: unknown): ctr is JsGetActiveContractsRespon
   const jsActive = entry['JsActiveContract'];
   if (!isRecord(jsActive)) return false;
 
-  return hasProperty(jsActive, 'createdEvent');
+  return 'createdEvent' in jsActive;
 }
 
 /** Type guard to check if a contract is a LegacyContract with contract property */

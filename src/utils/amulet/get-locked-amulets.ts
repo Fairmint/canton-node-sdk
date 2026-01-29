@@ -4,8 +4,12 @@ import { ValidationError } from '../../core/errors';
 import { isRecord } from '../../core/utils';
 import { type LockedAmulet } from './types';
 
-/** Type for JSON record values in contract payloads */
-type JsonRecord = Record<string, unknown>;
+/**
+ * Type alias for working with contract payloads at runtime.
+ * Note: RecordSchema produces Record<string, JsonValue>, but we use Record<string, unknown>
+ * here since we access properties dynamically with type guards.
+ */
+type PayloadRecord = Record<string, unknown>;
 
 /** Type guard for holder object with owner property */
 interface HolderWithOwner {
@@ -51,7 +55,7 @@ function parseHolders(raw: unknown): string[] {
 type LockedAmuletEntry = GetAmuletsResponse['locked_amulets'][number];
 
 /** Safely extracts a nested record from a payload */
-function getNestedRecord(payload: JsonRecord, key: string): JsonRecord {
+function getNestedRecord(payload: PayloadRecord, key: string): PayloadRecord {
   const value = payload[key];
   return isRecord(value) ? value : {};
 }
