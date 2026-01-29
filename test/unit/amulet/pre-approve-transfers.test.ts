@@ -1,10 +1,10 @@
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import type { Command, ExerciseCommand } from '../../../src/clients/ledger-json-api/schemas/api/commands';
+import type { CompositeCommand, ExerciseCommand } from '../../../src/clients/ledger-json-api/schemas/api/commands';
 import type { ValidatorApiClient } from '../../../src/clients/validator-api';
 import { preApproveTransfers } from '../../../src/utils/amulet/pre-approve-transfers';
 
-// Helper to safely extract ExerciseCommand from a Command
-const getExerciseCommand = (command: Command | undefined): ExerciseCommand['ExerciseCommand'] | undefined => {
+// Helper to safely extract ExerciseCommand from a CompositeCommand
+const getExerciseCommand = (command: CompositeCommand | undefined): ExerciseCommand['ExerciseCommand'] | undefined => {
   if (command && 'ExerciseCommand' in command) {
     return command.ExerciseCommand;
   }
