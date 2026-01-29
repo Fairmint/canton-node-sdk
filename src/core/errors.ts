@@ -109,22 +109,3 @@ export class OperationError extends CantonError {
     this.name = 'OperationError';
   }
 }
-
-/** Union type of all SDK errors for exhaustive type checking */
-export type SdkError =
-  | ConfigurationError
-  | AuthenticationError
-  | ApiError
-  | ValidationError
-  | NetworkError
-  | OperationError;
-
-/** Type guard to check if an error is a Canton SDK error */
-export function isCantonError(error: unknown): error is CantonError {
-  return error instanceof CantonError;
-}
-
-/** Type guard to check if an error is a specific SDK error type */
-export function isSdkErrorOfType<T extends SdkError>(error: unknown, errorType: T['type']): error is T {
-  return isCantonError(error) && error.type === errorType;
-}

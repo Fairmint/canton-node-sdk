@@ -1,15 +1,11 @@
 import { type ValidatorApiClient } from '../../clients/validator-api';
 import type { GetAmuletsResponse } from '../../clients/validator-api/schemas/api/wallet';
 import { ValidationError } from '../../core/errors';
+import { isRecord } from '../../core/utils';
 import { type LockedAmulet } from './types';
 
 /** Type for JSON record values in contract payloads */
 type JsonRecord = Record<string, unknown>;
-
-/** Type guard for checking if a value is a non-null object */
-function isRecord(value: unknown): value is JsonRecord {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 /** Type guard for holder object with owner property */
 interface HolderWithOwner {

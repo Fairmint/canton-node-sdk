@@ -1,5 +1,6 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { type JsGetActiveContractsResponseItem } from '../../clients/ledger-json-api/schemas/api/state';
+import { isRecord } from '../../core/utils';
 
 export interface AmuletForTransfer {
   contractId: string;
@@ -59,11 +60,6 @@ interface ContractData {
   contractId: string;
   templateId: string;
   payload: Record<string, unknown>;
-}
-
-/** Type guard to check if a value is a non-null object */
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 /** Type guard to check if a value has a specific property */
