@@ -10,18 +10,7 @@ for PR workflow, git workflow, dependencies, non-negotiables, and Linear integra
 
 ## Linear API Access
 
-The `LINEAR_API_KEY` environment variable provides access to the
-[Linear](https://linear.app/fairmint) GraphQL API for issue tracking.
-
-```bash
-curl -s -X POST https://api.linear.app/graphql \
-  -H "Authorization: $LINEAR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"query": "{ issue(id: \"ENG-XXX\") { title state { name } } }"}'
-```
-
-See [canton/AGENTS.md](https://github.com/fairmint/canton/blob/main/AGENTS.md#linear-integration)
-for full workflow documentation.
+Use `LINEAR_API_KEY` for programmatic Linear access. See `linear-api` skill for curl examples.
 
 ## Task Management
 
@@ -172,133 +161,19 @@ See [docs/EXTERNAL_SIGNING.md](docs/EXTERNAL_SIGNING.md) for details.
 
 ## LocalNet (cn-quickstart)
 
-The SDK includes cn-quickstart as a git submodule for local development and testing against a real
-Canton Network.
-
-### Location
-
-```
-libs/cn-quickstart/quickstart/   # cn-quickstart directory
-```
-
-### Prerequisites
-
-- **Docker Desktop** running with at least 8GB RAM allocated
-- **DAML SDK** (installed via `make install-daml-sdk`)
-
-### First-Time Setup
+Git submodule for local Canton Network development and testing.
 
 ```bash
-# Initialize submodule (if not already done)
+# Quick start
 git submodule update --init --recursive
-
-# Navigate to cn-quickstart
 cd libs/cn-quickstart/quickstart
+make setup && make start
 
-# Run interactive setup (creates .env.local)
-make setup
-# Choose: OAuth2 mode or shared-secret mode
-# Set party hint (e.g., "quickstart-dev-1")
-
-# Install DAML SDK (if not already installed)
-make install-daml-sdk
-```
-
-### Starting LocalNet
-
-```bash
-cd libs/cn-quickstart/quickstart
-make start   # Builds and starts all containers (~4-5 min first time)
-```
-
-Wait for all services to become healthy:
-
-```bash
+# Wait for healthy, then run tests
 docker ps --format "table {{.Names}}\t{{.Status}}"
-# All services should show "healthy" before running tests
 ```
 
-### Stopping LocalNet
-
-```bash
-cd libs/cn-quickstart/quickstart
-make stop              # Stop all containers
-make clean-all-docker  # Full reset (removes all containers/volumes)
-```
-
-### LocalNet Services and Ports
-
-| Service                | Port                | Description                             |
-| ---------------------- | ------------------- | --------------------------------------- |
-| App-Provider JSON API  | 3975                | Ledger API for app_provider participant |
-| App-Provider Validator | 3903                | Validator API for app_provider          |
-| App-User JSON API      | 2975                | Ledger API for app_user participant     |
-| SV JSON API            | 4975                | Ledger API for super validator          |
-| Keycloak               | 8082                | OAuth2 authentication                   |
-| Scan API               | scan.localhost:4000 | Network-wide contract queries           |
-| Swagger UI             | 9090                | API documentation                       |
-| Grafana                | 3030                | Observability dashboard                 |
-
-### OAuth2 Credentials (app-provider)
-
-Default LocalNet OAuth2 credentials:
-
-```
-Auth URL: http://localhost:8082/realms/AppProvider/protocol/openid-connect/token
-Client ID: app-provider-validator
-Client Secret: AL8648b9SfdTFImq7FV56Vd0KHifHBuC
-```
-
-### Troubleshooting
-
-#### "Cannot connect to Docker daemon"
-
-```bash
-# Start Docker Desktop, then verify
-docker ps
-```
-
-#### "HTTP 503" or "Connection refused"
-
-Services aren't ready yet. Wait for all containers to show "healthy":
-
-```bash
-docker ps --format "table {{.Names}}\t{{.Status}}" | grep -v healthy
-# Should return nothing when ready
-```
-
-#### "Container keeps restarting"
-
-Reset everything:
-
-```bash
-cd libs/cn-quickstart/quickstart
-make clean-all-docker  # Remove all containers and volumes
-make start
-```
-
-#### "Port already in use"
-
-```bash
-make stop              # Stop LocalNet containers
-lsof -i :3975          # Find what's using JSON API port
-```
-
-### Useful Make Targets
-
-```bash
-make status            # Show container status
-make logs              # View all logs
-make tail              # Tail logs in real-time
-make restart           # Stop and start
-make canton-console    # Interactive Canton console
-```
-
-### Known Limitations
-
-1. **First-time startup**: Takes longer as it builds images and compiles DAML code
-2. **Resource usage**: Runs ~20+ containers, requires 8GB+ RAM for Docker
-3. **State persistence**: Canton restarts clear all ledger state (DARs, contracts)
+For detailed setup, ports, OAuth2 credentials, and troubleshooting, use the `localnet` skill.
 
 ## NPM Publishing
 
@@ -336,40 +211,6 @@ npm publish               # Publishes to NPM (requires NPM_TOKEN)
 The publish workflow requires:
 
 - `NPM_TOKEN` secret configured in GitHub repository settings
-
----
-
-## PR Review Format
-
-When writing PR reviews, use this format:
-
-1. **Issues and improvements first** — Call out any problems, bugs, or suggested improvements at the
-   top, outside any collapsed sections. This is the only feedback reviewers need to see immediately.
-   - **Issue**: Something that should be fixed — bugs, security problems, incorrect logic,
-     violations of project standards
-   - **Improvement**: Something that could be better — performance, readability, maintainability,
-     edge cases
-
-2. **Collapse the rest** — Put the full analysis and any positive remarks inside a collapsed
-   `<details>` section:
-
-```markdown
-## Issues
-
-- **File:Line** Description of issue or improvement
-
----
-
-<details>
-<summary>Full Analysis</summary>
-
-... detailed analysis, positive remarks, etc. ...
-
-</details>
-```
-
-Keep the visible portion brief and actionable. The collapsed section is for comprehensive details
-and rationale.
 
 ---
 
