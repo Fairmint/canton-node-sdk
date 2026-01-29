@@ -125,9 +125,6 @@ export function isCantonError(error: unknown): error is CantonError {
 }
 
 /** Type guard to check if an error is a specific SDK error type */
-export function isSdkErrorOfType<T extends SdkError>(
-  error: unknown,
-  errorType: T['type']
-): error is T {
+export function isSdkErrorOfType<T extends SdkError>(error: unknown, errorType: T['type']): error is T {
   return isCantonError(error) && error.type === errorType;
 }

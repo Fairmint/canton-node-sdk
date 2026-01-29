@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import { createApiOperation } from '../../../../../../../../core';
-import { RecordSchema } from '../../../../../../../ledger-json-api/schemas/base';
 import type {
   components,
   paths,
 } from '../../../../../../../../generated/token-standard/splice-api-token-allocation-instruction-v1/openapi/allocation-instruction-v1';
+import { RecordSchema } from '../../../../../../../ledger-json-api/schemas/base';
 
 type ApiPath = '/registry/allocation-instruction/v1/allocation-factory';
 

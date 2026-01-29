@@ -14,9 +14,8 @@ export interface WebSocketHandlers<Message, ErrorMessage = unknown> {
   onError?: (err: Error | ErrorMessage) => void;
   onClose?: (code: number, reason: string) => void;
   /**
-   * Optional validator for incoming messages. If provided, this function is called
-   * with the parsed JSON data and should return the validated message or throw an error.
-   * This enables strict runtime type checking for WebSocket messages.
+   * Optional validator for incoming messages. If provided, this function is called with the parsed JSON data and should
+   * return the validated message or throw an error. This enables strict runtime type checking for WebSocket messages.
    */
   validateMessage?: (data: unknown) => Message;
 }

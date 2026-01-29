@@ -1,9 +1,8 @@
 /**
  * Branded types for domain-specific identifiers.
  *
- * Branded types use TypeScript's structural typing with a unique symbol to create
- * nominally-typed aliases. This prevents accidentally mixing up different ID types
- * that are all strings at runtime.
+ * Branded types use TypeScript's structural typing with a unique symbol to create nominally-typed aliases. This
+ * prevents accidentally mixing up different ID types that are all strings at runtime.
  *
  * @example
  *   const contractId = 'abc' as ContractId;

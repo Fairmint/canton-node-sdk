@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createApiOperation } from '../../../../../../../../core';
-import { RecordSchema } from '../../../../../../../ledger-json-api/schemas/base';
 import type { paths } from '../../../../../../../../generated/token-standard/splice-api-token-transfer-instruction-v1/openapi/transfer-instruction-v1';
+import { RecordSchema } from '../../../../../../../ledger-json-api/schemas/base';
 
 type ApiPath = '/registry/transfer-instruction/v1/transfer-factory';
 
