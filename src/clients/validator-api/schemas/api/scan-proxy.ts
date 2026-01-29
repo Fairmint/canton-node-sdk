@@ -24,20 +24,15 @@ export const GetMemberTrafficStatusResponseSchema = z.object({
 export type GetMemberTrafficStatusResponse = z.infer<typeof GetMemberTrafficStatusResponseSchema>;
 
 // Mining Rounds Schemas
+// Canonical format uses snake_case (Validator API convention)
 export const OpenMiningRoundSchema = z.object({
   contract: z.object({
     contract_id: z.string(),
     template_id: z.string(),
     created_event_blob: z.string(),
     payload: z.object({
-      opensAt: z.string().optional(),
-      roundNumber: z.number().optional(),
-      round_number: z.number().optional(),
-      round: z
-        .object({
-          number: z.string().optional(),
-        })
-        .optional(),
+      opensAt: z.string(),
+      round_number: z.number(),
     }),
   }),
   domain_id: z.string(),
@@ -45,12 +40,7 @@ export const OpenMiningRoundSchema = z.object({
 
 export const IssuingMiningRoundSchema = z.object({
   round_number: z.number(),
-  contract_id: z.string().optional(),
-  contract: z
-    .object({
-      contract_id: z.string(),
-    })
-    .optional(),
+  contract_id: z.string(),
 });
 
 export const GetOpenAndIssuingMiningRoundsResponseSchema = z.object({

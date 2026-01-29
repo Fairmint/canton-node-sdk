@@ -6,7 +6,7 @@ const createMockLedgerClient = (activeContracts: unknown[]): LedgerJsonApiClient
     getActiveContracts: jest.fn().mockResolvedValue(activeContracts),
   }) as unknown as LedgerJsonApiClient;
 
-// New format: JsActiveContract
+// Canonical JsActiveContract format
 const createJsActiveContract = (contractId: string, templateId: string, owner: string, amount: string) => ({
   contractEntry: {
     JsActiveContract: {
@@ -18,18 +18,6 @@ const createJsActiveContract = (contractId: string, templateId: string, owner: s
           amount: { initialAmount: amount },
         },
       },
-    },
-  },
-});
-
-// Legacy format
-const createLegacyContract = (contractId: string, templateId: string, owner: string, amount: string) => ({
-  contract: {
-    contract_id: contractId,
-    template_id: templateId,
-    payload: {
-      owner,
-      amount: { initialAmount: amount },
     },
   },
 });
@@ -273,37 +261,6 @@ describe('getAmuletsForTransfer', () => {
           '#splice-amulet:Splice.Amulet:ValidatorRewardCoupon',
         ],
       });
-    });
-  });
-
-  describe('legacy contract format', () => {
-    it('handles legacy contract format', async () => {
-      const mockClient = createMockLedgerClient([
-        createLegacyContract('amulet-1', 'pkg:Splice.Amulet:Amulet', 'alice::fp', '100'),
-      ]);
-
-      const result = await getAmuletsForTransfer({
-        jsonApiClient: mockClient,
-        readAs: ['alice::fp'],
-      });
-
-      expect(result).toHaveLength(1);
-      expect(result[0]?.contractId).toBe('amulet-1');
-      expect(result[0]?.effectiveAmount).toBe('100');
-    });
-
-    it('handles mixed formats', async () => {
-      const mockClient = createMockLedgerClient([
-        createJsActiveContract('amulet-new', 'pkg:Splice.Amulet:Amulet', 'alice::fp', '200'),
-        createLegacyContract('amulet-legacy', 'pkg:Splice.Amulet:Amulet', 'alice::fp', '100'),
-      ]);
-
-      const result = await getAmuletsForTransfer({
-        jsonApiClient: mockClient,
-        readAs: ['alice::fp'],
-      });
-
-      expect(result).toHaveLength(2);
     });
   });
 

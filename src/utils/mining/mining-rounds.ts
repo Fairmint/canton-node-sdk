@@ -16,18 +16,9 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Extract round number from a mining round object */
+/** Extract round number from a mining round object (canonical snake_case format) */
 function getRoundNumber(miningRound: OpenMiningRound): number {
-  try {
-    // Try to get round number from various possible locations
-    return (
-      miningRound.contract.payload.roundNumber ??
-      miningRound.contract.payload.round_number ??
-      (miningRound.contract.payload.round?.number ? parseInt(miningRound.contract.payload.round.number, 10) : 0)
-    );
-  } catch {
-    return 0;
-  }
+  return miningRound.contract.payload.round_number;
 }
 
 /** Find the latest mining round from a list of open mining rounds */
@@ -103,7 +94,7 @@ export async function getCurrentMiningRoundContext(validatorClient: MiningRoundC
 
   const issuingMiningRounds = miningRoundsResponse.issuing_mining_rounds.map((round: IssuingMiningRound) => ({
     round: round.round_number,
-    contractId: round.contract_id ?? round.contract?.contract_id ?? '',
+    contractId: round.contract_id,
   }));
 
   return {
