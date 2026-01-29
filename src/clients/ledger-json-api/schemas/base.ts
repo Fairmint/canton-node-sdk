@@ -4,7 +4,7 @@ import { z } from 'zod';
  * JSON value type for recursive schema definitions. Used for contract arguments and choice arguments where the
  * structure is dynamic.
  */
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 /**
  * Recursive JSON schema that allows arbitrarily nested structures. This is type-safe (uses unknown internally) while

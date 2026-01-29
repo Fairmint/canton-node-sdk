@@ -13,11 +13,6 @@ export interface WebSocketHandlers<Message, ErrorMessage = unknown> {
   onMessage: (msg: Message) => void;
   onError?: (err: Error | ErrorMessage) => void;
   onClose?: (code: number, reason: string) => void;
-  /**
-   * Optional validator for incoming messages. If provided, this function is called with the parsed JSON data and should
-   * return the validated message or throw an error. This enables strict runtime type checking for WebSocket messages.
-   */
-  validateMessage?: (data: unknown) => Message;
 }
 
 /** Converts an unknown error to an Error instance */
@@ -181,16 +176,7 @@ export class WebSocketClient {
           const parsed = WebSocketErrorUtils.safeJsonParse(dataString, 'WebSocket message');
           await log('message', parsed);
 
-          // Use validator if provided for strict runtime type checking
-          if (handlers.validateMessage) {
-            const validated = handlers.validateMessage(parsed);
-            handlers.onMessage(validated);
-          } else {
-            // Type assertion is necessary here as JSON.parse returns unknown and
-            // the WebSocket client is generic. Callers can provide validateMessage
-            // for strict runtime type checking.
-            handlers.onMessage(parsed as InboundMessage);
-          }
+          handlers.onMessage(parsed as InboundMessage);
         } catch (err) {
           const error = toError(err);
           await log('parse_error', { raw: dataString, error: error.message });
