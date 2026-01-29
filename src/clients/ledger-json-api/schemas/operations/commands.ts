@@ -92,10 +92,10 @@ export const SubmitAndWaitForReassignmentParamsSchema = z.object({
 export const SubmitAndWaitForTransactionTreeParamsSchema = z.object({
   /** Commands to submit and wait for transaction tree. */
   commands: z.array(CompositeCommandSchema),
-  /** Unique identifier for the command. */
-  commandId: NonEmptyStringSchema,
-  /** Parties on whose behalf the command should be executed. */
-  actAs: z.array(NonEmptyStringSchema),
+  /** Unique identifier for the command (optional, will be auto-generated if not provided). */
+  commandId: NonEmptyStringSchema.optional(),
+  /** Parties on whose behalf the command should be executed (optional, will use client's party ID if not provided). */
+  actAs: z.array(NonEmptyStringSchema).optional(),
   /** User ID submitting the command (optional if using authentication). */
   userId: NonEmptyStringSchema.optional(),
   /** Parties to read as (optional). */
