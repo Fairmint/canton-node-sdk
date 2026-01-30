@@ -242,11 +242,11 @@ Include all necessary information, but keep it brief and scannable.
 
 Before committing or pushing, run these checks:
 
-| Step  | Command        | Purpose                     |
-| ----- | -------------- | --------------------------- |
-| Lint  | `npm run fix`  | Fix linting/formatting      |
-| Test  | `npm test`     | Ensure tests pass           |
-| Build | `npm run build`| Verify compilation          |
+| Step  | Command         | Purpose                |
+| ----- | --------------- | ---------------------- |
+| Lint  | `npm run fix`   | Fix linting/formatting |
+| Test  | `npm test`      | Ensure tests pass      |
+| Build | `npm run build` | Verify compilation     |
 
 **Note**: Husky hooks should enforce this automatically. If hooks aren't set up, run these manually.
 
