@@ -20,6 +20,20 @@ jest.mock('../../../src/core/config/EnvLoader', () => ({
   },
 }));
 
+interface MockTransactionTreeResponse {
+  transactionTree: {
+    updateId: string;
+    commandId: string;
+    effectiveAt: string;
+    offset: string;
+    eventsById: Record<string, { CreatedTreeEvent: { value: { contractId: string; templateId: string } } }>;
+    rootEventIds: string[];
+    synchronizerId: string;
+    traceContext: undefined;
+    recordTime: string;
+  };
+}
+
 const createMockLedgerClient = (transactionTreeResponse: unknown): jest.Mocked<LedgerJsonApiClient> =>
   ({
     getNetwork: jest.fn().mockReturnValue('localnet'),
@@ -27,7 +41,7 @@ const createMockLedgerClient = (transactionTreeResponse: unknown): jest.Mocked<L
     submitAndWaitForTransactionTree: jest.fn().mockResolvedValue(transactionTreeResponse),
   }) as unknown as jest.Mocked<LedgerJsonApiClient>;
 
-const createTransactionTreeResponse = (contractId: string) => ({
+const createTransactionTreeResponse = (contractId: string): MockTransactionTreeResponse => ({
   transactionTree: {
     updateId: 'update-123',
     commandId: 'cmd-123',

@@ -1,6 +1,34 @@
 import type { SubmitAndWaitForTransactionTreeResponse } from '../../../src/clients/ledger-json-api/operations';
 import { findCreatedEventByTemplateId } from '../../../src/utils/contracts/findCreatedEvent';
 
+interface MockCreatedTreeEvent {
+  CreatedTreeEvent: {
+    value: {
+      contractId: string;
+      templateId: string;
+      contractKey: undefined;
+      createArgument: Record<string, string>;
+      createdEventBlob: string;
+      witnessParties: string[];
+      signatories: string[];
+      observers: string[];
+      createdAt: string;
+      packageName: string;
+    };
+  };
+}
+
+interface MockExercisedTreeEvent {
+  ExercisedTreeEvent: {
+    value: {
+      contractId: string;
+      templateId: string;
+      choice: string;
+      choiceArgument: Record<string, never>;
+    };
+  };
+}
+
 const createMockResponse = (events: Record<string, unknown>): SubmitAndWaitForTransactionTreeResponse =>
   ({
     transactionTree: {
@@ -16,7 +44,7 @@ const createMockResponse = (events: Record<string, unknown>): SubmitAndWaitForTr
     },
   }) as unknown as SubmitAndWaitForTransactionTreeResponse;
 
-const createCreatedTreeEvent = (contractId: string, templateId: string) => ({
+const createCreatedTreeEvent = (contractId: string, templateId: string): MockCreatedTreeEvent => ({
   CreatedTreeEvent: {
     value: {
       contractId,
@@ -33,7 +61,7 @@ const createCreatedTreeEvent = (contractId: string, templateId: string) => ({
   },
 });
 
-const createExercisedTreeEvent = (contractId: string) => ({
+const createExercisedTreeEvent = (contractId: string): MockExercisedTreeEvent => ({
   ExercisedTreeEvent: {
     value: {
       contractId,

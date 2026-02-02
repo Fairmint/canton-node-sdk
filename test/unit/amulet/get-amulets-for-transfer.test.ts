@@ -1,13 +1,30 @@
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
 import { getAmuletsForTransfer } from '../../../src/utils/amulet/get-amulets-for-transfer';
 
+interface MockActiveContract {
+  contractEntry: {
+    JsActiveContract: {
+      createdEvent: {
+        contractId: string;
+        templateId: string;
+        createArgument: Record<string, unknown>;
+      };
+    };
+  };
+}
+
 const createMockLedgerClient = (activeContracts: unknown[]): LedgerJsonApiClient =>
   ({
     getActiveContracts: jest.fn().mockResolvedValue(activeContracts),
   }) as unknown as LedgerJsonApiClient;
 
 // Canonical JsActiveContract format
-const createJsActiveContract = (contractId: string, templateId: string, owner: string, amount: string) => ({
+const createJsActiveContract = (
+  contractId: string,
+  templateId: string,
+  owner: string,
+  amount: string
+): MockActiveContract => ({
   contractEntry: {
     JsActiveContract: {
       createdEvent: {
@@ -28,7 +45,7 @@ const createJsActiveContractWithNumericAmount = (
   templateId: string,
   owner: string,
   amount: number
-) => ({
+): MockActiveContract => ({
   contractEntry: {
     JsActiveContract: {
       createdEvent: {
@@ -43,7 +60,7 @@ const createJsActiveContractWithNumericAmount = (
   },
 });
 
-const createAppRewardCoupon = (contractId: string, beneficiary: string, amount: string) => ({
+const createAppRewardCoupon = (contractId: string, beneficiary: string, amount: string): MockActiveContract => ({
   contractEntry: {
     JsActiveContract: {
       createdEvent: {
@@ -58,7 +75,7 @@ const createAppRewardCoupon = (contractId: string, beneficiary: string, amount: 
   },
 });
 
-const createValidatorRewardCoupon = (contractId: string, beneficiary: string, amount: string) => ({
+const createValidatorRewardCoupon = (contractId: string, beneficiary: string, amount: string): MockActiveContract => ({
   contractEntry: {
     JsActiveContract: {
       createdEvent: {

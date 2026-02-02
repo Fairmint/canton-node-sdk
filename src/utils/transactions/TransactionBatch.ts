@@ -1,6 +1,13 @@
 import { type LedgerJsonApiClient } from '../../clients';
 import { type Command, type DisclosedContract } from '../../clients/ledger-json-api/schemas';
 
+interface SubmitParams {
+  actAs: string[];
+  readAs?: string[];
+  commands: Command[];
+  disclosedContracts?: DisclosedContract[];
+}
+
 export class TransactionBatch {
   private readonly client: LedgerJsonApiClient;
   private readonly actAs: string[];
@@ -43,18 +50,26 @@ export class TransactionBatch {
     return this;
   }
 
-  private prepareSubmitParams() {
+  private prepareSubmitParams(): SubmitParams {
     // Dedupe disclosed contracts by contractId
     this.disclosedContracts = Array.from(
       new Map(this.disclosedContracts.map((contract) => [contract.contractId, contract])).values()
     );
 
-    return {
+    const params: SubmitParams = {
       actAs: this.actAs,
-      ...(this.readAs ? { readAs: this.readAs } : {}),
       commands: this.commands,
-      ...(this.disclosedContracts.length > 0 ? { disclosedContracts: this.disclosedContracts } : {}),
     };
+
+    if (this.readAs !== undefined) {
+      params.readAs = this.readAs;
+    }
+
+    if (this.disclosedContracts.length > 0) {
+      params.disclosedContracts = this.disclosedContracts;
+    }
+
+    return params;
   }
 
   public async submitAndWaitForTransactionTree(): Promise<{ updateId: string }> {
