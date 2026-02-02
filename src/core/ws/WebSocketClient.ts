@@ -104,7 +104,7 @@ export class WebSocketClient {
     let tokenRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
     const logger = this.client.getLogger();
-    const log = async (event: string, payload: unknown) => {
+    const log = async (event: string, payload: unknown): Promise<void> => {
       if (logger) {
         await logger.logRequestResponse(wsUrl, { event, requestMessage }, payload);
       }

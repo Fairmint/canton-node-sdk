@@ -55,7 +55,7 @@ function npmVersionExists(packageName: string, version: string): boolean {
     const versions = execSync(`npm view ${packageName} versions --json 2>/dev/null`, {
       encoding: 'utf8',
     });
-    const versionList: string[] = JSON.parse(versions);
+    const versionList = JSON.parse(versions) as string[];
     return versionList.includes(version);
   } catch {
     return false;
@@ -68,7 +68,13 @@ function parseVersion(version: string): { major: number; minor: number; patch: n
   if (parts.length !== 3 || parts.some(isNaN)) {
     return null;
   }
-  return { major: parts[0]!, minor: parts[1]!, patch: parts[2]! };
+  const major = parts[0];
+  const minor = parts[1];
+  const patch = parts[2];
+  if (major === undefined || minor === undefined || patch === undefined) {
+    return null;
+  }
+  return { major, minor, patch };
 }
 
 /** Find the next available version by checking both git tags and npm registry */
@@ -137,7 +143,7 @@ function prepareRelease(): void {
   try {
     // Read package.json
     const packageJsonPath: string = path.join(process.cwd(), 'package.json');
-    const packageJson: PackageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as PackageJson;
 
     const currentVersion: string = packageJson.version;
     const packageName: string = packageJson.name;

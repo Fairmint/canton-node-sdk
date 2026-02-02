@@ -1,10 +1,14 @@
 #!/usr/bin/env tsx
 import 'dotenv/config';
 import { EnvLoader, LedgerJsonApiClient, ValidatorApiClient } from '../src';
+import type { RevokeUserRightsParams } from '../src/clients/ledger-json-api/schemas/operations/users';
 import type { NetworkType } from '../src/core/types';
 
-/** Create party-specific rights with value wrapper for revoke operation */
-function createPartyRightsForRevoke(partyId: string): any[] {
+/** Rights type expected by grant/revoke APIs (with value wrapper) */
+type RevokableRight = NonNullable<RevokeUserRightsParams['rights']>[number];
+
+/** Create party-specific rights for revoke operation */
+function createPartyRightsForRevoke(partyId: string): RevokableRight[] {
   return [
     {
       kind: {
@@ -14,8 +18,8 @@ function createPartyRightsForRevoke(partyId: string): any[] {
   ];
 }
 
-/** Create admin rights with value wrapper for revoke operation */
-function createAdminRightsForRevoke(): any[] {
+/** Create admin rights for revoke operation */
+function createAdminRightsForRevoke(): RevokableRight[] {
   return [
     {
       kind: {
@@ -25,8 +29,8 @@ function createAdminRightsForRevoke(): any[] {
   ];
 }
 
-/** Create CanExecuteAsAnyParty rights with value wrapper for revoke operation */
-function createExecuteAsAnyPartyRightsForRevoke(): any[] {
+/** Create CanExecuteAsAnyParty rights for revoke operation */
+function createExecuteAsAnyPartyRightsForRevoke(): RevokableRight[] {
   return [
     {
       kind: {
@@ -36,8 +40,8 @@ function createExecuteAsAnyPartyRightsForRevoke(): any[] {
   ];
 }
 
-/** Create CanReadAsAnyParty rights with value wrapper for revoke operation */
-function createReadAsAnyPartyRightsForRevoke(): any[] {
+/** Create CanReadAsAnyParty rights for revoke operation */
+function createReadAsAnyPartyRightsForRevoke(): RevokableRight[] {
   return [
     {
       kind: {
@@ -104,7 +108,7 @@ Examples:
   const provider = providerIndex !== -1 ? args[providerIndex + 1] : undefined;
 
   // Determine which rights to revoke
-  let rights: any[];
+  let rights: RevokableRight[];
   let rightsType: string;
 
   if (partyId) {

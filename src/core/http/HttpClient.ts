@@ -209,8 +209,8 @@ export class HttpClient {
   private isRetryableError(error: unknown): boolean {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
-      const data = error.response?.data ?? {};
-      const { code } = data as { code?: string };
+      const data = (error.response?.data ?? {}) as Record<string, unknown>;
+      const code = typeof data['code'] === 'string' ? data['code'] : undefined;
 
       // Retry on undefined status (network error)
       if (status === undefined) {

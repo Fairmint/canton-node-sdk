@@ -8,8 +8,8 @@ function updateDocsVersion(): void {
 
   // Read SDK version from package.json
   const packageJsonPath = path.join(process.cwd(), 'package.json');
-  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-  const sdkVersion = packageJson.version;
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8')) as { version: string };
+  const sdkVersion: string = packageJson.version;
 
   console.log(`SDK version: ${sdkVersion}`);
 

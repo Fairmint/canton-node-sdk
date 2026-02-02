@@ -92,10 +92,16 @@ describe('TransactionBatch', () => {
       expect(mockClient.submitAndWait).toHaveBeenCalledWith(
         expect.objectContaining({
           commands: expect.arrayContaining([
-            expect.objectContaining({ CreateCommand: expect.objectContaining({ createArguments: { id: '1' } }) }),
-            expect.objectContaining({ CreateCommand: expect.objectContaining({ createArguments: { id: '2' } }) }),
-            expect.objectContaining({ CreateCommand: expect.objectContaining({ createArguments: { id: '3' } }) }),
-          ]),
+            expect.objectContaining({
+              CreateCommand: expect.objectContaining({ createArguments: { id: '1' } }) as Record<string, unknown>,
+            }),
+            expect.objectContaining({
+              CreateCommand: expect.objectContaining({ createArguments: { id: '2' } }) as Record<string, unknown>,
+            }),
+            expect.objectContaining({
+              CreateCommand: expect.objectContaining({ createArguments: { id: '3' } }) as Record<string, unknown>,
+            }),
+          ]) as unknown[],
         })
       );
     });
@@ -155,7 +161,7 @@ describe('TransactionBatch', () => {
       );
       expect(mockClient.submitAndWait).toHaveBeenCalledWith(
         expect.not.objectContaining({
-          disclosedContracts: expect.anything(),
+          disclosedContracts: expect.anything() as unknown,
         })
       );
     });
@@ -296,7 +302,7 @@ describe('TransactionBatch', () => {
 
       expect(mockClient.submitAndWait).toHaveBeenCalledWith(
         expect.objectContaining({
-          commands: expect.arrayContaining([createMockCommand('1'), createMockCommand('2')]),
+          commands: expect.arrayContaining([createMockCommand('1'), createMockCommand('2')]) as unknown[],
           disclosedContracts: [createMockDisclosedContract('1')],
         })
       );

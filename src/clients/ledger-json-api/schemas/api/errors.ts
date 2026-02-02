@@ -5,169 +5,66 @@ export const ErrorResponseSchema = z.object({
   /** Error message describing the problem. */
   error: z.string(),
   /** Additional details about the error. */
-  details: z.unknown(),
+  details: RecordSchema.optional(),
+});
+
+/** Common error details schema for HTTP error responses. */
+const HttpErrorDetailsSchema = z.object({
+  /** Optional error name. */
+  name: z.string().optional(),
+  /** Error message. */
+  message: z.string(),
+  /** HTTP status code. */
+  status: z.number().optional(),
+  /** Optional error code. */
+  code: z.string().optional(),
+  /** Optional raw response data. */
+  response: RecordSchema.optional(),
 });
 
 export const BadRequestErrorSchema = ErrorResponseSchema.extend({
   /** Details for a 400 Bad Request error. */
-  details: z
-    .object({
-      /** Optional error name. */
-      name: z.string().optional(),
-      /** Error message. */
-      message: z.string(),
-      /** HTTP status code (400). */
-      status: z.literal(400).optional(),
-      /** Optional error code. */
-      code: z.string().optional(),
-      /** Optional raw response. */
-      response: z.unknown().optional(),
-    })
-    .optional(),
+  details: HttpErrorDetailsSchema.extend({ status: z.literal(400).optional() }).optional(),
 });
 
 export const UnauthorizedErrorSchema = ErrorResponseSchema.extend({
   /** Details for a 401 Unauthorized error. */
-  details: z
-    .object({
-      /** Optional error name. */
-      name: z.string().optional(),
-      /** Error message. */
-      message: z.string(),
-      /** HTTP status code (401). */
-      status: z.literal(401).optional(),
-      /** Optional error code. */
-      code: z.string().optional(),
-      /** Optional raw response. */
-      response: z.unknown().optional(),
-    })
-    .optional(),
+  details: HttpErrorDetailsSchema.extend({ status: z.literal(401).optional() }).optional(),
 });
 
 export const ForbiddenErrorSchema = ErrorResponseSchema.extend({
   /** Details for a 403 Forbidden error. */
-  details: z
-    .object({
-      /** Optional error name. */
-      name: z.string().optional(),
-      /** Error message. */
-      message: z.string(),
-      /** HTTP status code (403). */
-      status: z.literal(403).optional(),
-      /** Optional error code. */
-      code: z.string().optional(),
-      /** Optional raw response. */
-      response: z.unknown().optional(),
-    })
-    .optional(),
+  details: HttpErrorDetailsSchema.extend({ status: z.literal(403).optional() }).optional(),
 });
 
 export const NotFoundErrorSchema = ErrorResponseSchema.extend({
   /** Details for a 404 Not Found error. */
-  details: z
-    .object({
-      /** Optional error name. */
-      name: z.string().optional(),
-      /** Error message. */
-      message: z.string(),
-      /** HTTP status code (404). */
-      status: z.literal(404).optional(),
-      /** Optional error code. */
-      code: z.string().optional(),
-      /** Optional raw response. */
-      response: z.unknown().optional(),
-    })
-    .optional(),
+  details: HttpErrorDetailsSchema.extend({ status: z.literal(404).optional() }).optional(),
 });
 
 export const ConflictErrorSchema = ErrorResponseSchema.extend({
   /** Details for a 409 Conflict error. */
-  details: z
-    .object({
-      /** Optional error name. */
-      name: z.string().optional(),
-      /** Error message. */
-      message: z.string(),
-      /** HTTP status code (409). */
-      status: z.literal(409).optional(),
-      /** Optional error code. */
-      code: z.string().optional(),
-      /** Optional raw response. */
-      response: z.unknown().optional(),
-    })
-    .optional(),
+  details: HttpErrorDetailsSchema.extend({ status: z.literal(409).optional() }).optional(),
 });
 
 export const UnprocessableEntityErrorSchema = ErrorResponseSchema.extend({
   /** Details for a 422 Unprocessable Entity error. */
-  details: z
-    .object({
-      /** Optional error name. */
-      name: z.string().optional(),
-      /** Error message. */
-      message: z.string(),
-      /** HTTP status code (422). */
-      status: z.literal(422).optional(),
-      /** Optional error code. */
-      code: z.string().optional(),
-      /** Optional raw response. */
-      response: z.unknown().optional(),
-    })
-    .optional(),
+  details: HttpErrorDetailsSchema.extend({ status: z.literal(422).optional() }).optional(),
 });
 
 export const TooManyRequestsErrorSchema = ErrorResponseSchema.extend({
   /** Details for a 429 Too Many Requests error. */
-  details: z
-    .object({
-      /** Optional error name. */
-      name: z.string().optional(),
-      /** Error message. */
-      message: z.string(),
-      /** HTTP status code (429). */
-      status: z.literal(429).optional(),
-      /** Optional error code. */
-      code: z.string().optional(),
-      /** Optional raw response. */
-      response: z.unknown().optional(),
-    })
-    .optional(),
+  details: HttpErrorDetailsSchema.extend({ status: z.literal(429).optional() }).optional(),
 });
 
 export const InternalServerErrorSchema = ErrorResponseSchema.extend({
   /** Details for a 500 Internal Server Error. */
-  details: z
-    .object({
-      /** Optional error name. */
-      name: z.string().optional(),
-      /** Error message. */
-      message: z.string(),
-      /** HTTP status code (500). */
-      status: z.literal(500).optional(),
-      /** Optional error code. */
-      code: z.string().optional(),
-      /** Optional raw response. */
-      response: z.unknown().optional(),
-    })
-    .optional(),
+  details: HttpErrorDetailsSchema.extend({ status: z.literal(500).optional() }).optional(),
 });
 
 export const ServiceUnavailableErrorSchema = ErrorResponseSchema.extend({
   /** Details for a 503 Service Unavailable error. */
-  details: z
-    .object({
-      /** Optional error name. */
-      name: z.string().optional(),
-      /** Error message. */
-      message: z.string(),
-      /** HTTP status code (503). */
-      status: z.literal(503).optional(),
-      /** Optional error code. */
-      code: z.string().optional(),
-      /** Optional raw response. */
-      response: z.unknown().optional(),
-    })
-    .optional(),
+  details: HttpErrorDetailsSchema.extend({ status: z.literal(503).optional() }).optional(),
 });
 
 /** Error code kind (oneOf all error code types). */
@@ -220,6 +117,7 @@ export const JsErrorSchema = z.object({
 });
 
 // Export types
+export type HttpErrorDetails = z.infer<typeof HttpErrorDetailsSchema>;
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
 export type BadRequestError = z.infer<typeof BadRequestErrorSchema>;
 export type UnauthorizedError = z.infer<typeof UnauthorizedErrorSchema>;

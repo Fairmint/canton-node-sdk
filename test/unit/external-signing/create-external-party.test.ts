@@ -60,7 +60,7 @@ describe('createExternalParty', () => {
       partyHint: 'alice',
       publicKey: {
         format: 'CRYPTO_KEY_FORMAT_DER_X509_SUBJECT_PUBLIC_KEY_INFO',
-        keyData: expect.any(String), // Base64-encoded DER-wrapped public key
+        keyData: expect.any(String) as string, // Base64-encoded DER-wrapped public key
         keySpec: 'SIGNING_KEY_SPEC_EC_CURVE25519',
       },
       localParticipantObservationOnly: undefined,
@@ -87,7 +87,7 @@ describe('createExternalParty', () => {
       multiHashSignatures: [
         {
           format: 'SIGNATURE_FORMAT_RAW',
-          signature: expect.any(String), // Base64-encoded signature
+          signature: expect.any(String) as string, // Base64-encoded signature
           signedBy: 'abc123fingerprint',
           signingAlgorithmSpec: 'SIGNING_ALGORITHM_SPEC_ED25519',
         },

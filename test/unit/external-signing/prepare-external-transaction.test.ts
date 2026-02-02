@@ -73,7 +73,7 @@ describe('prepareExternalTransaction', () => {
 
     expect(mockClient.interactiveSubmissionPrepare).toHaveBeenCalledWith({
       commands: [{ CreateCommand: { templateId: 'pkg:Module:Template', createArguments: { foo: 'bar' } } }],
-      commandId: expect.any(String),
+      commandId: expect.any(String) as string,
       userId: 'user-123',
       actAs: ['party1::fp', 'party2::fp'],
       readAs: [],
