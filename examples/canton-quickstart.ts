@@ -28,18 +28,24 @@ async function main(): Promise<void> {
 
     // Use the Ledger JSON API client
     console.log('📦 Testing Ledger JSON API...');
-    const version = await canton.ledger.getVersion();
-    console.log(`   Version: ${version.version}`);
+    const versionResponse = await canton.ledger.getVersion();
+    console.log(`   Version: ${versionResponse.version}`);
 
     // Use the Validator API client
     console.log('📋 Testing Validator API...');
-    const dsoPartyId = await canton.validator.getDsoPartyId();
-    console.log(`   DSO Party ID: ${dsoPartyId.dso_party_id.substring(0, 40)}...`);
+    const dsoPartyIdResponse = await canton.validator.getDsoPartyId();
+    const partyId = dsoPartyIdResponse.dso_party_id;
+    console.log(`   DSO Party ID: ${partyId.substring(0, 40)}...`);
 
     // Use the Scan API client (public, unauthenticated)
     console.log('🔍 Testing Scan API...');
-    const health = await canton.scan.getHealthStatus();
-    const status = 'success' in health ? 'healthy' : 'not_initialized' in health ? 'initializing' : 'failed';
+    const healthResponse = await canton.scan.getHealthStatus();
+    const status =
+      'success' in healthResponse
+        ? 'healthy'
+        : 'not_initialized' in healthResponse
+          ? 'initializing'
+          : 'failed';
     console.log(`   Scan API status: ${status}`);
 
     console.log('\n✅ All clients working correctly!');
