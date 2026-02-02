@@ -41,11 +41,7 @@ async function main(): Promise<void> {
     console.log('🔍 Testing Scan API...');
     const healthResponse = await canton.scan.getHealthStatus();
     const status =
-      'success' in healthResponse
-        ? 'healthy'
-        : 'not_initialized' in healthResponse
-          ? 'initializing'
-          : 'failed';
+      'success' in healthResponse ? 'healthy' : 'not_initialized' in healthResponse ? 'initializing' : 'failed';
     console.log(`   Scan API status: ${status}`);
 
     console.log('\n✅ All clients working correctly!');

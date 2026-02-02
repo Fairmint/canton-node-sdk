@@ -60,11 +60,7 @@ const createJsActiveContractWithNumericAmount = (
   },
 });
 
-const createAppRewardCoupon = (
-  contractId: string,
-  beneficiary: string,
-  amount: string
-): MockActiveContract => ({
+const createAppRewardCoupon = (contractId: string, beneficiary: string, amount: string): MockActiveContract => ({
   contractEntry: {
     JsActiveContract: {
       createdEvent: {
@@ -79,11 +75,7 @@ const createAppRewardCoupon = (
   },
 });
 
-const createValidatorRewardCoupon = (
-  contractId: string,
-  beneficiary: string,
-  amount: string
-): MockActiveContract => ({
+const createValidatorRewardCoupon = (contractId: string, beneficiary: string, amount: string): MockActiveContract => ({
   contractEntry: {
     JsActiveContract: {
       createdEvent: {
