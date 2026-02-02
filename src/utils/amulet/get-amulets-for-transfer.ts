@@ -61,7 +61,17 @@ function isJsActiveContractItem(ctr: unknown): ctr is JsGetActiveContractsRespon
   const jsActive = entry['JsActiveContract'];
   if (!isRecord(jsActive)) return false;
 
-  return 'createdEvent' in jsActive;
+  if (!('createdEvent' in jsActive)) return false;
+
+  const { createdEvent } = jsActive;
+  if (!isRecord(createdEvent)) return false;
+
+  // Validate all required fields exist and are strings
+  if (typeof createdEvent['contractId'] !== 'string') return false;
+  if (typeof createdEvent['templateId'] !== 'string') return false;
+  if (!isRecord(createdEvent['createArgument'])) return false;
+
+  return true;
 }
 
 /** Safely extract a string from an unknown value */

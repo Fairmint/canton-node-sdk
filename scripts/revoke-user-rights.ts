@@ -1,51 +1,54 @@
 #!/usr/bin/env tsx
 import 'dotenv/config';
 import { EnvLoader, LedgerJsonApiClient, ValidatorApiClient } from '../src';
-import type { Right } from '../src/clients/ledger-json-api/schemas/api/users';
+import type { RevokeUserRightsParams } from '../src/clients/ledger-json-api/schemas/operations/users';
 import type { NetworkType } from '../src/core/types';
 
-/** Create party-specific rights with value wrapper for revoke operation */
-function createPartyRightsForRevoke(partyId: string): Right[] {
+/** Rights type expected by grant/revoke APIs (with value wrapper) */
+type RevokableRight = NonNullable<RevokeUserRightsParams['rights']>[number];
+
+/** Create party-specific rights for revoke operation */
+function createPartyRightsForRevoke(partyId: string): RevokableRight[] {
   return [
     {
       kind: {
         CanActAs: { value: { party: partyId } },
       },
     },
-  ] as unknown as Right[];
+  ];
 }
 
-/** Create admin rights with value wrapper for revoke operation */
-function createAdminRightsForRevoke(): Right[] {
+/** Create admin rights for revoke operation */
+function createAdminRightsForRevoke(): RevokableRight[] {
   return [
     {
       kind: {
         ParticipantAdmin: { value: {} },
       },
     },
-  ] as unknown as Right[];
+  ];
 }
 
-/** Create CanExecuteAsAnyParty rights with value wrapper for revoke operation */
-function createExecuteAsAnyPartyRightsForRevoke(): Right[] {
+/** Create CanExecuteAsAnyParty rights for revoke operation */
+function createExecuteAsAnyPartyRightsForRevoke(): RevokableRight[] {
   return [
     {
       kind: {
         CanExecuteAsAnyParty: { value: {} },
       },
     },
-  ] as unknown as Right[];
+  ];
 }
 
-/** Create CanReadAsAnyParty rights with value wrapper for revoke operation */
-function createReadAsAnyPartyRightsForRevoke(): Right[] {
+/** Create CanReadAsAnyParty rights for revoke operation */
+function createReadAsAnyPartyRightsForRevoke(): RevokableRight[] {
   return [
     {
       kind: {
         CanReadAsAnyParty: { value: {} },
       },
     },
-  ] as unknown as Right[];
+  ];
 }
 
 async function main(): Promise<void> {
@@ -105,7 +108,7 @@ Examples:
   const provider = providerIndex !== -1 ? args[providerIndex + 1] : undefined;
 
   // Determine which rights to revoke
-  let rights: Right[];
+  let rights: RevokableRight[];
   let rightsType: string;
 
   if (partyId) {

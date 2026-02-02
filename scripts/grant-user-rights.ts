@@ -1,56 +1,54 @@
 #!/usr/bin/env tsx
 import 'dotenv/config';
 import { EnvLoader, LedgerJsonApiClient, ValidatorApiClient } from '../src';
-import type { Right } from '../src/clients/ledger-json-api/schemas/api/users';
+import type { GrantUserRightsParams } from '../src/clients/ledger-json-api/schemas/operations/users';
 import type { NetworkType } from '../src/core/types';
 
-/** Create default admin rights for a user Note: The grant API expects a nested "value" wrapper structure */
-function createAdminRights(): Right[] {
+/** Rights type expected by grant/revoke APIs (with value wrapper) */
+type GrantableRight = NonNullable<GrantUserRightsParams['rights']>[number];
+
+/** Create default admin rights for a user */
+function createAdminRights(): GrantableRight[] {
   return [
     {
       kind: {
         ParticipantAdmin: { value: {} },
       },
     },
-  ] as unknown as Right[];
+  ];
 }
 
-/** Create CanExecuteAsAnyParty rights for a user Note: The grant API expects a nested "value" wrapper structure */
-function createExecuteAsAnyPartyRights(): Right[] {
+/** Create CanExecuteAsAnyParty rights for a user */
+function createExecuteAsAnyPartyRights(): GrantableRight[] {
   return [
     {
       kind: {
         CanExecuteAsAnyParty: { value: {} },
       },
     },
-  ] as unknown as Right[];
+  ];
 }
 
-/** Create CanReadAsAnyParty rights for a user Note: The grant API expects a nested "value" wrapper structure */
-function createReadAsAnyPartyRights(): Right[] {
+/** Create CanReadAsAnyParty rights for a user */
+function createReadAsAnyPartyRights(): GrantableRight[] {
   return [
     {
       kind: {
         CanReadAsAnyParty: { value: {} },
       },
     },
-  ] as unknown as Right[];
+  ];
 }
 
-/** Create party-specific rights for a user Note: The grant API expects a nested "value" wrapper structure */
-function createPartyRights(partyId: string): Right[] {
+/** Create party-specific rights for a user */
+function createPartyRights(partyId: string): GrantableRight[] {
   return [
     {
       kind: {
         CanActAs: { value: { party: partyId } },
       },
     },
-    // {
-    //   kind: {
-    //     CanReadAs: { value: { party: partyId } },
-    //   },
-    // },
-  ] as unknown as Right[];
+  ];
 }
 
 async function main(): Promise<void> {
@@ -109,7 +107,7 @@ Examples:
   const provider = providerIndex !== -1 ? args[providerIndex + 1] : undefined;
 
   // Determine which rights to grant
-  let rights: Right[];
+  let rights: GrantableRight[];
   let rightsType: string;
 
   if (partyId) {
@@ -176,11 +174,9 @@ Examples:
 
     // Grant the rights
     console.log('\nGranting rights...');
-    // Note: Type assertion needed due to discrepancy between SDK's Right type
-    // (from responses) and grantUserRights params schema (which expects value wrapper)
     const result = await client.grantUserRights({
       userId: resolvedUserId,
-      rights: rights as unknown as Right[],
+      rights,
     });
 
     console.log(`\n✓ Successfully granted ${result.newlyGrantedRights?.length ?? 0} new rights`);
