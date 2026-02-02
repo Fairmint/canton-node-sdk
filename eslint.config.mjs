@@ -184,6 +184,18 @@ const eslintConfig = [
       'no-console': 'off',
     },
   },
+  // Relax unsafe rules for files that depend on generated client types
+  // These types may not exist at lint time in CI before build
+  {
+    files: ['examples/**/*', 'test/**/*'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+    },
+  },
   // Prettier config last to override any conflicting rules
   eslintConfigPrettier,
 ];
