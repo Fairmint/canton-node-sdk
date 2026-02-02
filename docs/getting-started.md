@@ -138,6 +138,7 @@ CANTON_CURRENT_PROVIDER=5n
 - **[Utility Functions](/utils/)** - Helper functions for common operations
 - **[Ledger JSON API Operations](/ledger-json-api-operations/)** - Complete Ledger JSON API reference
 - **[Validator API Operations](/validator-api-operations/)** - Complete Validator API reference
+- **[Ledger API Protobufs](/ledger-api-protobufs/)** - Protocol Buffer reference and schema mapping
 - **[Features](/features/)** - Detailed capabilities overview
 
 ## Requirements
