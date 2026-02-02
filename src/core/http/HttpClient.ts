@@ -229,8 +229,8 @@ export class HttpClient {
   }
 
   /**
-   * Formats a context object into a summary string for error messages.
-   * Shows up to MAX_CONTEXT_KEYS keys with truncated values.
+   * Formats a context object into a summary string for error messages. Shows up to MAX_CONTEXT_KEYS keys with truncated
+   * values.
    */
   private formatContextSummary(contextObj: Record<string, unknown>): string | undefined {
     const contextKeys = Object.keys(contextObj);
@@ -249,8 +249,8 @@ export class HttpClient {
   }
 
   /**
-   * Safely converts a context value to a string representation.
-   * Handles null, undefined, strings, and objects (with circular reference protection).
+   * Safely converts a context value to a string representation. Handles null, undefined, strings, and objects (with
+   * circular reference protection).
    */
   private stringifyContextValue(v: unknown): string {
     if (typeof v === 'string') {

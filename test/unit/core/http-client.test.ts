@@ -148,7 +148,7 @@ describe('HttpClient error diagnostics', () => {
         expect(error).toBeInstanceOf(ApiError);
         const apiError = error as ApiError;
         // Should contain truncated cause with ellipsis
-        expect(apiError.message).toContain(`(cause: ${  'a'.repeat(200)  }...)`);
+        expect(apiError.message).toContain(`(cause: ${'a'.repeat(200)}...)`);
         // Should not contain the full 250 characters
         expect(apiError.message).not.toContain('a'.repeat(250));
       }
