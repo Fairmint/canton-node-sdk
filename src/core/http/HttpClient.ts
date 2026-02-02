@@ -16,6 +16,11 @@ export class HttpClient {
   private readonly logger: Logger | undefined;
   private retryConfig: HttpClientRetryConfig = { maxRetries: 3, delayMs: 6000 };
 
+  // Error message formatting constants
+  private static readonly CAUSE_TRUNCATE_LENGTH = 200;
+  private static readonly CONTEXT_VALUE_TRUNCATE_LENGTH = 50;
+  private static readonly MAX_CONTEXT_KEYS = 3;
+
   constructor(logger?: Logger) {
     this.axiosInstance = axios.create();
     this.logger = logger;
@@ -186,7 +191,11 @@ export class HttpClient {
       const code = typeof data['code'] === 'string' ? data['code'] : undefined;
       const message = typeof data['message'] === 'string' ? data['message'] : undefined;
       const cause = typeof data['cause'] === 'string' ? data['cause'] : undefined;
-      const context = typeof data['context'] === 'object' && data['context'] !== null ? data['context'] : undefined;
+      // Only accept plain objects for context, not arrays or null
+      const context =
+        typeof data['context'] === 'object' && data['context'] !== null && !Array.isArray(data['context'])
+          ? data['context']
+          : undefined;
 
       // Build error message with all available details
       let msg = `HTTP ${status}`;
@@ -198,31 +207,16 @@ export class HttpClient {
       }
       // Include cause for DAML/Canton errors - this is the actionable info
       if (cause) {
-        // Truncate long causes but preserve the first ~200 chars which usually have the key info
-        const truncatedCause = cause.length > 200 ? `${cause.substring(0, 200)}...` : cause;
+        const truncatedCause =
+          cause.length > HttpClient.CAUSE_TRUNCATE_LENGTH
+            ? `${cause.substring(0, HttpClient.CAUSE_TRUNCATE_LENGTH)}...`
+            : cause;
         msg += ` (cause: ${truncatedCause})`;
       }
       // Include context summary if available
       if (context) {
-        const contextObj = context as Record<string, unknown>;
-        const contextKeys = Object.keys(contextObj);
-        if (contextKeys.length > 0) {
-          // Show key context fields that help identify the failure location
-          const contextSummary = contextKeys
-            .slice(0, 3)
-            .map((k) => {
-              const v = contextObj[k];
-              let vStr: string;
-              if (typeof v === 'string') {
-                vStr = v;
-              } else if (v === undefined) {
-                vStr = 'undefined';
-              } else {
-                vStr = JSON.stringify(v);
-              }
-              return `${k}=${vStr.substring(0, 50)}`;
-            })
-            .join(', ');
+        const contextSummary = this.formatContextSummary(context as Record<string, unknown>);
+        if (contextSummary) {
           msg += ` [context: ${contextSummary}]`;
         }
       }
@@ -232,6 +226,48 @@ export class HttpClient {
       return err;
     }
     return new NetworkError(`Request failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  /**
+   * Formats a context object into a summary string for error messages.
+   * Shows up to MAX_CONTEXT_KEYS keys with truncated values.
+   */
+  private formatContextSummary(contextObj: Record<string, unknown>): string | undefined {
+    const contextKeys = Object.keys(contextObj);
+    if (contextKeys.length === 0) {
+      return undefined;
+    }
+
+    return contextKeys
+      .slice(0, HttpClient.MAX_CONTEXT_KEYS)
+      .map((k) => {
+        const v = contextObj[k];
+        const vStr = this.stringifyContextValue(v);
+        return `${k}=${vStr.substring(0, HttpClient.CONTEXT_VALUE_TRUNCATE_LENGTH)}`;
+      })
+      .join(', ');
+  }
+
+  /**
+   * Safely converts a context value to a string representation.
+   * Handles null, undefined, strings, and objects (with circular reference protection).
+   */
+  private stringifyContextValue(v: unknown): string {
+    if (typeof v === 'string') {
+      return v;
+    }
+    if (v === null) {
+      return 'null';
+    }
+    if (v === undefined) {
+      return 'undefined';
+    }
+    try {
+      return JSON.stringify(v);
+    } catch {
+      // Handle circular references, BigInt, or other non-serializable values
+      return '[Object]';
+    }
   }
 
   /**
