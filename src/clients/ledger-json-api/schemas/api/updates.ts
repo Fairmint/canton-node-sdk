@@ -8,7 +8,14 @@ import {
   CreatedEventDetailsSchema,
   UnassignedEventDetailsSchema,
 } from './event-details';
-import { EventFormatSchema, TreeEventSchema } from './events';
+import {
+  ArchivedTreeEventSchema,
+  CreatedTreeEventSchema,
+  EventFormatSchema,
+  ExercisedTreeEventSchema,
+  TreeEventSchema,
+} from './events';
+import { JsReassignmentSchema } from './reassignment';
 
 /** Update event kind (oneOf all update event types). */
 export const JsUpdateEventKindSchema = z.union([
@@ -73,18 +80,41 @@ export const JsUpdateSchema = z.union([
   z.object({ OffsetCheckpoint: OffsetCheckpointSchema }),
 ]);
 
-/** WebSocket update wrappers (per AsyncAPI) - relaxed typing to accept server payloads. */
+/** Topology transaction event schema for WebSocket streams. */
+export const WsTopologyTransactionSchema = z.object({
+  /** Unique update ID for the topology transaction. */
+  updateId: z.string(),
+  /** Offset of the topology transaction in the ledger stream. */
+  offset: z.number(),
+  /** Record time of the topology transaction (ISO 8601). */
+  recordTime: z.string(),
+  /** Synchronizer ID for the topology transaction. */
+  synchronizerId: z.string(),
+  /** Events in the topology transaction. */
+  events: z.array(
+    z.object({
+      /** Participant ID affected by the topology change. */
+      participantId: z.string().optional(),
+      /** Party ID affected by the topology change. */
+      partyId: z.string().optional(),
+      /** Permission level granted. */
+      permission: z.string().optional(),
+    })
+  ),
+});
+
+/** WebSocket update wrappers (per AsyncAPI) - strictly typed server payloads. */
 export const WsUpdateSchema = z.union([
-  z.object({ OffsetCheckpoint: z.unknown() }),
-  z.object({ Reassignment: z.unknown() }),
-  z.object({ TopologyTransaction: z.unknown() }),
-  z.object({ Transaction: z.unknown() }),
+  z.object({ OffsetCheckpoint: OffsetCheckpointSchema }),
+  z.object({ Reassignment: JsReassignmentSchema }),
+  z.object({ TopologyTransaction: WsTopologyTransactionSchema }),
+  z.object({ Transaction: JsTransactionSchema }),
 ]);
 
 export const WsUpdateTreesSchema = z.union([
-  z.object({ OffsetCheckpoint: z.unknown() }),
-  z.object({ Reassignment: z.unknown() }),
-  z.object({ TransactionTree: z.unknown() }),
+  z.object({ OffsetCheckpoint: OffsetCheckpointSchema }),
+  z.object({ Reassignment: JsReassignmentSchema }),
+  z.object({ TransactionTree: JsTransactionTreeSchema }),
 ]);
 
 /** Update stream request. */
@@ -147,6 +177,13 @@ export const GetTransactionResponseSchema = z.object({
   transaction: JsTransactionSchema,
 });
 
+/** Event wrapper for tree events in transaction responses. */
+export const TransactionTreeEventSchema = z.union([
+  z.object({ ArchivedEvent: ArchivedTreeEventSchema.shape.ArchivedTreeEvent.shape.value }),
+  z.object({ CreatedEvent: CreatedTreeEventSchema.shape.CreatedTreeEvent.shape.value }),
+  z.object({ ExercisedEvent: ExercisedTreeEventSchema.shape.ExercisedTreeEvent.shape.value }),
+]);
+
 /**
  * Get transaction response (actual API response format). The API returns events as an array of tree events, not update
  * events.
@@ -165,13 +202,7 @@ export const GetTransactionResponseActualSchema = z.object({
     /** Offset of the transaction in the ledger stream. */
     offset: z.number(),
     /** Collection of tree events (not update events). */
-    events: z.array(
-      z.union([
-        z.object({ ArchivedEvent: z.unknown() }),
-        z.object({ CreatedEvent: z.unknown() }),
-        z.object({ ExercisedEvent: z.unknown() }),
-      ])
-    ),
+    events: z.array(TransactionTreeEventSchema),
     /** Record time of the transaction. */
     recordTime: z.string(),
     /** Synchronizer ID for the transaction. */
@@ -199,8 +230,10 @@ export type JsUpdateEvent = z.infer<typeof JsUpdateEventSchema>;
 export type JsTransaction = z.infer<typeof JsTransactionSchema>;
 export type JsTransactionTree = z.infer<typeof JsTransactionTreeSchema>;
 export type JsUpdate = z.infer<typeof JsUpdateSchema>;
+export type WsTopologyTransaction = z.infer<typeof WsTopologyTransactionSchema>;
 export type WsUpdate = z.infer<typeof WsUpdateSchema>;
 export type WsUpdateTrees = z.infer<typeof WsUpdateTreesSchema>;
+export type TransactionTreeEvent = z.infer<typeof TransactionTreeEventSchema>;
 export type UpdateStreamRequest = z.infer<typeof UpdateStreamRequestSchema>;
 export type UpdateStreamResponse = z.infer<typeof UpdateStreamResponseSchema>;
 export type JsSubmitAndWaitForTransactionRequest = z.infer<typeof JsSubmitAndWaitForTransactionRequestSchema>;

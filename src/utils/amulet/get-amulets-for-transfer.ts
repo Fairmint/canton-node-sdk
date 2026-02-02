@@ -151,11 +151,6 @@ export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams)
     const { createdEvent } = ctr.contractEntry.JsActiveContract;
     const { templateId, contractId, createArgument: payload } = createdEvent;
 
-    // Skip contracts with missing required fields
-    if (!contractId || !templateId || !payload) {
-      continue;
-    }
-
     // Filter for valid transfer input contracts
     const isUnlockedAmulet = templateId.includes('Splice.Amulet:Amulet') && !templateId.includes('LockedAmulet');
     const isAppRewardCoupon = templateId.includes('AppRewardCoupon');

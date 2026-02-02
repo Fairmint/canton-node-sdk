@@ -111,7 +111,7 @@ export class AuthenticationManager {
     } catch (error) {
       // Log failure with context
       if (this.logger) {
-        const errorPayload = axios.isAxiosError(error)
+        const errorPayload: unknown = axios.isAxiosError(error)
           ? (error.response?.data ?? error.message)
           : error instanceof Error
             ? error.message
