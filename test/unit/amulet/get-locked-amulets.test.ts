@@ -3,6 +3,25 @@ import type { GetAmuletsResponse } from '../../../src/clients/validator-api/sche
 import { ValidationError } from '../../../src/core/errors';
 import { getLockedAmuletsForParty } from '../../../src/utils/amulet/get-locked-amulets';
 
+interface MockLockedAmuletEntry {
+  effective_amount: string;
+  round: number;
+  accrued_holding_fee: string;
+  contract: {
+    contract: {
+      template_id: string;
+      contract_id: string;
+      created_event_blob: string;
+      created_at: string;
+      payload: {
+        amulet: { owner: string };
+        lock: { holders: string[]; expiresAt: string | null };
+      };
+    };
+    domain_id: string;
+  };
+}
+
 const createMockValidatorClient = (response: GetAmuletsResponse): ValidatorApiClient =>
   ({
     getAmulets: jest.fn().mockResolvedValue(response),
@@ -19,7 +38,7 @@ const createLockedAmuletEntry = (
     domainId: string;
     createdEventBlob: string;
   }> = {}
-) => ({
+): MockLockedAmuletEntry => ({
   effective_amount: effectiveAmount,
   round: 10,
   accrued_holding_fee: '0.001',
@@ -126,15 +145,16 @@ describe('getLockedAmuletsForParty', () => {
     const result = await getLockedAmuletsForParty(mockClient, 'alice::fingerprint');
 
     expect(result).toHaveLength(1);
-    const amulet = result[0]!;
-    expect(amulet.contractId).toBe('contract-alice-1');
-    expect(amulet.templateId).toBe('pkg:Splice.Amulet:LockedAmulet');
-    expect(amulet.owner).toBe('alice::fingerprint');
-    expect(amulet.effectiveAmount).toBe(100.5);
-    expect(amulet.holders).toEqual(['holder1', 'holder2']);
-    expect(amulet.lockExpiresAt).toBe('2026-12-31T23:59:59Z');
-    expect(amulet.domainId).toBe('domain-xyz');
-    expect(amulet.createdEventBlob).toBe('blob-abc');
+    const amulet = result[0];
+    expect(amulet).toBeDefined();
+    expect(amulet?.contractId).toBe('contract-alice-1');
+    expect(amulet?.templateId).toBe('pkg:Splice.Amulet:LockedAmulet');
+    expect(amulet?.owner).toBe('alice::fingerprint');
+    expect(amulet?.effectiveAmount).toBe(100.5);
+    expect(amulet?.holders).toEqual(['holder1', 'holder2']);
+    expect(amulet?.lockExpiresAt).toBe('2026-12-31T23:59:59Z');
+    expect(amulet?.domainId).toBe('domain-xyz');
+    expect(amulet?.createdEventBlob).toBe('blob-abc');
   });
 
   it('handles holders in different formats', async () => {

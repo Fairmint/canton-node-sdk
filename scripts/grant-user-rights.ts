@@ -180,7 +180,7 @@ Examples:
     // (from responses) and grantUserRights params schema (which expects value wrapper)
     const result = await client.grantUserRights({
       userId: resolvedUserId,
-      rights: rights as any,
+      rights: rights as unknown as Right[],
     });
 
     console.log(`\n✓ Successfully granted ${result.newlyGrantedRights?.length ?? 0} new rights`);

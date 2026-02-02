@@ -11,7 +11,29 @@ const createMockValidatorClient = (response: GetOpenAndIssuingMiningRoundsRespon
     getOpenAndIssuingMiningRounds: jest.fn().mockResolvedValue(response),
   }) as unknown as ValidatorApiClient;
 
-const createOpenMiningRound = (roundNumber: number, opensAt: Date, contractId = `contract-${roundNumber}`) => ({
+interface MockOpenMiningRound {
+  contract: {
+    contract_id: string;
+    template_id: string;
+    created_event_blob: string;
+    payload: {
+      round_number: number;
+      opensAt: string;
+    };
+  };
+  domain_id: string;
+}
+
+interface MockIssuingMiningRound {
+  round_number: number;
+  contract_id: string;
+}
+
+const createOpenMiningRound = (
+  roundNumber: number,
+  opensAt: Date,
+  contractId = `contract-${roundNumber}`
+): MockOpenMiningRound => ({
   contract: {
     contract_id: contractId,
     template_id: 'pkg:Splice.Round:OpenMiningRound',
@@ -24,7 +46,10 @@ const createOpenMiningRound = (roundNumber: number, opensAt: Date, contractId = 
   domain_id: 'domain-123',
 });
 
-const createIssuingMiningRound = (roundNumber: number, contractId = `issuing-${roundNumber}`) => ({
+const createIssuingMiningRound = (
+  roundNumber: number,
+  contractId = `issuing-${roundNumber}`
+): MockIssuingMiningRound => ({
   round_number: roundNumber,
   contract_id: contractId,
 });

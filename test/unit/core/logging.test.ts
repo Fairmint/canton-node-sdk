@@ -106,7 +106,8 @@ describe('ConsoleLogger', () => {
       logger.debug('debug message', { key: 'value' });
 
       expect(consoleSpy).toHaveBeenCalled();
-      const output = consoleSpy.mock.calls[0].join(' ');
+      const calls = consoleSpy.mock.calls[0] as unknown[];
+      const output = calls.map(String).join(' ');
       expect(output).toContain('debug message');
     });
 
@@ -115,7 +116,8 @@ describe('ConsoleLogger', () => {
       logger.info('info message');
 
       expect(consoleSpy).toHaveBeenCalled();
-      const output = consoleSpy.mock.calls[0].join(' ');
+      const calls = consoleSpy.mock.calls[0] as unknown[];
+      const output = calls.map(String).join(' ');
       expect(output).toContain('info message');
     });
 
@@ -124,7 +126,8 @@ describe('ConsoleLogger', () => {
       logger.warn('warn message');
 
       expect(consoleWarnSpy).toHaveBeenCalled();
-      const output = consoleWarnSpy.mock.calls[0].join(' ');
+      const calls = consoleWarnSpy.mock.calls[0] as unknown[];
+      const output = calls.map(String).join(' ');
       expect(output).toContain('warn message');
     });
 
@@ -133,7 +136,8 @@ describe('ConsoleLogger', () => {
       logger.error('error message');
 
       expect(consoleErrorSpy).toHaveBeenCalled();
-      const output = consoleErrorSpy.mock.calls[0].join(' ');
+      const calls = consoleErrorSpy.mock.calls[0] as unknown[];
+      const output = calls.map(String).join(' ');
       expect(output).toContain('error message');
     });
 

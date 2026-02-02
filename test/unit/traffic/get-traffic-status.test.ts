@@ -16,7 +16,7 @@ describe('getTrafficStatus', () => {
       },
     };
 
-    const createMockValidatorClient = (response = mockTrafficResponse) =>
+    const createMockValidatorClient = (response = mockTrafficResponse): ValidatorApiClient =>
       ({
         getMemberTrafficStatus: jest.fn().mockResolvedValue(response),
       }) as unknown as ValidatorApiClient;
@@ -72,7 +72,7 @@ describe('getTrafficStatus', () => {
     const createMockScanClient = (
       participantResponse = mockParticipantResponse,
       trafficResponse = mockTrafficResponse
-    ) =>
+    ): ScanApiClient =>
       ({
         getPartyToParticipant: jest.fn().mockResolvedValue(participantResponse),
         getMemberTrafficStatus: jest.fn().mockResolvedValue(trafficResponse),

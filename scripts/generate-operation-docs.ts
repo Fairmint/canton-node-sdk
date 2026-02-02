@@ -26,7 +26,7 @@ class OperationDocGenerator {
   constructor() {
     // Read SDK version from package.json
     const packageJsonPath = path.join(process.cwd(), 'package.json');
-    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8')) as { version: string };
     this.sdkVersion = packageJson.version;
   }
 
@@ -278,7 +278,7 @@ class OperationDocGenerator {
         node.expression.text === 'createWebSocketOperation'
       ) {
         // Mark this as a WebSocket operation
-        operationInfo.method = 'WebSocket' as any;
+        operationInfo.method = 'WebSocket' as const;
       }
 
       // Look for type imports to extract response type
@@ -559,8 +559,9 @@ ${closeBrace}`;
 
     // First, add properties in the preferred order
     for (const propName of propertyOrder) {
-      if (propertyMap.has(propName)) {
-        sortedProperties.push(propertyMap.get(propName)!);
+      const prop = propertyMap.get(propName);
+      if (prop !== undefined) {
+        sortedProperties.push(prop);
       }
     }
 
@@ -753,8 +754,12 @@ ${closeBrace}`;
     const visit = (node: ts.Node): void => {
       if (ts.isVariableStatement(node) && node.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)) {
         for (const declaration of node.declarationList.declarations) {
-          if (ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name)) {
-            schemaMap.set(declaration.name.text, declaration.initializer!);
+          if (
+            ts.isVariableDeclaration(declaration) &&
+            ts.isIdentifier(declaration.name) &&
+            declaration.initializer !== undefined
+          ) {
+            schemaMap.set(declaration.name.text, declaration.initializer);
           }
         }
       }
@@ -780,8 +785,8 @@ ${closeBrace}`;
       schemaMap = this.buildLocalSchemaMap(fromFilePath);
     }
     // Try to resolve from the local schema map first
-    if (schemaMap?.has(schemaName)) {
-      const expr = schemaMap.get(schemaName)!;
+    const expr = schemaMap?.get(schemaName);
+    if (expr !== undefined) {
       const schemaDefinition = this.extractSchemaStructure(expr, fromFilePath, localSchemaMap);
       this.schemaCache.set(schemaName, schemaDefinition);
       return schemaDefinition;
@@ -850,9 +855,9 @@ ${closeBrace}`;
       if (fs.existsSync(filePath)) {
         // Build a local schema map for this file
         const fileSchemaMap = this.buildLocalSchemaMap(filePath);
-        if (fileSchemaMap.has(schemaName)) {
-          const expr = fileSchemaMap.get(schemaName)!;
-          const schemaDefinition = this.extractSchemaStructure(expr, filePath, localSchemaMap);
+        const fileExpr = fileSchemaMap.get(schemaName);
+        if (fileExpr !== undefined) {
+          const schemaDefinition = this.extractSchemaStructure(fileExpr, filePath, localSchemaMap);
           this.schemaCache.set(schemaName, schemaDefinition);
           return schemaDefinition;
         }
@@ -873,10 +878,12 @@ ${closeBrace}`;
       if (operationsIndex !== -1 && pathParts[operationsIndex + 2]) {
         const category = pathParts[operationsIndex + 2];
         if (category) {
-          if (!apiCategories.has(operation.apiType)) {
-            apiCategories.set(operation.apiType, new Set());
+          const existingSet = apiCategories.get(operation.apiType);
+          if (existingSet !== undefined) {
+            existingSet.add(category);
+          } else {
+            apiCategories.set(operation.apiType, new Set([category]));
           }
-          apiCategories.get(operation.apiType)!.add(category);
         }
       }
     }
@@ -1092,10 +1099,12 @@ subscription.close();`
     const categorizedOps = new Map<string, OperationInfo[]>();
     sameApiOperations.forEach((op) => {
       const category = op.category ?? 'uncategorized';
-      if (!categorizedOps.has(category)) {
-        categorizedOps.set(category, []);
+      const existingOps = categorizedOps.get(category);
+      if (existingOps !== undefined) {
+        existingOps.push(op);
+      } else {
+        categorizedOps.set(category, [op]);
       }
-      categorizedOps.get(category)!.push(op);
     });
 
     // Sort categories and operations
@@ -1108,7 +1117,9 @@ subscription.close();`
 `;
 
     for (const category of sortedCategories) {
-      const categoryOps = categorizedOps.get(category)!.sort((a, b) => a.name.localeCompare(b.name));
+      const categoryOpsUnsorted = categorizedOps.get(category);
+      if (categoryOpsUnsorted === undefined) continue;
+      const categoryOps = categoryOpsUnsorted.sort((a, b) => a.name.localeCompare(b.name));
       const categoryName = category.charAt(0).toUpperCase() + category.slice(1).replace(/[-_]/g, ' ');
 
       navigation += `  <div style="margin-bottom: 8px;">

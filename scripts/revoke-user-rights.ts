@@ -1,50 +1,51 @@
 #!/usr/bin/env tsx
 import 'dotenv/config';
 import { EnvLoader, LedgerJsonApiClient, ValidatorApiClient } from '../src';
+import type { Right } from '../src/clients/ledger-json-api/schemas/api/users';
 import type { NetworkType } from '../src/core/types';
 
 /** Create party-specific rights with value wrapper for revoke operation */
-function createPartyRightsForRevoke(partyId: string): any[] {
+function createPartyRightsForRevoke(partyId: string): Right[] {
   return [
     {
       kind: {
         CanActAs: { value: { party: partyId } },
       },
     },
-  ];
+  ] as unknown as Right[];
 }
 
 /** Create admin rights with value wrapper for revoke operation */
-function createAdminRightsForRevoke(): any[] {
+function createAdminRightsForRevoke(): Right[] {
   return [
     {
       kind: {
         ParticipantAdmin: { value: {} },
       },
     },
-  ];
+  ] as unknown as Right[];
 }
 
 /** Create CanExecuteAsAnyParty rights with value wrapper for revoke operation */
-function createExecuteAsAnyPartyRightsForRevoke(): any[] {
+function createExecuteAsAnyPartyRightsForRevoke(): Right[] {
   return [
     {
       kind: {
         CanExecuteAsAnyParty: { value: {} },
       },
     },
-  ];
+  ] as unknown as Right[];
 }
 
 /** Create CanReadAsAnyParty rights with value wrapper for revoke operation */
-function createReadAsAnyPartyRightsForRevoke(): any[] {
+function createReadAsAnyPartyRightsForRevoke(): Right[] {
   return [
     {
       kind: {
         CanReadAsAnyParty: { value: {} },
       },
     },
-  ];
+  ] as unknown as Right[];
 }
 
 async function main(): Promise<void> {
@@ -104,7 +105,7 @@ Examples:
   const provider = providerIndex !== -1 ? args[providerIndex + 1] : undefined;
 
   // Determine which rights to revoke
-  let rights: any[];
+  let rights: Right[];
   let rightsType: string;
 
   if (partyId) {
