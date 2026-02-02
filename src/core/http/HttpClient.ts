@@ -243,7 +243,11 @@ export class HttpClient {
       .map((k) => {
         const v = contextObj[k];
         const vStr = this.stringifyContextValue(v);
-        return `${k}=${vStr.substring(0, HttpClient.CONTEXT_VALUE_TRUNCATE_LENGTH)}`;
+        const truncatedValue =
+          vStr.length > HttpClient.CONTEXT_VALUE_TRUNCATE_LENGTH
+            ? `${vStr.substring(0, HttpClient.CONTEXT_VALUE_TRUNCATE_LENGTH)}...`
+            : vStr;
+        return `${k}=${truncatedValue}`;
       })
       .join(', ');
   }

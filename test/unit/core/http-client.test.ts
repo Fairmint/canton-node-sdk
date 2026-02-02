@@ -218,7 +218,7 @@ describe('HttpClient error diagnostics', () => {
       }
     });
 
-    it('truncates long context values at 50 characters', async () => {
+    it('truncates long context values at 50 characters with ellipsis', async () => {
       const longValue = 'x'.repeat(100);
       const axiosError = createAxiosError(400, {
         code: 'DAML_FAILURE',
@@ -233,7 +233,9 @@ describe('HttpClient error diagnostics', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(ApiError);
         const apiError = error as ApiError;
-        expect(apiError.message).toContain(`longKey=${'x'.repeat(50)}`);
+        // Should contain truncated value with ellipsis
+        expect(apiError.message).toContain(`longKey=${'x'.repeat(50)}...`);
+        // Should not contain the full 100 characters
         expect(apiError.message).not.toContain('x'.repeat(100));
       }
     });
