@@ -195,6 +195,7 @@ const eslintConfig = [
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-return': 'off',
       '@typescript-eslint/require-await': 'off',
+      '@typescript-eslint/no-redundant-type-constituents': 'off',
     },
   },
   // Prettier config last to override any conflicting rules
