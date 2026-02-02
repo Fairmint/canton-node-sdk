@@ -148,7 +148,7 @@ describe('HttpClient error diagnostics', () => {
         expect(error).toBeInstanceOf(ApiError);
         const apiError = error as ApiError;
         // Should contain truncated cause with ellipsis
-        expect(apiError.message).toContain('(cause: ' + 'a'.repeat(200) + '...)');
+        expect(apiError.message).toContain(`(cause: ${  'a'.repeat(200)  }...)`);
         // Should not contain the full 250 characters
         expect(apiError.message).not.toContain('a'.repeat(250));
       }
@@ -233,7 +233,7 @@ describe('HttpClient error diagnostics', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(ApiError);
         const apiError = error as ApiError;
-        expect(apiError.message).toContain('longKey=' + 'x'.repeat(50));
+        expect(apiError.message).toContain(`longKey=${'x'.repeat(50)}`);
         expect(apiError.message).not.toContain('x'.repeat(100));
       }
     });
@@ -313,7 +313,7 @@ describe('HttpClient error diagnostics', () => {
     it('handles non-serializable context values gracefully', async () => {
       // Create a circular reference
       const circular: Record<string, unknown> = {};
-      circular.self = circular;
+      circular['self'] = circular;
 
       const axiosError = createAxiosError(400, {
         code: 'DAML_FAILURE',
