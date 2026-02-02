@@ -187,7 +187,7 @@ const eslintConfig = [
   // Relax unsafe rules for files that depend on generated client types
   // These types may not exist at lint time in CI before build
   {
-    files: ['examples/**/*', 'test/**/*', 'scripts/**/*', 'src/Canton.ts'],
+    files: ['examples/**/*', 'test/**/*', 'scripts/**/*', 'src/clients/**/*', 'src/Canton.ts'],
     rules: {
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
