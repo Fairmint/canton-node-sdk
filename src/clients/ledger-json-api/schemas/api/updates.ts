@@ -177,7 +177,12 @@ export const GetTransactionResponseSchema = z.object({
   transaction: JsTransactionSchema,
 });
 
-/** Event wrapper for tree events in transaction responses. */
+/**
+ * Event wrapper for tree events in GetTransaction responses.
+ * The API returns events in a flattened format like { CreatedEvent: {...} } rather than
+ * the nested { CreatedTreeEvent: { value: {...} } } format used in streams.
+ * This schema extracts the inner `value` from each tree event schema to match the actual response.
+ */
 export const TransactionTreeEventSchema = z.union([
   z.object({ ArchivedEvent: ArchivedTreeEventSchema.shape.ArchivedTreeEvent.shape.value }),
   z.object({ CreatedEvent: CreatedTreeEventSchema.shape.CreatedTreeEvent.shape.value }),

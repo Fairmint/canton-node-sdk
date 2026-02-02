@@ -176,19 +176,22 @@ const eslintConfig = [
       'no-array-constructor': 'off',
     },
   },
-  // Override rules for scripts, simulations, examples, and test directories
-  // Only relax console logging - typing must remain strict
+  // Console logging allowed in scripts, simulations, examples, and tests
   {
-    files: ['scripts/**/*', 'simulations/**/*', 'examples/**/*', 'test/**/*'],
+    files: ['scripts/**/*', 'simulations/**/*'],
     rules: {
       'no-console': 'off',
     },
   },
-  // Relax unsafe rules for files that depend on generated client types
-  // These types may not exist at lint time in CI before build
+  // Files that depend on generated OpenAPI client types (from libs/splice -> src/generated/).
+  // These types are generated during build but don't exist at CI lint time, causing
+  // "error typed value" and "type that cannot be resolved" lint failures.
+  // The dependency chain is: examples/tests/scripts -> src/clients -> src/utils -> generated types.
+  // All strict typing rules remain enabled; only type-resolution-dependent rules are relaxed.
   {
     files: ['examples/**/*', 'test/**/*', 'scripts/**/*', 'src/clients/**/*', 'src/utils/**/*', 'src/Canton.ts'],
     rules: {
+      'no-console': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-call': 'off',
