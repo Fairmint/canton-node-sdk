@@ -185,6 +185,10 @@ export class HttpClient {
       const data = (error.response?.data ?? {}) as Record<string, unknown>;
       const code = typeof data['code'] === 'string' ? data['code'] : undefined;
       const message = typeof data['message'] === 'string' ? data['message'] : undefined;
+      const cause = typeof data['cause'] === 'string' ? data['cause'] : undefined;
+      const context = typeof data['context'] === 'object' && data['context'] !== null ? data['context'] : undefined;
+
+      // Build error message with all available details
       let msg = `HTTP ${status}`;
       if (code) {
         msg += `: ${code}`;
@@ -192,6 +196,37 @@ export class HttpClient {
       if (message) {
         msg += ` - ${message}`;
       }
+      // Include cause for DAML/Canton errors - this is the actionable info
+      if (cause) {
+        // Truncate long causes but preserve the first ~200 chars which usually have the key info
+        const truncatedCause = cause.length > 200 ? `${cause.substring(0, 200)}...` : cause;
+        msg += ` (cause: ${truncatedCause})`;
+      }
+      // Include context summary if available
+      if (context) {
+        const contextObj = context as Record<string, unknown>;
+        const contextKeys = Object.keys(contextObj);
+        if (contextKeys.length > 0) {
+          // Show key context fields that help identify the failure location
+          const contextSummary = contextKeys
+            .slice(0, 3)
+            .map((k) => {
+              const v = contextObj[k];
+              let vStr: string;
+              if (typeof v === 'string') {
+                vStr = v;
+              } else if (v === undefined) {
+                vStr = 'undefined';
+              } else {
+                vStr = JSON.stringify(v);
+              }
+              return `${k}=${vStr.substring(0, 50)}`;
+            })
+            .join(', ');
+          msg += ` [context: ${contextSummary}]`;
+        }
+      }
+
       const err = new ApiError(msg, status, error.response?.statusText);
       err.response = data;
       return err;
