@@ -268,7 +268,7 @@ export class HttpClient {
     }
     try {
       // JSON.stringify can return undefined for functions, Symbols, or objects with toJSON() returning undefined
-      return JSON.stringify(v) ?? '[Object]';
+      return (JSON.stringify(v) as string | undefined) ?? '[Object]';
     } catch {
       // Handle circular references, BigInt, or other non-serializable values
       return '[Object]';
