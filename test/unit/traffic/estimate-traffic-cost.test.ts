@@ -16,7 +16,9 @@ describe('estimateTrafficCost', () => {
   };
 
   // Helper to calculate expected values
-  const calculateExpectedCosts = (totalCost: number) => {
+  const calculateExpectedCosts = (
+    totalCost: number
+  ): { totalCostWithOverhead: number; costInCents: number; costInDollars: number } => {
     const totalCostWithOverhead = totalCost + UPDATE_CONFIRMATION_OVERHEAD_BYTES;
     const costInCents = (6000 * totalCostWithOverhead) / (1024 * 1024);
     return { totalCostWithOverhead, costInCents, costInDollars: costInCents / 100 };
