@@ -6,25 +6,66 @@ sdk_version: 0.0.127
 
 # Ledger API Protocol Buffers
 
-The Canton Ledger API is defined using [Protocol Buffers](https://protobuf.dev/) (protobufs), which serve as the canonical specification for the API. This SDK implements a TypeScript interface that maps to these protobuf definitions.
+The Canton Ledger API is defined using [Protocol Buffers](https://protobuf.dev/) (protobufs), which serve as the canonical specification for the API. This SDK implements TypeScript clients for both the gRPC and JSON API interfaces.
 
-## Official Documentation
+## Choosing the Right API
 
-The authoritative reference for the Ledger API protobufs is maintained by Digital Asset:
+Canton exposes the Ledger API through two interfaces. Choose based on your use case:
 
-- **[Ledger API Protocol Buffer Reference](https://docs.digitalasset.com/build/3.4/reference/lapi-proto-docs.html)** - Complete protobuf documentation
-- **[Ledger JSON API OpenAPI Reference](https://docs.digitalasset.com/build/3.4/reference/json-api/openapi)** - JSON API equivalent
+### When to Use gRPC (`LedgerGrpcClient`)
 
-## Understanding the API Layers
+**Best for:**
+- **High-frequency polling** - Monitoring ledger state for new transactions
+- **Internal microservices** - Service-to-service communication where performance matters
+- **Low-latency requirements** - Trading systems, real-time analytics
+- **High-throughput batch operations** - Bulk data processing
+- **Streaming subscriptions** - Real-time transaction feeds (future enhancement)
 
-Canton exposes the Ledger API through two interfaces:
+**Benefits:**
+- Lower latency (binary protocol, no JSON parsing overhead)
+- Smaller message sizes (protobuf encoding is ~30-50% smaller than JSON)
+- Strong typing directly from protobuf definitions
+- Native streaming support for subscriptions
+- Better connection multiplexing
 
-1. **gRPC/Protobuf API** - The native binary protocol, optimized for performance
-2. **JSON API** - A REST/WebSocket interface that mirrors the protobuf definitions
+**Trade-offs:**
+- Requires gRPC infrastructure knowledge
+- More complex debugging (binary protocol)
+- Requires proto files for code generation
 
-This SDK provides clients for both:
-- `LedgerJsonApiClient` - For the REST/WebSocket JSON API
-- `LedgerGrpcClient` - For direct gRPC access (higher performance)
+### When to Use JSON API (`LedgerJsonApiClient`)
+
+**Best for:**
+- **Web applications** - Browser-based clients (gRPC requires proxies)
+- **External integrations** - Third-party systems that prefer REST
+- **Rapid prototyping** - Faster development with human-readable payloads
+- **Debugging and testing** - Easy to inspect with standard HTTP tools
+- **Simpler deployments** - Standard HTTP/WebSocket infrastructure
+
+**Benefits:**
+- Human-readable request/response format
+- Works directly in browsers with WebSocket
+- Easier debugging with curl, Postman, etc.
+- Standard REST patterns familiar to most developers
+- Well-documented with OpenAPI specs
+
+**Trade-offs:**
+- Higher latency than gRPC
+- Larger message sizes (JSON encoding)
+- JSON parsing overhead
+
+### Quick Decision Guide
+
+| Scenario | Recommended API |
+|----------|-----------------|
+| Monitoring dashboard | JSON API (ease of development) |
+| High-frequency health checks | gRPC (low latency) |
+| Transaction polling service | gRPC (efficiency at scale) |
+| Web frontend | JSON API (browser compatibility) |
+| Mobile app | JSON API (simpler integration) |
+| Internal trading engine | gRPC (performance critical) |
+| Analytics pipeline | gRPC (high throughput) |
+| Integration with external system | JSON API (standard REST) |
 
 ## Using the gRPC Client
 
@@ -33,14 +74,19 @@ import { LedgerGrpcClient, Values, createCreateCommand } from '@fairmint/canton-
 
 // Create a gRPC client
 const client = new LedgerGrpcClient({
-  endpoint: 'localhost:6865',
+  endpoint: 'localhost:3901',    // gRPC port (not JSON API port)
   accessToken: 'your-token',
-  useTls: false, // Set to true for production
+  useTls: false,                 // Set to true for production
+  timeoutMs: 30000,
 });
 
-// Get version
+// Get version (connectivity check)
 const version = await client.getVersion();
 console.log(`Ledger API version: ${version.version}`);
+
+// Get ledger end (for monitoring)
+const offset = await client.getLedgerEnd();
+console.log(`Current ledger offset: ${offset}`);
 
 // Submit a command
 const result = await client.submitAndWait({
@@ -60,130 +106,194 @@ console.log(`Transaction: ${result.updateId}`);
 client.close();
 ```
 
-## Protobuf Source Files
+## Using the JSON API Client
 
-The protobuf definitions are available in the [Hyperledger Labs Splice repository](https://github.com/hyperledger-labs/splice) (included as a git submodule in `libs/splice`):
+```typescript
+import { LedgerJsonApiClient, EnvLoader } from '@fairmint/canton-node-sdk';
 
-```
-libs/splice/canton/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/
-├── admin/                        # Administrative services
-│   ├── identity_provider_config_service.proto
-│   ├── package_management_service.proto
-│   ├── party_management_service.proto
-│   └── user_management_service.proto
-├── commands.proto                # Command definitions (Create, Exercise, etc.)
-├── command_service.proto         # Synchronous command submission
-├── command_submission_service.proto  # Async command submission
-├── command_completion_service.proto  # Command completion streaming
-├── completion.proto              # Completion types
-├── event.proto                   # Contract events (Created, Archived)
-├── event_query_service.proto     # Event queries
-├── interactive/                  # Interactive submission (external signing)
-│   └── interactive_submission_service.proto
-├── package_service.proto         # Package queries
-├── state_service.proto           # Ledger state queries
-├── transaction.proto             # Transaction types
-├── update_service.proto          # Transaction/update streaming
-└── version_service.proto         # Version info
+// Create a JSON API client
+const config = EnvLoader.getConfig('LEDGER_JSON_API', {
+  network: 'localnet',
+  provider: 'app-provider',
+});
+const client = new LedgerJsonApiClient(config);
+
+// Get version
+const version = await client.getVersion();
+console.log(`Ledger API version: ${version.version}`);
+
+// Get ledger end
+const { offset } = await client.getLedgerEnd();
+console.log(`Current ledger offset: ${offset}`);
 ```
 
-## Schema Mapping
+## Real-World Use Cases
 
-The SDK's Zod schemas in `src/clients/ledger-json-api/schemas/` map directly to the protobuf definitions:
+### Use Case 1: Health Check Service
 
-| Protobuf Message | SDK Schema | Description |
-|------------------|------------|-------------|
-| `Commands` | `JsCommandsSchema` | Composite command container |
-| `CreateCommand` | `CreateCommandSchema` | Contract creation |
-| `ExerciseCommand` | `ExerciseCommandSchema` | Choice exercise |
-| `ExerciseByKeyCommand` | `ExerciseByKeyCommandSchema` | Exercise by contract key |
-| `CreateAndExerciseCommand` | `CreateAndExerciseCommandSchema` | Create and exercise atomically |
-| `DisclosedContract` | `DisclosedContractSchema` | Pre-disclosed contracts |
-| `CreatedEvent` | `CreatedEventSchema` | Contract creation event |
-| `ArchivedEvent` | `ArchivedEventSchema` | Contract archival event |
-| `Transaction` | `TransactionSchema` | Transaction container |
-| `TransactionTree` | `TransactionTreeSchema` | Hierarchical transaction view |
+A service that monitors ledger connectivity for alerting systems.
 
-## Key Protobuf Concepts
-
-### Identifiers
-
-Contract template identifiers follow the format defined in `value.proto`:
-
-```protobuf
-message Identifier {
-  string package_id = 1;    // Package containing the template
-  string module_name = 2;   // Module path (e.g., "Main")
-  string entity_name = 3;   // Template name (e.g., "Asset")
-}
-```
-
-In the SDK, these are typically expressed as qualified strings: `packageId:moduleName:entityName`
-
-### Value Types
-
-The Ledger API uses a recursive `Value` type for contract arguments:
-
-```protobuf
-message Value {
-  oneof Sum {
-    Record record = 1;
-    Variant variant = 2;
-    string contract_id = 3;
-    List list = 4;
-    int64 int64 = 5;
-    string numeric = 6;
-    string text = 7;
-    int64 timestamp = 8;
-    string party = 9;
-    bool bool = 10;
-    google.protobuf.Empty unit = 11;
-    int32 date = 12;
-    Optional optional = 13;
-    TextMap text_map = 14;
-    GenMap gen_map = 15;
+```typescript
+async function healthCheck(): Promise<HealthStatus> {
+  const client = new LedgerGrpcClient({ endpoint: 'localhost:3901' });
+  
+  try {
+    const version = await client.getVersion();
+    const offset = await client.getLedgerEnd();
+    
+    return {
+      healthy: true,
+      version: version.version,
+      ledgerOffset: offset,
+      timestamp: new Date().toISOString(),
+    };
+  } catch (error) {
+    return {
+      healthy: false,
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    };
+  } finally {
+    client.close();
   }
 }
 ```
 
-The SDK represents this as a flexible `RecordSchema` that accepts JSON-compatible objects.
+### Use Case 2: Transaction Monitor
 
-### Deduplication
+A service that polls for new transactions using high-frequency ledger end checks.
 
-Commands support deduplication to prevent double-submission:
+```typescript
+class TransactionMonitor {
+  private client: LedgerGrpcClient;
+  private lastOffset: number = 0;
 
-```protobuf
-oneof deduplication_period {
-  google.protobuf.Duration deduplication_duration = 5;
-  int64 deduplication_offset = 6;
+  constructor(endpoint: string, token: string) {
+    this.client = new LedgerGrpcClient({
+      endpoint,
+      accessToken: token,
+      timeoutMs: 5000,
+    });
+  }
+
+  async poll(): Promise<number> {
+    const currentOffset = await this.client.getLedgerEnd();
+    const newTransactions = currentOffset - this.lastOffset;
+    this.lastOffset = currentOffset;
+    return newTransactions;
+  }
+
+  async startMonitoring(intervalMs: number): Promise<void> {
+    setInterval(async () => {
+      const newTxns = await this.poll();
+      if (newTxns > 0) {
+        console.log(`${newTxns} new transaction(s) detected`);
+      }
+    }, intervalMs);
+  }
 }
 ```
 
-The SDK provides `DeduplicationDurationSchema` and `DeduplicationOffsetSchema` for this purpose.
+### Use Case 3: Multi-API Architecture
 
-## Working with Protobufs Directly
+Use both APIs based on the specific requirements of each service.
 
-If you need to work with the raw protobuf definitions:
+```typescript
+// Internal high-throughput service uses gRPC
+const grpcClient = new LedgerGrpcClient({
+  endpoint: 'ledger-grpc.internal:3901',
+  accessToken: internalToken,
+});
+
+// External-facing API gateway uses JSON API
+const jsonClient = new LedgerJsonApiClient({
+  network: 'mainnet',
+  provider: 'production',
+  apis: {
+    LEDGER_JSON_API: {
+      uri: 'https://ledger-api.example.com',
+      auth: { clientId, clientSecret },
+    },
+  },
+});
+```
+
+## Official Documentation
+
+- **[Ledger API Protocol Buffer Reference](https://docs.digitalasset.com/build/3.4/reference/lapi-proto-docs.html)** - Complete protobuf documentation
+- **[Ledger JSON API OpenAPI Reference](https://docs.digitalasset.com/build/3.4/reference/json-api/openapi)** - REST API specification
+
+## Protobuf Source Files
+
+The protobuf definitions are in `libs/splice/canton/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/`:
+
+```
+├── admin/                           # Administrative services
+│   ├── identity_provider_config_service.proto
+│   ├── package_management_service.proto
+│   ├── party_management_service.proto
+│   └── user_management_service.proto
+├── commands.proto                   # Command definitions
+├── command_service.proto            # Synchronous submission
+├── command_submission_service.proto # Async submission
+├── command_completion_service.proto # Completion streaming
+├── completion.proto                 # Completion types
+├── event.proto                      # Contract events
+├── event_query_service.proto        # Event queries
+├── interactive/                     # External signing
+├── package_service.proto            # Package queries
+├── state_service.proto              # Ledger state
+├── transaction.proto                # Transaction types
+├── update_service.proto             # Transaction streaming
+└── version_service.proto            # Version info
+```
+
+## Type Mapping
+
+| Protobuf Type | gRPC Client Type | JSON API Schema |
+|---------------|------------------|-----------------|
+| `Identifier` | `Identifier` | string (qualified) |
+| `Record` | `DamlRecord` | `RecordSchema` |
+| `Value` | `Value` | JSON object |
+| `Commands` | `Commands` | `JsCommandsSchema` |
+| `CreateCommand` | `CreateCommand` | `CreateCommandSchema` |
+| `ExerciseCommand` | `ExerciseCommand` | `ExerciseCommandSchema` |
+| `Transaction` | `Transaction` | `TransactionSchema` |
+| `CreatedEvent` | `CreatedEvent` | `CreatedEventSchema` |
+
+## Network Configuration
+
+### LocalNet (cn-quickstart)
+
+| Service | gRPC Port | JSON API Port |
+|---------|-----------|---------------|
+| app-provider | 3901 | 3975 |
+| app-user | 2901 | 2975 |
+| sv | 4901 | 4975 |
+
+### Production
+
+Configure endpoints via environment variables:
 
 ```bash
-# Initialize the submodule
-git submodule update --init --recursive
+# gRPC endpoint
+CANTON_MAINNET_PROVIDER_LEDGER_GRPC_URI=grpc-ledger.example.com:443
 
-# Navigate to protobuf directory
-cd libs/splice/canton/community/ledger-api/src/main/protobuf
+# JSON API endpoint
+CANTON_MAINNET_PROVIDER_LEDGER_JSON_API_URI=https://json-ledger.example.com
 ```
 
 ## Version Compatibility
 
-This SDK targets **Canton 3.4.x** protobuf definitions. When upgrading:
+This SDK targets **Canton 3.4.x**. When upgrading:
 
-1. Check the [Canton release notes](https://docs.digitalasset.com/canton/release-notes/) for breaking changes
-2. Update the `libs/splice` submodule to the matching version
+1. Check [Canton release notes](https://docs.digitalasset.com/canton/release-notes/)
+2. Update `libs/splice` submodule
 3. Review protobuf changes in `com/daml/ledger/api/v2/`
-4. Update SDK schemas if needed
+4. Update SDK types if needed
 
 ## Related Resources
 
-- [Canton Documentation](https://docs.digitalasset.com/build/3.4/) - Official Canton docs
-- [Daml SDK Documentation](https://docs.daml.com/) - Daml language reference
-- [Hyperledger Labs Splice](https://github.com/hyperledger-labs/splice) - Open source Canton implementation
+- [Canton Documentation](https://docs.digitalasset.com/build/3.4/)
+- [Daml SDK Documentation](https://docs.daml.com/)
+- [Hyperledger Labs Splice](https://github.com/hyperledger-labs/splice)
