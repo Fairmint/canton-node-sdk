@@ -11,8 +11,13 @@ Functions for working with traffic costs and consumption on Canton networks.
 Traffic refers to the data throughput required to process transactions. Transactions consume traffic based
 on their size and complexity. These utilities help you:
 
-- Estimate traffic costs before submitting transactions
+- Estimate traffic costs before submitting transactions (including dollar cost)
 - Check current traffic status for a party/participant
+
+## Pricing
+
+Traffic is billed at **$60 per MB** (6000 cents/MB). The SDK automatically calculates the dollar cost
+based on the traffic estimate plus a ~5KB overhead for update confirmation.
 
 ## Functions
 
@@ -56,9 +61,8 @@ const estimate = await estimateTrafficCost({
 });
 
 if (estimate) {
-  console.log(`Estimated traffic cost: ${estimate.totalCost} bytes`);
-  console.log(`  Request: ${estimate.requestCost} bytes`);
-  console.log(`  Response: ${estimate.responseCost} bytes`);
+  console.log(`Traffic: ${estimate.totalCostWithOverhead} bytes`);
+  console.log(`Cost: $${estimate.costInDollars.toFixed(2)}`);
 }
 ```
 
@@ -95,10 +99,27 @@ const prepared = await prepareExternalTransaction({
 // Get the traffic cost estimate
 const cost = getEstimatedTrafficCost(prepared);
 if (cost) {
-  console.log(`Request cost: ${cost.requestCost} bytes`);
-  console.log(`Response cost: ${cost.responseCost} bytes`);
-  console.log(`Total cost: ${cost.totalCost} bytes`);
+  console.log(`Traffic: ${cost.totalCostWithOverhead} bytes`);
+  console.log(`Cost: $${cost.costInDollars.toFixed(2)}`);
 }
+```
+
+---
+
+### calculateTrafficCostInCents / calculateTrafficCostInDollars
+
+Helper functions to calculate traffic cost from bytes.
+
+**Example:**
+```typescript
+import {
+  calculateTrafficCostInCents,
+  calculateTrafficCostInDollars,
+} from '@fairmint/canton-node-sdk';
+
+// 55KB of traffic at $60/MB
+const cents = calculateTrafficCostInCents(55 * 1024); // ~322 cents
+const dollars = calculateTrafficCostInDollars(55 * 1024); // ~$3.22
 ```
 
 ---
@@ -168,15 +189,31 @@ Traffic cost estimation breakdown for a transaction.
 
 ```typescript
 interface TrafficCostEstimate {
-  /** Estimated traffic cost of the confirmation request. */
+  /** Estimated traffic cost of the confirmation request (bytes). */
   requestCost: number;
-  /** Estimated traffic cost of the confirmation response. */
+  /** Estimated traffic cost of the confirmation response (bytes). */
   responseCost: number;
-  /** Total estimated traffic cost (request + response). */
+  /** Total estimated traffic cost (request + response) in bytes. */
   totalCost: number;
+  /** Total cost including update confirmation overhead (~5KB) in bytes. */
+  totalCostWithOverhead: number;
+  /** Estimated cost in cents (based on $60/MB pricing). */
+  costInCents: number;
+  /** Estimated cost in dollars (based on $60/MB pricing). */
+  costInDollars: number;
   /** Timestamp when estimation was made (ISO 8601). */
   estimatedAt?: string;
 }
+```
+
+### Constants
+
+```typescript
+/** Default overhead for update ID confirmation (~5KB). */
+const UPDATE_CONFIRMATION_OVERHEAD_BYTES = 5 * 1024;
+
+/** Default price per megabyte of traffic in cents ($60/MB = 6000 cents/MB). */
+const DEFAULT_PRICE_PER_MB_CENTS = 6000;
 ```
 
 ### TrafficStatus

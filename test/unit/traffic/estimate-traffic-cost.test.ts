@@ -1,5 +1,6 @@
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
 import { estimateTrafficCost } from '../../../src/utils/traffic/estimate-traffic-cost';
+import { UPDATE_CONFIRMATION_OVERHEAD_BYTES } from '../../../src/utils/traffic/types';
 
 describe('estimateTrafficCost', () => {
   const mockPrepareResponse = {
@@ -12,6 +13,13 @@ describe('estimateTrafficCost', () => {
       totalTrafficCostEstimation: 2000,
       estimationTimestamp: '2024-01-15T10:30:00Z',
     },
+  };
+
+  // Helper to calculate expected values
+  const calculateExpectedCosts = (totalCost: number) => {
+    const totalCostWithOverhead = totalCost + UPDATE_CONFIRMATION_OVERHEAD_BYTES;
+    const costInCents = (6000 * totalCostWithOverhead) / (1024 * 1024);
+    return { totalCostWithOverhead, costInCents, costInDollars: costInCents / 100 };
   };
 
   const mockCommands = [
@@ -40,10 +48,14 @@ describe('estimateTrafficCost', () => {
       synchronizerId: 'domain-123',
     });
 
+    const expected = calculateExpectedCosts(2000);
     expect(result).toEqual({
       requestCost: 1500,
       responseCost: 500,
       totalCost: 2000,
+      totalCostWithOverhead: expected.totalCostWithOverhead,
+      costInCents: expected.costInCents,
+      costInDollars: expected.costInDollars,
       estimatedAt: '2024-01-15T10:30:00Z',
     });
   });
@@ -125,10 +137,14 @@ describe('estimateTrafficCost', () => {
       synchronizerId: 'domain-123',
     });
 
+    const expected = calculateExpectedCosts(1000);
     expect(result).toEqual({
       requestCost: 800,
       responseCost: 200,
       totalCost: 1000,
+      totalCostWithOverhead: expected.totalCostWithOverhead,
+      costInCents: expected.costInCents,
+      costInDollars: expected.costInDollars,
       estimatedAt: undefined,
     });
   });
@@ -212,10 +228,14 @@ describe('estimateTrafficCost', () => {
       synchronizerId: 'domain-123',
     });
 
+    const expected = calculateExpectedCosts(4000);
     expect(result).toEqual({
       requestCost: 3000,
       responseCost: 1000,
       totalCost: 4000,
+      totalCostWithOverhead: expected.totalCostWithOverhead,
+      costInCents: expected.costInCents,
+      costInDollars: expected.costInDollars,
       estimatedAt: undefined,
     });
     expect(client.interactiveSubmissionPrepare).toHaveBeenCalledWith(
