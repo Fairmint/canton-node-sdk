@@ -1,15 +1,12 @@
 import { type CostEstimation } from '../../clients/ledger-json-api/schemas/api/interactive-submission';
 
 /**
- * Default overhead for update ID confirmation (approximately 5KB).
- * This is added to the base traffic cost to account for confirmation messages.
+ * Default overhead for update ID confirmation (approximately 5KB). This is added to the base traffic cost to account
+ * for confirmation messages.
  */
 export const UPDATE_CONFIRMATION_OVERHEAD_BYTES = 5 * 1024; // 5KB
 
-/**
- * Default price per megabyte of traffic in cents.
- * Based on $60/MB = 6000 cents/MB.
- */
+/** Default price per megabyte of traffic in cents. Based on $60/MB = 6000 cents/MB. */
 export const DEFAULT_PRICE_PER_MB_CENTS = 6000;
 
 /** Traffic cost estimation breakdown for a transaction. */
@@ -49,7 +46,7 @@ export interface TrafficStatus {
  *   ```typescript
  *   // 55KB of traffic at $60/MB
  *   const cents = calculateTrafficCostInCents(55 * 1024); // ~322 cents ($3.22)
- *   ```
+ *   ```;
  *
  * @param bytes - Total traffic in bytes
  * @param pricePerMBCents - Price per MB in cents (default: 6000 = $60/MB)
@@ -69,7 +66,7 @@ export function calculateTrafficCostInCents(
  *   ```typescript
  *   // 55KB of traffic at $60/MB
  *   const dollars = calculateTrafficCostInDollars(55 * 1024); // ~$3.22
- *   ```
+ *   ```;
  *
  * @param bytes - Total traffic in bytes
  * @param pricePerMBCents - Price per MB in cents (default: 6000 = $60/MB)

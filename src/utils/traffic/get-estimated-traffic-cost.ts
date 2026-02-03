@@ -10,10 +10,11 @@ import {
  * Extracts traffic cost estimation from a prepared transaction response.
  *
  * The cost estimation is returned by the Ledger JSON API's `interactiveSubmissionPrepare` endpoint when preparing a
- * transaction for external signing. This provides insight into how much traffic (in bytes) the transaction will
- * consume and the estimated dollar cost.
+ * transaction for external signing. This provides insight into how much traffic (in bytes) the transaction will consume
+ * and the estimated dollar cost.
  *
  * The returned estimate includes:
+ *
  * - Raw traffic costs (request, response, total)
  * - Total with ~5KB overhead for update confirmation
  * - Cost in cents and dollars (based on $60/MB pricing)
@@ -21,17 +22,17 @@ import {
  * @example
  *   ```typescript
  *   const prepared = await prepareExternalTransaction({
- *     ledgerClient,
- *     commands,
- *     userId,
- *     actAs,
- *     synchronizerId,
+ *   ledgerClient,
+ *   commands,
+ *   userId,
+ *   actAs,
+ *   synchronizerId,
  *   });
  *
  *   const cost = getEstimatedTrafficCost(prepared);
  *   if (cost) {
- *     console.log(`Traffic: ${cost.totalCostWithOverhead} bytes`);
- *     console.log(`Cost: $${cost.costInDollars.toFixed(2)}`);
+ *   console.log(`Traffic: ${cost.totalCostWithOverhead} bytes`);
+ *   console.log(`Cost: $${cost.costInDollars.toFixed(2)}`);
  *   }
  *   ```;
  *

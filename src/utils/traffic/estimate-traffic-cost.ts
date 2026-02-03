@@ -31,9 +31,8 @@ export interface EstimateTrafficCostOptions {
 /**
  * Estimates the traffic cost for a set of commands without executing them.
  *
- * This is a convenience function that prepares a transaction (without executing it) to get
- * the traffic cost estimation. Use this when you want to know how much traffic a transaction
- * will consume before actually submitting it.
+ * This is a convenience function that prepares a transaction (without executing it) to get the traffic cost estimation.
+ * Use this when you want to know how much traffic a transaction will consume before actually submitting it.
  *
  * @example
  *   ```typescript
@@ -43,29 +42,31 @@ export interface EstimateTrafficCostOptions {
  *
  *   // Estimate the cost of creating a contract
  *   const estimate = await estimateTrafficCost({
- *     ledgerClient: canton.ledger,
- *     commands: [
- *       {
- *         CreateCommand: {
- *           templateId: 'MyModule:MyTemplate',
- *           createArguments: { fields: { owner: { party: 'alice::...' } } },
- *         },
- *       },
- *     ],
- *     synchronizerId: 'global-domain::1234...',
+ *   ledgerClient: canton.ledger,
+ *   commands: [
+ *   {
+ *   CreateCommand: {
+ *   templateId: 'MyModule:MyTemplate',
+ *   createArguments: { fields: { owner: { party: 'alice::...' } } },
+ *   },
+ *   },
+ *   ],
+ *   synchronizerId: 'global-domain::1234...',
  *   });
  *
  *   if (estimate) {
- *     console.log(`Estimated traffic cost: ${estimate.totalCost} bytes`);
- *     console.log(`  Request: ${estimate.requestCost} bytes`);
- *     console.log(`  Response: ${estimate.responseCost} bytes`);
+ *   console.log(`Estimated traffic cost: ${estimate.totalCost} bytes`);
+ *   console.log(`  Request: ${estimate.requestCost} bytes`);
+ *   console.log(`  Response: ${estimate.responseCost} bytes`);
  *   }
  *   ```
  *
  * @param options - Options for traffic cost estimation.
  * @returns The traffic cost estimate, or `undefined` if cost estimation is not available.
  */
-export async function estimateTrafficCost(options: EstimateTrafficCostOptions): Promise<TrafficCostEstimate | undefined> {
+export async function estimateTrafficCost(
+  options: EstimateTrafficCostOptions
+): Promise<TrafficCostEstimate | undefined> {
   const {
     ledgerClient,
     commands,
