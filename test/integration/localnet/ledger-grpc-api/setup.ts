@@ -1,8 +1,7 @@
 /**
  * Shared setup for LedgerGrpcClient integration tests.
  *
- * The gRPC Ledger API runs on port 3901 for app-provider in localnet.
- * Authentication uses OAuth2 via Keycloak.
+ * The gRPC Ledger API runs on port 3901 for app-provider in localnet. Authentication uses OAuth2 via Keycloak.
  */
 
 import axios from 'axios';
@@ -22,9 +21,7 @@ const GRPC_ENDPOINT = 'localhost:3901';
 let client: LedgerGrpcClient | null = null;
 let accessToken: string | null = null;
 
-/**
- * Get an OAuth2 access token for the gRPC client.
- */
+/** Get an OAuth2 access token for the gRPC client. */
 async function getAccessToken(): Promise<string> {
   if (accessToken) {
     return accessToken;
@@ -43,9 +40,7 @@ async function getAccessToken(): Promise<string> {
   return accessToken as string;
 }
 
-/**
- * Build gRPC client configuration for localnet.
- */
+/** Build gRPC client configuration for localnet. */
 export async function buildGrpcClientConfig(): Promise<GrpcClientConfig> {
   const token = await getAccessToken();
 
@@ -57,10 +52,7 @@ export async function buildGrpcClientConfig(): Promise<GrpcClientConfig> {
   };
 }
 
-/**
- * Get the shared LedgerGrpcClient instance for tests.
- * Creates the client on first call, reuses it for subsequent calls.
- */
+/** Get the shared LedgerGrpcClient instance for tests. Creates the client on first call, reuses it for subsequent calls. */
 export async function getClient(): Promise<LedgerGrpcClient> {
   if (!client) {
     const config = await buildGrpcClientConfig();
@@ -69,10 +61,7 @@ export async function getClient(): Promise<LedgerGrpcClient> {
   return client;
 }
 
-/**
- * Close the shared client connection.
- * Call this in afterAll() to clean up resources.
- */
+/** Close the shared client connection. Call this in afterAll() to clean up resources. */
 export function closeClient(): void {
   if (client) {
     client.close();

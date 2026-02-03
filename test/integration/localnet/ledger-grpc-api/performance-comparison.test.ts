@@ -1,11 +1,11 @@
 /**
  * LedgerGrpcClient integration tests: Performance Comparison
  *
- * Demonstrates the performance benefits of gRPC over JSON API for
- * high-frequency operations. This is a practical example of when
- * to choose gRPC over the JSON API.
+ * Demonstrates the performance benefits of gRPC over JSON API for high-frequency operations. This is a practical
+ * example of when to choose gRPC over the JSON API.
  *
  * Use Case: High-frequency ledger state polling
+ *
  * - Monitoring applications that need to track ledger progress
  * - Trading systems that need low-latency state updates
  * - Analytics pipelines that poll for new transactions
@@ -30,8 +30,8 @@ describe('LedgerGrpcClient / Performance Comparison', () => {
   /**
    * Benchmark: Multiple sequential version requests
    *
-   * This simulates a monitoring application that frequently checks
-   * the ledger version to ensure connectivity and compatibility.
+   * This simulates a monitoring application that frequently checks the ledger version to ensure connectivity and
+   * compatibility.
    */
   test('gRPC version requests are faster than JSON API', async () => {
     const iterations = 5;
@@ -73,9 +73,8 @@ describe('LedgerGrpcClient / Performance Comparison', () => {
   /**
    * Benchmark: Ledger end polling
    *
-   * This simulates a transaction monitoring system that polls the ledger
-   * to detect new transactions. High-frequency polling benefits from gRPC's
-   * lower overhead.
+   * This simulates a transaction monitoring system that polls the ledger to detect new transactions. High-frequency
+   * polling benefits from gRPC's lower overhead.
    */
   test('gRPC ledger end polling is efficient for monitoring', async () => {
     const iterations = 10;

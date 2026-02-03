@@ -1,8 +1,7 @@
 /**
  * LedgerGrpcClient integration tests: Real-World Use Cases
  *
- * This file demonstrates practical scenarios where the gRPC client
- * provides value for Canton Network applications.
+ * This file demonstrates practical scenarios where the gRPC client provides value for Canton Network applications.
  */
 
 import { closeClient, getClient } from './setup';
@@ -15,8 +14,8 @@ describe('LedgerGrpcClient / Use Cases', () => {
   /**
    * Use Case 1: Health Check Service
    *
-   * A service that monitors ledger health by checking version and connectivity.
-   * This is useful for:
+   * A service that monitors ledger health by checking version and connectivity. This is useful for:
+   *
    * - Load balancers performing health checks
    * - Monitoring dashboards
    * - Alerting systems
@@ -60,8 +59,8 @@ describe('LedgerGrpcClient / Use Cases', () => {
   /**
    * Use Case 2: Transaction Monitor
    *
-   * A service that monitors the ledger for new transactions.
-   * The gRPC client is ideal for this because:
+   * A service that monitors the ledger for new transactions. The gRPC client is ideal for this because:
+   *
    * - Low latency for frequent polling
    * - Efficient binary protocol reduces bandwidth
    * - Streaming support for real-time updates (future enhancement)
@@ -135,9 +134,9 @@ describe('LedgerGrpcClient / Use Cases', () => {
   /**
    * Use Case 3: Multi-Service Architecture
    *
-   * In microservices architectures, different services may need
-   * different API clients based on their requirements:
-   * - gRPC for high-throughput internal services
+   * In microservices architectures, different services may need different API clients based on their requirements:
+   *
+   * - GRPC for high-throughput internal services
    * - JSON API for external-facing APIs or simpler integrations
    */
   describe('Multi-Service Architecture', () => {
