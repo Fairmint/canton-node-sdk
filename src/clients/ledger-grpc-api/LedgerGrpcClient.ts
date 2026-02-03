@@ -1,8 +1,8 @@
 /**
- * gRPC client for the Canton Ledger API.
+ * GRPC client for the Canton Ledger API.
  *
- * This client provides direct access to the Ledger API via gRPC,
- * offering better performance than the JSON API for high-throughput scenarios.
+ * This client provides direct access to the Ledger API via gRPC, offering better performance than the JSON API for
+ * high-throughput scenarios.
  *
  * @see https://docs.digitalasset.com/build/3.4/reference/lapi-proto-docs.html
  */
@@ -12,15 +12,12 @@ import * as protoLoader from '@grpc/proto-loader';
 import * as path from 'path';
 
 import { type GrpcClientConfig, GrpcError } from './services/base';
-import { type Commands, type Command } from './types/commands';
+import { type Command, type Commands } from './types/commands';
 import { type Transaction } from './types/transactions';
 import { type Identifier } from './types/value';
 
 /** Path to the proto files. */
-const PROTO_BASE_PATH = path.resolve(
-  __dirname,
-  '../../../libs/splice/canton/community/ledger-api/src/main/protobuf'
-);
+const PROTO_BASE_PATH = path.resolve(__dirname, '../../../libs/splice/canton/community/ledger-api/src/main/protobuf');
 
 /** Proto loader options optimized for TypeScript. */
 const PROTO_OPTIONS: protoLoader.Options = {
@@ -108,9 +105,10 @@ export interface GetUpdatesRequest {
 }
 
 /**
- * gRPC client for the Canton Ledger API.
+ * GRPC client for the Canton Ledger API.
  *
  * Provides direct gRPC access to all Ledger API services including:
+ *
  * - Version Service
  * - Command Service (submit and wait)
  * - Command Submission Service (async submit)
@@ -121,23 +119,23 @@ export interface GetUpdatesRequest {
  * - User Management Service
  *
  * @example
- * ```typescript
- * const client = new LedgerGrpcClient({
- *   endpoint: 'localhost:6865',
- *   accessToken: 'your-token',
- * });
+ *   ```typescript
+ *   const client = new LedgerGrpcClient({
+ *     endpoint: 'localhost:6865',
+ *     accessToken: 'your-token',
+ *   });
  *
- * // Get version
- * const version = await client.getVersion();
+ *   // Get version
+ *   const version = await client.getVersion();
  *
- * // Submit a command
- * const result = await client.submitAndWait({
- *   userId: 'alice',
- *   commandId: 'cmd-1',
- *   actAs: ['Alice::1234'],
- *   commands: [{ create: { templateId, createArguments } }],
- * });
- * ```
+ *   // Submit a command
+ *   const result = await client.submitAndWait({
+ *     userId: 'alice',
+ *     commandId: 'cmd-1',
+ *     actAs: ['Alice::1234'],
+ *     commands: [{ create: { templateId, createArguments } }],
+ *   });
+ *   ```;
  */
 export class LedgerGrpcClient {
   private readonly config: GrpcClientConfig;
@@ -185,10 +183,7 @@ export class LedgerGrpcClient {
   }
 
   /** Load a service client. */
-  private async getService<T extends grpc.Client>(
-    protoFile: string,
-    servicePath: string
-  ): Promise<T> {
+  private async getService<T extends grpc.Client>(protoFile: string, servicePath: string): Promise<T> {
     const cacheKey = `${protoFile}:${servicePath}`;
 
     if (this.services.has(cacheKey)) {
@@ -211,10 +206,7 @@ export class LedgerGrpcClient {
     }
 
     const ServiceConstructor = service as grpc.ServiceClientConstructor;
-    const client = new ServiceConstructor(
-      this.config.endpoint,
-      this.credentials
-    ) as unknown as T;
+    const client = new ServiceConstructor(this.config.endpoint, this.credentials) as unknown as T;
 
     this.services.set(cacheKey, client);
     return client;
@@ -240,27 +232,19 @@ export class LedgerGrpcClient {
         return;
       }
 
-      methodFn.call(
-        client,
-        request,
-        this.metadata,
-        { deadline: this.createDeadline() },
-        (error, response) => {
-          if (error) {
-            reject(new GrpcError(error));
-          } else {
-            resolve(response);
-          }
+      methodFn.call(client, request, this.metadata, { deadline: this.createDeadline() }, (error, response) => {
+        if (error) {
+          reject(new GrpcError(error));
+        } else {
+          resolve(response);
         }
-      );
+      });
     });
   }
 
   // ==================== Version Service ====================
 
-  /**
-   * Get the Ledger API version.
-   */
+  /** Get the Ledger API version. */
   public async getVersion(): Promise<LedgerApiVersion> {
     const client = await this.getService(
       'com/daml/ledger/api/v2/version_service.proto',
@@ -292,10 +276,11 @@ export class LedgerGrpcClient {
       'com.daml.ledger.api.v2.CommandService'
     );
 
-    const response = await this.unaryCall<
-      { commands: unknown },
-      { updateId: string; completionOffset: string }
-    >(client, 'submitAndWait', { commands: this.convertCommands(commands) });
+    const response = await this.unaryCall<{ commands: unknown }, { updateId: string; completionOffset: string }>(
+      client,
+      'submitAndWait',
+      { commands: this.convertCommands(commands) }
+    );
 
     return {
       updateId: response.updateId,
@@ -323,13 +308,14 @@ export class LedgerGrpcClient {
       transaction: Transaction;
     }
 
-    const response = await this.unaryCall<
-      { commands: unknown; transactionFormat?: unknown },
-      RawResponse
-    >(client, 'submitAndWaitForTransaction', {
-      commands: this.convertCommands(commands),
-      transactionFormat: filter ? { eventFormat: { filtersByParty: filter.filtersByParty } } : undefined,
-    });
+    const response = await this.unaryCall<{ commands: unknown; transactionFormat?: unknown }, RawResponse>(
+      client,
+      'submitAndWaitForTransaction',
+      {
+        commands: this.convertCommands(commands),
+        transactionFormat: filter ? { eventFormat: { filtersByParty: filter.filtersByParty } } : undefined,
+      }
+    );
 
     return {
       transaction: response.transaction,
@@ -349,11 +335,7 @@ export class LedgerGrpcClient {
       'com.daml.ledger.api.v2.StateService'
     );
 
-    const response = await this.unaryCall<Record<string, never>, { offset: string }>(
-      client,
-      'getLedgerEnd',
-      {}
-    );
+    const response = await this.unaryCall<Record<string, never>, { offset: string }>(client, 'getLedgerEnd', {});
 
     return parseInt(response.offset, 10);
   }
@@ -390,11 +372,15 @@ export class LedgerGrpcClient {
         return;
       }
 
-      const stream = methodFn.call(client, {
-        filter: options.filter,
-        verbose: options.verbose ?? false,
-        activeAtOffset: options.activeAtOffset,
-      }, this.metadata);
+      const stream = methodFn.call(
+        client,
+        {
+          filter: options.filter,
+          verbose: options.verbose ?? false,
+          activeAtOffset: options.activeAtOffset,
+        },
+        this.metadata
+      );
 
       stream.on('data', (chunk: { contractEntry?: unknown; offset?: string }) => {
         if (chunk.contractEntry) {
@@ -490,9 +476,7 @@ export class LedgerGrpcClient {
     };
   }
 
-  /**
-   * Close all connections.
-   */
+  /** Close all connections. */
   public close(): void {
     for (const client of this.services.values()) {
       client.close();

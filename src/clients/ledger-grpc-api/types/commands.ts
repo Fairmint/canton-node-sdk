@@ -1,6 +1,5 @@
 /**
- * Command types from the Ledger API protobufs.
- * These types correspond to com.daml.ledger.api.v2.commands.proto
+ * Command types from the Ledger API protobufs. These types correspond to com.daml.ledger.api.v2.commands.proto
  *
  * @see https://docs.digitalasset.com/build/3.4/reference/lapi-proto-docs.html
  */

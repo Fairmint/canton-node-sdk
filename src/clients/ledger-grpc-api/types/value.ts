@@ -1,6 +1,5 @@
 /**
- * Core value types from the Ledger API protobufs.
- * These types correspond to com.daml.ledger.api.v2.value.proto
+ * Core value types from the Ledger API protobufs. These types correspond to com.daml.ledger.api.v2.value.proto
  *
  * @see https://docs.digitalasset.com/build/3.4/reference/lapi-proto-docs.html
  */
@@ -23,10 +22,7 @@ export interface RecordField {
   value: Value;
 }
 
-/**
- * A Record value (product type in Daml).
- * Named DamlRecord to avoid conflict with TypeScript's Record utility type.
- */
+/** A Record value (product type in Daml). Named DamlRecord to avoid conflict with TypeScript's Record utility type. */
 export interface DamlRecord {
   /** Optional type identifier. */
   recordId?: Identifier;
@@ -92,10 +88,7 @@ export interface GenMapEntry {
   value: Value;
 }
 
-/**
- * A Daml value. This is a discriminated union of all possible value types.
- * Only one field should be set at a time.
- */
+/** A Daml value. This is a discriminated union of all possible value types. Only one field should be set at a time. */
 export interface Value {
   record?: DamlRecord;
   variant?: Variant;
@@ -117,6 +110,7 @@ export interface Value {
 
 /**
  * Helper to create an Identifier from a qualified string.
+ *
  * @param qualifiedName - Format: "packageId:moduleName:entityName"
  */
 export function parseIdentifier(qualifiedName: string): Identifier {
@@ -132,20 +126,13 @@ export function parseIdentifier(qualifiedName: string): Identifier {
   };
 }
 
-/**
- * Helper to format an Identifier as a qualified string.
- */
+/** Helper to format an Identifier as a qualified string. */
 export function formatIdentifier(id: Identifier): string {
   return `${id.packageId}:${id.moduleName}:${id.entityName}`;
 }
 
-/**
- * Helper to create a DamlRecord value from a plain object.
- */
-export function createDamlRecord(
-  fields: Record<string, Value>,
-  recordId?: Identifier
-): DamlRecord {
+/** Helper to create a DamlRecord value from a plain object. */
+export function createDamlRecord(fields: Record<string, Value>, recordId?: Identifier): DamlRecord {
   const record: DamlRecord = {
     fields: Object.entries(fields).map(([label, value]) => ({ label, value })),
   };
@@ -155,9 +142,7 @@ export function createDamlRecord(
   return record;
 }
 
-/**
- * Helper to create common Value types.
- */
+/** Helper to create common Value types. */
 export const Values = {
   text: (value: string): Value => ({ text: value }),
   int64: (value: bigint | number): Value => ({ int64: value.toString() }),

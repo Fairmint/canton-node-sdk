@@ -132,10 +132,7 @@ describe('Ledger gRPC API Types', () => {
         moduleName: 'Module',
         entityName: 'Type',
       };
-      const result = createDamlRecord(
-        { field1: Values.text('value1') },
-        recordId
-      );
+      const result = createDamlRecord({ field1: Values.text('value1') }, recordId);
 
       expect(result).toEqual({
         recordId,
@@ -188,9 +185,7 @@ describe('Ledger gRPC API Types', () => {
           choice: 'Transfer',
           choiceArgument: {
             record: {
-              fields: [
-                { label: 'newOwner', value: { party: 'Bob::5678' } },
-              ],
+              fields: [{ label: 'newOwner', value: { party: 'Bob::5678' } }],
             },
           },
         },

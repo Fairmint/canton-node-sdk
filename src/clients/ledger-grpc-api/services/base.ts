@@ -1,6 +1,4 @@
-/**
- * Base gRPC client infrastructure for the Ledger API.
- */
+/** Base gRPC client infrastructure for the Ledger API. */
 
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
@@ -34,11 +32,12 @@ const PROTO_LOADER_OPTIONS: protoLoader.Options = {
 };
 
 /** Base path to the Ledger API proto files. */
-const PROTO_BASE_PATH = path.resolve(__dirname, '../../../../libs/splice/canton/community/ledger-api/src/main/protobuf');
+const PROTO_BASE_PATH = path.resolve(
+  __dirname,
+  '../../../../libs/splice/canton/community/ledger-api/src/main/protobuf'
+);
 
-/**
- * Base class for gRPC service clients.
- */
+/** Base class for gRPC service clients. */
 export abstract class GrpcServiceClient {
   protected channel: grpc.Channel | null = null;
   protected credentials: grpc.ChannelCredentials;
@@ -106,9 +105,7 @@ export abstract class GrpcServiceClient {
   }
 }
 
-/**
- * Load a proto file and return the package definition.
- */
+/** Load a proto file and return the package definition. */
 export async function loadProtoFile(protoFile: string): Promise<grpc.GrpcObject> {
   const protoPath = path.join(PROTO_BASE_PATH, protoFile);
 
@@ -120,9 +117,7 @@ export async function loadProtoFile(protoFile: string): Promise<grpc.GrpcObject>
   return grpc.loadPackageDefinition(packageDefinition);
 }
 
-/**
- * Create a gRPC client for a service.
- */
+/** Create a gRPC client for a service. */
 export function createGrpcClient<T>(
   ServiceClass: grpc.ServiceClientConstructor,
   endpoint: string,
@@ -131,9 +126,7 @@ export function createGrpcClient<T>(
   return new ServiceClass(endpoint, credentials) as T;
 }
 
-/**
- * Wrap a gRPC unary call in a Promise.
- */
+/** Wrap a gRPC unary call in a Promise. */
 export async function promisifyUnaryCall<TRequest, TResponse>(
   client: grpc.Client,
   method: (
@@ -157,9 +150,7 @@ export async function promisifyUnaryCall<TRequest, TResponse>(
   });
 }
 
-/**
- * Convert gRPC error to a more friendly error.
- */
+/** Convert gRPC error to a more friendly error. */
 export class GrpcError extends Error {
   public readonly code: grpc.status;
   public readonly details: string;
@@ -174,9 +165,7 @@ export class GrpcError extends Error {
   }
 }
 
-/**
- * Wrap a gRPC call and convert errors.
- */
+/** Wrap a gRPC call and convert errors. */
 export async function wrapGrpcCall<T>(call: Promise<T>): Promise<T> {
   try {
     return await call;

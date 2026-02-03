@@ -1,6 +1,5 @@
 /**
- * Transaction types from the Ledger API protobufs.
- * These types correspond to com.daml.ledger.api.v2.transaction.proto
+ * Transaction types from the Ledger API protobufs. These types correspond to com.daml.ledger.api.v2.transaction.proto
  *
  * @see https://docs.digitalasset.com/build/3.4/reference/lapi-proto-docs.html
  */
@@ -87,7 +86,7 @@ export interface Completion {
 
 /** Status of a completion. */
 export interface CompletionStatus {
-  /** gRPC status code. */
+  /** GRPC status code. */
   code: number;
   /** Error message if failed. */
   message?: string;
