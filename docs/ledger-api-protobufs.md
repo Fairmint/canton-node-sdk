@@ -22,7 +22,43 @@ Canton exposes the Ledger API through two interfaces:
 1. **gRPC/Protobuf API** - The native binary protocol, optimized for performance
 2. **JSON API** - A REST/WebSocket interface that mirrors the protobuf definitions
 
-This SDK primarily targets the JSON API while maintaining type compatibility with the underlying protobuf structure.
+This SDK provides clients for both:
+- `LedgerJsonApiClient` - For the REST/WebSocket JSON API
+- `LedgerGrpcClient` - For direct gRPC access (higher performance)
+
+## Using the gRPC Client
+
+```typescript
+import { LedgerGrpcClient, Values, createCreateCommand } from '@fairmint/canton-node-sdk';
+
+// Create a gRPC client
+const client = new LedgerGrpcClient({
+  endpoint: 'localhost:6865',
+  accessToken: 'your-token',
+  useTls: false, // Set to true for production
+});
+
+// Get version
+const version = await client.getVersion();
+console.log(`Ledger API version: ${version.version}`);
+
+// Submit a command
+const result = await client.submitAndWait({
+  userId: 'alice',
+  commandId: crypto.randomUUID(),
+  actAs: ['Alice::1234'],
+  commands: [
+    createCreateCommand(
+      { packageId: 'pkg', moduleName: 'Main', entityName: 'Asset' },
+      { fields: [{ label: 'owner', value: Values.party('Alice::1234') }] }
+    ),
+  ],
+});
+console.log(`Transaction: ${result.updateId}`);
+
+// Always close when done
+client.close();
+```
 
 ## Protobuf Source Files
 
