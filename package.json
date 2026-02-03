@@ -55,6 +55,8 @@
   },
   "dependencies": {
     "@canton-network/wallet-sdk": "0.20.0",
+    "@grpc/grpc-js": "^1.14.3",
+    "@grpc/proto-loader": "^0.8.0",
     "@stellar/stellar-base": "14.0.4",
     "axios": "1.13.4",
     "dotenv": "17.2.3",
@@ -66,6 +68,7 @@
     "zod": "4.3.6"
   },
   "devDependencies": {
+    "@types/google-protobuf": "^3.15.12",
     "@types/jest": "30.0.0",
     "@types/node": "25.2.0",
     "@types/ws": "8.18.1",

@@ -1,3 +1,4 @@
+export * from './ledger-grpc-api';
 export * from './ledger-json-api';
 export * from './register';
 export * from './scan-api';
