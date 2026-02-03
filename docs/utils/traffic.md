@@ -16,12 +16,60 @@ on their size and complexity. These utilities help you:
 
 ## Functions
 
+### estimateTrafficCost
+
+Estimates the traffic cost for a set of commands without executing them.
+
+This is the easiest way to get a traffic cost estimate. It prepares a transaction internally and extracts
+the cost estimation, so you don't need to handle the preparation step yourself.
+
+**Parameters:**
+- `options.ledgerClient: LedgerJsonApiClient` - Ledger JSON API client instance
+- `options.commands: Command[]` - Commands to estimate traffic cost for
+- `options.synchronizerId: string` - Synchronizer/domain ID where the transaction will be submitted
+- `options.actAs?: string[]` - Parties to act as (defaults to client's configured party)
+- `options.readAs?: string[]` - Parties to read as (optional)
+- `options.userId?: string` - User ID (defaults to client's configured user)
+- `options.disclosedContracts?: DisclosedContract[]` - Disclosed contracts (optional)
+- `options.packageIdSelectionPreference?: PackagePreference[]` - Package preferences (optional)
+
+**Returns:** `Promise<TrafficCostEstimate | undefined>` - The traffic cost estimate, or undefined if not available
+
+**Example:**
+```typescript
+import { Canton, estimateTrafficCost } from '@fairmint/canton-node-sdk';
+
+const canton = new Canton({ network: 'localnet' });
+
+// Estimate the cost of creating a contract
+const estimate = await estimateTrafficCost({
+  ledgerClient: canton.ledger,
+  commands: [
+    {
+      CreateCommand: {
+        templateId: 'MyModule:MyTemplate',
+        createArguments: { fields: { owner: { party: 'alice::...' } } },
+      },
+    },
+  ],
+  synchronizerId: 'global-domain::1234...',
+});
+
+if (estimate) {
+  console.log(`Estimated traffic cost: ${estimate.totalCost} bytes`);
+  console.log(`  Request: ${estimate.requestCost} bytes`);
+  console.log(`  Response: ${estimate.responseCost} bytes`);
+}
+```
+
+---
+
 ### getEstimatedTrafficCost
 
 Extracts traffic cost estimation from a prepared transaction response.
 
-When preparing transactions for external signing via `interactiveSubmissionPrepare`, the response includes
-cost estimation data that tells you how much traffic (in bytes) the transaction will consume.
+Use this when you already have a prepared transaction (e.g., from `prepareExternalTransaction`) and want
+to extract the cost information. For a simpler API, use `estimateTrafficCost` instead.
 
 **Parameters:**
 - `preparedTransaction: InteractiveSubmissionPrepareResponse` - The response from `interactiveSubmissionPrepare`
