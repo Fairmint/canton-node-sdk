@@ -176,7 +176,21 @@ export class AuthenticationManager {
           `Grant Type: ${this.authConfig.grantType}`
       );
     }
-    // password grant type fields (username, password) are enforced by the TypeScript type system
+    // Runtime validation for password grant type (TypeScript only provides compile-time checks)
+    if (this.authConfig.grantType === 'password') {
+      const missingFields: string[] = [];
+      if (!this.authConfig.username) {
+        missingFields.push('username');
+      }
+      if (!this.authConfig.password) {
+        missingFields.push('password');
+      }
+      if (missingFields.length > 0) {
+        throw new AuthenticationError(
+          `Authentication configuration incomplete for password grant type. Missing required field(s): ${missingFields.join(', ')}.`
+        );
+      }
+    }
   }
 
   private isTokenValid(): boolean {
