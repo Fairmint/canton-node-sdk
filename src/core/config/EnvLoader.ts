@@ -444,9 +444,16 @@ export class EnvLoader {
     }
 
     // Determine grant type based on available credentials
+    // Priority: clientSecret (client_credentials) > username/password (password grant)
     let auth: AuthConfig;
 
-    if (username && password) {
+    if (clientSecret) {
+      auth = {
+        grantType: 'client_credentials',
+        clientId,
+        clientSecret,
+      };
+    } else if (username && password) {
       auth = {
         grantType: 'password',
         clientId,
@@ -457,7 +464,6 @@ export class EnvLoader {
       auth = {
         grantType: 'client_credentials',
         clientId,
-        ...(clientSecret !== undefined ? { clientSecret } : {}),
       };
     }
 
