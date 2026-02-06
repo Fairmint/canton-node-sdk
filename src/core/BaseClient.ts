@@ -203,7 +203,7 @@ export abstract class BaseClient {
 
     const partyList = [...additionalParties, ...managedParties];
 
-    if (partyId && !partyList.includes(partyId)) {
+    if (!partyList.includes(partyId)) {
       partyList.push(partyId);
     }
 
