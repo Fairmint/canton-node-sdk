@@ -3,12 +3,12 @@ export type ProviderType = string;
 
 export type ApiType = 'LEDGER_JSON_API' | 'VALIDATOR_API' | 'SCAN_API';
 
-export interface AuthConfig {
-  grantType: string;
-  clientId?: string;
-  clientSecret?: string;
-  username?: string;
-  password?: string;
+/** Supported OAuth2 grant types */
+export type GrantType = 'client_credentials' | 'password';
+
+/** Shared OAuth2 fields present in all auth configs */
+interface AuthConfigBase {
+  clientId: string;
   audience?: string;
   scope?: string;
   /**
@@ -19,6 +19,22 @@ export interface AuthConfig {
   /** Async function to generate a bearer token dynamically. Used for shared-secret JWT generation. */
   tokenGenerator?: () => Promise<string>;
 }
+
+/** Auth config for client_credentials grant type */
+export interface ClientCredentialsAuthConfig extends AuthConfigBase {
+  grantType: 'client_credentials';
+  clientSecret?: string;
+}
+
+/** Auth config for password grant type */
+export interface PasswordAuthConfig extends AuthConfigBase {
+  grantType: 'password';
+  username: string;
+  password: string;
+}
+
+/** Discriminated union of all auth configurations, keyed on grantType */
+export type AuthConfig = ClientCredentialsAuthConfig | PasswordAuthConfig;
 
 export interface ApiConfig {
   apiUrl: string;

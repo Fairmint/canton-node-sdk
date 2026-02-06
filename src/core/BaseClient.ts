@@ -55,7 +55,8 @@ export abstract class BaseClient {
     }
 
     // Validate that the required API configuration is present
-    if (!this.clientConfig.apis?.[apiType]) {
+    const validatedApiConfig = this.clientConfig.apis?.[apiType];
+    if (!validatedApiConfig) {
       throw new ConfigurationError(`API configuration not found for ${apiType}`);
     }
 
@@ -66,7 +67,7 @@ export abstract class BaseClient {
         : this.clientConfig.network,
       authUrl: this.clientConfig.authUrl ?? '',
       apis: {
-        [apiType]: this.clientConfig.apis[apiType],
+        [apiType]: validatedApiConfig,
       },
     };
 
@@ -176,7 +177,10 @@ export abstract class BaseClient {
 
   public getApiUrl(): string {
     const apiConfig = this.config.apis[this.apiType];
-    return apiConfig?.apiUrl ?? '';
+    if (!apiConfig?.apiUrl) {
+      throw new ConfigurationError(`API URL not configured for ${this.apiType}`);
+    }
+    return apiConfig.apiUrl;
   }
 
   public getPartyId(): string {
@@ -185,7 +189,10 @@ export abstract class BaseClient {
     if (apiConfig?.partyId) {
       return apiConfig.partyId;
     }
-    return this.clientConfig.partyId ?? '';
+    if (this.clientConfig.partyId) {
+      return this.clientConfig.partyId;
+    }
+    throw new ConfigurationError(`Party ID not configured. Set partyId in client config or call setPartyId().`);
   }
 
   /**

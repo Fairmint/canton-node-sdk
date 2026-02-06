@@ -1,20 +1,5 @@
 import type { SubmitAndWaitForTransactionTreeResponse } from '../../clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction-tree';
-import { type CreatedTreeEventWrapper } from '../contracts/findCreatedEvent';
-
-/** Type guard to check if an event is a CreatedTreeEvent wrapper */
-function isCreatedTreeEventWrapper(event: unknown): event is CreatedTreeEventWrapper {
-  if (!event || typeof event !== 'object') return false;
-  if (!('CreatedTreeEvent' in event)) return false;
-
-  const wrapper = event as { CreatedTreeEvent?: unknown };
-  if (!wrapper.CreatedTreeEvent || typeof wrapper.CreatedTreeEvent !== 'object') return false;
-
-  const created = wrapper.CreatedTreeEvent as { value?: unknown };
-  if (!created.value || typeof created.value !== 'object') return false;
-
-  const value = created.value as { templateId?: unknown; contractId?: unknown };
-  return typeof value.templateId === 'string' && typeof value.contractId === 'string';
-}
+import { type CreatedTreeEventWrapper, isCreatedTreeEventWrapper } from '../contracts/findCreatedEvent';
 
 /**
  * Finds a CreatedTreeEvent for a given template name from a transaction tree response. The template name search

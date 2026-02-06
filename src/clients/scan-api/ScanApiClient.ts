@@ -1,11 +1,4 @@
-import {
-  ApiError,
-  ConfigurationError,
-  NetworkError,
-  type ClientConfig,
-  type NetworkType,
-  type ProviderType,
-} from '../../core';
+import { ApiError, ConfigurationError, NetworkError, type ClientConfig } from '../../core';
 import { resolveScanApiUrls } from './scan-endpoints';
 import { ScanApiClient as ScanApiClientGenerated } from './ScanApiClient.generated';
 
@@ -47,12 +40,11 @@ export class ScanApiClient extends ScanApiClientGenerated {
   private readonly maxEndpointAttempts: number;
   private activeBaseUrlIndex: number;
 
-  constructor(config?: ScanApiClientConfig) {
-    const network: NetworkType = config?.network ?? 'mainnet';
-    const provider: ProviderType | undefined = config?.provider;
+  constructor(config: ScanApiClientConfig) {
+    const { network, provider } = config;
 
-    const resolvedUrls = config?.scanApiUrls ?? resolveScanApiUrls(network, provider);
-    const fallbackUrl = config?.apis?.SCAN_API?.apiUrl;
+    const resolvedUrls = config.scanApiUrls ?? resolveScanApiUrls(network, provider);
+    const fallbackUrl = config.apis?.SCAN_API?.apiUrl;
     const scanApiUrls = resolvedUrls.length > 0 ? resolvedUrls : fallbackUrl ? [fallbackUrl] : [];
 
     const [firstApiUrl] = scanApiUrls;
@@ -65,14 +57,14 @@ export class ScanApiClient extends ScanApiClientGenerated {
     const clientConfig: ClientConfig = {
       network,
       ...(provider !== undefined ? { provider } : {}),
-      ...(config?.logger !== undefined ? { logger: config.logger } : {}),
-      ...(config?.debug !== undefined ? { debug: config.debug } : {}),
-      ...(config?.partyId !== undefined ? { partyId: config.partyId } : {}),
-      ...(config?.userId !== undefined ? { userId: config.userId } : {}),
-      ...(config?.managedParties !== undefined ? { managedParties: config.managedParties } : {}),
-      authUrl: config?.authUrl ?? '',
+      ...(config.logger !== undefined ? { logger: config.logger } : {}),
+      ...(config.debug !== undefined ? { debug: config.debug } : {}),
+      ...(config.partyId !== undefined ? { partyId: config.partyId } : {}),
+      ...(config.userId !== undefined ? { userId: config.userId } : {}),
+      ...(config.managedParties !== undefined ? { managedParties: config.managedParties } : {}),
+      authUrl: config.authUrl ?? '',
       apis: {
-        ...(config?.apis ?? {}),
+        ...(config.apis ?? {}),
         SCAN_API: {
           apiUrl: firstApiUrl,
           // Public endpoints do not require auth; the AuthenticationManager skips auth when clientId is empty.
@@ -84,11 +76,11 @@ export class ScanApiClient extends ScanApiClientGenerated {
     super(clientConfig);
 
     this.scanApiUrls = scanApiUrls;
-    this.maxEndpointAttempts = config?.maxEndpointAttempts ?? scanApiUrls.length;
+    this.maxEndpointAttempts = config.maxEndpointAttempts ?? scanApiUrls.length;
     this.activeBaseUrlIndex = 0;
 
     // Prefer rotating quickly across endpoints rather than waiting on per-endpoint retries.
-    this.httpClient.setRetryConfig({ maxRetries: 0 });
+    this.httpClient.setRetryConfig({ maxRetries: 0, delayMs: 0 });
   }
 
   private setActiveBaseUrl(index: number): void {

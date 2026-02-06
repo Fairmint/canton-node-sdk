@@ -24,23 +24,24 @@ export interface CreatedTreeEventWrapper {
   };
 }
 
-function isCreatedTreeEventWrapper(event: unknown): event is CreatedTreeEventWrapper {
+/** Type guard to check if an event is a CreatedTreeEvent wrapper */
+export function isCreatedTreeEventWrapper(event: unknown): event is CreatedTreeEventWrapper {
   if (!event || typeof event !== 'object') return false;
-  const e = event as { CreatedTreeEvent?: { value?: unknown } };
-  return Boolean(e.CreatedTreeEvent) && typeof e.CreatedTreeEvent === 'object' && 'value' in e.CreatedTreeEvent;
+  if (!('CreatedTreeEvent' in event)) return false;
+  const wrapper = event as { CreatedTreeEvent?: unknown };
+  if (!wrapper.CreatedTreeEvent || typeof wrapper.CreatedTreeEvent !== 'object') return false;
+  const created = wrapper.CreatedTreeEvent as { value?: unknown };
+  if (!created.value || typeof created.value !== 'object') return false;
+  const value = created.value as { templateId?: unknown; contractId?: unknown };
+  return typeof value.templateId === 'string' && typeof value.contractId === 'string';
 }
 
 export function findCreatedEventByTemplateId(
   response: SubmitAndWaitForTransactionTreeResponse,
   expectedTemplateId: string
 ): CreatedTreeEventWrapper | undefined {
-  // Canonical structure: transactionTree.eventsById
   const { transactionTree } = response;
-
-  const { eventsById } = transactionTree as { eventsById?: Record<string, unknown> };
-  if (!eventsById || typeof eventsById !== 'object') {
-    return undefined;
-  }
+  const { eventsById } = transactionTree;
 
   // Extract the part after the first ':' from the expected template ID for matching
   const expectedTemplateIdSuffix = expectedTemplateId.includes(':')

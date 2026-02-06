@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { RecordSchema } from './base';
 
-/** DAR file content (Buffer or base64 encoded string). */
-export const DarFileSchema = z.union([z.instanceof(Buffer), z.string()]);
+/** DAR file content as a binary Buffer. */
+export const DarFileSchema = z.instanceof(Buffer);
 
 /** Trace context for distributed tracing. */
 export const TraceContextSchema = z.object({
@@ -14,24 +14,6 @@ export const TraceContextSchema = z.object({
   parentSpanId: z.string().optional(),
   /** Additional trace metadata. */
   metadata: z.record(z.string(), z.string()).optional(),
-});
-
-/** Filter for active contracts and events. */
-export const FilterSchema = z.object({
-  /** Template or interface filters. */
-  filtersByParty: z
-    .record(
-      z.string(),
-      z
-        .object({
-          /** List of template or interface filters for this party. */
-          cumulative: z.array(z.string()),
-        })
-        .strict()
-    )
-    .optional(),
-  /** If true, include all available fields. */
-  verbose: z.boolean().optional(),
 });
 
 /** Deduplication duration. */
@@ -105,11 +87,6 @@ export const DurationSchema = z.object({
   seconds: z.number(),
   /** Duration in nanoseconds. */
   nanos: z.number(),
-  /** Unknown fields for forward compatibility. */
-  unknownFields: z.object({
-    /** Additional fields not explicitly defined in the schema */
-    fields: RecordSchema,
-  }),
 });
 
 /** Offset checkpoint features configuration. */
@@ -133,7 +110,6 @@ export const ApiFeaturesSchema = z.object({
 // Export types
 export type DarFile = z.infer<typeof DarFileSchema>;
 export type TraceContext = z.infer<typeof TraceContextSchema>;
-export type Filter = z.infer<typeof FilterSchema>;
 export type DeduplicationDuration = z.infer<typeof DeduplicationDurationSchema>;
 export type DeduplicationOffset = z.infer<typeof DeduplicationOffsetSchema>;
 export type EmptyDeduplication = z.infer<typeof EmptyDeduplicationSchema>;

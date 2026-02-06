@@ -1,7 +1,6 @@
 import {
   ApiFeaturesSchema,
   DeduplicationDurationSchema,
-  FilterSchema,
   TraceContextSchema,
 } from '../../../src/clients/ledger-json-api/schemas/common';
 
@@ -27,44 +26,6 @@ describe('Common Schemas', () => {
         traceId: 'abc123',
       });
       expect(result.success).toBe(true);
-    });
-  });
-
-  describe('FilterSchema', () => {
-    it('validates empty filter', () => {
-      const result = FilterSchema.safeParse({});
-      expect(result.success).toBe(true);
-    });
-
-    it('validates filter with party mappings', () => {
-      const result = FilterSchema.safeParse({
-        filtersByParty: {
-          'alice::123': {
-            cumulative: ['Splice.Amulet:Amulet'],
-          },
-        },
-        verbose: true,
-      });
-      expect(result.success).toBe(true);
-    });
-
-    it('validates filter with multiple parties', () => {
-      const result = FilterSchema.safeParse({
-        filtersByParty: {
-          'alice::123': { cumulative: ['Template1'] },
-          'bob::456': { cumulative: ['Template2', 'Template3'] },
-        },
-      });
-      expect(result.success).toBe(true);
-    });
-
-    it('rejects invalid filter structure', () => {
-      const result = FilterSchema.safeParse({
-        filtersByParty: {
-          party: 'invalid', // Should be an object
-        },
-      });
-      expect(result.success).toBe(false);
     });
   });
 
@@ -108,7 +69,6 @@ describe('Common Schemas', () => {
           maxOffsetCheckpointEmissionDelay: {
             seconds: 10,
             nanos: 0,
-            unknownFields: { fields: {} },
           },
         },
       });

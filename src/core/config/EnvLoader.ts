@@ -2,7 +2,14 @@ import { config } from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ConfigurationError } from '../errors';
-import { type ApiConfig, type AuthConfig, type ClientConfig, type NetworkType, type ProviderType } from '../types';
+import {
+  type ApiConfig,
+  type ApiType,
+  type AuthConfig,
+  type ClientConfig,
+  type NetworkType,
+  type ProviderType,
+} from '../types';
 
 // Load environment variables with fallback to parent directory
 const currentEnvPath = '.env';
@@ -53,7 +60,7 @@ export class EnvLoader {
    * @param options Optional network and provider to use instead of reading from env
    * @returns ClientConfig with only the specified API configured
    */
-  public static getConfig(apiType: string, options?: { network?: NetworkType; provider?: ProviderType }): ClientConfig {
+  public static getConfig(apiType: ApiType, options?: { network?: NetworkType; provider?: ProviderType }): ClientConfig {
     const envLoader = EnvLoader.getInstance();
 
     // Determine which values to use - prioritize options over environment
@@ -108,7 +115,7 @@ export class EnvLoader {
    * configuration issues
    */
   public static getConfigSummary(
-    apiType: string,
+    apiType: ApiType,
     options?: { network?: NetworkType; provider?: ProviderType }
   ): {
     network: NetworkType;
@@ -434,32 +441,20 @@ export class EnvLoader {
     }
 
     // Determine grant type based on available credentials
-    let grantType: string;
     let auth: AuthConfig;
 
-    if (clientSecret) {
-      // Use client_credentials if client secret is available
-      grantType = 'client_credentials';
+    if (username && password) {
       auth = {
-        grantType,
-        clientId,
-        clientSecret,
-      };
-    } else if (username && password) {
-      // Use password grant if username and password are available
-      grantType = 'password';
-      auth = {
-        grantType,
+        grantType: 'password',
         clientId,
         username,
         password,
       };
     } else {
-      // Fallback to client_credentials without secret (some providers may not require it)
-      grantType = 'client_credentials';
       auth = {
-        grantType,
+        grantType: 'client_credentials',
         clientId,
+        ...(clientSecret !== undefined ? { clientSecret } : {}),
       };
     }
 

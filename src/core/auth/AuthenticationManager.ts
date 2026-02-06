@@ -58,7 +58,7 @@ export class AuthenticationManager {
     formData.append('grant_type', this.authConfig.grantType);
     formData.append('client_id', this.authConfig.clientId);
 
-    if (this.authConfig.clientSecret) {
+    if (this.authConfig.grantType === 'client_credentials' && this.authConfig.clientSecret) {
       formData.append('client_secret', this.authConfig.clientSecret);
     }
     if (this.authConfig.audience) {
@@ -67,10 +67,8 @@ export class AuthenticationManager {
     if (this.authConfig.scope) {
       formData.append('scope', this.authConfig.scope);
     }
-    if (this.authConfig.username) {
+    if (this.authConfig.grantType === 'password') {
       formData.append('username', this.authConfig.username);
-    }
-    if (this.authConfig.password) {
       formData.append('password', this.authConfig.password);
     }
 
@@ -172,25 +170,13 @@ export class AuthenticationManager {
   }
 
   private validateAuthConfig(): void {
-    const missingConfig: string[] = [];
-
-    if (!this.authConfig.clientId) missingConfig.push('clientId');
-    if (!this.authConfig.grantType) missingConfig.push('grantType');
-
-    // Check for grant type specific requirements
-    if (this.authConfig.grantType === 'password') {
-      if (!this.authConfig.username) missingConfig.push('username');
-      if (!this.authConfig.password) missingConfig.push('password');
-    }
-    // Note: client_credentials grant type may not always require client_secret
-    // Some providers allow client_credentials without secret for public clients
-
-    if (missingConfig.length > 0) {
+    if (!this.authConfig.clientId) {
       throw new AuthenticationError(
-        `Authentication configuration incomplete. Missing required fields: ${missingConfig.join(', ')}. ` +
+        `Authentication configuration incomplete. Missing required field: clientId. ` +
           `Grant Type: ${this.authConfig.grantType}`
       );
     }
+    // password grant type fields (username, password) are enforced by the TypeScript type system
   }
 
   private isTokenValid(): boolean {

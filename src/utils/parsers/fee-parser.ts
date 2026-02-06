@@ -67,7 +67,6 @@ interface ExerciseResult {
     value: string;
   }>;
   senderChangeAmulet: string;
-  meta?: unknown;
 }
 
 // Type guard to check if an object is an ExerciseResult
