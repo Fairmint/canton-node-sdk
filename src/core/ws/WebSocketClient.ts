@@ -8,10 +8,10 @@ export interface WebSocketSubscription {
   getConnectionState: () => number;
 }
 
-export interface WebSocketHandlers<Message, ErrorMessage = unknown> {
+export interface WebSocketHandlers<Message> {
   onOpen?: () => void;
   onMessage: (msg: Message) => void;
-  onError?: (err: Error | ErrorMessage) => void;
+  onError?: (err: Error) => void;
   onClose?: (code: number, reason: string) => void;
 }
 
@@ -75,10 +75,10 @@ export function calculateTokenRefreshTime(tokenIssuedAt: number, tokenExpiresAt:
 export class WebSocketClient {
   constructor(private readonly client: BaseClient) {}
 
-  public async connect<RequestMessage, InboundMessage, ErrorMessage = unknown>(
+  public async connect<RequestMessage, InboundMessage>(
     path: string,
     requestMessage: RequestMessage,
-    handlers: WebSocketHandlers<InboundMessage, ErrorMessage>,
+    handlers: WebSocketHandlers<InboundMessage>,
     options?: WebSocketOptions
   ): Promise<WebSocketSubscription> {
     const baseUrl = this.client.getApiUrl();

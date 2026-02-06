@@ -56,7 +56,7 @@ export interface PartialProviderConfig {
 }
 
 export interface RequestConfig {
-  contentType?: string;
+  contentType?: 'application/json' | 'application/octet-stream';
   includeBearerToken?: boolean;
 }
 

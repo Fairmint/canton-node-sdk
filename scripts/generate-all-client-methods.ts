@@ -234,7 +234,7 @@ function generateMethodImplementations(ops: Array<OperationInfo & { importPath: 
         const opMethodName = op.methodName ?? 'execute';
         return `    this.${methodName} = (${params}) => new ${op.operationName}(this).${opMethodName}(${params});`;
       }
-      return `    this.${methodName} = (params, handlers) => new ${op.operationName}(this).subscribe(params as any, handlers as any);`;
+      return `    this.${methodName} = (params, handlers) => new ${op.operationName}(this).subscribe(params, handlers);`;
     })
     .join('\n');
 }

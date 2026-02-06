@@ -1,4 +1,4 @@
-import { ApiError, ConfigurationError, NetworkError, type ClientConfig } from '../../core';
+import { ApiError, ConfigurationError, NetworkError, type ClientConfig, type RequestConfig } from '../../core';
 import { resolveScanApiUrls } from './scan-endpoints';
 import { ScanApiClient as ScanApiClientGenerated } from './ScanApiClient.generated';
 
@@ -147,33 +147,19 @@ export class ScanApiClient extends ScanApiClientGenerated {
     throw lastError instanceof Error ? lastError : new NetworkError(`Scan request failed: ${String(lastError)}`);
   }
 
-  public override async makeGetRequest<T>(
-    url: string,
-    config: { contentType?: string; includeBearerToken?: boolean } = {}
-  ): Promise<T> {
+  public override async makeGetRequest<T>(url: string, config: RequestConfig = {}): Promise<T> {
     return this.rotateRequest(url, async (u) => super.makeGetRequest<T>(u, config));
   }
 
-  public override async makePostRequest<T>(
-    url: string,
-    data: unknown,
-    config: { contentType?: string; includeBearerToken?: boolean } = {}
-  ): Promise<T> {
+  public override async makePostRequest<T>(url: string, data: unknown, config: RequestConfig = {}): Promise<T> {
     return this.rotateRequest(url, async (u) => super.makePostRequest<T>(u, data, config));
   }
 
-  public override async makeDeleteRequest<T>(
-    url: string,
-    config: { contentType?: string; includeBearerToken?: boolean } = {}
-  ): Promise<T> {
+  public override async makeDeleteRequest<T>(url: string, config: RequestConfig = {}): Promise<T> {
     return this.rotateRequest(url, async (u) => super.makeDeleteRequest<T>(u, config));
   }
 
-  public override async makePatchRequest<T>(
-    url: string,
-    data: unknown,
-    config: { contentType?: string; includeBearerToken?: boolean } = {}
-  ): Promise<T> {
+  public override async makePatchRequest<T>(url: string, data: unknown, config: RequestConfig = {}): Promise<T> {
     return this.rotateRequest(url, async (u) => super.makePatchRequest<T>(u, data, config));
   }
 }

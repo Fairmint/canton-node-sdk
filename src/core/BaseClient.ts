@@ -9,6 +9,7 @@ import {
   type NetworkType,
   type PartialProviderConfig,
   type ProviderType,
+  type RequestConfig,
 } from './types';
 
 /** Abstract base class providing common functionality for all API clients */
@@ -121,53 +122,31 @@ export abstract class BaseClient {
     return this.authManager.getTokenLifetimeMs();
   }
 
-  public async makeGetRequest<T>(
-    url: string,
-    config: { contentType?: string; includeBearerToken?: boolean } = {}
-  ): Promise<T> {
-    // Ensure we have a valid token if authentication is required
+  public async makeGetRequest<T>(url: string, config: RequestConfig = {}): Promise<T> {
     if (config.includeBearerToken) {
       await this.authenticate();
     }
-
     return this.httpClient.makeGetRequest<T>(url, config);
   }
 
-  public async makePostRequest<T>(
-    url: string,
-    data: unknown,
-    config: { contentType?: string; includeBearerToken?: boolean } = {}
-  ): Promise<T> {
-    // Ensure we have a valid token if authentication is required
+  public async makePostRequest<T>(url: string, data: unknown, config: RequestConfig = {}): Promise<T> {
     if (config.includeBearerToken) {
       await this.authenticate();
     }
-
     return this.httpClient.makePostRequest<T>(url, data, config);
   }
 
-  public async makeDeleteRequest<T>(
-    url: string,
-    config: { contentType?: string; includeBearerToken?: boolean } = {}
-  ): Promise<T> {
-    // Ensure we have a valid token if authentication is required
+  public async makeDeleteRequest<T>(url: string, config: RequestConfig = {}): Promise<T> {
     if (config.includeBearerToken) {
       await this.authenticate();
     }
-
     return this.httpClient.makeDeleteRequest<T>(url, config);
   }
 
-  public async makePatchRequest<T>(
-    url: string,
-    data: unknown,
-    config: { contentType?: string; includeBearerToken?: boolean } = {}
-  ): Promise<T> {
-    // Ensure we have a valid token if authentication is required
+  public async makePatchRequest<T>(url: string, data: unknown, config: RequestConfig = {}): Promise<T> {
     if (config.includeBearerToken) {
       await this.authenticate();
     }
-
     return this.httpClient.makePatchRequest<T>(url, data, config);
   }
 

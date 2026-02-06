@@ -6,11 +6,9 @@ import { type AllocatePartyResponse } from '../../../schemas/api';
 // Type aliases for better readability and to avoid repetition
 type GeneratedAllocatePartyRequest = paths['/v2/parties']['post']['requestBody']['content']['application/json'];
 
-// Extended type to support both old and new API versions
-
 type AllocatePartyRequest = GeneratedAllocatePartyRequest & {
-  synchronizerId?: string;
-  userId?: string;
+  synchronizerId: string;
+  userId: string;
 };
 
 // Schema for the parameters
@@ -26,8 +24,8 @@ export const AllocatePartyParamsSchema = z.object({
   /** Local metadata (optional) */
   localMetadata: z
     .object({
-      resourceVersion: z.string().optional(),
-      annotations: z.record(z.string(), z.string()).optional(),
+      resourceVersion: z.string(),
+      annotations: z.record(z.string(), z.string()),
     })
     .optional(),
 });
@@ -56,11 +54,6 @@ export const AllocateParty = createApiOperation<AllocatePartyParams, AllocatePar
     identityProviderId: params.identityProviderId,
     synchronizerId: params.synchronizerId,
     userId: params.userId,
-    ...(params.localMetadata && {
-      localMetadata: {
-        resourceVersion: params.localMetadata.resourceVersion ?? '',
-        annotations: params.localMetadata.annotations ?? {},
-      },
-    }),
+    ...(params.localMetadata !== undefined ? { localMetadata: params.localMetadata } : {}),
   }),
 });
