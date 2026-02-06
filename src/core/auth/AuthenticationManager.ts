@@ -173,9 +173,7 @@ export class AuthenticationManager {
     // Runtime validation for grantType (TypeScript only provides compile-time checks)
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime guard for external config sources
     if (!this.authConfig.grantType) {
-      throw new AuthenticationError(
-        `Authentication configuration incomplete. Missing required field: grantType.`
-      );
+      throw new AuthenticationError(`Authentication configuration incomplete. Missing required field: grantType.`);
     }
     if (!this.authConfig.clientId) {
       throw new AuthenticationError(
