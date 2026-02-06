@@ -89,7 +89,7 @@ export class EnvLoader {
     const authUrl = envLoader.getAuthUrl(network, provider);
 
     // Get API-specific configuration using the determined network and provider
-    const apiConfig = envLoader.loadApiConfig(apiType, network, provider || undefined);
+    const apiConfig = envLoader.loadApiConfig(apiType, network, provider);
     if (!apiConfig) {
       const providerStr = provider ? provider.toUpperCase() : 'PROVIDER';
       throw new ConfigurationError(
@@ -128,7 +128,16 @@ export class EnvLoader {
   } {
     const envLoader = EnvLoader.getInstance();
     const network = options?.network ?? envLoader.getCurrentNetwork();
-    const provider = options?.provider ?? envLoader.getCurrentProvider();
+
+    // Get provider, with special handling for localnet (matching getConfig behavior)
+    let provider = options?.provider;
+    if (!provider) {
+      if (network === 'localnet') {
+        provider = 'app-provider';
+      } else {
+        provider = envLoader.getCurrentProvider();
+      }
+    }
 
     const envVars: Record<string, string | undefined> = {};
     const missingVars: string[] = [];
