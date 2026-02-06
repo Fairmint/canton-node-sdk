@@ -60,7 +60,10 @@ export class EnvLoader {
    * @param options Optional network and provider to use instead of reading from env
    * @returns ClientConfig with only the specified API configured
    */
-  public static getConfig(apiType: ApiType, options?: { network?: NetworkType; provider?: ProviderType }): ClientConfig {
+  public static getConfig(
+    apiType: ApiType,
+    options?: { network?: NetworkType; provider?: ProviderType }
+  ): ClientConfig {
     const envLoader = EnvLoader.getInstance();
 
     // Determine which values to use - prioritize options over environment
