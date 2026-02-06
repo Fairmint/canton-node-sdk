@@ -1,11 +1,4 @@
-import {
-  ApiError,
-  ConfigurationError,
-  NetworkError,
-  type ClientConfig,
-  type NetworkType,
-  type ProviderType,
-} from '../../core';
+import { ApiError, ConfigurationError, NetworkError, type ClientConfig, type RequestConfig } from '../../core';
 import { resolveScanApiUrls } from './scan-endpoints';
 import { ScanApiClient as ScanApiClientGenerated } from './ScanApiClient.generated';
 
@@ -47,12 +40,11 @@ export class ScanApiClient extends ScanApiClientGenerated {
   private readonly maxEndpointAttempts: number;
   private activeBaseUrlIndex: number;
 
-  constructor(config?: ScanApiClientConfig) {
-    const network: NetworkType = config?.network ?? 'mainnet';
-    const provider: ProviderType | undefined = config?.provider;
+  constructor(config: ScanApiClientConfig) {
+    const { network, provider } = config;
 
-    const resolvedUrls = config?.scanApiUrls ?? resolveScanApiUrls(network, provider);
-    const fallbackUrl = config?.apis?.SCAN_API?.apiUrl;
+    const resolvedUrls = config.scanApiUrls ?? resolveScanApiUrls(network, provider);
+    const fallbackUrl = config.apis?.SCAN_API?.apiUrl;
     const scanApiUrls = resolvedUrls.length > 0 ? resolvedUrls : fallbackUrl ? [fallbackUrl] : [];
 
     const [firstApiUrl] = scanApiUrls;
@@ -65,14 +57,14 @@ export class ScanApiClient extends ScanApiClientGenerated {
     const clientConfig: ClientConfig = {
       network,
       ...(provider !== undefined ? { provider } : {}),
-      ...(config?.logger !== undefined ? { logger: config.logger } : {}),
-      ...(config?.debug !== undefined ? { debug: config.debug } : {}),
-      ...(config?.partyId !== undefined ? { partyId: config.partyId } : {}),
-      ...(config?.userId !== undefined ? { userId: config.userId } : {}),
-      ...(config?.managedParties !== undefined ? { managedParties: config.managedParties } : {}),
-      authUrl: config?.authUrl ?? '',
+      ...(config.logger !== undefined ? { logger: config.logger } : {}),
+      ...(config.debug !== undefined ? { debug: config.debug } : {}),
+      ...(config.partyId !== undefined ? { partyId: config.partyId } : {}),
+      ...(config.userId !== undefined ? { userId: config.userId } : {}),
+      ...(config.managedParties !== undefined ? { managedParties: config.managedParties } : {}),
+      authUrl: config.authUrl ?? '',
       apis: {
-        ...(config?.apis ?? {}),
+        ...(config.apis ?? {}),
         SCAN_API: {
           apiUrl: firstApiUrl,
           // Public endpoints do not require auth; the AuthenticationManager skips auth when clientId is empty.
@@ -84,11 +76,11 @@ export class ScanApiClient extends ScanApiClientGenerated {
     super(clientConfig);
 
     this.scanApiUrls = scanApiUrls;
-    this.maxEndpointAttempts = config?.maxEndpointAttempts ?? scanApiUrls.length;
+    this.maxEndpointAttempts = config.maxEndpointAttempts ?? scanApiUrls.length;
     this.activeBaseUrlIndex = 0;
 
     // Prefer rotating quickly across endpoints rather than waiting on per-endpoint retries.
-    this.httpClient.setRetryConfig({ maxRetries: 0 });
+    this.httpClient.setRetryConfig({ maxRetries: 0, delayMs: 0 });
   }
 
   private setActiveBaseUrl(index: number): void {
@@ -155,33 +147,19 @@ export class ScanApiClient extends ScanApiClientGenerated {
     throw lastError instanceof Error ? lastError : new NetworkError(`Scan request failed: ${String(lastError)}`);
   }
 
-  public override async makeGetRequest<T>(
-    url: string,
-    config: { contentType?: string; includeBearerToken?: boolean } = {}
-  ): Promise<T> {
+  public override async makeGetRequest<T>(url: string, config: RequestConfig = {}): Promise<T> {
     return this.rotateRequest(url, async (u) => super.makeGetRequest<T>(u, config));
   }
 
-  public override async makePostRequest<T>(
-    url: string,
-    data: unknown,
-    config: { contentType?: string; includeBearerToken?: boolean } = {}
-  ): Promise<T> {
+  public override async makePostRequest<T>(url: string, data: unknown, config: RequestConfig = {}): Promise<T> {
     return this.rotateRequest(url, async (u) => super.makePostRequest<T>(u, data, config));
   }
 
-  public override async makeDeleteRequest<T>(
-    url: string,
-    config: { contentType?: string; includeBearerToken?: boolean } = {}
-  ): Promise<T> {
+  public override async makeDeleteRequest<T>(url: string, config: RequestConfig = {}): Promise<T> {
     return this.rotateRequest(url, async (u) => super.makeDeleteRequest<T>(u, config));
   }
 
-  public override async makePatchRequest<T>(
-    url: string,
-    data: unknown,
-    config: { contentType?: string; includeBearerToken?: boolean } = {}
-  ): Promise<T> {
+  public override async makePatchRequest<T>(url: string, data: unknown, config: RequestConfig = {}): Promise<T> {
     return this.rotateRequest(url, async (u) => super.makePatchRequest<T>(u, data, config));
   }
 }

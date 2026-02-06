@@ -42,7 +42,7 @@ export abstract class ApiOperation<Params, Response> {
     return this.client.getManagedParties();
   }
 
-  public getPartyId(): string | undefined {
+  public getPartyId(): string {
     return this.client.getPartyId();
   }
 

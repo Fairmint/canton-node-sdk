@@ -98,14 +98,11 @@ function extractAmount(payload: Record<string, unknown>, templateId: string): st
 
   // For amulets, amount is nested: { initialAmount: string }
   const amountObj = payload['amount'];
-  if (isRecord(amountObj)) {
-    const initialAmount = extractNumericValue(amountObj['initialAmount']);
-    return initialAmount !== undefined ? String(initialAmount) : '0';
+  if (!isRecord(amountObj)) {
+    return '0';
   }
-
-  // Direct amount value (shouldn't happen with current API but handle gracefully)
-  const directAmount = extractNumericValue(amountObj);
-  return directAmount !== undefined ? String(directAmount) : '0';
+  const initialAmount = extractNumericValue(amountObj['initialAmount']);
+  return initialAmount !== undefined ? String(initialAmount) : '0';
 }
 
 /** Extract the owner from a contract payload. For Amulets: owner field For Coupons: beneficiary or provider field */

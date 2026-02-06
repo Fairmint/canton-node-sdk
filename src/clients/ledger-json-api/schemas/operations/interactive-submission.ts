@@ -54,7 +54,7 @@ export const InteractiveSubmissionCreateUserParamsSchema = z.object({
 
 /** Parameters for interactive submission upload DAR. */
 export const InteractiveSubmissionUploadDarParamsSchema = z.object({
-  /** DAR file content as a buffer or base64 encoded string. */
+  /** DAR file content as a binary Buffer. */
   darFile: DarFileSchema,
 });
 

@@ -61,7 +61,6 @@ export class GetActiveContracts {
 
     // Request message type for the active contracts WebSocket endpoint
     interface ActiveContractsRequestMessage {
-      filter?: undefined;
       verbose: boolean;
       activeAtOffset: number;
       eventFormat: ReturnType<typeof buildEventFormat>;
@@ -71,7 +70,6 @@ export class GetActiveContracts {
     type ActiveContractsResponseMessage = JsGetActiveContractsResponseItem | JsCantonError | WsCantonError;
 
     const requestMessage: ActiveContractsRequestMessage = {
-      filter: undefined,
       verbose: false,
       activeAtOffset,
       eventFormat,

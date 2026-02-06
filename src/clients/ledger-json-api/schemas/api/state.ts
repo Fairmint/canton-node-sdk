@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ApiFeaturesSchema, FilterSchema } from '../common';
+import { ApiFeaturesSchema } from '../common';
 import {
   ArchivedEventDetailsSchema,
   AssignedEventDetailsSchema,
@@ -10,14 +10,10 @@ import { EventFormatSchema } from './events';
 
 /** Get active contracts request. */
 export const GetActiveContractsRequestSchema = z.object({
-  /** Filter for the request (optional, deprecated). */
-  filter: FilterSchema.optional(),
-  /** Verbose flag (optional, deprecated). */
-  verbose: z.boolean().optional(),
   /** Active at offset for the snapshot. */
   activeAtOffset: z.number(),
-  /** Event format (optional). */
-  eventFormat: EventFormatSchema.optional(),
+  /** Event format for the response. */
+  eventFormat: EventFormatSchema,
 });
 
 /** Active contract details. */

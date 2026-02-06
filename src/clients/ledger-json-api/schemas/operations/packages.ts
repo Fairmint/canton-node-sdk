@@ -7,7 +7,7 @@ export const ListPackagesParamsSchema = z.void();
 
 /** Schema for upload DAR file parameters. */
 export const UploadDarFileParamsSchema = z.object({
-  /** DAR file content as a buffer or string. */
+  /** DAR file content as a binary Buffer. */
   darFile: DarFileSchema,
   /** Optional submission ID for deduplication. */
   submissionId: z.string().optional(),

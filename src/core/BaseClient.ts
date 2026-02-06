@@ -9,6 +9,7 @@ import {
   type NetworkType,
   type PartialProviderConfig,
   type ProviderType,
+  type RequestConfig,
 } from './types';
 
 /** Abstract base class providing common functionality for all API clients */
@@ -55,7 +56,8 @@ export abstract class BaseClient {
     }
 
     // Validate that the required API configuration is present
-    if (!this.clientConfig.apis?.[apiType]) {
+    const validatedApiConfig = this.clientConfig.apis?.[apiType];
+    if (!validatedApiConfig) {
       throw new ConfigurationError(`API configuration not found for ${apiType}`);
     }
 
@@ -66,7 +68,7 @@ export abstract class BaseClient {
         : this.clientConfig.network,
       authUrl: this.clientConfig.authUrl ?? '',
       apis: {
-        [apiType]: this.clientConfig.apis[apiType],
+        [apiType]: validatedApiConfig,
       },
     };
 
@@ -120,53 +122,31 @@ export abstract class BaseClient {
     return this.authManager.getTokenLifetimeMs();
   }
 
-  public async makeGetRequest<T>(
-    url: string,
-    config: { contentType?: string; includeBearerToken?: boolean } = {}
-  ): Promise<T> {
-    // Ensure we have a valid token if authentication is required
+  public async makeGetRequest<T>(url: string, config: RequestConfig = {}): Promise<T> {
     if (config.includeBearerToken) {
       await this.authenticate();
     }
-
     return this.httpClient.makeGetRequest<T>(url, config);
   }
 
-  public async makePostRequest<T>(
-    url: string,
-    data: unknown,
-    config: { contentType?: string; includeBearerToken?: boolean } = {}
-  ): Promise<T> {
-    // Ensure we have a valid token if authentication is required
+  public async makePostRequest<T>(url: string, data: unknown, config: RequestConfig = {}): Promise<T> {
     if (config.includeBearerToken) {
       await this.authenticate();
     }
-
     return this.httpClient.makePostRequest<T>(url, data, config);
   }
 
-  public async makeDeleteRequest<T>(
-    url: string,
-    config: { contentType?: string; includeBearerToken?: boolean } = {}
-  ): Promise<T> {
-    // Ensure we have a valid token if authentication is required
+  public async makeDeleteRequest<T>(url: string, config: RequestConfig = {}): Promise<T> {
     if (config.includeBearerToken) {
       await this.authenticate();
     }
-
     return this.httpClient.makeDeleteRequest<T>(url, config);
   }
 
-  public async makePatchRequest<T>(
-    url: string,
-    data: unknown,
-    config: { contentType?: string; includeBearerToken?: boolean } = {}
-  ): Promise<T> {
-    // Ensure we have a valid token if authentication is required
+  public async makePatchRequest<T>(url: string, data: unknown, config: RequestConfig = {}): Promise<T> {
     if (config.includeBearerToken) {
       await this.authenticate();
     }
-
     return this.httpClient.makePatchRequest<T>(url, data, config);
   }
 
@@ -176,7 +156,10 @@ export abstract class BaseClient {
 
   public getApiUrl(): string {
     const apiConfig = this.config.apis[this.apiType];
-    return apiConfig?.apiUrl ?? '';
+    if (!apiConfig?.apiUrl) {
+      throw new ConfigurationError(`API URL not configured for ${this.apiType}`);
+    }
+    return apiConfig.apiUrl;
   }
 
   public getPartyId(): string {
@@ -185,7 +168,10 @@ export abstract class BaseClient {
     if (apiConfig?.partyId) {
       return apiConfig.partyId;
     }
-    return this.clientConfig.partyId ?? '';
+    if (this.clientConfig.partyId) {
+      return this.clientConfig.partyId;
+    }
+    throw new ConfigurationError(`Party ID not configured. Set partyId in client config or call setPartyId().`);
   }
 
   /**
@@ -217,7 +203,7 @@ export abstract class BaseClient {
 
     const partyList = [...additionalParties, ...managedParties];
 
-    if (partyId && !partyList.includes(partyId)) {
+    if (!partyList.includes(partyId)) {
       partyList.push(partyId);
     }
 

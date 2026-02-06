@@ -26,11 +26,8 @@ export class HttpClient {
     this.logger = logger;
   }
 
-  public setRetryConfig(config: Partial<HttpClientRetryConfig>): void {
-    this.retryConfig = {
-      maxRetries: config.maxRetries ?? this.retryConfig.maxRetries,
-      delayMs: config.delayMs ?? this.retryConfig.delayMs,
-    };
+  public setRetryConfig(config: HttpClientRetryConfig): void {
+    this.retryConfig = config;
   }
 
   public async makeGetRequest<T>(url: string, config: RequestConfig = {}, _retryCount = 0): Promise<T> {
