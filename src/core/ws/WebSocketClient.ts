@@ -2,17 +2,22 @@ import WebSocket, { type RawData } from 'ws';
 import { type BaseClient } from '../BaseClient';
 import { WebSocketErrorUtils } from './WebSocketErrorUtils';
 
+/** Handle returned from a WebSocket connection, used to check status and disconnect. */
 export interface WebSocketSubscription {
-  close: () => void;
-  isConnected: () => boolean;
-  getConnectionState: () => number;
+  /** Closes the WebSocket connection and cleans up resources. */
+  readonly close: () => void;
+  /** Returns true if the WebSocket is currently open. */
+  readonly isConnected: () => boolean;
+  /** Returns the raw WebSocket readyState value. */
+  readonly getConnectionState: () => number;
 }
 
+/** Callbacks for WebSocket lifecycle events. Only `onMessage` is required. */
 export interface WebSocketHandlers<Message> {
-  onOpen?: () => void;
-  onMessage: (msg: Message) => void;
-  onError?: (err: Error) => void;
-  onClose?: (code: number, reason: string) => void;
+  readonly onOpen?: () => void;
+  readonly onMessage: (msg: Message) => void;
+  readonly onError?: (err: Error) => void;
+  readonly onClose?: (code: number, reason: string) => void;
 }
 
 /** Converts an unknown error to an Error instance */
@@ -23,18 +28,19 @@ function toError(value: unknown): Error {
   return new Error(typeof value === 'string' ? value : String(value));
 }
 
+/** Options for WebSocket token refresh lifecycle. */
 export interface WebSocketOptions {
   /**
    * Called when the token is about to expire and refresh is scheduled. Use this to prepare for reconnection (e.g.,
    * track current offset for resumption).
    */
-  onTokenExpiring?: () => void;
+  readonly onTokenExpiring?: () => void;
 
   /**
    * Called when token refresh timer fires. The WebSocket will close after this callback returns, and the caller should
    * initiate a new connection with a fresh token. Returns the close code and reason.
    */
-  onTokenRefreshNeeded?: () => { code?: number; reason?: string } | void;
+  readonly onTokenRefreshNeeded?: () => { code?: number; reason?: string } | void;
 }
 
 /**

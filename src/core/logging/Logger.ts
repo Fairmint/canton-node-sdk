@@ -39,10 +39,10 @@ export interface Logger {
 }
 
 export interface LoggerConfig {
-  /** Enable or disable logging (default: true) */
-  enableLogging?: boolean;
-  /** Directory for log files (FileLogger only) */
-  logDir?: string;
-  /** Minimum log level to output (default: 'info') */
-  logLevel?: LogLevel;
+  /** Enable or disable logging (default: true). */
+  readonly enableLogging?: boolean;
+  /** Directory for log files (FileLogger only). */
+  readonly logDir?: string;
+  /** Minimum log level to output (default: 'info'). */
+  readonly logLevel?: LogLevel;
 }

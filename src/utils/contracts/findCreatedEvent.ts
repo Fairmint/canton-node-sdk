@@ -1,26 +1,26 @@
 import { type SubmitAndWaitForTransactionTreeResponse } from '../../clients/ledger-json-api/operations';
 
-/** Canonical CreatedTreeEvent value structure from the Ledger JSON API */
+/** Canonical CreatedTreeEvent value structure from the Ledger JSON API. */
 export interface CreatedTreeEventValue {
-  contractId: string;
-  templateId: string;
-  contractKey: string | null;
-  createArgument: Record<string, unknown>;
-  createdEventBlob: string;
-  witnessParties: string[];
-  signatories: string[];
-  observers: string[];
-  createdAt: string;
-  packageName: string;
-  offset: number;
-  nodeId: number;
-  interfaceViews: string[];
-  implementedInterfaces?: string[];
+  readonly contractId: string;
+  readonly templateId: string;
+  readonly contractKey: string | null;
+  readonly createArgument: Readonly<Record<string, unknown>>;
+  readonly createdEventBlob: string;
+  readonly witnessParties: readonly string[];
+  readonly signatories: readonly string[];
+  readonly observers: readonly string[];
+  readonly createdAt: string;
+  readonly packageName: string;
+  readonly offset: number;
+  readonly nodeId: number;
+  readonly interfaceViews: readonly string[];
+  readonly implementedInterfaces?: readonly string[];
 }
 
 export interface CreatedTreeEventWrapper {
-  CreatedTreeEvent: {
-    value: CreatedTreeEventValue;
+  readonly CreatedTreeEvent: {
+    readonly value: CreatedTreeEventValue;
   };
 }
 

@@ -12,29 +12,29 @@ export const DEFAULT_PRICE_PER_MB_CENTS = 6000;
 /** Traffic cost estimation breakdown for a transaction. */
 export interface TrafficCostEstimate {
   /** Estimated traffic cost of the confirmation request (bytes). */
-  requestCost: number;
+  readonly requestCost: number;
   /** Estimated traffic cost of the confirmation response (bytes). */
-  responseCost: number;
+  readonly responseCost: number;
   /** Total estimated traffic cost (request + response) in bytes. */
-  totalCost: number;
+  readonly totalCost: number;
   /** Total cost including update confirmation overhead (bytes). */
-  totalCostWithOverhead: number;
+  readonly totalCostWithOverhead: number;
   /** Estimated cost in cents (based on $60/MB pricing). */
-  costInCents: number;
+  readonly costInCents: number;
   /** Estimated cost in dollars (based on $60/MB pricing). */
-  costInDollars: number;
+  readonly costInDollars: number;
   /** Timestamp when estimation was made (ISO 8601). */
-  estimatedAt?: string;
+  readonly estimatedAt?: string;
 }
 
 /** Current traffic status for a participant/member. */
 export interface TrafficStatus {
   /** Total traffic consumed on the synchronizer. */
-  consumed: number;
+  readonly consumed: number;
   /** Current traffic limit. */
-  limit: number;
+  readonly limit: number;
   /** Total traffic purchased (may exceed limit while purchase is pending). */
-  purchased: number;
+  readonly purchased: number;
 }
 
 /**

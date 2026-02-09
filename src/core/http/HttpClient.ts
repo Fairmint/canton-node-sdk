@@ -4,10 +4,10 @@ import { type Logger } from '../logging';
 import { type RequestConfig } from '../types';
 
 export interface HttpClientRetryConfig {
-  /** Number of retries after the initial attempt */
-  maxRetries: number;
-  /** Delay between retries */
-  delayMs: number;
+  /** Number of retries after the initial attempt. */
+  readonly maxRetries: number;
+  /** Delay between retries in milliseconds. */
+  readonly delayMs: number;
 }
 
 /** Handles HTTP requests with authentication, logging, and error handling */
@@ -218,9 +218,7 @@ export class HttpClient {
         }
       }
 
-      const err = new ApiError(msg, status, error.response?.statusText);
-      err.response = data;
-      return err;
+      return new ApiError(msg, status, error.response?.statusText, data);
     }
     return new NetworkError(`Request failed: ${error instanceof Error ? error.message : String(error)}`);
   }

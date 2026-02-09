@@ -1,12 +1,12 @@
 import { OperationError, OperationErrorCode } from '../errors';
 
 export interface WaitForConditionOptions {
-  /** Maximum time to wait in milliseconds (default: 30000) */
-  timeout?: number;
-  /** Interval between checks in milliseconds (default: 1000) */
-  interval?: number;
-  /** Custom error message for timeout */
-  timeoutMessage?: string;
+  /** Maximum time to wait in milliseconds (default: 30000). */
+  readonly timeout?: number;
+  /** Interval between checks in milliseconds (default: 1000). */
+  readonly interval?: number;
+  /** Custom error message for timeout. */
+  readonly timeoutMessage?: string;
 }
 
 /**

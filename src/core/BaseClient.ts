@@ -1,4 +1,5 @@
 import { AuthenticationManager } from './auth/AuthenticationManager';
+import { type PartyId, type UserId } from './branded-types';
 import { EnvLoader } from './config/EnvLoader';
 import { ConfigurationError } from './errors';
 import { HttpClient } from './http/HttpClient';
@@ -162,14 +163,14 @@ export abstract class BaseClient {
     return apiConfig.apiUrl;
   }
 
-  public getPartyId(): string {
+  public getPartyId(): PartyId {
     // Use provided configuration first, fall back to API config
     const apiConfig = this.config.apis[this.apiType];
     if (apiConfig?.partyId) {
-      return apiConfig.partyId;
+      return apiConfig.partyId as PartyId;
     }
     if (this.clientConfig.partyId) {
-      return this.clientConfig.partyId;
+      return this.clientConfig.partyId as PartyId;
     }
     throw new ConfigurationError(`Party ID not configured. Set partyId in client config or call setPartyId().`);
   }
@@ -178,30 +179,30 @@ export abstract class BaseClient {
    * Set the party ID for this client. Useful for LocalNet where party ID is discovered at runtime after client
    * initialization.
    */
-  public setPartyId(partyId: string): void {
+  public setPartyId(partyId: PartyId | string): void {
     this.clientConfig.partyId = partyId;
   }
 
-  public getUserId(): string | undefined {
+  public getUserId(): UserId | undefined {
     // Use provided configuration first, fall back to API config
     const apiConfig = this.config.apis[this.apiType];
     if (apiConfig?.userId) {
-      return apiConfig.userId;
+      return apiConfig.userId as UserId;
     }
-    return this.clientConfig.userId;
+    return this.clientConfig.userId as UserId | undefined;
   }
 
-  public getManagedParties(): string[] {
+  public getManagedParties(): readonly string[] {
     // For now, always use environment variables for managed parties
     // as this is not typically provided in the API config
     return this.clientConfig.managedParties ?? [];
   }
 
-  public buildPartyList(additionalParties: string[] = []): string[] {
+  public buildPartyList(additionalParties: readonly string[] = []): string[] {
     const managedParties = this.getManagedParties();
     const partyId = this.getPartyId();
 
-    const partyList = [...additionalParties, ...managedParties];
+    const partyList: string[] = [...additionalParties, ...managedParties];
 
     if (!partyList.includes(partyId)) {
       partyList.push(partyId);

@@ -2,18 +2,18 @@ import { type LedgerJsonApiClient } from './index';
 import { type CompletionsWsMessage } from './operations/v2/commands/subscribe-to-completions';
 
 export interface WaitForCompletionParams {
-  submissionId: string;
-  partyId: string;
-  userId: string;
-  beginExclusive: number;
-  timeoutMs?: number;
+  readonly submissionId: string;
+  readonly partyId: string;
+  readonly userId: string;
+  readonly beginExclusive: number;
+  readonly timeoutMs?: number;
 }
 
 interface CompletionDetails {
-  submissionId?: string;
-  statusCode?: number;
-  statusMessage?: string;
-  updateId?: string;
+  readonly submissionId?: string | undefined;
+  readonly statusCode?: number | undefined;
+  readonly statusMessage?: string | undefined;
+  readonly updateId?: string | undefined;
 }
 
 function extractCompletion(message: CompletionsWsMessage): CompletionDetails | null {
@@ -31,23 +31,12 @@ function extractCompletion(message: CompletionsWsMessage): CompletionDetails | n
     return null;
   }
 
-  const details: CompletionDetails = {
+  return {
     submissionId: completion.submissionId,
+    statusCode: typeof completion.status?.code === 'number' ? completion.status.code : undefined,
+    statusMessage: typeof completion.status?.message === 'string' ? completion.status.message : undefined,
+    updateId: typeof completion.updateId === 'string' ? completion.updateId : undefined,
   };
-
-  if (typeof completion.status?.code === 'number') {
-    details.statusCode = completion.status.code;
-  }
-
-  if (typeof completion.status?.message === 'string') {
-    details.statusMessage = completion.status.message;
-  }
-
-  if (typeof completion.updateId === 'string') {
-    details.updateId = completion.updateId;
-  }
-
-  return details;
 }
 
 /** Wait for a specific completion using the ledger's WebSocket completions stream. */

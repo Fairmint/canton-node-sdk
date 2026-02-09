@@ -5,11 +5,11 @@ import { type TrafficStatus } from './types';
 /** Options for retrieving traffic status. */
 export interface GetTrafficStatusOptions {
   /** Domain/synchronizer ID. If not provided, uses the current mining round domain. */
-  domainId?: string;
+  readonly domainId?: string;
   /** Party ID to look up. Required when using ScanApiClient. */
-  partyId?: string;
+  readonly partyId?: string;
   /** Member/participant ID. If not provided, resolved from partyId. */
-  memberId?: string;
+  readonly memberId?: string;
 }
 
 /**

@@ -1,5 +1,6 @@
 import { type ValidatorApiClient } from '../../clients/validator-api';
 import type { GetAmuletsResponse } from '../../clients/validator-api/schemas/api/wallet';
+import { type ContractId, type DomainId, type PartyId, type TemplateId } from '../../core/branded-types';
 import { ValidationError } from '../../core/errors';
 import { isRecord } from '../../core/utils';
 import { type LockedAmulet } from './types';
@@ -79,13 +80,13 @@ function toLockedAmulet(entry: LockedAmuletEntry, index: number): LockedAmulet {
   const createdEventBlob = assertString(contract.created_event_blob, `${label} created_event_blob`);
 
   return {
-    contractId,
-    templateId,
-    owner,
-    holders,
+    contractId: contractId as ContractId,
+    templateId: templateId as TemplateId,
+    owner: owner as PartyId,
+    holders: holders as PartyId[],
     lockExpiresAt,
     effectiveAmount,
-    domainId,
+    domainId: domainId as DomainId,
     createdEventBlob,
   };
 }

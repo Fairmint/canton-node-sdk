@@ -4,25 +4,25 @@ import { EnvLoader } from '../../core/config/EnvLoader';
 import { OperationError, OperationErrorCode } from '../../core/errors';
 
 export interface CreateTransferOfferParams {
-  /** Ledger client for submitting commands */
-  ledgerClient: LedgerJsonApiClient;
-  /** Receiver party ID */
-  receiverPartyId: string;
-  /** Amount to transfer */
-  amount: string;
-  /** Description for the transfer */
-  description: string;
-  /** When the offer expires (optional, defaults to 24 hours from now) */
-  expiresAt?: Date;
+  /** Ledger client for submitting commands. */
+  readonly ledgerClient: LedgerJsonApiClient;
+  /** Receiver party ID. */
+  readonly receiverPartyId: string;
+  /** Amount to transfer. */
+  readonly amount: string;
+  /** Description for the transfer. */
+  readonly description: string;
+  /** When the offer expires (defaults to 24 hours from now). */
+  readonly expiresAt?: Date;
 }
 
 export interface AcceptTransferOfferParams {
-  /** Ledger client for submitting commands */
-  ledgerClient: LedgerJsonApiClient;
-  /** Transfer offer contract ID to accept */
-  transferOfferContractId: string;
-  /** Party ID accepting the offer */
-  acceptingPartyId: string;
+  /** Ledger client for submitting commands. */
+  readonly ledgerClient: LedgerJsonApiClient;
+  /** Transfer offer contract ID to accept. */
+  readonly transferOfferContractId: string;
+  /** Party ID accepting the offer. */
+  readonly acceptingPartyId: string;
 }
 
 /**
