@@ -70,22 +70,22 @@ export class TransactionBatch {
   }
 
   private prepareSubmitParams(): SubmitParams {
-    // Dedupe disclosed contracts by contractId
-    this.disclosedContracts = Array.from(
+    // Dedupe disclosed contracts by contractId (without mutating instance state)
+    const dedupedContracts = Array.from(
       new Map(this.disclosedContracts.map((contract) => [contract.contractId, contract])).values()
     );
 
     const params: SubmitParams = {
       actAs: [...this.actAs],
-      commands: this.commands,
+      commands: [...this.commands],
     };
 
     if (this.readAs !== undefined) {
       params.readAs = [...this.readAs];
     }
 
-    if (this.disclosedContracts.length > 0) {
-      params.disclosedContracts = this.disclosedContracts;
+    if (dedupedContracts.length > 0) {
+      params.disclosedContracts = dedupedContracts;
     }
 
     return params;

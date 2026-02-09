@@ -106,12 +106,8 @@ export async function transferToPreapproved(
     value: amulet.contractId,
   }));
 
-  const transferResults: Array<{
-    recipientPartyId: string;
-    contractId: string;
-    domainId: string;
-    transferResult: SubmitAndWaitForTransactionTreeResponse;
-  }> = [];
+  type TransferResultItem = TransferToPreapprovedResult['transferResults'][number];
+  const transferResults: TransferResultItem[] = [];
 
   // Build base disclosed contracts (shared across all transfers)
   const disclosedContracts: DisclosedContract[] = [

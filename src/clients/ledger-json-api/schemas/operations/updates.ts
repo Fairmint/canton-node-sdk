@@ -112,24 +112,8 @@ export type GetTransactionTreeByOffsetParams = z.infer<typeof GetTransactionTree
 
 /** Shared update format schema for selecting which update types to include. */
 export const UpdateFormatSchema = z.object({
-  includeTransactions: z
-    .object({
-      eventFormat: OperationEventFormatSchema,
-      transactionShape: TransactionShapeSchema,
-    })
-    .optional(),
-  includeReassignments: z
-    .object({
-      filtersByParty: z.record(
-        z.string(),
-        z.object({
-          cumulative: z.array(CumulativeFilterSchema),
-        })
-      ),
-      filtersForAnyParty: FiltersForAnyPartySchema,
-      verbose: z.boolean().optional(),
-    })
-    .optional(),
+  includeTransactions: TransactionFormatSchema.optional(),
+  includeReassignments: OperationEventFormatSchema.optional(),
   includeTopologyEvents: z
     .object({
       includeParticipantAuthorizationEvents: z

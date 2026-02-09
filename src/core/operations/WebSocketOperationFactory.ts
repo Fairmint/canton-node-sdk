@@ -35,9 +35,9 @@ export function createWebSocketOperation<Params, RequestMessage, InboundMessage>
   subscribe: (params: Params, handlers: WebSocketHandlers<InboundMessage>) => Promise<WebSocketSubscription>;
 } {
   return class WebSocketOperation {
-    constructor(public client: BaseClient) {}
+    constructor(public readonly client: BaseClient) {}
 
-    public validateParams<T>(params: T, schema: z.ZodSchema<T>): T {
+    private validateParams<T>(params: T, schema: z.ZodSchema<T>): T {
       try {
         return schema.parse(params);
       } catch (error) {
@@ -59,15 +59,12 @@ export function createWebSocketOperation<Params, RequestMessage, InboundMessage>
       const path = config.buildPath(validatedParams, this.client.getApiUrl(), this.client);
       const request = await config.buildRequestMessage(validatedParams, this.client);
 
-      const wrappedHandlers: WebSocketHandlers<InboundMessage> = config.transformInbound
+      const { transformInbound } = config;
+      const wrappedHandlers: WebSocketHandlers<InboundMessage> = transformInbound
         ? {
             ...handlers,
             onMessage: (msg) => {
-              if (config.transformInbound) {
-                handlers.onMessage(config.transformInbound(msg));
-              } else {
-                handlers.onMessage(msg);
-              }
+              handlers.onMessage(transformInbound(msg));
             },
           }
         : handlers;

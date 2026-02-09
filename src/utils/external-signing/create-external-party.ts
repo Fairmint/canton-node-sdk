@@ -29,7 +29,7 @@ export interface CreateExternalPartyParams {
 export interface CreateExternalPartyResult {
   /** Generated party ID (e.g., "alice::12abc..."). */
   readonly partyId: string;
-  /** Base64-encoded public key. */
+  /** Hex-encoded raw Ed25519 public key. */
   readonly publicKey: string;
   /** Fingerprint of the public key. */
   readonly publicKeyFingerprint: string;

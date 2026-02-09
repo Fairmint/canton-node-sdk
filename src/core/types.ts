@@ -68,7 +68,12 @@ export interface RequestConfig {
   readonly includeBearerToken?: boolean;
 }
 
-/** Top-level configuration for creating API clients. */
+/**
+ * Top-level configuration for creating API clients.
+ *
+ * Most fields are intentionally mutable because `BaseClient` and `EnvLoader` merge defaults into the config at
+ * construction time (e.g., filling in provider, authUrl, partyId from environment variables).
+ */
 export interface ClientConfig {
   readonly network: NetworkType;
   provider?: ProviderType;
@@ -80,8 +85,8 @@ export interface ClientConfig {
    */
   debug?: boolean;
 
-  // Direct configuration options
   authUrl?: string;
+  /** Party ID. Mutable so it can be set at runtime after client initialization (e.g., LocalNet discovery). */
   partyId?: string;
   userId?: string;
   managedParties?: string[];

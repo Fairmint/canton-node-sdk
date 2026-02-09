@@ -4,8 +4,8 @@ import { type RequestConfig } from '../types';
 import { ApiOperation } from './ApiOperation';
 
 /**
- * Builds the request body from validated params. Return `undefined` for methods that don't send a body (GET, DELETE
- * typically).
+ * Builds the request body from validated params. Return `undefined` for endpoints that don't send a body. Only called
+ * for POST and PATCH methods.
  */
 export type RequestDataBuilder<Params> = (
   params: Params,

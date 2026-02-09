@@ -84,12 +84,7 @@ export class Canton {
 
     this.ledger = new LedgerJsonApiClient(clientConfig);
     this.validator = new ValidatorApiClient(clientConfig);
-    this.scan = new ScanApiClient({
-      network: config.network,
-      ...(config.provider !== undefined && { provider: config.provider }),
-      ...(config.logger !== undefined && { logger: config.logger }),
-      ...(config.debug !== undefined && { debug: config.debug }),
-    });
+    this.scan = new ScanApiClient(clientConfig);
   }
 
   /** Gets the current network. */

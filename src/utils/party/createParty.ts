@@ -1,6 +1,6 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { type ValidatorApiClient } from '../../clients/validator-api';
-import { type ContractId, type PartyId } from '../../core/branded-types';
+import { ContractId, PartyId } from '../../core/branded-types';
 import { ValidationError } from '../../core/errors';
 import { waitForCondition } from '../../core/utils/polling';
 import { getAmuletsForTransfer } from '../amulet/get-amulets-for-transfer';
@@ -45,7 +45,7 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
 
   // Create user via Validator API
   const userStatus = await validatorClient.createUser({ name: options.partyName });
-  const partyId = userStatus.party_id as PartyId;
+  const partyId = PartyId(userStatus.party_id);
 
   // Skip funding if amount is 0
   if (amountNum === 0) {
@@ -90,6 +90,6 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
 
   return {
     partyId,
-    preapprovalContractId: preapprovalResult.contractId as ContractId,
+    preapprovalContractId: ContractId(preapprovalResult.contractId),
   };
 }

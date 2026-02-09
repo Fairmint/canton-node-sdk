@@ -273,7 +273,7 @@ export function validateFeeAnalysis(feeAnalysis: FeeAnalysis): string[] {
   }
 
   if (!feeAnalysis.feeValidation.isBalanced) {
-    errors.push(`Fee balance mismatch: ${feeAnalysis.feeValidation.discrepancy}`);
+    errors.push(`Fee balance mismatch: ${feeAnalysis.feeValidation.discrepancy ?? 'unknown'}`);
   }
 
   return errors;

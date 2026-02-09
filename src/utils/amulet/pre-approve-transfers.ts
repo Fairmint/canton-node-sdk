@@ -11,7 +11,7 @@ export interface PreApproveTransfersParams {
   readonly receiverPartyId: string;
   /** Party ID of the provider (defaults to receiverPartyId if not specified). */
   readonly providerPartyId?: string;
-  /** When the pre-approval expires (defaults to 1 day from now). */
+  /** When the pre-approval expires (defaults to 1 year from now). */
   readonly expiresAt?: Date;
   /** Contract details for disclosed contracts (optional - will be fetched if not provided). */
   readonly contractDetails?: {
