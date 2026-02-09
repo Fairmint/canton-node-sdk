@@ -2,13 +2,13 @@ import { ApiError, ConfigurationError, NetworkError, type ClientConfig, type Req
 import { resolveScanApiUrls } from './scan-endpoints';
 import { ScanApiClient as ScanApiClientGenerated } from './ScanApiClient.generated';
 
-export type ScanApiClientConfig = ClientConfig & {
-  /** Optional override for the rotation list (must include the full `/api/scan` base). */
-  scanApiUrls?: readonly string[];
+export interface ScanApiClientConfig extends ClientConfig {
+  /** Override the rotation list (must include the full `/api/scan` base). */
+  readonly scanApiUrls?: readonly string[];
 
   /** Maximum number of distinct scan endpoints to try per request (defaults to all). */
-  maxEndpointAttempts?: number;
-};
+  readonly maxEndpointAttempts?: number;
+}
 
 function shouldRotateOnError(error: unknown): boolean {
   if (error instanceof NetworkError) {
