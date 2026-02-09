@@ -110,58 +110,57 @@ export const GetTransactionTreeByOffsetParamsSchema = z.object({
 
 export type GetTransactionTreeByOffsetParams = z.infer<typeof GetTransactionTreeByOffsetParamsSchema>;
 
-/** Schema for get updates parameters. Defines parameters for retrieving flat updates from the ledger. */
+/** Shared update format schema for selecting which update types to include. */
+export const UpdateFormatSchema = z.object({
+  includeTransactions: z
+    .object({
+      eventFormat: OperationEventFormatSchema,
+      transactionShape: TransactionShapeSchema,
+    })
+    .optional(),
+  includeReassignments: z
+    .object({
+      filtersByParty: z.record(
+        z.string(),
+        z.object({
+          cumulative: z.array(CumulativeFilterSchema),
+        })
+      ),
+      filtersForAnyParty: FiltersForAnyPartySchema,
+      verbose: z.boolean().optional(),
+    })
+    .optional(),
+  includeTopologyEvents: z
+    .object({
+      includeParticipantAuthorizationEvents: z
+        .object({
+          parties: z.array(z.string()).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+});
+
+export type UpdateFormat = z.infer<typeof UpdateFormatSchema>;
+
+/** Parameters for retrieving updates from the ledger. */
 export const GetUpdatesParamsSchema = z.object({
   /** Beginning of the requested ledger section (non-negative integer). */
   beginExclusive: z.number(),
-  /** End of the requested ledger section (optional). */
+  /** End of the requested ledger section. */
   endInclusive: z.number().optional(),
-  /** Maximum number of elements to return (optional). */
+  /** Maximum number of elements to return. */
   limit: z.number().optional(),
-  /** Timeout to complete and send result if no new elements are received (optional). */
+  /** Timeout to complete and send result if no new elements are received. */
   streamIdleTimeoutMs: z.number().optional(),
   /** Update format for the request. */
-  updateFormat: z.object({
-    includeTransactions: z
-      .object({
-        eventFormat: OperationEventFormatSchema,
-        transactionShape: TransactionShapeSchema,
-      })
-      .optional(),
-    includeReassignments: z
-      .object({
-        filtersByParty: z.record(
-          z.string(),
-          z.object({
-            cumulative: z.array(CumulativeFilterSchema),
-          })
-        ),
-        filtersForAnyParty: FiltersForAnyPartySchema,
-        verbose: z.boolean().optional(),
-      })
-      .optional(),
-    includeTopologyEvents: z
-      .object({
-        includeParticipantAuthorizationEvents: z
-          .object({
-            parties: z.array(z.string()).optional(),
-          })
-          .optional(),
-      })
-      .optional(),
-  }),
+  updateFormat: UpdateFormatSchema,
 });
 
-/**
- * Schema for get update trees parameters. Defines parameters for retrieving update trees from the ledger. Same as
- * GetUpdatesParams but for tree structures.
- */
+/** Same as GetUpdatesParams but for tree structures. */
 export const GetUpdateTreesParamsSchema = GetUpdatesParamsSchema;
 
-/**
- * Schema for get transaction by offset parameters. Defines parameters for retrieving a specific transaction by its
- * offset.
- */
+/** Parameters for retrieving a specific transaction by its offset. */
 export const GetTransactionByOffsetParamsSchema = z.object({
   /** Offset of the transaction being looked up. */
   offset: z.number(),
@@ -169,40 +168,12 @@ export const GetTransactionByOffsetParamsSchema = z.object({
   transactionFormat: TransactionFormatSchema,
 });
 
-/** Schema for get update by offset parameters. Defines parameters for retrieving a specific update by its offset. */
+/** Parameters for retrieving a specific update by its offset. */
 export const GetUpdateByOffsetParamsSchema = z.object({
   /** Offset of the update being looked up. */
   offset: z.number(),
   /** Update format for the request. */
-  updateFormat: z.object({
-    includeTransactions: z
-      .object({
-        eventFormat: OperationEventFormatSchema,
-        transactionShape: TransactionShapeSchema,
-      })
-      .optional(),
-    includeReassignments: z
-      .object({
-        filtersByParty: z.record(
-          z.string(),
-          z.object({
-            cumulative: z.array(CumulativeFilterSchema),
-          })
-        ),
-        filtersForAnyParty: FiltersForAnyPartySchema,
-        verbose: z.boolean().optional(),
-      })
-      .optional(),
-    includeTopologyEvents: z
-      .object({
-        includeParticipantAuthorizationEvents: z
-          .object({
-            parties: z.array(z.string()).optional(),
-          })
-          .optional(),
-      })
-      .optional(),
-  }),
+  updateFormat: UpdateFormatSchema,
 });
 
 /** Schema for get transaction by id parameters. Defines parameters for retrieving a specific transaction by its ID. */

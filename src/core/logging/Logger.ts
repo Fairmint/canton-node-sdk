@@ -1,14 +1,11 @@
 /**
- * Log levels for the logging system.
+ * Log levels ordered by priority: `error` > `warn` > `info` > `debug`.
  *
- * - Error: Critical errors that need immediate attention
- * - Warn: Warning conditions that may indicate problems
- * - Info: Informational messages about normal operation
- * - Debug: Detailed debug information for development
+ * Messages are shown when their level is at or above the configured minimum.
  */
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 
-/** Numeric values for log levels, used for filtering. Lower number = higher priority. */
+/** Numeric values for log levels. Lower number = higher priority. */
 export const LOG_LEVEL_VALUES: Record<LogLevel, number> = {
   error: 0,
   warn: 1,
@@ -19,22 +16,28 @@ export const LOG_LEVEL_VALUES: Record<LogLevel, number> = {
 /**
  * Logger interface for SDK operations.
  *
- * Implementations can log to files, console, or external services.
+ * The SDK ships with three implementations:
+ *
+ * - {@link FileLogger} - Writes JSON logs to disk (default)
+ * - {@link ConsoleLogger} - Prints to stdout/stderr
+ * - {@link CompositeLogger} - Delegates to multiple loggers
+ *
+ * Provide a custom implementation to integrate with your logging infrastructure.
  */
 export interface Logger {
-  /** Logs an API request and its response. This is the primary logging method used by HttpClient. */
+  /** Logs an API request and its response. Called by HttpClient for every HTTP call. */
   logRequestResponse(url: string, request: unknown, response: unknown): Promise<void>;
 
-  /** Logs a debug message. Only shown when log level is 'debug'. Use for detailed information useful during development. */
+  /** Logs a debug message. Only shown when log level is `'debug'`. */
   debug?(message: string, context?: Record<string, unknown>): void;
 
-  /** Logs an info message. Shown at 'info' and 'debug' levels. Use for general operational information. */
+  /** Logs an info message. Shown at `'info'` and `'debug'` levels. */
   info?(message: string, context?: Record<string, unknown>): void;
 
-  /** Logs a warning message. Shown at 'warn', 'info', and 'debug' levels. Use for potentially problematic situations. */
+  /** Logs a warning. Shown at `'warn'`, `'info'`, and `'debug'` levels. */
   warn?(message: string, context?: Record<string, unknown>): void;
 
-  /** Logs an error message. Always shown. Use for errors and exceptions. */
+  /** Logs an error. Always shown regardless of log level. */
   error?(message: string, context?: Record<string, unknown>): void;
 }
 
