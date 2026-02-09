@@ -3,7 +3,10 @@ import { type BaseClient } from '../BaseClient';
 import { type RequestConfig } from '../types';
 import { ApiOperation } from './ApiOperation';
 
-/** Type for the request data builder function - can return any JSON-serializable value or compatible object */
+/**
+ * Builds the request body from validated params. Return `undefined` for methods that don't send a body (GET, DELETE
+ * typically).
+ */
 export type RequestDataBuilder<Params> = (
   params: Params,
   client: BaseClient
@@ -14,15 +17,34 @@ export type RequestDataBuilder<Params> = (
   | undefined
   | Promise<Record<string, unknown> | Buffer | string | undefined>;
 
+/** Configuration for a factory-created API operation. */
 export interface ApiOperationConfig<Params, Response> {
-  paramsSchema: z.ZodSchema<Params>;
-  method: 'GET' | 'POST' | 'DELETE' | 'PATCH';
-  buildUrl: (params: Params, apiUrl: string, client: BaseClient) => string;
-  buildRequestData?: RequestDataBuilder<Params>;
-  requestConfig?: RequestConfig;
-  transformResponse?: (response: Response) => Response;
+  /** Zod schema used to validate params before the request. */
+  readonly paramsSchema: z.ZodSchema<Params>;
+  /** HTTP method. */
+  readonly method: 'GET' | 'POST' | 'DELETE' | 'PATCH';
+  /** Builds the full request URL from validated params and the client's base API URL. */
+  readonly buildUrl: (params: Params, apiUrl: string, client: BaseClient) => string;
+  /** Builds the request body. Only called for POST and PATCH. */
+  readonly buildRequestData?: RequestDataBuilder<Params>;
+  /** Override default request configuration (content type, auth). */
+  readonly requestConfig?: RequestConfig;
+  /** Transform the raw API response before returning it. */
+  readonly transformResponse?: (response: Response) => Response;
 }
 
+/**
+ * Creates an {@link ApiOperation} class from a declarative configuration object.
+ *
+ * Prefer this over extending `ApiOperation` directly for simple REST endpoints that don't need async pre-processing.
+ *
+ * @example
+ *   export const GetVersion = createApiOperation<void, VersionResponse>({
+ *     paramsSchema: z.void(),
+ *     method: 'GET',
+ *     buildUrl: (_params, apiUrl) => `${apiUrl}/v2/version`,
+ *   });
+ */
 export function createApiOperation<Params, Response>(
   config: ApiOperationConfig<Params, Response>
 ): new (client: BaseClient) => ApiOperation<Params, Response> {

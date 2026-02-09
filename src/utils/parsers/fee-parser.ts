@@ -3,33 +3,36 @@
 import { type TreeEvent } from '../../clients/ledger-json-api/schemas/api/events';
 import { ValidationError } from '../../core/errors';
 
+/** A single party's balance change from a transfer. */
 export interface BalanceChange {
-  party: string;
-  changeToInitialAmountAsOfRoundZero: string;
-  changeToHoldingFeesRate: string;
+  readonly party: string;
+  readonly changeToInitialAmountAsOfRoundZero: string;
+  readonly changeToHoldingFeesRate: string;
 }
 
+/** Fee summary directly from the ledger exercise result. */
 export interface FeeSummary {
-  holdingFees: string;
-  outputFees: string[];
-  senderChangeFee: string;
-  senderChangeAmount: string;
-  amuletPrice: string;
+  readonly holdingFees: string;
+  readonly outputFees: readonly string[];
+  readonly senderChangeFee: string;
+  readonly senderChangeAmount: string;
+  readonly amuletPrice: string;
 }
 
+/** Parsed and validated fee analysis from an AmuletRules_Transfer exercise. */
 export interface FeeAnalysis {
-  totalFees: string;
-  feeBreakdown: {
-    holdingFees: string;
-    outputFees: string[];
-    senderChangeFee: string;
+  readonly totalFees: string;
+  readonly feeBreakdown: {
+    readonly holdingFees: string;
+    readonly outputFees: readonly string[];
+    readonly senderChangeFee: string;
   };
-  balanceChanges: BalanceChange[];
-  feeValidation: {
-    isBalanced: boolean;
-    totalBalanceChange: string;
-    totalFeesCalculated: string;
-    discrepancy?: string;
+  readonly balanceChanges: readonly BalanceChange[];
+  readonly feeValidation: {
+    readonly isBalanced: boolean;
+    readonly totalBalanceChange: string;
+    readonly totalFeesCalculated: string;
+    readonly discrepancy?: string | undefined;
   };
 }
 
@@ -216,11 +219,10 @@ export function parseFeesFromUpdate(treeEvent: TreeEvent): FeeAnalysis {
     isBalanced,
     totalBalanceChange,
     totalFeesCalculated,
+    ...(!isBalanced && {
+      discrepancy: (parseFloat(totalBalanceChange) + parseFloat(totalFeesCalculated)).toString(),
+    }),
   };
-
-  if (!isBalanced) {
-    feeValidation.discrepancy = (parseFloat(totalBalanceChange) + parseFloat(totalFeesCalculated)).toString();
-  }
 
   return {
     totalFees,

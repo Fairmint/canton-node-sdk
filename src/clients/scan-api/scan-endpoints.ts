@@ -1,12 +1,13 @@
 import { type NetworkType, type ProviderType } from '../../core/types';
 
+/** A known Super Validator (SV) scan endpoint on the Canton Network. */
 export interface ScanSvEndpoint {
   /** Human-readable SV name as published publicly. */
-  svName: string;
+  readonly svName: string;
   /** Base host URL (no trailing /api/scan). */
-  hostUrl: string;
+  readonly hostUrl: string;
   /** Scan service version as published publicly. */
-  version: string;
+  readonly version: string;
 }
 
 // Source of these lists: https://canton.foundation/sv-network-status/#devnet

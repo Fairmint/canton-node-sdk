@@ -3,17 +3,35 @@ import { type BaseClient } from '../BaseClient';
 import { ValidationError } from '../errors';
 import { WebSocketClient, type WebSocketHandlers, type WebSocketSubscription } from '../ws';
 
+/** Configuration for a factory-created WebSocket operation. */
 export interface WebSocketOperationConfig<Params, RequestMessage, InboundMessage> {
-  paramsSchema: z.ZodSchema<Params>;
-  buildPath: (params: Params, apiUrl: string, client: BaseClient) => string;
-  buildRequestMessage: (params: Params, client: BaseClient) => RequestMessage | Promise<RequestMessage>;
-  transformInbound?: (msg: InboundMessage) => InboundMessage;
+  /** Zod schema used to validate params. */
+  readonly paramsSchema: z.ZodSchema<Params>;
+  /** Builds the WebSocket path (appended to the base URL). */
+  readonly buildPath: (params: Params, apiUrl: string, client: BaseClient) => string;
+  /** Builds the initial request message sent after the WebSocket opens. */
+  readonly buildRequestMessage: (params: Params, client: BaseClient) => RequestMessage | Promise<RequestMessage>;
+  /** Optional transform applied to every inbound message before calling `onMessage`. */
+  readonly transformInbound?: (msg: InboundMessage) => InboundMessage;
 }
 
+/**
+ * Creates a WebSocket operation class from a declarative config.
+ *
+ * The returned class exposes a `subscribe()` method that opens a WebSocket, sends the initial request message, and
+ * dispatches parsed messages to the provided handlers.
+ *
+ * @example
+ *   export const SubscribeToCompletions = createWebSocketOperation<Params, Req, Msg>({
+ *     paramsSchema: CompletionStreamRequestSchema,
+ *     buildPath: () => '/v2/commands/completions',
+ *     buildRequestMessage: (params, client) => ({ userId: params.userId ?? client.getUserId() }),
+ *   });
+ */
 export function createWebSocketOperation<Params, RequestMessage, InboundMessage>(
   config: WebSocketOperationConfig<Params, RequestMessage, InboundMessage>
 ): new (client: BaseClient) => {
-  client: BaseClient;
+  readonly client: BaseClient;
   subscribe: (params: Params, handlers: WebSocketHandlers<InboundMessage>) => Promise<WebSocketSubscription>;
 } {
   return class WebSocketOperation {
