@@ -12,19 +12,19 @@ export interface WaitForConditionOptions {
 /**
  * Polls a condition function until it returns a non-null/non-undefined value or times out.
  *
- * Return `null` or `undefined` to signal "not yet". Any other value (including falsy values like `0`, `false`, or
- * `""`) is treated as success and returned immediately.
+ * Return `null` or `undefined` to signal "not yet". Any other value (including falsy values like `0`, `false`, or `""`)
+ * is treated as success and returned immediately.
  *
  * @example
- *   const contract = await waitForCondition(
- *     () => client.getContract(id),
- *     { timeout: 30_000, timeoutMessage: 'Contract not found' }
- *   );
+ *   const contract = await waitForCondition(() => client.getContract(id), {
+ *     timeout: 30_000,
+ *     timeoutMessage: 'Contract not found',
+ *   });
  *
  * @param check - Async function returning a value when the condition is met, or `null`/`undefined` otherwise.
  * @param options - Timeout, polling interval, and error message.
  * @returns The first non-null/non-undefined value.
- * @throws {@link OperationError} if the timeout is reached.
+ * @throws {@link OperationError} If the timeout is reached.
  */
 export async function waitForCondition<T>(
   check: () => Promise<T | null | undefined>,
