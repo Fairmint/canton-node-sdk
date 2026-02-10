@@ -54,10 +54,9 @@ export function createApiOperation<Params, Response>(
       const validatedParams = this.validateParams(params, config.paramsSchema);
 
       const url = config.buildUrl(validatedParams, this.getApiUrl(), this.client);
-      const requestConfig: RequestConfig = {
+      const requestConfig: RequestConfig = config.requestConfig ?? {
         contentType: 'application/json',
         includeBearerToken: true,
-        ...config.requestConfig,
       };
 
       let response: Response;
