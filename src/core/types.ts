@@ -1,67 +1,81 @@
+/** Canton network environments. */
 export type NetworkType = 'devnet' | 'testnet' | 'mainnet' | 'localnet';
+
+/** Provider identifier (e.g., '5n', 'app-provider'). */
 export type ProviderType = string;
 
+/** API client types supported by the SDK. */
 export type ApiType = 'LEDGER_JSON_API' | 'VALIDATOR_API' | 'SCAN_API';
 
-/** Supported OAuth2 grant types */
+/** Supported OAuth2 grant types. */
 export type GrantType = 'client_credentials' | 'password';
 
-/** Shared OAuth2 fields present in all auth configs */
+/** Shared OAuth2 fields present in all auth configs. */
 interface AuthConfigBase {
-  clientId: string;
-  audience?: string;
-  scope?: string;
+  readonly clientId: string;
+  readonly audience?: string;
+  readonly scope?: string;
   /**
    * Static bearer token for auth modes that don't use OAuth2. If provided, this token is used directly without OAuth2
    * exchange.
    */
-  bearerToken?: string;
+  readonly bearerToken?: string;
   /** Async function to generate a bearer token dynamically. Used for shared-secret JWT generation. */
-  tokenGenerator?: () => Promise<string>;
+  readonly tokenGenerator?: () => Promise<string>;
 }
 
-/** Auth config for client_credentials grant type */
+/** Auth config for client_credentials grant type. */
 export interface ClientCredentialsAuthConfig extends AuthConfigBase {
-  grantType: 'client_credentials';
-  clientSecret?: string;
+  readonly grantType: 'client_credentials';
+  readonly clientSecret?: string;
 }
 
-/** Auth config for password grant type */
+/** Auth config for password grant type. */
 export interface PasswordAuthConfig extends AuthConfigBase {
-  grantType: 'password';
-  username: string;
-  password: string;
+  readonly grantType: 'password';
+  readonly username: string;
+  readonly password: string;
 }
 
-/** Discriminated union of all auth configurations, keyed on grantType */
+/** Discriminated union of all auth configurations, keyed on `grantType`. */
 export type AuthConfig = ClientCredentialsAuthConfig | PasswordAuthConfig;
 
+/** Configuration for a single API endpoint. */
 export interface ApiConfig {
   apiUrl: string;
-  auth: AuthConfig;
+  readonly auth: AuthConfig;
   partyId?: string;
   userId?: string;
 }
 
+/** Full provider configuration with all API types required. */
 export interface ProviderConfig {
-  providerName: string;
-  authUrl: string;
-  apis: Record<ApiType, ApiConfig>;
+  readonly providerName: string;
+  readonly authUrl: string;
+  readonly apis: Record<ApiType, ApiConfig>;
 }
 
+/** Partial provider configuration where not all API types are required. */
 export interface PartialProviderConfig {
-  providerName: string;
-  authUrl: string;
-  apis: Partial<Record<ApiType, ApiConfig>>;
+  readonly providerName: string;
+  readonly authUrl: string;
+  readonly apis: Partial<Record<ApiType, ApiConfig>>;
 }
 
+/** Configuration for individual HTTP requests. */
 export interface RequestConfig {
-  contentType?: 'application/json' | 'application/octet-stream';
-  includeBearerToken?: boolean;
+  readonly contentType?: 'application/json' | 'application/octet-stream';
+  readonly includeBearerToken?: boolean;
 }
 
+/**
+ * Top-level configuration for creating API clients.
+ *
+ * Most fields are intentionally mutable because `BaseClient` and `EnvLoader` merge defaults into the config at
+ * construction time (e.g., filling in provider, authUrl, partyId from environment variables).
+ */
 export interface ClientConfig {
-  network: NetworkType;
+  readonly network: NetworkType;
   provider?: ProviderType;
   logger?: import('./logging').Logger;
 
@@ -71,8 +85,8 @@ export interface ClientConfig {
    */
   debug?: boolean;
 
-  // Direct configuration options
   authUrl?: string;
+  /** Party ID. Mutable so it can be set at runtime after client initialization (e.g., LocalNet discovery). */
   partyId?: string;
   userId?: string;
   managedParties?: string[];

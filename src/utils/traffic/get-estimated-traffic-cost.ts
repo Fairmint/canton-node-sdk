@@ -51,18 +51,13 @@ export function getEstimatedTrafficCost(
   const totalCost = costEstimation.totalTrafficCostEstimation;
   const totalCostWithOverhead = totalCost + UPDATE_CONFIRMATION_OVERHEAD_BYTES;
 
-  const result: TrafficCostEstimate = {
+  return {
     requestCost: costEstimation.confirmationRequestTrafficCostEstimation,
     responseCost: costEstimation.confirmationResponseTrafficCostEstimation,
     totalCost,
     totalCostWithOverhead,
     costInCents: calculateTrafficCostInCents(totalCostWithOverhead),
     costInDollars: calculateTrafficCostInDollars(totalCostWithOverhead),
+    ...(costEstimation.estimationTimestamp !== undefined && { estimatedAt: costEstimation.estimationTimestamp }),
   };
-
-  if (costEstimation.estimationTimestamp !== undefined) {
-    result.estimatedAt = costEstimation.estimationTimestamp;
-  }
-
-  return result;
 }

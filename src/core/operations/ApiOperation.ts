@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { type BaseClient } from '../BaseClient';
+import { type PartyId } from '../branded-types';
 import { ValidationError } from '../errors';
 import { type RequestConfig } from '../types';
 
-/** Abstract base class for API operations with parameter validation and request handling */
+/** Abstract base class for API operations with parameter validation and request handling. */
 export abstract class ApiOperation<Params, Response> {
-  constructor(public client: BaseClient) {}
+  constructor(public readonly client: BaseClient) {}
 
   abstract execute(params: Params): Promise<Response>;
 
@@ -38,11 +39,11 @@ export abstract class ApiOperation<Params, Response> {
     return this.client.makePatchRequest<T>(url, data, config);
   }
 
-  public getManagedParties(): string[] {
+  public getManagedParties(): readonly string[] {
     return this.client.getManagedParties();
   }
 
-  public getPartyId(): string {
+  public getPartyId(): PartyId {
     return this.client.getPartyId();
   }
 
@@ -50,7 +51,7 @@ export abstract class ApiOperation<Params, Response> {
     return this.client.getApiUrl();
   }
 
-  public buildPartyList(additionalParties: string[] = []): string[] {
+  public buildPartyList(additionalParties: readonly string[] = []): string[] {
     return this.client.buildPartyList(additionalParties);
   }
 }

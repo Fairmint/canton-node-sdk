@@ -10,32 +10,32 @@ import { getCurrentMiningRoundContext } from '../mining/mining-rounds';
 import { getAmuletsForTransfer } from './get-amulets-for-transfer';
 
 export interface TransferRequest {
-  /** Recipient party ID */
-  recipientPartyId: string;
-  /** Amount to transfer */
-  amount: string;
-  /** Optional description for the transfer */
-  description?: string;
+  /** Recipient party ID. */
+  readonly recipientPartyId: string;
+  /** Amount to transfer. */
+  readonly amount: string;
+  /** Description for the transfer. */
+  readonly description?: string;
 }
 
 export interface TransferToPreapprovedParams {
-  /** Party ID sending the transfer */
-  senderPartyId: string;
-  /** Array of transfer requests */
-  transfers: TransferRequest[];
+  /** Party ID sending the transfer. */
+  readonly senderPartyId: string;
+  /** Array of transfer requests. */
+  readonly transfers: readonly TransferRequest[];
 }
 
 export interface TransferToPreapprovedResult {
-  /** Array of transfer results */
-  transferResults: Array<{
-    /** Recipient party ID */
-    recipientPartyId: string;
-    /** Contract ID of the TransferPreapproval contract used */
-    contractId: string;
-    /** Domain ID where the transfer occurred */
-    domainId: string;
-    /** Transfer result summary */
-    transferResult: SubmitAndWaitForTransactionTreeResponse;
+  /** Array of transfer results. */
+  readonly transferResults: ReadonlyArray<{
+    /** Recipient party ID. */
+    readonly recipientPartyId: string;
+    /** Contract ID of the TransferPreapproval contract used. */
+    readonly contractId: string;
+    /** Domain ID where the transfer occurred. */
+    readonly domainId: string;
+    /** Transfer result summary. */
+    readonly transferResult: SubmitAndWaitForTransactionTreeResponse;
   }>;
 }
 
@@ -106,7 +106,8 @@ export async function transferToPreapproved(
     value: amulet.contractId,
   }));
 
-  const transferResults: TransferToPreapprovedResult['transferResults'] = [];
+  type TransferResultItem = TransferToPreapprovedResult['transferResults'][number];
+  const transferResults: TransferResultItem[] = [];
 
   // Build base disclosed contracts (shared across all transfers)
   const disclosedContracts: DisclosedContract[] = [

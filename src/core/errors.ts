@@ -1,7 +1,7 @@
-/** JSON-serializable context for error details */
-export type ErrorContext = Record<string, unknown>;
+/** JSON-serializable context for error details. */
+export type ErrorContext = Readonly<Record<string, unknown>>;
 
-/** Base error class for all Canton SDK errors */
+/** Base error class for all Canton SDK errors. */
 export class CantonError extends Error {
   constructor(
     message: string,
@@ -13,7 +13,7 @@ export class CantonError extends Error {
   }
 }
 
-/** Error thrown when configuration is invalid or missing */
+/** Error thrown when configuration is invalid or missing. */
 export class ConfigurationError extends CantonError {
   constructor(message: string) {
     super(message, 'CONFIGURATION_ERROR');
@@ -21,7 +21,7 @@ export class ConfigurationError extends CantonError {
   }
 }
 
-/** Error thrown when authentication fails */
+/** Error thrown when authentication fails. */
 export class AuthenticationError extends CantonError {
   constructor(message: string) {
     super(message, 'AUTHENTICATION_ERROR');
@@ -29,22 +29,24 @@ export class AuthenticationError extends CantonError {
   }
 }
 
-/** Error thrown when API requests fail */
+/** Error thrown when API requests fail. */
 export class ApiError extends CantonError {
-  /** The response data from the failed request, if available */
-  public response?: ErrorContext;
+  /** The response data from the failed request, if available. */
+  public readonly response: ErrorContext | undefined;
 
   constructor(
     message: string,
     public readonly status?: number,
-    public readonly statusText?: string
+    public readonly statusText?: string,
+    response?: ErrorContext
   ) {
     super(message, 'API_ERROR');
     this.name = 'ApiError';
+    this.response = response;
   }
 }
 
-/** Error thrown when parameter validation fails */
+/** Error thrown when parameter validation fails. */
 export class ValidationError extends CantonError {
   constructor(message: string, context?: ErrorContext) {
     super(message, 'VALIDATION_ERROR', context);
@@ -52,7 +54,7 @@ export class ValidationError extends CantonError {
   }
 }
 
-/** Error thrown when network requests fail */
+/** Error thrown when network requests fail. */
 export class NetworkError extends CantonError {
   constructor(message: string) {
     super(message, 'NETWORK_ERROR');
@@ -60,7 +62,7 @@ export class NetworkError extends CantonError {
   }
 }
 
-/** Error codes for operation-specific errors */
+/** Error codes for operation-specific errors. */
 export const OperationErrorCode = {
   MISSING_CONTRACT: 'MISSING_CONTRACT',
   MISSING_DOMAIN_ID: 'MISSING_DOMAIN_ID',
@@ -74,7 +76,7 @@ export const OperationErrorCode = {
 
 export type OperationErrorCodeType = (typeof OperationErrorCode)[keyof typeof OperationErrorCode];
 
-/** Error thrown when SDK operations fail */
+/** Error thrown when SDK operations fail. */
 export class OperationError extends CantonError {
   constructor(message: string, code: OperationErrorCodeType, context?: ErrorContext) {
     super(message, code, context);

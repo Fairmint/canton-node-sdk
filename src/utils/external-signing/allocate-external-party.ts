@@ -5,11 +5,11 @@ import {
 } from '../../clients/ledger-json-api/operations/v2/parties/external/allocate-external-party';
 
 export interface AllocateExternalPartyOptions {
-  ledgerClient: LedgerJsonApiClient;
-  synchronizerId: string;
-  identityProviderId: string;
-  onboardingTransactions?: AllocateExternalPartyParams['onboardingTransactions'];
-  multiHashSignatures?: AllocateExternalPartyParams['multiHashSignatures'];
+  readonly ledgerClient: LedgerJsonApiClient;
+  readonly synchronizerId: string;
+  readonly identityProviderId: string;
+  readonly onboardingTransactions?: AllocateExternalPartyParams['onboardingTransactions'];
+  readonly multiHashSignatures?: AllocateExternalPartyParams['multiHashSignatures'];
 }
 
 /** Helper that submits the signed external party topology to the ledger. */

@@ -7,13 +7,13 @@ import {
 export type PartySignature = InteractiveSubmissionExecuteRequest['partySignatures']['signatures'][number];
 
 export interface ExecuteExternalTransactionOptions {
-  ledgerClient: LedgerJsonApiClient;
-  userId: string;
-  preparedTransaction: string;
-  submissionId: string;
-  partySignatures: PartySignature[];
-  hashingSchemeVersion?: string;
-  deduplicationPeriod?: InteractiveSubmissionExecuteRequest['deduplicationPeriod'];
+  readonly ledgerClient: LedgerJsonApiClient;
+  readonly userId: string;
+  readonly preparedTransaction: string;
+  readonly submissionId: string;
+  readonly partySignatures: readonly PartySignature[];
+  readonly hashingSchemeVersion?: string;
+  readonly deduplicationPeriod?: InteractiveSubmissionExecuteRequest['deduplicationPeriod'];
 }
 
 /** Submit a previously prepared and externally signed interactive submission to the ledger. */
@@ -31,7 +31,7 @@ export async function executeExternalTransaction(
       },
     },
     partySignatures: {
-      signatures: options.partySignatures,
+      signatures: [...options.partySignatures],
     },
   });
 }

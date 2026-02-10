@@ -1,5 +1,6 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { type ValidatorApiClient } from '../../clients/validator-api';
+import { ContractId, PartyId } from '../../core/branded-types';
 import { ValidationError } from '../../core/errors';
 import { waitForCondition } from '../../core/utils/polling';
 import { getAmuletsForTransfer } from '../amulet/get-amulets-for-transfer';
@@ -7,21 +8,21 @@ import { acceptTransferOffer, createTransferOffer } from '../amulet/offers';
 import { preApproveTransfers } from '../amulet/pre-approve-transfers';
 
 export interface CreatePartyOptions {
-  /** Ledger JSON API client instance */
-  ledgerClient: LedgerJsonApiClient;
-  /** Validator API client instance */
-  validatorClient: ValidatorApiClient;
+  /** Ledger JSON API client instance. */
+  readonly ledgerClient: LedgerJsonApiClient;
+  /** Validator API client instance. */
+  readonly validatorClient: ValidatorApiClient;
   /** Party name to use for creation. This becomes the prefix on the party ID. */
-  partyName: string;
+  readonly partyName: string;
   /** Amount to fund the party with. Must be > 0 in order to create a preapproval contract. */
-  amount: string;
+  readonly amount: string;
 }
 
 export interface PartyCreationResult {
-  /** Party ID from the Validator API */
-  partyId: string;
-  /** Preapproval contract ID for transfers */
-  preapprovalContractId?: string;
+  /** Party ID from the Validator API. */
+  readonly partyId: PartyId;
+  /** Preapproval contract ID for transfers. */
+  readonly preapprovalContractId?: ContractId;
 }
 
 /**
@@ -44,19 +45,17 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
 
   // Create user via Validator API
   const userStatus = await validatorClient.createUser({ name: options.partyName });
-  const result: PartyCreationResult = {
-    partyId: userStatus.party_id,
-  };
+  const partyId = PartyId(userStatus.party_id);
 
   // Skip funding if amount is 0
   if (amountNum === 0) {
-    return result;
+    return { partyId };
   }
 
   // Create and accept transfer offer
   const transferOfferContractId = await createTransferOffer({
     ledgerClient,
-    receiverPartyId: result.partyId,
+    receiverPartyId: partyId,
     amount: options.amount,
     description: `Welcome transfer for ${options.partyName}`,
   });
@@ -65,7 +64,7 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
   await acceptTransferOffer({
     ledgerClient,
     transferOfferContractId,
-    acceptingPartyId: result.partyId,
+    acceptingPartyId: partyId,
   });
 
   // Poll until amulets are available (transfer has settled)
@@ -73,23 +72,24 @@ export async function createParty(options: CreatePartyOptions): Promise<PartyCre
     async () => {
       const amulets = await getAmuletsForTransfer({
         jsonApiClient: ledgerClient,
-        readAs: [result.partyId],
+        readAs: [partyId],
       });
       return amulets.length > 0 ? amulets : null;
     },
     {
       timeout: 60000,
       interval: 2000,
-      timeoutMessage: `Timeout waiting for transfer to settle for party ${result.partyId}`,
+      timeoutMessage: `Timeout waiting for transfer to settle for party ${partyId}`,
     }
   );
 
   // Create transfer preapproval
   const preapprovalResult = await preApproveTransfers(ledgerClient, validatorClient, {
-    receiverPartyId: result.partyId,
+    receiverPartyId: partyId,
   });
 
-  result.preapprovalContractId = preapprovalResult.contractId;
-
-  return result;
+  return {
+    partyId,
+    preapprovalContractId: ContractId(preapprovalResult.contractId),
+  };
 }

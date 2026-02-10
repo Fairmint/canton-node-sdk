@@ -46,9 +46,11 @@ describe('HttpClient error types', () => {
       expect(error.name).toBe('ApiError');
     });
 
-    it('allows setting response data', () => {
-      const error = new ApiError('HTTP 500', 500);
-      error.response = { code: 'INTERNAL_ERROR', details: 'Something went wrong' };
+    it('accepts response data in constructor', () => {
+      const error = new ApiError('HTTP 500', 500, 'Internal Server Error', {
+        code: 'INTERNAL_ERROR',
+        details: 'Something went wrong',
+      });
 
       expect(error.response).toEqual({
         code: 'INTERNAL_ERROR',

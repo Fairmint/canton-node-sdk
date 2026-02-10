@@ -11,21 +11,21 @@ import { type TrafficCostEstimate } from './types';
  */
 export interface EstimateTrafficCostOptions {
   /** Ledger JSON API client instance. */
-  ledgerClient: LedgerJsonApiClient;
+  readonly ledgerClient: LedgerJsonApiClient;
   /** Commands to estimate traffic cost for. */
-  commands: InteractiveSubmissionPrepareRequest['commands'];
+  readonly commands: InteractiveSubmissionPrepareRequest['commands'];
   /** Synchronizer/domain ID where the transaction will be submitted. */
-  synchronizerId: string;
+  readonly synchronizerId: string;
   /** Parties to act as. Defaults to the ledger client's configured party. */
-  actAs?: string[];
-  /** Parties to read as (optional). */
-  readAs?: string[];
+  readonly actAs?: readonly string[];
+  /** Parties to read as. */
+  readonly readAs?: readonly string[];
   /** User ID. Defaults to the ledger client's configured user. */
-  userId?: string;
-  /** Disclosed contracts (optional). */
-  disclosedContracts?: InteractiveSubmissionPrepareRequest['disclosedContracts'];
-  /** Package ID selection preference (optional). */
-  packageIdSelectionPreference?: InteractiveSubmissionPrepareRequest['packageIdSelectionPreference'];
+  readonly userId?: string;
+  /** Disclosed contracts. */
+  readonly disclosedContracts?: InteractiveSubmissionPrepareRequest['disclosedContracts'];
+  /** Package ID selection preference. */
+  readonly packageIdSelectionPreference?: InteractiveSubmissionPrepareRequest['packageIdSelectionPreference'];
 }
 
 /**
@@ -85,7 +85,7 @@ export async function estimateTrafficCost(
   }
 
   const resolvedPartyId = ledgerClient.getPartyId();
-  const resolvedActAs = actAs ?? (resolvedPartyId ? [resolvedPartyId] : undefined);
+  const resolvedActAs = actAs ? [...actAs] : resolvedPartyId ? [resolvedPartyId] : undefined;
   if (!resolvedActAs || resolvedActAs.length === 0) {
     throw new Error('actAs is required: provide it in options or configure partyId on the ledger client');
   }
@@ -99,7 +99,7 @@ export async function estimateTrafficCost(
     commandId,
     userId: resolvedUserId,
     actAs: resolvedActAs,
-    readAs,
+    readAs: [...readAs],
     disclosedContracts,
     synchronizerId,
     verboseHashing: false,

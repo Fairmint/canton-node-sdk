@@ -37,12 +37,12 @@ function findLatestMiningRound(openMiningRounds: OpenMiningRound[]): OpenMiningR
 
 /** Context information derived from open / issuing mining rounds. */
 export interface MiningRoundContext {
-  /** Contract ID of the open mining round to reference in commands */
-  openMiningRound: string;
-  /** Contract information (for disclosed contracts) of the open mining round */
-  openMiningRoundContract: DisclosedContract;
-  /** Issuing mining rounds formatted for command arguments */
-  issuingMiningRounds: Array<{ round: number; contractId: string }>;
+  /** Contract ID of the open mining round to reference in commands. */
+  readonly openMiningRound: string;
+  /** Contract information (for disclosed contracts) of the open mining round. */
+  readonly openMiningRoundContract: DisclosedContract;
+  /** Issuing mining rounds formatted for command arguments. */
+  readonly issuingMiningRounds: ReadonlyArray<{ readonly round: number; readonly contractId: string }>;
 }
 
 /**

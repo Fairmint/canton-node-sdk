@@ -195,14 +195,10 @@ export class SubscribeToUpdates {
     // Build WebSocket options for token refresh handling (only include defined properties)
     let wsOptions: WebSocketOptions | undefined;
     if (params.onTokenExpiring !== undefined || params.onTokenRefreshNeeded !== undefined) {
-      const options: WebSocketOptions = {};
-      if (params.onTokenExpiring !== undefined) {
-        options.onTokenExpiring = params.onTokenExpiring;
-      }
-      if (params.onTokenRefreshNeeded !== undefined) {
-        options.onTokenRefreshNeeded = params.onTokenRefreshNeeded;
-      }
-      wsOptions = options;
+      wsOptions = {
+        ...(params.onTokenExpiring !== undefined && { onTokenExpiring: params.onTokenExpiring }),
+        ...(params.onTokenRefreshNeeded !== undefined && { onTokenRefreshNeeded: params.onTokenRefreshNeeded }),
+      };
     }
 
     return new Promise<void>((resolve, reject) => {

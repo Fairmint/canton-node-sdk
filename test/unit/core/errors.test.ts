@@ -68,10 +68,14 @@ describe('CantonError hierarchy', () => {
       expect(error.name).toBe('ApiError');
     });
 
-    it('allows setting response', () => {
-      const error = new ApiError('HTTP 400', 400);
-      error.response = { code: 'BAD_REQUEST' };
+    it('accepts response in constructor', () => {
+      const error = new ApiError('HTTP 400', 400, 'Bad Request', { code: 'BAD_REQUEST' });
       expect(error.response).toEqual({ code: 'BAD_REQUEST' });
+    });
+
+    it('has undefined response when not provided', () => {
+      const error = new ApiError('HTTP 400', 400);
+      expect(error.response).toBeUndefined();
     });
 
     it('handles optional parameters', () => {

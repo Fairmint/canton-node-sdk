@@ -5,14 +5,14 @@ import {
 } from '../../clients/ledger-json-api/operations/v2/parties/external/generate-topology';
 
 export interface GenerateExternalPartyOptions {
-  ledgerClient: LedgerJsonApiClient;
-  synchronizerId: string;
-  partyHint: string;
-  publicKey: GenerateExternalPartyTopologyParams['publicKey'];
-  localParticipantObservationOnly?: boolean;
-  otherConfirmingParticipantUids?: string[];
-  confirmationThreshold?: number;
-  observingParticipantUids?: string[];
+  readonly ledgerClient: LedgerJsonApiClient;
+  readonly synchronizerId: string;
+  readonly partyHint: string;
+  readonly publicKey: GenerateExternalPartyTopologyParams['publicKey'];
+  readonly localParticipantObservationOnly?: boolean;
+  readonly otherConfirmingParticipantUids?: readonly string[];
+  readonly confirmationThreshold?: number;
+  readonly observingParticipantUids?: readonly string[];
 }
 
 /** Helper that invokes the external party topology generation endpoint. */
@@ -24,8 +24,10 @@ export async function generateExternalPartyTopology(
     partyHint: options.partyHint,
     publicKey: options.publicKey,
     localParticipantObservationOnly: options.localParticipantObservationOnly ?? false,
-    otherConfirmingParticipantUids: options.otherConfirmingParticipantUids,
+    otherConfirmingParticipantUids: options.otherConfirmingParticipantUids
+      ? [...options.otherConfirmingParticipantUids]
+      : undefined,
     confirmationThreshold: options.confirmationThreshold,
-    observingParticipantUids: options.observingParticipantUids,
+    observingParticipantUids: options.observingParticipantUids ? [...options.observingParticipantUids] : undefined,
   });
 }

@@ -7,28 +7,31 @@ import { getCurrentMiningRoundContext } from '../mining/mining-rounds';
 import { getAmuletsForTransfer } from './get-amulets-for-transfer';
 
 export interface PreApproveTransfersParams {
-  /** Party ID to enable pre-approved transfers for (receiver) */
-  receiverPartyId: string;
-  /** Party ID of the provider (defaults to receiverPartyId if not specified) */
-  providerPartyId?: string;
-  /** When the pre-approval expires (defaults to 1 day from now) */
-  expiresAt?: Date;
-  /** Contract details for disclosed contracts (optional - will be fetched if not provided) */
-  contractDetails?: {
-    amuletRules?: { createdEventBlob: string; synchronizerId: string };
-    openMiningRound?: { createdEventBlob: string; synchronizerId: string };
-    issuingMiningRounds?: Array<{ createdEventBlob: string; synchronizerId: string }>;
-    featuredAppRight?: { createdEventBlob: string; synchronizerId: string };
+  /** Party ID to enable pre-approved transfers for (receiver). */
+  readonly receiverPartyId: string;
+  /** Party ID of the provider (defaults to receiverPartyId if not specified). */
+  readonly providerPartyId?: string;
+  /** When the pre-approval expires (defaults to 1 year from now). */
+  readonly expiresAt?: Date;
+  /** Contract details for disclosed contracts (optional - will be fetched if not provided). */
+  readonly contractDetails?: {
+    readonly amuletRules?: { readonly createdEventBlob: string; readonly synchronizerId: string };
+    readonly openMiningRound?: { readonly createdEventBlob: string; readonly synchronizerId: string };
+    readonly issuingMiningRounds?: ReadonlyArray<{
+      readonly createdEventBlob: string;
+      readonly synchronizerId: string;
+    }>;
+    readonly featuredAppRight?: { readonly createdEventBlob: string; readonly synchronizerId: string };
   };
 }
 
 export interface PreApproveTransfersResult {
-  /** Contract ID of the created TransferPreapproval contract */
-  contractId: string;
-  /** Domain ID where the contract was created */
-  domainId: string;
-  /** Amount of amulet paid for the pre-approval */
-  amuletPaid: string;
+  /** Contract ID of the created TransferPreapproval contract. */
+  readonly contractId: string;
+  /** Domain ID where the contract was created. */
+  readonly domainId: string;
+  /** Amount of amulet paid for the pre-approval. */
+  readonly amuletPaid: string;
 }
 
 /**

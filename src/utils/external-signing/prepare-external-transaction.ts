@@ -6,20 +6,20 @@ import {
 } from '../../clients/ledger-json-api/schemas/api/interactive-submission';
 
 export interface PrepareExternalTransactionOptions {
-  ledgerClient: LedgerJsonApiClient;
-  commands: InteractiveSubmissionPrepareRequest['commands'];
-  userId: string;
-  actAs: string[];
-  synchronizerId: string;
-  commandId?: string;
-  readAs?: string[];
-  disclosedContracts?: InteractiveSubmissionPrepareRequest['disclosedContracts'];
-  verboseHashing?: boolean;
-  packageIdSelectionPreference?: InteractiveSubmissionPrepareRequest['packageIdSelectionPreference'];
+  readonly ledgerClient: LedgerJsonApiClient;
+  readonly commands: InteractiveSubmissionPrepareRequest['commands'];
+  readonly userId: string;
+  readonly actAs: readonly string[];
+  readonly synchronizerId: string;
+  readonly commandId?: string;
+  readonly readAs?: readonly string[];
+  readonly disclosedContracts?: InteractiveSubmissionPrepareRequest['disclosedContracts'];
+  readonly verboseHashing?: boolean;
+  readonly packageIdSelectionPreference?: InteractiveSubmissionPrepareRequest['packageIdSelectionPreference'];
 }
 
 export interface PrepareExternalTransactionResult extends InteractiveSubmissionPrepareResponse {
-  commandId: string;
+  readonly commandId: string;
 }
 
 /** Convenience helper for preparing an interactive submission that will be signed off-ledger. */
@@ -32,8 +32,8 @@ export async function prepareExternalTransaction(
     commands: options.commands,
     commandId,
     userId: options.userId,
-    actAs: options.actAs,
-    readAs: options.readAs ?? [],
+    actAs: [...options.actAs],
+    readAs: options.readAs ? [...options.readAs] : [],
     disclosedContracts: options.disclosedContracts,
     synchronizerId: options.synchronizerId,
     verboseHashing: options.verboseHashing ?? false,
