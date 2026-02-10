@@ -128,14 +128,22 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
     );
   }
 
+  // Validate fingerprint before using it in the API call
+  const publicKeyFingerprint = partyId.split('::')[1];
+  if (!publicKeyFingerprint) {
+    throw new OperationError(
+      'Failed to extract public key fingerprint from party ID',
+      OperationErrorCode.PARTY_CREATION_FAILED,
+      { partyId, partyName }
+    );
+  }
+
   // Step 3: Sign the multi-hash using the Stellar keypair
   const multiHashSignatureHex = signHexWithStellarKeypair(keypair, multiHash);
   // Convert signature from hex to base64 for Canton
   const multiHashSignature = Buffer.from(multiHashSignatureHex, 'hex').toString('base64');
 
   // Step 4: Allocate the party using Ledger JSON API
-  // We need to pass both the topology transactions and the multi-hash signature
-  // Transform the topology transactions (array of strings) into the expected format
   const onboardingTransactions = topologyTransactions.map((transaction: string) => ({ transaction }));
 
   const allocateResult = await ledgerClient.allocateExternalParty({
@@ -146,7 +154,7 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
       {
         format: 'SIGNATURE_FORMAT_RAW',
         signature: multiHashSignature,
-        signedBy: partyId.split('::')[1] ?? '', // fingerprint
+        signedBy: publicKeyFingerprint,
         signingAlgorithmSpec: 'SIGNING_ALGORITHM_SPEC_ED25519',
       },
     ],
@@ -157,15 +165,6 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
       'Failed to allocate external party - no party ID returned',
       OperationErrorCode.PARTY_CREATION_FAILED,
       { partyName, synchronizerId }
-    );
-  }
-
-  const publicKeyFingerprint = partyId.split('::')[1];
-  if (!publicKeyFingerprint) {
-    throw new OperationError(
-      'Failed to extract public key fingerprint from party ID',
-      OperationErrorCode.PARTY_CREATION_FAILED,
-      { partyId, partyName }
     );
   }
 

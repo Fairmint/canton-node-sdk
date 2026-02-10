@@ -123,7 +123,7 @@ function buildClientConfig(config: CantonConfig): ClientConfig {
   if (config.userId !== undefined) clientConfig.userId = config.userId;
   if (config.managedParties !== undefined) clientConfig.managedParties = [...config.managedParties];
   if (config.authUrl !== undefined) clientConfig.authUrl = config.authUrl;
-  if (config.apis !== undefined) clientConfig.apis = config.apis;
+  if (config.apis !== undefined) clientConfig.apis = { ...config.apis };
 
   return clientConfig;
 }

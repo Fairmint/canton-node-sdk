@@ -28,8 +28,8 @@ export class TransactionBatch {
 
   constructor(client: LedgerJsonApiClient, actAs: readonly string[], readAs?: readonly string[]) {
     this.client = client;
-    this.actAs = actAs;
-    this.readAs = readAs;
+    this.actAs = [...actAs];
+    this.readAs = readAs ? [...readAs] : undefined;
   }
 
   /** Appends disclosed contracts (deduped by contractId on submit). */
