@@ -52,8 +52,6 @@ export class AuthenticationError extends CantonError {
 /** Error thrown when API requests fail. */
 export class ApiError extends CantonError {
   public override readonly name: string;
-  /** The response data from the failed request, if available. */
-  public readonly response: ErrorContext | undefined;
 
   constructor(
     message: string,
@@ -61,9 +59,16 @@ export class ApiError extends CantonError {
     public readonly statusText?: string,
     response?: ErrorContext
   ) {
-    super(message, ErrorCode.API_ERROR);
+    super(message, ErrorCode.API_ERROR, response);
     this.name = 'ApiError';
-    this.response = response;
+  }
+
+  /**
+   * Alias for `context` for backwards compatibility and semantic clarity.
+   * @deprecated Use `context` instead for consistency with other error classes.
+   */
+  public get response(): ErrorContext | undefined {
+    return this.context;
   }
 }
 

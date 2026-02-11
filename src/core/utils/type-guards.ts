@@ -3,7 +3,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-/** Type guard to check if a value is a non-empty string */
+/** Type guard to check if a value is a non-empty string (whitespace-only strings return false). */
 export function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
