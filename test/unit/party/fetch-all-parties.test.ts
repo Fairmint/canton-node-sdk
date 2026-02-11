@@ -1,10 +1,10 @@
-import type { ApiOperation } from '../../../src/core';
 import {
   fetchAllParties,
   PartiesAggregationParamsSchema,
   type PartiesAggregationParams,
   type PartiesAggregationResponse,
 } from '../../../src/clients/ledger-json-api/operations/v2/parties/aggregate-parties';
+import type { ApiOperation } from '../../../src/core';
 
 type AggregationOperation = Pick<
   ApiOperation<PartiesAggregationParams, PartiesAggregationResponse>,
