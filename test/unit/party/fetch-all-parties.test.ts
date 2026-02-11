@@ -12,11 +12,11 @@ type AggregationOperation = Pick<
 >;
 
 type PartyDetail = NonNullable<PartiesAggregationResponse['partyDetails']>[number];
-type MockOperationContext = {
+interface MockOperationContext {
   operation: ApiOperation<PartiesAggregationParams, PartiesAggregationResponse>;
   makeGetRequestMock: jest.Mock;
   validateParamsMock: jest.Mock;
-};
+}
 
 const createPartyDetail = (party: string): PartyDetail => ({ party }) as PartyDetail;
 
