@@ -22,8 +22,12 @@ export async function fetchAllParties(
 
   const aggregatedPartyDetails: PartyDetail[] = [];
   let currentPageToken = validatedParams.pageToken?.trim() ?? '';
+  const seenPageTokens = new Set<string>();
+  if (currentPageToken.length > 0) {
+    seenPageTokens.add(currentPageToken);
+  }
 
-  // Loop until the API stops returning nextPageToken (or fails to advance)
+  // Loop until the API stops returning nextPageToken (or repeats a previous token)
   for (;;) {
     const url = new URL(`${operation.getApiUrl()}${endpoint}`);
     url.searchParams.set('pageSize', DEFAULT_PAGE_SIZE.toString());
@@ -45,10 +49,11 @@ export async function fetchAllParties(
     if (nextToken.length === 0) {
       break;
     }
-    if (nextToken === currentPageToken) {
+    if (seenPageTokens.has(nextToken)) {
       throw new Error('ListParties pagination did not advance to a new page token');
     }
 
+    seenPageTokens.add(nextToken);
     currentPageToken = nextToken;
   }
 
