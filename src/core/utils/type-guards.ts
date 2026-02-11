@@ -44,8 +44,8 @@ export function isDefined<T>(value: T | null | undefined): value is T {
 }
 
 /**
- * Type guard to check if a record has a specific property with the expected type. Uses a type predicate callback for the
- * property value.
+ * Type guard to check if a record has a specific property with the expected type. Uses a type predicate callback for
+ * the property value.
  */
 export function hasProperty<K extends string, V>(
   obj: unknown,
@@ -55,30 +55,22 @@ export function hasProperty<K extends string, V>(
   return isRecord(obj) && key in obj && guard(obj[key]);
 }
 
-/**
- * Type guard to check if a record has a string property.
- */
+/** Type guard to check if a record has a string property. */
 export function hasStringProperty<K extends string>(obj: unknown, key: K): obj is Record<K, string> {
   return hasProperty(obj, key, isString);
 }
 
-/**
- * Type guard to check if a record has a number property.
- */
+/** Type guard to check if a record has a number property. */
 export function hasNumberProperty<K extends string>(obj: unknown, key: K): obj is Record<K, number> {
   return hasProperty(obj, key, isNumber);
 }
 
-/**
- * Safely extract a string from an unknown value.
- */
+/** Safely extract a string from an unknown value. */
 export function extractString(value: unknown): string | undefined {
   return isString(value) ? value : undefined;
 }
 
-/**
- * Safely extract a number from an unknown value.
- */
+/** Safely extract a number from an unknown value. */
 export function extractNumber(value: unknown): number | undefined {
   return isNumber(value) ? value : undefined;
 }
