@@ -1,14 +1,35 @@
+/** Supported network environments. */
+export const Networks = {
+  DEVNET: 'devnet',
+  TESTNET: 'testnet',
+  MAINNET: 'mainnet',
+  LOCALNET: 'localnet',
+} as const;
+
 /** Canton network environments. */
-export type NetworkType = 'devnet' | 'testnet' | 'mainnet' | 'localnet';
+export type NetworkType = (typeof Networks)[keyof typeof Networks];
 
 /** Provider identifier (e.g., '5n', 'app-provider'). */
 export type ProviderType = string;
 
+/** Supported API types. */
+export const ApiTypes = {
+  LEDGER_JSON_API: 'LEDGER_JSON_API',
+  VALIDATOR_API: 'VALIDATOR_API',
+  SCAN_API: 'SCAN_API',
+} as const;
+
 /** API client types supported by the SDK. */
-export type ApiType = 'LEDGER_JSON_API' | 'VALIDATOR_API' | 'SCAN_API';
+export type ApiType = (typeof ApiTypes)[keyof typeof ApiTypes];
+
+/** Supported grant types. */
+export const GrantTypes = {
+  CLIENT_CREDENTIALS: 'client_credentials',
+  PASSWORD: 'password',
+} as const;
 
 /** Supported OAuth2 grant types. */
-export type GrantType = 'client_credentials' | 'password';
+export type GrantType = (typeof GrantTypes)[keyof typeof GrantTypes];
 
 /** Shared OAuth2 fields present in all auth configs. */
 interface AuthConfigBase {

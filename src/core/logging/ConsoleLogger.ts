@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import { LOG_LEVEL_VALUES, type LogLevel, type Logger, type LoggerConfig } from './Logger';
+import { LogLevels, type LogLevel, type Logger, type LoggerConfig } from './Logger';
 
 /** ANSI color codes for terminal output */
 const COLORS = {
@@ -105,7 +105,7 @@ export class ConsoleLogger implements Logger {
   }
 
   private shouldLog(level: LogLevel): boolean {
-    return LOG_LEVEL_VALUES[level] <= LOG_LEVEL_VALUES[this.logLevel];
+    return LogLevels[level] <= LogLevels[this.logLevel];
   }
 
   private formatTimestamp(): string {

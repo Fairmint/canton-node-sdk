@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
-import { LOG_LEVEL_VALUES, type LogLevel, type Logger, type LoggerConfig } from './Logger';
+import { LogLevels, type LogLevel, type Logger, type LoggerConfig } from './Logger';
 dotenv.config();
 
 /** Logs API requests and responses to files with sensitive data redaction */
@@ -90,7 +90,7 @@ export class FileLogger implements Logger {
   }
 
   private shouldLog(level: LogLevel): boolean {
-    return LOG_LEVEL_VALUES[level] <= LOG_LEVEL_VALUES[this.logLevel];
+    return LogLevels[level] <= LogLevels[this.logLevel];
   }
 
   private sanitizeForLogging(obj: unknown): unknown {

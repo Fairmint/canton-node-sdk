@@ -1,8 +1,22 @@
 /** JSON-serializable context for error details. */
 export type ErrorContext = Readonly<Record<string, unknown>>;
 
+/** Base error codes for standard SDK errors. */
+export const ErrorCode = {
+  CANTON_ERROR: 'CANTON_ERROR',
+  CONFIGURATION_ERROR: 'CONFIGURATION_ERROR',
+  AUTHENTICATION_ERROR: 'AUTHENTICATION_ERROR',
+  API_ERROR: 'API_ERROR',
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  NETWORK_ERROR: 'NETWORK_ERROR',
+} as const;
+
+export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];
+
 /** Base error class for all Canton SDK errors. */
 export class CantonError extends Error {
+  public override readonly name: string;
+
   constructor(
     message: string,
     public readonly code: string,
@@ -10,27 +24,34 @@ export class CantonError extends Error {
   ) {
     super(message);
     this.name = 'CantonError';
+    // Maintains proper prototype chain for ES5
+    Object.setPrototypeOf(this, new.target.prototype);
   }
 }
 
 /** Error thrown when configuration is invalid or missing. */
 export class ConfigurationError extends CantonError {
-  constructor(message: string) {
-    super(message, 'CONFIGURATION_ERROR');
+  public override readonly name: string;
+
+  constructor(message: string, context?: ErrorContext) {
+    super(message, ErrorCode.CONFIGURATION_ERROR, context);
     this.name = 'ConfigurationError';
   }
 }
 
 /** Error thrown when authentication fails. */
 export class AuthenticationError extends CantonError {
-  constructor(message: string) {
-    super(message, 'AUTHENTICATION_ERROR');
+  public override readonly name: string;
+
+  constructor(message: string, context?: ErrorContext) {
+    super(message, ErrorCode.AUTHENTICATION_ERROR, context);
     this.name = 'AuthenticationError';
   }
 }
 
 /** Error thrown when API requests fail. */
 export class ApiError extends CantonError {
+  public override readonly name: string;
   /** The response data from the failed request, if available. */
   public readonly response: ErrorContext | undefined;
 
@@ -40,7 +61,7 @@ export class ApiError extends CantonError {
     public readonly statusText?: string,
     response?: ErrorContext
   ) {
-    super(message, 'API_ERROR');
+    super(message, ErrorCode.API_ERROR);
     this.name = 'ApiError';
     this.response = response;
   }
@@ -48,16 +69,20 @@ export class ApiError extends CantonError {
 
 /** Error thrown when parameter validation fails. */
 export class ValidationError extends CantonError {
+  public override readonly name: string;
+
   constructor(message: string, context?: ErrorContext) {
-    super(message, 'VALIDATION_ERROR', context);
+    super(message, ErrorCode.VALIDATION_ERROR, context);
     this.name = 'ValidationError';
   }
 }
 
 /** Error thrown when network requests fail. */
 export class NetworkError extends CantonError {
-  constructor(message: string) {
-    super(message, 'NETWORK_ERROR');
+  public override readonly name: string;
+
+  constructor(message: string, context?: ErrorContext) {
+    super(message, ErrorCode.NETWORK_ERROR, context);
     this.name = 'NetworkError';
   }
 }
@@ -78,6 +103,8 @@ export type OperationErrorCodeType = (typeof OperationErrorCode)[keyof typeof Op
 
 /** Error thrown when SDK operations fail. */
 export class OperationError extends CantonError {
+  public override readonly name: string;
+
   constructor(message: string, code: OperationErrorCodeType, context?: ErrorContext) {
     super(message, code, context);
     this.name = 'OperationError';

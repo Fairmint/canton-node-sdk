@@ -1,6 +1,6 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { type JsGetActiveContractsResponseItem } from '../../clients/ledger-json-api/schemas/api/state';
-import { isRecord } from '../../core/utils';
+import { isNumber, isRecord, isString } from '../../core/utils';
 
 export interface AmuletForTransfer {
   readonly contractId: string;
@@ -73,21 +73,21 @@ function isJsActiveContractItem(ctr: unknown): ctr is JsGetActiveContractsRespon
   if (!isRecord(createdEvent)) return false;
 
   // Validate all required fields exist and are strings
-  if (typeof createdEvent['contractId'] !== 'string') return false;
-  if (typeof createdEvent['templateId'] !== 'string') return false;
+  if (!isString(createdEvent['contractId'])) return false;
+  if (!isString(createdEvent['templateId'])) return false;
   if (!isRecord(createdEvent['createArgument'])) return false;
 
   return true;
 }
 
 /** Safely extract a string from an unknown value */
-function extractString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
+function extractStringValue(value: unknown): string | undefined {
+  return isString(value) ? value : undefined;
 }
 
 /** Safely extract a number or string from an unknown value */
 function extractNumericValue(value: unknown): string | number | undefined {
-  if (typeof value === 'string' || typeof value === 'number') return value;
+  if (isString(value) || isNumber(value)) return value;
   return undefined;
 }
 
@@ -115,11 +115,11 @@ function extractAmount(payload: Record<string, unknown>, templateId: string): st
 function extractOwner(payload: Record<string, unknown>, templateId: string): string {
   if (templateId.includes('AppRewardCoupon') || templateId.includes('ValidatorRewardCoupon')) {
     // For coupons, beneficiary is optional and falls back to provider
-    return extractString(payload['beneficiary']) ?? extractString(payload['provider']) ?? '';
+    return extractStringValue(payload['beneficiary']) ?? extractStringValue(payload['provider']) ?? '';
   }
 
   // For amulets, use owner field
-  return extractString(payload['owner']) ?? '';
+  return extractStringValue(payload['owner']) ?? '';
 }
 
 /**
