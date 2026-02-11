@@ -12,6 +12,11 @@ type AggregationOperation = Pick<
 >;
 
 type PartyDetail = NonNullable<PartiesAggregationResponse['partyDetails']>[number];
+type MockOperationContext = {
+  operation: ApiOperation<PartiesAggregationParams, PartiesAggregationResponse>;
+  makeGetRequestMock: jest.Mock;
+  validateParamsMock: jest.Mock;
+};
 
 const createPartyDetail = (party: string): PartyDetail => ({ party }) as PartyDetail;
 
@@ -21,7 +26,7 @@ const createResponse = (partyDetails: PartyDetail[], nextPageToken = ''): Partie
     nextPageToken,
   }) as PartiesAggregationResponse;
 
-const createMockOperation = (responses: PartiesAggregationResponse[]) => {
+const createMockOperation = (responses: PartiesAggregationResponse[]): MockOperationContext => {
   const validateParamsMock = jest.fn((params: PartiesAggregationParams) => params);
   const getApiUrlMock = jest.fn(() => 'https://ledger.example.com');
   const makeGetRequestMock = jest.fn();
