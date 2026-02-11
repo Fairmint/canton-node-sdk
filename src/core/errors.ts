@@ -65,6 +65,7 @@ export class ApiError extends CantonError {
 
   /**
    * Alias for `context` for backwards compatibility and semantic clarity.
+   *
    * @deprecated Use `context` instead for consistency with other error classes.
    */
   public get response(): ErrorContext | undefined {
