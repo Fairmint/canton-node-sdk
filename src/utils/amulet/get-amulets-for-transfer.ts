@@ -1,6 +1,6 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { type JsGetActiveContractsResponseItem } from '../../clients/ledger-json-api/schemas/api/state';
-import { isNumber, isRecord, isString } from '../../core/utils';
+import { extractString, isNumber, isRecord, isString } from '../../core/utils';
 
 export interface AmuletForTransfer {
   readonly contractId: string;
@@ -80,11 +80,6 @@ function isJsActiveContractItem(ctr: unknown): ctr is JsGetActiveContractsRespon
   return true;
 }
 
-/** Safely extract a string from an unknown value */
-function extractStringValue(value: unknown): string | undefined {
-  return isString(value) ? value : undefined;
-}
-
 /** Safely extract a number or string from an unknown value */
 function extractNumericValue(value: unknown): string | number | undefined {
   if (isString(value) || isNumber(value)) return value;
@@ -115,11 +110,11 @@ function extractAmount(payload: Record<string, unknown>, templateId: string): st
 function extractOwner(payload: Record<string, unknown>, templateId: string): string {
   if (templateId.includes('AppRewardCoupon') || templateId.includes('ValidatorRewardCoupon')) {
     // For coupons, beneficiary is optional and falls back to provider
-    return extractStringValue(payload['beneficiary']) ?? extractStringValue(payload['provider']) ?? '';
+    return extractString(payload['beneficiary']) ?? extractString(payload['provider']) ?? '';
   }
 
   // For amulets, use owner field
-  return extractStringValue(payload['owner']) ?? '';
+  return extractString(payload['owner']) ?? '';
 }
 
 /**
