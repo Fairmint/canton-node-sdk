@@ -1,2 +1,2 @@
 export { waitForCondition, type WaitForConditionOptions } from './polling';
-export { isRecord } from './type-guards';
+export { extractString, hasStringProperty, isNonEmptyString, isNumber, isRecord, isString } from './type-guards';

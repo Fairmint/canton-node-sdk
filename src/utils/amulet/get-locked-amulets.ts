@@ -2,7 +2,7 @@ import { type ValidatorApiClient } from '../../clients/validator-api';
 import type { GetAmuletsResponse } from '../../clients/validator-api/schemas/api/wallet';
 import { ContractId, DomainId, PartyId, TemplateId } from '../../core/branded-types';
 import { ValidationError } from '../../core/errors';
-import { isRecord } from '../../core/utils';
+import { hasStringProperty, isNonEmptyString, isRecord, isString } from '../../core/utils';
 import { type LockedAmulet } from './types';
 
 /**
@@ -12,16 +12,12 @@ import { type LockedAmulet } from './types';
 type PayloadRecord = Record<string, unknown>;
 
 /** Type guard for holder object with owner property */
-interface HolderWithOwner {
-  owner: string;
-}
-
-function isHolderWithOwner(value: unknown): value is HolderWithOwner {
-  return isRecord(value) && typeof value['owner'] === 'string';
+function isHolderWithOwner(value: unknown): value is { readonly owner: string } {
+  return hasStringProperty(value, 'owner');
 }
 
 function assertString(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.trim() === '') {
+  if (!isNonEmptyString(value)) {
     throw new ValidationError(`${label} must be a non-empty string`, { label, value: String(value) });
   }
   return value;
@@ -41,7 +37,7 @@ function parseHolders(raw: unknown): string[] {
   }
   return raw
     .map((holder: unknown) => {
-      if (typeof holder === 'string') {
+      if (isString(holder)) {
         return holder;
       }
       if (isHolderWithOwner(holder)) {
@@ -49,7 +45,7 @@ function parseHolders(raw: unknown): string[] {
       }
       return null;
     })
-    .filter((holder): holder is string => typeof holder === 'string' && holder.trim() !== '');
+    .filter((holder): holder is string => isNonEmptyString(holder));
 }
 
 type LockedAmuletEntry = GetAmuletsResponse['locked_amulets'][number];

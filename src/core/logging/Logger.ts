@@ -1,17 +1,20 @@
+/** Log level priority values. Lower number = higher priority. */
+export const LogLevels = {
+  error: 0,
+  warn: 1,
+  info: 2,
+  debug: 3,
+} as const;
+
 /**
  * Log levels ordered by priority: `error` > `warn` > `info` > `debug`.
  *
  * Messages are shown when their level is at or above the configured minimum.
  */
-export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
+export type LogLevel = keyof typeof LogLevels;
 
-/** Numeric values for log levels. Lower number = higher priority. */
-export const LOG_LEVEL_VALUES: Record<LogLevel, number> = {
-  error: 0,
-  warn: 1,
-  info: 2,
-  debug: 3,
-};
+/** @deprecated Use LogLevels instead */
+export const LOG_LEVEL_VALUES: Record<LogLevel, number> = LogLevels;
 
 /**
  * Logger interface for SDK operations.
