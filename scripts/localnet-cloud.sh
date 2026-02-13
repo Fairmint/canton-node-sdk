@@ -40,12 +40,12 @@ ensure_docker_packages() {
 }
 
 ensure_legacy_iptables() {
-  if ! iptables --version | rg -q 'legacy'; then
+  if ! iptables --version | grep -q 'legacy'; then
     log "Switching iptables to legacy backend..."
     sudo update-alternatives --set iptables /usr/sbin/iptables-legacy
   fi
 
-  if ! ip6tables --version | rg -q 'legacy'; then
+  if ! ip6tables --version | grep -q 'legacy'; then
     log "Switching ip6tables to legacy backend..."
     sudo update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
   fi
@@ -94,7 +94,7 @@ ensure_submodules() {
 }
 
 ensure_hosts_entries() {
-  if ! rg -q 'scan\.localhost' /etc/hosts; then
+  if ! grep -q 'scan\.localhost' /etc/hosts; then
     log "Adding localnet host aliases to /etc/hosts..."
     echo "${HOSTS_ENTRY}" | sudo tee -a /etc/hosts >/dev/null
   fi
@@ -245,7 +245,6 @@ do_prerequisites() {
   if [[ "${require_curl}" == "true" ]]; then
     require_command curl
   fi
-  require_command rg
   ensure_sudo
   ensure_docker_packages
   ensure_legacy_iptables
