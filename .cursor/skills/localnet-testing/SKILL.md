@@ -1,6 +1,7 @@
 # LocalNet Testing Skill
 
-Use this skill when you need to quickly bring up LocalNet, validate SDK behavior, or run integration tests before pushing.
+Use this skill when you need to quickly bring up LocalNet, validate SDK behavior, or run integration
+tests before pushing.
 
 ## Primary Commands
 
