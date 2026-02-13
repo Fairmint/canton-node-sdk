@@ -46,11 +46,17 @@
     "localnet:start": "./scripts/start-localnet.sh",
     "localnet:status": "./scripts/localnet-status.sh",
     "localnet:stop": "./scripts/stop-localnet.sh",
+    "localnet:smoke": "./scripts/localnet-cloud.sh smoke",
+    "localnet:test": "npm run test:integration",
+    "localnet:verify": "./scripts/localnet-cloud.sh verify",
     "prepack": "npm run clean && npm run build:core",
     "prepare-release": "tsx scripts/prepare-release.ts",
     "prepublishOnly": "npm run prepack",
     "revoke-user-rights": "tsx scripts/revoke-user-rights.ts",
     "test": "jest",
+    "test:integration": "jest test/integration/localnet",
+    "test:localnet": "npm run test:integration",
+    "test:regression": "npm run test:integration",
     "test:watch": "jest --watch"
   },
   "dependencies": {
