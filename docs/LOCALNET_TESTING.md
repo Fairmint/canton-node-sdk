@@ -3,7 +3,7 @@
 This repository uses [cn-quickstart](https://github.com/digital-asset/cn-quickstart) for integration
 tests.
 
-The scripts in `scripts/localnet-cloud.sh` are tuned for this cloud environment:
+The scripts in `scripts/localnet/localnet-cloud.sh` are tuned for this cloud environment:
 
 - Install Docker when missing
 - Switch iptables to `legacy` mode (required here)

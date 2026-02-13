@@ -56,27 +56,15 @@ npm run localnet:stop
 
 ### Use LocalNet tooling from other repos
 
-You can reuse this LocalNet workflow from another repository by installing this package and using
-the bundled CLI.
+You can reuse this LocalNet workflow from another repository by installing this package and calling
+the bundled shell scripts.
 
 ```bash
 # In your other repo
 npm install --save-dev @fairmint/canton-node-sdk
 
-# Run bundled localnet CLI
-npx canton-localnet setup
-npx canton-localnet start
-npx canton-localnet status
-npx canton-localnet smoke
-npx canton-localnet test
-npx canton-localnet verify
-npx canton-localnet stop
-```
-
-One-off (without adding a dependency):
-
-```bash
-npx --yes --package @fairmint/canton-node-sdk canton-localnet verify
+# Run bundled localnet script directly
+bash ./node_modules/@fairmint/canton-node-sdk/scripts/localnet/localnet-cloud.sh verify
 ```
 
 Or wire it into your other repo's `package.json`:
@@ -84,12 +72,12 @@ Or wire it into your other repo's `package.json`:
 ```json
 {
   "scripts": {
-    "localnet:setup": "canton-localnet setup",
-    "localnet:start": "canton-localnet start",
-    "localnet:status": "canton-localnet status",
-    "localnet:smoke": "canton-localnet smoke",
-    "localnet:test": "canton-localnet test",
-    "localnet:stop": "canton-localnet stop"
+    "localnet:setup": "bash ./node_modules/@fairmint/canton-node-sdk/scripts/localnet/setup-localnet.sh",
+    "localnet:start": "bash ./node_modules/@fairmint/canton-node-sdk/scripts/localnet/start-localnet.sh",
+    "localnet:status": "bash ./node_modules/@fairmint/canton-node-sdk/scripts/localnet/localnet-status.sh",
+    "localnet:smoke": "bash ./node_modules/@fairmint/canton-node-sdk/scripts/localnet/localnet-cloud.sh smoke",
+    "localnet:test": "bash ./node_modules/@fairmint/canton-node-sdk/scripts/localnet/localnet-cloud.sh test",
+    "localnet:stop": "bash ./node_modules/@fairmint/canton-node-sdk/scripts/localnet/stop-localnet.sh"
   }
 }
 ```
@@ -97,8 +85,8 @@ Or wire it into your other repo's `package.json`:
 The npm package includes the LocalNet helper scripts and required cn-quickstart resources so other
 repos can use the same setup without copying files.
 
-`canton-localnet test` runs `test:integration` or `test:localnet` from your repo when those scripts
-exist. If no integration test script is configured, it skips that step.
+`localnet-cloud.sh test` runs `test:integration` or `test:localnet` from your repo when those
+scripts exist. If no integration test script is configured, it skips that step.
 
 ### Available Commands
 

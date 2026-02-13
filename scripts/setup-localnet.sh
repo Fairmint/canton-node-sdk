@@ -2,4 +2,4 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-"${SCRIPT_DIR}/setup-quickstart-localnet.sh"
+bash "${SCRIPT_DIR}/setup-quickstart-localnet.sh"

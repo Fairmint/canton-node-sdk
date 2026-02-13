@@ -386,7 +386,7 @@ read_npm_script() {
 
 script_is_recursive_localnet_test() {
   local script_value="$1"
-  echo "${script_value}" | grep -Eq '(^|[[:space:]])canton-localnet[[:space:]]+test([[:space:]]|$)'
+  echo "${script_value}" | grep -Eq '(^|[[:space:]])(canton-localnet[[:space:]]+test|[^[:space:]]*localnet-cloud\.sh[[:space:]]+test)([[:space:]]|$)'
 }
 
 run_integration_tests() {
@@ -443,7 +443,7 @@ run_integration_tests() {
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/localnet-cloud.sh <command>
+Usage: scripts/localnet/localnet-cloud.sh <command>
 
 Commands:
   setup    Install prerequisites, init submodules, configure quickstart
