@@ -47,7 +47,6 @@
     "localnet:start": "./scripts/start-localnet.sh",
     "localnet:status": "./scripts/localnet-status.sh",
     "localnet:stop": "./scripts/stop-localnet.sh",
-    "localnet:test": "npm run test:integration",
     "localnet:verify": "./scripts/localnet-cloud.sh verify",
     "prepack": "npm run clean && npm run build:core",
     "prepare-release": "tsx scripts/prepare-release.ts",

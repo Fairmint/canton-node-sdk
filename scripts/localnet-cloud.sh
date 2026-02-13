@@ -130,7 +130,10 @@ wait_for_services() {
     fi
     sleep 2
   done
-  curl -fsS http://localhost:8082/realms/AppProvider >/dev/null
+  if ! curl -fsS http://localhost:8082/realms/AppProvider >/dev/null 2>&1; then
+    log "Keycloak did not become ready."
+    exit 1
+  fi
 
   log "Waiting for Validator API..."
   for _ in $(seq 1 30); do
@@ -153,7 +156,10 @@ wait_for_services() {
     fi
     sleep 2
   done
-  curl -fsS http://scan.localhost:4000/api/scan/v0/dso-party-id >/dev/null
+  if ! curl -fsS http://scan.localhost:4000/api/scan/v0/dso-party-id >/dev/null 2>&1; then
+    log "Scan API did not become ready."
+    exit 1
+  fi
 
   log "All localnet services are ready."
 }
