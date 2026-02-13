@@ -51,6 +51,6 @@ npm run localnet:smoke
 ## Before Push Checklist
 
 ```bash
-yarn lint && yarn build && yarn test
+npm run lint && npm run build && npm test
 npm run test:integration
 ```

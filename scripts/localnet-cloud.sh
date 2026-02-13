@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_ROOT="${CANTON_LOCALNET_PROJECT_ROOT:-$(pwd)}"
 QUICKSTART_DIR="${REPO_ROOT}/libs/cn-quickstart/quickstart"
 DOCKERD_PID_FILE="/tmp/localnet-dockerd.pid"
 DOCKERD_LOG_FILE="/tmp/localnet-dockerd.log"
@@ -68,15 +69,55 @@ configure_docker_socket_permissions() {
     return
   fi
 
+  sudo groupadd -f docker >/dev/null 2>&1 || true
   sudo chown root:docker /var/run/docker.sock >/dev/null 2>&1 || true
+  sudo chmod 660 /var/run/docker.sock || true
+}
 
-  if id -nG "${USER:-$(whoami)}" | grep -qw docker; then
-    sudo chmod 660 /var/run/docker.sock || true
+run_docker() {
+  if docker info >/dev/null 2>&1; then
+    docker "$@"
     return
   fi
+  sudo docker "$@"
+}
 
-  log "Current user is not in docker group; using temporary socket mode 666."
-  sudo chmod 666 /var/run/docker.sock || true
+run_quickstart_make() {
+  local target="$1"
+  local docker_shim_dir=""
+  local status=0
+
+  if ! docker info >/dev/null 2>&1 && sudo docker info >/dev/null 2>&1; then
+    docker_shim_dir="$(mktemp -d "/tmp/canton-localnet-docker-shim.XXXXXX")"
+    cat >"${docker_shim_dir}/docker" <<'EOF'
+#!/usr/bin/env bash
+exec sudo -E docker "$@"
+EOF
+    chmod +x "${docker_shim_dir}/docker"
+    log "Using sudo docker shim for quickstart make ${target}."
+  fi
+
+  set +e
+  if [[ -n "${docker_shim_dir}" ]]; then
+    (
+      cd "${QUICKSTART_DIR}"
+      PATH="${docker_shim_dir}:${HOME}/.daml/bin:${PATH}" make "${target}"
+    )
+    status=$?
+  else
+    (
+      cd "${QUICKSTART_DIR}"
+      PATH="${HOME}/.daml/bin:${PATH}" make "${target}"
+    )
+    status=$?
+  fi
+  set -e
+
+  if [[ -n "${docker_shim_dir}" ]]; then
+    rm -rf "${docker_shim_dir}"
+  fi
+
+  return "${status}"
 }
 
 start_docker_daemon() {
@@ -142,7 +183,11 @@ quickstart_setup() {
     log "Running cn-quickstart setup (OAuth2 enabled)..."
     (
       cd "${QUICKSTART_DIR}"
-      printf 'y\ny\n\nn\n' | make setup
+      # Match CI behavior first, then fall back to prompt-based answers for newer setup flows.
+      echo "2" | make setup || true
+      if ! grep -Eq '^AUTH_MODE=oauth2$' "${QUICKSTART_DIR}/.env.local" 2>/dev/null; then
+        printf 'y\ny\n\nn\n' | make setup
+      fi
     )
   else
     log "Reusing existing ${QUICKSTART_DIR}/.env.local."
@@ -203,24 +248,65 @@ wait_for_services() {
 
 start_localnet() {
   log "Starting cn-quickstart..."
-  (
-    cd "${QUICKSTART_DIR}"
-    PATH="${HOME}/.daml/bin:${PATH}" make start
-  )
+  run_quickstart_make start
   wait_for_services
 }
 
 stop_localnet() {
   if [[ ! -d "${QUICKSTART_DIR}" ]]; then
     log "cn-quickstart directory not found; nothing to stop."
+    stop_managed_dockerd
     return
   fi
 
   log "Stopping cn-quickstart..."
-  (
-    cd "${QUICKSTART_DIR}"
-    PATH="${HOME}/.daml/bin:${PATH}" make stop || true
-  )
+  run_quickstart_make stop || true
+  stop_managed_dockerd
+}
+
+stop_managed_dockerd() {
+  local pid=""
+  local cmd=""
+
+  if [[ ! -f "${DOCKERD_PID_FILE}" ]]; then
+    return
+  fi
+
+  pid="$(cat "${DOCKERD_PID_FILE}" 2>/dev/null || true)"
+  if [[ -z "${pid}" ]]; then
+    rm -f "${DOCKERD_PID_FILE}" "${DOCKERD_LOG_FILE}"
+    return
+  fi
+
+  if ! ps -p "${pid}" >/dev/null 2>&1; then
+    rm -f "${DOCKERD_PID_FILE}" "${DOCKERD_LOG_FILE}"
+    return
+  fi
+
+  cmd="$(ps -p "${pid}" -o comm= 2>/dev/null | tr -d '[:space:]')"
+  if [[ "${cmd}" != "dockerd" ]]; then
+    log "PID ${pid} is not dockerd; skipping daemon cleanup."
+    rm -f "${DOCKERD_PID_FILE}"
+    return
+  fi
+
+  if ! sudo -n true >/dev/null 2>&1; then
+    log "Cannot stop managed dockerd without passwordless sudo."
+    return
+  fi
+
+  log "Stopping managed dockerd (pid ${pid})..."
+  sudo kill -TERM "${pid}" >/dev/null 2>&1 || true
+  for _ in $(seq 1 10); do
+    if ! ps -p "${pid}" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+  if ps -p "${pid}" >/dev/null 2>&1; then
+    sudo kill -KILL "${pid}" >/dev/null 2>&1 || true
+  fi
+  rm -f "${DOCKERD_PID_FILE}" "${DOCKERD_LOG_FILE}"
 }
 
 status_localnet() {
@@ -231,7 +317,7 @@ status_localnet() {
     exit 1
   fi
 
-  docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+  run_docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
   echo
 
   keycloak_ok="no"
@@ -254,25 +340,95 @@ status_localnet() {
 }
 
 run_smoke() {
-  log "Building SDK core artifacts..."
-  (
-    cd "${REPO_ROOT}"
-    npm run build:core
-  )
+  local validator_code=""
 
-  log "Running localnet smoke script..."
-  (
-    cd "${REPO_ROOT}"
-    npm run example:connect
-  )
+  log "Running localnet smoke checks..."
+
+  if ! curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://localhost:8082/realms/AppProvider >/dev/null 2>&1; then
+    log "Keycloak is not reachable."
+    exit 1
+  fi
+
+  validator_code="$(curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -sS -o /dev/null -w '%{http_code}' http://localhost:3903/api/validator/v0/wallet/user-status || true)"
+  if [[ "${validator_code}" != "200" && "${validator_code}" != "401" ]]; then
+    log "Validator API is not reachable (HTTP ${validator_code})."
+    exit 1
+  fi
+
+  if ! curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://scan.localhost:4000/api/scan/v0/dso-party-id >/dev/null 2>&1; then
+    log "Scan API is not reachable."
+    exit 1
+  fi
+
+  log "Smoke checks passed."
+}
+
+read_npm_script() {
+  local target_dir="$1"
+  local script_name="$2"
+
+  if [[ ! -f "${target_dir}/package.json" ]]; then
+    return
+  fi
+
+  node -e 'const fs=require("fs"); const pkgPath=process.argv[1]; const scriptName=process.argv[2]; try { const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")); const script = pkg?.scripts?.[scriptName]; if (typeof script === "string") process.stdout.write(script); } catch {}' "${target_dir}/package.json" "${script_name}"
+}
+
+script_is_recursive_localnet_test() {
+  local script_value="$1"
+  echo "${script_value}" | grep -Eq '(^|[[:space:]])canton-localnet[[:space:]]+test([[:space:]]|$)'
 }
 
 run_integration_tests() {
-  log "Running localnet integration tests..."
-  (
-    cd "${REPO_ROOT}"
-    npm test -- test/integration/localnet
-  )
+  local script_value=""
+
+  if [[ -n "${CANTON_LOCALNET_TEST_CMD:-}" ]]; then
+    log "Running custom integration command from CANTON_LOCALNET_TEST_CMD..."
+    (
+      cd "${PROJECT_ROOT}"
+      bash -lc "${CANTON_LOCALNET_TEST_CMD}"
+    )
+    return
+  fi
+
+  script_value="$(read_npm_script "${PROJECT_ROOT}" "test:integration")"
+  if [[ -n "${script_value}" ]]; then
+    if script_is_recursive_localnet_test "${script_value}"; then
+      log "Skipping recursive test:integration script."
+    else
+      log "Running project integration tests: npm run test:integration"
+      (
+        cd "${PROJECT_ROOT}"
+        npm run test:integration
+      )
+      return
+    fi
+  fi
+
+  script_value="$(read_npm_script "${PROJECT_ROOT}" "test:localnet")"
+  if [[ -n "${script_value}" ]]; then
+    if script_is_recursive_localnet_test "${script_value}"; then
+      log "Skipping recursive test:localnet script."
+    else
+      log "Running project integration tests: npm run test:localnet"
+      (
+        cd "${PROJECT_ROOT}"
+        npm run test:localnet
+      )
+      return
+    fi
+  fi
+
+  if [[ "${PROJECT_ROOT}" == "${REPO_ROOT}" && -d "${REPO_ROOT}/test/integration/localnet" && -d "${REPO_ROOT}/node_modules" ]]; then
+    log "Running bundled SDK localnet integration tests..."
+    (
+      cd "${REPO_ROOT}"
+      npm test -- test/integration/localnet
+    )
+    return
+  fi
+
+  log "No integration test command configured; skipping test step."
 }
 
 usage() {
@@ -284,8 +440,8 @@ Commands:
   start    Start localnet and wait for ready endpoints
   stop     Stop localnet services
   status   Show docker + endpoint status
-  smoke    Run example localnet connectivity script
-  test     Run localnet integration tests
+  smoke    Run endpoint smoke checks
+  test     Run project integration tests (if configured)
   verify   Run setup + start + smoke + test
 USAGE
 }

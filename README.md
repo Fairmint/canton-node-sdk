@@ -44,7 +44,7 @@ npm run localnet:quickstart
 # Start localnet and wait for ready endpoints
 npm run localnet:start
 
-# Run a fast SDK smoke check script
+# Run a fast localnet endpoint smoke check
 npm run localnet:smoke
 
 # Run integration tests
@@ -69,6 +69,7 @@ npx canton-localnet start
 npx canton-localnet status
 npx canton-localnet smoke
 npx canton-localnet test
+npx canton-localnet verify
 npx canton-localnet stop
 ```
 
@@ -96,13 +97,16 @@ Or wire it into your other repo's `package.json`:
 The npm package includes the LocalNet helper scripts and required cn-quickstart resources so other
 repos can use the same setup without copying files.
 
+`canton-localnet test` runs `test:integration` or `test:localnet` from your repo when those scripts
+exist. If no integration test script is configured, it skips that step.
+
 ### Available Commands
 
 - `npm run localnet:quickstart` - One-time localnet setup for this machine
 - `npm run localnet:setup` - Alias for `localnet:quickstart`
 - `npm run localnet:start` - Start localnet and wait for readiness
 - `npm run localnet:status` - Show container and endpoint status
-- `npm run localnet:smoke` - Run SDK connectivity smoke script
+- `npm run localnet:smoke` - Run localnet endpoint smoke checks
 - `npm run localnet:stop` - Stop localnet services
 - `npm run localnet:verify` - Setup + start + smoke + integration tests
 - `npm run test:integration` - Run localnet integration tests
