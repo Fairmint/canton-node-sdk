@@ -9,7 +9,6 @@ simulations/
 temp/
 
 # Development files
-scripts/
 .eslintrc*
 eslint.config.mjs
 jest.config.js
