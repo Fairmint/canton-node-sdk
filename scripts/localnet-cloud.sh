@@ -238,6 +238,23 @@ run_integration_tests() {
   )
 }
 
+do_prerequisites() {
+  local require_curl="${1:-false}"
+
+  require_command git
+  if [[ "${require_curl}" == "true" ]]; then
+    require_command curl
+  fi
+  require_command rg
+  ensure_sudo
+  ensure_docker_packages
+  ensure_legacy_iptables
+  start_docker_daemon
+  ensure_submodules
+  ensure_hosts_entries
+  quickstart_setup
+}
+
 usage() {
   cat <<'USAGE'
 Usage: scripts/localnet-cloud.sh <command>
@@ -261,27 +278,10 @@ main() {
 
   case "$1" in
     setup)
-      require_command git
-      require_command rg
-      ensure_sudo
-      ensure_docker_packages
-      ensure_legacy_iptables
-      start_docker_daemon
-      ensure_submodules
-      ensure_hosts_entries
-      quickstart_setup
+      do_prerequisites
       ;;
     start)
-      require_command git
-      require_command curl
-      require_command rg
-      ensure_sudo
-      ensure_docker_packages
-      ensure_legacy_iptables
-      start_docker_daemon
-      ensure_submodules
-      ensure_hosts_entries
-      quickstart_setup
+      do_prerequisites true
       start_localnet
       ;;
     stop)
@@ -298,16 +298,7 @@ main() {
       run_integration_tests
       ;;
     verify)
-      require_command git
-      require_command curl
-      require_command rg
-      ensure_sudo
-      ensure_docker_packages
-      ensure_legacy_iptables
-      start_docker_daemon
-      ensure_submodules
-      ensure_hosts_entries
-      quickstart_setup
+      do_prerequisites true
       start_localnet
       run_smoke
       run_integration_tests
