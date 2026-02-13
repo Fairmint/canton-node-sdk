@@ -7,6 +7,8 @@ QUICKSTART_DIR="${REPO_ROOT}/libs/cn-quickstart/quickstart"
 DOCKERD_PID_FILE="/tmp/localnet-dockerd.pid"
 DOCKERD_LOG_FILE="/tmp/localnet-dockerd.log"
 HOSTS_ENTRY="127.0.0.1 scan.localhost sv.localhost wallet.localhost"
+CURL_CONNECT_TIMEOUT=2
+CURL_MAX_TIME=5
 
 log() {
   printf '[localnet] %s\n' "$*"
@@ -40,12 +42,18 @@ ensure_docker_packages() {
 }
 
 ensure_legacy_iptables() {
-  if ! iptables --version | grep -q 'legacy'; then
+  if ! command -v update-alternatives >/dev/null 2>&1 \
+    || [[ ! -x /usr/sbin/iptables-legacy || ! -x /usr/sbin/ip6tables-legacy ]]; then
+    log "iptables legacy binaries unavailable; skipping backend switch."
+    return
+  fi
+
+  if ! iptables --version 2>/dev/null | grep -q 'legacy'; then
     log "Switching iptables to legacy backend..."
     sudo update-alternatives --set iptables /usr/sbin/iptables-legacy
   fi
 
-  if ! ip6tables --version | grep -q 'legacy'; then
+  if ! ip6tables --version 2>/dev/null | grep -q 'legacy'; then
     log "Switching ip6tables to legacy backend..."
     sudo update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
   fi
@@ -55,9 +63,25 @@ docker_ready() {
   docker info >/dev/null 2>&1 || sudo docker info >/dev/null 2>&1
 }
 
+configure_docker_socket_permissions() {
+  if [[ ! -S /var/run/docker.sock ]]; then
+    return
+  fi
+
+  sudo chown root:docker /var/run/docker.sock >/dev/null 2>&1 || true
+
+  if id -nG "${USER:-$(whoami)}" | grep -qw docker; then
+    sudo chmod 660 /var/run/docker.sock || true
+    return
+  fi
+
+  log "Current user is not in docker group; using temporary socket mode 666."
+  sudo chmod 666 /var/run/docker.sock || true
+}
+
 start_docker_daemon() {
   if docker_ready; then
-    sudo chmod 660 /var/run/docker.sock || true
+    configure_docker_socket_permissions
     return
   fi
 
@@ -66,7 +90,7 @@ start_docker_daemon() {
 
   for _ in $(seq 1 60); do
     if sudo docker info >/dev/null 2>&1; then
-      sudo chmod 660 /var/run/docker.sock || true
+      configure_docker_socket_permissions
       return
     fi
     sleep 1
@@ -77,6 +101,17 @@ start_docker_daemon() {
 }
 
 ensure_submodules() {
+  if [[ -d "${REPO_ROOT}/libs/splice" && -d "${QUICKSTART_DIR}" ]]; then
+    return
+  fi
+
+  require_command git
+
+  if ! git -C "${REPO_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    log "Missing localnet assets and not in a git checkout. Install from npm with bundled assets or clone SDK with submodules."
+    exit 1
+  fi
+
   if [[ ! -d "${REPO_ROOT}/libs/splice" ]]; then
     log "Initializing libs/splice submodule..."
     git -C "${REPO_ROOT}" submodule update --init --depth 1 libs/splice
@@ -94,7 +129,9 @@ ensure_submodules() {
 }
 
 ensure_hosts_entries() {
-  if ! grep -q 'scan\.localhost' /etc/hosts; then
+  if ! grep -Eq '(^|[[:space:]])scan\.localhost([[:space:]]|$)' /etc/hosts \
+    || ! grep -Eq '(^|[[:space:]])sv\.localhost([[:space:]]|$)' /etc/hosts \
+    || ! grep -Eq '(^|[[:space:]])wallet\.localhost([[:space:]]|$)' /etc/hosts; then
     log "Adding localnet host aliases to /etc/hosts..."
     echo "${HOSTS_ENTRY}" | sudo tee -a /etc/hosts >/dev/null
   fi
@@ -125,25 +162,25 @@ quickstart_setup() {
 wait_for_services() {
   log "Waiting for Keycloak..."
   for _ in $(seq 1 30); do
-    if curl -fsS http://localhost:8082/realms/AppProvider >/dev/null 2>&1; then
+    if curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://localhost:8082/realms/AppProvider >/dev/null 2>&1; then
       break
     fi
     sleep 2
   done
-  if ! curl -fsS http://localhost:8082/realms/AppProvider >/dev/null 2>&1; then
+  if ! curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://localhost:8082/realms/AppProvider >/dev/null 2>&1; then
     log "Keycloak did not become ready."
     exit 1
   fi
 
   log "Waiting for Validator API..."
   for _ in $(seq 1 30); do
-    code="$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:3903/api/validator/v0/wallet/user-status || true)"
+    code="$(curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -sS -o /dev/null -w '%{http_code}' http://localhost:3903/api/validator/v0/wallet/user-status || true)"
     if [[ "${code}" == "200" || "${code}" == "401" ]]; then
       break
     fi
     sleep 2
   done
-  code="$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:3903/api/validator/v0/wallet/user-status || true)"
+  code="$(curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -sS -o /dev/null -w '%{http_code}' http://localhost:3903/api/validator/v0/wallet/user-status || true)"
   if [[ "${code}" != "200" && "${code}" != "401" ]]; then
     log "Validator API did not become ready."
     exit 1
@@ -151,12 +188,12 @@ wait_for_services() {
 
   log "Waiting for Scan API..."
   for _ in $(seq 1 30); do
-    if curl -fsS http://scan.localhost:4000/api/scan/v0/dso-party-id >/dev/null 2>&1; then
+    if curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://scan.localhost:4000/api/scan/v0/dso-party-id >/dev/null 2>&1; then
       break
     fi
     sleep 2
   done
-  if ! curl -fsS http://scan.localhost:4000/api/scan/v0/dso-party-id >/dev/null 2>&1; then
+  if ! curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://scan.localhost:4000/api/scan/v0/dso-party-id >/dev/null 2>&1; then
     log "Scan API did not become ready."
     exit 1
   fi
@@ -238,22 +275,6 @@ run_integration_tests() {
   )
 }
 
-do_prerequisites() {
-  local require_curl="${1:-false}"
-
-  require_command git
-  if [[ "${require_curl}" == "true" ]]; then
-    require_command curl
-  fi
-  ensure_sudo
-  ensure_docker_packages
-  ensure_legacy_iptables
-  start_docker_daemon
-  ensure_submodules
-  ensure_hosts_entries
-  quickstart_setup
-}
-
 usage() {
   cat <<'USAGE'
 Usage: scripts/localnet-cloud.sh <command>
@@ -277,10 +298,23 @@ main() {
 
   case "$1" in
     setup)
-      do_prerequisites
+      ensure_sudo
+      ensure_docker_packages
+      ensure_legacy_iptables
+      start_docker_daemon
+      ensure_submodules
+      ensure_hosts_entries
+      quickstart_setup
       ;;
     start)
-      do_prerequisites true
+      require_command curl
+      ensure_sudo
+      ensure_docker_packages
+      ensure_legacy_iptables
+      start_docker_daemon
+      ensure_submodules
+      ensure_hosts_entries
+      quickstart_setup
       start_localnet
       ;;
     stop)
@@ -297,7 +331,14 @@ main() {
       run_integration_tests
       ;;
     verify)
-      do_prerequisites true
+      require_command curl
+      ensure_sudo
+      ensure_docker_packages
+      ensure_legacy_iptables
+      start_docker_daemon
+      ensure_submodules
+      ensure_hosts_entries
+      quickstart_setup
       start_localnet
       run_smoke
       run_integration_tests

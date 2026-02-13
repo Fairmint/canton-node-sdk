@@ -54,6 +54,48 @@ npm run test:integration
 npm run localnet:stop
 ```
 
+### Use LocalNet tooling from other repos
+
+You can reuse this LocalNet workflow from another repository by installing this package and using
+the bundled CLI.
+
+```bash
+# In your other repo
+npm install --save-dev @fairmint/canton-node-sdk
+
+# Run bundled localnet CLI
+npx canton-localnet setup
+npx canton-localnet start
+npx canton-localnet status
+npx canton-localnet smoke
+npx canton-localnet test
+npx canton-localnet stop
+```
+
+One-off (without adding a dependency):
+
+```bash
+npx --yes --package @fairmint/canton-node-sdk canton-localnet verify
+```
+
+Or wire it into your other repo's `package.json`:
+
+```json
+{
+  "scripts": {
+    "localnet:setup": "canton-localnet setup",
+    "localnet:start": "canton-localnet start",
+    "localnet:status": "canton-localnet status",
+    "localnet:smoke": "canton-localnet smoke",
+    "localnet:test": "canton-localnet test",
+    "localnet:stop": "canton-localnet stop"
+  }
+}
+```
+
+The npm package includes the LocalNet helper scripts and required cn-quickstart resources so other
+repos can use the same setup without copying files.
+
 ### Available Commands
 
 - `npm run localnet:quickstart` - One-time localnet setup for this machine

@@ -72,7 +72,7 @@ Use `npm run localnet:start` first so the script has a running network.
 Run the standard quality gates plus localnet integration tests:
 
 ```bash
-yarn lint && yarn build && yarn test
+npm run lint && npm run build && npm test
 npm run test:integration
 ```
 

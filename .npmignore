@@ -9,7 +9,15 @@ simulations/
 temp/
 
 # Development files
-scripts/
+scripts/*
+!scripts/localnet-cloud.sh
+!scripts/localnet-status.sh
+!scripts/setup-localnet.sh
+!scripts/setup-quickstart-localnet.sh
+!scripts/start-localnet.sh
+!scripts/stop-localnet.sh
+!bin/
+!bin/canton-localnet.mjs
 .eslintrc*
 eslint.config.mjs
 jest.config.js
