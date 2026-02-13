@@ -253,13 +253,11 @@ main() {
     exit 1
   fi
 
-  require_command git
-  require_command curl
-  require_command rg
-  ensure_sudo
-
   case "$1" in
     setup)
+      require_command git
+      require_command rg
+      ensure_sudo
       ensure_docker_packages
       ensure_legacy_iptables
       start_docker_daemon
@@ -268,6 +266,10 @@ main() {
       quickstart_setup
       ;;
     start)
+      require_command git
+      require_command curl
+      require_command rg
+      ensure_sudo
       ensure_docker_packages
       ensure_legacy_iptables
       start_docker_daemon
@@ -280,6 +282,7 @@ main() {
       stop_localnet
       ;;
     status)
+      require_command curl
       status_localnet
       ;;
     smoke)
@@ -289,6 +292,10 @@ main() {
       run_integration_tests
       ;;
     verify)
+      require_command git
+      require_command curl
+      require_command rg
+      ensure_sudo
       ensure_docker_packages
       ensure_legacy_iptables
       start_docker_daemon
