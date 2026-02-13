@@ -323,14 +323,14 @@ status_localnet() {
   keycloak_ok="no"
   validator_ok="no"
   scan_ok="no"
-  if curl -fsS http://localhost:8082/realms/AppProvider >/dev/null 2>&1; then
+  if curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://localhost:8082/realms/AppProvider >/dev/null 2>&1; then
     keycloak_ok="yes"
   fi
-  validator_code="$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:3903/api/validator/v0/wallet/user-status || true)"
+  validator_code="$(curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -sS -o /dev/null -w '%{http_code}' http://localhost:3903/api/validator/v0/wallet/user-status || true)"
   if [[ "${validator_code}" == "200" || "${validator_code}" == "401" ]]; then
     validator_ok="yes"
   fi
-  if curl -fsS http://scan.localhost:4000/api/scan/v0/dso-party-id >/dev/null 2>&1; then
+  if curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://scan.localhost:4000/api/scan/v0/dso-party-id >/dev/null 2>&1; then
     scan_ok="yes"
   fi
 
@@ -481,6 +481,7 @@ main() {
       status_localnet
       ;;
     smoke)
+      require_command curl
       run_smoke
       ;;
     test)
