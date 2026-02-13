@@ -57,7 +57,7 @@ docker_ready() {
 
 start_docker_daemon() {
   if docker_ready; then
-    sudo chmod 666 /var/run/docker.sock || true
+    sudo chmod 660 /var/run/docker.sock || true
     return
   fi
 
@@ -66,7 +66,7 @@ start_docker_daemon() {
 
   for _ in $(seq 1 60); do
     if sudo docker info >/dev/null 2>&1; then
-      sudo chmod 666 /var/run/docker.sock || true
+      sudo chmod 660 /var/run/docker.sock || true
       return
     fi
     sleep 1
