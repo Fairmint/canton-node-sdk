@@ -121,6 +121,8 @@ EOF
 }
 
 start_docker_daemon() {
+  local dockerd_pid=""
+
   if docker_ready; then
     configure_docker_socket_permissions
     return
@@ -133,6 +135,14 @@ start_docker_daemon() {
     if sudo docker info >/dev/null 2>&1; then
       configure_docker_socket_permissions
       return
+    fi
+    if [[ -f "${DOCKERD_PID_FILE}" ]]; then
+      dockerd_pid="$(cat "${DOCKERD_PID_FILE}" 2>/dev/null || true)"
+      if [[ -n "${dockerd_pid}" ]] && ! ps -p "${dockerd_pid}" >/dev/null 2>&1; then
+        log "Docker daemon exited before becoming ready."
+        log "Inspect ${DOCKERD_LOG_FILE}."
+        exit 1
+      fi
     fi
     sleep 1
   done
