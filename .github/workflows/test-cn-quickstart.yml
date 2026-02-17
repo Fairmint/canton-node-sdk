@@ -45,6 +45,26 @@ jobs:
         with:
           cache-read-only: false
 
+      - name: Initialize Submodules
+        run: |
+          set -euo pipefail
+
+          init_submodule() {
+            local path="$1"
+            shift
+            if git submodule update --init "$@" "$path"; then
+              return
+            fi
+
+            # If a previous run left an incomplete checkout around, retry from a clean directory.
+            echo "Submodule init failed for $path, retrying with clean checkout..."
+            rm -rf "$path"
+            git submodule update --init "$@" "$path"
+          }
+
+          init_submodule libs/splice --depth 1
+          init_submodule libs/cn-quickstart --recursive
+
       - name: Restore Quickstart Preparation Cache
         id: quickstart-prep-cache-restore
         uses: actions/cache/restore@v5
@@ -65,15 +85,6 @@ jobs:
             /home/runner/.daml
             /home/runner/.gradle
           key: quickstart-prep-${{ runner.os }}-${{ hashFiles('package.json', 'package-lock.json') }}-${{ steps.submodule-cache-key.outputs.value }}
-
-      - name: Initialize Submodules
-        run: |
-          # If a previous run/cached state left an incomplete submodule checkout around,
-          # `git submodule update` can fail with "could not get a repository handle".
-          rm -rf libs/splice
-          rm -rf libs/cn-quickstart
-          git submodule update --init --depth 1 libs/splice
-          git submodule update --init --recursive libs/cn-quickstart
 
       - name: Verify Cached Prerequisites
         id: verify-cache
@@ -172,51 +183,9 @@ jobs:
 
       - name: Start CN-Quickstart
         run: |
-          cd libs/cn-quickstart/quickstart
-          make start
+          CANTON_LOCALNET_FAST_START=true bash ./scripts/localnet/localnet-cloud.sh start
           echo "✓ CN-Quickstart started"
         timeout-minutes: 15
-
-      - name: Configure Hosts
-        run: |
-          # cn-quickstart nginx uses virtual host routing for different services
-          # These hostnames must resolve to localhost for the tests to work
-          echo "127.0.0.1 scan.localhost sv.localhost wallet.localhost" | sudo tee -a /etc/hosts
-          echo "✓ Added virtual host entries to /etc/hosts"
-
-      - name: Wait for Services
-        run: |
-          echo "Waiting for Keycloak..."
-          for i in {1..30}; do
-            if curl -f http://localhost:8082/realms/AppProvider 2>/dev/null; then
-              echo "✓ Keycloak is ready"
-              break
-            fi
-            echo "Waiting for Keycloak... ($i/30)"
-            sleep 10
-          done
-
-          echo "Waiting for Validator API..."
-          for i in {1..30}; do
-            if curl -f http://localhost:3903/api/validator/v0/wallet/user-status 2>/dev/null || [ $? -eq 22 ]; then
-              echo "✓ Validator API is responding"
-              break
-            fi
-            echo "Waiting for Validator API... ($i/30)"
-            sleep 10
-          done
-
-          echo "Waiting for Scan API..."
-          for i in {1..30}; do
-            if curl -f http://scan.localhost:4000/api/scan/v0/dso-party-id 2>/dev/null; then
-              echo "✓ Scan API is responding"
-              break
-            fi
-            echo "Waiting for Scan API... ($i/30)"
-            sleep 5
-          done
-
-          echo "✓ All services are ready!"
 
       # Cache the prepared quickstart environment to speed up subsequent runs.
       # This cache will be invalidated when:
@@ -250,10 +219,11 @@ jobs:
       - name: Build SDK
         run: npm run build
 
-      - name: Run Smoke Tests
+      - name: Run LocalNet Smoke + Integration Tests
         run: |
           echo "Running tests..."
-          npm run test
+          npm run localnet:smoke
+          npm run test:integration
           echo "✓ Tests passed!"
 
       - name: Show Logs on Failure

@@ -44,6 +44,26 @@ One-shot verification:
 npm run localnet:verify
 ```
 
+## Startup Modes
+
+`npm run localnet:start` now uses a fast path by default:
+
+- If quickstart build artifacts are already present, it skips rebuilding quickstart and runs compose
+  startup directly.
+- If artifacts are missing (or fast start fails), it automatically falls back to full `make start`.
+
+Force a full rebuild start:
+
+```bash
+CANTON_LOCALNET_FORCE_FULL_START=true npm run localnet:start
+```
+
+Disable fast startup explicitly:
+
+```bash
+CANTON_LOCALNET_FAST_START=false npm run localnet:start
+```
+
 ## Running Quick Custom Scripts
 
 Create a script and run it with `tsx`:

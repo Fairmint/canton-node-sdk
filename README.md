@@ -54,6 +54,9 @@ npm run test:integration
 npm run localnet:stop
 ```
 
+`localnet:start` uses a fast startup path when quickstart build artifacts already exist. To force a
+full rebuild start, run `CANTON_LOCALNET_FORCE_FULL_START=true npm run localnet:start`.
+
 ### Use LocalNet tooling from other repos
 
 You can reuse this LocalNet workflow from another repository by installing this package and calling

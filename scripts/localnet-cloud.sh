@@ -15,6 +15,17 @@ log() {
   printf '[localnet] %s\n' "$*"
 }
 
+is_truthy() {
+  case "${1,,}" in
+    1 | true | yes | on)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 require_command() {
   local cmd="$1"
   if ! command -v "${cmd}" >/dev/null 2>&1; then
@@ -32,7 +43,6 @@ ensure_sudo() {
 
 ensure_docker_packages() {
   if command -v docker >/dev/null 2>&1 \
-    && command -v docker-compose >/dev/null 2>&1 \
     && docker compose version >/dev/null 2>&1; then
     return
   fi
@@ -82,10 +92,47 @@ run_docker() {
   sudo docker "$@"
 }
 
-run_quickstart_make() {
-  local target="$1"
+resolve_quickstart_image_tag() {
+  local env_file=""
+  local splice_version=""
+  local parsed_value=""
+
+  for env_file in "${QUICKSTART_DIR}/.env" "${QUICKSTART_DIR}/.env.local"; do
+    if [[ ! -f "${env_file}" ]]; then
+      continue
+    fi
+
+    parsed_value="$(awk -F= -v key="SPLICE_VERSION" '
+      $0 ~ /^[[:space:]]*#/ { next }
+      $1 == key {
+        value = substr($0, index($0, "=") + 1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+        gsub(/^"|"$/, "", value)
+        gsub(/^'\''|'\''$/, "", value)
+        parsed = value
+      }
+      END {
+        if (parsed != "") {
+          print parsed
+        }
+      }
+    ' "${env_file}")"
+
+    if [[ -n "${parsed_value}" ]]; then
+      splice_version="${parsed_value}"
+    fi
+  done
+
+  printf '%s' "${splice_version}"
+}
+
+run_quickstart_command() {
+  local command="$1"
   local docker_shim_dir=""
+  local quickstart_image_tag=""
   local status=0
+
+  quickstart_image_tag="$(resolve_quickstart_image_tag)"
 
   if ! docker info >/dev/null 2>&1 && sudo docker info >/dev/null 2>&1; then
     docker_shim_dir="$(mktemp -d "/tmp/canton-localnet-docker-shim.XXXXXX")"
@@ -94,20 +141,28 @@ run_quickstart_make() {
 exec sudo -E docker "$@"
 EOF
     chmod +x "${docker_shim_dir}/docker"
-    log "Using sudo docker shim for quickstart make ${target}."
+    log "Using sudo docker shim for quickstart command."
   fi
 
   set +e
   if [[ -n "${docker_shim_dir}" ]]; then
     (
       cd "${QUICKSTART_DIR}"
-      PATH="${docker_shim_dir}:${HOME}/.daml/bin:${PATH}" make "${target}"
+      MODULES_DIR="${QUICKSTART_DIR}/docker/modules" \
+        LOCALNET_DIR="${QUICKSTART_DIR}/docker/modules/localnet" \
+        IMAGE_TAG="${quickstart_image_tag}" \
+        PATH="${docker_shim_dir}:${HOME}/.daml/bin:${PATH}" \
+        bash -lc "${command}"
     )
     status=$?
   else
     (
       cd "${QUICKSTART_DIR}"
-      PATH="${HOME}/.daml/bin:${PATH}" make "${target}"
+      MODULES_DIR="${QUICKSTART_DIR}/docker/modules" \
+        LOCALNET_DIR="${QUICKSTART_DIR}/docker/modules/localnet" \
+        IMAGE_TAG="${quickstart_image_tag}" \
+        PATH="${HOME}/.daml/bin:${PATH}" \
+        bash -lc "${command}"
     )
     status=$?
   fi
@@ -118,6 +173,11 @@ EOF
   fi
 
   return "${status}"
+}
+
+run_quickstart_make() {
+  local target="$1"
+  run_quickstart_command "make ${target}"
 }
 
 start_docker_daemon() {
@@ -214,6 +274,61 @@ quickstart_setup() {
   fi
 }
 
+quickstart_fast_start_enabled() {
+  is_truthy "${CANTON_LOCALNET_FAST_START:-true}"
+}
+
+quickstart_force_full_start() {
+  is_truthy "${CANTON_LOCALNET_FORCE_FULL_START:-false}"
+}
+
+quickstart_build_artifacts_ready() {
+  local missing_paths=()
+
+  if [[ ! -f "${QUICKSTART_DIR}/backend/build/distributions/backend.tar" ]]; then
+    missing_paths+=("backend/build/distributions/backend.tar")
+  fi
+
+  if [[ ! -d "${QUICKSTART_DIR}/frontend/dist" ]]; then
+    missing_paths+=("frontend/dist")
+  fi
+
+  if ! compgen -G "${QUICKSTART_DIR}/daml/licensing/.daml/dist/*.dar" >/dev/null; then
+    missing_paths+=("daml/licensing/.daml/dist/*.dar")
+  fi
+
+  if ! compgen -G "${QUICKSTART_DIR}/backend/build/otel-agent/opentelemetry-javaagent-*.jar" >/dev/null; then
+    missing_paths+=("backend/build/otel-agent/opentelemetry-javaagent-*.jar")
+  fi
+
+  if [[ ${#missing_paths[@]} -gt 0 ]]; then
+    log "Fast start unavailable; missing quickstart build artifacts: ${missing_paths[*]}"
+    return 1
+  fi
+
+  return 0
+}
+
+extract_quickstart_compose_up_command() {
+  (
+    cd "${QUICKSTART_DIR}"
+    make -n start 2>/dev/null | awk '/docker compose .* up -d --no-recreate/{line=$0} END{print line}'
+  )
+}
+
+try_fast_start_localnet() {
+  local compose_up_command=""
+
+  compose_up_command="$(extract_quickstart_compose_up_command)"
+  if [[ -z "${compose_up_command}" ]]; then
+    log "Unable to determine quickstart compose startup command."
+    return 1
+  fi
+
+  log "Starting cn-quickstart with fast path (skip quickstart rebuild)..."
+  run_quickstart_command "${compose_up_command}"
+}
+
 wait_for_services() {
   log "Waiting for Keycloak..."
   for _ in $(seq 1 30); do
@@ -257,7 +372,22 @@ wait_for_services() {
 }
 
 start_localnet() {
-  log "Starting cn-quickstart..."
+  if quickstart_force_full_start; then
+    log "Forcing full cn-quickstart start (CANTON_LOCALNET_FORCE_FULL_START=true)."
+    run_quickstart_make start
+    wait_for_services
+    return
+  fi
+
+  if quickstart_fast_start_enabled && quickstart_build_artifacts_ready; then
+    if try_fast_start_localnet; then
+      wait_for_services
+      return
+    fi
+    log "Fast start failed; falling back to full cn-quickstart start."
+  fi
+
+  log "Starting cn-quickstart with full build..."
   run_quickstart_make start
   wait_for_services
 }
@@ -453,6 +583,10 @@ Commands:
   smoke    Run endpoint smoke checks
   test     Run project integration tests (if configured)
   verify   Run setup + start + smoke + test
+
+Environment:
+  CANTON_LOCALNET_FAST_START=true|false       Enable fast startup path (default: true)
+  CANTON_LOCALNET_FORCE_FULL_START=true|false Force full startup with rebuild
 USAGE
 }
 
