@@ -188,6 +188,8 @@ start_docker_daemon() {
     return
   fi
 
+  ensure_legacy_iptables
+
   log "Starting Docker daemon with vfs storage driver..."
   sudo nohup dockerd --host=unix:///var/run/docker.sock --pidfile="${DOCKERD_PID_FILE}" --storage-driver=vfs >"${DOCKERD_LOG_FILE}" 2>&1 &
 
@@ -600,7 +602,6 @@ main() {
     setup)
       ensure_sudo
       ensure_docker_packages
-      ensure_legacy_iptables
       start_docker_daemon
       ensure_submodules
       ensure_hosts_entries
@@ -610,7 +611,6 @@ main() {
       require_command curl
       ensure_sudo
       ensure_docker_packages
-      ensure_legacy_iptables
       start_docker_daemon
       ensure_submodules
       ensure_hosts_entries
@@ -635,7 +635,6 @@ main() {
       require_command curl
       ensure_sudo
       ensure_docker_packages
-      ensure_legacy_iptables
       start_docker_daemon
       ensure_submodules
       ensure_hosts_entries
