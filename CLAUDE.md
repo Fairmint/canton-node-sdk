@@ -261,7 +261,7 @@ Before committing or pushing, run these checks:
 | `canton-explorer`             | Next.js explorer UI                           | `AGENTS.md`, [cantonops.fairmint.com](https://cantonops.fairmint.com/)   |
 | `canton-fairmint-sdk`         | Shared TypeScript utilities                   | `AGENTS.md`                                                              |
 | `ocp-canton-sdk`              | High-level OCP TypeScript SDK                 | `AGENTS.md`, [ocp.canton.fairmint.com](https://ocp.canton.fairmint.com/) |
-| `ocp-digital-certificate`     | Soulbound digital certificate smart contracts | `AGENTS.md`                                                              |
+| `ocp-equity-certificate`      | Soulbound equity certificate smart contracts  | `AGENTS.md`                                                              |
 | `open-captable-protocol-daml` | DAML contracts (OCF impl)                     | `AGENTS.md`                                                              |
 
 ## Docs
