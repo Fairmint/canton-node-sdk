@@ -173,7 +173,8 @@ make setup && make start
 docker ps --format "table {{.Names}}\t{{.Status}}"
 ```
 
-For detailed setup, ports, OAuth2 credentials, and troubleshooting, use the `localnet` skill.
+For detailed setup, ports, OAuth2 credentials, and troubleshooting, use the local LocalNet skill:
+`.cursor/skills/localnet-testing/SKILL.md`.
 
 ## NPM Publishing
 
