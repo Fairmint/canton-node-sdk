@@ -129,6 +129,7 @@ export class SyncStateTracker {
     }
 
     if (state.lastSuccessfulOffset > currentLedgerEnd) {
+      this.resetState();
       return { offset: 0, wasReset: true };
     }
 
