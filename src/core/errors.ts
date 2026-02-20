@@ -1,3 +1,5 @@
+import { RestClientError } from '@hardlydifficult/rest-client';
+
 /** JSON-serializable context for error details. */
 export type ErrorContext = Readonly<Record<string, unknown>>;
 
@@ -13,19 +15,16 @@ export const ErrorCode = {
 
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];
 
-/** Base error class for all Canton SDK errors. */
-export class CantonError extends Error {
+/**
+ * Base error class for all Canton SDK errors. Extends `@hardlydifficult/rest-client`'s `RestClientError` so errors are
+ * compatible with both hierarchies.
+ */
+export class CantonError extends RestClientError {
   public override readonly name: string;
 
-  constructor(
-    message: string,
-    public readonly code: string,
-    public readonly context?: ErrorContext
-  ) {
-    super(message);
+  constructor(message: string, code: string, context?: ErrorContext) {
+    super(message, code, context);
     this.name = 'CantonError';
-    // Maintains proper prototype chain for ES5
-    Object.setPrototypeOf(this, new.target.prototype);
   }
 }
 
