@@ -60,6 +60,8 @@
   },
   "dependencies": {
     "@canton-network/wallet-sdk": "0.21.0",
+    "@hardlydifficult/rest-client": "1.0.0",
+    "@hardlydifficult/websocket": "1.0.2",
     "@stellar/stellar-base": "14.0.4",
     "axios": "1.13.5",
     "dotenv": "17.2.4",
