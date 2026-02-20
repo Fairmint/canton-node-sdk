@@ -52,7 +52,11 @@ export async function runContinuousLoop(options: ContinuousLoopOptions): Promise
       try {
         await runCycle(isShutdownRequested);
       } catch (error) {
-        onCycleError?.(error);
+        try {
+          onCycleError?.(error);
+        } catch {
+          // Prevent a failing error callback from terminating the loop
+        }
       }
 
       if (isShutdownRequested()) {
