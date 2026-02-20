@@ -137,6 +137,13 @@ export class SyncStateTracker {
 
   resetState(): void {
     this.cachedState = null;
+    try {
+      if (fs.existsSync(this.stateFilePath)) {
+        fs.unlinkSync(this.stateFilePath);
+      }
+    } catch {
+      // Best-effort deletion; in-memory cache is already cleared.
+    }
   }
 
   getStateFilePath(): string {
