@@ -110,11 +110,12 @@ export class SyncStateTracker {
       },
     };
 
+    this.cachedState = state;
+
     try {
       const tempPath = `${this.stateFilePath}.tmp`;
       fs.writeFileSync(tempPath, JSON.stringify(state, null, 2));
       fs.renameSync(tempPath, this.stateFilePath);
-      this.cachedState = state;
     } catch {
       // Ignore local persistence errors and continue with in-memory progress.
     }
