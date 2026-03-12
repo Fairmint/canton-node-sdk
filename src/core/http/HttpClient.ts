@@ -274,6 +274,7 @@ export class HttpClient {
   /**
    * Determines whether a request error is retryable. Retries on:
    *
+   * - HTTP 404 (transient during Canton node restarts)
    * - HTTP 5xx server errors
    * - Network errors
    * - Canton-specific transient errors: UNKNOWN_CONTRACT_SYNCHRONIZERS (400), SEQUENCER_BACKPRESSURE (409), HTTP 503
@@ -286,6 +287,11 @@ export class HttpClient {
 
       // Retry on undefined status (network error)
       if (status === undefined) {
+        return true;
+      }
+
+      // Retry on 404 - Canton nodes may return transient 404s during restarts
+      if (status === 404) {
         return true;
       }
 
