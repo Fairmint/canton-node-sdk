@@ -220,9 +220,9 @@ export class EnvLoader {
       return this.options.currentNetwork;
     }
     const value = this.env['CANTON_CURRENT_NETWORK']?.toLowerCase();
-    if (!value || !['devnet', 'testnet', 'mainnet', 'localnet'].includes(value)) {
+    if (!value || !['devnet', 'testnet', 'mainnet', 'localnet', 'staging'].includes(value)) {
       throw new ConfigurationError(
-        'Missing or invalid CANTON_CURRENT_NETWORK. Must be "devnet", "testnet", "mainnet", or "localnet"'
+        'Missing or invalid CANTON_CURRENT_NETWORK. Must be "devnet", "testnet", "mainnet", "localnet", or "staging"'
       );
     }
     return value as NetworkType;

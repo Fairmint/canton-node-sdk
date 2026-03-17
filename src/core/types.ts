@@ -2,6 +2,7 @@
 export const Networks = {
   DEVNET: 'devnet',
   TESTNET: 'testnet',
+  STAGING: 'staging',
   MAINNET: 'mainnet',
   LOCALNET: 'localnet',
 } as const;
