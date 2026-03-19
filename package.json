@@ -1,6 +1,6 @@
 {
   "name": "@fairmint/canton-node-sdk",
-  "version": "0.0.127",
+  "version": "0.0.192",
   "description": "Canton Node SDK",
   "keywords": [
     "canton",
