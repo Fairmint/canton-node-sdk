@@ -218,6 +218,11 @@ export class HttpClient {
         }
       }
 
+      // Non-standard bodies (e.g. reverse-proxy "404 page not found") rarely include Canton fields; the URL is the best repro hint.
+      if (error.config?.url) {
+        msg += ` [request: ${error.config.method ?? 'GET'} ${error.config.url}]`;
+      }
+
       return new ApiError(msg, status, error.response?.statusText, data);
     }
     return new NetworkError(`Request failed: ${error instanceof Error ? error.message : String(error)}`);
