@@ -21,7 +21,7 @@ export class AuthenticationManager {
   private readonly delegate: RestClientAuthManager;
 
   constructor(authUrl: string, authConfig: AuthConfig, logger?: Logger) {
-    const restAuthConfig = convertAuthConfig(authUrl, authConfig);
+    const restAuthConfig = convertAuthConfig(authUrl, authConfig, logger);
     this.delegate = new RestClientAuthManager(restAuthConfig, toRestLogger(logger));
   }
 
@@ -51,7 +51,11 @@ export class AuthenticationManager {
 }
 
 /** Converts Canton's auth config format to rest-client's auth config format. */
-function convertAuthConfig(authUrl: string, config: AuthConfig): RestClientAuthConfig {
+function convertAuthConfig(
+  authUrl: string,
+  config: AuthConfig,
+  logger?: Logger,
+): RestClientAuthConfig {
   if (config.bearerToken) {
     return { type: 'bearer', token: config.bearerToken };
   }
@@ -61,6 +65,13 @@ function convertAuthConfig(authUrl: string, config: AuthConfig): RestClientAuthC
   }
 
   if (!config.clientId || config.clientId.trim() === '') {
+    if (authUrl && authUrl.trim() !== '') {
+      logger?.warn?.(
+        `[AuthenticationManager] Auth URL is configured (${authUrl}) but clientId is empty. ` +
+          `Requests will be sent without authentication. ` +
+          `Set CANTON_<NETWORK>_<PROVIDER>_LEDGER_JSON_API_CLIENT_ID to fix.`,
+      );
+    }
     return { type: 'none' };
   }
 
