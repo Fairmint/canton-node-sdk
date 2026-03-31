@@ -1,0 +1,14 @@
+name: Check Pinned Dependencies
+
+on:
+  pull_request:
+
+jobs:
+  check-pinned-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Check pinned dependencies
+        run: node scripts/check-pinned-deps.mjs
