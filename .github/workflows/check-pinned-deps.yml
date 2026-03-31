@@ -11,4 +11,4 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Check pinned dependencies
-        run: node scripts/check-pinned-deps.mjs
+        run: npx --yes --package @hardlydifficult/ci-scripts@1.0.85 check-pinned-deps
