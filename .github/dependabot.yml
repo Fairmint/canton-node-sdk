@@ -12,7 +12,7 @@ updates:
     commit-message:
       prefix: 'deps'
     cooldown:
-      default: '7-days'
+      default-days: 7
     groups:
       all-dependencies:
         patterns:
