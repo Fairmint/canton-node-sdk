@@ -29,6 +29,9 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Upgrade npm
+        run: npm install --global npm@^11.10.0
+
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
