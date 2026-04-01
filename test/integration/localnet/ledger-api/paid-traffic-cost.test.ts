@@ -10,6 +10,26 @@ import { CompletionStreamResponseSchema } from '../../../../src/clients/ledger-j
 import { getPaidTrafficCostFromCompletion } from '../../../../src/utils/traffic/paid-traffic-cost';
 import { getClient } from './setup';
 
+/** User ID for completions: config/env, else ledger identity from the OAuth token (cn-quickstart). */
+async function resolveLedgerUserId(client: ReturnType<typeof getClient>): Promise<string> {
+  const configured = client.getUserId();
+  if (configured) {
+    return configured;
+  }
+  const fromEnv = EnvLoader.getInstance().getUserId('localnet', 'app-provider');
+  if (fromEnv) {
+    return fromEnv;
+  }
+  try {
+    const auth = await client.getAuthenticatedUser({});
+    return auth.user.id;
+  } catch {
+    throw new Error(
+      'Could not resolve ledger userId: set partyId/userId in ClientConfig, CANTON_LOCALNET_APP_PROVIDER_USER_ID, or ensure getAuthenticatedUser works with the token'
+    );
+  }
+}
+
 function findCompletionForSubmission(
   rows: unknown[],
   submissionId: string
@@ -33,10 +53,7 @@ function findCompletionForSubmission(
 describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
   test('async submit then completions include paidTrafficCost (WS + REST)', async () => {
     const client = getClient();
-    const userId = client.getUserId();
-    if (!userId) {
-      throw new Error('Ledger client userId is required (configure userId or CANTON_LOCALNET_APP_PROVIDER_USER_ID)');
-    }
+    const userId = await resolveLedgerUserId(client);
 
     const partiesResponse = await client.listParties({});
     const details = partiesResponse.partyDetails ?? [];
@@ -105,9 +122,10 @@ describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
     });
 
     const row = findCompletionForSubmission(blocking as unknown[], submissionId);
-    expect(row).toBeDefined();
     if (!row) {
-      return;
+      throw new Error(
+        `Blocking completions did not include submissionId=${submissionId} (check limit=${50} or timing)`
+      );
     }
 
     const { completionResponse } = row;
