@@ -45,8 +45,9 @@ describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
       .map((entry: { party: string }) => entry.party)
       .find((id: string) => id !== partyId);
     if (!receiverParty) {
-      // Need another party as transfer-offer receiver (cannot offer to self).
-      return;
+      throw new Error(
+        'Integration precondition failed: need at least two distinct parties on the ledger (transfer offer cannot use self as receiver)'
+      );
     }
 
     const walletInstallCid = EnvLoader.getInstance().getValidatorWalletAppInstallContractId('localnet');

@@ -40,7 +40,7 @@ function extractCompletion(message: CompletionsWsMessage): CompletionDetails | n
   }
 
   let paidTrafficCost: bigint | undefined;
-  if (typeof completion.paidTrafficCost === 'number' && Number.isInteger(completion.paidTrafficCost)) {
+  if (typeof completion.paidTrafficCost === 'number' && Number.isSafeInteger(completion.paidTrafficCost)) {
     paidTrafficCost = BigInt(completion.paidTrafficCost);
   }
 
@@ -151,8 +151,7 @@ export async function waitForCompletionWithMetadata(
   ledgerClient: LedgerJsonApiClient,
   params: WaitForCompletionParams
 ): Promise<WaitForCompletionResult> {
-  return waitForCompletionCore(ledgerClient, params, (c, updateId) => ({
-    updateId,
-    paidTrafficCost: c.paidTrafficCost,
-  }));
+  return waitForCompletionCore(ledgerClient, params, (c, updateId) =>
+    c.paidTrafficCost === undefined ? { updateId } : { updateId, paidTrafficCost: c.paidTrafficCost }
+  );
 }

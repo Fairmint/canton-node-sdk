@@ -20,4 +20,12 @@ describe('getPaidTrafficCostFromCompletion', () => {
   it('returns bigint when present', () => {
     expect(getPaidTrafficCostFromCompletion(makeCompletion(42))).toBe(42n);
   });
+
+  it('returns undefined for a non-integer number', () => {
+    expect(getPaidTrafficCostFromCompletion(makeCompletion(42.5))).toBeUndefined();
+  });
+
+  it('returns undefined when the number is not a safe integer', () => {
+    expect(getPaidTrafficCostFromCompletion(makeCompletion(Number.MAX_SAFE_INTEGER + 1))).toBeUndefined();
+  });
 });

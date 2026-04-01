@@ -81,3 +81,10 @@ jobs:
           # if: |
           #   !contains(github.event.pull_request.title, '[skip-review]') &&
           #   !contains(github.event.pull_request.title, '[WIP]')
+
+      - name: Notify if Claude review step failed
+        if: steps.claude-review.outcome == 'failure'
+        run: |
+          echo '### Claude Code Review' >> "$GITHUB_STEP_SUMMARY"
+          echo 'The review step did not complete successfully (often OAuth/org policy or invalid token). **This does not block the PR.**' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Review manually or fix CLAUDE_CODE_OAUTH_TOKEN / Anthropic org settings.' >> "$GITHUB_STEP_SUMMARY"
