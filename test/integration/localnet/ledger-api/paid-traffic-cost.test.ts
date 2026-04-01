@@ -33,7 +33,6 @@ function findCompletionForSubmission(
 describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
   test('async submit then completions include paidTrafficCost (WS + REST)', async () => {
     const client = getClient();
-    const partyId = client.getPartyId();
     const userId = client.getUserId();
     if (!userId) {
       throw new Error('Ledger client userId is required (configure userId or CANTON_LOCALNET_APP_PROVIDER_USER_ID)');
@@ -41,9 +40,13 @@ describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
 
     const partiesResponse = await client.listParties({});
     const details = partiesResponse.partyDetails ?? [];
-    const receiverParty = details
-      .map((entry: { party: string }) => entry.party)
-      .find((id: string) => id !== partyId);
+    const partyId = details[0]?.party;
+    if (!partyId) {
+      throw new Error('Integration precondition failed: listParties returned no parties');
+    }
+    client.setPartyId(partyId);
+
+    const receiverParty = details.map((entry: { party: string }) => entry.party).find((id: string) => id !== partyId);
     if (!receiverParty) {
       throw new Error(
         'Integration precondition failed: need at least two distinct parties on the ledger (transfer offer cannot use self as receiver)'
