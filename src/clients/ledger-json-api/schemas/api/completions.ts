@@ -61,6 +61,11 @@ export const CompletionSchema = z.object({
       .nullable(),
     /** Trace context (optional). */
     traceContext: TraceContextSchema.optional(),
+    /**
+     * Traffic cost (in traffic units) paid by this participant for ordering the confirmation request. Present on recent
+     * Canton Ledger API versions; omitted or zero for older nodes. See Canton OpenAPI `Completion` schema.
+     */
+    paidTrafficCost: z.number().int().optional(),
     /** Offset for resuming the stream. */
     offset: z.number(),
     /** Synchronizer time information. */

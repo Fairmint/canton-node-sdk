@@ -9,11 +9,19 @@ export interface WaitForCompletionParams {
   readonly timeoutMs?: number;
 }
 
+/** Result of waiting for a command completion, including optional paid traffic cost when the ledger reports it. */
+export interface WaitForCompletionResult {
+  readonly updateId: string;
+  /** Present when the Ledger API includes `paidTrafficCost` on the completion (Canton). */
+  readonly paidTrafficCost?: bigint | undefined;
+}
+
 interface CompletionDetails {
   readonly submissionId?: string | undefined;
   readonly statusCode?: number | undefined;
   readonly statusMessage?: string | undefined;
   readonly updateId?: string | undefined;
+  readonly paidTrafficCost?: bigint | undefined;
 }
 
 function extractCompletion(message: CompletionsWsMessage): CompletionDetails | null {
@@ -31,19 +39,25 @@ function extractCompletion(message: CompletionsWsMessage): CompletionDetails | n
     return null;
   }
 
+  let paidTrafficCost: bigint | undefined;
+  if (typeof completion.paidTrafficCost === 'number' && Number.isInteger(completion.paidTrafficCost)) {
+    paidTrafficCost = BigInt(completion.paidTrafficCost);
+  }
+
   return {
     submissionId: completion.submissionId,
     statusCode: typeof completion.status?.code === 'number' ? completion.status.code : undefined,
     statusMessage: typeof completion.status?.message === 'string' ? completion.status.message : undefined,
     updateId: typeof completion.updateId === 'string' ? completion.updateId : undefined,
+    paidTrafficCost,
   };
 }
 
-/** Wait for a specific completion using the ledger's WebSocket completions stream. */
-export async function waitForCompletion(
+async function waitForCompletionCore<T>(
   ledgerClient: LedgerJsonApiClient,
-  params: WaitForCompletionParams
-): Promise<string> {
+  params: WaitForCompletionParams,
+  mapSuccess: (details: CompletionDetails, updateId: string) => T
+): Promise<T> {
   const { submissionId, partyId, userId, beginExclusive, timeoutMs = 10 * 60 * 1000 } = params;
 
   return new Promise((resolve, reject) => {
@@ -97,12 +111,13 @@ export async function waitForCompletion(
               return;
             }
 
-            if (!completion.updateId) {
+            const { updateId } = completion;
+            if (!updateId) {
               reject(new Error('Completion did not include updateId'));
               return;
             }
 
-            resolve(completion.updateId);
+            resolve(mapSuccess(completion, updateId));
           },
           onError: handleError,
           onClose: () => {
@@ -118,4 +133,26 @@ export async function waitForCompletion(
       })
       .catch(handleError);
   });
+}
+
+/** Wait for a specific completion using the ledger's WebSocket completions stream. */
+export async function waitForCompletion(
+  ledgerClient: LedgerJsonApiClient,
+  params: WaitForCompletionParams
+): Promise<string> {
+  return waitForCompletionCore(ledgerClient, params, (_c, updateId) => updateId);
+}
+
+/**
+ * Like {@link waitForCompletion}, but also surfaces `paidTrafficCost` when the Ledger API includes it on the completion
+ * (recent Canton versions).
+ */
+export async function waitForCompletionWithMetadata(
+  ledgerClient: LedgerJsonApiClient,
+  params: WaitForCompletionParams
+): Promise<WaitForCompletionResult> {
+  return waitForCompletionCore(ledgerClient, params, (c, updateId) => ({
+    updateId,
+    paidTrafficCost: c.paidTrafficCost,
+  }));
 }
