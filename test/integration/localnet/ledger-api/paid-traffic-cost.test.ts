@@ -4,13 +4,18 @@
  * Uses async submit + completions (WebSocket and blocking REST) against cn-quickstart.
  */
 
+import { ValidatorApiClient } from '../../../../src';
 import { waitForCompletionWithMetadata } from '../../../../src/clients/ledger-json-api';
 import { EnvLoader } from '../../../../src/core/config/EnvLoader';
 import { CompletionStreamResponseSchema } from '../../../../src/clients/ledger-json-api/schemas/api/completions';
 import { getPaidTrafficCostFromCompletion } from '../../../../src/utils/traffic/paid-traffic-cost';
+import { buildIntegrationTestClientConfig } from '../../../utils/testConfig';
 import { getClient } from './setup';
 
-/** User ID for completions: config/env, else ledger identity from the OAuth token (cn-quickstart). */
+/**
+ * Ledger userId for completions / async submit. Order matches `scripts/grant-user-rights.ts`: validator `user_name` is
+ * the participant user id when OAuth token user is not exposed on the ledger API.
+ */
 async function resolveLedgerUserId(client: ReturnType<typeof getClient>): Promise<string> {
   const configured = client.getUserId();
   if (configured) {
@@ -24,9 +29,13 @@ async function resolveLedgerUserId(client: ReturnType<typeof getClient>): Promis
     const auth = await client.getAuthenticatedUser({});
     return auth.user.id;
   } catch {
-    throw new Error(
-      'Could not resolve ledger userId: set partyId/userId in ClientConfig, CANTON_LOCALNET_APP_PROVIDER_USER_ID, or ensure getAuthenticatedUser works with the token'
-    );
+    // CI / cn-quickstart: ledger authenticated-user may be unavailable; validator-user matches grant-user-rights flow.
+    const validatorClient = new ValidatorApiClient(buildIntegrationTestClientConfig());
+    const info = await validatorClient.getValidatorUserInfo();
+    if (!info.user_name) {
+      throw new Error('getValidatorUserInfo returned empty user_name');
+    }
+    return info.user_name;
   }
 }
 
