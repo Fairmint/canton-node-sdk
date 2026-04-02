@@ -7,10 +7,47 @@
 import { ValidatorApiClient } from '../../../../src';
 import { waitForCompletionWithMetadata } from '../../../../src/clients/ledger-json-api';
 import { EnvLoader } from '../../../../src/core/config/EnvLoader';
+import { ConfigurationError } from '../../../../src/core/errors';
 import { CompletionStreamResponseSchema } from '../../../../src/clients/ledger-json-api/schemas/api/completions';
 import { getPaidTrafficCostFromCompletion } from '../../../../src/utils/traffic/paid-traffic-cost';
 import { buildIntegrationTestClientConfig } from '../../../utils/testConfig';
 import { getClient } from './setup';
+
+const WALLET_APP_INSTALL_TEMPLATE_SUFFIX = 'Splice.Wallet.Install:WalletAppInstall';
+
+/** Env (local dev) or active-contracts snapshot (CI without .env.local). */
+async function resolveWalletAppInstallContext(
+  client: ReturnType<typeof getClient>,
+  partyId: string
+): Promise<{ contractId: string; synchronizerId: string | undefined }> {
+  try {
+    const contractId = EnvLoader.getInstance().getValidatorWalletAppInstallContractId('localnet');
+    return { contractId, synchronizerId: undefined };
+  } catch (error) {
+    if (!(error instanceof ConfigurationError)) {
+      throw error;
+    }
+    const snapshot = await client.getActiveContracts({
+      parties: [partyId],
+      templateIds: [`#splice-wallet:${WALLET_APP_INSTALL_TEMPLATE_SUFFIX}`],
+    });
+    for (const item of snapshot) {
+      const entry = item.contractEntry;
+      if ('JsActiveContract' in entry) {
+        const { contractId, templateId } = entry.JsActiveContract.createdEvent;
+        if (templateId.includes(WALLET_APP_INSTALL_TEMPLATE_SUFFIX)) {
+          return {
+            contractId,
+            synchronizerId: entry.JsActiveContract.synchronizerId,
+          };
+        }
+      }
+    }
+    throw new Error(
+      'Could not find WalletAppInstall contract: set CANTON_VALIDATOR_WALLET_APP_INSTALL_CONTRACT_ID_LOCALNET or ensure the validator party has WalletAppInstall on-ledger'
+    );
+  }
+}
 
 /**
  * Ledger userId for completions / async submit. Order matches `scripts/grant-user-rights.ts`: validator `user_name` is
@@ -79,7 +116,7 @@ describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
       );
     }
 
-    const walletInstallCid = EnvLoader.getInstance().getValidatorWalletAppInstallContractId('localnet');
+    const { contractId: walletInstallCid, synchronizerId } = await resolveWalletAppInstallContext(client, partyId);
 
     const ledgerEnd = await client.getLedgerEnd({});
     const beginExclusive = ledgerEnd.offset;
@@ -92,6 +129,7 @@ describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
     await client.asyncSubmit({
       commandId,
       submissionId,
+      ...(synchronizerId !== undefined ? { synchronizerId } : {}),
       commands: [
         {
           ExerciseCommand: {
