@@ -50,10 +50,13 @@ async function resolveWalletAppInstallContext(
 }
 
 /**
- * Ledger userId for completions / async submit. Order matches `scripts/grant-user-rights.ts`: validator `user_name` is
- * the participant user id when OAuth token user is not exposed on the ledger API.
+ * Participant user id for completions. Falls back to validator `user_name` (same as `scripts/grant-user-rights.ts`)
+ * when the ledger authenticated-user endpoint is unavailable.
  */
-async function resolveLedgerUserId(client: ReturnType<typeof getClient>): Promise<string> {
+async function resolveLedgerUserId(
+  client: ReturnType<typeof getClient>,
+  validatorUserName: string
+): Promise<string> {
   const configured = client.getUserId();
   if (configured) {
     return configured;
@@ -66,13 +69,7 @@ async function resolveLedgerUserId(client: ReturnType<typeof getClient>): Promis
     const auth = await client.getAuthenticatedUser({});
     return auth.user.id;
   } catch {
-    // CI / cn-quickstart: ledger authenticated-user may be unavailable; validator-user matches grant-user-rights flow.
-    const validatorClient = new ValidatorApiClient(buildIntegrationTestClientConfig());
-    const info = await validatorClient.getValidatorUserInfo();
-    if (!info.user_name) {
-      throw new Error('getValidatorUserInfo returned empty user_name');
-    }
-    return info.user_name;
+    return validatorUserName;
   }
 }
 
@@ -99,16 +96,20 @@ function findCompletionForSubmission(
 describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
   test('async submit then completions include paidTrafficCost (WS + REST)', async () => {
     const client = getClient();
-    const userId = await resolveLedgerUserId(client);
+    const validatorClient = new ValidatorApiClient(buildIntegrationTestClientConfig());
+    const validatorInfo = await validatorClient.getValidatorUserInfo();
+    const partyId = validatorInfo.party_id;
+    if (!partyId) {
+      throw new Error('getValidatorUserInfo returned empty party_id');
+    }
+    if (!validatorInfo.user_name) {
+      throw new Error('getValidatorUserInfo returned empty user_name');
+    }
+    client.setPartyId(partyId);
+    const userId = await resolveLedgerUserId(client, validatorInfo.user_name);
 
     const partiesResponse = await client.listParties({});
     const details = partiesResponse.partyDetails ?? [];
-    const partyId = details[0]?.party;
-    if (!partyId) {
-      throw new Error('Integration precondition failed: listParties returned no parties');
-    }
-    client.setPartyId(partyId);
-
     const receiverParty = details.map((entry: { party: string }) => entry.party).find((id: string) => id !== partyId);
     if (!receiverParty) {
       throw new Error(
