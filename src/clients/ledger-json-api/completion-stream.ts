@@ -39,9 +39,12 @@ function extractCompletion(message: CompletionsWsMessage): CompletionDetails | n
     return null;
   }
 
+  const paidRaw = completion.paidTrafficCost;
   let paidTrafficCost: bigint | undefined;
-  if (typeof completion.paidTrafficCost === 'number' && Number.isSafeInteger(completion.paidTrafficCost)) {
-    paidTrafficCost = BigInt(completion.paidTrafficCost);
+  if (typeof paidRaw === 'number' && Number.isSafeInteger(paidRaw)) {
+    paidTrafficCost = BigInt(paidRaw);
+  } else if (typeof paidRaw === 'string' && /^\d+$/.test(paidRaw)) {
+    paidTrafficCost = BigInt(paidRaw);
   }
 
   return {
