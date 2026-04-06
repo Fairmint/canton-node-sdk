@@ -4,7 +4,7 @@
  * Uses async submit + completions (WebSocket and blocking REST) against cn-quickstart.
  */
 
-import { ValidatorApiClient } from '../../../../src';
+import { CantonRuntime, ValidatorApiClient } from '../../../../src';
 import { waitForCompletionWithMetadata } from '../../../../src/clients/ledger-json-api';
 import { EnvLoader } from '../../../../src/core/config/EnvLoader';
 import { ConfigurationError } from '../../../../src/core/errors';
@@ -96,7 +96,7 @@ function findCompletionForSubmission(
 describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
   test('async submit then completions include paidTrafficCost (WS + REST)', async () => {
     const client = getClient();
-    const validatorClient = new ValidatorApiClient(buildIntegrationTestClientConfig());
+    const validatorClient = new ValidatorApiClient(new CantonRuntime(buildIntegrationTestClientConfig()));
     const validatorInfo = await validatorClient.getValidatorUserInfo();
     const partyId = validatorInfo.party_id;
     if (!partyId) {

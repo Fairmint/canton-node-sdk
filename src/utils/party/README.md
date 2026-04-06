@@ -9,13 +9,17 @@ Creates a party on the specified network with optional funding.
 ### Usage
 
 ```typescript
-import { createParty } from '@fairmint/canton-node-sdk';
-import { LedgerJsonApiClient } from '@fairmint/canton-node-sdk';
-import { ValidatorApiClient } from '@fairmint/canton-node-sdk';
+import {
+  CantonRuntime,
+  LedgerJsonApiClient,
+  ValidatorApiClient,
+  createParty,
+} from '@fairmint/canton-node-sdk';
 
-// Initialize your clients
-const ledgerClient = new LedgerJsonApiClient(/* your config */);
-const validatorClient = new ValidatorApiClient(/* your config */);
+// Initialize one shared runtime, then derive clients from it
+const runtime = new CantonRuntime({ network: 'localnet' });
+const ledgerClient = new LedgerJsonApiClient(runtime);
+const validatorClient = new ValidatorApiClient(runtime);
 
 const result = await createParty({
   ledgerClient,

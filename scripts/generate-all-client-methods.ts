@@ -290,7 +290,7 @@ function generateClientFile(clientConfig: ClientConfig): void {
   const needsWsImports = allOps.some((op) => op.kind === 'ws');
   const wsImports = needsWsImports ? `\nimport { WebSocketHandlers, WebSocketSubscription } from '../../core/ws';` : '';
 
-  const content = `import { ${baseClassImport}, ClientConfig } from '${baseClassPath}';
+  const content = `import { ${baseClassImport}, CantonRuntime } from '${baseClassPath}';
 ${opImports}
 ${wsImports}
 
@@ -298,8 +298,8 @@ ${wsImports}
 export class ${name} extends ${baseClass} {
 ${methodDecls}
 
-  constructor(clientConfig?: ClientConfig) {
-    super('${apiType}', clientConfig);
+  constructor(runtime: CantonRuntime) {
+    super('${apiType}', runtime);
     this.initializeMethods();
   }
 

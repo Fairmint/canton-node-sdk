@@ -14,7 +14,7 @@
  *   participant.
  */
 
-import { ScanApiClient } from '../src';
+import { CantonRuntime, ScanApiClient } from '../src';
 
 function readArg(name: string): string | undefined {
   const idx = process.argv.indexOf(`--${name}`);
@@ -34,7 +34,8 @@ async function main(): Promise<void> {
     throw new Error('Missing required args: --domainId and --partyId');
   }
 
-  const scanClient = new ScanApiClient(provider ? { network, provider } : { network });
+  const runtime = new CantonRuntime(provider ? { network, provider } : { network });
+  const scanClient = new ScanApiClient(runtime);
 
   const partyToParticipant = await scanClient.getPartyToParticipant({ domainId, partyId });
   const participantId = partyToParticipant.participant_id;

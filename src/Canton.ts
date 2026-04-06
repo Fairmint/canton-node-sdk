@@ -1,6 +1,7 @@
 import { LedgerJsonApiClient, ScanApiClient, ValidatorApiClient } from './clients';
 import { type PartyId } from './core/branded-types';
 import { type Logger } from './core/logging';
+import { CantonRuntime } from './core/runtime';
 import { type ClientConfig, type NetworkType, type ProviderType } from './core/types';
 
 /**
@@ -53,6 +54,9 @@ export interface CantonConfig {
  *   const balance = await canton.validator.getWalletBalance();
  */
 export class Canton {
+  /** Shared runtime for all clients created by this Canton instance. */
+  public readonly runtime: CantonRuntime;
+
   /** Ledger JSON API client for ledger operations. */
   public readonly ledger: LedgerJsonApiClient;
 
@@ -81,10 +85,11 @@ export class Canton {
 
     // Build shared client config from CantonConfig, omitting undefined values
     const clientConfig = buildClientConfig(config);
+    this.runtime = new CantonRuntime(clientConfig);
 
-    this.ledger = new LedgerJsonApiClient(clientConfig);
-    this.validator = new ValidatorApiClient(clientConfig);
-    this.scan = new ScanApiClient(clientConfig);
+    this.ledger = new LedgerJsonApiClient(this.runtime);
+    this.validator = new ValidatorApiClient(this.runtime);
+    this.scan = new ScanApiClient(this.runtime);
   }
 
   /** Gets the current network. */

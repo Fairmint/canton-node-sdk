@@ -28,7 +28,8 @@ function isScanApiClient(client: ValidatorApiClient | ScanApiClient): client is 
  *
  * @example
  *   ```typescript
- *   const validatorClient = new ValidatorApiClient({ ... });
+ *   const runtime = new CantonRuntime({ network: 'mainnet', provider: 'your-provider' });
+ *   const validatorClient = new ValidatorApiClient(runtime);
  *
  *   // Get traffic status for the configured party
  *   const status = await getTrafficStatus(validatorClient);
@@ -53,7 +54,8 @@ export async function getTrafficStatus(
  *
  * @example
  *   ```typescript
- *   const scanClient = new ScanApiClient({ network: 'mainnet' });
+ *   const runtime = new CantonRuntime({ network: 'mainnet' });
+ *   const scanClient = new ScanApiClient(runtime);
  *
  *   // Get traffic status for a specific party
  *   const status = await getTrafficStatus(scanClient, {

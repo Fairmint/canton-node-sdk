@@ -1,13 +1,13 @@
 #!/usr/bin/env tsx
 import 'dotenv/config';
-import { LedgerJsonApiClient } from '../src';
+import { CantonRuntime, EnvLoader, LedgerJsonApiClient } from '../src';
 
 /** List all configured identity providers in the Canton system */
 async function main(): Promise<void> {
   console.log('=== List Identity Providers ===\n');
 
   try {
-    const client = new LedgerJsonApiClient();
+    const client = new LedgerJsonApiClient(new CantonRuntime(EnvLoader.getConfig('LEDGER_JSON_API')));
 
     console.log('Fetching identity provider configs...\n');
     const result = await client.listIdentityProviderConfigs({});

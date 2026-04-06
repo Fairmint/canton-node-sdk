@@ -36,8 +36,12 @@ console.log(user.user.id); // ✅ Type-safe
 Built-in OAuth2 support with automatic token management:
 
 ```typescript
-// Authentication is handled automatically
-const client = new LedgerJsonApiClient(config);
+import { CantonRuntime, LedgerJsonApiClient } from '@fairmint/canton-node-sdk';
+
+// Authentication is handled automatically once the runtime is configured
+const runtime = new CantonRuntime(config);
+const client = new LedgerJsonApiClient(runtime);
+
 // Tokens are managed behind the scenes
 const user = await client.getAuthenticatedUser({
   identityProviderId: 'default',
@@ -49,6 +53,8 @@ const user = await client.getAuthenticatedUser({
 Secure configuration management with environment variables:
 
 ```typescript
+import { EnvLoader } from '@fairmint/canton-node-sdk';
+
 // Switch between environments easily
 const devConfig = EnvLoader.getConfig('LEDGER_JSON_API', {
   network: 'devnet',
@@ -156,13 +162,14 @@ await client.grantUserRights({
 
 ## Developer Tools
 
-### Direct Client Instantiation
+### Runtime-First Client Instantiation
 
-Simple and direct client creation:
+Create one runtime per environment/auth context, then instantiate as many clients from it as you need:
 
 ```typescript
-// Create clients directly
-const client = new LedgerJsonApiClient(config);
+// Create a shared runtime once, then instantiate clients from it
+const runtime = new CantonRuntime(config);
+const client = new LedgerJsonApiClient(runtime);
 ```
 
 ## Use Cases

@@ -2,7 +2,7 @@ import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { type SubmitAndWaitForTransactionTreeParams } from '../../clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction-tree';
 import { type DisclosedContract, type ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/commands';
 import { type ValidatorApiClient } from '../../clients/validator-api';
-import { OperationError, OperationErrorCode } from '../../core/errors';
+import { ApiError, OperationError, OperationErrorCode } from '../../core/errors';
 import { getCurrentMiningRoundContext } from '../mining/mining-rounds';
 import { getAmuletsForTransfer } from './get-amulets-for-transfer';
 
@@ -92,61 +92,74 @@ export async function preApproveTransfers(
     });
   }
 
-  // Get amulet inputs for the receiver party
+  const MAX_RETRIES = 3;
+  let result: Awaited<ReturnType<typeof ledgerClient.submitAndWaitForTransactionTree>>;
 
-  const amulets = await getAmuletsForTransfer({
-    jsonApiClient: ledgerClient,
-    readAs: [params.receiverPartyId],
-  });
+  for (let attempt = 0; ; attempt++) {
+    const amulets = await getAmuletsForTransfer({
+      jsonApiClient: ledgerClient,
+      readAs: [params.receiverPartyId],
+    });
 
-  if (amulets.length === 0) {
-    throw new OperationError(
-      `No unlocked amulets found for provider party ${params.receiverPartyId}`,
-      OperationErrorCode.INSUFFICIENT_FUNDS,
-      { partyId: params.receiverPartyId }
-    );
-  }
+    if (amulets.length === 0) {
+      throw new OperationError(
+        `No unlocked amulets found for provider party ${params.receiverPartyId}`,
+        OperationErrorCode.INSUFFICIENT_FUNDS,
+        { partyId: params.receiverPartyId }
+      );
+    }
 
-  // Convert amulets to input format
-  const inputs = amulets.map((amulet) => ({
-    tag: 'InputAmulet' as const,
-    value: amulet.contractId,
-  }));
+    const inputs = amulets.map((amulet) => ({
+      tag: 'InputAmulet' as const,
+      value: amulet.contractId,
+    }));
 
-  // Create the TransferPreapproval contract using AmuletRules_CreateTransferPreapproval
-  const createCommand: ExerciseCommand = {
-    ExerciseCommand: {
-      templateId: amuletRules.amulet_rules.contract.template_id,
-      contractId: amuletRules.amulet_rules.contract.contract_id,
-      choice: 'AmuletRules_CreateTransferPreapproval',
-      choiceArgument: {
-        context: {
-          amuletRules: amuletRules.amulet_rules.contract.contract_id,
+    const createCommand: ExerciseCommand = {
+      ExerciseCommand: {
+        templateId: amuletRules.amulet_rules.contract.template_id,
+        contractId: amuletRules.amulet_rules.contract.contract_id,
+        choice: 'AmuletRules_CreateTransferPreapproval',
+        choiceArgument: {
           context: {
-            openMiningRound: openMiningRoundContractId,
-            issuingMiningRounds: [],
-            validatorRights: [],
-            featuredAppRight: featuredAppRight.featured_app_right?.contract_id ?? null,
+            amuletRules: amuletRules.amulet_rules.contract.contract_id,
+            context: {
+              openMiningRound: openMiningRoundContractId,
+              issuingMiningRounds: [],
+              validatorRights: [],
+              featuredAppRight: featuredAppRight.featured_app_right?.contract_id ?? null,
+            },
           },
+          inputs,
+          receiver: params.receiverPartyId,
+          provider: providerPartyId,
+          expiresAt: expiresAt.toISOString(),
+          expectedDso: dsoPartyId.dso_party_id,
         },
-        inputs,
-        receiver: params.receiverPartyId,
-        provider: providerPartyId,
-        expiresAt: expiresAt.toISOString(),
-        expectedDso: dsoPartyId.dso_party_id,
       },
-    },
-  };
+    };
 
-  // Submit the command
-  const submitParams: SubmitAndWaitForTransactionTreeParams = {
-    commands: [createCommand],
-    commandId: `create-preapproval-${Date.now()}`,
-    actAs: [params.receiverPartyId],
-    disclosedContracts,
-  };
+    const submitParams: SubmitAndWaitForTransactionTreeParams = {
+      commands: [createCommand],
+      commandId: `create-preapproval-${Date.now()}`,
+      actAs: [params.receiverPartyId],
+      disclosedContracts,
+    };
 
-  const result = await ledgerClient.submitAndWaitForTransactionTree(submitParams);
+    try {
+      result = await ledgerClient.submitAndWaitForTransactionTree(submitParams);
+      break;
+    } catch (error: unknown) {
+      if (error instanceof ApiError && error.status === 409 && attempt < MAX_RETRIES) {
+        const backoffMs = 1000 * 2 ** attempt;
+        console.warn(
+          `[preApproveTransfers] LOCAL_VERDICT_LOCKED_CONTRACTS (attempt ${attempt + 1}/${MAX_RETRIES + 1}), retrying in ${backoffMs}ms...`
+        );
+        await new Promise<void>((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+      throw error;
+    }
+  }
 
   // Extract the created TransferPreapproval contract ID from the result
   const events = result.transactionTree.eventsById;

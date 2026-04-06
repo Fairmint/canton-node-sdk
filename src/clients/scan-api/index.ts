@@ -1,2 +1,2 @@
 export * from './scan-endpoints';
-export { ScanApiClient } from './ScanApiClient';
+export { ScanApiClient, type ScanApiClientOptions } from './ScanApiClient';

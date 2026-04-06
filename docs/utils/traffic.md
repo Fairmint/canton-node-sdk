@@ -139,9 +139,10 @@ Supports automatic domain and party resolution.
 
 **Example:**
 ```typescript
-import { ValidatorApiClient, getTrafficStatus } from '@fairmint/canton-node-sdk';
+import { CantonRuntime, ValidatorApiClient, getTrafficStatus } from '@fairmint/canton-node-sdk';
 
-const validatorClient = new ValidatorApiClient({ ... });
+const runtime = new CantonRuntime({ network: 'mainnet', provider: 'your-provider' });
+const validatorClient = new ValidatorApiClient(runtime);
 
 // Get traffic status for the configured party
 const status = await getTrafficStatus(validatorClient);
@@ -166,9 +167,10 @@ Requires explicit domainId and partyId.
 
 **Example:**
 ```typescript
-import { ScanApiClient, getTrafficStatus } from '@fairmint/canton-node-sdk';
+import { CantonRuntime, ScanApiClient, getTrafficStatus } from '@fairmint/canton-node-sdk';
 
-const scanClient = new ScanApiClient({ network: 'mainnet' });
+const runtime = new CantonRuntime({ network: 'mainnet' });
+const scanClient = new ScanApiClient(runtime);
 
 // Get traffic status for a specific party
 const status = await getTrafficStatus(scanClient, {

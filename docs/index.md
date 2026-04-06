@@ -11,7 +11,7 @@ A TypeScript SDK for interacting with Canton blockchain.
 ## Quick Start
 
 ```typescript
-import { LedgerJsonApiClient, EnvLoader } from '@fairmint/canton-node-sdk';
+import { CantonRuntime, EnvLoader, LedgerJsonApiClient } from '@fairmint/canton-node-sdk';
 
 // Optionally load configuration from environment variables
 const config = EnvLoader.getConfig('LEDGER_JSON_API', {
@@ -19,8 +19,9 @@ const config = EnvLoader.getConfig('LEDGER_JSON_API', {
   provider: '5n',
 });
 
-// Create a client
-const client = new LedgerJsonApiClient(config);
+// Create a shared runtime, then lightweight client views
+const runtime = new CantonRuntime(config);
+const client = new LedgerJsonApiClient(runtime);
 
 // Use the client
 const version = await client.getVersion();
