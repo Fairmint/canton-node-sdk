@@ -1,6 +1,6 @@
 /** Shared setup for ScanApiClient integration tests. */
 
-import { ScanApiClient } from '../../../../src';
+import { CantonRuntime, ScanApiClient } from '../../../../src';
 import { buildIntegrationTestClientConfig } from '../../../utils/testConfig';
 
 let client: ScanApiClient | null = null;
@@ -12,8 +12,7 @@ export function getClient(): ScanApiClient {
     // LocalNet doesn't have default scan endpoints - must provide explicitly
     // cn-quickstart routes scan API via nginx virtual host at scan.localhost:4000
     // Using 'scan.localhost' hostname is required for nginx to route correctly
-    client = new ScanApiClient({
-      ...config,
+    client = new ScanApiClient(new CantonRuntime(config), {
       scanApiUrls: ['http://scan.localhost:4000/api/scan'],
     });
   }

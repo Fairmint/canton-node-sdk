@@ -20,7 +20,7 @@
  * Usage: npx tsx canton-node-sdk/examples/localnet-with-oauth2.ts
  */
 
-import { LedgerJsonApiClient, ValidatorApiClient } from '../src';
+import { CantonRuntime, LedgerJsonApiClient, ValidatorApiClient } from '../src';
 
 async function main(): Promise<void> {
   console.log('🔌 Connecting to Canton Network LocalNet with OAuth2...\n');
@@ -31,13 +31,12 @@ async function main(): Promise<void> {
     // - OAuth2 auth URL (Keycloak)
     // - API endpoints (ports 3903, 3975, etc.)
     // - Client credentials (app-provider-validator)
-    const validatorClient = new ValidatorApiClient({
+    const runtime = new CantonRuntime({
       network: 'localnet',
     });
+    const validatorClient = new ValidatorApiClient(runtime);
 
-    const jsonClient = new LedgerJsonApiClient({
-      network: 'localnet',
-    });
+    const jsonClient = new LedgerJsonApiClient(runtime);
 
     console.log('🔐 Authenticating with OAuth2...');
 

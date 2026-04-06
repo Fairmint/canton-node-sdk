@@ -1,6 +1,6 @@
 /** Shared setup for ValidatorApiClient integration tests. */
 
-import { ValidatorApiClient } from '../../../../src';
+import { CantonRuntime, ValidatorApiClient } from '../../../../src';
 import { buildIntegrationTestClientConfig } from '../../../utils/testConfig';
 
 let client: ValidatorApiClient | null = null;
@@ -12,7 +12,7 @@ let client: ValidatorApiClient | null = null;
 export function getClient(): ValidatorApiClient {
   if (!client) {
     const config = buildIntegrationTestClientConfig();
-    client = new ValidatorApiClient(config);
+    client = new ValidatorApiClient(new CantonRuntime(config));
   }
   return client;
 }

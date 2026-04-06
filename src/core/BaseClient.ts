@@ -1,60 +1,21 @@
-import { AuthenticationManager } from './auth/AuthenticationManager';
 import { type PartyId, type UserId } from './branded-types';
-import { EnvLoader } from './config/EnvLoader';
 import { ConfigurationError } from './errors';
 import { HttpClient } from './http/HttpClient';
-import { CompositeLogger, ConsoleLogger, FileLogger, type Logger } from './logging';
-import {
-  type ApiType,
-  type ClientConfig,
-  type NetworkType,
-  type PartialProviderConfig,
-  type ProviderType,
-  type RequestConfig,
-} from './types';
+import { type CantonRuntime } from './runtime';
+import { type ApiType, type ClientConfig, type NetworkType, type PartialProviderConfig, type ProviderType, type RequestConfig } from './types';
 
 /** Abstract base class providing common functionality for all API clients */
 export abstract class BaseClient {
   protected config: PartialProviderConfig;
   protected apiType: ApiType;
   protected clientConfig: ClientConfig;
-  protected authManager: AuthenticationManager;
+  protected runtime: CantonRuntime;
   protected httpClient: HttpClient;
 
-  constructor(apiType: ApiType, config?: ClientConfig) {
+  constructor(apiType: ApiType, runtime: CantonRuntime) {
     this.apiType = apiType;
-
-    // If no config provided, or config missing APIs, use EnvLoader to get defaults
-    if (!config) {
-      // No config at all - use EnvLoader defaults
-      const defaultConfig = EnvLoader.getConfig(apiType);
-      defaultConfig.logger = this.createLogger(undefined, this.isDebugEnabled(undefined));
-      this.clientConfig = defaultConfig;
-    } else if (!config.apis?.[apiType]) {
-      // Config provided but missing API configuration - merge with EnvLoader defaults
-      const options: { network?: NetworkType; provider?: ProviderType } = {
-        network: config.network,
-      };
-      if (config.provider) {
-        options.provider = config.provider;
-      }
-      const defaultConfig = EnvLoader.getConfig(apiType, options);
-      this.clientConfig = {
-        ...defaultConfig,
-        ...config,
-        apis: {
-          ...defaultConfig.apis,
-          ...config.apis,
-        },
-        logger: config.logger ?? this.createLogger(undefined, this.isDebugEnabled(config.debug)),
-      };
-    } else {
-      // Config fully provided - create logger if not provided
-      this.clientConfig = {
-        ...config,
-        logger: config.logger ?? this.createLogger(undefined, this.isDebugEnabled(config.debug)),
-      };
-    }
+    this.runtime = runtime;
+    this.clientConfig = runtime.createClientConfig(apiType);
 
     // Validate that the required API configuration is present
     const validatedApiConfig = this.clientConfig.apis?.[apiType];
@@ -73,24 +34,22 @@ export abstract class BaseClient {
       },
     };
 
-    // Initialize authentication manager
     const apiConfig = this.config.apis[this.apiType];
     if (!apiConfig) {
       throw new ConfigurationError(`API configuration not found for ${this.apiType}`);
     }
 
-    this.authManager = new AuthenticationManager(this.config.authUrl, apiConfig.auth, this.clientConfig.logger);
-
-    // Initialize HTTP client with logger
-    this.httpClient = new HttpClient(this.clientConfig.logger);
+    this.httpClient = new HttpClient(this.clientConfig.logger, async () =>
+      this.runtime.getAuthenticationManager(this.config.authUrl, apiConfig.auth).authenticate(),
+    );
   }
 
   public async authenticate(): Promise<string> {
-    const token = await this.authManager.authenticate();
-    if (token) {
-      this.httpClient.setBearerToken(token);
+    const apiConfig = this.config.apis[this.apiType];
+    if (!apiConfig) {
+      throw new ConfigurationError(`API configuration not found for ${this.apiType}`);
     }
-    return token;
+    return this.runtime.getAuthenticationManager(this.config.authUrl, apiConfig.auth).authenticate();
   }
 
   /**
@@ -98,8 +57,11 @@ export abstract class BaseClient {
    * expired mid-operation (e.g., during a long-running WebSocket stream).
    */
   public clearToken(): void {
-    this.authManager.clearToken();
-    this.httpClient.clearBearerToken();
+    const apiConfig = this.config.apis[this.apiType];
+    if (!apiConfig) {
+      throw new ConfigurationError(`API configuration not found for ${this.apiType}`);
+    }
+    this.runtime.getAuthenticationManager(this.config.authUrl, apiConfig.auth).clearToken();
   }
 
   /**
@@ -107,12 +69,20 @@ export abstract class BaseClient {
    * proactive token refresh before expiration, especially for long-running WebSocket connections.
    */
   public getTokenExpiryTime(): number | null {
-    return this.authManager.getTokenExpiryTime();
+    const apiConfig = this.config.apis[this.apiType];
+    if (!apiConfig) {
+      throw new ConfigurationError(`API configuration not found for ${this.apiType}`);
+    }
+    return this.runtime.getAuthenticationManager(this.config.authUrl, apiConfig.auth).getTokenExpiryTime();
   }
 
   /** Returns the timestamp when the current token was issued, in milliseconds since epoch, or null if not available. */
   public getTokenIssuedAt(): number | null {
-    return this.authManager.getTokenIssuedAt();
+    const apiConfig = this.config.apis[this.apiType];
+    if (!apiConfig) {
+      throw new ConfigurationError(`API configuration not found for ${this.apiType}`);
+    }
+    return this.runtime.getAuthenticationManager(this.config.authUrl, apiConfig.auth).getTokenIssuedAt();
   }
 
   /**
@@ -120,34 +90,26 @@ export abstract class BaseClient {
    * proactive token refresh (e.g., at 50% of lifetime or 2 minutes before expiry, whichever is later).
    */
   public getTokenLifetimeMs(): number | null {
-    return this.authManager.getTokenLifetimeMs();
+    const apiConfig = this.config.apis[this.apiType];
+    if (!apiConfig) {
+      throw new ConfigurationError(`API configuration not found for ${this.apiType}`);
+    }
+    return this.runtime.getAuthenticationManager(this.config.authUrl, apiConfig.auth).getTokenLifetimeMs();
   }
 
   public async makeGetRequest<T>(url: string, config: RequestConfig = {}): Promise<T> {
-    if (config.includeBearerToken) {
-      await this.authenticate();
-    }
     return this.httpClient.makeGetRequest<T>(url, config);
   }
 
   public async makePostRequest<T>(url: string, data: unknown, config: RequestConfig = {}): Promise<T> {
-    if (config.includeBearerToken) {
-      await this.authenticate();
-    }
     return this.httpClient.makePostRequest<T>(url, data, config);
   }
 
   public async makeDeleteRequest<T>(url: string, config: RequestConfig = {}): Promise<T> {
-    if (config.includeBearerToken) {
-      await this.authenticate();
-    }
     return this.httpClient.makeDeleteRequest<T>(url, config);
   }
 
   public async makePatchRequest<T>(url: string, data: unknown, config: RequestConfig = {}): Promise<T> {
-    if (config.includeBearerToken) {
-      await this.authenticate();
-    }
     return this.httpClient.makePatchRequest<T>(url, data, config);
   }
 
@@ -219,6 +181,10 @@ export abstract class BaseClient {
     return this.clientConfig.provider;
   }
 
+  public getRuntime(): CantonRuntime {
+    return this.runtime;
+  }
+
   public getProviderName(): string {
     return this.config.providerName;
   }
@@ -231,31 +197,4 @@ export abstract class BaseClient {
     return this.apiType;
   }
 
-  /** Checks if debug mode is enabled via config or environment variable. */
-  private isDebugEnabled(configDebug: boolean | undefined): boolean {
-    if (configDebug !== undefined) {
-      return configDebug;
-    }
-    const envDebug = process.env['CANTON_DEBUG'];
-    return envDebug !== undefined && ['1', 'true', 'yes', 'on'].includes(envDebug.toLowerCase());
-  }
-
-  /**
-   * Creates a logger based on configuration. When debug is enabled, uses a CompositeLogger with both file and console
-   * logging.
-   */
-  private createLogger(existingLogger: Logger | undefined, debug: boolean): Logger {
-    if (existingLogger) {
-      return existingLogger;
-    }
-
-    const fileLogger = new FileLogger();
-
-    if (debug) {
-      const consoleLogger = new ConsoleLogger({ logLevel: 'debug' });
-      return new CompositeLogger([fileLogger, consoleLogger]);
-    }
-
-    return fileLogger;
-  }
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 import 'dotenv/config';
-import { EnvLoader, LedgerJsonApiClient, ValidatorApiClient } from '../src';
+import { CantonRuntime, EnvLoader, LedgerJsonApiClient, ValidatorApiClient } from '../src';
 import type { GrantUserRightsParams } from '../src/clients/ledger-json-api/schemas/operations/users';
 import type { NetworkType } from '../src/core/types';
 
@@ -142,8 +142,9 @@ Examples:
       ...(network !== undefined && { network }),
       ...(provider !== undefined && { provider }),
     };
-    const client = new LedgerJsonApiClient(EnvLoader.getConfig('LEDGER_JSON_API', configOptions));
-    const validatorClient = new ValidatorApiClient(EnvLoader.getConfig('VALIDATOR_API', configOptions));
+    const runtime = new CantonRuntime(EnvLoader.getConfig('LEDGER_JSON_API', configOptions));
+    const client = new LedgerJsonApiClient(runtime);
+    const validatorClient = new ValidatorApiClient(runtime);
 
     console.log(`Connected to Ledger JSON API`);
 

@@ -1,8 +1,8 @@
-import { ApiError, ConfigurationError, NetworkError, type ClientConfig, type RequestConfig } from '../../core';
+import { ApiError, ConfigurationError, NetworkError, type CantonRuntime, type RequestConfig } from '../../core';
 import { resolveScanApiUrls } from './scan-endpoints';
 import { ScanApiClient as ScanApiClientGenerated } from './ScanApiClient.generated';
 
-export interface ScanApiClientConfig extends ClientConfig {
+export interface ScanApiClientOptions {
   /** Override the rotation list (must include the full `/api/scan` base). */
   readonly scanApiUrls?: readonly string[];
 
@@ -29,6 +29,17 @@ function shouldRotateOnError(error: unknown): boolean {
   return false;
 }
 
+function resolveConfiguredScanApiUrl(runtime: CantonRuntime): string | undefined {
+  try {
+    return runtime.createClientConfig('SCAN_API').apis?.SCAN_API?.apiUrl;
+  } catch (error) {
+    if (error instanceof ConfigurationError) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 /**
  * Public Scan API client.
  *
@@ -40,43 +51,32 @@ export class ScanApiClient extends ScanApiClientGenerated {
   private readonly maxEndpointAttempts: number;
   private activeBaseUrlIndex: number;
 
-  constructor(config: ScanApiClientConfig) {
-    const { network, provider } = config;
-
-    const resolvedUrls = config.scanApiUrls ?? resolveScanApiUrls(network, provider);
-    const fallbackUrl = config.apis?.SCAN_API?.apiUrl;
+  constructor(runtime: CantonRuntime, options: ScanApiClientOptions = {}) {
+    const resolvedUrls = options.scanApiUrls ?? resolveScanApiUrls(runtime.getNetwork(), runtime.getProvider());
+    const fallbackUrl = resolvedUrls.length > 0 ? undefined : resolveConfiguredScanApiUrl(runtime);
     const scanApiUrls = resolvedUrls.length > 0 ? resolvedUrls : fallbackUrl ? [fallbackUrl] : [];
 
     const [firstApiUrl] = scanApiUrls;
     if (!firstApiUrl) {
       throw new ConfigurationError(
-        `No public scan endpoints configured for network '${network}'. Provide scanApiUrls explicitly.`
+        `No public scan endpoints configured for network '${runtime.getNetwork()}'. Provide scanApiUrls explicitly.`
       );
     }
 
-    const clientConfig: ClientConfig = {
-      network,
-      ...(provider !== undefined ? { provider } : {}),
-      ...(config.logger !== undefined ? { logger: config.logger } : {}),
-      ...(config.debug !== undefined ? { debug: config.debug } : {}),
-      ...(config.partyId !== undefined ? { partyId: config.partyId } : {}),
-      ...(config.userId !== undefined ? { userId: config.userId } : {}),
-      ...(config.managedParties !== undefined ? { managedParties: config.managedParties } : {}),
-      authUrl: config.authUrl ?? '',
-      apis: {
-        ...(config.apis ?? {}),
-        SCAN_API: {
-          apiUrl: firstApiUrl,
-          // Public endpoints do not require auth; the AuthenticationManager skips auth when clientId is empty.
-          auth: { grantType: 'client_credentials', clientId: '' },
+    super(
+      runtime.fork({
+        apis: {
+          SCAN_API: {
+            apiUrl: firstApiUrl,
+            // Public endpoints do not require auth; the AuthenticationManager skips auth when clientId is empty.
+            auth: { grantType: 'client_credentials', clientId: '' },
+          },
         },
-      },
-    };
-
-    super(clientConfig);
+      }),
+    );
 
     this.scanApiUrls = scanApiUrls;
-    this.maxEndpointAttempts = config.maxEndpointAttempts ?? scanApiUrls.length;
+    this.maxEndpointAttempts = options.maxEndpointAttempts ?? scanApiUrls.length;
     this.activeBaseUrlIndex = 0;
 
     // Prefer rotating quickly across endpoints rather than waiting on per-endpoint retries.

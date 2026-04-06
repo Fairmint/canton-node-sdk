@@ -1,6 +1,6 @@
 /** Shared setup for LedgerJsonApiClient integration tests. */
 
-import { LedgerJsonApiClient } from '../../../../src';
+import { CantonRuntime, LedgerJsonApiClient } from '../../../../src';
 import { buildIntegrationTestClientConfig } from '../../../utils/testConfig';
 
 let client: LedgerJsonApiClient | null = null;
@@ -12,7 +12,7 @@ let client: LedgerJsonApiClient | null = null;
 export function getClient(): LedgerJsonApiClient {
   if (!client) {
     const config = buildIntegrationTestClientConfig();
-    client = new LedgerJsonApiClient(config);
+    client = new LedgerJsonApiClient(new CantonRuntime(config));
   }
   return client;
 }

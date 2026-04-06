@@ -1,5 +1,5 @@
 import axios, { type AxiosInstance } from 'axios';
-import { ApiError, NetworkError } from '../errors';
+import { ApiError, AuthenticationError, NetworkError } from '../errors';
 import { type Logger } from '../logging';
 import { type RequestConfig } from '../types';
 
@@ -13,6 +13,7 @@ export interface HttpClientRetryConfig {
 /** Handles HTTP requests with authentication, logging, and error handling */
 export class HttpClient {
   private readonly axiosInstance: AxiosInstance;
+  private readonly bearerTokenProvider: (() => Promise<string>) | undefined;
   private readonly logger: Logger | undefined;
   private retryConfig: HttpClientRetryConfig = { maxRetries: 3, delayMs: 6000 };
 
@@ -21,8 +22,9 @@ export class HttpClient {
   private static readonly CONTEXT_VALUE_TRUNCATE_LENGTH = 50;
   private static readonly MAX_CONTEXT_KEYS = 3;
 
-  constructor(logger?: Logger) {
+  constructor(logger?: Logger, bearerTokenProvider?: () => Promise<string>) {
     this.axiosInstance = axios.create();
+    this.bearerTokenProvider = bearerTokenProvider;
     this.logger = logger;
   }
 
@@ -32,7 +34,7 @@ export class HttpClient {
 
   public async makeGetRequest<T>(url: string, config: RequestConfig = {}, _retryCount = 0): Promise<T> {
     try {
-      const headers = this.buildHeaders(config);
+      const headers = await this.buildHeaders(config);
       const response = await this.axiosInstance.get<T>(url, { headers });
 
       await this.logRequestResponse(url, { method: 'GET', headers }, response.data);
@@ -61,7 +63,7 @@ export class HttpClient {
 
   public async makePostRequest<T>(url: string, data: unknown, config: RequestConfig = {}, _retryCount = 0): Promise<T> {
     try {
-      const headers = this.buildHeaders(config);
+      const headers = await this.buildHeaders(config);
       const response = await this.axiosInstance.post<T>(url, data, { headers });
 
       await this.logRequestResponse(url, { method: 'POST', headers, data }, response.data);
@@ -90,7 +92,7 @@ export class HttpClient {
 
   public async makeDeleteRequest<T>(url: string, config: RequestConfig = {}, _retryCount = 0): Promise<T> {
     try {
-      const headers = this.buildHeaders(config);
+      const headers = await this.buildHeaders(config);
       const response = await this.axiosInstance.delete<T>(url, { headers });
 
       await this.logRequestResponse(url, { method: 'DELETE', headers }, response.data);
@@ -123,7 +125,7 @@ export class HttpClient {
     _retryCount = 0
   ): Promise<T> {
     try {
-      const headers = this.buildHeaders(config);
+      const headers = await this.buildHeaders(config);
       const response = await this.axiosInstance.patch<T>(url, data, { headers });
 
       await this.logRequestResponse(url, { method: 'PATCH', headers, data }, response.data);
@@ -150,7 +152,7 @@ export class HttpClient {
     }
   }
 
-  private buildHeaders(config: RequestConfig): Record<string, string> {
+  private async buildHeaders(config: RequestConfig): Promise<Record<string, string>> {
     const headers: Record<string, string> = {};
 
     if (config.contentType) {
@@ -160,19 +162,17 @@ export class HttpClient {
     }
 
     if (config.includeBearerToken) {
-      // This will be set by the client that uses this HTTP client
-      // The bearer token should be passed in the config or set separately
+      if (!this.bearerTokenProvider) {
+        throw new AuthenticationError('Bearer token requested but no token provider is configured');
+      }
+
+      const token = await this.bearerTokenProvider();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
     }
 
     return headers;
-  }
-
-  public setBearerToken(token: string): void {
-    this.axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-  }
-
-  public clearBearerToken(): void {
-    delete this.axiosInstance.defaults.headers.common['Authorization'];
   }
 
   private async logRequestResponse(url: string, request: unknown, response: unknown): Promise<void> {

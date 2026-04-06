@@ -1,4 +1,8 @@
-import { LedgerJsonApiClient, ValidatorApiClient } from '../src';
+import { CantonRuntime, LedgerJsonApiClient, ValidatorApiClient } from '../src';
+
+const runtime = new CantonRuntime({
+  network: 'localnet',
+});
 
 /**
  * Global test clients - constructed once and shared across all tests
@@ -11,10 +15,6 @@ import { LedgerJsonApiClient, ValidatorApiClient } from '../src';
  * and operations.
  */
 export const testClients = {
-  ledgerJsonApi: new LedgerJsonApiClient({
-    network: 'localnet',
-  }),
-  validatorApi: new ValidatorApiClient({
-    network: 'localnet',
-  }),
+  ledgerJsonApi: new LedgerJsonApiClient(runtime),
+  validatorApi: new ValidatorApiClient(runtime),
 };
