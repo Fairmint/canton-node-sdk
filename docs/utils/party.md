@@ -28,12 +28,12 @@ Creates a party, optionally funds the wallet and if funded it then creates a pre
 
 **Example:**
 ```typescript
-import { createParty } from '@fairmint/canton-node-sdk';
-import { LedgerJsonApiClient, ValidatorApiClient } from '@fairmint/canton-node-sdk';
+import { CantonRuntime, LedgerJsonApiClient, ValidatorApiClient, createParty } from '@fairmint/canton-node-sdk';
 
 async function createNewParty() {
-  const ledgerClient = new LedgerJsonApiClient();
-  const validatorClient = new ValidatorApiClient();
+  const runtime = new CantonRuntime({ network: 'localnet' });
+  const ledgerClient = new LedgerJsonApiClient(runtime);
+  const validatorClient = new ValidatorApiClient(runtime);
 
   const result = await createParty({
     ledgerClient,

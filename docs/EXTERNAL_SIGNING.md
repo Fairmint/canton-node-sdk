@@ -6,11 +6,12 @@ This SDK provides utilities for creating and managing **external parties** in Ca
 
 ```typescript
 import { Keypair } from '@stellar/stellar-base';
-import { LedgerJsonApiClient, createExternalParty, prepareExternalTransaction, executeExternalTransaction } from '@fairmint/canton-node-sdk';
+import { CantonRuntime, LedgerJsonApiClient, createExternalParty, prepareExternalTransaction, executeExternalTransaction } from '@fairmint/canton-node-sdk';
 
 // 1. Create external party with a local keypair
 const keypair = Keypair.random();
-const ledgerClient = new LedgerJsonApiClient();
+const runtime = new CantonRuntime({ network: 'localnet' });
+const ledgerClient = new LedgerJsonApiClient(runtime);
 
 const party = await createExternalParty({
   ledgerClient,

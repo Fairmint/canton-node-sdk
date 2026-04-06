@@ -71,10 +71,11 @@ Create a script and run it with `tsx`:
 ```bash
 mkdir -p scripts/localnet
 cat > scripts/localnet/check.ts <<'TS'
-import { LedgerJsonApiClient } from '../../src';
+import { CantonRuntime, LedgerJsonApiClient } from '../../src';
 
 async function main(): Promise<void> {
-  const client = new LedgerJsonApiClient({ network: 'localnet' });
+  const runtime = new CantonRuntime({ network: 'localnet' });
+  const client = new LedgerJsonApiClient(runtime);
   const version = await client.getVersion();
   console.log(version.version);
 }

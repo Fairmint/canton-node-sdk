@@ -21,7 +21,7 @@ npm install @fairmint/canton-node-sdk
 ### Basic Setup
 
 ```typescript
-import { LedgerJsonApiClient, EnvLoader } from '@fairmint/canton-node-sdk';
+import { CantonRuntime, EnvLoader, LedgerJsonApiClient } from '@fairmint/canton-node-sdk';
 
 // Load configuration from environment variables
 const config = EnvLoader.getConfig('LEDGER_JSON_API', {
@@ -29,8 +29,9 @@ const config = EnvLoader.getConfig('LEDGER_JSON_API', {
   provider: '5n',
 });
 
-// Create a client
-const client = new LedgerJsonApiClient(config);
+// Create a shared runtime, then a client
+const runtime = new CantonRuntime(config);
+const client = new LedgerJsonApiClient(runtime);
 
 // Use the client
 const version = await client.getVersion();
@@ -40,14 +41,15 @@ console.log(`Connected to Canton ${version.version}`);
 ### Validator API
 
 ```typescript
-import { ValidatorApiClient, EnvLoader } from '@fairmint/canton-node-sdk';
+import { CantonRuntime, EnvLoader, ValidatorApiClient } from '@fairmint/canton-node-sdk';
 
 const config = EnvLoader.getConfig('VALIDATOR_API', {
   network: 'devnet',
   provider: '5n',
 });
 
-const client = new ValidatorApiClient(config);
+const runtime = new CantonRuntime(config);
+const client = new ValidatorApiClient(runtime);
 
 // Get wallet balance
 const balance = await client.getWalletBalance();
@@ -84,6 +86,8 @@ CANTON_DEVNET_5N_VALIDATOR_API_CLIENT_SECRET=your-validator-client-secret
 ### Programmatic Configuration
 
 ```typescript
+import { CantonRuntime, LedgerJsonApiClient } from '@fairmint/canton-node-sdk';
+
 const config = {
   network: 'devnet',
   provider: '5n',
@@ -92,8 +96,9 @@ const config = {
   userId: 'alice',
   apis: {
     LEDGER_JSON_API: {
-      uri: 'https://devnet.5n.canton.com/ledger-json-api',
+      apiUrl: 'https://devnet.5n.canton.com/ledger-json-api',
       auth: {
+        grantType: 'client_credentials' as const,
         clientId: 'your-client-id',
         clientSecret: 'your-client-secret',
       },
@@ -101,7 +106,8 @@ const config = {
   },
 };
 
-const client = new LedgerJsonApiClient(config);
+const runtime = new CantonRuntime(config);
+const client = new LedgerJsonApiClient(runtime);
 ```
 
 ## Environment Setup
