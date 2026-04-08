@@ -4,10 +4,22 @@ import { getAmuletsForTransfer } from '../../../src/utils/amulet/get-amulets-for
 interface MockActiveContract {
   contractEntry: {
     JsActiveContract: {
+      synchronizerId: string;
+      reassignmentCounter: number;
       createdEvent: {
+        offset: number;
+        nodeId: number;
         contractId: string;
         templateId: string;
+        contractKey: string | null;
         createArgument: Record<string, unknown>;
+        createdEventBlob: string;
+        interfaceViews: string[];
+        witnessParties: string[];
+        signatories: string[];
+        observers: string[];
+        createdAt: string;
+        packageName: string;
       };
     };
   };
@@ -27,13 +39,25 @@ const createJsActiveContract = (
 ): MockActiveContract => ({
   contractEntry: {
     JsActiveContract: {
+      synchronizerId: 'sync-1',
+      reassignmentCounter: 0,
       createdEvent: {
+        offset: 1,
+        nodeId: 1,
         contractId,
         templateId,
+        contractKey: null,
         createArgument: {
           owner,
           amount: { initialAmount: amount },
         },
+        createdEventBlob: `blob-${contractId}`,
+        interfaceViews: [],
+        witnessParties: [owner],
+        signatories: [owner],
+        observers: [],
+        createdAt: '2026-01-01T00:00:00Z',
+        packageName: 'test-package',
       },
     },
   },
@@ -48,13 +72,25 @@ const createJsActiveContractWithNumericAmount = (
 ): MockActiveContract => ({
   contractEntry: {
     JsActiveContract: {
+      synchronizerId: 'sync-1',
+      reassignmentCounter: 0,
       createdEvent: {
+        offset: 1,
+        nodeId: 1,
         contractId,
         templateId,
+        contractKey: null,
         createArgument: {
           owner,
           amount: { initialAmount: amount },
         },
+        createdEventBlob: `blob-${contractId}`,
+        interfaceViews: [],
+        witnessParties: [owner],
+        signatories: [owner],
+        observers: [],
+        createdAt: '2026-01-01T00:00:00Z',
+        packageName: 'test-package',
       },
     },
   },
@@ -63,13 +99,25 @@ const createJsActiveContractWithNumericAmount = (
 const createAppRewardCoupon = (contractId: string, beneficiary: string, amount: string): MockActiveContract => ({
   contractEntry: {
     JsActiveContract: {
+      synchronizerId: 'sync-1',
+      reassignmentCounter: 0,
       createdEvent: {
+        offset: 1,
+        nodeId: 1,
         contractId,
         templateId: 'pkg:Splice.Amulet:AppRewardCoupon',
+        contractKey: null,
         createArgument: {
           beneficiary,
           amount,
         },
+        createdEventBlob: `blob-${contractId}`,
+        interfaceViews: [],
+        witnessParties: [beneficiary],
+        signatories: [beneficiary],
+        observers: [],
+        createdAt: '2026-01-01T00:00:00Z',
+        packageName: 'test-package',
       },
     },
   },
@@ -78,13 +126,25 @@ const createAppRewardCoupon = (contractId: string, beneficiary: string, amount: 
 const createValidatorRewardCoupon = (contractId: string, beneficiary: string, amount: string): MockActiveContract => ({
   contractEntry: {
     JsActiveContract: {
+      synchronizerId: 'sync-1',
+      reassignmentCounter: 0,
       createdEvent: {
+        offset: 1,
+        nodeId: 1,
         contractId,
         templateId: 'pkg:Splice.Amulet:ValidatorRewardCoupon',
+        contractKey: null,
         createArgument: {
           beneficiary,
           amount,
         },
+        createdEventBlob: `blob-${contractId}`,
+        interfaceViews: [],
+        witnessParties: [beneficiary],
+        signatories: [beneficiary],
+        observers: [],
+        createdAt: '2026-01-01T00:00:00Z',
+        packageName: 'test-package',
       },
     },
   },

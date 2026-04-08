@@ -1,6 +1,6 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
-import { type JsGetActiveContractsResponseItem } from '../../clients/ledger-json-api/schemas/api/state';
 import { extractString, isNumber, isRecord, isString } from '../../core/utils';
+import { isJsActiveContractItem } from '../contracts';
 
 export interface AmuletForTransfer {
   readonly contractId: string;
@@ -49,35 +49,6 @@ interface ContractData {
   contractId: string;
   templateId: string;
   payload: Record<string, unknown>;
-}
-
-/** Type guard to check if a contract is a JsGetActiveContractsResponseItem with JsActiveContract */
-function isJsActiveContractItem(ctr: unknown): ctr is JsGetActiveContractsResponseItem & {
-  contractEntry: {
-    JsActiveContract: {
-      createdEvent: { templateId: string; contractId: string; createArgument: Record<string, unknown> };
-    };
-  };
-} {
-  if (!isRecord(ctr)) return false;
-
-  const entry = ctr['contractEntry'];
-  if (!isRecord(entry)) return false;
-
-  const jsActive = entry['JsActiveContract'];
-  if (!isRecord(jsActive)) return false;
-
-  if (!('createdEvent' in jsActive)) return false;
-
-  const { createdEvent } = jsActive;
-  if (!isRecord(createdEvent)) return false;
-
-  // Validate all required fields exist and are strings
-  if (!isString(createdEvent['contractId'])) return false;
-  if (!isString(createdEvent['templateId'])) return false;
-  if (!isRecord(createdEvent['createArgument'])) return false;
-
-  return true;
 }
 
 /** Safely extract a number or string from an unknown value */
