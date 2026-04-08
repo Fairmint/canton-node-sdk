@@ -1,0 +1,304 @@
+{
+  "founders/1.1-how-does-fairmint-work.md": {
+    "intercom_article_id": "14432605",
+    "last_synced_checksum": "794325e1afac",
+    "collection_id": "19287566"
+  },
+  "founders/1.2-what-is-fairmint-one.md": {
+    "intercom_article_id": "14432606",
+    "last_synced_checksum": "c6b173099326",
+    "collection_id": "19287566"
+  },
+  "founders/1.3-early-stage-can-i-use-fairmint.md": {
+    "intercom_article_id": "14432607",
+    "last_synced_checksum": "a340f46e8bb8",
+    "collection": "1. Getting Started & Overview",
+    "collection_id": "19287566"
+  },
+  "founders/1.4-later-stages-can-i-use-fairmint.md": {
+    "intercom_article_id": "14432608",
+    "last_synced_checksum": "b462012df6ab",
+    "collection_id": "19287566"
+  },
+  "founders/1.5-onboarding-and-setting-up-your-portal.md": {
+    "intercom_article_id": "14432609",
+    "last_synced_checksum": "750ab3511fa1",
+    "collection_id": "19287566"
+  },
+  "founders/1.6-dashboard-overview.md": {
+    "intercom_article_id": "14432610",
+    "last_synced_checksum": "f79d131c6012",
+    "collection_id": "19287566"
+  },
+  "founders/1.7-is-fairmint-a-broker-dealer.md": {
+    "intercom_article_id": "14432611",
+    "last_synced_checksum": "7bd514323470",
+    "collection_id": "19287566"
+  },
+  "founders/1.8-what-if-i-stop-using-fairmint.md": {
+    "intercom_article_id": "14432612",
+    "last_synced_checksum": "884009c2585a",
+    "collection_id": "19287566"
+  },
+  "founders/1.9-smart-contract-compromised.md": {
+    "intercom_article_id": "14432614",
+    "last_synced_checksum": "937d990333a9",
+    "collection_id": "19287566"
+  },
+  "founders/10.1-kyc-kyb-accreditation-aml.md": {
+    "intercom_article_id": "14432615",
+    "last_synced_checksum": "c7436c6031e1",
+    "collection": "10. Legal & Compliance (Conceptual / FAQ)",
+    "collection_id": "19287575"
+  },
+  "founders/10.2-transfer-restrictions.md": {
+    "intercom_article_id": "14432616",
+    "last_synced_checksum": "4f6ae74bf16d",
+    "collection_id": "19287575"
+  },
+  "founders/10.3-securities-exemptions.md": {
+    "intercom_article_id": "14432617",
+    "last_synced_checksum": "ba706a19202d",
+    "collection_id": "19287575"
+  },
+  "founders/2.0-fundraising-with-fairmint.md": {
+    "intercom_article_id": "14432618",
+    "last_synced_checksum": "f7e9f5667217",
+    "collection_id": "19287567"
+  },
+  "founders/2.1-create-fundraise-rollup.md": {
+    "intercom_article_id": "14432619",
+    "last_synced_checksum": "08031c77b3ad",
+    "collection_id": "19287567"
+  },
+  "founders/2.10-deal-page-design.md": {
+    "intercom_article_id": "14432620",
+    "last_synced_checksum": "1bd8c3cddbce",
+    "collection_id": "19287567"
+  },
+  "founders/2.11-manage-series-settings.md": {
+    "intercom_article_id": "14432621",
+    "last_synced_checksum": "688001868a40",
+    "collection_id": "19287567"
+  },
+  "founders/2.12-fundraising-for-us-based-c-corps.md": {
+    "intercom_article_id": "14432623",
+    "last_synced_checksum": "fdf7541dc881",
+    "collection_id": "19287567"
+  },
+  "founders/2.13-fundraising-for-llcs-and-non-us-companies.md": {
+    "intercom_article_id": "14432624",
+    "last_synced_checksum": "317084a7bec7",
+    "collection_id": "19287567"
+  },
+  "founders/2.15-soliciting-advertising-506b-vs-506c.md": {
+    "intercom_article_id": "14432625",
+    "last_synced_checksum": "850180ce390d",
+    "collection_id": "19287567"
+  },
+  "founders/2.16-use-your-own-legal-agreement.md": {
+    "intercom_article_id": "14432626",
+    "last_synced_checksum": "33fc89f69515",
+    "collection_id": "19287567"
+  },
+  "founders/2.2-create-fundraise-safe.md": {
+    "intercom_article_id": "14432627",
+    "last_synced_checksum": "3452d36c1ca5",
+    "collection_id": "19287567"
+  },
+  "founders/2.3-publish-fundraise.md": {
+    "intercom_article_id": "14432628",
+    "last_synced_checksum": "75e628b8aa26",
+    "collection_id": "19287567"
+  },
+  "founders/2.5-how-to-pause-resume-a-fundraise.md": {
+    "intercom_article_id": "14432629",
+    "last_synced_checksum": "838dbdcd3597",
+    "collection_id": "19287567"
+  },
+  "founders/2.6-how-to-end-a-fundraise.md": {
+    "intercom_article_id": "14432631",
+    "last_synced_checksum": "57a1b175ad97",
+    "collection_id": "19287567"
+  },
+  "founders/2.7-what-is-a-roll-up-investment.md": {
+    "intercom_article_id": "14432632",
+    "last_synced_checksum": "0b5bb7f6131b",
+    "collection_id": "19287567"
+  },
+  "founders/2.8-what-is-a-ticker-symbol.md": {
+    "intercom_article_id": "14432634",
+    "last_synced_checksum": "3db3fbee3581",
+    "collection_id": "19287567"
+  },
+  "founders/2.9-what-fundraising-templates-are-available.md": {
+    "intercom_article_id": "14432635",
+    "last_synced_checksum": "b491dfafe383",
+    "collection_id": "19287567"
+  },
+  "founders/3.1-upload-import-cap-table.md": {
+    "intercom_article_id": "14432636",
+    "last_synced_checksum": "f1264a83a15d",
+    "collection_id": "19287568"
+  },
+  "founders/3.2-can-i-import-old-investors-into-fairmint.md": {
+    "intercom_article_id": "14432637",
+    "last_synced_checksum": "fd120d8fb568",
+    "collection_id": "19287568"
+  },
+  "founders/3.3-can-i-manage-my-entire-cap-table-with-fairmint.md": {
+    "intercom_article_id": "14432638",
+    "last_synced_checksum": "1b27cfdb9ba0",
+    "collection_id": "19287568"
+  },
+  "founders/3.4-cap-table-summary-view.md": {
+    "intercom_article_id": "14432640",
+    "last_synced_checksum": "aeb8a13c49a9",
+    "collection_id": "19287568"
+  },
+  "founders/3.5-cap-table-holder-view.md": {
+    "intercom_article_id": "14432641",
+    "last_synced_checksum": "f88040701cbb",
+    "collection_id": "19287568"
+  },
+  "founders/3.6-cap-table-timeline-view.md": {
+    "intercom_article_id": "14432642",
+    "last_synced_checksum": "eb9b32b89aea",
+    "collection_id": "19287568"
+  },
+  "founders/3.7-pro-forma-cap-table.md": {
+    "intercom_article_id": "14432643",
+    "last_synced_checksum": "6af46c944865",
+    "collection_id": "19287568"
+  },
+  "founders/4.1-understanding-shares.md": {
+    "intercom_article_id": "14432644",
+    "last_synced_checksum": "1b3b2d5c5d28",
+    "collection_id": "19287569"
+  },
+  "founders/4.2-understanding-safes.md": {
+    "intercom_article_id": "14432645",
+    "last_synced_checksum": "42c3fa47d9fb",
+    "collection_id": "19287569"
+  },
+  "founders/4.3-understanding-warrants.md": {
+    "intercom_article_id": "14432646",
+    "last_synced_checksum": "8c5cea47f33e",
+    "collection_id": "19287569"
+  },
+  "founders/5.1-set-up-an-equity-grant.md": {
+    "intercom_article_id": "14432647",
+    "last_synced_checksum": "b32808148eb5",
+    "collection_id": "19287570"
+  },
+  "founders/5.2-manage-equity-grants.md": {
+    "intercom_article_id": "14432649",
+    "last_synced_checksum": "d9312c6e2577",
+    "collection_id": "19287570"
+  },
+  "founders/5.3-understanding-vesting-schedules.md": {
+    "intercom_article_id": "14432650",
+    "last_synced_checksum": "d58a8dfaa587",
+    "collection_id": "19287570"
+  },
+  "founders/6.1-view-manage-stakeholders.md": {
+    "intercom_article_id": "14432651",
+    "last_synced_checksum": "25b541b44738",
+    "collection_id": "19287571"
+  },
+  "founders/6.2-deal-invitation-links.md": {
+    "intercom_article_id": "14432652",
+    "last_synced_checksum": "4af17c377280",
+    "collection_id": "19287571"
+  },
+  "founders/6.3-how-to-block-an-investor.md": {
+    "intercom_article_id": "14432653",
+    "last_synced_checksum": "fcc940700092",
+    "collection_id": "19287571"
+  },
+  "founders/6.4-how-to-reset-an-investor-country.md": {
+    "intercom_article_id": "14432654",
+    "last_synced_checksum": "373cbe0fe294",
+    "collection_id": "19287571"
+  },
+  "founders/6.5-can-organizations-limit-investor-type-and-number.md": {
+    "intercom_article_id": "14432655",
+    "last_synced_checksum": "db1b35e16659",
+    "collection_id": "19287571"
+  },
+  "founders/6.6-view-manage-investments.md": {
+    "intercom_article_id": "14432656",
+    "last_synced_checksum": "5b7a586cdf1a",
+    "collection_id": "19287571"
+  },
+  "founders/7.1-filings-sec-form-d.md": {
+    "intercom_article_id": "14432657",
+    "last_synced_checksum": "1ff7a454b33e",
+    "collection_id": "19287572"
+  },
+  "founders/7.2-risk-factors.md": {
+    "intercom_article_id": "14432658",
+    "last_synced_checksum": "0b7fec547b10",
+    "collection_id": "19287572"
+  },
+  "founders/7.3-state-fees-blue-sky.md": {
+    "intercom_article_id": "14432659",
+    "last_synced_checksum": "fd4d1bc16306",
+    "collection_id": "19287572"
+  },
+  "founders/7.4-409a-report.md": {
+    "intercom_article_id": "14432661",
+    "last_synced_checksum": "567f3d138ccf",
+    "collection_id": "19287572"
+  },
+  "founders/7.5-jurisdictions.md": {
+    "intercom_article_id": "14432662",
+    "last_synced_checksum": "87807135fc2b",
+    "collection_id": "19287572"
+  },
+  "founders/8.1-documents-overview.md": {
+    "intercom_article_id": "14432663",
+    "last_synced_checksum": "1e786ab68a99",
+    "collection_id": "19287573"
+  },
+  "founders/8.2-generate-shareholder-register-pdf.md": {
+    "intercom_article_id": "14432664",
+    "last_synced_checksum": "55aac5ac795a",
+    "collection_id": "19287573"
+  },
+  "founders/9.1-general-settings.md": {
+    "intercom_article_id": "14432665",
+    "last_synced_checksum": "5cae26a63904",
+    "collection_id": "19287574"
+  },
+  "founders/9.2-bank-details-funding-options.md": {
+    "intercom_article_id": "14432666",
+    "last_synced_checksum": "af9655892d81",
+    "collection": "9. Settings",
+    "collection_id": "19287574"
+  },
+  "founders/9.3-team-management.md": {
+    "intercom_article_id": "14432667",
+    "last_synced_checksum": "07bed5b2ad96",
+    "collection": "9. Settings",
+    "collection_id": "19287574"
+  },
+  "founders/9.4-integrations.md": {
+    "intercom_article_id": "14432668",
+    "last_synced_checksum": "fa6302887028",
+    "collection": "9. Settings",
+    "collection_id": "19287574"
+  },
+  "founders/9.5-custom-domain.md": {
+    "intercom_article_id": "14432669",
+    "last_synced_checksum": "0c88feb951d1",
+    "collection": "9. Settings",
+    "collection_id": "19287574"
+  },
+  "founders/1.0-why-fairmint.md": {
+    "intercom_article_id": "14442114",
+    "last_synced_checksum": "5cb5093bdb4f",
+    "collection": "1. Getting Started & Overview",
+    "collection_id": "19287566"
+  }
+}

@@ -5,6 +5,20 @@ description: Auto-generated documentation for Canton Node SDK operations
 include:
   - _generated
 
+# Help-center / Intercom source (not part of the Jekyll API doc site)
+exclude:
+  - founders
+  - doc-agent
+  - investors
+  - AGENTS.md
+  - CLAUDE.md
+  - README.md
+  - TABLE-OF-CONTENTS.md
+  - review-checklist.md
+  - sync-manifest.json
+  - sync-to-intercom.py
+  - .gitignore
+
 collections:
   operations:
     output: true
