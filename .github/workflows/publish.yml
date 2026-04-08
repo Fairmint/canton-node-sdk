@@ -27,10 +27,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '18'
+          # Trusted publishing requires Node >= 22.14.0 (npm docs)
+          node-version: '22.14'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Upgrade npm
+        # Trusted publishing requires npm CLI >= 11.5.1
         run: npm install --global npm@^11.10.0
 
       - name: Install dependencies
@@ -45,10 +47,9 @@ jobs:
       - name: Prepare release
         run: npm run prepare-release
 
+      # Publishes via npm Trusted Publisher (OIDC); do not set NODE_AUTH_TOKEN here.
       - name: Publish to NPM
         run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create and push git tag
         run: |
@@ -63,8 +64,6 @@ jobs:
           git config --local user.name "GitHub Action"
           git tag -a "v$NEW_VERSION" -m "$CHANGELOG"
           git push origin "v$NEW_VERSION"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate documentation
         run: npm run docs
