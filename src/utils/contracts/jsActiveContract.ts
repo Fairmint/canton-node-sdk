@@ -44,7 +44,7 @@ function getContractEntryKeys(item: unknown): readonly string[] | undefined {
  */
 export function getJsActiveContractItems(
   items: readonly JsGetActiveContractsResponseItem[]
-): JsActiveContractItem[] {
+): readonly JsActiveContractItem[] {
   return items.map((item, index) => {
     if (!isJsActiveContractItem(item)) {
       throw new ValidationError('Expected getActiveContracts to return only canonical JsActiveContract entries', {
@@ -61,6 +61,6 @@ export function getJsActiveContractItems(
 /** Returns created events after validating that every row is a canonical `JsActiveContract`. */
 export function getJsActiveCreatedEvents(
   items: readonly JsGetActiveContractsResponseItem[]
-): JsActiveCreatedEvent[] {
+): readonly JsActiveCreatedEvent[] {
   return getJsActiveContractItems(items).map((item) => item.contractEntry.JsActiveContract.createdEvent);
 }
