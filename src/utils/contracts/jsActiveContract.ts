@@ -57,7 +57,9 @@ function getContractEntryKeys(item: unknown): readonly string[] | undefined {
  * Throws a `ValidationError` when the ledger returns another response variant such as `JsEmpty` or a malformed active
  * contract row missing `contractId`, `templateId`, or `createArgument`.
  */
-export function getJsActiveContractItems(items: readonly JsGetActiveContractsResponseItem[]): JsActiveContractItem[] {
+export function getJsActiveContractItems(
+  items: readonly JsGetActiveContractsResponseItem[]
+): readonly JsActiveContractItem[] {
   return items.map((item, index) => {
     if (!isJsActiveContractItem(item)) {
       throw new ValidationError(
@@ -75,6 +77,8 @@ export function getJsActiveContractItems(items: readonly JsGetActiveContractsRes
 }
 
 /** Returns created events after validating the minimal fields generic `JsActiveContract` consumers rely on. */
-export function getJsActiveCreatedEvents(items: readonly JsGetActiveContractsResponseItem[]): JsActiveCreatedEvent[] {
+export function getJsActiveCreatedEvents(
+  items: readonly JsGetActiveContractsResponseItem[]
+): readonly JsActiveCreatedEvent[] {
   return getJsActiveContractItems(items).map((item) => item.contractEntry.JsActiveContract.createdEvent);
 }
