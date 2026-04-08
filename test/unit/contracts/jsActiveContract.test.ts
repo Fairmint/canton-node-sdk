@@ -1,16 +1,36 @@
+import { type JsGetActiveContractsResponseItem } from '../../../src/clients/ledger-json-api/schemas/api/state';
 import { ValidationError } from '../../../src/core/errors';
 import {
   getJsActiveContractItems,
   getJsActiveCreatedEvents,
   isJsActiveContractItem,
-  type JsActiveContractItem,
 } from '../../../src/utils/contracts/jsActiveContract';
 
-const createJsActiveContractItem = (
+const createMinimalJsActiveContractItem = (
   contractId: string,
   templateId: string,
   owner = 'alice::fp'
-): JsActiveContractItem => ({
+): JsGetActiveContractsResponseItem =>
+  ({
+    workflowId: `workflow-${contractId}`,
+    contractEntry: {
+      JsActiveContract: {
+        createdEvent: {
+          contractId,
+          templateId,
+          createArgument: {
+            owner,
+          },
+        },
+      },
+    },
+  }) as unknown as JsGetActiveContractsResponseItem;
+
+const createFullJsActiveContractItem = (
+  contractId: string,
+  templateId: string,
+  owner = 'alice::fp'
+): JsGetActiveContractsResponseItem => ({
   workflowId: `workflow-${contractId}`,
   contractEntry: {
     JsActiveContract: {
@@ -38,11 +58,15 @@ const createJsActiveContractItem = (
 });
 
 describe('jsActiveContract helpers', () => {
-  it('identifies canonical JsActiveContract items', () => {
-    expect(isJsActiveContractItem(createJsActiveContractItem('contract-1', 'pkg:Module:Template'))).toBe(true);
+  it('accepts minimally-shaped JsActiveContract items', () => {
+    expect(isJsActiveContractItem(createMinimalJsActiveContractItem('contract-1', 'pkg:Module:Template'))).toBe(true);
   });
 
-  it('rejects non-canonical entries', () => {
+  it('also accepts full-schema JsActiveContract items', () => {
+    expect(isJsActiveContractItem(createFullJsActiveContractItem('contract-1', 'pkg:Module:Template'))).toBe(true);
+  });
+
+  it('rejects entries missing the minimum required created-event fields', () => {
     expect(
       isJsActiveContractItem({
         contractEntry: {
@@ -50,7 +74,6 @@ describe('jsActiveContract helpers', () => {
             createdEvent: {
               contractId: 'contract-1',
               templateId: 'pkg:Module:Template',
-              createArgument: {},
             },
           },
         },
@@ -62,8 +85,8 @@ describe('jsActiveContract helpers', () => {
 
   it('returns validated JsActiveContract items', () => {
     const items = [
-      createJsActiveContractItem('contract-1', 'pkg:Module:Template'),
-      createJsActiveContractItem('contract-2', 'pkg:Module:OtherTemplate'),
+      createMinimalJsActiveContractItem('contract-1', 'pkg:Module:Template'),
+      createMinimalJsActiveContractItem('contract-2', 'pkg:Module:OtherTemplate'),
     ];
 
     const result = getJsActiveContractItems(items);
@@ -75,8 +98,8 @@ describe('jsActiveContract helpers', () => {
 
   it('returns created events from validated JsActiveContract items', () => {
     const result = getJsActiveCreatedEvents([
-      createJsActiveContractItem('contract-1', 'pkg:Module:Template'),
-      createJsActiveContractItem('contract-2', 'pkg:Module:OtherTemplate'),
+      createMinimalJsActiveContractItem('contract-1', 'pkg:Module:Template'),
+      createMinimalJsActiveContractItem('contract-2', 'pkg:Module:OtherTemplate'),
     ]);
 
     expect(result.map((event) => event.contractId)).toEqual(['contract-1', 'contract-2']);
@@ -85,16 +108,18 @@ describe('jsActiveContract helpers', () => {
   it('throws when getActiveContracts returns a non-canonical entry', () => {
     expect(() =>
       getJsActiveCreatedEvents([
-        createJsActiveContractItem('contract-1', 'pkg:Module:Template'),
+        createMinimalJsActiveContractItem('contract-1', 'pkg:Module:Template'),
         { contractEntry: { JsEmpty: {} } },
       ])
     ).toThrow(ValidationError);
 
     expect(() =>
       getJsActiveContractItems([
-        createJsActiveContractItem('contract-1', 'pkg:Module:Template'),
+        createMinimalJsActiveContractItem('contract-1', 'pkg:Module:Template'),
         { contractEntry: { JsEmpty: {} } },
       ])
-    ).toThrow('Expected getActiveContracts to return only canonical JsActiveContract entries');
+    ).toThrow(
+      'Expected getActiveContracts to return only JsActiveContract entries with contractId, templateId, and createArgument'
+    );
   });
 });
