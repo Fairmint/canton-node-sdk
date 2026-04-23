@@ -9,6 +9,13 @@ export const UploadDarFileParamsSchema = z.object({
   filePath: z.string(),
   /** Optional submission ID for deduplication */
   submissionId: z.string().optional(),
+  /**
+   * When true (default), Canton vets all packages after upload and runs upgrade-compatibility checks.
+   * Set false to upload into the package store only; vet separately (e.g. with force flags) if needed.
+   */
+  vetAllPackages: z.boolean().optional(),
+  /** Synchronizer id for vetting when vetAllPackages is true (optional; Canton may auto-detect). */
+  synchronizerId: z.string().optional(),
 });
 
 export type UploadDarFileParams = z.infer<typeof UploadDarFileParamsSchema>;
@@ -36,6 +43,12 @@ export const UploadDarFile = createApiOperation<UploadDarFileParams, UploadDarFi
 
     if (params.submissionId) {
       queryParams.append('submission_id', params.submissionId);
+    }
+    if (params.vetAllPackages === false) {
+      queryParams.append('vetAllPackages', 'false');
+    }
+    if (params.synchronizerId) {
+      queryParams.append('synchronizerId', params.synchronizerId);
     }
 
     const queryString = queryParams.toString();
