@@ -154,6 +154,6 @@ const { partyId } = await createExternalParty({
 
 ## More Resources
 
-- [SDK Documentation](https://sdk.canton.fairmint.com/)
-- [External Signing Guide](../docs/EXTERNAL_SIGNING.md)
+- [Canton Node SDK documentation](https://canton-node-sdk.fairmint.com/)
+- [External signing guide](https://canton-node-sdk.fairmint.com/external-signing/)
 - [Integration Tests](../test/integration/) - More complex examples

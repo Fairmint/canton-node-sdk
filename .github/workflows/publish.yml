@@ -13,7 +13,6 @@ jobs:
     permissions:
       contents: write
       packages: write
-      pages: write
       id-token: write
 
     steps:
@@ -65,30 +64,3 @@ jobs:
           git tag -a "v$NEW_VERSION" -m "$CHANGELOG"
           git push origin "v$NEW_VERSION"
 
-      - name: Generate documentation
-        run: npm run docs
-
-      - name: Setup Ruby and Jekyll
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.2'
-          bundler: '2.4.22'
-          bundler-cache: true
-          working-directory: ./docs
-
-      - name: Build Jekyll site
-        run: npm run docs:build
-        env:
-          JEKYLL_ENV: production
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v6
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: './docs/_site'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
