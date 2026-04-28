@@ -13,6 +13,9 @@ export type AsyncSubmitParams = z.infer<typeof AsyncSubmitParamsSchema>;
 
 export type AsyncSubmitResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
+/**
+ * Submits commands without blocking (`async-submit`). Pair with completion polling/stream for confirmation.
+ */
 export const AsyncSubmit = createApiOperation<AsyncSubmitParams, AsyncSubmitResponse>({
   paramsSchema: AsyncSubmitParamsSchema,
   method: 'POST',

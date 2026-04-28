@@ -16,7 +16,12 @@ export interface ExecuteExternalTransactionOptions {
   readonly deduplicationPeriod?: InteractiveSubmissionExecuteRequest['deduplicationPeriod'];
 }
 
-/** Submit a previously prepared and externally signed interactive submission to the ledger. */
+/**
+ * Executes an interactive submission after offline signing (`interactiveSubmissionExecute`).
+ *
+ * @param options - Prepared blob from {@link prepareExternalTransaction}, submission id, per-party signatures
+ * @returns Validator response payload from interactive submission execute
+ */
 export async function executeExternalTransaction(
   options: ExecuteExternalTransactionOptions
 ): Promise<InteractiveSubmissionExecuteResponse> {

@@ -22,7 +22,23 @@ export interface PrepareExternalTransactionResult extends InteractiveSubmissionP
   readonly commandId: string;
 }
 
-/** Convenience helper for preparing an interactive submission that will be signed off-ledger. */
+/**
+ * Runs interactive submission **prepare** so payloads can be signed offline (`interactiveSubmissionPrepare`).
+ *
+ * @param options - Ledger client, commands, identity (`userId`, `actAs`), synchronizer scope, optional disclosures
+ * @returns Prepared transaction blob plus echoed `commandId`
+ *
+ * @example
+ * ```ts
+ * const prepared = await prepareExternalTransaction({
+ *   ledgerClient,
+ *   commands: [{ ExerciseCommand: { … } }],
+ *   userId,
+ *   actAs: [partyId],
+ *   synchronizerId,
+ * });
+ * ```
+ */
 export async function prepareExternalTransaction(
   options: PrepareExternalTransactionOptions
 ): Promise<PrepareExternalTransactionResult> {
