@@ -13,6 +13,11 @@ export type SubmitAndWaitParams = z.infer<typeof SubmitAndWaitParamsSchema>;
 
 export type SubmitAndWaitResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
+/**
+ * Submits commands synchronously and blocks until completion (`submit-and-wait`).
+ *
+ * `commandId` defaults when omitted; `actAs` defaults to the client's configured party when omitted.
+ */
 export const SubmitAndWait = createApiOperation<SubmitAndWaitParams, SubmitAndWaitResponse>({
   paramsSchema: SubmitAndWaitParamsSchema,
   method: 'POST',

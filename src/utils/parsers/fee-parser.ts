@@ -1,4 +1,8 @@
-/** Types for fee-related data structures */
+/**
+ * Helpers for decoding Amulet fee breakdown from exercised transaction trees (`AmuletRules_Transfer`).
+ *
+ * Typical flow: submit a transfer, read `transactionTreeById`, pass `eventTree` into {@link parseFeesFromEventTree}.
+ */
 
 import { type TreeEvent } from '../../clients/ledger-json-api/schemas/api/events';
 import { ValidationError } from '../../core/errors';
@@ -130,10 +134,17 @@ function findAmuletRulesTransferEvent(eventTree: Record<string, TreeEvent>): Tre
 }
 
 /**
- * Parses fee information from an event tree (Record<string, TreeEvent>)
+ * Parses fee information from an event tree (`Record<string, TreeEvent>`), usually from a transaction tree response.
  *
- * @param eventTree - The event tree object
- * @returns FeeAnalysis object with extracted fee information and validation
+ * @param eventTree - Event tree containing an `AmuletRules_Transfer` exercise
+ * @returns Structured totals, per-party balance deltas, and simple arithmetic validation flags
+ * @throws ValidationError when no transferable fee-bearing exercise exists in the tree
+ *
+ * @example
+ * ```ts
+ * const analysis = parseFeesFromEventTree(transaction.transactionTreeById.eventTree);
+ * console.log(analysis.totalFees, analysis.feeBreakdown.holdingFees);
+ * ```
  */
 export function parseFeesFromEventTree(eventTree: Record<string, TreeEvent>): FeeAnalysis {
   const amuletRulesEvent = findAmuletRulesTransferEvent(eventTree);

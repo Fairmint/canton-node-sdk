@@ -9,9 +9,7 @@ interface SubmitParams {
 }
 
 /**
- * Builder for batching multiple commands into a single ledger submission.
- *
- * Uses a fluent API so you can chain calls:
+ * Builder for batching multiple commands into a single ledger submission using fluent chaining.
  *
  * @example
  *   const result = await new TransactionBatch(client, [partyId])
@@ -26,6 +24,11 @@ export class TransactionBatch {
   private disclosedContracts: DisclosedContract[] = [];
   private commands: Command[] = [];
 
+  /**
+   * @param client - Ledger client performing submits (`submitAndWait`, etc.).
+   * @param actAs - Parties authorized as controllers/signer contexts on submissions (typically `readAs[0]` sender chain).
+   * @param readAs - Extra disclosure/read scopes forwarded verbatim when omitted elsewhere on submissions.
+   */
   constructor(client: LedgerJsonApiClient, actAs: readonly string[], readAs?: readonly string[]) {
     this.client = client;
     this.actAs = [...actAs];

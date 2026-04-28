@@ -29,7 +29,7 @@ export interface CantonConfig {
   readonly managedParties?: readonly string[];
   /** OAuth2 auth URL (if different from default). */
   readonly authUrl?: string;
-  /** Override API configurations per client type. */
+  /** Override API endpoints or timeouts per service (`ledgerJsonApi`, `validatorApi`, `scanApi`). */
   readonly apis?: ClientConfig['apis'];
 }
 
@@ -71,9 +71,12 @@ export class Canton {
   /**
    * Creates a new Canton unified client.
    *
+   * @param config - Connection targets (`network`, optional `provider`) plus identity/logging/API overrides.
+   *
    * @example
    *   const canton = new Canton({ network: 'localnet' });
    *
+   * @example
    *   const canton = new Canton({
    *     network: 'devnet',
    *     provider: '5n',

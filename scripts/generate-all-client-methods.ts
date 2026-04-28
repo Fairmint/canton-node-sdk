@@ -290,11 +290,20 @@ function generateClientFile(clientConfig: ClientConfig): void {
   const needsWsImports = allOps.some((op) => op.kind === 'ws');
   const wsImports = needsWsImports ? `\nimport { WebSocketHandlers, WebSocketSubscription } from '../../core/ws';` : '';
 
+  const clientPurpose =
+    name === 'LedgerJsonApiClient'
+      ? 'Ledger JSON API — synchronous/async ledger submissions, ACS snapshots, packages, parties, interactive submissions.'
+      : name === 'ValidatorApiClient'
+        ? 'Validator HTTP API — wallet balances, onboarding, onboarding proxies into Scan + mining rounds.'
+        : name === 'ScanApiClient'
+          ? 'Public Scan HTTP API — infrastructure snapshots + ACS-derived telemetry without dedicated wallet secrets.'
+          : '';
+
   const content = `import { ${baseClassImport}, CantonRuntime } from '${baseClassPath}';
 ${opImports}
 ${wsImports}
 
-/** Client for interacting with Canton's ${name.replace('Client', '')} */
+/** ${clientPurpose} */
 export class ${name} extends ${baseClass} {
 ${methodDecls}
 
