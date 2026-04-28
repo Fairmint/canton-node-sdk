@@ -5,42 +5,50 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import ts from 'typescript';
+import type { Program } from 'typescript';
+import {
+  createSdkProgram,
+  fallbackClientMethodDocs,
+  findPublicMethodLine,
+  parseClientValueImports,
+  resolveClientMethodDocs,
+  uniqueOps,
+} from './reference-client-method-docs';
 
 const REPO_ROOT = path.resolve(__dirname, '..');
+
 const SCHEMA_VERSION = 2 as const;
-const GITHUB_BLOB_BASE = 'https://github.com/Fairmint/canton-node-sdk/blob/main';
 
 type Transport = 'http' | 'websocket';
 
-export interface ReferenceParam {
+export interface ReferenceParamDoc {
   name: string;
   type: string;
   optional?: boolean;
-  rest?: boolean;
-  description?: string;
 }
 
 export interface ReferenceMember {
-  id?: string;
   kind: string;
   name: string;
+  id?: string;
   summary?: string;
   sourceFile?: string;
   sourceLine?: number;
   sourceUrl?: string;
+  /** Human-readable TypeScript signature (expanded types). */
   signature?: string;
-  params?: ReferenceParam[];
+  /** Raw `method!: (params: Parameters<InstanceType<…>>) => …` from the generated client. */
+  implementationSignature?: string;
+  inputSummary?: string;
+  returnSummary?: string;
+  params?: ReferenceParamDoc[];
   returnType?: string;
   parent?: string;
   receiver?: string;
   importPath?: string;
   category?: string;
-  requirements?: string[];
-  examples?: string[];
   operationClasses?: string[];
   transport?: Transport;
-  /** Submembers (e.g. client methods) */
   members?: ReferenceMember[];
 }
 
@@ -61,57 +69,138 @@ export interface ReferenceManifest {
   };
   generatedAt: string;
   categories: ReferenceCategory[];
-  functions: ReferenceMember[];
 }
+
+const CLIENT_RECEIVER: Record<string, string> = {
+  LedgerJsonApiClient: 'canton.ledger',
+  ValidatorApiClient: 'canton.validator',
+  ScanApiClient: 'canton.scan',
+};
 
 /** Satisfy `exactOptionalPropertyTypes` — omit keys when value is undefined */
 function member(input: {
-  id?: string | undefined;
   kind: string;
   name: string;
-  summary?: string | undefined;
-  sourceFile?: string | undefined;
-  sourceLine?: number | undefined;
-  sourceUrl?: string | undefined;
-  signature?: string | undefined;
-  params?: ReferenceParam[] | undefined;
-  returnType?: string | undefined;
-  parent?: string | undefined;
-  receiver?: string | undefined;
-  importPath?: string | undefined;
-  category?: string | undefined;
-  requirements?: string[] | undefined;
-  examples?: string[] | undefined;
-  operationClasses?: string[] | undefined;
-  transport?: Transport | undefined;
-  members?: ReferenceMember[] | undefined;
+  id?: string;
+  summary?: string;
+  sourceFile?: string;
+  sourceLine?: number;
+  sourceUrl?: string;
+  signature?: string;
+  implementationSignature?: string;
+  inputSummary?: string;
+  returnSummary?: string;
+  params?: ReferenceParamDoc[];
+  returnType?: string;
+  parent?: string;
+  receiver?: string;
+  importPath?: string;
+  category?: string;
+  operationClasses?: string[];
+  transport?: Transport;
+  members?: ReferenceMember[];
 }): ReferenceMember {
   const m: ReferenceMember = { kind: input.kind, name: input.name };
-  for (const key of [
-    'id',
-    'summary',
-    'sourceFile',
-    'sourceLine',
-    'sourceUrl',
-    'signature',
-    'params',
-    'returnType',
-    'parent',
-    'receiver',
-    'importPath',
-    'category',
-    'requirements',
-    'examples',
-    'operationClasses',
-    'transport',
-    'members',
-  ] as const) {
-    const value = input[key];
-    if (value !== undefined) {
-      (m as unknown as Record<string, unknown>)[key] = value;
-    }
-  }
+  if (input.id !== undefined) m.id = input.id;
+  if (input.summary !== undefined) m.summary = input.summary;
+  if (input.sourceFile !== undefined) m.sourceFile = input.sourceFile;
+  if (input.sourceLine !== undefined) m.sourceLine = input.sourceLine;
+  if (input.sourceUrl !== undefined) m.sourceUrl = input.sourceUrl;
+  if (input.signature !== undefined) m.signature = input.signature;
+  if (input.implementationSignature !== undefined) m.implementationSignature = input.implementationSignature;
+  if (input.inputSummary !== undefined) m.inputSummary = input.inputSummary;
+  if (input.returnSummary !== undefined) m.returnSummary = input.returnSummary;
+  if (input.params !== undefined) m.params = input.params;
+  if (input.returnType !== undefined) m.returnType = input.returnType;
+  if (input.parent !== undefined) m.parent = input.parent;
+  if (input.receiver !== undefined) m.receiver = input.receiver;
+  if (input.importPath !== undefined) m.importPath = input.importPath;
+  if (input.category !== undefined) m.category = input.category;
+  if (input.operationClasses !== undefined) m.operationClasses = input.operationClasses;
+  if (input.transport !== undefined) m.transport = input.transport;
+  if (input.members !== undefined) m.members = input.members;
   return m;
+}
+
+function githubBlobMainBase(repoUrl: string | undefined): string {
+  const raw = repoUrl?.replace(/^git\+/, '').replace(/\.git\s*$/, '').trim() ?? '';
+  const m = /github\.com[/:]([^/]+\/[^/]+)/.exec(raw);
+  if (m?.[1]) return `https://github.com/${m[1]}/blob/main`;
+  return 'https://github.com/Fairmint/canton-node-sdk/blob/main';
+}
+
+function implementationSignatureFromParsed(methodName: string, signatureField: string): string {
+  const idx = signatureField.indexOf(': ');
+  const tail = idx >= 0 ? signatureField.slice(idx + 2) : signatureField;
+  return `${methodName}!: ${tail}`;
+}
+
+function enrichGeneratedClientMethods(
+  program: Program | undefined,
+  generatedAbs: string,
+  methods: ReferenceMember[],
+  className: string,
+  blobBase: string
+): ReferenceMember[] {
+  const content = readText(generatedAbs);
+  const importMap = parseClientValueImports(content, generatedAbs);
+  const receiver = CLIENT_RECEIVER[className] ?? className;
+  const importPath = '@fairmint/canton-node-sdk';
+  const relSf = rel(generatedAbs);
+
+  return methods.map((m) => {
+    if (m.kind !== 'client-method') return m;
+    const line = findPublicMethodLine(content, m.name);
+    const implSig = implementationSignatureFromParsed(m.name, m.signature ?? '');
+    const opNames = uniqueOps(extractInstanceTypes(m.signature ?? ''));
+    const transport = m.transport ?? 'http';
+
+    const sigTail =
+      m.signature && m.signature.includes(': ') ? m.signature.slice(m.signature.indexOf(': ') + 2) : '';
+
+    const resolved =
+      program &&
+      resolveClientMethodDocs(program, importMap, {
+        methodName: m.name,
+        implementationSignature: implSig,
+        operationNames: opNames.length > 0 ? opNames : (m.operationClasses ?? []),
+        transport,
+        clientShimTail: sigTail,
+      });
+    const docs =
+      resolved ??
+      fallbackClientMethodDocs({
+        methodName: m.name,
+        implementationSignature: implSig,
+        operationNames: opNames.length > 0 ? opNames : (m.operationClasses ?? []),
+        transport,
+      });
+
+    const sourceUrl =
+      line !== undefined ? `${blobBase}/${relSf.replace(/^\//, '')}#L${line}` : undefined;
+
+    return member({
+      kind: 'client-method',
+      name: m.name,
+      id: `${className}.${m.name}`,
+      ...(m.summary !== undefined ? { summary: m.summary } : {}),
+      sourceFile: m.sourceFile ?? relSf,
+      ...(line !== undefined ? { sourceLine: line } : {}),
+      ...(sourceUrl !== undefined ? { sourceUrl } : {}),
+      signature: docs.signature,
+      implementationSignature: docs.implementationSignature,
+      ...(docs.params !== undefined && docs.params.length > 0 ? { params: docs.params } : {}),
+      ...(docs.returnType !== undefined ? { returnType: docs.returnType } : {}),
+      inputSummary: docs.inputSummary,
+      returnSummary: docs.returnSummary,
+      operationClasses: docs.operationClasses,
+      parent: className,
+      receiver,
+      importPath,
+      category: className,
+      ...(transport !== undefined ? { transport } : {}),
+    });
+  });
 }
 
 const GENERATED_CLIENTS: Array<{ id: string; title: string; generatedFile: string }> = [
@@ -140,6 +229,20 @@ function rel(p: string): string {
   return path.relative(REPO_ROOT, p).replace(/\\/g, '/');
 }
 
+function firstParagraph(jsdoc: string | undefined): string | undefined {
+  if (!jsdoc) return undefined;
+  const body = jsdoc
+    .replace(/^\/\*\*\s*/s, '')
+    .replace(/\s*\*\/$/s, '')
+    .split('\n')
+    .map((line) => line.replace(/^\s*\*\s?/, '').replace(/^\s*/, ''))
+    .join('\n')
+    .trim();
+  const para = body.split(/\n\s*\n|\n\s*@/)[0];
+  const trimmed = para?.trim();
+  return trimmed === undefined || trimmed === '' ? undefined : trimmed;
+}
+
 function inferTransport(signature: string): Transport {
   if (
     signature.includes('WebSocketHandlers') ||
@@ -161,164 +264,52 @@ function extractInstanceTypes(signature: string): string[] {
   return out;
 }
 
-
-let cachedProgram: ts.Program | undefined;
-let cachedChecker: ts.TypeChecker | undefined;
-
-function createReferenceProgram(): ts.Program {
-  if (cachedProgram) return cachedProgram;
-  const configPath = ts.findConfigFile(REPO_ROOT, ts.sys.fileExists, 'tsconfig.json');
-  if (!configPath) throw new Error('Unable to find tsconfig.json');
-  const parsedConfig = ts.getParsedCommandLineOfConfigFile(configPath, {}, ts.sys as unknown as ts.ParseConfigFileHost);
-  if (!parsedConfig) throw new Error('Unable to parse tsconfig.json');
-  cachedProgram = ts.createProgram({ rootNames: parsedConfig.fileNames, options: parsedConfig.options });
-  cachedChecker = cachedProgram.getTypeChecker();
-  return cachedProgram;
+/** Take the last Jsdoc block immediately before a method's `public` line (avoids picking up the class banner). */
+function extractTrailingJsDoc(before: string): string | undefined {
+  const idx = before.lastIndexOf('/**');
+  if (idx < 0) return undefined;
+  const rest = before.slice(idx);
+  const end = rest.indexOf('*/');
+  if (end < 0) return undefined;
+  const body = rest.slice(3, end).trim();
+  if (!body) return undefined;
+  return firstParagraph(`/**\n${body}\n */`);
 }
 
-function checker(): ts.TypeChecker {
-  if (!cachedChecker) cachedChecker = createReferenceProgram().getTypeChecker();
-  return cachedChecker;
-}
-
-function sourceInfo(node: ts.Node): { sourceFile: string; sourceLine: number; sourceUrl: string } {
-  const sf = node.getSourceFile();
-  const sourceFile = rel(sf.fileName);
-  const sourceLine = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
-  return { sourceFile, sourceLine, sourceUrl: `${GITHUB_BLOB_BASE}/${sourceFile}#L${sourceLine}` };
-}
-
-function typeText(type: ts.Type, node: ts.Node): string {
-  return checker().typeToString(
-    type,
-    node,
-    ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
-  );
-}
-
-function docsFromSymbol(symbol: ts.Symbol | undefined): string | undefined {
-  if (!symbol) return undefined;
-  const text = ts.displayPartsToString(symbol.getDocumentationComment(checker())).trim();
-  return text === '' ? undefined : text;
-}
-
-function paramDocs(sig: ts.Signature): Map<string, string> {
-  const out = new Map<string, string>();
-  for (const tag of sig.getJsDocTags()) {
-    if (tag.name !== 'param' || !tag.text?.length) continue;
-    const [first, ...rest] = tag.text.map((p) => p.text).join('').split(/\s+/);
-    if (first) out.set(first, rest.join(' ').trim());
-  }
-  return out;
-}
-
-function signatureParams(sig: ts.Signature, node: ts.Node): ReferenceParam[] {
-  const docs = paramDocs(sig);
-  return sig.parameters.map((sym) => {
-    const decl = sym.valueDeclaration;
-    const optional = Boolean(
-      decl && ((ts.isParameter(decl) && decl.questionToken !== undefined) || (ts.isPropertyDeclaration(decl) && decl.questionToken !== undefined))
-    );
-    const rest = Boolean(decl && ts.isParameter(decl) && decl.dotDotDotToken !== undefined);
-    const p: ReferenceParam = { name: sym.getName(), type: typeText(checker().getTypeOfSymbolAtLocation(sym, decl ?? node), decl ?? node) };
-    if (optional) p.optional = true;
-    if (rest) p.rest = true;
-    const desc = docs.get(sym.getName()) ?? docsFromSymbol(sym);
-    if (desc) p.description = desc;
-    return p;
-  });
-}
-
-function callableFromSignature(input: {
-  id: string;
-  kind: string;
-  name: string;
-  parent?: string | undefined;
-  receiver?: string | undefined;
-  importPath: string;
-  category: string;
-  node: ts.Node;
-  signature: ts.Signature;
-  summary?: string | undefined;
-  operationClasses?: string[] | undefined;
-  transport?: Transport | undefined;
-}): ReferenceMember {
-  const ret = checker().getReturnTypeOfSignature(input.signature);
-  const info = sourceInfo(input.node);
-  return member({
-    id: input.id,
-    kind: input.kind,
-    name: input.name,
-    ...(input.summary !== undefined ? { summary: input.summary } : {}),
-    ...info,
-    signature: `${input.name}${checker().signatureToString(input.signature, input.node, ts.TypeFormatFlags.NoTruncation)}`,
-    params: signatureParams(input.signature, input.node),
-    returnType: typeText(ret, input.node),
-    ...(input.parent !== undefined ? { parent: input.parent } : {}),
-    ...(input.receiver !== undefined ? { receiver: input.receiver } : {}),
-    importPath: input.importPath,
-    category: input.category,
-    ...(input.operationClasses !== undefined ? { operationClasses: input.operationClasses } : {}),
-    ...(input.transport !== undefined ? { transport: input.transport } : {}),
-  });
-}
-
-function findClassDeclaration(filePath: string, name: string): ts.ClassDeclaration | undefined {
-  const sf = createReferenceProgram().getSourceFile(filePath);
-  let found: ts.ClassDeclaration | undefined;
-  const visit = (node: ts.Node): void => {
-    if (ts.isClassDeclaration(node) && node.name?.text === name) {
-      found = node;
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  if (sf) visit(sf);
-  return found;
-}
-
-function publicMethodSignature(node: ts.MethodDeclaration | ts.ConstructorDeclaration): ts.Signature | undefined {
-  const mods = ts.getCombinedModifierFlags(node);
-  if (mods & ts.ModifierFlags.Private || mods & ts.ModifierFlags.Protected) return undefined;
-  return checker().getSignatureFromDeclaration(node);
-}
-
-/** Parse generated client classes with the TypeScript checker for real params/returns. */
+/** Parse `LedgerJsonApiClient.generated.ts` (etc.) for class + public method shims. */
 function parseGeneratedClient(generatedFile: string): {
   className: string;
   classSummary?: string;
   methods: ReferenceMember[];
 } {
-  const sf = createReferenceProgram().getSourceFile(generatedFile);
-  const className = path.basename(generatedFile, '.generated.ts');
-  const cls = findClassDeclaration(generatedFile, className);
-  if (!sf || !cls) return { className, methods: [] };
-  const classSummary = docsFromSymbol(checker().getSymbolAtLocation(cls.name ?? cls));
-  const methods: ReferenceMember[] = [];
+  const content = readText(generatedFile);
+  const classMatch = /(?:\/\*\*\s*([\s\S]*?)\s*\*\/\s*)?export\s+class\s+(\w+)/.exec(content);
+  const className = classMatch?.[2] ?? path.basename(generatedFile, '.ts');
+  const classSummary = firstParagraph(classMatch?.[1]);
 
-  for (const node of cls.members) {
-    if (!ts.isPropertyDeclaration(node) || !ts.isIdentifier(node.name)) continue;
-    const name = node.name.text;
-    if (name.startsWith('_')) continue;
-    const sig = checker().getTypeAtLocation(node).getCallSignatures()[0];
-    if (!sig) continue;
-    const declarationText = node.getText(sf).replace(/^public\s+/, '').replace(/;$/, '').trim();
-    const ops = extractInstanceTypes(declarationText);
-    const callable = callableFromSignature({
-      id: `${className}.${name}`,
-      kind: 'client-method',
-      name,
-      parent: className,
-      receiver: `canton.${className.replace(/ApiClient$/, '').replace(/^LedgerJson$/, 'ledger').replace(/^Validator$/, 'validator').replace(/^Scan$/, 'scan')}`,
-      importPath: '@fairmint/canton-node-sdk',
-      category: className,
-      node,
-      signature: sig,
-      summary: docsFromSymbol(checker().getSymbolAtLocation(node.name)),
-      operationClasses: ops.length > 0 ? ops : undefined,
-      transport: inferTransport(declarationText),
-    });
-    methods.push({ ...callable, signature: declarationText });
+  const methods: ReferenceMember[] = [];
+  const methodDecl = /^\s*public\s+(\w+)!\s*:\s*([^;]+);/gm;
+  let m: RegExpExecArray | null;
+  while ((m = methodDecl.exec(content)) !== null) {
+    const name = m[1];
+    const sigRaw = m[2];
+    if (name === undefined || sigRaw === undefined) continue;
+    const before = content.slice(Math.max(0, (m.index ?? 0) - 12000), m.index ?? 0);
+    const summary = extractTrailingJsDoc(before);
+    const signature = `${name}: ${sigRaw.trim()}`;
+    const ops = extractInstanceTypes(sigRaw);
+    methods.push(
+      member({
+        kind: 'client-method',
+        name,
+        ...(summary !== undefined ? { summary } : {}),
+        sourceFile: rel(generatedFile),
+        signature,
+        ...(ops.length > 0 ? { operationClasses: ops } : {}),
+        parent: className,
+        transport: inferTransport(sigRaw),
+      })
+    );
   }
 
   const out: { className: string; classSummary?: string; methods: ReferenceMember[] } = {
@@ -341,81 +332,41 @@ function extractExportStarFrom(spec: string, fromDir: string): string | undefine
 }
 
 function scanDirectExports(tsPath: string, categoryLabel: string): ReferenceMember[] {
-  const sf = createReferenceProgram().getSourceFile(tsPath);
-  if (!sf) return [];
+  const content = readText(tsPath);
   const out: ReferenceMember[] = [];
 
-  const addDeclaration = (node: ts.Node, kind: string, name: string, sig?: ts.Signature): void => {
-    if (name.startsWith('_')) return;
-    const symbol = 'name' in node && node.name ? checker().getSymbolAtLocation(node.name as ts.Node) : undefined;
-    if (sig) {
-      out.push(
-        callableFromSignature({
-          id: `${categoryLabel}.${name}`,
-          kind: `core-${kind}`,
-          name,
-          importPath: '@fairmint/canton-node-sdk',
-          category: categoryLabel,
-          node,
-          signature: sig,
-          summary: docsFromSymbol(symbol),
-        })
-      );
-      return;
-    }
-    const info = sourceInfo(node);
+  const tryAdd = (kind: string | undefined, name: string | undefined, jsdoc: string | undefined): void => {
+    // Skip private/internal-looking names
+    if (kind === undefined || name === undefined || name.startsWith('_')) return;
+    const summary = firstParagraph(jsdoc);
     out.push(
       member({
-        id: `${categoryLabel}.${name}`,
         kind: `core-${kind}`,
         name,
-        ...(docsFromSymbol(symbol) !== undefined ? { summary: docsFromSymbol(symbol) } : {}),
-        ...info,
+        ...(summary !== undefined ? { summary } : {}),
+        sourceFile: rel(tsPath),
         parent: categoryLabel,
-        importPath: '@fairmint/canton-node-sdk',
-        category: categoryLabel,
       })
     );
   };
 
-  for (const stmt of sf.statements) {
-    const mods = ts.getCombinedModifierFlags(stmt as unknown as ts.Declaration);
-    const exported = Boolean(mods & ts.ModifierFlags.Export) || ts.isExportDeclaration(stmt);
-    if (!exported) continue;
-    if (ts.isFunctionDeclaration(stmt) && stmt.name) {
-      const sig = checker().getSignatureFromDeclaration(stmt);
-      addDeclaration(stmt, 'function', stmt.name.text, sig);
-    } else if (ts.isClassDeclaration(stmt) && stmt.name) {
-      addDeclaration(stmt, 'class', stmt.name.text);
-      for (const m of stmt.members) {
-        if (!ts.isMethodDeclaration(m) || !ts.isIdentifier(m.name)) continue;
-        const sig = publicMethodSignature(m);
-        if (sig) {
-          out.push(
-            callableFromSignature({
-              id: `${stmt.name.text}.${m.name.text}`,
-              kind: 'method',
-              name: m.name.text,
-              parent: stmt.name.text,
-              receiver: stmt.name.text,
-              importPath: '@fairmint/canton-node-sdk',
-              category: categoryLabel,
-              node: m,
-              signature: sig,
-              summary: docsFromSymbol(checker().getSymbolAtLocation(m.name)),
-            })
-          );
-        }
-      }
-    } else if ((ts.isInterfaceDeclaration(stmt) || ts.isTypeAliasDeclaration(stmt) || ts.isEnumDeclaration(stmt)) && stmt.name) {
-      addDeclaration(stmt, ts.isInterfaceDeclaration(stmt) ? 'interface' : ts.isTypeAliasDeclaration(stmt) ? 'type' : 'enum', stmt.name.text);
-    } else if (ts.isVariableStatement(stmt)) {
-      for (const decl of stmt.declarationList.declarations) {
-        if (!ts.isIdentifier(decl.name)) continue;
-        const sig = checker().getTypeAtLocation(decl).getCallSignatures()[0];
-        addDeclaration(decl, sig ? 'function' : 'const', decl.name.text, sig);
-      }
-    }
+  const re =
+    /(?:\/\*\*\s*([\s\S]*?)\s*\*\/\s*)?(?:export\s+(?:declare\s+)?)(?:abstract\s+)?(class|interface|type|enum)\s+(\w+)/g;
+  let mm: RegExpExecArray | null;
+  while ((mm = re.exec(content)) !== null) {
+    tryAdd(mm[2], mm[3], mm[1]);
+  }
+
+  const reFn =
+    /(?:\/\*\*\s*([\s\S]*?)\s*\*\/\s*)?export\s+(?:async\s+)?function\s+(\w+)\s*\(/g;
+  while ((mm = reFn.exec(content)) !== null) {
+    tryAdd('function', mm[2], mm[1]);
+  }
+
+  const reConst =
+    /(?:\/\*\*\s*([\s\S]*?)\s*\*\/\s*)?export\s+const\s+(\w+)\s*(?::|=)/g;
+  while ((mm = reConst.exec(content)) !== null) {
+    tryAdd('const', mm[2], mm[1]);
   }
 
   return out;
@@ -481,88 +432,58 @@ function dedupeMembers(members: ReferenceMember[]): ReferenceMember[] {
 
 function parseCantonEntry(): ReferenceMember[] {
   const cantonPath = path.join(REPO_ROOT, 'src/Canton.ts');
-  const sf = createReferenceProgram().getSourceFile(cantonPath);
-  const cls = findClassDeclaration(cantonPath, 'Canton');
+  const content = readText(cantonPath);
   const members: ReferenceMember[] = [];
 
-  if (sf) {
-    for (const stmt of sf.statements) {
-      if (ts.isInterfaceDeclaration(stmt) && stmt.name.text === 'CantonConfig') {
-        for (const prop of stmt.members) {
-          if (!ts.isPropertySignature(prop) || !ts.isIdentifier(prop.name)) continue;
-          const info = sourceInfo(prop);
-          members.push(
-            member({
-              id: `CantonConfig.${prop.name.text}`,
-              kind: 'config-field',
-              name: prop.name.text,
-              ...(docsFromSymbol(checker().getSymbolAtLocation(prop.name)) !== undefined
-                ? { summary: docsFromSymbol(checker().getSymbolAtLocation(prop.name)) }
-                : {}),
-              ...info,
-              returnType: prop.type ? prop.type.getText(sf) : typeText(checker().getTypeAtLocation(prop), prop),
-              parent: 'CantonConfig',
-              importPath: '@fairmint/canton-node-sdk',
-              category: 'Canton',
-            })
-          );
-        }
-      }
-    }
-  }
-
-  if (cls) {
-    const classSymbol = cls.name ? checker().getSymbolAtLocation(cls.name) : undefined;
-    members.push(
-      member({
-        id: 'Canton',
-        kind: 'class',
-        name: 'Canton',
-        ...(docsFromSymbol(classSymbol) !== undefined ? { summary: docsFromSymbol(classSymbol) } : {}),
-        ...sourceInfo(cls),
-        importPath: '@fairmint/canton-node-sdk',
-        category: 'Canton',
-      })
-    );
-
-    for (const node of cls.members) {
-      if (ts.isConstructorDeclaration(node)) {
-        const sig = publicMethodSignature(node);
-        if (sig) {
-          members.push(
-            callableFromSignature({
-              id: 'Canton.constructor',
-              kind: 'constructor',
-              name: 'constructor',
-              parent: 'Canton',
-              receiver: 'new Canton',
-              importPath: '@fairmint/canton-node-sdk',
-              category: 'Canton',
-              node,
-              signature: sig,
-              summary: 'Create a Canton SDK facade with ledger, validator, scan, auth, and utility clients.',
-            })
-          );
-        }
-      }
-      if (!ts.isMethodDeclaration(node) || !ts.isIdentifier(node.name)) continue;
-      const sig = publicMethodSignature(node);
-      if (!sig) continue;
+  const iface = /export\s+interface\s+CantonConfig\s*\{([\s\S]*?)\n\}/.exec(content);
+  if (iface?.[1]) {
+    const body = iface[1];
+    const propRe = /(?:\/\*\*\s*([\s\S]*?)\s*\*\/\s*)?(?:readonly\s+)?(\w+)(\?)?:/g;
+    let pm: RegExpExecArray | null;
+    while ((pm = propRe.exec(body)) !== null) {
+      const fieldName = pm[2];
+      if (fieldName === undefined) continue;
+      const summary = firstParagraph(pm[1]);
       members.push(
-        callableFromSignature({
-          id: `Canton.${node.name.text}`,
-          kind: 'method',
-          name: node.name.text,
-          parent: 'Canton',
-          receiver: 'canton',
-          importPath: '@fairmint/canton-node-sdk',
-          category: 'Canton',
-          node,
-          signature: sig,
-          summary: docsFromSymbol(checker().getSymbolAtLocation(node.name)),
+        member({
+          kind: 'config-field',
+          name: fieldName,
+          ...(summary !== undefined ? { summary } : {}),
+          parent: 'CantonConfig',
+          sourceFile: rel(cantonPath),
         })
       );
     }
+  }
+
+  const cls = /(?:\/\*\*\s*([\s\S]*?)\s*\*\/\s*)?export\s+class\s+Canton\b/.exec(content);
+  if (cls) {
+    const summary = firstParagraph(cls[1]);
+    members.push(
+      member({
+        kind: 'class',
+        name: 'Canton',
+        ...(summary !== undefined ? { summary } : {}),
+        sourceFile: rel(cantonPath),
+      })
+    );
+  }
+
+  const methodRe = /(?:\/\*\*\s*([\s\S]*?)\s*\*\/\s*)?public\s+(?:async\s+)?(\w+)\s*\(/g;
+  let mm: RegExpExecArray | null;
+  while ((mm = methodRe.exec(content)) !== null) {
+    const methodName = mm[2];
+    if (methodName === undefined) continue;
+    const summary = firstParagraph(mm[1]);
+    members.push(
+      member({
+        kind: 'method',
+        name: methodName,
+        ...(summary !== undefined ? { summary } : {}),
+        parent: 'Canton',
+        sourceFile: rel(cantonPath),
+      })
+    );
   }
 
   return members;
@@ -587,7 +508,15 @@ export function buildReferenceManifest(): ReferenceManifest {
     description?: string;
   };
 
-  createReferenceProgram();
+  let program: Program | undefined;
+  try {
+    program = createSdkProgram(REPO_ROOT);
+  } catch {
+    program = undefined;
+  }
+
+  const blobBase = githubBlobMainBase(pkg.repository?.url);
+
   const categories: ReferenceCategory[] = [];
 
   categories.push({
@@ -598,6 +527,7 @@ export function buildReferenceManifest(): ReferenceManifest {
 
   for (const c of GENERATED_CLIENTS) {
     const { className, classSummary, methods } = parseGeneratedClient(c.generatedFile);
+    const enriched = enrichGeneratedClientMethods(program, c.generatedFile, methods, className, blobBase);
     categories.push({
       id: c.id,
       title: c.title,
@@ -607,7 +537,7 @@ export function buildReferenceManifest(): ReferenceManifest {
           name: className,
           ...(classSummary !== undefined ? { summary: classSummary } : {}),
           sourceFile: rel(c.generatedFile),
-          members: methods,
+          members: enriched,
         }),
       ],
     });
@@ -663,17 +593,11 @@ export function buildReferenceManifest(): ReferenceManifest {
   if (repoUrl !== undefined) pkgMeta.repository = repoUrl;
   if (pkg.description !== undefined) pkgMeta.description = pkg.description;
 
-  const functions = categories
-    .flatMap((c) => c.members.flatMap((m) => (m.members?.length ? m.members : [m])))
-    .filter((m) => m.params !== undefined || m.returnType !== undefined)
-    .sort((a, b) => (a.id ?? a.name).localeCompare(b.id ?? b.name));
-
   return {
     schemaVersion: SCHEMA_VERSION,
     package: pkgMeta,
     generatedAt: new Date().toISOString(),
     categories,
-    functions,
   };
 }
 

@@ -31,21 +31,18 @@ describe('export-reference-manifest', () => {
     expect(methods.length).toBeGreaterThan(40);
     expect(methods.some((m) => m.name === 'getVersion')).toBe(true);
 
+    const getUser = methods.find((m) => m.name === 'getAuthenticatedUser');
+    expect(getUser?.signature).toBeDefined();
+    expect(getUser?.signature?.includes('Parameters<')).toBe(false);
+    expect(getUser?.implementationSignature?.includes('Parameters<')).toBe(true);
+    expect(getUser?.inputSummary).toBe('No parameters');
+
     const wsMethod = methods.find((m) => m.name === 'subscribeToUpdates');
     expect(wsMethod?.transport).toBe('websocket');
-
-    const getAuthenticatedUser = methods.find((m) => m.name === 'getAuthenticatedUser');
-    expect(getAuthenticatedUser?.params?.[0]?.name).toBe('params');
-    expect(getAuthenticatedUser?.params?.[0]?.type).toContain('Record');
-    expect(getAuthenticatedUser?.returnType).toContain('Promise');
-    expect(getAuthenticatedUser?.sourceLine).toBeGreaterThan(0);
-
 
     expect((manifest.categories.find((c) => c.id === 'core')?.members.length ?? 0) > 0).toBe(true);
     expect((manifest.categories.find((c) => c.id === 'utilities')?.members.length ?? 0) > 0).toBe(
       true
     );
-    expect(manifest.functions.length).toBeGreaterThan(100);
-    expect(manifest.functions.some((m) => m.id === 'Canton.constructor')).toBe(true);
   });
 });
