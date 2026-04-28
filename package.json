@@ -9,7 +9,7 @@
     "blockchain",
     "daml"
   ],
-  "homepage": "https://canton-node-sdk.fairmint.com/",
+  "homepage": "https://sdk.canton.fairmint.com/",
   "bugs": {
     "url": "https://github.com/Fairmint/canton-node-sdk/issues"
   },
