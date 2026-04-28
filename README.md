@@ -1,6 +1,5 @@
 # canton-node-sdk
 
-Low-level TypeScript SDK for interacting with Canton blockchain nodes.
+Low-level TypeScript SDK for Canton Network nodes (Ledger JSON API, Validator API, Scan API).
 
-See the [wiki](https://github.com/fairmint/canton-node-sdk/wiki) for full documentation.
-For the full API reference, see [sdk.canton.fairmint.com](https://sdk.canton.fairmint.com/).
+All documentation, examples, architecture, and contributor information live on the **[GitHub wiki](https://github.com/fairmint/canton-node-sdk/wiki)**.
