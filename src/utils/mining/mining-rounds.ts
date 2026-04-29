@@ -6,7 +6,7 @@ import {
 } from '../../clients/validator-api/schemas/api';
 import { OperationError, OperationErrorCode } from '../../core/errors';
 
-/** Client interface required for mining round operations */
+/** Minimal Validator/client operations dependency surface required by mining helper utilities. */
 export interface MiningRoundClient {
   getOpenAndIssuingMiningRounds: () => Promise<GetOpenAndIssuingMiningRoundsResponse>;
 }

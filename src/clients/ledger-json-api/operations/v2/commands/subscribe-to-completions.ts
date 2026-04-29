@@ -15,6 +15,11 @@ export type CompletionsWsMessage =
   | z.infer<typeof JsCantonErrorSchema>
   | z.infer<typeof WsCantonErrorSchema>;
 
+/**
+ * WebSocket stream of completions (`/v2/commands/completions`), exposed as `LedgerJsonApiClient.subscribeToCompletions`.
+ *
+ * `userId` can come from params or the client's configured user id (otherwise subscribe fails fast).
+ */
 export const SubscribeToCompletions = createWebSocketOperation<
   CompletionsWsParams,
   CompletionStreamRequest,

@@ -89,11 +89,18 @@ function extractOwner(payload: Record<string, unknown>, templateId: string): str
 }
 
 /**
- * Gets unlocked amulets owned by the sender party that can be used for transfers. Optionally returns all valid transfer
- * inputs (Amulet, AppRewardCoupon, ValidatorRewardCoupon).
+ * Gets unlocked Amulet contracts owned by the selected sender (`readAs[0]`) plus reward coupons when enabled.
  *
- * @param params - Parameters for getting transfer inputs
- * @returns Promise resolving to array of transfer inputs suitable for transfer
+ * @param params - Ledger client for ACS snapshots plus viewer scopes (`readAs`)
+ * @returns Contracts sorted largest-first so greedy transfers consume highest denominations first
+ *
+ * @example
+ * ```ts
+ * const inputs = await getAmuletsForTransfer({
+ *   jsonApiClient,
+ *   readAs: [senderPartyId],
+ * });
+ * ```
  */
 export async function getAmuletsForTransfer(params: GetAmuletsForTransferParams): Promise<AmuletForTransfer[]> {
   const { jsonApiClient, readAs, includeAllTransferInputs } = params;

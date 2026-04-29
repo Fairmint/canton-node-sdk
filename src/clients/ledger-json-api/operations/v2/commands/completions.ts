@@ -16,6 +16,12 @@ export type CompletionsParams = z.infer<typeof CompletionsParamsSchema>;
 export type CompletionsRequest = paths[typeof endpoint]['post']['requestBody']['content']['application/json'];
 export type CompletionsResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
+/**
+ * Polls command completions over **HTTP** POST `/v2/commands/completions` (cursor batch).
+ *
+ * For waiting on a **specific submission**, prefer `waitForCompletion` / `subscribeToCompletions`
+ * streaming instead.
+ */
 export const Completions = createApiOperation<CompletionsParams, CompletionsResponse>({
   paramsSchema: CompletionsParamsSchema,
   method: 'POST',

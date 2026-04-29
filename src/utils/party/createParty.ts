@@ -28,8 +28,24 @@ export interface PartyCreationResult {
 /**
  * Creates a party, optionally funds the wallet and if funded it then creates a preapproval contract for the party.
  *
- * @param options - Configuration options for party creation
- * @returns Promise resolving to the party creation result
+ * @param options - Ledger + validator clients, human-readable party prefix, optional funded wallet (`amount` > 0)
+ * @returns `partyId` plus optional `preapprovalContractId` when transfers succeed past onboarding funding.
+ * @throws ValidationError when `amount` is not a valid non-negative number string.
+ *
+ * @example Fund onboarding wallet + pre-approve transfers for downstream transfers:
+ * ```ts
+ * const { partyId, preapprovalContractId } = await createParty({
+ *   ledgerClient: canton.ledger,
+ *   validatorClient: canton.validator,
+ *   partyName: 'alice',
+ *   amount: '100',
+ * });
+ * ```
+ *
+ * @example Bare identity without sponsoring transfers (`amount` `'0'`):
+ * ```ts
+ * await createParty({ ledgerClient, validatorClient, partyName: 'bob', amount: '0' });
+ * ```
  */
 export async function createParty(options: CreatePartyOptions): Promise<PartyCreationResult> {
   // Use provided clients directly
