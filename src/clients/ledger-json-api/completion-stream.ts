@@ -1,11 +1,22 @@
 import { type LedgerJsonApiClient } from './index';
 import { type CompletionsWsMessage } from './operations/v2/commands/subscribe-to-completions';
 
+/**
+ * Arguments for {@link waitForCompletion} / {@link waitForCompletionWithMetadata}.
+ *
+ * Use the same `submissionId` you passed when submitting the command, `partyId` / `userId` matching the subscription,
+ * and `beginExclusive` set from ledger-offset bookkeeping used when subscribing (typically before submit offset).
+ */
 export interface WaitForCompletionParams {
+  /** Submission identifier returned by the submit/prepare flow for this command. */
   readonly submissionId: string;
+  /** Party whose completions stream should include this submission. */
   readonly partyId: string;
+  /** Ledger user id used when subscribing to completions (must match authenticated stream user). */
   readonly userId: string;
+  /** Exclusive lower bound for the completions stream (`beginExclusive` / checkpoint offset semantics). */
   readonly beginExclusive: number;
+  /** Max wait before rejecting with a timeout error (default 10 minutes). */
   readonly timeoutMs?: number;
 }
 
@@ -138,7 +149,28 @@ async function waitForCompletionCore<T>(
   });
 }
 
-/** Wait for a specific completion using the ledger's WebSocket completions stream. */
+/**
+ * Waits until the completions WebSocket delivers the completion for `submissionId`, then returns the ledger `updateId`.
+ *
+ * Prefer this over polling HTTP completions when you already submitted async/interactive commands and need to block on
+ * one submission.
+ *
+ * @param ledgerClient - Client used to open `subscribeToCompletions`
+ * @param params - Submission identity, party/user, offset cursor, optional timeout
+ * @returns The canonical update id string for the completed submission
+ * @throws Error if the completion reports non-zero status, omits `updateId`, the stream errors/closes early, or time runs out
+ *
+ * @example
+ * ```ts
+ * const submissionId = '…'; // from your submit response
+ * await waitForCompletion(ledger, {
+ *   submissionId,
+ *   partyId,
+ *   userId,
+ *   beginExclusive,
+ * });
+ * ```
+ */
 export async function waitForCompletion(
   ledgerClient: LedgerJsonApiClient,
   params: WaitForCompletionParams
@@ -147,8 +179,11 @@ export async function waitForCompletion(
 }
 
 /**
- * Like {@link waitForCompletion}, but also surfaces `paidTrafficCost` when the Ledger API includes it on the completion
- * (recent Canton versions).
+ * Same as {@link waitForCompletion}, but returns `{ updateId, paidTrafficCost? }` when the Ledger API attaches traffic
+ * cost metadata to the completion (supported Canton versions).
+ *
+ * @param ledgerClient - Client used to open `subscribeToCompletions`
+ * @param params - Same as {@link waitForCompletion}
  */
 export async function waitForCompletionWithMetadata(
   ledgerClient: LedgerJsonApiClient,
