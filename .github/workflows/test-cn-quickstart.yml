@@ -27,7 +27,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '22.14'
 
       - name: Upgrade npm
         run: npm install --global npm@^11.10.0
