@@ -63,12 +63,12 @@ export async function prepareExternalPartyCcTransfer(
   validatorClient: ValidatorApiClient,
   params: PrepareExternalPartyCcTransferParams
 ): Promise<PreparedExternalPartyCcTransfer> {
+  validatePartyId('senderPartyId', params.senderPartyId);
+  validatePartyId('receiverPartyId', params.receiverPartyId);
   const amount = normalizePositiveAmount(params.amount);
   const expiresAt = normalizeExpiresAt(params.expiresAt);
   const nonce = params.nonce ?? (await lookupNextNonce(validatorClient, params.senderPartyId));
 
-  validatePartyId('senderPartyId', params.senderPartyId);
-  validatePartyId('receiverPartyId', params.receiverPartyId);
   validateNonce(nonce);
 
   const raw = await validatorClient.prepareTransferPreapprovalSend({
@@ -165,10 +165,15 @@ function validatePartyId(name: string, value: string): void {
   if (!value.trim()) {
     throw new ValidationError(`${name} is required`);
   }
+  if (value !== value.trim()) {
+    throw new ValidationError(`${name} must not include leading or trailing whitespace`, {
+      [name]: value,
+    });
+  }
 }
 
 function validateHex(name: string, value: string): void {
-  if (!/^[0-9a-fA-F]+$/.test(value)) {
+  if (!/^(?:[0-9a-fA-F]{2})+$/.test(value)) {
     throw new ValidationError(`${name} must be hex-encoded`, { [name]: value });
   }
 }
