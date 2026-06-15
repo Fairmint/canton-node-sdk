@@ -127,7 +127,7 @@ describe('ScanApiClient', () => {
     });
 
     expect(mockAxiosInstance.get.mock.calls[0]?.[0]).toBe(
-      'https://scan.example/api/scan/registry/metadata/v1/instruments/Amulet%2FUSD'
+      'https://scan.example/registry/metadata/v1/instruments/Amulet%2FUSD'
     );
   });
 });

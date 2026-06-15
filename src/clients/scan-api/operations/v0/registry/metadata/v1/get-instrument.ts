@@ -7,6 +7,10 @@ type ApiPath = '/registry/metadata/v1/instruments/{instrumentId}';
 const endpoint = '/registry/metadata/v1/instruments';
 const publicRequestConfig = { contentType: 'application/json', includeBearerToken: false } as const;
 
+function getRegistryApiUrl(scanApiUrl: string): string {
+  return scanApiUrl.replace(/\/api\/scan\/?$/, '').replace(/\/$/, '');
+}
+
 export const GetInstrumentParamsSchema = z.object({
   instrumentId: z.string(),
 });
@@ -18,6 +22,6 @@ export type GetInstrumentResponse = paths[ApiPath]['get']['responses']['200']['c
 export const GetInstrument = createApiOperation<GetInstrumentParams, GetInstrumentResponse>({
   paramsSchema: GetInstrumentParamsSchema,
   method: 'GET',
-  buildUrl: (params, apiUrl) => `${apiUrl}${endpoint}/${encodeURIComponent(params.instrumentId)}`,
+  buildUrl: (params, apiUrl) => `${getRegistryApiUrl(apiUrl)}${endpoint}/${encodeURIComponent(params.instrumentId)}`,
   requestConfig: publicRequestConfig,
 });
