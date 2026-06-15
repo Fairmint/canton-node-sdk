@@ -36,8 +36,8 @@ describe('ScanApiClient / Mining', () => {
 
     expect(latestContract.contract_id).toBeDefined();
     expect(latestContract.template_id).toContain('OpenMiningRound');
-    expect(rounds.open_mining_rounds[latestContract.contract_id]?.contract?.contract_id).toBe(
-      latestContract.contract_id
-    );
+    const openRound = rounds.open_mining_rounds[latestContract.contract_id];
+    expect(openRound).toBeDefined();
+    expect(openRound?.contract?.contract_id).toBe(latestContract.contract_id);
   });
 });

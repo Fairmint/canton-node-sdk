@@ -117,17 +117,54 @@ describe('ScanApiClient', () => {
         name: 'Amulet',
         symbol: 'AMT',
         decimals: 10,
+        totalSupply: null,
+        totalSupplyAsOf: null,
         supportedApis: {},
       },
     });
 
-    await expect(client.getInstrument({ instrumentId: 'Amulet/USD' })).resolves.toMatchObject({
+    const instrument = await client.getInstrument({ instrumentId: 'Amulet/USD' });
+
+    expect(instrument).toMatchObject({
       id: 'Amulet/USD',
       symbol: 'AMT',
     });
+    expect(instrument.totalSupply).toBeUndefined();
+    expect(instrument.totalSupplyAsOf).toBeUndefined();
 
     expect(mockAxiosInstance.get.mock.calls[0]?.[0]).toBe(
       'https://scan.example/registry/metadata/v1/instruments/Amulet%2FUSD'
     );
+  });
+
+  it('rotates token metadata registry requests across scan endpoints', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan-a.example/api/scan', 'https://scan-b.example/api/scan'],
+      }
+    );
+
+    mockAxiosInstance.get.mockRejectedValueOnce(new Error('first endpoint unavailable')).mockResolvedValueOnce({
+      data: {
+        id: 'Amulet',
+        name: 'Amulet',
+        symbol: 'AMT',
+        decimals: 10,
+        supportedApis: {},
+      },
+    });
+
+    await expect(client.getInstrument({ instrumentId: 'Amulet' })).resolves.toMatchObject({
+      id: 'Amulet',
+      symbol: 'AMT',
+    });
+
+    const requestedUrls = mockAxiosInstance.get.mock.calls.map((call) => call[0] as string);
+    expect(requestedUrls).toEqual([
+      'https://scan-a.example/registry/metadata/v1/instruments/Amulet',
+      'https://scan-b.example/registry/metadata/v1/instruments/Amulet',
+    ]);
+    expect(client.getApiUrl()).toBe('https://scan-b.example/api/scan');
   });
 });

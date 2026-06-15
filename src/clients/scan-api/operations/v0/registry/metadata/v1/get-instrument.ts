@@ -18,10 +18,30 @@ export const GetInstrumentParamsSchema = z.object({
 export type GetInstrumentParams = z.infer<typeof GetInstrumentParamsSchema>;
 export type GetInstrumentResponse = paths[ApiPath]['get']['responses']['200']['content']['application/json'];
 
+type RawGetInstrumentResponse = Omit<GetInstrumentResponse, 'totalSupply' | 'totalSupplyAsOf'> & {
+  totalSupply?: string | null;
+  totalSupplyAsOf?: string | null;
+};
+
+function normalizeInstrumentResponse(response: GetInstrumentResponse): GetInstrumentResponse {
+  const raw = response as RawGetInstrumentResponse;
+  const { totalSupply, totalSupplyAsOf, ...instrument } = raw;
+  const normalized: GetInstrumentResponse = { ...instrument };
+  if (totalSupply != null) {
+    normalized.totalSupply = totalSupply;
+  }
+  if (totalSupplyAsOf != null) {
+    normalized.totalSupplyAsOf = totalSupplyAsOf;
+  }
+  return normalized;
+}
+
 /** Retrieve an instrument's token metadata from the public Scan API. */
 export const GetInstrument = createApiOperation<GetInstrumentParams, GetInstrumentResponse>({
   paramsSchema: GetInstrumentParamsSchema,
   method: 'GET',
-  buildUrl: (params, apiUrl) => `${getRegistryApiUrl(apiUrl)}${endpoint}/${encodeURIComponent(params.instrumentId)}`,
+  buildUrl: (params, apiUrl): string =>
+    `${getRegistryApiUrl(apiUrl)}${endpoint}/${encodeURIComponent(params.instrumentId)}`,
   requestConfig: publicRequestConfig,
+  transformResponse: normalizeInstrumentResponse,
 });
