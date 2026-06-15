@@ -28,9 +28,9 @@ export const SubmitAndWaitForTransactionTree = createApiOperation<
       `submit-and-wait-for-transaction-tree-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
     actAs: params.actAs ?? [client.getPartyId()],
   }),
-  transformResponse: (response) => {
-    const generatedResponse = response as GeneratedResponse;
-    if (!generatedResponse.transactionTree) {
+  transformResponse: (response): SubmitAndWaitForTransactionTreeResponse => {
+    const generatedResponse = response as unknown as { readonly transactionTree?: unknown };
+    if (generatedResponse.transactionTree === undefined || generatedResponse.transactionTree === null) {
       throw new ApiError('Submit-and-wait-for-transaction-tree response did not include a transaction tree');
     }
     return response;
