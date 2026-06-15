@@ -2,6 +2,7 @@ import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { type SubmitAndWaitForTransactionTreeResponse } from '../../clients/ledger-json-api/operations';
 import { EnvLoader } from '../../core/config/EnvLoader';
 import { OperationError, OperationErrorCode } from '../../core/errors';
+import { parseCreatedEvent } from '../parsers';
 
 export interface CreateTransferOfferParams {
   /** Ledger client for submitting commands. */
@@ -64,7 +65,8 @@ export async function createTransferOffer(params: CreateTransferOfferParams): Pr
   });
 
   const transferOfferEvent = transferOfferCid.transactionTree.eventsById['1'];
-  if (!transferOfferEvent || !('CreatedTreeEvent' in transferOfferEvent)) {
+  const createdEvent = parseCreatedEvent(transferOfferEvent);
+  if (!createdEvent) {
     const firstKey = transferOfferEvent ? Object.keys(transferOfferEvent)[0] : 'undefined';
     throw new OperationError(`Expected CreatedTreeEvent but got ${firstKey}`, OperationErrorCode.TRANSACTION_FAILED, {
       eventType: firstKey,
@@ -73,7 +75,7 @@ export async function createTransferOffer(params: CreateTransferOfferParams): Pr
     });
   }
 
-  return transferOfferEvent.CreatedTreeEvent.value.contractId;
+  return createdEvent.contractId;
 }
 
 /**

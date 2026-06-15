@@ -1,5 +1,9 @@
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import type { CompositeCommand, ExerciseCommand } from '../../../src/clients/ledger-json-api/schemas/api/commands';
+import type {
+  CompositeCommand,
+  DisclosedContract,
+  ExerciseCommand,
+} from '../../../src/clients/ledger-json-api/schemas/api/commands';
 import type { ValidatorApiClient } from '../../../src/clients/validator-api';
 import { preApproveTransfers } from '../../../src/utils/amulet/pre-approve-transfers';
 
@@ -218,11 +222,15 @@ describe('preApproveTransfers', () => {
     expect(callArgs?.disclosedContracts?.length).toBeGreaterThan(0);
 
     // Should include AmuletRules contract
-    const amuletRulesContract = callArgs?.disclosedContracts?.find((c) => c.contractId === 'amulet-rules-contract-123');
+    const amuletRulesContract = callArgs?.disclosedContracts?.find(
+      (c: DisclosedContract) => c.contractId === 'amulet-rules-contract-123'
+    );
     expect(amuletRulesContract).toBeDefined();
 
     // Should include mining round contract
-    const miningRoundContract = callArgs?.disclosedContracts?.find((c) => c.contractId === 'mining-round-contract-123');
+    const miningRoundContract = callArgs?.disclosedContracts?.find(
+      (c: DisclosedContract) => c.contractId === 'mining-round-contract-123'
+    );
     expect(miningRoundContract).toBeDefined();
   });
 
@@ -232,7 +240,9 @@ describe('preApproveTransfers', () => {
     });
 
     const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
-    const featuredContract = callArgs?.disclosedContracts?.find((c) => c.contractId === 'featured-app-right-123');
+    const featuredContract = callArgs?.disclosedContracts?.find(
+      (c: DisclosedContract) => c.contractId === 'featured-app-right-123'
+    );
     expect(featuredContract).toBeDefined();
   });
 

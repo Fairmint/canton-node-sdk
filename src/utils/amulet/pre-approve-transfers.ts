@@ -4,6 +4,7 @@ import { type DisclosedContract, type ExerciseCommand } from '../../clients/ledg
 import { type ValidatorApiClient } from '../../clients/validator-api';
 import { ApiError, OperationError, OperationErrorCode } from '../../core/errors';
 import { getCurrentMiningRoundContext } from '../mining/mining-rounds';
+import { extractEventsFromTransaction } from '../parsers';
 import { getAmuletsForTransfer } from './get-amulets-for-transfer';
 
 export interface PreApproveTransfersParams {
@@ -162,20 +163,9 @@ export async function preApproveTransfers(
   }
 
   // Extract the created TransferPreapproval contract ID from the result
-  const events = result.transactionTree.eventsById;
-  let contractId: string | undefined;
-
-  for (const eventKey in events) {
-    const event = events[eventKey];
-    if (
-      event &&
-      'CreatedTreeEvent' in event &&
-      event.CreatedTreeEvent.value.templateId.includes('TransferPreapproval')
-    ) {
-      ({ contractId } = event.CreatedTreeEvent.value);
-      break;
-    }
-  }
+  const contractId = extractEventsFromTransaction(result).created.find((event) =>
+    event.templateId.includes('TransferPreapproval')
+  )?.contractId;
 
   if (!contractId) {
     throw new OperationError('Failed to create TransferPreapproval contract', OperationErrorCode.TRANSACTION_FAILED, {
