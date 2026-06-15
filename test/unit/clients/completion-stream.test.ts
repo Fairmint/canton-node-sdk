@@ -86,4 +86,64 @@ describe('waitForCompletionWithMetadata', () => {
     }
     expect(secondSubscription.close).toHaveBeenCalledTimes(1);
   });
+
+  it('closes stale subscription handles that resolve after a retry connects', async () => {
+    jest.useFakeTimers();
+
+    const handlers: SubscribeHandlers[] = [];
+    const subscriptions = [createSubscription(), createSubscription()];
+    let resolveFirstSubscription: (subscription: CompletionSubscription) => void = () => undefined;
+    const firstSubscriptionPromise = new Promise<CompletionSubscription>((resolve) => {
+      resolveFirstSubscription = resolve;
+    });
+    const client = {
+      subscribeToCompletions: jest.fn(async (_params, nextHandlers: SubscribeHandlers) => {
+        handlers.push(nextHandlers);
+        if (handlers.length === 1) {
+          return firstSubscriptionPromise;
+        }
+        return subscriptions[1];
+      }),
+    } as unknown as jest.Mocked<LedgerJsonApiClient>;
+
+    const resultPromise = waitForCompletionWithMetadata(client, {
+      submissionId: 'submission-123',
+      partyId: 'party-123',
+      userId: 'user-123',
+      beginExclusive: 10,
+      timeoutMs: 30_000,
+    });
+
+    await Promise.resolve();
+    const firstHandlers = handlers[0];
+    if (!firstHandlers) {
+      throw new Error('Expected first completion subscription');
+    }
+
+    firstHandlers.onClose?.(1000, 'stream complete');
+    jest.advanceTimersByTime(250);
+    await Promise.resolve();
+
+    expect(client.subscribeToCompletions).toHaveBeenCalledTimes(2);
+
+    const firstSubscription = subscriptions[0];
+    if (!firstSubscription) {
+      throw new Error('Expected first completion subscription handle');
+    }
+    resolveFirstSubscription(firstSubscription);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(firstSubscription.close).toHaveBeenCalledTimes(1);
+
+    const secondHandlers = handlers[1];
+    if (!secondHandlers) {
+      throw new Error('Expected second completion subscription');
+    }
+    secondHandlers.onMessage(completionMessage('submission-123'));
+
+    await expect(resultPromise).resolves.toEqual({
+      updateId: 'update-123',
+      paidTrafficCost: 17n,
+    });
+  });
 });

@@ -80,6 +80,7 @@ async function waitForCompletionCore<T>(
     let settled = false;
     let subscription: { close: () => void } | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let subscribeAttempt = 0;
 
     const cleanup = (): void => {
       settled = true;
@@ -108,8 +109,8 @@ async function waitForCompletionCore<T>(
       reject(err);
     };
 
-    const scheduleResubscribe = (): void => {
-      if (settled) {
+    const scheduleResubscribe = (attempt: number): void => {
+      if (settled || attempt !== subscribeAttempt) {
         return;
       }
       subscription = null;
@@ -122,7 +123,11 @@ async function waitForCompletionCore<T>(
       }, COMPLETION_STREAM_RETRY_DELAY_MS);
     };
 
-    const handleMessage = (message: CompletionsWsMessage): void => {
+    const handleMessage = (attempt: number, message: CompletionsWsMessage): void => {
+      if (attempt !== subscribeAttempt) {
+        return;
+      }
+
       const completion = extractCompletion(message);
       if (!completion) {
         return;
@@ -152,6 +157,9 @@ async function waitForCompletionCore<T>(
         return;
       }
 
+      const attempt = subscribeAttempt + 1;
+      subscribeAttempt = attempt;
+
       void ledgerClient
         .subscribeToCompletions(
           {
@@ -160,12 +168,20 @@ async function waitForCompletionCore<T>(
             beginExclusive,
           },
           {
-            onMessage: handleMessage,
-            onError: handleError,
-            onClose: scheduleResubscribe,
+            onMessage: (message) => handleMessage(attempt, message),
+            onError: (error) => {
+              if (attempt === subscribeAttempt) {
+                handleError(error);
+              }
+            },
+            onClose: () => scheduleResubscribe(attempt),
           },
         )
         .then((sub) => {
+          if (attempt !== subscribeAttempt) {
+            sub.close();
+            return;
+          }
           subscription = sub;
           if (settled) {
             subscription.close();
