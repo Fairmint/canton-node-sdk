@@ -20,5 +20,24 @@ describe('ScanApiClient / Mining', () => {
     expect(response.open_mining_rounds).not.toBeNull();
   });
 
-  test.todo('getRoundOfLatestData was removed from the Scan API in Splice 0.6.x');
+  test('getDsoInfo returns the latest mining round contract', async () => {
+    const client = getClient();
+
+    const dsoInfo = await client.getDsoInfo();
+    const rounds = await client.getOpenAndIssuingMiningRounds({
+      body: {
+        cached_open_mining_round_contract_ids: [],
+        cached_issuing_round_contract_ids: [],
+      },
+    });
+
+    const latestMiningRound = dsoInfo.latest_mining_round;
+    const latestContract = latestMiningRound.contract;
+
+    expect(latestContract.contract_id).toBeDefined();
+    expect(latestContract.template_id).toContain('OpenMiningRound');
+    expect(rounds.open_mining_rounds[latestContract.contract_id]?.contract?.contract_id).toBe(
+      latestContract.contract_id
+    );
+  });
 });

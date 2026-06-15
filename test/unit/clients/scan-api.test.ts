@@ -102,4 +102,32 @@ describe('ScanApiClient', () => {
       'https://scan-b.example/api/scan/v0/scan/health',
     ]);
   });
+
+  it('gets token metadata instruments from the direct scan endpoint', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan.example/api/scan'],
+      }
+    );
+
+    mockAxiosInstance.get.mockResolvedValueOnce({
+      data: {
+        id: 'Amulet/USD',
+        name: 'Amulet',
+        symbol: 'AMT',
+        decimals: 10,
+        supportedApis: {},
+      },
+    });
+
+    await expect(client.getInstrument({ instrumentId: 'Amulet/USD' })).resolves.toMatchObject({
+      id: 'Amulet/USD',
+      symbol: 'AMT',
+    });
+
+    expect(mockAxiosInstance.get.mock.calls[0]?.[0]).toBe(
+      'https://scan.example/api/scan/registry/metadata/v1/instruments/Amulet%2FUSD'
+    );
+  });
 });
