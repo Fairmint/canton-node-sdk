@@ -21,12 +21,20 @@ describe('ScanApiClient / Balance', () => {
       'splice-api-token-transfer-instruction-v1': 1,
     });
 
-    const { totalSupply, totalSupplyAsOf } = instrument;
-    if (totalSupply !== undefined) {
+    type LocalNetInstrument = Omit<typeof instrument, 'totalSupply' | 'totalSupplyAsOf'> & {
+      totalSupply?: string | null;
+      totalSupplyAsOf?: string | null;
+    };
+    const { totalSupply, totalSupplyAsOf } = instrument as LocalNetInstrument;
+    if (typeof totalSupply === 'string') {
       expect(totalSupply).toMatch(/^\d+(?:\.\d+)?$/);
+    } else {
+      expect(totalSupply == null).toBe(true);
     }
-    if (totalSupplyAsOf !== undefined) {
+    if (typeof totalSupplyAsOf === 'string') {
       expect(Number.isNaN(Date.parse(totalSupplyAsOf))).toBe(false);
+    } else {
+      expect(totalSupplyAsOf == null).toBe(true);
     }
   });
 });
