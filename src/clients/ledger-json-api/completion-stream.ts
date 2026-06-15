@@ -1,6 +1,8 @@
 import { type LedgerJsonApiClient } from './index';
 import { type CompletionsWsMessage } from './operations/v2/commands/subscribe-to-completions';
 
+const COMPLETION_STREAM_RETRY_DELAY_MS = 250;
+
 /**
  * Arguments for {@link waitForCompletion} / {@link waitForCompletionWithMetadata}.
  *
@@ -75,11 +77,16 @@ async function waitForCompletionCore<T>(
   const { submissionId, partyId, userId, beginExclusive, timeoutMs = 10 * 60 * 1000 } = params;
 
   return new Promise((resolve, reject) => {
-    let closed = false;
+    let settled = false;
     let subscription: { close: () => void } | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     const cleanup = (): void => {
-      closed = true;
+      settled = true;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+      }
       if (subscription) {
         subscription.close();
         subscription = null;
@@ -92,7 +99,7 @@ async function waitForCompletionCore<T>(
     }, timeoutMs);
 
     const handleError = (error: unknown): void => {
-      if (closed) {
+      if (settled) {
         return;
       }
       clearTimeout(timer);
@@ -101,51 +108,70 @@ async function waitForCompletionCore<T>(
       reject(err);
     };
 
-    void ledgerClient
-      .subscribeToCompletions(
-        {
-          userId,
-          parties: [partyId],
-          beginExclusive,
-        },
-        {
-          onMessage: (message: CompletionsWsMessage) => {
-            const completion = extractCompletion(message);
-            if (!completion) {
-              return;
-            }
-            if (completion.submissionId !== submissionId) {
-              return;
-            }
-            clearTimeout(timer);
-            cleanup();
+    const scheduleResubscribe = (): void => {
+      if (settled) {
+        return;
+      }
+      subscription = null;
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        subscribe();
+      }, COMPLETION_STREAM_RETRY_DELAY_MS);
+    };
 
-            if (completion.statusCode && completion.statusCode !== 0) {
-              reject(new Error(completion.statusMessage ?? 'Transaction failed'));
-              return;
-            }
+    const handleMessage = (message: CompletionsWsMessage): void => {
+      const completion = extractCompletion(message);
+      if (!completion) {
+        return;
+      }
+      if (completion.submissionId !== submissionId) {
+        return;
+      }
 
-            const { updateId } = completion;
-            if (!updateId) {
-              reject(new Error('Completion did not include updateId'));
-              return;
-            }
+      if (completion.statusCode && completion.statusCode !== 0) {
+        handleError(new Error(completion.statusMessage ?? 'Transaction failed'));
+        return;
+      }
 
-            resolve(mapSuccess(completion, updateId));
+      const { updateId } = completion;
+      if (!updateId) {
+        handleError(new Error('Completion did not include updateId'));
+        return;
+      }
+
+      clearTimeout(timer);
+      cleanup();
+      resolve(mapSuccess(completion, updateId));
+    };
+
+    const subscribe = (): void => {
+      if (settled) {
+        return;
+      }
+
+      void ledgerClient
+        .subscribeToCompletions(
+          {
+            userId,
+            parties: [partyId],
+            beginExclusive,
           },
-          onError: handleError,
-          onClose: () => {
-            handleError(new Error('Completion subscription closed before receiving response'));
+          {
+            onMessage: handleMessage,
+            onError: handleError,
+            onClose: scheduleResubscribe,
           },
-        }
-      )
-      .then((sub) => {
-        subscription = sub;
-        if (closed) {
-          subscription.close();
-        }
-      })
-      .catch(handleError);
+        )
+        .then((sub) => {
+          subscription = sub;
+          if (settled) {
+            subscription.close();
+          }
+        })
+        .catch(handleError);
+    };
+
+    subscribe();
   });
 }
 
@@ -158,7 +184,7 @@ async function waitForCompletionCore<T>(
  * @param ledgerClient - Client used to open `subscribeToCompletions`
  * @param params - Submission identity, party/user, offset cursor, optional timeout
  * @returns The canonical update id string for the completed submission
- * @throws Error if the completion reports non-zero status, omits `updateId`, the stream errors/closes early, or time runs out
+ * @throws Error if the completion reports non-zero status, omits `updateId`, the stream errors, or time runs out
  *
  * @example
  * ```ts
