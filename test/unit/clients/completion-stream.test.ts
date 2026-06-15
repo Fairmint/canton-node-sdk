@@ -68,6 +68,11 @@ describe('waitForCompletionWithMetadata', () => {
     jest.advanceTimersByTime(250);
     await Promise.resolve();
 
+    const firstSubscription = subscriptions[0];
+    if (!firstSubscription) {
+      throw new Error('Expected first completion subscription handle');
+    }
+    expect(firstSubscription.close).toHaveBeenCalledTimes(1);
     expect(client.subscribeToCompletions).toHaveBeenCalledTimes(2);
 
     const secondHandlers = handlers[1];

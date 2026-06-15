@@ -113,7 +113,9 @@ async function waitForCompletionCore<T>(
       if (settled || attempt !== subscribeAttempt) {
         return;
       }
+      const activeSubscription = subscription;
       subscription = null;
+      activeSubscription?.close();
       if (retryTimer) {
         clearTimeout(retryTimer);
       }
