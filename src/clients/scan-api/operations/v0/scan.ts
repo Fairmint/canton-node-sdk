@@ -443,16 +443,6 @@ export const LookupFeaturedAppRight = createApiOperation<
   requestConfig: publicRequestConfig,
 });
 
-export const GetTopValidatorsByValidatorFaucets = createApiOperation<
-  void,
-  operations['getTopValidatorsByValidatorFaucets']['responses']['200']['content']['application/json']
->({
-  paramsSchema: z.void(),
-  method: 'GET',
-  buildUrl: (_params, apiUrl) => `${apiUrl}/v0/top-validators-by-validator-faucets`,
-  requestConfig: publicRequestConfig,
-});
-
 const LookupTransferPreapprovalByPartyParamsSchema = z.object({ party: z.string() });
 export type LookupTransferPreapprovalByPartyParams = z.infer<typeof LookupTransferPreapprovalByPartyParamsSchema>;
 export const LookupTransferPreapprovalByParty = createApiOperation<
@@ -662,64 +652,6 @@ export const GetAcsSnapshot = createApiOperation<
   requestConfig: publicRequestConfig,
 });
 
-export const GetAggregatedRounds = createApiOperation<
-  void,
-  operations['getAggregatedRounds']['responses']['200']['content']['application/json']
->({
-  paramsSchema: z.void(),
-  method: 'GET',
-  buildUrl: (_params, apiUrl) => `${apiUrl}/v0/aggregated-rounds`,
-  requestConfig: publicRequestConfig,
-});
-
-type ListRoundTotalsRequest = operations['listRoundTotals']['requestBody']['content']['application/json'];
-const ListRoundTotalsParamsSchema = z.object({ body: z.custom<ListRoundTotalsRequest>() });
-export type ListRoundTotalsParams = z.infer<typeof ListRoundTotalsParamsSchema>;
-export const ListRoundTotals = createApiOperation<
-  ListRoundTotalsParams,
-  operations['listRoundTotals']['responses']['200']['content']['application/json']
->({
-  paramsSchema: ListRoundTotalsParamsSchema,
-  method: 'POST',
-  buildUrl: (_params, apiUrl) => `${apiUrl}/v0/round-totals`,
-  buildRequestData: (params) => params.body,
-  requestConfig: publicRequestConfig,
-});
-
-type ListRoundPartyTotalsRequest = operations['listRoundPartyTotals']['requestBody']['content']['application/json'];
-const ListRoundPartyTotalsParamsSchema = z.object({ body: z.custom<ListRoundPartyTotalsRequest>() });
-export type ListRoundPartyTotalsParams = z.infer<typeof ListRoundPartyTotalsParamsSchema>;
-export const ListRoundPartyTotals = createApiOperation<
-  ListRoundPartyTotalsParams,
-  operations['listRoundPartyTotals']['responses']['200']['content']['application/json']
->({
-  paramsSchema: ListRoundPartyTotalsParamsSchema,
-  method: 'POST',
-  buildUrl: (_params, apiUrl) => `${apiUrl}/v0/round-party-totals`,
-  buildRequestData: (params) => params.body,
-  requestConfig: publicRequestConfig,
-});
-
-export const GetTotalAmuletBalance = createApiOperation<
-  void,
-  operations['getTotalAmuletBalance']['responses']['200']['content']['application/json']
->({
-  paramsSchema: z.void(),
-  method: 'GET',
-  buildUrl: (_params, apiUrl) => `${apiUrl}/v0/total-amulet-balance`,
-  requestConfig: publicRequestConfig,
-});
-
-export const GetWalletBalance = createApiOperation<
-  void,
-  operations['getWalletBalance']['responses']['200']['content']['application/json']
->({
-  paramsSchema: z.void(),
-  method: 'GET',
-  buildUrl: (_params, apiUrl) => `${apiUrl}/v0/wallet-balance`,
-  requestConfig: publicRequestConfig,
-});
-
 export const GetAmuletConfigForRound = createApiOperation<
   void,
   operations['getAmuletConfigForRound']['responses']['200']['content']['application/json']
@@ -727,70 +659,6 @@ export const GetAmuletConfigForRound = createApiOperation<
   paramsSchema: z.void(),
   method: 'GET',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/amulet-config-for-round`,
-  requestConfig: publicRequestConfig,
-});
-
-export const GetRoundOfLatestData = createApiOperation<
-  void,
-  operations['getRoundOfLatestData']['responses']['200']['content']['application/json']
->({
-  paramsSchema: z.void(),
-  method: 'GET',
-  buildUrl: (_params, apiUrl) => `${apiUrl}/v0/round-of-latest-data`,
-  requestConfig: publicRequestConfig,
-});
-
-export const GetRewardsCollected = createApiOperation<
-  void,
-  operations['getRewardsCollected']['responses']['200']['content']['application/json']
->({
-  paramsSchema: z.void(),
-  method: 'GET',
-  buildUrl: (_params, apiUrl) => `${apiUrl}/v0/rewards-collected`,
-  requestConfig: publicRequestConfig,
-});
-
-export const GetTopProvidersByAppRewards = createApiOperation<
-  void,
-  operations['getTopProvidersByAppRewards']['responses']['200']['content']['application/json']
->({
-  paramsSchema: z.void(),
-  method: 'GET',
-  buildUrl: (_params, apiUrl) => `${apiUrl}/v0/top-providers-by-app-rewards`,
-  requestConfig: publicRequestConfig,
-});
-
-export const GetTopValidatorsByValidatorRewards = createApiOperation<
-  void,
-  operations['getTopValidatorsByValidatorRewards']['responses']['200']['content']['application/json']
->({
-  paramsSchema: z.void(),
-  method: 'GET',
-  buildUrl: (_params, apiUrl) => `${apiUrl}/v0/top-validators-by-validator-rewards`,
-  requestConfig: publicRequestConfig,
-});
-
-export const GetTopValidatorsByPurchasedTraffic = createApiOperation<
-  void,
-  operations['getTopValidatorsByPurchasedTraffic']['responses']['200']['content']['application/json']
->({
-  paramsSchema: z.void(),
-  method: 'GET',
-  buildUrl: (_params, apiUrl) => `${apiUrl}/v0/top-validators-by-purchased-traffic`,
-  requestConfig: publicRequestConfig,
-});
-
-type ListActivityRequest = operations['listActivity']['requestBody']['content']['application/json'];
-const ListActivityParamsSchema = z.object({ body: z.custom<ListActivityRequest>() });
-export type ListActivityParams = z.infer<typeof ListActivityParamsSchema>;
-export const ListActivity = createApiOperation<
-  ListActivityParams,
-  operations['listActivity']['responses']['200']['content']['application/json']
->({
-  paramsSchema: ListActivityParamsSchema,
-  method: 'POST',
-  buildUrl: (_params, apiUrl) => `${apiUrl}/v0/activities`,
-  buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
 });
 

@@ -36,7 +36,7 @@ export async function fetchAllParties(
       includeBearerToken: true,
     });
 
-    if (response.partyDetails?.length) {
+    if (response.partyDetails.length > 0) {
       aggregatedPartyDetails.push(...response.partyDetails);
     }
 

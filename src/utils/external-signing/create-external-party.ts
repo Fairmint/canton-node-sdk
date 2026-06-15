@@ -120,7 +120,7 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
     );
   }
 
-  if (!topologyTransactions || topologyTransactions.length === 0) {
+  if (topologyTransactions.length === 0) {
     throw new OperationError(
       'No topology transactions returned from topology generation',
       OperationErrorCode.PARTY_CREATION_FAILED,

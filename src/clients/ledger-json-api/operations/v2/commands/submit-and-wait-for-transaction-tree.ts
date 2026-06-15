@@ -1,5 +1,6 @@
 import { type z } from 'zod';
 import { createApiOperation } from '../../../../../core';
+import { ApiError } from '../../../../../core/errors';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 import { SubmitAndWaitForTransactionTreeParamsSchema } from '../../../schemas/operations';
 
@@ -7,8 +8,11 @@ const endpoint = '/v2/commands/submit-and-wait-for-transaction-tree' as const;
 
 export type SubmitAndWaitForTransactionTreeParams = z.infer<typeof SubmitAndWaitForTransactionTreeParamsSchema>;
 
-export type SubmitAndWaitForTransactionTreeResponse =
-  paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
+type GeneratedResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
+
+export type SubmitAndWaitForTransactionTreeResponse = GeneratedResponse & {
+  readonly transactionTree: NonNullable<GeneratedResponse['transactionTree']>;
+};
 
 export const SubmitAndWaitForTransactionTree = createApiOperation<
   SubmitAndWaitForTransactionTreeParams,
@@ -24,4 +28,11 @@ export const SubmitAndWaitForTransactionTree = createApiOperation<
       `submit-and-wait-for-transaction-tree-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
     actAs: params.actAs ?? [client.getPartyId()],
   }),
+  transformResponse: (response) => {
+    const generatedResponse = response as GeneratedResponse;
+    if (!generatedResponse.transactionTree) {
+      throw new ApiError('Submit-and-wait-for-transaction-tree response did not include a transaction tree');
+    }
+    return response;
+  },
 });

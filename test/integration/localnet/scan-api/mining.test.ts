@@ -20,12 +20,5 @@ describe('ScanApiClient / Mining', () => {
     expect(response.open_mining_rounds).not.toBeNull();
   });
 
-  // Skip: This endpoint may not be available in cn-quickstart scan API
-  test.skip('getRoundOfLatestData returns latest round info', async () => {
-    const client = getClient();
-    const response = await client.getRoundOfLatestData();
-
-    expect(response).toBeDefined();
-    expect(response.round).toBeDefined();
-  });
+  test.todo('getRoundOfLatestData was removed from the Scan API in Splice 0.6.x');
 });

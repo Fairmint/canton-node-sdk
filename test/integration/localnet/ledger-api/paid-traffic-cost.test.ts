@@ -109,7 +109,7 @@ describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
     const userId = await resolveLedgerUserId(client, validatorInfo.user_name);
 
     const partiesResponse = await client.listParties({});
-    const details = partiesResponse.partyDetails ?? [];
+    const details = partiesResponse.partyDetails;
     const receiverParty = details.map((entry: { party: string }) => entry.party).find((id: string) => id !== partyId);
     if (!receiverParty) {
       throw new Error(
@@ -120,6 +120,9 @@ describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
     const { contractId: walletInstallCid, synchronizerId } = await resolveWalletAppInstallContext(client, partyId);
 
     const ledgerEnd = await client.getLedgerEnd({});
+    if (ledgerEnd.offset === undefined) {
+      throw new Error('getLedgerEnd returned no offset');
+    }
     const beginExclusive = ledgerEnd.offset;
 
     const submissionId = `paid-traffic-it-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
