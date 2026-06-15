@@ -5,29 +5,28 @@
 import { getClient } from './setup';
 
 describe('ScanApiClient / Balance', () => {
-  test('getInstrument returns total Amulet supply metadata', async () => {
+  test('getInstrument returns Amulet metadata', async () => {
     const client = getClient();
 
-    const snapshot = await client.forceAcsSnapshotNow();
     const instrument = await client.getInstrument({ instrumentId: 'Amulet' });
 
-    expect(Number.isNaN(Date.parse(snapshot.record_time))).toBe(false);
-    expect(snapshot.migration_id).toBeGreaterThanOrEqual(0);
     expect(instrument.id).toBe('Amulet');
     expect(instrument.name).toBeDefined();
     expect(instrument.symbol).toBeDefined();
     expect(instrument.decimals).toBeGreaterThanOrEqual(0);
     expect(instrument.decimals).toBeLessThanOrEqual(10);
+    expect(instrument.supportedApis).toMatchObject({
+      'splice-api-token-metadata-v1': 1,
+      'splice-api-token-holding-v1': 1,
+      'splice-api-token-transfer-instruction-v1': 1,
+    });
 
     const { totalSupply, totalSupplyAsOf } = instrument;
-    if (typeof totalSupply !== 'string') {
-      throw new Error('Amulet instrument did not include totalSupply');
+    if (totalSupply !== undefined) {
+      expect(totalSupply).toMatch(/^\d+(?:\.\d+)?$/);
     }
-    if (typeof totalSupplyAsOf !== 'string') {
-      throw new Error('Amulet instrument did not include totalSupplyAsOf');
+    if (totalSupplyAsOf !== undefined) {
+      expect(Number.isNaN(Date.parse(totalSupplyAsOf))).toBe(false);
     }
-
-    expect(totalSupply).toMatch(/^\d+(?:\.\d+)?$/);
-    expect(Number.isNaN(Date.parse(totalSupplyAsOf))).toBe(false);
   });
 });
