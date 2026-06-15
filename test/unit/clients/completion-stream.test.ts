@@ -64,6 +64,7 @@ describe('waitForCompletionWithMetadata', () => {
       throw new Error('Expected first completion subscription');
     }
     firstHandlers.onClose?.(1000, 'stream complete');
+    firstHandlers.onClose?.(1000, 'duplicate close');
     jest.advanceTimersByTime(250);
     await Promise.resolve();
 

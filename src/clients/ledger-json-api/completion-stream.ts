@@ -113,6 +113,9 @@ async function waitForCompletionCore<T>(
         return;
       }
       subscription = null;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+      }
       retryTimer = setTimeout(() => {
         retryTimer = null;
         subscribe();
