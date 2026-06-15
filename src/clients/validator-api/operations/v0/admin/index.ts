@@ -4,4 +4,6 @@ export * from './generate-external-party-topology';
 export * from './get-external-party-balance';
 export * from './list-external-party-setup-proposals';
 export * from './list-users';
+export * from './prepare-transfer-preapproval-send';
 export * from './submit-external-party-topology';
+export * from './submit-transfer-preapproval-send';
