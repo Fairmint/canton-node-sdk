@@ -81,6 +81,37 @@ describe('event-parser', () => {
       });
     });
 
+    it('parses flattened CreatedEvent wrappers', () => {
+      expect(
+        parseCreatedEvent({
+          CreatedEvent: {
+            contractId: 'contract-1',
+            templateId: 'pkg:Module:Template',
+            createArguments: { owner: 'alice' },
+          },
+        })
+      ).toEqual({
+        contractId: 'contract-1',
+        templateId: 'pkg:Module:Template',
+        createArgument: { owner: 'alice' },
+      });
+    });
+
+    it('parses lowercase createdEvent wrappers', () => {
+      expect(
+        parseCreatedEvent({
+          createdEvent: {
+            contractId: 'contract-1',
+            templateId: 'pkg:Module:Template',
+          },
+        })
+      ).toEqual({
+        contractId: 'contract-1',
+        templateId: 'pkg:Module:Template',
+        createArgument: {},
+      });
+    });
+
     it('returns null for malformed created events', () => {
       expect(parseCreatedEvent({ CreatedTreeEvent: { value: { templateId: 'pkg:Module:Template' } } })).toBeNull();
       expect(parseCreatedEvent({ ExercisedTreeEvent: { value: { contractId: 'contract-1' } } })).toBeNull();
@@ -105,6 +136,20 @@ describe('event-parser', () => {
         templateId: 'pkg:Module:Template',
         witnessParties: ['alice'],
         offset: 99,
+      });
+    });
+
+    it('parses flattened ArchivedEvent wrappers', () => {
+      expect(
+        parseArchivedEvent({
+          ArchivedEvent: {
+            contractId: 'contract-1',
+            templateId: 'pkg:Module:Template',
+          },
+        })
+      ).toEqual({
+        contractId: 'contract-1',
+        templateId: 'pkg:Module:Template',
       });
     });
 
@@ -139,6 +184,22 @@ describe('event-parser', () => {
         actingParties: ['alice'],
         consuming: true,
         offset: 10,
+      });
+    });
+
+    it('parses flattened ExercisedEvent wrappers', () => {
+      expect(
+        parseExercisedEvent({
+          ExercisedEvent: {
+            contractId: 'contract-1',
+            templateId: 'pkg:Module:Template',
+            choice: 'Archive',
+          },
+        })
+      ).toEqual({
+        contractId: 'contract-1',
+        templateId: 'pkg:Module:Template',
+        choice: 'Archive',
       });
     });
 
