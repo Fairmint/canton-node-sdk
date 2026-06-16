@@ -26,7 +26,7 @@ describe('external party CC transfer helpers', () => {
     validatorClient = createMockValidatorClient();
   });
 
-  it('prepares a CC transfer using the sender transfer-command counter as nonce', async () => {
+  it('prepares a CC transfer using the sender transfer-command counter as nonce', async (): Promise<void> => {
     const result = await prepareExternalPartyCcTransfer(validatorClient, {
       senderPartyId: 'sender::fingerprint',
       receiverPartyId: 'receiver::fingerprint',
@@ -56,7 +56,7 @@ describe('external party CC transfer helpers', () => {
     });
   });
 
-  it('uses nonce 0 when the sender has no transfer-command counter yet', async () => {
+  it('uses nonce 0 when the sender has no transfer-command counter yet', async (): Promise<void> => {
     validatorClient.lookupTransferCommandCounterByParty.mockRejectedValueOnce(new ApiError('not found', 404));
 
     await prepareExternalPartyCcTransfer(validatorClient, {
@@ -69,7 +69,7 @@ describe('external party CC transfer helpers', () => {
     expect(validatorClient.prepareTransferPreapprovalSend).toHaveBeenCalledWith(expect.objectContaining({ nonce: 0 }));
   });
 
-  it('submits a signed CC transfer through the validator endpoint', async () => {
+  it('submits a signed CC transfer through the validator endpoint', async (): Promise<void> => {
     const result = await submitExternalPartyCcTransfer(validatorClient, {
       senderPartyId: 'sender::fingerprint',
       transaction: 'prepared-transaction-base64',
@@ -88,7 +88,7 @@ describe('external party CC transfer helpers', () => {
     expect(result.updateId).toBe('update-123');
   });
 
-  it('rejects invalid amounts before calling the validator', async () => {
+  it('rejects invalid amounts before calling the validator', async (): Promise<void> => {
     await expect(
       prepareExternalPartyCcTransfer(validatorClient, {
         senderPartyId: 'sender::fingerprint',
@@ -98,5 +98,53 @@ describe('external party CC transfer helpers', () => {
     ).rejects.toThrow('CC transfer amount must be a positive number');
 
     expect(validatorClient.prepareTransferPreapprovalSend).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid sender party IDs before looking up the nonce', async (): Promise<void> => {
+    await expect(
+      prepareExternalPartyCcTransfer(validatorClient, {
+        senderPartyId: '   ',
+        receiverPartyId: 'receiver::fingerprint',
+        amount: 1,
+      })
+    ).rejects.toThrow('senderPartyId is required');
+
+    expect(validatorClient.lookupTransferCommandCounterByParty).not.toHaveBeenCalled();
+    expect(validatorClient.prepareTransferPreapprovalSend).not.toHaveBeenCalled();
+  });
+
+  it('rejects party IDs with leading or trailing whitespace', async (): Promise<void> => {
+    await expect(
+      submitExternalPartyCcTransfer(validatorClient, {
+        senderPartyId: ' sender::fingerprint ',
+        transaction: 'prepared-transaction-base64',
+        transactionHashSignatureHex: 'deadbeef',
+        publicKeyHex: 'abcdef',
+      })
+    ).rejects.toThrow('senderPartyId must not include leading or trailing whitespace');
+
+    expect(validatorClient.submitTransferPreapprovalSend).not.toHaveBeenCalled();
+  });
+
+  it('rejects odd-length hex strings before calling the validator', async (): Promise<void> => {
+    await expect(
+      submitExternalPartyCcTransfer(validatorClient, {
+        senderPartyId: 'sender::fingerprint',
+        transaction: 'prepared-transaction-base64',
+        transactionHashSignatureHex: 'abc',
+        publicKeyHex: 'abcdef',
+      })
+    ).rejects.toThrow('transactionHashSignatureHex must be hex-encoded');
+
+    await expect(
+      submitExternalPartyCcTransfer(validatorClient, {
+        senderPartyId: 'sender::fingerprint',
+        transaction: 'prepared-transaction-base64',
+        transactionHashSignatureHex: 'deadbeef',
+        publicKeyHex: 'abc',
+      })
+    ).rejects.toThrow('publicKeyHex must be hex-encoded');
+
+    expect(validatorClient.submitTransferPreapprovalSend).not.toHaveBeenCalled();
   });
 });
