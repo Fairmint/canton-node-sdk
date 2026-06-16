@@ -32,6 +32,7 @@ describe('event-parser', () => {
     it('matches exact template names', () => {
       expect(hasTemplateName('pkg:Module:TransferPreapproval', 'TransferPreapproval')).toBe(true);
       expect(hasTemplateName('pkg:Module:NotTransferPreapproval', 'TransferPreapproval')).toBe(false);
+      expect(hasTemplateName('pkg::TransferPreapproval', 'TransferPreapproval')).toBe(false);
       expect(hasTemplateName('TransferPreapproval', 'TransferPreapproval')).toBe(false);
     });
   });
@@ -210,6 +211,26 @@ describe('event-parser', () => {
       });
     });
 
+    it('preserves non-record exercise values', () => {
+      expect(
+        parseExercisedEvent({
+          ExercisedEvent: {
+            contractId: 'contract-1',
+            templateId: 'pkg:Module:Template',
+            choice: 'Archive',
+            choiceArgument: ['contract-1'],
+            exerciseResult: null,
+          },
+        })
+      ).toEqual({
+        contractId: 'contract-1',
+        templateId: 'pkg:Module:Template',
+        choice: 'Archive',
+        exerciseArgument: ['contract-1'],
+        exerciseResult: null,
+      });
+    });
+
     it('returns null for malformed exercised events', () => {
       expect(
         parseExercisedEvent({
@@ -280,6 +301,23 @@ describe('event-parser', () => {
               },
             },
           },
+        },
+      });
+
+      expect(result.created[0]?.contractId).toBe('created-1');
+    });
+
+    it('extracts from transaction.events arrays', () => {
+      const result = extractEventsFromTransaction({
+        transaction: {
+          events: [
+            {
+              CreatedEvent: {
+                contractId: 'created-1',
+                templateId: 'pkg:Module:Created',
+              },
+            },
+          ],
         },
       });
 

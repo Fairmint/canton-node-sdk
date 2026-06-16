@@ -41,8 +41,8 @@ export interface ParsedExercisedEvent {
   readonly choice: string;
   readonly packageName?: string;
   readonly interfaceId?: string | null;
-  readonly exerciseArgument?: Readonly<Record<string, unknown>>;
-  readonly exerciseResult?: Readonly<Record<string, unknown>>;
+  readonly exerciseArgument?: unknown;
+  readonly exerciseResult?: unknown;
   readonly actingParties?: readonly string[];
   readonly witnessParties?: readonly string[];
   readonly consuming?: boolean;
@@ -124,8 +124,11 @@ export function parseTemplateId(templateId: string): ParsedTemplateId {
 }
 
 export function hasTemplateName(templateId: string, expectedTemplateName: string): boolean {
-  const lastColon = templateId.lastIndexOf(':');
-  return lastColon >= 0 && templateId.slice(lastColon + 1) === expectedTemplateName;
+  try {
+    return parseTemplateId(templateId).templateName === expectedTemplateName;
+  } catch {
+    return false;
+  }
 }
 
 export function parseCreatedEvent(event: unknown): ParsedCreatedEvent | null {
@@ -214,8 +217,9 @@ export function parseExercisedEvent(event: unknown): ParsedExercisedEvent | null
   };
   const packageName = readString(value['packageName']);
   const interfaceId = readNullableString(value['interfaceId']);
-  const exerciseArgument = readRecord(value['exerciseArgument']) ?? readRecord(value['choiceArgument']);
-  const exerciseResult = readRecord(value['exerciseResult']);
+  const exerciseArgument =
+    value['exerciseArgument'] !== undefined ? value['exerciseArgument'] : value['choiceArgument'];
+  const { exerciseResult } = value;
   const actingParties = readStringArray(value['actingParties']);
   const witnessParties = readStringArray(value['witnessParties']);
   const consuming = readBoolean(value['consuming']);
@@ -250,6 +254,15 @@ function getNestedRecord(value: unknown, path: readonly string[]): Readonly<Reco
   return readRecord(current) ?? null;
 }
 
+function getNestedArray(value: unknown, path: readonly string[]): readonly unknown[] | null {
+  let current = value;
+  for (const segment of path) {
+    if (!isRecord(current)) return null;
+    current = current[segment];
+  }
+  return Array.isArray(current) ? current : null;
+}
+
 function getEventsById(transaction: unknown): Readonly<Record<string, unknown>> | null {
   const paths: ReadonlyArray<readonly string[]> = [
     ['eventsById'],
@@ -268,9 +281,24 @@ function getEventsById(transaction: unknown): Readonly<Record<string, unknown>> 
   return null;
 }
 
+function getEventArray(transaction: unknown): readonly unknown[] | null {
+  const paths: ReadonlyArray<readonly string[]> = [
+    ['events'],
+    ['transactionTree', 'events'],
+    ['transaction', 'events'],
+  ];
+
+  for (const path of paths) {
+    const events = getNestedArray(transaction, path);
+    if (events) return events;
+  }
+
+  return null;
+}
+
 export function extractEventsFromTransaction(transaction: unknown): ParsedTransactionEvents {
   const eventsById = getEventsById(transaction);
-  const events = eventsById ? Object.values(eventsById) : [];
+  const events = eventsById ? Object.values(eventsById) : (getEventArray(transaction) ?? []);
 
   return events.reduce<ParsedTransactionEvents>(
     (acc, event) => {

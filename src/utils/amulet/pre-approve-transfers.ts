@@ -163,7 +163,7 @@ export async function preApproveTransfers(
   }
 
   // Extract the created TransferPreapproval contract ID from the result
-  const contractId = extractEventsFromTransaction(result).created.find((event) =>
+  const contractId = extractEventsFromTransaction(result).created.find((event): boolean =>
     hasTemplateName(event.templateId, 'TransferPreapproval')
   )?.contractId;
 

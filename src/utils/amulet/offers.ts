@@ -65,7 +65,7 @@ export async function createTransferOffer(params: CreateTransferOfferParams): Pr
   });
 
   const createdEvents = extractEventsFromTransaction(transferOfferCid).created;
-  const createdEvent = createdEvents.find((event) => hasTemplateName(event.templateId, 'TransferOffer'));
+  const createdEvent = createdEvents.find((event): boolean => hasTemplateName(event.templateId, 'TransferOffer'));
   if (!createdEvent) {
     throw new OperationError(`Failed to create TransferOffer contract`, OperationErrorCode.TRANSACTION_FAILED, {
       createdTemplateIds: createdEvents.map((event) => event.templateId),
