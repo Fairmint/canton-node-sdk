@@ -123,6 +123,11 @@ export function parseTemplateId(templateId: string): ParsedTemplateId {
   };
 }
 
+export function hasTemplateName(templateId: string, expectedTemplateName: string): boolean {
+  const lastColon = templateId.lastIndexOf(':');
+  return lastColon >= 0 && templateId.slice(lastColon + 1) === expectedTemplateName;
+}
+
 export function parseCreatedEvent(event: unknown): ParsedCreatedEvent | null {
   const value = unwrapVariant(event, 'created');
   if (!value) return null;

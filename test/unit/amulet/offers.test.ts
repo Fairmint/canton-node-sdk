@@ -26,7 +26,7 @@ interface MockTransactionTreeResponse {
     commandId: string;
     effectiveAt: string;
     offset: string;
-    eventsById: Record<string, { CreatedTreeEvent: { value: { contractId: string; templateId: string } } }>;
+    eventsById: Record<string, unknown>;
     rootEventIds: string[];
     synchronizerId: string;
     traceContext: undefined;
@@ -81,6 +81,39 @@ describe('createTransferOffer', () => {
 
     expect(result).toBe('transfer-offer-contract-123');
     expect(mockClient.submitAndWaitForTransactionTree).toHaveBeenCalledTimes(1);
+  });
+
+  it('finds transfer offer created events without relying on event id', async () => {
+    const mockResponse = createTransactionTreeResponse('transfer-offer-contract-123');
+    mockResponse.transactionTree.eventsById = {
+      '1': {
+        CreatedTreeEvent: {
+          value: {
+            contractId: 'other-contract-123',
+            templateId: 'pkg:Splice.Wallet.TransferOffer:NotTransferOffer',
+          },
+        },
+      },
+      '7': {
+        CreatedTreeEvent: {
+          value: {
+            contractId: 'transfer-offer-contract-123',
+            templateId: 'pkg:Splice.Wallet.TransferOffer:TransferOffer',
+          },
+        },
+      },
+    };
+    mockResponse.transactionTree.rootEventIds = ['7'];
+    const mockClient = createMockLedgerClient(mockResponse);
+
+    const result = await createTransferOffer({
+      ledgerClient: mockClient,
+      receiverPartyId: 'receiver::fingerprint',
+      amount: '100',
+      description: 'Test transfer',
+    });
+
+    expect(result).toBe('transfer-offer-contract-123');
   });
 
   it('uses validator party as actAs', async () => {
@@ -207,7 +240,7 @@ describe('createTransferOffer', () => {
         amount: '100',
         description: 'Test transfer',
       })
-    ).rejects.toThrow('Expected CreatedTreeEvent but got ExercisedTreeEvent');
+    ).rejects.toThrow('Failed to create TransferOffer contract');
   });
 
   it('throws when response has no events', async () => {
@@ -225,7 +258,7 @@ describe('createTransferOffer', () => {
         amount: '100',
         description: 'Test transfer',
       })
-    ).rejects.toThrow('Expected CreatedTreeEvent but got undefined');
+    ).rejects.toThrow('Failed to create TransferOffer contract');
   });
 });
 

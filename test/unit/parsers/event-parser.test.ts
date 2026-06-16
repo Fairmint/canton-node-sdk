@@ -1,5 +1,6 @@
 import {
   extractEventsFromTransaction,
+  hasTemplateName,
   parseArchivedEvent,
   parseCreatedEvent,
   parseExercisedEvent,
@@ -26,6 +27,12 @@ describe('event-parser', () => {
 
     it('throws for invalid template ids', () => {
       expect(() => parseTemplateId('pkg:OnlyModule')).toThrow('Invalid templateId');
+    });
+
+    it('matches exact template names', () => {
+      expect(hasTemplateName('pkg:Module:TransferPreapproval', 'TransferPreapproval')).toBe(true);
+      expect(hasTemplateName('pkg:Module:NotTransferPreapproval', 'TransferPreapproval')).toBe(false);
+      expect(hasTemplateName('TransferPreapproval', 'TransferPreapproval')).toBe(false);
     });
   });
 

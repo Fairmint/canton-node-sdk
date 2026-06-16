@@ -4,7 +4,7 @@ import { type DisclosedContract, type ExerciseCommand } from '../../clients/ledg
 import { type ValidatorApiClient } from '../../clients/validator-api';
 import { ApiError, OperationError, OperationErrorCode } from '../../core/errors';
 import { getCurrentMiningRoundContext } from '../mining/mining-rounds';
-import { extractEventsFromTransaction } from '../parsers';
+import { extractEventsFromTransaction, hasTemplateName } from '../parsers';
 import { getAmuletsForTransfer } from './get-amulets-for-transfer';
 
 export interface PreApproveTransfersParams {
@@ -164,7 +164,7 @@ export async function preApproveTransfers(
 
   // Extract the created TransferPreapproval contract ID from the result
   const contractId = extractEventsFromTransaction(result).created.find((event) =>
-    event.templateId.includes('TransferPreapproval')
+    hasTemplateName(event.templateId, 'TransferPreapproval')
   )?.contractId;
 
   if (!contractId) {

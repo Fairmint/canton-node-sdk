@@ -323,6 +323,46 @@ describe('preApproveTransfers', () => {
     ).rejects.toThrow('Failed to create TransferPreapproval contract');
   });
 
+  it('does not match similarly named preapproval templates', async () => {
+    mockLedgerClient.submitAndWaitForTransactionTree.mockResolvedValue({
+      transactionTree: {
+        updateId: 'update-123',
+        commandId: 'cmd-123',
+        workflowId: 'workflow-123',
+        effectiveAt: '2026-01-01T00:00:00Z',
+        offset: 100,
+        synchronizerId: 'sync-123',
+        recordTime: '2026-01-01T00:00:00Z',
+        eventsById: {
+          '1': {
+            CreatedTreeEvent: {
+              value: {
+                offset: 100,
+                nodeId: 1,
+                contractId: 'other-contract-123',
+                templateId: 'pkg:Splice.AmuletRules:NotTransferPreapproval',
+                createdEventBlob: 'blob-123',
+                createdAt: '2026-01-01T00:00:00Z',
+                witnessParties: ['party1'],
+                signatories: ['party1'],
+                observers: [],
+                packageName: 'test-package',
+                representativePackageId: 'pkg-123',
+                acsDelta: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    await expect(
+      preApproveTransfers(mockLedgerClient, mockValidatorClient, {
+        receiverPartyId: 'receiver::fingerprint',
+      })
+    ).rejects.toThrow('Failed to create TransferPreapproval contract');
+  });
+
   it('includes amulet inputs from provider party', async () => {
     await preApproveTransfers(mockLedgerClient, mockValidatorClient, {
       receiverPartyId: 'receiver::fingerprint',

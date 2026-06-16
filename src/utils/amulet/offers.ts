@@ -2,7 +2,7 @@ import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { type SubmitAndWaitForTransactionTreeResponse } from '../../clients/ledger-json-api/operations';
 import { EnvLoader } from '../../core/config/EnvLoader';
 import { OperationError, OperationErrorCode } from '../../core/errors';
-import { parseCreatedEvent } from '../parsers';
+import { extractEventsFromTransaction, hasTemplateName } from '../parsers';
 
 export interface CreateTransferOfferParams {
   /** Ledger client for submitting commands. */
@@ -64,12 +64,11 @@ export async function createTransferOffer(params: CreateTransferOfferParams): Pr
     actAs: [validatorParty],
   });
 
-  const transferOfferEvent = transferOfferCid.transactionTree.eventsById['1'];
-  const createdEvent = parseCreatedEvent(transferOfferEvent);
+  const createdEvents = extractEventsFromTransaction(transferOfferCid).created;
+  const createdEvent = createdEvents.find((event) => hasTemplateName(event.templateId, 'TransferOffer'));
   if (!createdEvent) {
-    const firstKey = transferOfferEvent ? Object.keys(transferOfferEvent)[0] : 'undefined';
-    throw new OperationError(`Expected CreatedTreeEvent but got ${firstKey}`, OperationErrorCode.TRANSACTION_FAILED, {
-      eventType: firstKey,
+    throw new OperationError(`Failed to create TransferOffer contract`, OperationErrorCode.TRANSACTION_FAILED, {
+      createdTemplateIds: createdEvents.map((event) => event.templateId),
       receiverPartyId,
       amount,
     });
