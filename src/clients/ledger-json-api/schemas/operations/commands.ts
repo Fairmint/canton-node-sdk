@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { CompositeCommandSchema, DeduplicationPeriodSchema, DisclosedContractSchema } from '../api/commands';
 import { ReassignmentCommandSchema } from '../api/reassignment';
-import { MinLedgerTimeRelSchema, PrefetchContractKeySchema } from '../common';
+import { MinLedgerTimeRelSchema, PrefetchContractKeySchema, TraceContextSchema } from '../common';
 import { NonEmptyStringSchema } from './base';
 import { OperationEventFormatSchema, TransactionFormatSchema } from './updates';
 
@@ -30,6 +30,8 @@ const BaseCommandParamsSchema = z.object({
   minLedgerTimeRel: MinLedgerTimeRelSchema.optional(),
   /** Submission ID. */
   submissionId: NonEmptyStringSchema.optional(),
+  /** Trace context propagated to Canton command submissions. */
+  traceContext: TraceContextSchema.optional(),
   /** Disclosed contracts to include. */
   disclosedContracts: z.array(DisclosedContractSchema).optional(),
   /** Target synchronizer ID. */
