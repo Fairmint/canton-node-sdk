@@ -31,8 +31,8 @@ export const AllocateExternalPartyParamsSchema = z.object({
   /** Synchronizer ID on which to onboard the party */
   synchronizer: z.string(),
   /** Topology transactions to onboard the external party (from generate-topology endpoint) */
-  onboardingTransactions: z.array(SignedTransactionSchema).optional(),
-  /** Signatures for the multi-hash (alternative to signing each individual transaction) */
+  onboardingTransactions: z.array(SignedTransactionSchema),
+  /** Signatures for the multi-hash (alternative to signatures on each individual transaction) */
   multiHashSignatures: z.array(SignatureSchema).optional(),
   /** Identity provider ID. If not set, assume the party is managed by the default identity provider. */
   identityProviderId: z.string(),
@@ -45,8 +45,8 @@ export type AllocateExternalPartyResponse = GeneratedResponse;
 /**
  * Allocate a new external party
  *
- * This endpoint completes the onboarding of an external party by submitting the signed topology transactions or
- * multi-hash signatures. The topology transactions and multi-hash should be obtained from the generate-topology
+ * This endpoint completes the onboarding of an external party by submitting the topology transactions and signatures.
+ * The topology transactions and multi-hash should be obtained from the generate-topology
  * endpoint and signed with the external party's private key.
  *
  * @example
@@ -55,6 +55,9 @@ export type AllocateExternalPartyResponse = GeneratedResponse;
  *   const result = await client.allocateExternalParty({
  *     synchronizer: 'global-synchronizer',
  *     identityProviderId: 'default',
+ *     onboardingTransactions: [{
+ *       transaction: 'serialized-transaction'
+ *     }],
  *     multiHashSignatures: [{
  *       format: 'SIGNATURE_FORMAT_RAW',
  *       signature: 'base64-encoded-signature',
@@ -81,9 +84,7 @@ export const AllocateExternalParty = createApiOperation<AllocateExternalPartyPar
   buildRequestData: (params: AllocateExternalPartyParams, _client: BaseClient): GeneratedRequest => ({
     synchronizer: params.synchronizer,
     identityProviderId: params.identityProviderId,
-    ...(params.onboardingTransactions && {
-      onboardingTransactions: params.onboardingTransactions,
-    }),
+    onboardingTransactions: params.onboardingTransactions,
     ...(params.multiHashSignatures && {
       multiHashSignatures: params.multiHashSignatures,
     }),

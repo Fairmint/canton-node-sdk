@@ -8,7 +8,7 @@ export interface AllocateExternalPartyOptions {
   readonly ledgerClient: LedgerJsonApiClient;
   readonly synchronizerId: string;
   readonly identityProviderId: string;
-  readonly onboardingTransactions?: AllocateExternalPartyParams['onboardingTransactions'];
+  readonly onboardingTransactions: AllocateExternalPartyParams['onboardingTransactions'];
   readonly multiHashSignatures?: AllocateExternalPartyParams['multiHashSignatures'];
 }
 

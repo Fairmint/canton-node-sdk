@@ -1,19 +1,32 @@
 /**
  * ScanApiClient integration tests: Balance Information
- *
- * NOTE: Some balance endpoints may not be available in basic cn-quickstart setup. These tests are skipped until we
- * confirm endpoint availability. See: tasks/2026/01/hd/2026.01.02-sdk-refactoring-and-testing.md (Backlog section)
  */
 
 import { getClient } from './setup';
 
 describe('ScanApiClient / Balance', () => {
-  // Skip: This endpoint may not be available in cn-quickstart
-  test.skip('getTotalAmuletBalance returns network balance', async () => {
+  test('getInstrument returns Amulet metadata', async () => {
     const client = getClient();
-    const response = await client.getTotalAmuletBalance();
 
-    expect(response).toBeDefined();
-    expect(response.total_balance).toBeDefined();
+    const instrument = await client.getInstrument({ instrumentId: 'Amulet' });
+
+    expect(instrument.id).toBe('Amulet');
+    expect(instrument.name).toBeDefined();
+    expect(instrument.symbol).toBeDefined();
+    expect(instrument.decimals).toBeGreaterThanOrEqual(0);
+    expect(instrument.decimals).toBeLessThanOrEqual(10);
+    expect(instrument.supportedApis).toMatchObject({
+      'splice-api-token-metadata-v1': 1,
+      'splice-api-token-holding-v1': 1,
+      'splice-api-token-transfer-instruction-v1': 1,
+    });
+
+    const { totalSupply, totalSupplyAsOf } = instrument;
+    if (totalSupply !== undefined) {
+      expect(totalSupply).toMatch(/^\d+(?:\.\d+)?$/);
+    }
+    if (totalSupplyAsOf !== undefined) {
+      expect(Date.parse(totalSupplyAsOf)).not.toBeNaN();
+    }
   });
 });

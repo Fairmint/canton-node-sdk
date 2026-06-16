@@ -20,12 +20,24 @@ describe('ScanApiClient / Mining', () => {
     expect(response.open_mining_rounds).not.toBeNull();
   });
 
-  // Skip: This endpoint may not be available in cn-quickstart scan API
-  test.skip('getRoundOfLatestData returns latest round info', async () => {
+  test('getDsoInfo returns the latest mining round contract', async () => {
     const client = getClient();
-    const response = await client.getRoundOfLatestData();
 
-    expect(response).toBeDefined();
-    expect(response.round).toBeDefined();
+    const dsoInfo = await client.getDsoInfo();
+    const rounds = await client.getOpenAndIssuingMiningRounds({
+      body: {
+        cached_open_mining_round_contract_ids: [],
+        cached_issuing_round_contract_ids: [],
+      },
+    });
+
+    const latestMiningRound = dsoInfo.latest_mining_round;
+    const latestContract = latestMiningRound.contract;
+
+    expect(latestContract.contract_id).toBeDefined();
+    expect(latestContract.template_id).toContain('OpenMiningRound');
+    const openRound = rounds.open_mining_rounds[latestContract.contract_id];
+    expect(openRound).toBeDefined();
+    expect(openRound?.contract?.contract_id).toBe(latestContract.contract_id);
   });
 });

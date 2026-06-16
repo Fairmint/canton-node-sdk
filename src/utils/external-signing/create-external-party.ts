@@ -120,7 +120,12 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
     );
   }
 
-  if (!topologyTransactions || topologyTransactions.length === 0) {
+  const rawTopologyTransactions: unknown = topologyTransactions;
+  if (
+    !Array.isArray(rawTopologyTransactions) ||
+    rawTopologyTransactions.length === 0 ||
+    !rawTopologyTransactions.every((transaction) => typeof transaction === 'string')
+  ) {
     throw new OperationError(
       'No topology transactions returned from topology generation',
       OperationErrorCode.PARTY_CREATION_FAILED,
@@ -144,7 +149,7 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
   const multiHashSignature = Buffer.from(multiHashSignatureHex, 'hex').toString('base64');
 
   // Step 4: Allocate the party using Ledger JSON API
-  const onboardingTransactions = topologyTransactions.map((transaction: string) => ({ transaction }));
+  const onboardingTransactions = rawTopologyTransactions.map((transaction) => ({ transaction }));
 
   const allocateResult = await ledgerClient.allocateExternalParty({
     synchronizer: synchronizerId,

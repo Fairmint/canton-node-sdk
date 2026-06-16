@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ApiOperation } from '../../../../../core';
+import { ApiError } from '../../../../../core/errors';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 
 const endpoint = '/v2/parties';
@@ -36,8 +37,13 @@ export async function fetchAllParties(
       includeBearerToken: true,
     });
 
-    if (response.partyDetails?.length) {
-      aggregatedPartyDetails.push(...response.partyDetails);
+    const rawPartyDetails: unknown = response.partyDetails;
+    if (!Array.isArray(rawPartyDetails)) {
+      throw new ApiError('ListParties response did not include partyDetails');
+    }
+    const partyDetails = rawPartyDetails as PartyDetail[];
+    if (partyDetails.length > 0) {
+      aggregatedPartyDetails.push(...partyDetails);
     }
 
     const nextTokenRaw = response.nextPageToken;

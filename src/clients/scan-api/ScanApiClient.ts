@@ -40,6 +40,14 @@ function resolveConfiguredScanApiUrl(runtime: CantonRuntime): string | undefined
   }
 }
 
+function getScanHostRoot(scanApiUrl: string): string {
+  return scanApiUrl.replace(/\/api\/scan\/?$/, '').replace(/\/$/, '');
+}
+
+interface RotatableScanUrl {
+  readonly buildUrl: (baseUrl: string) => string;
+}
+
 /**
  * Public Scan API client.
  *
@@ -95,17 +103,33 @@ export class ScanApiClient extends ScanApiClientGenerated {
     }
   }
 
-  private getRelativeUrlWithinApiRoot(fullUrl: string): string | null {
+  private getRotatableUrl(fullUrl: string): RotatableScanUrl | null {
     for (const base of this.scanApiUrls) {
       if (fullUrl.startsWith(base)) {
-        return fullUrl.slice(base.length);
+        const relativePath = fullUrl.slice(base.length);
+        return {
+          buildUrl: (baseUrl): string => `${baseUrl}${relativePath}`,
+        };
+      }
+
+      const hostRoot = getScanHostRoot(base);
+      if (fullUrl.startsWith(hostRoot)) {
+        const relativePath = fullUrl.slice(hostRoot.length);
+        if (relativePath.startsWith('/')) {
+          return {
+            buildUrl: (baseUrl): string => `${getScanHostRoot(baseUrl)}${relativePath}`,
+          };
+        }
       }
     }
 
     const marker = '/api/scan';
     const idx = fullUrl.indexOf(marker);
     if (idx >= 0) {
-      return fullUrl.slice(idx + marker.length);
+      const relativePath = fullUrl.slice(idx + marker.length);
+      return {
+        buildUrl: (baseUrl): string => `${baseUrl}${relativePath}`,
+      };
     }
 
     return null;
@@ -116,8 +140,8 @@ export class ScanApiClient extends ScanApiClientGenerated {
       return doRequest(fullUrl);
     }
 
-    const relative = this.getRelativeUrlWithinApiRoot(fullUrl);
-    if (relative === null) {
+    const rotatableUrl = this.getRotatableUrl(fullUrl);
+    if (rotatableUrl === null) {
       return doRequest(fullUrl);
     }
 
@@ -130,7 +154,7 @@ export class ScanApiClient extends ScanApiClientGenerated {
       if (!base) {
         continue;
       }
-      const url = `${base}${relative}`;
+      const url = rotatableUrl.buildUrl(base);
 
       try {
         const result = await doRequest(url);

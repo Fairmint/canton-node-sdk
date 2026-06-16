@@ -12,9 +12,10 @@ describe('LedgerJsonApiClient / Updates', () => {
   beforeAll(async () => {
     const client = getClient();
     const parties = await client.listParties({});
-    const partyDetails = parties.partyDetails ?? [];
-    if (partyDetails.length > 0 && partyDetails[0]) {
-      partyId = partyDetails[0].party;
+    const { partyDetails } = parties;
+    const [firstPartyDetails] = partyDetails;
+    if (firstPartyDetails) {
+      partyId = firstPartyDetails.party;
     }
   });
 

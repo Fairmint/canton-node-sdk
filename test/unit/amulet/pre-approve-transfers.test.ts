@@ -290,6 +290,7 @@ describe('preApproveTransfers', () => {
                 nodeId: 1,
                 contractId: 'other-contract-123',
                 templateId: 'pkg:Some.Other:Contract', // Not TransferPreapproval
+                createArgument: {},
                 createdEventBlob: 'blob-123',
                 createdAt: '2026-01-01T00:00:00Z',
                 witnessParties: ['party1'],
