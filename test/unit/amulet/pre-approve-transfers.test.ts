@@ -1,5 +1,9 @@
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import type { CompositeCommand, ExerciseCommand } from '../../../src/clients/ledger-json-api/schemas/api/commands';
+import type {
+  CompositeCommand,
+  DisclosedContract,
+  ExerciseCommand,
+} from '../../../src/clients/ledger-json-api/schemas/api/commands';
 import type { ValidatorApiClient } from '../../../src/clients/validator-api';
 import { preApproveTransfers } from '../../../src/utils/amulet/pre-approve-transfers';
 
@@ -218,11 +222,15 @@ describe('preApproveTransfers', () => {
     expect(callArgs?.disclosedContracts?.length).toBeGreaterThan(0);
 
     // Should include AmuletRules contract
-    const amuletRulesContract = callArgs?.disclosedContracts?.find((c) => c.contractId === 'amulet-rules-contract-123');
+    const amuletRulesContract = callArgs?.disclosedContracts?.find(
+      (c: DisclosedContract) => c.contractId === 'amulet-rules-contract-123'
+    );
     expect(amuletRulesContract).toBeDefined();
 
     // Should include mining round contract
-    const miningRoundContract = callArgs?.disclosedContracts?.find((c) => c.contractId === 'mining-round-contract-123');
+    const miningRoundContract = callArgs?.disclosedContracts?.find(
+      (c: DisclosedContract) => c.contractId === 'mining-round-contract-123'
+    );
     expect(miningRoundContract).toBeDefined();
   });
 
@@ -232,7 +240,9 @@ describe('preApproveTransfers', () => {
     });
 
     const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
-    const featuredContract = callArgs?.disclosedContracts?.find((c) => c.contractId === 'featured-app-right-123');
+    const featuredContract = callArgs?.disclosedContracts?.find(
+      (c: DisclosedContract) => c.contractId === 'featured-app-right-123'
+    );
     expect(featuredContract).toBeDefined();
   });
 
@@ -290,6 +300,47 @@ describe('preApproveTransfers', () => {
                 nodeId: 1,
                 contractId: 'other-contract-123',
                 templateId: 'pkg:Some.Other:Contract', // Not TransferPreapproval
+                createArgument: {},
+                createdEventBlob: 'blob-123',
+                createdAt: '2026-01-01T00:00:00Z',
+                witnessParties: ['party1'],
+                signatories: ['party1'],
+                observers: [],
+                packageName: 'test-package',
+                representativePackageId: 'pkg-123',
+                acsDelta: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    await expect(
+      preApproveTransfers(mockLedgerClient, mockValidatorClient, {
+        receiverPartyId: 'receiver::fingerprint',
+      })
+    ).rejects.toThrow('Failed to create TransferPreapproval contract');
+  });
+
+  it('does not match similarly named preapproval templates', async () => {
+    mockLedgerClient.submitAndWaitForTransactionTree.mockResolvedValue({
+      transactionTree: {
+        updateId: 'update-123',
+        commandId: 'cmd-123',
+        workflowId: 'workflow-123',
+        effectiveAt: '2026-01-01T00:00:00Z',
+        offset: 100,
+        synchronizerId: 'sync-123',
+        recordTime: '2026-01-01T00:00:00Z',
+        eventsById: {
+          '1': {
+            CreatedTreeEvent: {
+              value: {
+                offset: 100,
+                nodeId: 1,
+                contractId: 'other-contract-123',
+                templateId: 'pkg:Splice.AmuletRules:NotTransferPreapproval',
                 createArgument: {},
                 createdEventBlob: 'blob-123',
                 createdAt: '2026-01-01T00:00:00Z',
