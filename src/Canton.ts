@@ -162,7 +162,7 @@ export class Canton {
    * readiness/liveness operation. Validator and Scan use their readiness/liveness endpoints.
    */
   public async checkHealth(options: CantonHealthCheckOptions = {}): Promise<ServiceHealthStatus> {
-    const servicesToCheck = options.services ?? (['ledger', 'validator', 'scan'] as const);
+    const servicesToCheck = [...new Set(options.services ?? (['ledger', 'validator', 'scan'] as const))];
     const services: Partial<Record<CantonHealthService, CantonServiceHealthStatus>> = {};
 
     await Promise.all(
@@ -219,10 +219,14 @@ export class Canton {
       probe(async () => this.scan.isLive()),
       probe(async () => this.scan.getHealthStatus()),
     ]);
+    const scanStatusOk = status.ok && isSuccessfulScanStatus(status.value);
     const errors = collectErrors(ready, live, status);
+    if (status.ok && !scanStatusOk) {
+      errors.push(formatScanStatusError(status.value));
+    }
 
     return {
-      ok: ready.ok && live.ok && status.ok,
+      ok: ready.ok && live.ok && scanStatusOk,
       ready: ready.ok,
       live: live.ok,
       ...(status.ok ? { status: status.value } : {}),
@@ -257,6 +261,34 @@ async function probe<T>(operation: () => Promise<T>): Promise<ProbeResult<T>> {
 
 function collectErrors(...results: ReadonlyArray<ProbeResult<unknown>>): string[] {
   return results.flatMap((result) => (result.ok ? [] : [result.error]));
+}
+
+function isSuccessfulScanStatus(status: unknown): boolean {
+  return isRecord(status) && 'success' in status;
+}
+
+function formatScanStatusError(status: unknown): string {
+  if (!isRecord(status)) {
+    return 'scan status response was not an object';
+  }
+  if ('not_initialized' in status) {
+    return 'scan status not initialized';
+  }
+  if ('failed' in status) {
+    const { failed } = status;
+    if (isRecord(failed)) {
+      const { error } = failed;
+      if (typeof error === 'string') {
+        return `scan status failed: ${error}`;
+      }
+    }
+    return 'scan status failed';
+  }
+  return 'scan status did not report success';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function formatHealthError(error: unknown): string {
