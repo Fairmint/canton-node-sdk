@@ -15,7 +15,7 @@ const publicRequestConfig = { contentType: 'application/json', includeBearerToke
 export const IsReady = createApiOperation<void, void>({
   paramsSchema: z.void(),
   method: 'GET',
-  buildUrl: (_params: void, apiUrl: string) => `${apiUrl}/api/validator/readyz`,
+  buildUrl: (_params: void, apiUrl: string): string => `${apiUrl}/api/validator/readyz`,
   requestConfig: publicRequestConfig,
 });
 
@@ -31,6 +31,6 @@ export const IsReady = createApiOperation<void, void>({
 export const IsLive = createApiOperation<void, void>({
   paramsSchema: z.void(),
   method: 'GET',
-  buildUrl: (_params: void, apiUrl: string) => `${apiUrl}/api/validator/livez`,
+  buildUrl: (_params: void, apiUrl: string): string => `${apiUrl}/api/validator/livez`,
   requestConfig: publicRequestConfig,
 });

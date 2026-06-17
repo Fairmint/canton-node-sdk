@@ -19,7 +19,7 @@ import { ValidatorApiClient } from '../../../src';
 import { CantonRuntime, type ClientConfig } from '../../../src/core';
 
 interface MockAxiosInstance {
-  get: jest.Mock;
+  get: jest.Mock<Promise<{ data: undefined }>, [string, Record<string, unknown>]>;
 }
 
 function createClient(): { client: ValidatorApiClient; mockAxiosInstance: MockAxiosInstance } {
@@ -77,5 +77,19 @@ describe('ValidatorApiClient health checks', () => {
     expect(mockAxiosInstance.get).toHaveBeenCalledWith('http://localhost:3903/api/validator/livez', {
       headers: { 'Content-Type': 'application/json' },
     });
+  });
+
+  it('rejects when validator readyz request fails', async () => {
+    const { client, mockAxiosInstance } = createClient();
+    mockAxiosInstance.get.mockRejectedValueOnce(new Error('readyz unavailable'));
+
+    await expect(client.isReady()).rejects.toThrow('readyz unavailable');
+  });
+
+  it('rejects when validator livez request fails', async () => {
+    const { client, mockAxiosInstance } = createClient();
+    mockAxiosInstance.get.mockRejectedValueOnce(new Error('livez unavailable'));
+
+    await expect(client.isLive()).rejects.toThrow('livez unavailable');
   });
 });

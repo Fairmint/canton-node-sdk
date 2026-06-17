@@ -167,12 +167,18 @@ export class Canton {
 
     await Promise.all(
       servicesToCheck.map(async (service) => {
-        if (service === 'ledger') {
-          services.ledger = await this.checkLedgerHealth();
-        } else if (service === 'validator') {
-          services.validator = await this.checkValidatorHealth();
-        } else {
-          services.scan = await this.checkScanHealth();
+        switch (service) {
+          case 'ledger':
+            services.ledger = await this.checkLedgerHealth();
+            return;
+          case 'validator':
+            services.validator = await this.checkValidatorHealth();
+            return;
+          case 'scan':
+            services.scan = await this.checkScanHealth();
+            return;
+          default:
+            throw new Error(`Unknown Canton health service: ${String(service)}`);
         }
       })
     );

@@ -39,4 +39,30 @@ describe('Canton.checkHealth', () => {
     } satisfies Partial<CantonServiceHealthStatus>);
     expect(health.services.scan).toBeUndefined();
   });
+
+  it('rejects unknown service values supplied by runtime JavaScript callers', async () => {
+    const canton = new Canton({
+      network: 'localnet',
+      apis: {
+        LEDGER_JSON_API: {
+          apiUrl: 'https://ledger.example',
+          auth: { grantType: 'client_credentials', clientId: 'ledger', clientSecret: 'secret' },
+        },
+        VALIDATOR_API: {
+          apiUrl: 'https://validator.example',
+          auth: { grantType: 'client_credentials', clientId: 'validator', clientSecret: 'secret' },
+        },
+        SCAN_API: {
+          apiUrl: 'https://scan.example/api/scan',
+          auth: { grantType: 'client_credentials', clientId: '' },
+        },
+      },
+    });
+
+    await expect(
+      canton.checkHealth({
+        services: ['validatorr'] as unknown as readonly ['validator'],
+      })
+    ).rejects.toThrow('Unknown Canton health service: validatorr');
+  });
 });
