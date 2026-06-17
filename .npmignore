@@ -49,6 +49,11 @@ coverage/
 
 # Dependency directories
 node_modules/
+/libs/
+
+# Crash dumps / accidental binary artifacts
+/core
+/core.*
 
 # Optional npm cache directory
 .npm
