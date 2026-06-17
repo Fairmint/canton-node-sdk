@@ -4,6 +4,42 @@ import { type Logger } from './core/logging';
 import { CantonRuntime } from './core/runtime';
 import { type ClientConfig, type NetworkType, type ProviderType } from './core/types';
 
+export type CantonHealthService = 'ledger' | 'validator' | 'scan';
+
+/** Options for one-shot Canton service health checks. */
+export interface CantonHealthCheckOptions {
+  /** Services to check. Defaults to ledger, validator, and scan. */
+  readonly services?: readonly CantonHealthService[];
+}
+
+/** Health check result for one Canton service. */
+export interface CantonServiceHealthStatus {
+  /** True when every probe for this service succeeded. */
+  readonly ok: boolean;
+  /** Readiness probe result, when the service exposes a readiness endpoint. */
+  readonly ready?: boolean;
+  /** Liveness probe result, when the service exposes a liveness endpoint. */
+  readonly live?: boolean;
+  /** Version response, when the service exposes a version endpoint. */
+  readonly version?: unknown;
+  /** Status response, when the service exposes a status endpoint. */
+  readonly status?: unknown;
+  /** Combined probe error messages when one or more probes failed. */
+  readonly error?: string;
+}
+
+/** Combined health check result for selected Canton services. */
+export interface ServiceHealthStatus {
+  /** True when every selected service is healthy. */
+  readonly ok: boolean;
+  /** ISO timestamp for when the check completed. */
+  readonly checkedAt: string;
+  /** Per-service health results. */
+  readonly services: Partial<Record<CantonHealthService, CantonServiceHealthStatus>>;
+}
+
+type ProbeResult<T> = { ok: true; value: T } | { ok: false; error: string };
+
 /**
  * Configuration for the Canton unified client. Initializes all clients with shared settings.
  *
@@ -71,8 +107,6 @@ export class Canton {
   /**
    * Creates a new Canton unified client.
    *
-   * @param config - Connection targets (`network`, optional `provider`) plus identity/logging/API overrides.
-   *
    * @example
    *   const canton = new Canton({ network: 'localnet' });
    *
@@ -82,6 +116,8 @@ export class Canton {
    *     provider: '5n',
    *     debug: true,
    *   });
+   *
+   * @param config - Connection targets (`network`, optional `provider`) plus identity/logging/API overrides.
    */
   constructor(config: CantonConfig) {
     this.config = config;
@@ -118,6 +154,75 @@ export class Canton {
     this.ledger.setPartyId(partyId);
     this.validator.setPartyId(partyId);
   }
+
+  /**
+   * Checks configured Canton services without waiting or throwing on partial failures.
+   *
+   * Ledger health is represented by the JSON API version endpoint because this checkout does not expose a JSON API
+   * readiness/liveness operation. Validator and Scan use their readiness/liveness endpoints.
+   */
+  public async checkHealth(options: CantonHealthCheckOptions = {}): Promise<ServiceHealthStatus> {
+    const servicesToCheck = options.services ?? (['ledger', 'validator', 'scan'] as const);
+    const services: Partial<Record<CantonHealthService, CantonServiceHealthStatus>> = {};
+
+    await Promise.all(
+      servicesToCheck.map(async (service) => {
+        if (service === 'ledger') {
+          services.ledger = await this.checkLedgerHealth();
+        } else if (service === 'validator') {
+          services.validator = await this.checkValidatorHealth();
+        } else {
+          services.scan = await this.checkScanHealth();
+        }
+      })
+    );
+
+    return {
+      ok: Object.values(services).every((service) => service.ok),
+      checkedAt: new Date().toISOString(),
+      services,
+    };
+  }
+
+  private async checkLedgerHealth(): Promise<CantonServiceHealthStatus> {
+    const version = await probe(async () => this.ledger.getVersion());
+    return {
+      ok: version.ok,
+      ...(version.ok ? { version: version.value } : { error: version.error }),
+    };
+  }
+
+  private async checkValidatorHealth(): Promise<CantonServiceHealthStatus> {
+    const [ready, live] = await Promise.all([
+      probe(async () => this.validator.isReady()),
+      probe(async () => this.validator.isLive()),
+    ]);
+    const errors = collectErrors(ready, live);
+
+    return {
+      ok: ready.ok && live.ok,
+      ready: ready.ok,
+      live: live.ok,
+      ...(errors.length > 0 ? { error: errors.join('; ') } : {}),
+    };
+  }
+
+  private async checkScanHealth(): Promise<CantonServiceHealthStatus> {
+    const [ready, live, status] = await Promise.all([
+      probe(async () => this.scan.isReady()),
+      probe(async () => this.scan.isLive()),
+      probe(async () => this.scan.getHealthStatus()),
+    ]);
+    const errors = collectErrors(ready, live, status);
+
+    return {
+      ok: ready.ok && live.ok && status.ok,
+      ready: ready.ok,
+      live: live.ok,
+      ...(status.ok ? { status: status.value } : {}),
+      ...(errors.length > 0 ? { error: errors.join('; ') } : {}),
+    };
+  }
 }
 
 /** Builds a ClientConfig from CantonConfig, omitting undefined values to preserve exactOptionalPropertyTypes. */
@@ -134,4 +239,23 @@ function buildClientConfig(config: CantonConfig): ClientConfig {
   if (config.apis !== undefined) clientConfig.apis = { ...config.apis };
 
   return clientConfig;
+}
+
+async function probe<T>(operation: () => Promise<T>): Promise<ProbeResult<T>> {
+  try {
+    return { ok: true, value: await operation() };
+  } catch (error) {
+    return { ok: false, error: formatHealthError(error) };
+  }
+}
+
+function collectErrors(...results: ReadonlyArray<ProbeResult<unknown>>): string[] {
+  return results.flatMap((result) => (result.ok ? [] : [result.error]));
+}
+
+function formatHealthError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
 }
