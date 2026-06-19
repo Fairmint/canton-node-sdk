@@ -1,5 +1,7 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { ApiError, OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
+import { isRecord } from '../../core/utils';
+import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
 import { allocateExternalParty } from './allocate-external-party';
 import {
   assertCantonHashSignature,
@@ -154,6 +156,7 @@ export async function submitExternalPartyOnboarding(
     const existing = await readExistingExternalPartyAfterAllocationConflict(
       options.ledgerClient,
       options.partyId,
+      options.identityProviderId ?? DEFAULT_CANTON_IDENTITY_PROVIDER_ID,
       error
     );
     if (!existing) {
@@ -244,13 +247,14 @@ function assertGeneratedPartyMatchesPublicKey(input: {
 async function readExistingExternalPartyAfterAllocationConflict(
   ledgerClient: LedgerJsonApiClient,
   partyId: string,
+  identityProviderId: string,
   error: unknown
 ): Promise<Record<string, unknown> | null> {
   if (!isConflict(error)) return null;
   try {
     const partyDetailsResponse = await ledgerClient.getPartyDetails({
       party: partyId,
-      identityProviderId: DEFAULT_CANTON_IDENTITY_PROVIDER_ID,
+      identityProviderId,
     });
     const partyDetails = readMatchingPartyDetails(partyDetailsResponse, partyId);
     if (!partyDetails) return null;
@@ -307,17 +311,6 @@ function readPartyIdsByFingerprint(source: unknown, publicKeyFingerprint: string
   return [...seen].sort((left, right) => left.localeCompare(right));
 }
 
-function readRequiredString(source: unknown, key: string, operation: string): string {
-  if (isRecord(source) && key in source) {
-    const value = source[key];
-    if (typeof value === 'string' && value.trim()) return value;
-  }
-  throw new OperationError(
-    `Canton ${operation} response did not include ${key}`,
-    OperationErrorCode.TRANSACTION_FAILED
-  );
-}
-
 function readRequiredStringArray(source: unknown, key: string, operation: string): string[] {
   if (isRecord(source) && key in source) {
     const value = source[key];
@@ -351,12 +344,4 @@ function readErrorDetails(error: unknown): Record<string, unknown> {
     return { message: error instanceof Error ? error.message : String(error) };
   }
   return objectOrEmpty(error);
-}
-
-function objectOrEmpty(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

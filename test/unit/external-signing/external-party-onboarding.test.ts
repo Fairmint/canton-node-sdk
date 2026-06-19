@@ -187,12 +187,13 @@ describe('external-party onboarding helpers', () => {
       multiHashHex: MULTI_HASH_HEX,
       topologyTransactions: ['topology-tx-1'],
       multiHashSignatureBase64: fixture.signMultiHash(),
+      identityProviderId: 'custom-idp',
       allowAlreadyExists: true,
     });
 
     expect(ledgerClient.getPartyDetails).toHaveBeenCalledWith({
       party: fixture.partyId,
-      identityProviderId: '',
+      identityProviderId: 'custom-idp',
     });
     expect(submitted.alreadyExisted).toBe(true);
     expect(submitted.partyId).toBe(fixture.partyId);

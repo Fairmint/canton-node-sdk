@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { type ValidatorApiClient } from '../../clients/validator-api';
 import { OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
+import { isRecord } from '../../core/utils';
+import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
 import {
   assertCantonHashSignature,
   assertCantonPartyMatchesPublicKey,
@@ -102,7 +104,7 @@ export async function prepareExternalPartyTransferOfferAcceptance(
 
   const synchronizerId = connectedSynchronizerId;
   const offerDisclosure = options.disclosedContract
-    ? { contract: options.disclosedContract, raw: { source: 'caller' } }
+    ? readCallerTransferOfferDisclosure(options.disclosedContract, options.offerContractId, synchronizerId)
     : await readRequiredTransferOfferDisclosedContract({
         ledgerClient: options.ledgerClient,
         providerPartyId: options.providerPartyId,
@@ -145,6 +147,32 @@ export async function prepareExternalPartyTransferOfferAcceptance(
     hashingSchemeVersion: readOptionalString(prepared, 'hashingSchemeVersion') ?? 'HASHING_SCHEME_VERSION_V2',
     offerDisclosure,
     raw: objectOrEmpty(prepared),
+  };
+}
+
+function readCallerTransferOfferDisclosure(
+  contract: CantonDisclosedContract,
+  offerContractId: string,
+  synchronizerId: string
+): TransferOfferDisclosure {
+  if (contract.contractId !== offerContractId) {
+    throw new ValidationError('Disclosed transfer-offer contract ID does not match offerContractId', {
+      contractId: contract.contractId,
+      offerContractId,
+    });
+  }
+  if (contract.synchronizerId !== synchronizerId) {
+    throw new ValidationError('Disclosed transfer-offer synchronizer does not match the provider synchronizer', {
+      disclosedSynchronizerId: contract.synchronizerId,
+      synchronizerId,
+    });
+  }
+  validateRequiredString('disclosedContract.templateId', contract.templateId);
+  validateRequiredString('disclosedContract.createdEventBlob', contract.createdEventBlob);
+
+  return {
+    contract,
+    raw: { source: 'caller' },
   };
 }
 
@@ -375,17 +403,6 @@ function validateRequiredString(name: string, value: string): void {
   }
 }
 
-function readRequiredString(source: unknown, key: string, operation: string): string {
-  if (isRecord(source) && key in source) {
-    const value = source[key];
-    if (typeof value === 'string' && value.trim()) return value;
-  }
-  throw new OperationError(
-    `Canton ${operation} response did not include ${key}`,
-    OperationErrorCode.TRANSACTION_FAILED
-  );
-}
-
 function readOptionalString(source: unknown, key: string): string | null {
   if (!isRecord(source) || !(key in source)) return null;
   const value = source[key];
@@ -404,12 +421,4 @@ function readFirstString(
     }
   }
   return null;
-}
-
-function objectOrEmpty(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

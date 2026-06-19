@@ -237,6 +237,41 @@ describe('external-party transfer-offer helpers', () => {
     expect(ledgerClient.interactiveSubmissionPrepare).not.toHaveBeenCalled();
   });
 
+  it('rejects caller-provided disclosures that do not match the requested offer', async () => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient();
+
+    await expect(
+      prepareExternalPartyTransferOfferAcceptance({
+        ledgerClient,
+        providerPartyId: 'provider::fingerprint',
+        userId: 'user-5n',
+        acceptingPartyId: fixture.partyId,
+        offerContractId: offerContract.contractId,
+        disclosedContract: {
+          ...offerContract,
+          contractId: 'different-offer-contract',
+        },
+      })
+    ).rejects.toThrow('contract ID does not match offerContractId');
+
+    await expect(
+      prepareExternalPartyTransferOfferAcceptance({
+        ledgerClient,
+        providerPartyId: 'provider::fingerprint',
+        userId: 'user-5n',
+        acceptingPartyId: fixture.partyId,
+        offerContractId: offerContract.contractId,
+        disclosedContract: {
+          ...offerContract,
+          synchronizerId: 'different-synchronizer',
+        },
+      })
+    ).rejects.toThrow('synchronizer does not match the provider synchronizer');
+
+    expect(ledgerClient.interactiveSubmissionPrepare).not.toHaveBeenCalled();
+  });
+
   it('submits a signed TransferOffer_Accept through executeAndWait and returns the update id', async () => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient();

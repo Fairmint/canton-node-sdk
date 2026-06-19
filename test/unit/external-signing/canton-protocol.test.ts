@@ -80,6 +80,10 @@ describe('Canton protocol helpers', () => {
     ).toBe(PRIVY_CANTON_FINGERPRINT);
 
     expect(() => buildExternalPartyId('bad::prefix', PRIVY_CANTON_FINGERPRINT)).toThrow('partyHint cannot include');
+    expect(() => buildExternalPartyId('privy-test', 'not-a-fingerprint')).toThrow(
+      'Expected a Canton SHA-256 multihash hex string'
+    );
+    expect(buildExternalPartyId('privy-test', PRIVY_CANTON_FINGERPRINT.toUpperCase())).toBe(partyId);
     expect(() =>
       assertCantonPartyMatchesPublicKey({
         partyId: `privy-test::1220${'00'.repeat(32)}`,
@@ -152,6 +156,8 @@ describe('Canton protocol helpers', () => {
     const token = buildCantonPrepareToken(secret, payload);
 
     expect(() => assertCantonPrepareToken(secret, token, payload)).not.toThrow();
+    expect(() => buildCantonPrepareToken('   ', payload)).toThrow('Prepare token secret is required');
+    expect(() => assertCantonPrepareToken('', token, payload)).toThrow('Prepare token secret is required');
     expect(() => assertCantonPrepareToken(secret, token, { ...payload, amount: '6' })).toThrow(
       'does not match the submitted details'
     );

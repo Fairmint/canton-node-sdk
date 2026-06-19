@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual, verify as verifyEd25519Signature } from 'node:crypto';
 import { OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
+import { isRecord } from '../../core/utils';
 import { wrapEd25519PublicKeyInDER } from './stellar-utils';
 
 const ED25519_DER_X509_PREFIX_HEX = '302a300506032b6570032100';
@@ -85,10 +86,7 @@ export function buildExternalPartyId(partyHint: string, publicKeyFingerprint: st
   if (normalizedHint.includes('::')) {
     throw new ValidationError('partyHint cannot include the reserved "::" separator', { partyHint });
   }
-  const fingerprint = publicKeyFingerprint.trim();
-  if (!fingerprint) {
-    throw new ValidationError('publicKeyFingerprint is required');
-  }
+  const fingerprint = assertCantonSha256MultihashHex(publicKeyFingerprint);
   return `${normalizedHint}::${fingerprint}`;
 }
 
@@ -193,6 +191,7 @@ export function hashCantonProtocolPayload(payload: unknown): string {
 
 /** Builds an HMAC-bound token for a prepared Canton transaction or topology payload. */
 export function buildCantonPrepareToken(secret: string, payload: Record<string, unknown>): string {
+  assertNonEmptyPrepareTokenSecret(secret);
   const encodedPayload = Buffer.from(canonicalizeCantonProtocolPayload(payload)).toString('base64url');
   const signature = createHmac('sha256', secret).update(encodedPayload).digest('base64url');
   return `${encodedPayload}.${signature}`;
@@ -204,6 +203,7 @@ export function assertCantonPrepareToken(
   token: string,
   expectedPayload: Record<string, unknown>
 ): void {
+  assertNonEmptyPrepareTokenSecret(secret);
   const expectedToken = buildCantonPrepareToken(secret, expectedPayload);
   const actual = Buffer.from(token);
   const expected = Buffer.from(expectedToken);
@@ -211,6 +211,12 @@ export function assertCantonPrepareToken(
     throw new ValidationError(
       'Prepared Canton transaction token does not match the submitted details. Prepare a fresh transaction and sign it again'
     );
+  }
+}
+
+function assertNonEmptyPrepareTokenSecret(secret: string): void {
+  if (!secret.trim()) {
+    throw new ValidationError('Prepare token secret is required');
   }
 }
 
@@ -397,8 +403,4 @@ function normalizeCantonProtocolPayload(payload: unknown): unknown {
     );
   }
   throw new ValidationError('Canton protocol payload contains an unsupported value');
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
