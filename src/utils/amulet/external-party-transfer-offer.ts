@@ -323,26 +323,31 @@ function readDisclosedContractFromPossibleOffer(
   const offerContract = objectOrEmpty(offer['contract']);
   const contract = objectOrEmpty(source['contract']);
   const records = [source, contract, offer, offerContract, transferOffer, transferOfferContract];
-  const contractId = readFirstString(records, ['contractId', 'contract_id']);
-  if (contractId !== offerContractId) return null;
-  const createdEventBlob = readFirstString(records, ['createdEventBlob', 'created_event_blob']);
-  if (!createdEventBlob) return null;
-  const templateId = readFirstString(records, ['templateId', 'template_id']) ?? CANTON_TRANSFER_OFFER_TEMPLATE_ID;
-  const synchronizerId =
-    readFirstString(records, ['synchronizerId', 'synchronizer_id', 'domainId', 'domain_id']) ?? defaultSynchronizerId;
 
-  return {
-    contract: {
-      contractId,
-      templateId,
-      createdEventBlob,
-      synchronizerId,
-    },
-    raw: {
-      source: 'validator-transfer-offers',
-      contract: source,
-    },
-  };
+  for (const record of records) {
+    const contractId = readFirstString(record, ['contractId', 'contract_id']);
+    if (contractId !== offerContractId) continue;
+    const createdEventBlob = readFirstString(record, ['createdEventBlob', 'created_event_blob']);
+    if (!createdEventBlob) continue;
+    const templateId = readFirstString(record, ['templateId', 'template_id']) ?? CANTON_TRANSFER_OFFER_TEMPLATE_ID;
+    const synchronizerId =
+      readFirstString(record, ['synchronizerId', 'synchronizer_id', 'domainId', 'domain_id']) ?? defaultSynchronizerId;
+
+    return {
+      contract: {
+        contractId,
+        templateId,
+        createdEventBlob,
+        synchronizerId,
+      },
+      raw: {
+        source: 'validator-transfer-offers',
+        contract: source,
+      },
+    };
+  }
+
+  return null;
 }
 
 async function readRequiredConnectedSynchronizerId(

@@ -104,6 +104,41 @@ describe('external-party transfer-offer helpers', () => {
     });
   });
 
+  it('does not merge validator transfer-offer disclosure fields across different records', () => {
+    expect(
+      readTransferOfferDisclosedContractFromList(
+        {
+          offers: [
+            {
+              contract_id: offerContract.contractId,
+              contract: {
+                contract_id: 'different-offer-contract',
+                created_event_blob: 'wrong-created-event-blob',
+                synchronizer_id: 'wrong-synchronizer',
+              },
+            },
+            {
+              transfer_offer: {
+                contract: {
+                  contract_id: offerContract.contractId,
+                  created_event_blob: offerContract.createdEventBlob,
+                },
+              },
+            },
+          ],
+        },
+        offerContract.contractId,
+        offerContract.synchronizerId
+      )
+    ).toEqual({
+      contract: offerContract,
+      raw: {
+        source: 'validator-transfer-offers',
+        contract: expect.any(Object) as object,
+      },
+    });
+  });
+
   it('reads disclosed contracts from Ledger active-contract responses', () => {
     expect(
       readTransferOfferDisclosedContractFromActiveContracts(
