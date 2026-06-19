@@ -114,6 +114,17 @@ describe('external-party transfer-offer helpers', () => {
                 createdEvent: {
                   contractId: offerContract.contractId,
                   templateId: offerContract.templateId,
+                },
+                synchronizerId: offerContract.synchronizerId,
+              },
+            },
+          },
+          {
+            contractEntry: {
+              JsActiveContract: {
+                createdEvent: {
+                  contractId: offerContract.contractId,
+                  templateId: offerContract.templateId,
                   createdEventBlob: offerContract.createdEventBlob,
                 },
                 synchronizerId: offerContract.synchronizerId,

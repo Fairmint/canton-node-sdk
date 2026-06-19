@@ -293,7 +293,7 @@ export function readTransferOfferDisclosedContractFromActiveContracts(
       'domainId',
       'domain_id',
     ]);
-    if (!createdEventBlob || !synchronizerId) return null;
+    if (!createdEventBlob || !synchronizerId) continue;
     return {
       contract: {
         contractId,
