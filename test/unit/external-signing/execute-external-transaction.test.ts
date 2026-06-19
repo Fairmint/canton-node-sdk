@@ -1,11 +1,18 @@
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import { executeExternalTransaction } from '../../../src/utils/external-signing/execute-external-transaction';
+import {
+  executeExternalTransaction,
+  executeExternalTransactionAndWait,
+} from '../../../src/utils/external-signing/execute-external-transaction';
 
 const createMockLedgerClient = (): jest.Mocked<LedgerJsonApiClient> =>
   ({
     interactiveSubmissionExecute: jest.fn().mockResolvedValue({
       updateId: 'update-123',
       completionOffset: 'offset-456',
+    }),
+    getApiUrl: jest.fn().mockReturnValue('https://ledger.example.test'),
+    makePostRequest: jest.fn().mockResolvedValue({
+      updateId: 'update-wait-123',
     }),
   }) as unknown as jest.Mocked<LedgerJsonApiClient>;
 
@@ -215,5 +222,60 @@ describe('executeExternalTransaction', () => {
         },
       })
     );
+  });
+
+  it('executes external transaction with executeAndWait and returns the update id', async () => {
+    const result = await executeExternalTransactionAndWait({
+      ledgerClient: mockClient,
+      userId: 'user-123',
+      preparedTransaction: 'prepared-tx-base64',
+      submissionId: 'submission-123',
+      partySignatures: [],
+    });
+
+    expect(mockClient.makePostRequest.mock.calls).toEqual([
+      [
+        'https://ledger.example.test/v2/interactive-submission/executeAndWait',
+        {
+          userId: 'user-123',
+          preparedTransaction: 'prepared-tx-base64',
+          hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
+          submissionId: 'submission-123',
+          deduplicationPeriod: {
+            DeduplicationDuration: {
+              value: { duration: '30s' },
+            },
+          },
+          partySignatures: {
+            signatures: [],
+          },
+        },
+        {
+          contentType: 'application/json',
+          includeBearerToken: true,
+        },
+      ],
+    ]);
+    expect(result).toEqual({
+      updateId: 'update-wait-123',
+      raw: { updateId: 'update-wait-123' },
+    });
+  });
+
+  it('throws a typed operation error when executeAndWait does not return an update id', async () => {
+    mockClient.makePostRequest.mockResolvedValueOnce({ completionOffset: 'offset-only' });
+
+    await expect(
+      executeExternalTransactionAndWait({
+        ledgerClient: mockClient,
+        userId: 'user-123',
+        preparedTransaction: 'prepared-tx-base64',
+        submissionId: 'submission-123',
+        partySignatures: [],
+      })
+    ).rejects.toMatchObject({
+      name: 'OperationError',
+      code: 'TRANSACTION_FAILED',
+    });
   });
 });
