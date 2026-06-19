@@ -246,7 +246,11 @@ export async function readRequiredTransferOfferDisclosedContract(input: {
     includeCreatedEventBlob: true,
   });
 
-  const disclosed = readTransferOfferDisclosedContractFromActiveContracts(activeContracts, input.offerContractId);
+  const disclosed = readTransferOfferDisclosedContractFromActiveContracts(
+    activeContracts,
+    input.offerContractId,
+    input.synchronizerId
+  );
   if (disclosed) return disclosed;
 
   throw new OperationError(
@@ -274,7 +278,8 @@ export function readTransferOfferDisclosedContractFromList(
 
 export function readTransferOfferDisclosedContractFromActiveContracts(
   source: unknown,
-  offerContractId: string
+  offerContractId: string,
+  expectedSynchronizerId?: string
 ): TransferOfferDisclosure | null {
   if (!Array.isArray(source)) return null;
 
@@ -294,6 +299,7 @@ export function readTransferOfferDisclosedContractFromActiveContracts(
       'domain_id',
     ]);
     if (!createdEventBlob || !synchronizerId) continue;
+    if (expectedSynchronizerId && synchronizerId !== expectedSynchronizerId) continue;
     return {
       contract: {
         contractId,
@@ -332,6 +338,7 @@ function readDisclosedContractFromPossibleOffer(
     const templateId = readFirstString(record, ['templateId', 'template_id']) ?? CANTON_TRANSFER_OFFER_TEMPLATE_ID;
     const synchronizerId =
       readFirstString(record, ['synchronizerId', 'synchronizer_id', 'domainId', 'domain_id']) ?? defaultSynchronizerId;
+    if (synchronizerId !== defaultSynchronizerId) continue;
 
     return {
       contract: {

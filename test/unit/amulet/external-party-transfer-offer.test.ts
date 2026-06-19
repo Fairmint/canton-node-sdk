@@ -139,6 +139,42 @@ describe('external-party transfer-offer helpers', () => {
     });
   });
 
+  it('ignores validator transfer-offer disclosures from a different synchronizer', () => {
+    expect(
+      readTransferOfferDisclosedContractFromList(
+        {
+          offers: [
+            {
+              transfer_offer: {
+                contract: {
+                  contract_id: offerContract.contractId,
+                  created_event_blob: 'wrong-synchronizer-created-event-blob',
+                  synchronizer_id: 'different-synchronizer',
+                },
+              },
+            },
+            {
+              transfer_offer: {
+                contract: {
+                  contract_id: offerContract.contractId,
+                  created_event_blob: offerContract.createdEventBlob,
+                },
+              },
+            },
+          ],
+        },
+        offerContract.contractId,
+        offerContract.synchronizerId
+      )
+    ).toEqual({
+      contract: offerContract,
+      raw: {
+        source: 'validator-transfer-offers',
+        contract: expect.any(Object) as object,
+      },
+    });
+  });
+
   it('reads disclosed contracts from Ledger active-contract responses', () => {
     expect(
       readTransferOfferDisclosedContractFromActiveContracts(
@@ -168,6 +204,47 @@ describe('external-party transfer-offer helpers', () => {
           },
         ],
         offerContract.contractId
+      )
+    ).toEqual({
+      contract: offerContract,
+      raw: {
+        source: 'ledger-active-contracts',
+        contract: expect.any(Object) as object,
+      },
+    });
+  });
+
+  it('ignores Ledger active-contract disclosures from a different synchronizer when expected', () => {
+    expect(
+      readTransferOfferDisclosedContractFromActiveContracts(
+        [
+          {
+            contractEntry: {
+              JsActiveContract: {
+                createdEvent: {
+                  contractId: offerContract.contractId,
+                  templateId: offerContract.templateId,
+                  createdEventBlob: 'wrong-synchronizer-created-event-blob',
+                },
+                synchronizerId: 'different-synchronizer',
+              },
+            },
+          },
+          {
+            contractEntry: {
+              JsActiveContract: {
+                createdEvent: {
+                  contractId: offerContract.contractId,
+                  templateId: offerContract.templateId,
+                  createdEventBlob: offerContract.createdEventBlob,
+                },
+                synchronizerId: offerContract.synchronizerId,
+              },
+            },
+          },
+        ],
+        offerContract.contractId,
+        offerContract.synchronizerId
       )
     ).toEqual({
       contract: offerContract,
