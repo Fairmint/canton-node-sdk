@@ -1,4 +1,5 @@
 export * from './external-party-cc-transfer';
+export * from './external-party-transfer-offer';
 export * from './get-amulets-for-transfer';
 export * from './get-locked-amulets';
 export * from './offers';
