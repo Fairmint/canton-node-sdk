@@ -3,6 +3,7 @@ export * from './canton-protocol';
 export * from './create-external-party';
 export * from './execute-external-transaction';
 export * from './external-party-onboarding';
+export * from './external-party-wallet';
 export * from './generate-external-party';
 export * from './prepare-external-transaction';
 export * from './stellar-utils';
