@@ -1,9 +1,9 @@
 /** ValidatorApiClient integration tests: Wallet Operations. */
 
-import { ensureValidatorUserOnboarded, getClient } from './setup';
+import { ensureValidatorUserOnboarded, getClient, VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS } from './setup';
 
 describe('ValidatorApiClient / Wallet', () => {
-  beforeAll(ensureValidatorUserOnboarded);
+  beforeAll(ensureValidatorUserOnboarded, VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS);
 
   test('getWalletBalance returns balance information', async () => {
     const client = getClient();

@@ -1,9 +1,9 @@
 /** ValidatorApiClient integration tests: ANS Operations. */
 
-import { ensureValidatorUserOnboarded, getClient } from './setup';
+import { ensureValidatorUserOnboarded, getClient, VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS } from './setup';
 
 describe('ValidatorApiClient / ANS', () => {
-  beforeAll(ensureValidatorUserOnboarded);
+  beforeAll(ensureValidatorUserOnboarded, VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS);
 
   test('listAnsEntries returns ANS entries', async () => {
     const client = getClient();

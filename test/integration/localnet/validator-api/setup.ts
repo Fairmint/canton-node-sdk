@@ -4,6 +4,8 @@ import { ApiError, CantonRuntime, ValidatorApiClient } from '../../../../src';
 import { buildIntegrationTestClientConfig, retry } from '../../../utils/testConfig';
 
 const DEFAULT_VALIDATOR_USER_NAME = 'app-provider-validator';
+const VALIDATOR_ONBOARDING_TIMEOUT_MS = 150_000;
+export const VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS = VALIDATOR_ONBOARDING_TIMEOUT_MS + 30_000;
 
 let client: ValidatorApiClient | null = null;
 let onboardingPromise: Promise<void> | null = null;
@@ -22,7 +24,11 @@ export function getClient(): ValidatorApiClient {
 
 /** Ensure the cn-quickstart OAuth client has an onboarded wallet user before wallet-scoped endpoint tests run. */
 export async function ensureValidatorUserOnboarded(): Promise<void> {
-  onboardingPromise ??= onboardValidatorUser();
+  onboardingPromise ??= withTimeout(
+    onboardValidatorUser(),
+    VALIDATOR_ONBOARDING_TIMEOUT_MS,
+    `validator wallet user ${DEFAULT_VALIDATOR_USER_NAME} onboarding`
+  );
   return onboardingPromise;
 }
 
@@ -47,7 +53,7 @@ async function onboardValidatorUser(): Promise<void> {
       return true;
     },
     {
-      timeoutMs: 60_000,
+      timeoutMs: VALIDATOR_ONBOARDING_TIMEOUT_MS,
       pollIntervalMs: 2_000,
       description: `validator wallet user ${DEFAULT_VALIDATOR_USER_NAME} onboarding`,
     }
@@ -95,4 +101,20 @@ function isAlreadyOnboardedError(error: unknown): boolean {
 
 function isApiErrorStatus(error: unknown, status: number): boolean {
   return error instanceof ApiError && error.status === status;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, description: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => reject(new Error(`Timed out waiting for ${description}`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
 }
