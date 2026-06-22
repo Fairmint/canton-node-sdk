@@ -1,11 +1,16 @@
 /** Shared setup for ValidatorApiClient integration tests. */
 
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { ApiError, CantonRuntime, ValidatorApiClient } from '../../../../src';
 import { buildIntegrationTestClientConfig, retry } from '../../../utils/testConfig';
 
 const DEFAULT_VALIDATOR_USER_NAME = 'app-provider-validator';
 const VALIDATOR_ONBOARDING_TIMEOUT_MS = 150_000;
 export const VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS = VALIDATOR_ONBOARDING_TIMEOUT_MS + 30_000;
+const VALIDATOR_ONBOARDING_LOCK_DIR = join(tmpdir(), 'canton-node-sdk-validator-onboarding.lock');
 
 let client: ValidatorApiClient | null = null;
 let onboardingPromise: Promise<void> | null = null;
@@ -24,33 +29,35 @@ export function getClient(): ValidatorApiClient {
 
 /** Ensure the cn-quickstart OAuth client has an onboarded wallet user before wallet-scoped endpoint tests run. */
 export async function ensureValidatorUserOnboarded(): Promise<void> {
-  onboardingPromise ??= withTimeout(
-    onboardValidatorUser(),
-    VALIDATOR_ONBOARDING_TIMEOUT_MS,
-    `validator wallet user ${DEFAULT_VALIDATOR_USER_NAME} onboarding`
-  );
+  onboardingPromise ??= onboardValidatorUser();
   return onboardingPromise;
 }
 
 async function onboardValidatorUser(): Promise<void> {
   const validatorClient = getClient();
 
-  if (await isValidatorWalletReady(validatorClient)) {
-    return;
-  }
-
-  try {
-    await validatorClient.createUser({ name: DEFAULT_VALIDATOR_USER_NAME });
-  } catch (error) {
-    if (!isAlreadyOnboardedError(error)) {
-      throw error;
-    }
-  }
-
   await retry(
     async (): Promise<boolean> => {
-      await assertValidatorWalletReady(validatorClient);
-      return true;
+      if (await isValidatorWalletReady(validatorClient)) {
+        return true;
+      }
+
+      if (!(await tryAcquireOnboardingLock())) {
+        throw new Error(`Validator user ${DEFAULT_VALIDATOR_USER_NAME} onboarding is in progress`);
+      }
+
+      try {
+        if (await isValidatorWalletReady(validatorClient)) {
+          return true;
+        }
+
+        await registerValidatorUser(validatorClient);
+
+        await assertValidatorWalletReady(validatorClient);
+        return true;
+      } finally {
+        await releaseOnboardingLock();
+      }
     },
     {
       timeoutMs: VALIDATOR_ONBOARDING_TIMEOUT_MS,
@@ -103,18 +110,33 @@ function isApiErrorStatus(error: unknown, status: number): boolean {
   return error instanceof ApiError && error.status === status;
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, description: string): Promise<T> {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
+async function tryAcquireOnboardingLock(): Promise<boolean> {
   try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(() => reject(new Error(`Timed out waiting for ${description}`)), timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timeout) {
-      clearTimeout(timeout);
+    await mkdir(VALIDATOR_ONBOARDING_LOCK_DIR);
+    await writeFile(join(VALIDATOR_ONBOARDING_LOCK_DIR, 'owner'), `${process.pid}\n`);
+    return true;
+  } catch (error) {
+    if (hasErrorCode(error, 'EEXIST')) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function releaseOnboardingLock(): Promise<void> {
+  await rm(VALIDATOR_ONBOARDING_LOCK_DIR, { recursive: true, force: true });
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  return error instanceof Error && 'code' in error && (error as { code?: unknown }).code === code;
+}
+
+async function registerValidatorUser(validatorClient: ValidatorApiClient): Promise<void> {
+  try {
+    await validatorClient.registerNewUser();
+  } catch (error) {
+    if (!isAlreadyOnboardedError(error)) {
+      throw error;
     }
   }
 }
