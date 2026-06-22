@@ -1,6 +1,6 @@
 /** Shared setup for ValidatorApiClient integration tests. */
 
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -9,8 +9,9 @@ import { buildIntegrationTestClientConfig, retry } from '../../../utils/testConf
 
 const DEFAULT_VALIDATOR_USER_NAME = 'app-provider-validator';
 const VALIDATOR_ONBOARDING_TIMEOUT_MS = 150_000;
-export const VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS = VALIDATOR_ONBOARDING_TIMEOUT_MS + 30_000;
+export const VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS = VALIDATOR_ONBOARDING_TIMEOUT_MS + 120_000;
 const VALIDATOR_ONBOARDING_LOCK_DIR = join(tmpdir(), 'canton-node-sdk-validator-onboarding.lock');
+const VALIDATOR_ONBOARDING_LOCK_OWNER_FILE = join(VALIDATOR_ONBOARDING_LOCK_DIR, 'owner');
 
 let client: ValidatorApiClient | null = null;
 let onboardingPromise: Promise<void> | null = null;
@@ -113,12 +114,21 @@ function isApiErrorStatus(error: unknown, status: number): boolean {
 async function tryAcquireOnboardingLock(): Promise<boolean> {
   try {
     await mkdir(VALIDATOR_ONBOARDING_LOCK_DIR);
-    await writeFile(join(VALIDATOR_ONBOARDING_LOCK_DIR, 'owner'), `${process.pid}\n`);
-    return true;
   } catch (error) {
     if (hasErrorCode(error, 'EEXIST')) {
+      if (await releaseStaleOnboardingLock()) {
+        return tryAcquireOnboardingLock();
+      }
       return false;
     }
+    throw error;
+  }
+
+  try {
+    await writeFile(VALIDATOR_ONBOARDING_LOCK_OWNER_FILE, `${process.pid}\n`);
+    return true;
+  } catch (error) {
+    await releaseOnboardingLock();
     throw error;
   }
 }
@@ -127,8 +137,39 @@ async function releaseOnboardingLock(): Promise<void> {
   await rm(VALIDATOR_ONBOARDING_LOCK_DIR, { recursive: true, force: true });
 }
 
+async function releaseStaleOnboardingLock(): Promise<boolean> {
+  try {
+    const ownerPid = Number((await readFile(VALIDATOR_ONBOARDING_LOCK_OWNER_FILE, 'utf8')).trim());
+    if (Number.isInteger(ownerPid) && ownerPid > 0 && isProcessAlive(ownerPid)) {
+      return false;
+    }
+  } catch (error) {
+    if (!hasErrorCode(error, 'ENOENT')) {
+      throw error;
+    }
+  }
+
+  await releaseOnboardingLock();
+  return true;
+}
+
 function hasErrorCode(error: unknown, code: string): boolean {
   return error instanceof Error && 'code' in error && (error as { code?: unknown }).code === code;
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (hasErrorCode(error, 'ESRCH')) {
+      return false;
+    }
+    if (hasErrorCode(error, 'EPERM')) {
+      return true;
+    }
+    throw error;
+  }
 }
 
 async function registerValidatorUser(validatorClient: ValidatorApiClient): Promise<void> {
