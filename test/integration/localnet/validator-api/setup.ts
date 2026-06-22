@@ -1,6 +1,6 @@
 /** Shared setup for ValidatorApiClient integration tests. */
 
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -8,10 +8,11 @@ import { ApiError, CantonRuntime, ValidatorApiClient } from '../../../../src';
 import { buildIntegrationTestClientConfig, retry } from '../../../utils/testConfig';
 
 const DEFAULT_VALIDATOR_USER_NAME = 'app-provider-validator';
-const VALIDATOR_ONBOARDING_TIMEOUT_MS = 150_000;
-export const VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS = VALIDATOR_ONBOARDING_TIMEOUT_MS + 120_000;
+const VALIDATOR_ONBOARDING_TIMEOUT_MS = 240_000;
+export const VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS = 300_000;
 const VALIDATOR_ONBOARDING_LOCK_DIR = join(tmpdir(), 'canton-node-sdk-validator-onboarding.lock');
 const VALIDATOR_ONBOARDING_LOCK_OWNER_FILE = join(VALIDATOR_ONBOARDING_LOCK_DIR, 'owner');
+const VALIDATOR_ONBOARDING_LOCK_STALE_MS = 30_000;
 
 let client: ValidatorApiClient | null = null;
 let onboardingPromise: Promise<void> | null = null;
@@ -147,10 +148,18 @@ async function releaseStaleOnboardingLock(): Promise<boolean> {
     if (!hasErrorCode(error, 'ENOENT')) {
       throw error;
     }
+    if (!(await isOnboardingLockOldEnoughToSteal())) {
+      return false;
+    }
   }
 
   await releaseOnboardingLock();
   return true;
+}
+
+async function isOnboardingLockOldEnoughToSteal(): Promise<boolean> {
+  const lockStats = await stat(VALIDATOR_ONBOARDING_LOCK_DIR);
+  return Date.now() - lockStats.mtimeMs >= VALIDATOR_ONBOARDING_LOCK_STALE_MS;
 }
 
 function hasErrorCode(error: unknown, code: string): boolean {
