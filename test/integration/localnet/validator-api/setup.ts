@@ -56,8 +56,7 @@ async function onboardValidatorUser(): Promise<void> {
 
 async function isValidatorWalletReady(validatorClient: ValidatorApiClient): Promise<boolean> {
   try {
-    await assertValidatorWalletReady(validatorClient);
-    return true;
+    return await checkValidatorWalletReady(validatorClient);
   } catch (error) {
     if (isApiErrorStatus(error, 404)) {
       return false;
@@ -67,11 +66,19 @@ async function isValidatorWalletReady(validatorClient: ValidatorApiClient): Prom
 }
 
 async function assertValidatorWalletReady(validatorClient: ValidatorApiClient): Promise<void> {
-  const status = await validatorClient.getUserStatus();
-  if (!status.user_onboarded || !status.user_wallet_installed || !status.party_id) {
+  if (!(await checkValidatorWalletReady(validatorClient))) {
+    const status = await validatorClient.getUserStatus();
     throw new Error(`Validator user ${DEFAULT_VALIDATOR_USER_NAME} is not fully onboarded: ${JSON.stringify(status)}`);
   }
+}
+
+async function checkValidatorWalletReady(validatorClient: ValidatorApiClient): Promise<boolean> {
+  const status = await validatorClient.getUserStatus();
+  if (!status.user_onboarded || !status.user_wallet_installed || !status.party_id) {
+    return false;
+  }
   await validatorClient.getWalletBalance();
+  return true;
 }
 
 function isAlreadyOnboardedError(error: unknown): boolean {
