@@ -1,4 +1,5 @@
 export * from './amulet';
+export * from './canton-response-utils';
 export * from './contracts';
 export * from './external-signing';
 export * from './health';
