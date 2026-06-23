@@ -4,9 +4,9 @@ import {
   type CantonWalletBalances,
 } from '../../src/utils/canton-response-utils';
 
-describe('canton-response-utils', () => {
-  describe('normalizeCantonContractItem', () => {
-    it('normalizes flat active contract items', () => {
+describe('canton-response-utils', (): void => {
+  describe('normalizeCantonContractItem', (): void => {
+    it('normalizes flat active contract items', (): void => {
       expect(
         normalizeCantonContractItem({
           contractId: 'cid',
@@ -23,7 +23,7 @@ describe('canton-response-utils', () => {
       });
     });
 
-    it('normalizes wrapped ledger API active contract items', () => {
+    it('normalizes wrapped ledger API active contract items', (): void => {
       expect(
         normalizeCantonContractItem({
           workflowId: '',
@@ -48,7 +48,7 @@ describe('canton-response-utils', () => {
       });
     });
 
-    it('handles malformed active contract items defensively', () => {
+    it('handles malformed active contract items defensively', (): void => {
       expect(normalizeCantonContractItem(null)).toEqual({
         contractId: '',
         templateId: '',
@@ -81,8 +81,8 @@ describe('canton-response-utils', () => {
     });
   });
 
-  describe('findCantonCoinBalance', () => {
-    it('finds Canton Coin balances by Amulet instrument id', () => {
+  describe('findCantonCoinBalance', (): void => {
+    it('finds Canton Coin balances by Amulet instrument id', (): void => {
       const balances: CantonWalletBalances = {
         partyId: 'party',
         fetchedAt: '2026-06-15T00:00:00.000Z',
@@ -110,7 +110,7 @@ describe('canton-response-utils', () => {
       expect(findCantonCoinBalance(balances, { expectedAdmin: 'unknown' })).toBeNull();
     });
 
-    it('prefers exact Amulet balances before case-insensitive fallbacks', () => {
+    it('prefers exact Amulet balances before case-insensitive fallbacks', (): void => {
       const balances: CantonWalletBalances = {
         partyId: 'party',
         fetchedAt: '2026-06-15T00:00:00.000Z',
@@ -137,7 +137,7 @@ describe('canton-response-utils', () => {
       expect(findCantonCoinBalance(balances, { expectedAdmin: 'dso' })?.totalBalance).toBe('4');
     });
 
-    it('does not match arbitrary token ids or admins containing amulet', () => {
+    it('does not match arbitrary token ids or admins containing amulet', (): void => {
       const balances: CantonWalletBalances = {
         partyId: 'party',
         fetchedAt: '2026-06-15T00:00:00.000Z',
