@@ -167,9 +167,19 @@ export function normalizeCantonError(error: unknown): NormalizedCantonErrorDetai
 
 /** Return true when a Canton error represents a non-retryable 4xx mutation rejection. */
 export function isDefiniteCantonMutationRejection(error: unknown): boolean {
-  const status = normalizeCantonError(error)?.status;
+  const details = normalizeCantonError(error);
+  const status = details?.status;
   if (status === undefined) return false;
+  if (isRetryableCantonApiCode(status, details?.code)) return false;
   return status >= 400 && status < 500 && status !== 408 && status !== 425 && status !== 429;
+}
+
+/** Return true when a Canton API status/code pair is known to be transient. */
+function isRetryableCantonApiCode(status: number, code: string | undefined): boolean {
+  return (
+    (status === 400 && code === 'UNKNOWN_CONTRACT_SYNCHRONIZERS') ||
+    (status === 409 && code === 'SEQUENCER_BACKPRESSURE')
+  );
 }
 
 /** Read normalized error context from current and legacy SDK error fields. */

@@ -256,9 +256,27 @@ describe('isDefiniteCantonMutationRejection', () => {
     expect(isDefiniteCantonMutationRejection(new ApiError('bad request', 400))).toBe(true);
     expect(isDefiniteCantonMutationRejection(new ApiError('conflict', 409))).toBe(true);
     expect(isDefiniteCantonMutationRejection(new ApiError('not found', 404))).toBe(true);
+    expect(
+      isDefiniteCantonMutationRejection(
+        new ApiError('invalid argument', 400, 'Bad Request', { code: 'INVALID_ARGUMENT' })
+      )
+    ).toBe(true);
+    expect(
+      isDefiniteCantonMutationRejection(new ApiError('conflict', 409, 'Conflict', { code: 'ALREADY_EXISTS' }))
+    ).toBe(true);
   });
 
   it('does not treat retryable or non-HTTP errors as definite rejections', () => {
+    expect(
+      isDefiniteCantonMutationRejection(
+        new ApiError('unknown contract synchronizers', 400, 'Bad Request', { code: 'UNKNOWN_CONTRACT_SYNCHRONIZERS' })
+      )
+    ).toBe(false);
+    expect(
+      isDefiniteCantonMutationRejection(
+        new ApiError('sequencer backpressure', 409, 'Conflict', { code: 'SEQUENCER_BACKPRESSURE' })
+      )
+    ).toBe(false);
     expect(isDefiniteCantonMutationRejection(new ApiError('timeout', 408))).toBe(false);
     expect(isDefiniteCantonMutationRejection(new ApiError('too early', 425))).toBe(false);
     expect(isDefiniteCantonMutationRejection(new ApiError('rate limited', 429))).toBe(false);
