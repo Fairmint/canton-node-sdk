@@ -3,6 +3,7 @@ import { RestClientError } from '@hardlydifficult/rest-client';
 /** JSON-serializable context for error details. */
 export type ErrorContext = Readonly<Record<string, unknown>>;
 
+/** Serializable details extracted from a Canton SDK-shaped error. */
 export interface NormalizedCantonErrorDetails {
   readonly name: string;
   readonly message: string;
@@ -141,6 +142,7 @@ const CANTON_SDK_ERROR_NAMES = new Set([
   'ValidationError',
 ]);
 
+/** Normalize a Canton SDK-shaped error into serializable details for logging or API responses. */
 export function normalizeCantonError(error: unknown): NormalizedCantonErrorDetails | null {
   if (!(error instanceof Error)) return null;
 
@@ -163,6 +165,7 @@ export function normalizeCantonError(error: unknown): NormalizedCantonErrorDetai
   };
 }
 
+/** Return true when a Canton error represents a non-retryable 4xx mutation rejection. */
 export function isDefiniteCantonMutationRejection(error: unknown): boolean {
   const status = normalizeCantonError(error)?.status;
   if (status === undefined) return false;
