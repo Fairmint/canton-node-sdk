@@ -184,7 +184,8 @@ function isRetryableCantonApiCode(status: number, code: string | undefined): boo
 
 /** Read normalized error context from current and legacy SDK error fields. */
 function readErrorContext(source: Record<string, unknown>): unknown {
-  if ('context' in source) return source['context'];
+  const { context } = source;
+  if (context !== undefined) return context;
   if ('response' in source) return source['response'];
   return undefined;
 }

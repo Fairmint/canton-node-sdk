@@ -246,6 +246,25 @@ describe('normalizeCantonError', () => {
     });
   });
 
+  it('falls back to legacy response when context is undefined', () => {
+    const error = Object.assign(new Error('HTTP 400'), {
+      name: 'ApiError',
+      status: 400,
+      context: undefined,
+      response: { code: 'UNKNOWN_CONTRACT_SYNCHRONIZERS' },
+    });
+
+    expect(normalizeCantonError(error)).toEqual({
+      name: 'ApiError',
+      message: 'HTTP 400',
+      status: 400,
+      code: 'UNKNOWN_CONTRACT_SYNCHRONIZERS',
+      context: { code: 'UNKNOWN_CONTRACT_SYNCHRONIZERS' },
+      response: { code: 'UNKNOWN_CONTRACT_SYNCHRONIZERS' },
+    });
+    expect(isDefiniteCantonMutationRejection(error)).toBe(false);
+  });
+
   it('ignores plain errors without SDK markers', () => {
     expect(normalizeCantonError(new Error('plain failure'))).toBeNull();
   });
