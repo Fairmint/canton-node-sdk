@@ -172,26 +172,31 @@ export function isDefiniteCantonMutationRejection(error: unknown): boolean {
   return status >= 400 && status < 500 && status !== 408 && status !== 425 && status !== 429;
 }
 
+/** Read normalized error context from current and legacy SDK error fields. */
 function readErrorContext(source: Record<string, unknown>): unknown {
   if ('context' in source) return source['context'];
   if ('response' in source) return source['response'];
   return undefined;
 }
 
+/** Read a string error code from normalized context when one is present. */
 function readContextCode(context: unknown): string | undefined {
   return isObjectRecord(context) && typeof context['code'] === 'string' ? context['code'] : undefined;
 }
 
+/** Read a finite numeric property from an SDK-shaped error object. */
 function readNumericErrorProperty(source: Record<string, unknown>, property: string): number | undefined {
   const value = source[property];
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+/** Read a non-empty string property from an SDK-shaped error object. */
 function readStringErrorProperty(source: Record<string, unknown>, property: string): string | undefined {
   const value = source[property];
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
+/** Return true when a value can be inspected as a plain object record. */
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
