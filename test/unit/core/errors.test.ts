@@ -7,6 +7,8 @@ import {
   OperationError,
   OperationErrorCode,
   ValidationError,
+  isDefiniteCantonMutationRejection,
+  normalizeCantonError,
 } from '../../../src/core/errors';
 
 describe('CantonError hierarchy', () => {
@@ -180,5 +182,90 @@ describe('error type checking', () => {
 
     const opError: CantonError = new OperationError('Missing', OperationErrorCode.MISSING_CONTRACT);
     expect(opError.code).toBe('MISSING_CONTRACT');
+  });
+});
+
+describe('normalizeCantonError', () => {
+  it('normalizes ApiError details for consumers', () => {
+    const error = new ApiError('HTTP 409: ALREADY_EXISTS', 409, 'Conflict', {
+      code: 'ALREADY_EXISTS',
+      message: 'Party already exists',
+    });
+
+    expect(normalizeCantonError(error)).toEqual({
+      name: 'ApiError',
+      message: 'HTTP 409: ALREADY_EXISTS',
+      status: 409,
+      statusText: 'Conflict',
+      code: 'ALREADY_EXISTS',
+      context: {
+        code: 'ALREADY_EXISTS',
+        message: 'Party already exists',
+      },
+      response: {
+        code: 'ALREADY_EXISTS',
+        message: 'Party already exists',
+      },
+    });
+  });
+
+  it('normalizes operation errors without HTTP status', () => {
+    const error = new OperationError('Canton transfer failed', OperationErrorCode.TRANSACTION_FAILED, {
+      senderPartyId: 'sender::fingerprint',
+    });
+
+    expect(normalizeCantonError(error)).toEqual({
+      name: 'OperationError',
+      message: 'Canton transfer failed',
+      code: OperationErrorCode.TRANSACTION_FAILED,
+      context: {
+        senderPartyId: 'sender::fingerprint',
+      },
+      response: {
+        senderPartyId: 'sender::fingerprint',
+      },
+    });
+  });
+
+  it('normalizes SDK-shaped legacy errors with statusCode and response', () => {
+    const error = Object.assign(new Error('HTTP 429'), {
+      name: 'ApiError',
+      statusCode: 429,
+      statusText: 'Too Many Requests',
+      response: { code: 'RESOURCE_EXHAUSTED' },
+    });
+
+    expect(normalizeCantonError(error)).toEqual({
+      name: 'ApiError',
+      message: 'HTTP 429',
+      status: 429,
+      statusText: 'Too Many Requests',
+      code: 'RESOURCE_EXHAUSTED',
+      context: { code: 'RESOURCE_EXHAUSTED' },
+      response: { code: 'RESOURCE_EXHAUSTED' },
+    });
+  });
+
+  it('ignores plain errors without SDK markers', () => {
+    expect(normalizeCantonError(new Error('plain failure'))).toBeNull();
+  });
+});
+
+describe('isDefiniteCantonMutationRejection', () => {
+  it('treats non-transient 4xx API responses as definite rejections', () => {
+    expect(isDefiniteCantonMutationRejection(new ApiError('bad request', 400))).toBe(true);
+    expect(isDefiniteCantonMutationRejection(new ApiError('conflict', 409))).toBe(true);
+    expect(isDefiniteCantonMutationRejection(new ApiError('not found', 404))).toBe(true);
+  });
+
+  it('does not treat retryable or non-HTTP errors as definite rejections', () => {
+    expect(isDefiniteCantonMutationRejection(new ApiError('timeout', 408))).toBe(false);
+    expect(isDefiniteCantonMutationRejection(new ApiError('too early', 425))).toBe(false);
+    expect(isDefiniteCantonMutationRejection(new ApiError('rate limited', 429))).toBe(false);
+    expect(isDefiniteCantonMutationRejection(new ApiError('server error', 503))).toBe(false);
+    expect(isDefiniteCantonMutationRejection(new NetworkError('network unavailable'))).toBe(false);
+    expect(isDefiniteCantonMutationRejection(new OperationError('failed', OperationErrorCode.TRANSACTION_FAILED))).toBe(
+      false
+    );
   });
 });
