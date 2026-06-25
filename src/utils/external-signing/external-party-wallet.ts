@@ -787,6 +787,10 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
       input: ExternalPartyWalletTransferPreapprovalSubmitInput
     ): Promise<SubmittedExternalPartyWalletTransferPreapprovalSetup> {
       const validatorClient = requireValidatorClient(options.validatorClient, 'transfer preapproval setup submit');
+      assertCantonPartyMatchesPublicKey({
+        partyId: input.partyId,
+        publicKeyBase64: input.publicKeyBase64,
+      });
       return submitExternalPartyTransferPreapprovalSetup(validatorClient, input);
     },
 
