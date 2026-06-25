@@ -89,6 +89,28 @@ const createMockValidatorClient = (): jest.Mocked<ValidatorApiClient> =>
     submitTransferPreapprovalSend: jest.fn().mockResolvedValue({
       update_id: 'cc-transfer-update-1',
     }),
+    lookupTransferPreapprovalByParty: jest.fn().mockResolvedValue({
+      transfer_preapproval: {
+        contract: {
+          contract_id: 'transfer-preapproval-contract-id',
+        },
+      },
+    }),
+    listExternalPartySetupProposals: jest.fn().mockResolvedValue({ contracts: [] }),
+    createExternalPartySetupProposal: jest.fn().mockResolvedValue({
+      contract_id: 'setup-proposal-contract-id',
+    }),
+    prepareAcceptExternalPartySetupProposal: jest.fn().mockResolvedValue({
+      transaction: 'prepared-transfer-preapproval-setup',
+      tx_hash: PREPARED_TRANSACTION_HASH_HEX,
+    }),
+    submitAcceptExternalPartySetupProposal: jest.fn().mockResolvedValue({
+      transfer_preapproval_contract_id: 'transfer-preapproval-contract-id',
+      update_id: 'transfer-preapproval-update-1',
+    }),
+    transferPreapprovalSend: jest.fn().mockResolvedValue({
+      transaction_id: 'provider-preapproval-send-update-1',
+    }),
     getWalletBalance: jest.fn().mockResolvedValue({ effective_unlocked_qty: '100.0' }),
     createTransferOffer: jest.fn().mockResolvedValue({
       offer_contract_id: OFFER_CONTRACT_ID,
@@ -141,7 +163,7 @@ describe('external-party wallet bridge', (): void => {
       amount: '2.5',
       description: 'demo transfer',
       publicKeyBase64: fixture.publicKeyBase64,
-      tokenContext: { userId: 'user-1', privyId: 'did:privy:user-1' },
+      tokenContext: { userId: 'user-1', externalUserId: 'did:wallet:user-1' },
     });
 
     expect(prepared).toMatchObject({
@@ -160,7 +182,7 @@ describe('external-party wallet bridge', (): void => {
       ...prepared,
       publicKeyBase64: fixture.publicKeyBase64,
       signatureBase64: fixture.signPreparedHash(),
-      tokenContext: { userId: 'user-1', privyId: 'did:privy:user-1' },
+      tokenContext: { userId: 'user-1', externalUserId: 'did:wallet:user-1' },
     });
 
     expect(validatorClient.submitTransferPreapprovalSend).toHaveBeenCalledWith({
@@ -389,6 +411,121 @@ describe('external-party wallet bridge', (): void => {
       },
     ]);
     expect(submitted.updateId).toBe('provider-accept-update-1');
+  });
+
+  it('prepares and submits transfer preapproval setup through validator endpoints', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const validatorClient = createMockValidatorClient();
+    validatorClient.lookupTransferPreapprovalByParty.mockRejectedValueOnce(new ApiError('not found', 404));
+    const bridge = createBridge({ validatorClient });
+
+    const prepared = await bridge.prepareTransferPreapprovalSetup({
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+    });
+
+    expect(validatorClient.createExternalPartySetupProposal).toHaveBeenCalledWith({
+      user_party_id: fixture.partyId,
+    });
+    expect(validatorClient.prepareAcceptExternalPartySetupProposal).toHaveBeenCalledWith({
+      contract_id: 'setup-proposal-contract-id',
+      user_party_id: fixture.partyId,
+      verbose_hashing: false,
+    });
+    expect(prepared).toMatchObject({
+      partyId: fixture.partyId,
+      publicKeyFingerprint: fixture.publicKeyFingerprint,
+      alreadyPreapproved: false,
+      setupProposalContractId: 'setup-proposal-contract-id',
+      preparedTransaction: 'prepared-transfer-preapproval-setup',
+      preparedTransactionHashHex: PREPARED_TRANSACTION_HASH_HEX,
+    });
+
+    const submitted = await bridge.submitTransferPreapprovalSetup({
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+      preparedTransaction: prepared.preparedTransaction ?? '',
+      preparedTransactionHashHex: prepared.preparedTransactionHashHex ?? '',
+      signatureBase64: fixture.signPreparedHash(),
+    });
+
+    expect(validatorClient.submitAcceptExternalPartySetupProposal).toHaveBeenCalledWith({
+      submission: {
+        party_id: fixture.partyId,
+        transaction: 'prepared-transfer-preapproval-setup',
+        signed_tx_hash: expect.stringMatching(/^[0-9a-f]+$/) as string,
+        public_key: Buffer.from(fixture.publicKeyBase64, 'base64').toString('hex'),
+      },
+    });
+    expect(submitted).toEqual({
+      partyId: fixture.partyId,
+      transferPreapprovalContractId: 'transfer-preapproval-contract-id',
+      updateId: 'transfer-preapproval-update-1',
+      raw: {
+        transfer_preapproval_contract_id: 'transfer-preapproval-contract-id',
+        update_id: 'transfer-preapproval-update-1',
+      },
+    });
+  });
+
+  it('reports an existing transfer preapproval without creating a setup proposal', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const validatorClient = createMockValidatorClient();
+    const bridge = createBridge({ validatorClient });
+
+    const prepared = await bridge.prepareTransferPreapprovalSetup({
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+    });
+
+    expect(prepared).toMatchObject({
+      partyId: fixture.partyId,
+      alreadyPreapproved: true,
+      transferPreapprovalContractId: 'transfer-preapproval-contract-id',
+      preparedTransaction: null,
+      preparedTransactionHashHex: null,
+    });
+    expect(validatorClient.createExternalPartySetupProposal).not.toHaveBeenCalled();
+    expect(validatorClient.prepareAcceptExternalPartySetupProposal).not.toHaveBeenCalled();
+  });
+
+  it('sends provider wallet CC to a preapproved receiver', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const validatorClient = createMockValidatorClient();
+    const bridge = createBridge({ validatorClient });
+
+    const sent = await bridge.sendProviderTransferToPreapprovedParty({
+      receiverPartyId: fixture.partyId,
+      amount: '3.5',
+      description: 'preapproved funding',
+      idempotencyKey: 'dedupe-1',
+    });
+
+    expect(validatorClient.transferPreapprovalSend).toHaveBeenCalledWith({
+      receiver_party_id: fixture.partyId,
+      amount: '3.5',
+      deduplication_id: 'dedupe-1',
+      description: 'preapproved funding',
+    });
+    expect(sent).toEqual({
+      sourcePartyId: 'provider::fingerprint',
+      receiverPartyId: fixture.partyId,
+      amount: '3.5',
+      description: 'preapproved funding',
+      transferPreapprovalContractId: 'transfer-preapproval-contract-id',
+      updateId: 'provider-preapproval-send-update-1',
+      sourceBalanceAfter: { effective_unlocked_qty: '100.0' },
+      raw: {
+        transferPreapproval: {
+          contract: {
+            contract_id: 'transfer-preapproval-contract-id',
+          },
+        },
+        transferPreapprovalSend: {
+          transaction_id: 'provider-preapproval-send-update-1',
+        },
+      },
+    });
   });
 
   it('lets callers resume provider-funded acceptance prepare without creating duplicate offers', async (): Promise<void> => {

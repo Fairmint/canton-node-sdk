@@ -14,6 +14,14 @@ import {
   type PreparedExternalPartyTransferOfferAcceptance,
   type SubmittedExternalPartyTransferOfferAcceptance,
 } from '../amulet/external-party-transfer-offer';
+import {
+  lookupExternalPartyTransferPreapproval,
+  prepareExternalPartyTransferPreapprovalSetup,
+  sendWalletTransferToPreapprovedParty,
+  submitExternalPartyTransferPreapprovalSetup,
+  type PreparedExternalPartyTransferPreapprovalSetup,
+  type SubmittedExternalPartyTransferPreapprovalSetup,
+} from '../amulet/external-party-transfer-preapproval';
 import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
 import {
   assertCantonHashSignature,
@@ -50,7 +58,7 @@ export interface ExternalPartyWalletTokenContext {
   readonly provider?: string;
   readonly network?: string;
   readonly userId?: string | null;
-  readonly privyId?: string | null;
+  readonly externalUserId?: string | null;
   readonly [key: string]: unknown;
 }
 
@@ -210,6 +218,45 @@ export interface SubmittedExternalPartyWalletProviderTransfer {
   readonly raw: Record<string, unknown>;
 }
 
+export interface ExternalPartyWalletTransferPreapprovalSetupInput {
+  readonly partyId: string;
+  readonly publicKeyBase64: string;
+  readonly verboseHashing?: boolean;
+}
+
+export interface ExternalPartyWalletTransferPreapprovalSubmitInput {
+  readonly partyId: string;
+  readonly publicKeyBase64: string;
+  readonly preparedTransaction: string;
+  readonly preparedTransactionHashHex: string;
+  readonly signatureBase64: string;
+}
+
+export type PreparedExternalPartyWalletTransferPreapprovalSetup = PreparedExternalPartyTransferPreapprovalSetup;
+
+export type SubmittedExternalPartyWalletTransferPreapprovalSetup = SubmittedExternalPartyTransferPreapprovalSetup;
+
+export interface ExternalPartyWalletProviderTransferToPreapprovedInput {
+  readonly receiverPartyId: string;
+  readonly amount: string | number;
+  readonly idempotencyKey: string;
+  readonly description?: string | null;
+}
+
+export interface ExternalPartyWalletProviderTransferToPreapproved {
+  readonly sourcePartyId: string;
+  readonly receiverPartyId: string;
+  readonly amount: string;
+  readonly description: string | null;
+  readonly transferPreapprovalContractId: string;
+  readonly updateId: string | null;
+  readonly sourceBalanceAfter: unknown | null;
+  readonly raw: {
+    readonly transferPreapproval: unknown;
+    readonly transferPreapprovalSend: unknown;
+  };
+}
+
 export interface ListExternalPartyWalletActiveContractsInput {
   readonly partyId: string;
   readonly templateIds?: readonly string[];
@@ -260,6 +307,15 @@ export interface ExternalPartyWalletBridge {
   readonly submitProviderTransfer: (
     input: SubmitExternalPartyWalletProviderTransferInput
   ) => Promise<SubmittedExternalPartyWalletProviderTransfer>;
+  readonly prepareTransferPreapprovalSetup: (
+    input: ExternalPartyWalletTransferPreapprovalSetupInput
+  ) => Promise<PreparedExternalPartyWalletTransferPreapprovalSetup>;
+  readonly submitTransferPreapprovalSetup: (
+    input: ExternalPartyWalletTransferPreapprovalSubmitInput
+  ) => Promise<SubmittedExternalPartyWalletTransferPreapprovalSetup>;
+  readonly sendProviderTransferToPreapprovedParty: (
+    input: ExternalPartyWalletProviderTransferToPreapprovedInput
+  ) => Promise<ExternalPartyWalletProviderTransferToPreapproved>;
   readonly listActiveContracts: (
     input: ListExternalPartyWalletActiveContractsInput
   ) => Promise<ExternalPartyWalletActiveContracts>;
@@ -715,6 +771,59 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
         updateId: acceptUpdateId,
         sourceBalanceAfter,
         raw: objectOrEmpty(submitted.raw),
+      };
+    },
+
+    async prepareTransferPreapprovalSetup(
+      input: ExternalPartyWalletTransferPreapprovalSetupInput
+    ): Promise<PreparedExternalPartyWalletTransferPreapprovalSetup> {
+      const validatorClient = requireValidatorClient(options.validatorClient, 'transfer preapproval setup prepare');
+      return prepareExternalPartyTransferPreapprovalSetup(validatorClient, input);
+    },
+
+    async submitTransferPreapprovalSetup(
+      input: ExternalPartyWalletTransferPreapprovalSubmitInput
+    ): Promise<SubmittedExternalPartyWalletTransferPreapprovalSetup> {
+      const validatorClient = requireValidatorClient(options.validatorClient, 'transfer preapproval setup submit');
+      return submitExternalPartyTransferPreapprovalSetup(validatorClient, input);
+    },
+
+    async sendProviderTransferToPreapprovedParty(
+      input: ExternalPartyWalletProviderTransferToPreapprovedInput
+    ): Promise<ExternalPartyWalletProviderTransferToPreapproved> {
+      const validatorClient = requireValidatorClient(
+        options.validatorClient,
+        'provider transfer preapproval wallet send'
+      );
+      const amount = normalizeAmountString(input.amount);
+      const description = normalizeDescription(input.description);
+      const transferPreapproval = await lookupExternalPartyTransferPreapproval(validatorClient, input.receiverPartyId);
+      if (!transferPreapproval) {
+        throw new OperationError(
+          'Receiver party does not have transfer preapproval',
+          OperationErrorCode.MISSING_CONTRACT,
+          { receiverPartyId: input.receiverPartyId }
+        );
+      }
+      const sent = await sendWalletTransferToPreapprovedParty(validatorClient, {
+        receiverPartyId: input.receiverPartyId,
+        amount,
+        deduplicationId: input.idempotencyKey,
+        ...(description ? { description } : {}),
+      });
+      const sourceBalanceAfter = await readOptionalProviderWalletBalance(validatorClient);
+      return {
+        sourcePartyId: options.providerPartyId,
+        receiverPartyId: input.receiverPartyId,
+        amount,
+        description,
+        transferPreapprovalContractId: transferPreapproval.contractId,
+        updateId: sent.updateId,
+        sourceBalanceAfter,
+        raw: {
+          transferPreapproval: transferPreapproval.raw,
+          transferPreapprovalSend: sent.raw,
+        },
       };
     },
 
