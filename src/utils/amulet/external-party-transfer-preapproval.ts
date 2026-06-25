@@ -62,7 +62,7 @@ export interface SendWalletTransferToPreapprovedPartyParams {
   /** Receiver party with an existing TransferPreapproval contract. */
   readonly receiverPartyId: string;
   /** CC amount to send. */
-  readonly amount: string | number;
+  readonly amount: string;
   /** Idempotency key accepted by Canton for this wallet send. */
   readonly deduplicationId: string;
   /** Optional transfer description. */
@@ -170,6 +170,10 @@ export async function submitExternalPartyTransferPreapprovalSetup(
   params: SubmitExternalPartyTransferPreapprovalSetupParams
 ): Promise<SubmittedExternalPartyTransferPreapprovalSetup> {
   validatePartyId('partyId', params.partyId);
+  assertCantonPartyMatchesPublicKey({
+    partyId: params.partyId,
+    publicKeyBase64: params.publicKeyBase64,
+  });
   assertCantonHashSignature({
     publicKeyBase64: params.publicKeyBase64,
     hashHex: params.preparedTransactionHashHex,
@@ -294,11 +298,11 @@ function validatePartyId(name: string, value: string): void {
 
 const CANTON_DECIMAL_AMOUNT_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
 
-function normalizeAmountString(amount: string | number): string {
-  const normalized = typeof amount === 'number' ? amount.toString() : amount.trim();
-  if (typeof amount === 'number' && !Number.isFinite(amount)) {
-    throw new ValidationError('amount must be a finite decimal amount', { amount });
+function normalizeAmountString(amount: string): string {
+  if (typeof amount !== 'string') {
+    throw new ValidationError('amount must be a decimal string', { amount });
   }
+  const normalized = amount.trim();
   if (!normalized) {
     throw new ValidationError('amount is required', { amount });
   }

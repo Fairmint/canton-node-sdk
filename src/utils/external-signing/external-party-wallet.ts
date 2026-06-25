@@ -59,6 +59,8 @@ export interface ExternalPartyWalletTokenContext {
   readonly network?: string;
   readonly userId?: string | null;
   readonly externalUserId?: string | null;
+  /** @deprecated Use externalUserId for implementation-agnostic wallet/user identifiers. */
+  readonly privyId?: string | null;
   readonly [key: string]: unknown;
 }
 
@@ -238,7 +240,7 @@ export type SubmittedExternalPartyWalletTransferPreapprovalSetup = SubmittedExte
 
 export interface ExternalPartyWalletProviderTransferToPreapprovedInput {
   readonly receiverPartyId: string;
-  readonly amount: string | number;
+  readonly amount: string;
   readonly idempotencyKey: string;
   readonly description?: string | null;
 }

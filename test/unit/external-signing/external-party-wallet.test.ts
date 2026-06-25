@@ -468,6 +468,24 @@ describe('external-party wallet bridge', (): void => {
     });
   });
 
+  it('rejects transfer preapproval setup submit when the party does not match the public key', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const validatorClient = createMockValidatorClient();
+    const bridge = createBridge({ validatorClient });
+
+    await expect(
+      bridge.submitTransferPreapprovalSetup({
+        partyId: 'wrong-party::fingerprint',
+        publicKeyBase64: fixture.publicKeyBase64,
+        preparedTransaction: 'prepared-transfer-preapproval-setup',
+        preparedTransactionHashHex: PREPARED_TRANSACTION_HASH_HEX,
+        signatureBase64: fixture.signPreparedHash(),
+      })
+    ).rejects.toThrow('Canton party ID does not match the submitted public key');
+
+    expect(validatorClient.submitAcceptExternalPartySetupProposal).not.toHaveBeenCalled();
+  });
+
   it('reports an existing transfer preapproval without creating a setup proposal', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const validatorClient = createMockValidatorClient();
@@ -526,6 +544,23 @@ describe('external-party wallet bridge', (): void => {
         },
       },
     });
+  });
+
+  it('does not send provider wallet CC when the receiver has no transfer preapproval', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const validatorClient = createMockValidatorClient();
+    validatorClient.lookupTransferPreapprovalByParty.mockRejectedValueOnce(new ApiError('not found', 404));
+    const bridge = createBridge({ validatorClient });
+
+    await expect(
+      bridge.sendProviderTransferToPreapprovedParty({
+        receiverPartyId: fixture.partyId,
+        amount: '3.5',
+        idempotencyKey: 'dedupe-1',
+      })
+    ).rejects.toHaveProperty('code', 'MISSING_CONTRACT');
+
+    expect(validatorClient.transferPreapprovalSend).not.toHaveBeenCalled();
   });
 
   it('lets callers resume provider-funded acceptance prepare without creating duplicate offers', async (): Promise<void> => {
