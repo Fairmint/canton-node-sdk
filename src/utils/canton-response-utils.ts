@@ -17,6 +17,14 @@ export interface CantonNormalizedContract {
   readonly createdAt: string | null;
 }
 
+export interface CantonContractWithStateLike {
+  readonly contract?: {
+    readonly contract_id?: string;
+    readonly [key: string]: unknown;
+  };
+  readonly [key: string]: unknown;
+}
+
 export interface CantonInstrumentId {
   readonly admin: string;
   readonly id: string;
@@ -63,6 +71,23 @@ export function readRequiredString(source: unknown, key: string, operation: stri
     `Canton ${operation} response did not include ${key}`,
     OperationErrorCode.TRANSACTION_FAILED
   );
+}
+
+export function readContractWithStateContractId(contractWithState: unknown): string | null {
+  if (!isRecord(contractWithState)) return null;
+  const contract = contractWithState['contract'];
+  if (!isRecord(contract)) return null;
+  const contractId = contract['contract_id'];
+  return typeof contractId === 'string' && contractId.trim() ? contractId : null;
+}
+
+export function readOptionalCantonUpdateId(source: unknown): string | null {
+  if (!isRecord(source)) return null;
+  for (const key of ['updateId', 'update_id', 'transaction_id', 'transactionId']) {
+    const value = source[key];
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return readOptionalCantonUpdateId(source['transactionTree']);
 }
 
 export function objectOrEmpty(value: unknown): Record<string, unknown> {
