@@ -1,0 +1,33 @@
+name: Check Package Artifacts
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  check-package-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          submodules: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.14'
+
+      - name: Install dependencies
+        run: npm i
+
+      - name: Initialize Splice Submodule
+        run: git submodule update --init --depth 1 libs/splice
+
+      - name: Build package
+        run: npm run build
+
+      - name: Check package artifacts
+        run: npm run check:package-artifacts
