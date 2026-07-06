@@ -372,6 +372,13 @@ async function readRequiredConnectedSynchronizerId(
         OperationErrorCode.MISSING_DOMAIN_ID
       );
     }
+    if (error instanceof OperationError && error.message === 'Canton party reported multiple connected synchronizers') {
+      throw new OperationError(
+        'Canton provider reported multiple connected synchronizers',
+        OperationErrorCode.MISSING_DOMAIN_ID,
+        error.context
+      );
+    }
     throw error;
   }
 }
