@@ -30,6 +30,15 @@ describe('Canton runtime credential helpers', () => {
     expect(normalizeCantonRuntimeCredentials(rawCredentials)).toEqual(normalizedCredentials);
   });
 
+  it('normalizes long trailing slash runs without regex backtracking', () => {
+    const credentials = normalizeCantonRuntimeCredentials({
+      ...rawCredentials,
+      ledgerJsonApiEndpoint: `https://ledger.example${'/'.repeat(10_000)}`,
+    });
+
+    expect(credentials.ledgerJsonApiEndpoint).toBe('https://ledger.example');
+  });
+
   it('emits stable env keys for a network/provider prefix', () => {
     expect(
       buildCantonRuntimeCredentialEnvKeys({
