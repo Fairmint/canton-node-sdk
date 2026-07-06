@@ -43,7 +43,7 @@ jobs:
       - name: Build package
         run: npm run build
 
-      - name: Check package artifacts
+      - name: Prepack and check package artifacts
         run: npm run check:package-artifacts
 
       - name: Prepare release

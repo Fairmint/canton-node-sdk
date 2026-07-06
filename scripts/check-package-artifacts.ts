@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 
-import { spawnSync } from 'child_process';
+import { spawnSync, type SpawnSyncReturns } from 'child_process';
 
 interface NpmPackFile {
   path: string;
@@ -20,10 +20,20 @@ interface NpmPackResult {
 
 const DEFAULT_MAX_UNPACKED_BYTES = 15 * 1024 * 1024;
 const configuredMaxUnpackedBytes = process.env['MAX_PACKAGE_UNPACKED_BYTES'];
-const maxUnpackedBytes = Number.parseInt(configuredMaxUnpackedBytes ?? String(DEFAULT_MAX_UNPACKED_BYTES), 10);
+const maxUnpackedBytes = parseMaxUnpackedBytes(configuredMaxUnpackedBytes);
 
 function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function parseMaxUnpackedBytes(rawValue: string | undefined): number {
+  const parsedValue = rawValue === undefined ? DEFAULT_MAX_UNPACKED_BYTES : Number(rawValue);
+
+  if (!Number.isInteger(parsedValue) || parsedValue <= 0) {
+    throw new Error(`MAX_PACKAGE_UNPACKED_BYTES must be a positive integer in bytes, got ${JSON.stringify(rawValue)}`);
+  }
+
+  return parsedValue;
 }
 
 function forbiddenPackagePathReason(packagePath: string): string | null {
@@ -48,14 +58,43 @@ function parsePackResults(stdout: string): NpmPackResult[] {
   }
 }
 
+function spawnFailureDetails(command: string, result: SpawnSyncReturns<string>): string {
+  const details = [`status ${result.status ?? 'unknown'}`];
+
+  if (result.signal) {
+    details.push(`signal ${result.signal}`);
+  }
+  if (result.error) {
+    details.push(`error ${result.error.message}`);
+  }
+
+  return `${command} failed (${details.join(', ')})`;
+}
+
+function throwIfSpawnFailed(command: string, result: SpawnSyncReturns<string>): void {
+  if (result.status === 0 && !result.signal && !result.error) {
+    return;
+  }
+
+  if (result.stderr) {
+    console.error(result.stderr);
+  }
+  if (result.stdout) {
+    console.error(result.stdout);
+  }
+
+  throw new Error(spawnFailureDetails(command, result));
+}
+
+const prepack = spawnSync('npm', ['run', 'prepack'], {
+  encoding: 'utf8',
+});
+throwIfSpawnFailed('npm run prepack', prepack);
+
 const pack = spawnSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
   encoding: 'utf8',
 });
-
-if (pack.status !== 0) {
-  console.error(pack.stderr || pack.stdout);
-  throw new Error(`npm pack failed with status ${pack.status ?? 'unknown'}`);
-}
+throwIfSpawnFailed('npm pack --dry-run --json --ignore-scripts', pack);
 
 const [result] = parsePackResults(pack.stdout);
 if (!result) {
@@ -64,11 +103,7 @@ if (!result) {
 
 const errors: string[] = [];
 
-if (Number.isNaN(maxUnpackedBytes) || maxUnpackedBytes <= 0) {
-  errors.push(
-    `MAX_PACKAGE_UNPACKED_BYTES must be a positive integer, got ${JSON.stringify(configuredMaxUnpackedBytes)}`
-  );
-} else if (result.unpackedSize > maxUnpackedBytes) {
+if (result.unpackedSize > maxUnpackedBytes) {
   errors.push(
     `package unpacked size ${formatBytes(result.unpackedSize)} exceeds limit ${formatBytes(maxUnpackedBytes)}`
   );
