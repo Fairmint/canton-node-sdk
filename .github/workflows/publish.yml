@@ -43,6 +43,9 @@ jobs:
       - name: Build package
         run: npm run build
 
+      - name: Prepack and check package artifacts
+        run: npm run check:package-artifacts
+
       - name: Prepare release
         run: npm run prepare-release
 
@@ -63,4 +66,3 @@ jobs:
           git config --local user.name "GitHub Action"
           git tag -a "v$NEW_VERSION" -m "$CHANGELOG"
           git push origin "v$NEW_VERSION"
-
