@@ -18,6 +18,7 @@ import {
   CANTON_RAW_SIGNATURE_FORMAT,
 } from '../external-signing/external-party-onboarding';
 import { prepareExternalTransaction } from '../external-signing/prepare-external-transaction';
+import { assertSingleConnectedSynchronizerId } from '../party-readiness';
 
 export const CANTON_TRANSFER_OFFER_TEMPLATE_ID = '#splice-wallet:Splice.Wallet.TransferOffer:TransferOffer';
 
@@ -362,51 +363,24 @@ async function readRequiredConnectedSynchronizerId(
   providerPartyId: string
 ): Promise<string> {
   const raw = await ledgerClient.getConnectedSynchronizers({ party: providerPartyId });
-  const synchronizerId = parseRequiredSingleSynchronizerId(raw);
-  if (synchronizerId) return synchronizerId;
-  throw new OperationError(
-    'Canton provider did not report a connected synchronizer',
-    OperationErrorCode.MISSING_DOMAIN_ID
-  );
-}
-
-function parseRequiredSingleSynchronizerId(raw: unknown): string | null {
-  if (!isRecord(raw) && !Array.isArray(raw)) return null;
-  const direct = isRecord(raw) ? raw['connectedSynchronizers'] : undefined;
-  const itemsField = isRecord(raw) ? raw['items'] : undefined;
-  const items: unknown[] = Array.isArray(raw)
-    ? raw
-    : Array.isArray(direct)
-      ? direct
-      : Array.isArray(itemsField)
-        ? itemsField
-        : [];
-  const synchronizerIds: string[] = [];
-  for (const item of items) {
-    if (typeof item === 'string' && item.trim()) {
-      synchronizerIds.push(item);
-      continue;
+  try {
+    return assertSingleConnectedSynchronizerId(raw);
+  } catch (error) {
+    if (error instanceof OperationError && error.message === 'Canton party did not report a connected synchronizer') {
+      throw new OperationError(
+        'Canton provider did not report a connected synchronizer',
+        OperationErrorCode.MISSING_DOMAIN_ID
+      );
     }
-    if (!isRecord(item)) {
-      continue;
+    if (error instanceof OperationError && error.message === 'Canton party reported multiple connected synchronizers') {
+      throw new OperationError(
+        'Canton provider reported multiple connected synchronizers',
+        OperationErrorCode.MISSING_DOMAIN_ID,
+        error.context
+      );
     }
-    for (const key of ['synchronizerId', 'synchronizer', 'domainId', 'id']) {
-      const value = item[key];
-      if (typeof value === 'string' && value.trim()) {
-        synchronizerIds.push(value);
-        break;
-      }
-    }
+    throw error;
   }
-  const uniqueSynchronizerIds = new Set(synchronizerIds);
-  if (uniqueSynchronizerIds.size > 1) {
-    throw new OperationError(
-      'Canton provider reported multiple connected synchronizers',
-      OperationErrorCode.MISSING_DOMAIN_ID,
-      { synchronizerIds }
-    );
-  }
-  return synchronizerIds[0] ?? null;
 }
 
 function validateRequiredString(name: string, value: string): void {

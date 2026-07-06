@@ -23,6 +23,7 @@ import {
   type SubmittedExternalPartyTransferPreapprovalSetup,
 } from '../amulet/external-party-transfer-preapproval';
 import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
+import { readConnectedSynchronizers as readPartyConnectedSynchronizers } from '../party-readiness';
 import {
   assertCantonHashSignature,
   assertCantonPartyMatchesPublicKey,
@@ -949,40 +950,16 @@ export function normalizeExternalPartyWalletDescription(description: string | nu
 }
 
 export function parseExternalPartyWalletConnectedSynchronizerId(raw: unknown): string | null {
-  if (!isRecord(raw) && !Array.isArray(raw)) return null;
-  const direct = isRecord(raw) ? raw['connectedSynchronizers'] : undefined;
-  const itemsField = isRecord(raw) ? raw['items'] : undefined;
-  const items: unknown[] = Array.isArray(raw)
-    ? raw
-    : Array.isArray(direct)
-      ? direct
-      : Array.isArray(itemsField)
-        ? itemsField
-        : [];
-  const synchronizerIds: string[] = [];
-  for (const item of items) {
-    if (typeof item === 'string' && item.trim()) {
-      synchronizerIds.push(item.trim());
-      continue;
-    }
-    if (!isRecord(item)) continue;
-    for (const key of ['synchronizerId', 'synchronizer', 'domainId', 'id']) {
-      const value = item[key];
-      if (typeof value === 'string' && value.trim()) {
-        synchronizerIds.push(value.trim());
-        break;
-      }
-    }
-  }
-  const uniqueSynchronizerIds = new Set(synchronizerIds);
-  if (uniqueSynchronizerIds.size > 1) {
+  const synchronizerIds = readPartyConnectedSynchronizers(raw).map((synchronizer) => synchronizer.synchronizerId);
+  const uniqueSynchronizerIds = [...new Set(synchronizerIds)];
+  if (uniqueSynchronizerIds.length > 1) {
     throw new OperationError(
       'Canton provider reported multiple connected synchronizers',
       OperationErrorCode.MISSING_DOMAIN_ID,
       { synchronizerIds }
     );
   }
-  return synchronizerIds[0] ?? null;
+  return uniqueSynchronizerIds[0] ?? null;
 }
 
 async function prepareProviderTransferAcceptance(input: {

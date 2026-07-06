@@ -355,7 +355,7 @@ describe('external-party transfer-offer helpers', () => {
         offerContractId: offerContract.contractId,
         disclosedContract: offerContract,
       })
-    ).rejects.toThrow('multiple connected synchronizers');
+    ).rejects.toThrow('Canton provider reported multiple connected synchronizers');
 
     expect(ledgerClient.interactiveSubmissionPrepare).not.toHaveBeenCalled();
   });
