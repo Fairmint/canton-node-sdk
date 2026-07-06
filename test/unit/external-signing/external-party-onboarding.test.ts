@@ -11,6 +11,7 @@ import {
   CANTON_EC_CURVE25519_PUBLIC_KEY_SPEC,
   CANTON_ED25519_SIGNATURE_ALGORITHM,
   CANTON_RAW_SIGNATURE_FORMAT,
+  createExternalPartyWithSigner,
   getExternalPartyIdForHintAndPublicKey,
   listExternalPartyIdsForPublicKey,
   prepareExternalPartyOnboarding,
@@ -24,6 +25,7 @@ const createSigningFixture = (): {
   readonly publicKeyFingerprint: string;
   readonly partyId: string;
   readonly signMultiHash: () => string;
+  readonly signMultiHashHex: () => string;
 } => {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
   const publicKeyBase64 = Buffer.from(publicKey.export({ format: 'der', type: 'spki' }))
@@ -35,34 +37,36 @@ const createSigningFixture = (): {
     publicKeyFingerprint,
     partyId: buildExternalPartyId('privy-test', publicKeyFingerprint),
     signMultiHash: () => sign(null, Buffer.from(MULTI_HASH_HEX, 'hex'), privateKey).toString('base64'),
+    signMultiHashHex: () => sign(null, Buffer.from(MULTI_HASH_HEX, 'hex'), privateKey).toString('hex'),
   };
 };
 
-const createMockLedgerClient = (fixture = createSigningFixture()): jest.Mocked<LedgerJsonApiClient> =>
-  ({
-    generateExternalPartyTopology: jest.fn().mockResolvedValue({
-      partyId: fixture.partyId,
-      multiHash: Buffer.from(MULTI_HASH_HEX, 'hex').toString('base64'),
-      topologyTransactions: ['topology-tx-1', 'topology-tx-2'],
-    }),
-    allocateExternalParty: jest.fn().mockResolvedValue({
-      partyId: fixture.partyId,
-    }),
-    getPartyDetails: jest.fn().mockResolvedValue({
-      partyDetails: {
-        party: fixture.partyId,
-        isLocal: true,
-      },
-    }),
-    listParties: jest.fn().mockResolvedValue({
-      partyDetails: [
-        { party: fixture.partyId },
-        { party: buildExternalPartyId('another-prefix', fixture.publicKeyFingerprint) },
-        { party: `other::1220${'aa'.repeat(32)}` },
-        { party: fixture.partyId },
-      ],
-    }),
-  }) as unknown as jest.Mocked<LedgerJsonApiClient>;
+const createMockLedgerClient = (fixture = createSigningFixture()): jest.Mocked<LedgerJsonApiClient> => {
+  const ledgerClient = Object.create(null) as jest.Mocked<LedgerJsonApiClient>;
+  ledgerClient.generateExternalPartyTopology = jest.fn().mockResolvedValue({
+    partyId: fixture.partyId,
+    multiHash: Buffer.from(MULTI_HASH_HEX, 'hex').toString('base64'),
+    topologyTransactions: ['topology-tx-1', 'topology-tx-2'],
+  });
+  ledgerClient.allocateExternalParty = jest.fn().mockResolvedValue({
+    partyId: fixture.partyId,
+  });
+  ledgerClient.getPartyDetails = jest.fn().mockResolvedValue({
+    partyDetails: {
+      party: fixture.partyId,
+      isLocal: true,
+    },
+  });
+  ledgerClient.listParties = jest.fn().mockResolvedValue({
+    partyDetails: [
+      { party: fixture.partyId },
+      { party: buildExternalPartyId('another-prefix', fixture.publicKeyFingerprint) },
+      { party: `other::1220${'aa'.repeat(32)}` },
+      { party: fixture.partyId },
+    ],
+  });
+  return ledgerClient;
+};
 
 describe('external-party onboarding helpers', () => {
   it('prepares topology with normalized Canton public key metadata', async () => {
@@ -107,7 +111,7 @@ describe('external-party onboarding helpers', () => {
       partyId: `wrong::1220${'aa'.repeat(32)}`,
       multiHash: MULTI_HASH_HEX,
       topologyTransactions: ['topology-tx'],
-    } as never);
+    });
 
     await expect(
       prepareExternalPartyOnboarding({
@@ -152,6 +156,96 @@ describe('external-party onboarding helpers', () => {
       raw: { partyId: fixture.partyId },
       alreadyExisted: false,
     });
+  });
+
+  it('creates an external party with an external signer callback returning hex', async () => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    const signMultiHash = jest.fn(() => ({ signatureHex: fixture.signMultiHashHex() }));
+
+    const created = await createExternalPartyWithSigner({
+      ledgerClient,
+      synchronizerId: 'global-domain::sync',
+      partyHint: 'privy-test',
+      publicKeyBase64: fixture.publicKeyBase64,
+      identityProviderId: 'custom-idp',
+      signMultiHash,
+    });
+
+    expect(signMultiHash).toHaveBeenCalledWith({
+      partyHint: 'privy-test',
+      partyId: fixture.partyId,
+      publicKeyBase64: normalizeEd25519PublicKeyForCanton(fixture.publicKeyBase64),
+      publicKeyFingerprint: fixture.publicKeyFingerprint,
+      synchronizerId: 'global-domain::sync',
+      multiHashHex: MULTI_HASH_HEX,
+      multiHashBase64: Buffer.from(MULTI_HASH_HEX, 'hex').toString('base64'),
+      topologyTransactions: ['topology-tx-1', 'topology-tx-2'],
+      signingAlgorithmSpec: CANTON_ED25519_SIGNATURE_ALGORITHM,
+    });
+    expect(ledgerClient.allocateExternalParty).toHaveBeenCalledWith({
+      synchronizer: 'global-domain::sync',
+      identityProviderId: 'custom-idp',
+      onboardingTransactions: [{ transaction: 'topology-tx-1' }, { transaction: 'topology-tx-2' }],
+      multiHashSignatures: [
+        {
+          format: CANTON_RAW_SIGNATURE_FORMAT,
+          signature: fixture.signMultiHash(),
+          signedBy: fixture.publicKeyFingerprint,
+          signingAlgorithmSpec: CANTON_ED25519_SIGNATURE_ALGORITHM,
+        },
+      ],
+    });
+    expect(created).toMatchObject({
+      partyId: fixture.partyId,
+      publicKeyFingerprint: fixture.publicKeyFingerprint,
+      publicKeyBase64: normalizeEd25519PublicKeyForCanton(fixture.publicKeyBase64),
+      synchronizerId: 'global-domain::sync',
+      alreadyExisted: false,
+    });
+  });
+
+  it('forwards multi-hosting options through external signer party creation', async () => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+
+    await createExternalPartyWithSigner({
+      ledgerClient,
+      synchronizerId: 'global-domain::sync',
+      partyHint: 'privy-test',
+      publicKeyBase64: fixture.publicKeyBase64,
+      localParticipantObservationOnly: true,
+      otherConfirmingParticipantUids: ['participant-1'],
+      confirmationThreshold: 1,
+      observingParticipantUids: ['observer-1'],
+      signMultiHash: () => ({ signatureBase64: fixture.signMultiHash() }),
+    });
+
+    expect(ledgerClient.generateExternalPartyTopology).toHaveBeenCalledWith(
+      expect.objectContaining({
+        localParticipantObservationOnly: true,
+        otherConfirmingParticipantUids: ['participant-1'],
+        confirmationThreshold: 1,
+        observingParticipantUids: ['observer-1'],
+      })
+    );
+  });
+
+  it('rejects invalid external signer output before allocating', async () => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+
+    await expect(
+      createExternalPartyWithSigner({
+        ledgerClient,
+        synchronizerId: 'global-domain::sync',
+        partyHint: 'privy-test',
+        publicKeyBase64: fixture.publicKeyBase64,
+        signMultiHash: () => ({ signatureHex: 'deadbeef' }),
+      })
+    ).rejects.toThrow('External-party signer must return a 64-byte Ed25519 signature');
+
+    expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
   });
 
   it('does not allocate when the submitted multi-hash signature is invalid', async () => {

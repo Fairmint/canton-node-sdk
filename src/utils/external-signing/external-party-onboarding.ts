@@ -9,6 +9,7 @@ import {
   assertCantonSha256MultihashHex,
   buildExternalPartyId,
   deriveCantonEd25519PublicKeyFingerprint,
+  hashHexToBase64,
   normalizeCantonHashToHex,
   normalizeEd25519PublicKeyForCanton,
 } from './canton-protocol';
@@ -25,6 +26,14 @@ export interface PrepareExternalPartyOnboardingOptions {
   readonly synchronizerId: string;
   readonly partyHint: string;
   readonly publicKeyBase64: string;
+  /** If true, the local participant will only observe, not confirm (default: false). */
+  readonly localParticipantObservationOnly?: boolean;
+  /** Other participant UIDs that should confirm for this party. */
+  readonly otherConfirmingParticipantUids?: readonly string[];
+  /** Confirmation threshold for multi-hosted party (default: all confirmers). */
+  readonly confirmationThreshold?: number;
+  /** Other participant UIDs that should only observe. */
+  readonly observingParticipantUids?: readonly string[];
 }
 
 export interface PreparedExternalPartyOnboarding {
@@ -61,6 +70,53 @@ export interface SubmittedExternalPartyOnboarding {
   readonly alreadyExisted: boolean;
 }
 
+export interface ExternalPartyHashSigningRequest {
+  readonly partyHint: string;
+  readonly partyId: string;
+  readonly publicKeyBase64: string;
+  readonly publicKeyFingerprint: string;
+  readonly synchronizerId: string;
+  readonly multiHashHex: string;
+  readonly multiHashBase64: string;
+  readonly topologyTransactions: readonly string[];
+  readonly signingAlgorithmSpec: typeof CANTON_ED25519_SIGNATURE_ALGORITHM;
+}
+
+export type ExternalPartyHashSignature =
+  | {
+      readonly signatureBase64: string;
+    }
+  | {
+      readonly signatureHex: string;
+    }
+  | {
+      readonly signatureBytes: Buffer | Uint8Array;
+    };
+
+export type ExternalPartyHashSigner = (
+  request: ExternalPartyHashSigningRequest
+) => ExternalPartyHashSignature | Promise<ExternalPartyHashSignature>;
+
+export interface CreateExternalPartyWithSignerOptions extends PrepareExternalPartyOnboardingOptions {
+  readonly signMultiHash: ExternalPartyHashSigner;
+  readonly identityProviderId?: string;
+  /**
+   * Treat a 409 allocation conflict as success when the party already exists and the party details endpoint confirms
+   * it.
+   */
+  readonly allowAlreadyExists?: boolean;
+}
+
+export interface CreatedExternalPartyWithSigner {
+  readonly partyId: string;
+  readonly publicKeyFingerprint: string;
+  readonly publicKeyBase64: string;
+  readonly synchronizerId: string;
+  readonly prepared: PreparedExternalPartyOnboarding;
+  readonly submitted: SubmittedExternalPartyOnboarding;
+  readonly alreadyExisted: boolean;
+}
+
 /**
  * Prepares external-party topology for a raw or DER-wrapped Ed25519 public key.
  *
@@ -81,6 +137,16 @@ export async function prepareExternalPartyOnboarding(
       keyData: normalizeEd25519PublicKeyForCanton(options.publicKeyBase64),
       keySpec: CANTON_EC_CURVE25519_PUBLIC_KEY_SPEC,
     },
+    ...(options.localParticipantObservationOnly !== undefined
+      ? { localParticipantObservationOnly: options.localParticipantObservationOnly }
+      : {}),
+    ...(options.otherConfirmingParticipantUids !== undefined
+      ? { otherConfirmingParticipantUids: options.otherConfirmingParticipantUids }
+      : {}),
+    ...(options.confirmationThreshold !== undefined ? { confirmationThreshold: options.confirmationThreshold } : {}),
+    ...(options.observingParticipantUids !== undefined
+      ? { observingParticipantUids: options.observingParticipantUids }
+      : {}),
   });
 
   const partyId = readRequiredString(topology, 'partyId', 'topology generation');
@@ -101,6 +167,68 @@ export async function prepareExternalPartyOnboarding(
     publicKeyFormat: CANTON_DER_X509_PUBLIC_KEY_FORMAT,
     signingAlgorithmSpec: CANTON_ED25519_SIGNATURE_ALGORITHM,
     raw: topology,
+  };
+}
+
+/**
+ * Creates an external party using an external Ed25519 signer.
+ *
+ * Use this when the private key is held by a wallet service or browser wallet. The SDK prepares Canton topology, passes
+ * the multihash to `signMultiHash`, validates the returned signature against the submitted public key, and submits the
+ * allocation.
+ */
+export async function createExternalPartyWithSigner(
+  options: CreateExternalPartyWithSignerOptions
+): Promise<CreatedExternalPartyWithSigner> {
+  const publicKeyBase64 = normalizeEd25519PublicKeyForCanton(options.publicKeyBase64);
+  const prepared = await prepareExternalPartyOnboarding({
+    ledgerClient: options.ledgerClient,
+    synchronizerId: options.synchronizerId,
+    partyHint: options.partyHint,
+    publicKeyBase64,
+    ...(options.localParticipantObservationOnly !== undefined
+      ? { localParticipantObservationOnly: options.localParticipantObservationOnly }
+      : {}),
+    ...(options.otherConfirmingParticipantUids !== undefined
+      ? { otherConfirmingParticipantUids: options.otherConfirmingParticipantUids }
+      : {}),
+    ...(options.confirmationThreshold !== undefined ? { confirmationThreshold: options.confirmationThreshold } : {}),
+    ...(options.observingParticipantUids !== undefined
+      ? { observingParticipantUids: options.observingParticipantUids }
+      : {}),
+  });
+  const signature = await options.signMultiHash({
+    partyHint: options.partyHint,
+    partyId: prepared.partyId,
+    publicKeyBase64,
+    publicKeyFingerprint: prepared.publicKeyFingerprint,
+    synchronizerId: prepared.synchronizerId,
+    multiHashHex: prepared.multiHashHex,
+    multiHashBase64: hashHexToBase64(prepared.multiHashHex),
+    topologyTransactions: prepared.topologyTransactions,
+    signingAlgorithmSpec: prepared.signingAlgorithmSpec,
+  });
+  const submitted = await submitExternalPartyOnboarding({
+    ledgerClient: options.ledgerClient,
+    synchronizerId: prepared.synchronizerId,
+    partyId: prepared.partyId,
+    publicKeyBase64,
+    publicKeyFingerprint: prepared.publicKeyFingerprint,
+    multiHashHex: prepared.multiHashHex,
+    topologyTransactions: prepared.topologyTransactions,
+    multiHashSignatureBase64: normalizeExternalPartyHashSignature(signature),
+    ...(options.identityProviderId !== undefined ? { identityProviderId: options.identityProviderId } : {}),
+    ...(options.allowAlreadyExists !== undefined ? { allowAlreadyExists: options.allowAlreadyExists } : {}),
+  });
+
+  return {
+    partyId: submitted.partyId,
+    publicKeyFingerprint: prepared.publicKeyFingerprint,
+    publicKeyBase64,
+    synchronizerId: prepared.synchronizerId,
+    prepared,
+    submitted,
+    alreadyExisted: submitted.alreadyExisted,
   };
 }
 
@@ -168,6 +296,51 @@ export async function submitExternalPartyOnboarding(
       alreadyExisted: true,
     };
   }
+}
+
+function normalizeExternalPartyHashSignature(signature: ExternalPartyHashSignature): string {
+  if ('signatureBase64' in signature) {
+    return encodeSignatureBytes(decodeBase64Signature(signature.signatureBase64));
+  }
+  if ('signatureHex' in signature) {
+    return encodeSignatureBytes(decodeHexSignature(signature.signatureHex));
+  }
+  return encodeSignatureBytes(Buffer.from(signature.signatureBytes));
+}
+
+function decodeBase64Signature(value: string): Buffer {
+  const normalized = value.trim().replace(/-/g, '+').replace(/_/g, '/');
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized) || normalized.length % 4 === 1) {
+    throw invalidExternalPartySignature();
+  }
+  const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
+  const decoded = Buffer.from(padded, 'base64');
+  if (decoded.toString('base64').replace(/=+$/, '') !== normalized.replace(/=+$/, '')) {
+    throw invalidExternalPartySignature();
+  }
+  return decoded;
+}
+
+function decodeHexSignature(value: string): Buffer {
+  const normalized = value.trim().replace(/^0x/i, '');
+  if (!/^[0-9a-fA-F]+$/.test(normalized) || normalized.length % 2 !== 0) {
+    throw invalidExternalPartySignature();
+  }
+  return Buffer.from(normalized, 'hex');
+}
+
+function encodeSignatureBytes(signature: Buffer): string {
+  if (signature.length !== 64) {
+    throw invalidExternalPartySignature(signature.length);
+  }
+  return signature.toString('base64');
+}
+
+function invalidExternalPartySignature(actualLength?: number): ValidationError {
+  return new ValidationError('External-party signer must return a 64-byte Ed25519 signature', {
+    ...(actualLength !== undefined ? { actualLength } : {}),
+    expectedLength: 64,
+  });
 }
 
 /** Lists party ids whose suffix matches the supplied Ed25519 public key fingerprint. */
