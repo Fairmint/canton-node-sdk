@@ -109,6 +109,7 @@ describe('external-party onboarding helpers', () => {
     const ledgerClient = createMockLedgerClient(fixture);
     ledgerClient.generateExternalPartyTopology.mockResolvedValueOnce({
       partyId: `wrong::1220${'aa'.repeat(32)}`,
+      publicKeyFingerprint: `1220${'aa'.repeat(32)}`,
       multiHash: MULTI_HASH_HEX,
       topologyTransactions: ['topology-tx'],
     });
