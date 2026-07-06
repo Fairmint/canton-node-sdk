@@ -4,9 +4,12 @@ import {
   canSubmitWithPermission,
   checkPartySynchronizerReadiness,
   listConnectedSynchronizerIds,
+  partyCanSubmitOnSynchronizer,
   readConnectedSynchronizers,
   readSingleConnectedSynchronizerId,
+  resolveActiveSubmissionSynchronizer,
   resolveCommonSynchronizerIds,
+  waitForPartyCanSubmit,
   type PartySynchronizerReadinessLedgerClient,
 } from '../../src';
 
@@ -151,6 +154,32 @@ describe('party synchronizer readiness helpers', (): void => {
     });
   });
 
+  it('exposes a boolean helper for submit readiness on a synchronizer', async (): Promise<void> => {
+    const ledgerClient = createMockLedgerClient({
+      'issuer::party': {
+        connectedSynchronizers: [
+          { synchronizerId: 'global-domain::sync', permission: 'PARTICIPANT_PERMISSION_SUBMISSION' },
+          { synchronizerId: 'observer-domain::sync', permission: 'PARTICIPANT_PERMISSION_OBSERVATION' },
+        ],
+      },
+    });
+
+    await expect(
+      partyCanSubmitOnSynchronizer({
+        ledgerClient,
+        party: 'issuer::party',
+        synchronizerId: 'global-domain::sync',
+      })
+    ).resolves.toBe(true);
+    await expect(
+      partyCanSubmitOnSynchronizer({
+        ledgerClient,
+        party: 'issuer::party',
+        synchronizerId: 'observer-domain::sync',
+      })
+    ).resolves.toBe(false);
+  });
+
   it('asserts party readiness with actionable failures', async (): Promise<void> => {
     const ledgerClient = createMockLedgerClient({
       'external::party': {
@@ -219,6 +248,71 @@ describe('party synchronizer readiness helpers', (): void => {
     });
   });
 
+  it('resolves the active submission synchronizer using anchor-party order', async (): Promise<void> => {
+    const ledgerClient = createMockLedgerClient({
+      'transfer-agent::party': {
+        connectedSynchronizers: [
+          { synchronizerId: 'sync-b', permission: 'Submission' },
+          { synchronizerId: 'sync-a', permission: 'Submission' },
+        ],
+      },
+      'issuer::party': {
+        connectedSynchronizers: [
+          { synchronizerId: 'sync-a', permission: 'Submission' },
+          { synchronizerId: 'sync-b', permission: 'Submission' },
+        ],
+      },
+      'external::party': {
+        connectedSynchronizers: [{ synchronizerId: 'sync-b', permission: 'Submission' }],
+      },
+    });
+
+    await expect(
+      resolveActiveSubmissionSynchronizer({
+        ledgerClient,
+        anchorParty: 'transfer-agent::party',
+        parties: ['issuer::party', 'external::party'],
+      })
+    ).resolves.toBe('sync-b');
+  });
+
+  it('resolves the active submission synchronizer for an anchor party without counterparties', async (): Promise<void> => {
+    const ledgerClient = createMockLedgerClient({
+      'transfer-agent::party': {
+        connectedSynchronizers: [
+          { synchronizerId: 'observer-domain::sync', permission: 'Observation' },
+          { synchronizerId: 'global-domain::sync', permission: 'Submission' },
+        ],
+      },
+    });
+
+    await expect(
+      resolveActiveSubmissionSynchronizer({
+        ledgerClient,
+        anchorParty: 'transfer-agent::party',
+      })
+    ).resolves.toBe('global-domain::sync');
+  });
+
+  it('reports active submission synchronizer failures with party context', async (): Promise<void> => {
+    const ledgerClient = createMockLedgerClient({
+      'transfer-agent::party': {
+        connectedSynchronizers: [{ synchronizerId: 'sync-a', permission: 'Submission' }],
+      },
+      'external::party': {
+        connectedSynchronizers: [{ synchronizerId: 'sync-b', permission: 'Submission' }],
+      },
+    });
+
+    await expect(
+      resolveActiveSubmissionSynchronizer({
+        ledgerClient,
+        anchorParty: 'transfer-agent::party',
+        parties: ['external::party'],
+      })
+    ).rejects.toThrow('do not share a submission-capable synchronizer');
+  });
+
   it('asserts common synchronizer readiness for an expected synchronizer', async (): Promise<void> => {
     const ledgerClient = createMockLedgerClient({
       'transfer-agent::party': {
@@ -249,6 +343,53 @@ describe('party synchronizer readiness helpers', (): void => {
         synchronizerId: 'global-domain::sync',
       })
     ).rejects.toThrow('not ready on the requested synchronizer');
+  });
+
+  it('waits for a party to become submission-capable and ignores transient check errors', async (): Promise<void> => {
+    const onCheckError = jest.fn();
+    const ledgerClient: MockLedgerClient = {
+      getConnectedSynchronizers: jest
+        .fn<
+          ReturnType<PartySynchronizerReadinessLedgerClient['getConnectedSynchronizers']>,
+          [{ readonly party: string }]
+        >()
+        .mockRejectedValueOnce(new Error('ledger unavailable'))
+        .mockResolvedValueOnce({
+          connectedSynchronizers: [{ synchronizerId: 'global-domain::sync', permission: 'Observation' }],
+        })
+        .mockResolvedValueOnce({
+          connectedSynchronizers: [{ synchronizerId: 'global-domain::sync', permission: 'Submission' }],
+        }),
+    };
+
+    await expect(
+      waitForPartyCanSubmit({
+        ledgerClient,
+        party: 'external::party',
+        synchronizerId: 'global-domain::sync',
+        delaysMs: [0, 0, 0],
+        onCheckError,
+      })
+    ).resolves.toBe(true);
+    expect(onCheckError).toHaveBeenCalledTimes(1);
+    expect(ledgerClient.getConnectedSynchronizers).toHaveBeenCalledTimes(3);
+  });
+
+  it('returns false when party submit readiness does not settle within the wait window', async (): Promise<void> => {
+    const ledgerClient = createMockLedgerClient({
+      'external::party': {
+        connectedSynchronizers: [{ synchronizerId: 'global-domain::sync', permission: 'Observation' }],
+      },
+    });
+
+    await expect(
+      waitForPartyCanSubmit({
+        ledgerClient,
+        party: 'external::party',
+        synchronizerId: 'global-domain::sync',
+        delaysMs: [0, 0],
+      })
+    ).resolves.toBe(false);
   });
 
   it('handles single-synchronizer and permission helper edge cases', (): void => {

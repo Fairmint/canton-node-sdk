@@ -66,6 +66,26 @@ export interface CommonPartySynchronizerReadiness extends CommonPartySynchronize
   readonly synchronizerId: string;
 }
 
+export interface ResolveActiveSubmissionSynchronizerOptions {
+  readonly ledgerClient: PartySynchronizerReadinessLedgerClient;
+  readonly anchorParty: string;
+  readonly parties?: readonly string[];
+  readonly participantId?: string;
+}
+
+export interface WaitForPartyCanSubmitOptions extends PartySynchronizerReadinessOptions {
+  readonly delaysMs?: readonly number[];
+  readonly onCheckError?: (
+    error: unknown,
+    context: {
+      readonly party: string;
+      readonly synchronizerId: string;
+      readonly delayMs: number;
+      readonly attempt: number;
+    }
+  ) => void | Promise<void>;
+}
+
 export async function listConnectedSynchronizerIds(
   options: ListConnectedSynchronizerIdsOptions
 ): Promise<PartyConnectedSynchronizers> {
@@ -113,6 +133,10 @@ export async function checkPartySynchronizerReadiness(
         : {}),
     raw: connected.raw,
   };
+}
+
+export async function partyCanSubmitOnSynchronizer(options: PartySynchronizerReadinessOptions): Promise<boolean> {
+  return (await checkPartySynchronizerReadiness(options)).ready;
 }
 
 export async function assertPartySynchronizerReady(
@@ -225,6 +249,106 @@ export async function assertCommonSynchronizerReady(
   };
 }
 
+export async function resolveActiveSubmissionSynchronizer(
+  options: ResolveActiveSubmissionSynchronizerOptions
+): Promise<string> {
+  const anchorParty = validateRequiredString('anchorParty', options.anchorParty);
+  const parties = normalizeOptionalPartyList(options.parties);
+  const participantId =
+    options.participantId === undefined ? undefined : validateRequiredString('participantId', options.participantId);
+  const anchorSynchronizers = await listConnectedSynchronizerIds({
+    ledgerClient: options.ledgerClient,
+    party: anchorParty,
+    ...(participantId !== undefined ? { participantId } : {}),
+  });
+  const anchorSubmissionSynchronizerIds = anchorSynchronizers.synchronizers
+    .filter((synchronizer) => canSubmitWithPermission(synchronizer.permission))
+    .map((synchronizer) => synchronizer.synchronizerId);
+
+  if (anchorSubmissionSynchronizerIds.length === 0) {
+    throw new OperationError(
+      'Canton anchor party is not connected to a submission-capable synchronizer',
+      OperationErrorCode.MISSING_DOMAIN_ID,
+      {
+        anchorParty,
+        connectedSynchronizerIds: anchorSynchronizers.synchronizerIds,
+      }
+    );
+  }
+
+  const uniqueParties = parties.filter((party) => party !== anchorParty);
+  const partySynchronizers = await Promise.all(
+    uniqueParties.map(async (party) =>
+      listConnectedSynchronizerIds({
+        ledgerClient: options.ledgerClient,
+        party,
+        ...(participantId !== undefined ? { participantId } : {}),
+      })
+    )
+  );
+  const partySubmissionSynchronizerIdSets = partySynchronizers.map(
+    (partyResult) =>
+      new Set(
+        partyResult.synchronizers
+          .filter((synchronizer) => canSubmitWithPermission(synchronizer.permission))
+          .map((synchronizer) => synchronizer.synchronizerId)
+      )
+  );
+  const synchronizerId = anchorSubmissionSynchronizerIds.find((candidate) =>
+    partySubmissionSynchronizerIdSets.every((ids) => ids.has(candidate))
+  );
+
+  if (!synchronizerId) {
+    throw new OperationError(
+      'Canton parties do not share a submission-capable synchronizer with the anchor party',
+      OperationErrorCode.MISSING_DOMAIN_ID,
+      {
+        anchorParty,
+        parties,
+        anchorSynchronizerIds: anchorSynchronizers.synchronizerIds,
+        partySynchronizers: partySynchronizers.map((partyResult) => ({
+          party: partyResult.party,
+          synchronizerIds: partyResult.synchronizerIds,
+        })),
+      }
+    );
+  }
+
+  return synchronizerId;
+}
+
+export async function waitForPartyCanSubmit(options: WaitForPartyCanSubmitOptions): Promise<boolean> {
+  const party = validateRequiredString('party', options.party);
+  const synchronizerId = validateRequiredString('synchronizerId', options.synchronizerId);
+  const delaysMs = normalizeWaitDelays(options.delaysMs);
+
+  for (let attempt = 0; attempt < delaysMs.length; attempt += 1) {
+    const delayMs = delaysMs[attempt] ?? 0;
+    if (delayMs > 0) await delay(delayMs);
+    try {
+      if (
+        await partyCanSubmitOnSynchronizer({
+          ledgerClient: options.ledgerClient,
+          party,
+          synchronizerId,
+          ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
+        })
+      ) {
+        return true;
+      }
+    } catch (error) {
+      await options.onCheckError?.(error, {
+        party,
+        synchronizerId,
+        delayMs,
+        attempt,
+      });
+    }
+  }
+
+  return false;
+}
+
 export function assertSingleConnectedSynchronizerId(raw: unknown): string {
   const synchronizerId = readSingleConnectedSynchronizerId(raw);
   if (synchronizerId) return synchronizerId;
@@ -316,6 +440,11 @@ function normalizePartyList(parties: readonly string[]): readonly string[] {
   return normalized;
 }
 
+function normalizeOptionalPartyList(parties: readonly string[] | undefined): readonly string[] {
+  if (parties === undefined) return [];
+  return [...new Set(parties.map((party) => validateRequiredString('parties', party)))];
+}
+
 function intersectSynchronizerIds(synchronizerGroups: ReadonlyArray<readonly CantonConnectedSynchronizer[]>): string[] {
   const [firstGroup, ...restGroups] = synchronizerGroups;
   if (!firstGroup) return [];
@@ -329,6 +458,23 @@ function intersectSynchronizerIds(synchronizerGroups: ReadonlyArray<readonly Can
   }
 
   return [...common].sort();
+}
+
+function normalizeWaitDelays(delaysMs: readonly number[] | undefined): readonly number[] {
+  const delays = delaysMs ?? [0, 1_000, 2_000, 4_000];
+  if (delays.length === 0) {
+    throw new ValidationError('delaysMs must include at least one delay');
+  }
+  for (const delayMs of delays) {
+    if (!Number.isSafeInteger(delayMs) || delayMs < 0) {
+      throw new ValidationError('delaysMs entries must be non-negative safe integers', { delayMs });
+    }
+  }
+  return delays;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function validateRequiredString(name: string, value: string): string {
