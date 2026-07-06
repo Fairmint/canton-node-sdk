@@ -91,10 +91,18 @@ const prepack = spawnSync('npm', ['run', 'prepack'], {
 });
 throwIfSpawnFailed('npm run prepack', prepack);
 
-const pack = spawnSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
+const packArgs = [
+  'pack',
+  '--dry-run',
+  '--json',
+  // prepack already produced the publish-time build; keep this inspection step JSON-only.
+  '--ignore-scripts',
+];
+
+const pack = spawnSync('npm', packArgs, {
   encoding: 'utf8',
 });
-throwIfSpawnFailed('npm pack --dry-run --json --ignore-scripts', pack);
+throwIfSpawnFailed(`npm ${packArgs.join(' ')}`, pack);
 
 const [result] = parsePackResults(pack.stdout);
 if (!result) {
