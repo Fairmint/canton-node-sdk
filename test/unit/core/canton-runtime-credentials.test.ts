@@ -31,13 +31,18 @@ describe('Canton runtime credential helpers', () => {
   });
 
   it('emits stable env keys for a network/provider prefix', () => {
-    expect(buildCantonRuntimeCredentialEnvKeys({ network: 'devnet', provider: '5n' })).toEqual([
-      'CANTON_DEVNET_5N_PARTY_ID',
-      'CANTON_DEVNET_5N_USER_ID',
-      'CANTON_DEVNET_5N_VALIDATOR_ADMIN_TOKEN',
-      'CANTON_DEVNET_5N_VALIDATOR_JSON_API_ENDPOINT',
-      'CANTON_DEVNET_5N_LEDGER_JSON_API_ENDPOINT',
-      'CANTON_DEVNET_5N_SPLICE_SCAN_API_ENDPOINT',
+    expect(
+      buildCantonRuntimeCredentialEnvKeys({
+        network: 'localnet',
+        provider: 'app-provider',
+      })
+    ).toEqual([
+      'CANTON_LOCALNET_APP-PROVIDER_PARTY_ID',
+      'CANTON_LOCALNET_APP-PROVIDER_USER_ID',
+      'CANTON_LOCALNET_APP-PROVIDER_VALIDATOR_ADMIN_TOKEN',
+      'CANTON_LOCALNET_APP-PROVIDER_VALIDATOR_JSON_API_ENDPOINT',
+      'CANTON_LOCALNET_APP-PROVIDER_LEDGER_JSON_API_ENDPOINT',
+      'CANTON_LOCALNET_APP-PROVIDER_SPLICE_SCAN_API_ENDPOINT',
     ]);
   });
 
@@ -137,9 +142,9 @@ describe('Canton runtime credential helpers', () => {
     expect(() =>
       buildCantonRuntimeCredentialEnvMap({
         network: 'devnet',
-        provider: 'app-provider',
+        provider: 'app provider',
         credentials: rawCredentials,
       })
-    ).toThrow('expected only letters, numbers, and underscores');
+    ).toThrow('expected only letters, numbers, underscores, and hyphens');
   });
 });

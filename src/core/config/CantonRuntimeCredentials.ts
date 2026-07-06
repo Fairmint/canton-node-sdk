@@ -1,7 +1,7 @@
 import { ConfigurationError } from '../errors';
 import { type ApiConfig, type AuthConfig, type ClientConfig, type NetworkType, type ProviderType } from '../types';
 
-const CANTON_RUNTIME_ENV_SEGMENT_REGEX = /^[A-Za-z0-9_]+$/;
+const CANTON_RUNTIME_ENV_SEGMENT_REGEX = /^[A-Za-z0-9_-]+$/;
 
 /** Env-var suffixes used for explicit Canton runtime credentials. */
 export const CANTON_RUNTIME_CREDENTIAL_ENV_SUFFIXES = [
@@ -210,7 +210,7 @@ function normalizeEnvSegment(name: string, value: string): string {
   const normalized = normalizeRequiredString(name, value).toUpperCase();
   if (!CANTON_RUNTIME_ENV_SEGMENT_REGEX.test(normalized)) {
     throw new ConfigurationError(
-      `Invalid Canton runtime credential ${name}: expected only letters, numbers, and underscores`
+      `Invalid Canton runtime credential ${name}: expected only letters, numbers, underscores, and hyphens`
     );
   }
   return normalized;
