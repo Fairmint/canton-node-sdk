@@ -27,9 +27,9 @@
   "scripts": {
     "artifacts:manifest": "mkdir -p artifacts && npm pack --dry-run --json --ignore-scripts > /tmp/npm-pack.json 2>/dev/null && jq -r '.[0].files[].path' /tmp/npm-pack.json | sort | tsx scripts/collapse-manifest.ts > artifacts/npm-manifest.txt",
     "build": "npm run build:core && npm run build:lint",
-    "build:core": "npm run generate:openapi-types && npm run build:core:generate-client-methods && tsc",
+    "build:core": "npm run generate:openapi-types && npm run build:core:generate-client-methods && npm run tsc7",
     "build:core:generate-client-methods": "tsx scripts/generate-all-client-methods.ts",
-    "build:lint": "tsc -p tsconfig.lint.json",
+    "build:lint": "npm run tsc7 -- -p tsconfig.lint.json",
     "check:package-artifacts": "tsx scripts/check-package-artifacts.ts",
     "clean": "rm -rf build",
     "example:connect": "tsx examples/localnet-with-oauth2.ts",
@@ -57,7 +57,8 @@
     "test:integration": "jest test/integration/localnet",
     "test:localnet": "npm run test:integration",
     "test:regression": "npm run test:integration",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "tsc7": "node node_modules/typescript-7/bin/tsc"
   },
   "dependencies": {
     "@canton-network/wallet-sdk": "1.3.1",
@@ -94,7 +95,8 @@
     "prettier-plugin-packagejson": "3.0.2",
     "ts-jest": "29.4.11",
     "tsx": "4.22.4",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "typescript-7": "npm:typescript@7.0.2"
   },
   "engines": {
     "node": ">=22.0.0"

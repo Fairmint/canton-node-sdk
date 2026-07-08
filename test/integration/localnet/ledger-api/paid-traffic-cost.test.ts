@@ -6,9 +6,9 @@
 
 import { CantonRuntime, ValidatorApiClient } from '../../../../src';
 import { waitForCompletionWithMetadata } from '../../../../src/clients/ledger-json-api';
+import { CompletionStreamResponseSchema } from '../../../../src/clients/ledger-json-api/schemas/api/completions';
 import { EnvLoader } from '../../../../src/core/config/EnvLoader';
 import { ConfigurationError } from '../../../../src/core/errors';
-import { CompletionStreamResponseSchema } from '../../../../src/clients/ledger-json-api/schemas/api/completions';
 import { getPaidTrafficCostFromCompletion } from '../../../../src/utils/traffic/paid-traffic-cost';
 import { buildIntegrationTestClientConfig } from '../../../utils/testConfig';
 import { getClient } from './setup';
@@ -53,10 +53,7 @@ async function resolveWalletAppInstallContext(
  * Participant user id for completions. Falls back to validator `user_name` (same as `scripts/grant-user-rights.ts`)
  * when the ledger authenticated-user endpoint is unavailable.
  */
-async function resolveLedgerUserId(
-  client: ReturnType<typeof getClient>,
-  validatorUserName: string
-): Promise<string> {
+async function resolveLedgerUserId(client: ReturnType<typeof getClient>, validatorUserName: string): Promise<string> {
   const configured = client.getUserId();
   if (configured) {
     return configured;
@@ -109,7 +106,7 @@ describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
     const userId = await resolveLedgerUserId(client, validatorInfo.user_name);
 
     const partiesResponse = await client.listParties({});
-    const details = partiesResponse.partyDetails;
+    const details = partiesResponse.partyDetails ?? [];
     const receiverParty = details.map((entry: { party: string }) => entry.party).find((id: string) => id !== partyId);
     if (!receiverParty) {
       throw new Error(
