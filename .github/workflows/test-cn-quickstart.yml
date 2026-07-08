@@ -16,6 +16,13 @@ jobs:
         with:
           submodules: false
 
+      - name: Compute Quickstart Env Cache Key
+        id: quickstart-env-cache-key
+        run: |
+          set -euo pipefail
+          key="$(git ls-tree HEAD libs/splice libs/cn-quickstart | sha256sum | cut -d' ' -f1)"
+          echo "submodules=$key" >> "$GITHUB_OUTPUT"
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -43,6 +50,13 @@ jobs:
 
           init_submodule libs/splice --depth 1
           init_submodule libs/cn-quickstart --recursive
+
+      - name: Restore Quickstart Env Cache
+        id: quickstart-env-cache-restore
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ github.workspace }}/libs/cn-quickstart/quickstart/.env.local
+          key: quickstart-env-${{ runner.os }}-${{ hashFiles('.github/workflows/test-cn-quickstart.yml', 'package.json', 'package-lock.json', 'scripts/localnet-cloud.sh') }}-${{ steps.quickstart-env-cache-key.outputs.submodules }}
 
       - name: Restore Node Dependencies Cache
         id: node-cache-restore
@@ -72,6 +86,14 @@ jobs:
           npm run localnet:start
           echo "✓ CN-Quickstart started"
         timeout-minutes: 15
+
+      - name: Save Quickstart Env Cache
+        if: steps.quickstart-env-cache-restore.outputs.cache-hit != 'true'
+        id: quickstart-env-cache-save
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ github.workspace }}/libs/cn-quickstart/quickstart/.env.local
+          key: ${{ steps.quickstart-env-cache-restore.outputs.cache-primary-key }}
 
       - name: Save Node Dependencies Cache
         if: steps.node-cache-restore.outputs.cache-hit != 'true'
