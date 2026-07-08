@@ -1,6 +1,9 @@
 #!/usr/bin/env tsx
 
 import { spawnSync, type SpawnSyncReturns } from 'child_process';
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 interface NpmPackFile {
   path: string;
@@ -86,6 +89,37 @@ function throwIfSpawnFailed(command: string, result: SpawnSyncReturns<string>): 
   throw new Error(spawnFailureDetails(command, result));
 }
 
+function verifyPackagedLocalnetBinary(): void {
+  const tempDir = mkdtempSync(join(tmpdir(), 'canton-node-sdk-package-'));
+
+  try {
+    const packageRoot = join(tempDir, 'node_modules', '@fairmint', 'canton-node-sdk');
+    const binDir = join(tempDir, 'node_modules', '.bin');
+    const localnetBin = join(packageRoot, 'bin', 'canton-localnet');
+    const localnetSymlink = join(binDir, 'canton-localnet');
+
+    mkdirSync(packageRoot, { recursive: true });
+    mkdirSync(binDir, { recursive: true });
+    cpSync(join(process.cwd(), 'bin'), join(packageRoot, 'bin'), { recursive: true });
+    cpSync(join(process.cwd(), 'scripts'), join(packageRoot, 'scripts'), { recursive: true });
+    chmodSync(localnetBin, 0o755);
+    symlinkSync('../@fairmint/canton-node-sdk/bin/canton-localnet', localnetSymlink);
+
+    const logs = spawnSync(localnetSymlink, ['logs'], {
+      cwd: tempDir,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        CANTON_LOCALNET_CACHE_DIR: join(tempDir, 'cache'),
+        HOME: join(tempDir, 'home'),
+      },
+    });
+    throwIfSpawnFailed('packaged canton-localnet logs', logs);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
 const prepack = spawnSync('npm', ['run', 'prepack'], {
   encoding: 'utf8',
 });
@@ -118,7 +152,12 @@ if (result.unpackedSize > maxUnpackedBytes) {
 }
 
 const packagePaths = new Set(result.files.map((file) => file.path));
-for (const requiredPath of ['build/src/index.js', 'build/src/index.d.ts', 'bin/canton-localnet']) {
+for (const requiredPath of [
+  'build/src/index.js',
+  'build/src/index.d.ts',
+  'bin/canton-localnet',
+  'scripts/localnet-cloud.sh',
+]) {
   if (!packagePaths.has(requiredPath)) {
     errors.push(`package is missing required runtime entry ${requiredPath}`);
   }
@@ -138,6 +177,8 @@ if (errors.length > 0) {
   }
   process.exit(1);
 }
+
+verifyPackagedLocalnetBinary();
 
 console.log(
   `✓ ${result.name}@${result.version} package artifact is ${formatBytes(result.unpackedSize)} unpacked across ${result.files.length} files`
