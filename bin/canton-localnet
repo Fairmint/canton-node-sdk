@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PACKAGE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LOCALNET_SCRIPT="${PACKAGE_ROOT}/scripts/localnet-cloud.sh"
+DEFAULT_QUICKSTART_REPO="https://github.com/digital-asset/cn-quickstart.git"
+DEFAULT_QUICKSTART_REF="46201cd27ee16c99f78ab97b7e6513c56f28e004"
+
+log() {
+  printf '[canton-localnet] %s\n' "$*"
+}
+
+usage() {
+  cat <<'USAGE'
+Usage: canton-localnet <command>
+
+Commands:
+  setup    Fetch cn-quickstart and prepare LocalNet prerequisites
+  start    Start lean LocalNet + Keycloak and wait for ready endpoints
+  stop     Stop LocalNet services
+  status   Show docker + endpoint status
+  smoke    Run endpoint smoke checks
+  test     Run project integration tests when configured
+  verify   Run setup + start + smoke + test
+
+One-liners:
+  npx @fairmint/canton-node-sdk start
+  npx @fairmint/canton-node-sdk verify
+
+Environment:
+  CANTON_LOCALNET_QUICKSTART_DIR   Use an existing cn-quickstart/quickstart directory
+  CANTON_LOCALNET_CACHE_DIR        Cache root for fetched cn-quickstart assets
+  CANTON_LOCALNET_QUICKSTART_REF   cn-quickstart git ref to fetch
+  CANTON_LOCALNET_INFRA_ONLY       Defaults to true for this package binary
+USAGE
+}
+
+require_command() {
+  local cmd="$1"
+  if ! command -v "${cmd}" >/dev/null 2>&1; then
+    log "Missing required command: ${cmd}"
+    exit 1
+  fi
+}
+
+cache_root() {
+  if [[ -n "${CANTON_LOCALNET_CACHE_DIR:-}" ]]; then
+    printf '%s' "${CANTON_LOCALNET_CACHE_DIR}"
+    return
+  fi
+
+  if [[ -n "${XDG_CACHE_HOME:-}" ]]; then
+    printf '%s' "${XDG_CACHE_HOME}/fairmint/canton-localnet"
+    return
+  fi
+
+  printf '%s' "${HOME}/.cache/fairmint/canton-localnet"
+}
+
+quickstart_ref() {
+  printf '%s' "${CANTON_LOCALNET_QUICKSTART_REF:-${DEFAULT_QUICKSTART_REF}}"
+}
+
+quickstart_repo() {
+  printf '%s' "${CANTON_LOCALNET_QUICKSTART_REPO:-${DEFAULT_QUICKSTART_REPO}}"
+}
+
+default_quickstart_root() {
+  printf '%s/cn-quickstart-%s' "$(cache_root)" "$(quickstart_ref)"
+}
+
+quickstart_dir() {
+  if [[ -n "${CANTON_LOCALNET_QUICKSTART_DIR:-}" ]]; then
+    printf '%s' "${CANTON_LOCALNET_QUICKSTART_DIR}"
+    return
+  fi
+
+  printf '%s/quickstart' "$(default_quickstart_root)"
+}
+
+ensure_quickstart_checkout() {
+  local dir=""
+  local root=""
+  local tmp=""
+
+  dir="$(quickstart_dir)"
+  if [[ -d "${dir}/docker/modules/localnet" ]]; then
+    return
+  fi
+
+  if [[ -n "${CANTON_LOCALNET_QUICKSTART_DIR:-}" ]]; then
+    log "CANTON_LOCALNET_QUICKSTART_DIR is not a cn-quickstart quickstart directory: ${dir}"
+    exit 1
+  fi
+
+  require_command git
+
+  root="$(default_quickstart_root)"
+  if [[ -e "${root}" ]]; then
+    log "Cached cn-quickstart directory exists but is incomplete: ${root}"
+    log "Remove it or set CANTON_LOCALNET_CACHE_DIR to use a fresh cache."
+    exit 1
+  fi
+
+  mkdir -p "$(cache_root)"
+  tmp="$(mktemp -d "$(cache_root)/cn-quickstart.XXXXXX")"
+  trap 'rm -rf "${tmp}"' RETURN
+
+  log "Fetching cn-quickstart $(quickstart_ref)..."
+  git -C "${tmp}" init -q
+  git -C "${tmp}" remote add origin "$(quickstart_repo)"
+  if git -C "${tmp}" fetch --depth 1 origin "$(quickstart_ref)"; then
+    git -C "${tmp}" checkout --detach FETCH_HEAD -q
+  else
+    log "Direct ref fetch failed; retrying with a blobless repository fetch."
+    git -C "${tmp}" fetch --filter=blob:none origin
+    git -C "${tmp}" checkout --detach "$(quickstart_ref)" -q
+  fi
+
+  if [[ ! -d "${tmp}/quickstart/docker/modules/localnet" ]]; then
+    log "Fetched cn-quickstart does not contain quickstart/docker/modules/localnet."
+    exit 1
+  fi
+
+  mv "${tmp}" "${root}"
+  trap - RETURN
+  log "Cached cn-quickstart at ${root}."
+}
+
+main() {
+  local command="${1:-}"
+  local dir=""
+
+  case "${command}" in
+    "" | -h | --help | help)
+      usage
+      if [[ -z "${command}" ]]; then
+        exit 1
+      fi
+      exit 0
+      ;;
+    setup | start | stop | verify)
+      ensure_quickstart_checkout
+      ;;
+    status | smoke | test)
+      ;;
+    *)
+      usage
+      exit 1
+      ;;
+  esac
+
+  dir="$(quickstart_dir)"
+  export CANTON_LOCALNET_QUICKSTART_DIR="${dir}"
+  export CANTON_LOCALNET_INFRA_ONLY="${CANTON_LOCALNET_INFRA_ONLY:-true}"
+
+  exec bash "${LOCALNET_SCRIPT}" "$@"
+}
+
+main "$@"

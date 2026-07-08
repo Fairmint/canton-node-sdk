@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PROJECT_ROOT="${CANTON_LOCALNET_PROJECT_ROOT:-$(pwd)}"
-QUICKSTART_DIR="${REPO_ROOT}/libs/cn-quickstart/quickstart"
+QUICKSTART_DIR="${CANTON_LOCALNET_QUICKSTART_DIR:-${REPO_ROOT}/libs/cn-quickstart/quickstart}"
 DOCKERD_PID_FILE="/tmp/localnet-dockerd.pid"
 DOCKERD_LOG_FILE="/tmp/localnet-dockerd.log"
 HOSTS_ENTRY="127.0.0.1 scan.localhost sv.localhost wallet.localhost"
@@ -35,16 +35,25 @@ require_command() {
 }
 
 ensure_sudo() {
-  if ! sudo -n true >/dev/null 2>&1; then
+  if ! sudo_noninteractive_available; then
     log "Passwordless sudo is required in this cloud environment."
     exit 1
   fi
+}
+
+sudo_noninteractive_available() {
+  command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1
 }
 
 ensure_docker_packages() {
   if command -v docker >/dev/null 2>&1 \
     && docker compose version >/dev/null 2>&1; then
     return
+  fi
+
+  if ! sudo_noninteractive_available || ! command -v apt-get >/dev/null 2>&1; then
+    log "Docker with Compose is required. Install Docker and start it, then retry."
+    exit 1
   fi
 
   log "Installing Docker packages..."
@@ -71,11 +80,15 @@ ensure_legacy_iptables() {
 }
 
 docker_ready() {
-  docker info >/dev/null 2>&1 || sudo docker info >/dev/null 2>&1
+  docker info >/dev/null 2>&1 || (sudo_noninteractive_available && sudo docker info >/dev/null 2>&1)
 }
 
 configure_docker_socket_permissions() {
   if [[ ! -S /var/run/docker.sock ]]; then
+    return
+  fi
+
+  if ! sudo_noninteractive_available; then
     return
   fi
 
@@ -88,6 +101,10 @@ run_docker() {
   if docker info >/dev/null 2>&1; then
     docker "$@"
     return
+  fi
+  if ! sudo_noninteractive_available || ! sudo docker info >/dev/null 2>&1; then
+    log "Docker daemon is not available."
+    exit 1
   fi
   sudo docker "$@"
 }
@@ -188,6 +205,11 @@ start_docker_daemon() {
     return
   fi
 
+  if ! sudo_noninteractive_available; then
+    log "Docker daemon is not running. Start Docker and retry."
+    exit 1
+  fi
+
   ensure_legacy_iptables
 
   log "Starting Docker daemon with vfs storage driver..."
@@ -214,6 +236,14 @@ start_docker_daemon() {
 }
 
 ensure_submodules() {
+  if [[ -n "${CANTON_LOCALNET_QUICKSTART_DIR:-}" ]]; then
+    if [[ -d "${QUICKSTART_DIR}" ]]; then
+      return
+    fi
+    log "Configured CANTON_LOCALNET_QUICKSTART_DIR does not exist: ${QUICKSTART_DIR}"
+    exit 1
+  fi
+
   if [[ -d "${REPO_ROOT}/libs/splice" && -d "${QUICKSTART_DIR}" ]]; then
     return
   fi
@@ -246,7 +276,17 @@ ensure_hosts_entries() {
     || ! grep -Eq '(^|[[:space:]])sv\.localhost([[:space:]]|$)' /etc/hosts \
     || ! grep -Eq '(^|[[:space:]])wallet\.localhost([[:space:]]|$)' /etc/hosts; then
     log "Adding localnet host aliases to /etc/hosts..."
-    echo "${HOSTS_ENTRY}" | sudo tee -a /etc/hosts >/dev/null
+    if sudo_noninteractive_available; then
+      echo "${HOSTS_ENTRY}" | sudo tee -a /etc/hosts >/dev/null
+      return
+    fi
+    if [[ -t 0 ]] && command -v sudo >/dev/null 2>&1; then
+      echo "${HOSTS_ENTRY}" | sudo tee -a /etc/hosts >/dev/null
+      return
+    fi
+    log "Missing localnet host aliases. Add this line to /etc/hosts, then retry:"
+    log "${HOSTS_ENTRY}"
+    exit 1
   fi
 }
 
@@ -679,6 +719,7 @@ Environment:
   CANTON_LOCALNET_FAST_START=true|false       Enable fast startup path (default: true)
   CANTON_LOCALNET_FORCE_FULL_START=true|false Force full startup with rebuild
   CANTON_LOCALNET_INFRA_ONLY=true|false       Start only LocalNet + Keycloak infrastructure
+  CANTON_LOCALNET_QUICKSTART_DIR=<path>       Use an existing cn-quickstart/quickstart directory
 USAGE
 }
 
@@ -690,7 +731,6 @@ main() {
 
   case "$1" in
     setup)
-      ensure_sudo
       ensure_docker_packages
       start_docker_daemon
       ensure_submodules
@@ -699,7 +739,6 @@ main() {
       ;;
     start)
       require_command curl
-      ensure_sudo
       ensure_docker_packages
       start_docker_daemon
       ensure_submodules
@@ -723,7 +762,6 @@ main() {
       ;;
     verify)
       require_command curl
-      ensure_sudo
       ensure_docker_packages
       start_docker_daemon
       ensure_submodules

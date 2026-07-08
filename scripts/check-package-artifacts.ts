@@ -118,7 +118,7 @@ if (result.unpackedSize > maxUnpackedBytes) {
 }
 
 const packagePaths = new Set(result.files.map((file) => file.path));
-for (const requiredPath of ['build/src/index.js', 'build/src/index.d.ts']) {
+for (const requiredPath of ['build/src/index.js', 'build/src/index.d.ts', 'bin/canton-localnet']) {
   if (!packagePaths.has(requiredPath)) {
     errors.push(`package is missing required runtime entry ${requiredPath}`);
   }

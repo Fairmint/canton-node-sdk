@@ -21,7 +21,12 @@
   "author": "Fairmint",
   "main": "build/src/index.js",
   "types": "build/src/index.d.ts",
+  "bin": {
+    "canton-localnet": "bin/canton-localnet"
+  },
   "files": [
+    "bin/canton-localnet",
+    "scripts/localnet-cloud.sh",
     "build/**"
   ],
   "scripts": {
