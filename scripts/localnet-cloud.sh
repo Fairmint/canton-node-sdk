@@ -212,19 +212,28 @@ run_quickstart_make() {
 
 run_infra_compose() {
   local compose_args="$1"
+  local keycloak_compose_file=""
+  local keycloak_env_file=""
+  local keycloak_profile=""
+
+  if [[ "$(current_auth_mode)" == "oauth2" ]]; then
+    keycloak_compose_file='-f "${MODULES_DIR}/keycloak/compose.yaml"'
+    keycloak_env_file='--env-file "${MODULES_DIR}/keycloak/compose.env"'
+    keycloak_profile='--profile keycloak'
+  fi
 
   run_quickstart_command "docker compose \
     -f \"\${LOCALNET_DIR}/compose.yaml\" \
-    -f \"\${MODULES_DIR}/keycloak/compose.yaml\" \
+    ${keycloak_compose_file} \
     --env-file .env \
     --env-file .env.local \
     --env-file \"\${LOCALNET_DIR}/compose.env\" \
     --env-file \"\${LOCALNET_DIR}/env/common.env\" \
-    --env-file \"\${MODULES_DIR}/keycloak/compose.env\" \
+    ${keycloak_env_file} \
     --profile app-provider \
     --profile app-user \
     --profile sv \
-    --profile keycloak \
+    ${keycloak_profile} \
     ${compose_args}"
 }
 
