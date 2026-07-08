@@ -69,7 +69,7 @@ jobs:
 
       - name: Start CN-Quickstart
         run: |
-          CANTON_LOCALNET_INFRA_ONLY=true bash ./scripts/localnet/localnet-cloud.sh start
+          npm run localnet:start
           echo "✓ CN-Quickstart started"
         timeout-minutes: 15
 

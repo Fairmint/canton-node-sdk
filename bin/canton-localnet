@@ -15,7 +15,7 @@ usage() {
 Usage: canton-localnet <command>
 
 Commands:
-  setup    Fetch cn-quickstart and prepare LocalNet prerequisites
+  setup    Prepare LocalNet prerequisites
   start    Start lean LocalNet + Keycloak and wait for ready endpoints
   stop     Stop LocalNet services
   status   Show docker + endpoint status
@@ -69,9 +69,24 @@ default_quickstart_root() {
   printf '%s/cn-quickstart-%s' "$(cache_root)" "$(quickstart_ref)"
 }
 
+repo_quickstart_dir() {
+  printf '%s/libs/cn-quickstart/quickstart' "${PACKAGE_ROOT}"
+}
+
+use_repo_quickstart_default() {
+  [[ -z "${CANTON_LOCALNET_QUICKSTART_DIR:-}" \
+    && -f "${PACKAGE_ROOT}/.gitmodules" \
+    && ( -d "${PACKAGE_ROOT}/.git" || -f "${PACKAGE_ROOT}/.git" ) ]]
+}
+
 quickstart_dir() {
   if [[ -n "${CANTON_LOCALNET_QUICKSTART_DIR:-}" ]]; then
     printf '%s' "${CANTON_LOCALNET_QUICKSTART_DIR}"
+    return
+  fi
+
+  if use_repo_quickstart_default; then
+    repo_quickstart_dir
     return
   fi
 
@@ -82,6 +97,10 @@ ensure_quickstart_checkout() {
   local dir=""
   local root=""
   local tmp=""
+
+  if use_repo_quickstart_default; then
+    return
+  fi
 
   dir="$(quickstart_dir)"
   if [[ -d "${dir}/docker/modules/localnet" ]]; then
@@ -151,7 +170,9 @@ main() {
   esac
 
   dir="$(quickstart_dir)"
-  export CANTON_LOCALNET_QUICKSTART_DIR="${dir}"
+  if ! use_repo_quickstart_default; then
+    export CANTON_LOCALNET_QUICKSTART_DIR="${dir}"
+  fi
   export CANTON_LOCALNET_INFRA_ONLY="${CANTON_LOCALNET_INFRA_ONLY:-true}"
 
   exec bash "${LOCALNET_SCRIPT}" "$@"
