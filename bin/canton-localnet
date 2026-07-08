@@ -1,7 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PACKAGE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+resolve_script_dir() {
+  local source="$1"
+  local dir=""
+
+  while [[ -L "${source}" ]]; do
+    dir="$(cd -P "$(dirname "${source}")" && pwd)"
+    source="$(readlink "${source}")"
+    if [[ "${source}" != /* ]]; then
+      source="${dir}/${source}"
+    fi
+  done
+
+  cd -P "$(dirname "${source}")" && pwd
+}
+
+PACKAGE_ROOT="$(cd "$(resolve_script_dir "${BASH_SOURCE[0]}")/.." && pwd)"
 LOCALNET_SCRIPT="${PACKAGE_ROOT}/scripts/localnet-cloud.sh"
 DEFAULT_QUICKSTART_REPO="https://github.com/digital-asset/cn-quickstart.git"
 DEFAULT_QUICKSTART_REF="46201cd27ee16c99f78ab97b7e6513c56f28e004"
