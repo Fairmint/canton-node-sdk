@@ -197,6 +197,24 @@ run_quickstart_make() {
   run_quickstart_command "make ${target}"
 }
 
+run_infra_compose() {
+  local compose_args="$1"
+
+  run_quickstart_command "docker compose \
+    -f \"\${LOCALNET_DIR}/compose.yaml\" \
+    -f \"\${MODULES_DIR}/keycloak/compose.yaml\" \
+    --env-file .env \
+    --env-file .env.local \
+    --env-file \"\${LOCALNET_DIR}/compose.env\" \
+    --env-file \"\${LOCALNET_DIR}/env/common.env\" \
+    --env-file \"\${MODULES_DIR}/keycloak/compose.env\" \
+    --profile app-provider \
+    --profile app-user \
+    --profile sv \
+    --profile keycloak \
+    ${compose_args}"
+}
+
 start_docker_daemon() {
   local dockerd_pid=""
 
@@ -417,19 +435,7 @@ try_fast_start_localnet() {
 
 start_infra_only_localnet() {
   log "Starting cn-quickstart LocalNet infrastructure only (skip quickstart app, PQS, and onboarding)."
-  run_quickstart_command 'docker compose \
-    -f "${LOCALNET_DIR}/compose.yaml" \
-    -f "${MODULES_DIR}/keycloak/compose.yaml" \
-    --env-file .env \
-    --env-file .env.local \
-    --env-file "${LOCALNET_DIR}/compose.env" \
-    --env-file "${LOCALNET_DIR}/env/common.env" \
-    --env-file "${MODULES_DIR}/keycloak/compose.env" \
-    --profile app-provider \
-    --profile app-user \
-    --profile sv \
-    --profile keycloak \
-    up -d --no-recreate'
+  run_infra_compose 'up -d --no-recreate'
 }
 
 stop_infra_only_localnet() {
@@ -438,19 +444,7 @@ stop_infra_only_localnet() {
   fi
 
   log "Stopping cn-quickstart LocalNet infrastructure-only stack..."
-  run_quickstart_command 'docker compose \
-    -f "${LOCALNET_DIR}/compose.yaml" \
-    -f "${MODULES_DIR}/keycloak/compose.yaml" \
-    --env-file .env \
-    --env-file .env.local \
-    --env-file "${LOCALNET_DIR}/compose.env" \
-    --env-file "${LOCALNET_DIR}/env/common.env" \
-    --env-file "${MODULES_DIR}/keycloak/compose.env" \
-    --profile app-provider \
-    --profile app-user \
-    --profile sv \
-    --profile keycloak \
-    down' || true
+  run_infra_compose down || true
 }
 
 wait_for_services() {
@@ -610,6 +604,39 @@ status_localnet() {
   printf 'Scan ready: %s\n' "${scan_ok}"
 }
 
+show_localnet_logs() {
+  log "==================== Docker Containers ===================="
+  if docker_ready; then
+    run_docker ps -a || true
+  else
+    log "Docker daemon is not running."
+  fi
+
+  echo
+  log "==================== Docker Compose Logs ===================="
+  if [[ -f "${QUICKSTART_DIR}/.env.local" ]]; then
+    run_infra_compose 'logs --tail=100' || true
+  elif [[ -d "${QUICKSTART_DIR}" ]]; then
+    log "Quickstart local env not found; skipping compose logs: ${QUICKSTART_DIR}/.env.local"
+  else
+    log "cn-quickstart directory not found: ${QUICKSTART_DIR}"
+  fi
+
+  echo
+  log "==================== Canton Logs ===================="
+  if [[ -f "${QUICKSTART_DIR}/logs/canton.log" ]]; then
+    tail -100 "${QUICKSTART_DIR}/logs/canton.log" || true
+  else
+    log "Canton log not found: ${QUICKSTART_DIR}/logs/canton.log"
+  fi
+
+  if [[ -f "${DOCKERD_LOG_FILE}" ]]; then
+    echo
+    log "==================== Managed Docker Daemon Logs ===================="
+    tail -100 "${DOCKERD_LOG_FILE}" || true
+  fi
+}
+
 run_smoke() {
   local validator_code=""
 
@@ -710,6 +737,7 @@ Commands:
   setup    Install prerequisites, init submodules, configure quickstart
   start    Start localnet and wait for ready endpoints
   stop     Stop localnet services
+  logs     Show localnet diagnostic logs
   status   Show docker + endpoint status
   smoke    Run endpoint smoke checks
   test     Run project integration tests (if configured)
@@ -748,6 +776,9 @@ main() {
       ;;
     stop)
       stop_localnet
+      ;;
+    logs)
+      show_localnet_logs
       ;;
     status)
       require_command curl

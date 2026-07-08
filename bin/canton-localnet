@@ -18,6 +18,7 @@ Commands:
   setup    Prepare LocalNet prerequisites
   start    Start lean LocalNet + Keycloak and wait for ready endpoints
   stop     Stop LocalNet services
+  logs     Show LocalNet diagnostic logs
   status   Show docker + endpoint status
   smoke    Run endpoint smoke checks
   test     Run project integration tests when configured
@@ -161,7 +162,7 @@ main() {
     setup | start | stop | verify)
       ensure_quickstart_checkout
       ;;
-    status | smoke | test)
+    logs | status | smoke | test)
       ;;
     *)
       usage

@@ -48,6 +48,7 @@
     "lint:npm": "npmPkgJsonLint . --fix",
     "lint:npm:check": "npmPkgJsonLint .",
     "localnet:quickstart": "bash ./bin/canton-localnet setup",
+    "localnet:logs": "bash ./bin/canton-localnet logs",
     "localnet:setup": "bash ./bin/canton-localnet setup",
     "localnet:smoke": "bash ./bin/canton-localnet smoke",
     "localnet:start": "bash ./bin/canton-localnet start",

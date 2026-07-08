@@ -94,29 +94,4 @@ jobs:
 
       - name: Show Logs on Failure
         if: failure()
-        run: |
-          echo "==================== Docker Containers ===================="
-          docker ps -a || true
-
-          echo "==================== Docker Compose Logs ===================="
-          if [ -d "libs/cn-quickstart/quickstart" ]; then
-            cd libs/cn-quickstart/quickstart
-            docker compose \
-              -f docker/modules/localnet/compose.yaml \
-              -f docker/modules/keycloak/compose.yaml \
-              --env-file .env \
-              --env-file .env.local \
-              --env-file docker/modules/localnet/compose.env \
-              --env-file docker/modules/localnet/env/common.env \
-              --env-file docker/modules/keycloak/compose.env \
-              --profile app-provider \
-              --profile app-user \
-              --profile sv \
-              --profile keycloak \
-              logs --tail=100 || true
-          fi
-
-          echo "==================== Canton Logs ===================="
-          if [ -f libs/cn-quickstart/quickstart/logs/canton.log ]; then
-            tail -100 libs/cn-quickstart/quickstart/logs/canton.log
-          fi
+        run: npm run localnet:logs
