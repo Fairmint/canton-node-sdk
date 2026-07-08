@@ -10,6 +10,11 @@ DOCKERD_LOG_FILE="/tmp/localnet-dockerd.log"
 HOSTS_ENTRY="127.0.0.1 scan.localhost sv.localhost wallet.localhost"
 CURL_CONNECT_TIMEOUT=2
 CURL_MAX_TIME=5
+LOCALNET_SPLICE_VERSION="${CANTON_LOCALNET_SPLICE_VERSION:-}"
+LOCALNET_SCRIBE_VERSION="${CANTON_LOCALNET_SCRIBE_VERSION:-}"
+LOCALNET_PROTOCOL_VERSION="${CANTON_LOCALNET_PROTOCOL_VERSION:-}"
+VALIDATOR_READY_ATTEMPTS="${CANTON_LOCALNET_VALIDATOR_READY_ATTEMPTS:-90}"
+SCAN_READY_ATTEMPTS="${CANTON_LOCALNET_SCAN_READY_ATTEMPTS:-90}"
 
 log() {
   printf '[localnet] %s\n' "$*"
@@ -32,6 +37,21 @@ require_command() {
     log "Missing required command: ${cmd}"
     exit 1
   fi
+}
+
+require_positive_integer() {
+  local name="$1"
+  local value="$2"
+
+  if [[ ! "${value}" =~ ^[1-9][0-9]*$ ]]; then
+    log "${name} must be a positive integer; received '${value}'."
+    exit 1
+  fi
+}
+
+validate_configuration() {
+  require_positive_integer "CANTON_LOCALNET_VALIDATOR_READY_ATTEMPTS" "${VALIDATOR_READY_ATTEMPTS}"
+  require_positive_integer "CANTON_LOCALNET_SCAN_READY_ATTEMPTS" "${SCAN_READY_ATTEMPTS}"
 }
 
 ensure_sudo() {
@@ -147,6 +167,7 @@ run_quickstart_command() {
   local command="$1"
   local docker_shim_dir=""
   local quickstart_image_tag=""
+  local quickstart_path="${HOME}/.dpm/bin:${HOME}/.daml/bin:${PATH}"
   local status=0
 
   quickstart_image_tag="$(resolve_quickstart_image_tag)"
@@ -161,28 +182,20 @@ EOF
     log "Using sudo docker shim for quickstart command."
   fi
 
-  set +e
   if [[ -n "${docker_shim_dir}" ]]; then
-    (
-      cd "${QUICKSTART_DIR}"
-      MODULES_DIR="${QUICKSTART_DIR}/docker/modules" \
-        LOCALNET_DIR="${QUICKSTART_DIR}/docker/modules/localnet" \
-        IMAGE_TAG="${quickstart_image_tag}" \
-        PATH="${docker_shim_dir}:${HOME}/.daml/bin:${PATH}" \
-        bash -lc "${command}"
-    )
-    status=$?
-  else
-    (
-      cd "${QUICKSTART_DIR}"
-      MODULES_DIR="${QUICKSTART_DIR}/docker/modules" \
-        LOCALNET_DIR="${QUICKSTART_DIR}/docker/modules/localnet" \
-        IMAGE_TAG="${quickstart_image_tag}" \
-        PATH="${HOME}/.daml/bin:${PATH}" \
-        bash -lc "${command}"
-    )
-    status=$?
+    quickstart_path="${docker_shim_dir}:${quickstart_path}"
   fi
+
+  set +e
+  (
+    cd "${QUICKSTART_DIR}"
+    MODULES_DIR="${QUICKSTART_DIR}/docker/modules" \
+      LOCALNET_DIR="${QUICKSTART_DIR}/docker/modules/localnet" \
+      IMAGE_TAG="${quickstart_image_tag}" \
+      PATH="${quickstart_path}" \
+      bash -lc "${command}"
+  )
+  status=$?
   set -e
 
   if [[ -n "${docker_shim_dir}" ]]; then
@@ -308,24 +321,275 @@ ensure_hosts_entries() {
   fi
 }
 
-quickstart_setup() {
-  if [[ ! -f "${QUICKSTART_DIR}/.env.local" ]]; then
-    if quickstart_infra_only_enabled; then
-      write_quickstart_env_local
-    else
+set_quickstart_env_value() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+
+  if [[ ! -f "${file}" ]]; then
+    return
+  fi
+
+  if grep -Eq "^${key}=" "${file}"; then
+    KEY="${key}" VALUE="${value}" perl -0pi -e '
+      my $key = $ENV{"KEY"};
+      my $value = $ENV{"VALUE"};
+      s/^\Q$key\E=.*/$key=$value/m;
+    ' "${file}"
+  else
+    printf '\n%s=%s\n' "${key}" "${value}" >>"${file}"
+  fi
+}
+
+patch_quickstart_canton_healthcheck() {
+  local healthcheck="${QUICKSTART_DIR}/docker/modules/localnet/docker/canton/health-check.sh"
+
+  if [[ ! -f "${healthcheck}" ]]; then
+    log "Canton quickstart healthcheck not found: ${healthcheck}"
+    exit 1
+  fi
+
+  cat >"${healthcheck}" <<'EOF'
+#!/bin/bash
+set -eou pipefail
+
+http_check() {
+  local port="$1"
+  local path="$2"
+  local status=""
+
+  echo "Checking http://localhost:${port}${path}"
+  exec 3<>"/dev/tcp/127.0.0.1/${port}"
+  printf 'GET %s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' "${path}" >&3
+  IFS=$'\r' read -r status <&3 || true
+  exec 3<&-
+  exec 3>&-
+
+  case "${status}" in
+    HTTP/*\ 2*) ;;
+    *)
+      echo "Unexpected status from ${port}${path}: ${status}"
+      return 1
+      ;;
+  esac
+}
+
+if [ "${APP_USER_PROFILE:-off}" = "on" ]; then
+  http_check "2${CANTON_HTTP_HEALTHCHECK_PORT_SUFFIX}" "/health"
+fi
+if [ "${APP_PROVIDER_PROFILE:-off}" = "on" ]; then
+  http_check "3${CANTON_HTTP_HEALTHCHECK_PORT_SUFFIX}" "/health"
+fi
+if [ "${SV_PROFILE:-off}" = "on" ]; then
+  http_check "4${CANTON_HTTP_HEALTHCHECK_PORT_SUFFIX}" "/health"
+fi
+EOF
+  chmod +x "${healthcheck}"
+}
+
+patch_quickstart_splice_healthcheck() {
+  local healthcheck="${QUICKSTART_DIR}/docker/modules/localnet/docker/splice/health-check.sh"
+
+  if [[ ! -f "${healthcheck}" ]]; then
+    log "Splice quickstart healthcheck not found: ${healthcheck}"
+    exit 1
+  fi
+
+  cat >"${healthcheck}" <<'EOF'
+#!/bin/bash
+set -eou pipefail
+
+http_check() {
+  local port="$1"
+  local path="$2"
+  local status=""
+
+  echo "Checking http://localhost:${port}${path}"
+  exec 3<>"/dev/tcp/127.0.0.1/${port}"
+  printf 'GET %s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' "${path}" >&3
+  IFS=$'\r' read -r status <&3 || true
+  exec 3<&-
+  exec 3>&-
+
+  case "${status}" in
+    HTTP/*\ 2*) ;;
+    *)
+      echo "Unexpected status from ${port}${path}: ${status}"
+      return 1
+      ;;
+  esac
+}
+
+if [ "${APP_USER_PROFILE:-off}" = "on" ]; then
+  http_check "2${VALIDATOR_ADMIN_API_PORT_SUFFIX}" "/api/validator/readyz"
+fi
+if [ "${APP_PROVIDER_PROFILE:-off}" = "on" ]; then
+  http_check "3${VALIDATOR_ADMIN_API_PORT_SUFFIX}" "/api/validator/readyz"
+fi
+if [ "${SV_PROFILE:-off}" = "on" ]; then
+  http_check "4${VALIDATOR_ADMIN_API_PORT_SUFFIX}" "/api/validator/readyz"
+  http_check "5012" "/api/scan/readyz"
+  http_check "5014" "/api/sv/readyz"
+fi
+EOF
+  chmod +x "${healthcheck}"
+}
+
+configure_quickstart_localnet() {
+  local env_file=""
+  local canton_conf="${QUICKSTART_DIR}/docker/modules/localnet/conf/canton/app.conf"
+
+  for env_file in "${QUICKSTART_DIR}/.env" "${QUICKSTART_DIR}/.env.local"; do
+    if [[ -n "${LOCALNET_SPLICE_VERSION}" ]]; then
+      set_quickstart_env_value "${env_file}" "SPLICE_VERSION" "${LOCALNET_SPLICE_VERSION}"
+    fi
+    if [[ -n "${LOCALNET_SCRIBE_VERSION}" ]]; then
+      set_quickstart_env_value "${env_file}" "SCRIBE_VERSION" "${LOCALNET_SCRIBE_VERSION}"
+    fi
+    if [[ -n "${CANTON_LOCALNET_DAML_RUNTIME_VERSION:-}" ]]; then
+      set_quickstart_env_value "${env_file}" "DAML_RUNTIME_VERSION" "${CANTON_LOCALNET_DAML_RUNTIME_VERSION}"
+    fi
+  done
+
+  if [[ ! -f "${canton_conf}" ]]; then
+    log "Canton quickstart config not found: ${canton_conf}"
+    exit 1
+  fi
+
+  if [[ -n "${LOCALNET_PROTOCOL_VERSION}" ]]; then
+    PROTOCOL_VERSION="${LOCALNET_PROTOCOL_VERSION}" perl -0pi -e '
+      my $protocol_version = $ENV{"PROTOCOL_VERSION"};
+      s/initial-protocol-version = \d+/initial-protocol-version = $protocol_version/g;
+      s/(non-standard-config = yes\n)(?![[:space:]]*alpha-version-support = yes)/$1    alpha-version-support = yes\n/;
+      s/(initial-protocol-version = \d+\n)(?![[:space:]]*alpha-version-support = yes)/$1    alpha-version-support = yes\n/;
+    ' "${canton_conf}"
+  fi
+
+  patch_quickstart_canton_healthcheck
+  patch_quickstart_splice_healthcheck
+}
+
+requested_auth_mode() {
+  printf '%s' "${CANTON_LOCALNET_AUTH_MODE:-oauth2}"
+}
+
+quickstart_env_value() {
+  local key="$1"
+  local parsed_value=""
+
+  if [[ -f "${QUICKSTART_DIR}/.env.local" ]]; then
+    parsed_value="$(awk -F= -v key="${key}" '
+      $0 ~ /^[[:space:]]*#/ { next }
+      $1 == key {
+        value = substr($0, index($0, "=") + 1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+        gsub(/^"|"$/, "", value)
+        gsub(/^'\''|'\''$/, "", value)
+        parsed = value
+      }
+      END {
+        if (parsed != "") {
+          print parsed
+        }
+      }
+    ' "${QUICKSTART_DIR}/.env.local")"
+  fi
+
+  printf '%s' "${parsed_value}"
+}
+
+configured_auth_mode() {
+  quickstart_env_value "AUTH_MODE"
+}
+
+quickstart_profile_config_complete() {
+  local key=""
+
+  for key in OBSERVABILITY_ENABLED AUTH_MODE PARTY_HINT TEST_MODE; do
+    if [[ -z "$(quickstart_env_value "${key}")" ]]; then
+      return 1
+    fi
+  done
+
+  return 0
+}
+
+verify_configured_auth_mode() {
+  local expected_auth_mode="$1"
+  local actual_auth_mode=""
+
+  actual_auth_mode="$(configured_auth_mode)"
+  if [[ "${actual_auth_mode}" != "${expected_auth_mode}" ]]; then
+    log "cn-quickstart setup did not configure AUTH_MODE=${expected_auth_mode}; found '${actual_auth_mode:-unset}'."
+    exit 1
+  fi
+}
+
+current_auth_mode() {
+  local configured=""
+
+  configured="$(configured_auth_mode)"
+  if [[ -n "${configured}" ]]; then
+    printf '%s' "${configured}"
+    return
+  fi
+
+  requested_auth_mode
+}
+
+run_quickstart_setup() {
+  local auth_mode=""
+
+  auth_mode="$(requested_auth_mode)"
+  case "${auth_mode}" in
+    shared-secret)
+      log "Running cn-quickstart setup (shared-secret mode)..."
+      (
+        cd "${QUICKSTART_DIR}"
+        printf 'Y\nn\n\n' | make setup || true
+      )
+      verify_configured_auth_mode "shared-secret"
+      ;;
+    oauth2)
       log "Running cn-quickstart setup (OAuth2 enabled)..."
       (
         cd "${QUICKSTART_DIR}"
         # Match CI behavior first, then fall back to prompt-based answers for newer setup flows.
         echo "2" | make setup || true
-        if ! grep -Eq '^AUTH_MODE=oauth2$' "${QUICKSTART_DIR}/.env.local" 2>/dev/null; then
+        if [[ "$(configured_auth_mode)" != "oauth2" ]]; then
           printf 'y\ny\n\nn\n' | make setup
         fi
       )
-    fi
+      verify_configured_auth_mode "oauth2"
+      ;;
+    *)
+      log "Unsupported CANTON_LOCALNET_AUTH_MODE: ${auth_mode}"
+      exit 1
+      ;;
+  esac
+}
+
+quickstart_setup() {
+  if [[ ! -f "${QUICKSTART_DIR}/.env.local" ]]; then
+    run_quickstart_setup
+  elif ! quickstart_profile_config_complete; then
+    log "Regenerating incomplete cn-quickstart config."
+    rm -f "${QUICKSTART_DIR}/.env.local"
+    run_quickstart_setup
+  elif [[ -n "${CANTON_LOCALNET_AUTH_MODE:-}" && "$(configured_auth_mode)" != "${CANTON_LOCALNET_AUTH_MODE}" ]]; then
+    log "Regenerating cn-quickstart config for CANTON_LOCALNET_AUTH_MODE=${CANTON_LOCALNET_AUTH_MODE}."
+    rm -f "${QUICKSTART_DIR}/.env.local"
+    run_quickstart_setup
   else
     log "Reusing existing ${QUICKSTART_DIR}/.env.local."
   fi
+
+  if [[ ! -f "${QUICKSTART_DIR}/.env.local" ]]; then
+    log "cn-quickstart setup failed: ${QUICKSTART_DIR}/.env.local was not created."
+    exit 1
+  fi
+
+  configure_quickstart_localnet
 
   if quickstart_infra_only_enabled; then
     log "Skipping Daml SDK install for infrastructure-only localnet."
@@ -341,37 +605,6 @@ quickstart_setup() {
   else
     log "Reusing existing Daml SDK at ${HOME}/.daml/bin/daml."
   fi
-}
-
-default_party_hint() {
-  local clean_user=""
-  local raw_user="${USER:-runner}"
-
-  clean_user="$(printf '%s' "${raw_user}" | tr -cd '[:alpha:]')"
-  if [[ -z "${clean_user}" ]]; then
-    clean_user="runner"
-  fi
-
-  printf 'quickstart-%s-1' "${clean_user,,}"
-}
-
-write_quickstart_env_local() {
-  local auth_mode="${CANTON_LOCALNET_AUTH_MODE:-oauth2}"
-  local observability_enabled="${CANTON_LOCALNET_OBSERVABILITY_ENABLED:-false}"
-  local party_hint="${CANTON_LOCALNET_PARTY_HINT:-}"
-  local test_mode="${CANTON_LOCALNET_TEST_MODE:-off}"
-
-  if [[ -z "${party_hint}" ]]; then
-    party_hint="$(default_party_hint)"
-  fi
-
-  log "Writing non-interactive cn-quickstart localnet config."
-  cat >"${QUICKSTART_DIR}/.env.local" <<EOF
-OBSERVABILITY_ENABLED=${observability_enabled}
-AUTH_MODE=${auth_mode}
-PARTY_HINT=${party_hint}
-TEST_MODE=${test_mode}
-EOF
 }
 
 quickstart_fast_start_enabled() {
@@ -448,20 +681,37 @@ stop_infra_only_localnet() {
 }
 
 wait_for_services() {
-  log "Waiting for Keycloak..."
-  for _ in $(seq 1 30); do
-    if curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://localhost:8082/realms/AppProvider >/dev/null 2>&1; then
-      break
+  local auth_mode=""
+  local code=""
+  local ledger_code=""
+
+  auth_mode="$(current_auth_mode)"
+
+  if [[ "${auth_mode}" == "oauth2" ]]; then
+    log "Waiting for Keycloak..."
+    for _ in $(seq 1 30); do
+      if curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://localhost:8082/realms/AppProvider >/dev/null 2>&1; then
+        break
+      fi
+      sleep 2
+    done
+    if ! curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://localhost:8082/realms/AppProvider >/dev/null 2>&1; then
+      log "Keycloak did not become ready."
+      exit 1
     fi
-    sleep 2
-  done
-  if ! curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://localhost:8082/realms/AppProvider >/dev/null 2>&1; then
-    log "Keycloak did not become ready."
-    exit 1
+  else
+    log "Checking for Keycloak (optional in ${auth_mode} mode)..."
+    for _ in $(seq 1 5); do
+      if curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://localhost:8082/realms/AppProvider >/dev/null 2>&1; then
+        log "Keycloak is ready."
+        break
+      fi
+      sleep 2
+    done
   fi
 
   log "Waiting for Validator API..."
-  for _ in $(seq 1 30); do
+  for _ in $(seq 1 "${VALIDATOR_READY_ATTEMPTS}"); do
     code="$(curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -sS -o /dev/null -w '%{http_code}' http://localhost:3903/api/validator/v0/wallet/user-status || true)"
     if [[ "${code}" == "200" || "${code}" == "401" ]]; then
       break
@@ -475,7 +725,7 @@ wait_for_services() {
   fi
 
   log "Waiting for Scan API..."
-  for _ in $(seq 1 30); do
+  for _ in $(seq 1 "${SCAN_READY_ATTEMPTS}"); do
     if curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://scan.localhost:4000/api/scan/v0/dso-party-id >/dev/null 2>&1; then
       break
     fi
@@ -483,6 +733,20 @@ wait_for_services() {
   done
   if ! curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://scan.localhost:4000/api/scan/v0/dso-party-id >/dev/null 2>&1; then
     log "Scan API did not become ready."
+    exit 1
+  fi
+
+  log "Waiting for Ledger JSON API..."
+  for _ in $(seq 1 60); do
+    ledger_code="$(curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -sS -o /dev/null -w '%{http_code}' http://localhost:3975/v2/version || true)"
+    if [[ "${ledger_code}" == "200" || "${ledger_code}" == "401" ]]; then
+      break
+    fi
+    sleep 2
+  done
+  ledger_code="$(curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -sS -o /dev/null -w '%{http_code}' http://localhost:3975/v2/version || true)"
+  if [[ "${ledger_code}" != "200" && "${ledger_code}" != "401" ]]; then
+    log "Ledger JSON API did not become ready (HTTP ${ledger_code})."
     exit 1
   fi
 
@@ -592,6 +856,7 @@ status_localnet() {
   keycloak_ok="no"
   validator_ok="no"
   scan_ok="no"
+  ledger_ok="no"
   if curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://localhost:8082/realms/AppProvider >/dev/null 2>&1; then
     keycloak_ok="yes"
   fi
@@ -602,10 +867,15 @@ status_localnet() {
   if curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://scan.localhost:4000/api/scan/v0/dso-party-id >/dev/null 2>&1; then
     scan_ok="yes"
   fi
+  ledger_code="$(curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -sS -o /dev/null -w '%{http_code}' http://localhost:3975/v2/version || true)"
+  if [[ "${ledger_code}" == "200" || "${ledger_code}" == "401" ]]; then
+    ledger_ok="yes"
+  fi
 
   printf 'Keycloak ready: %s\n' "${keycloak_ok}"
   printf 'Validator ready: %s (HTTP %s)\n' "${validator_ok}" "${validator_code:-n/a}"
   printf 'Scan ready: %s\n' "${scan_ok}"
+  printf 'Ledger JSON API ready: %s (HTTP %s)\n' "${ledger_ok}" "${ledger_code:-n/a}"
 }
 
 show_localnet_logs() {
@@ -642,13 +912,20 @@ show_localnet_logs() {
 }
 
 run_smoke() {
+  local auth_mode=""
   local validator_code=""
+  local ledger_code=""
 
   log "Running localnet smoke checks..."
+  auth_mode="$(current_auth_mode)"
 
-  if ! curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://localhost:8082/realms/AppProvider >/dev/null 2>&1; then
+  if curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://localhost:8082/realms/AppProvider >/dev/null 2>&1; then
+    log "Keycloak is reachable."
+  elif [[ "${auth_mode}" == "oauth2" ]]; then
     log "Keycloak is not reachable."
     exit 1
+  else
+    log "Keycloak not detected (expected in ${auth_mode} mode)."
   fi
 
   validator_code="$(curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -sS -o /dev/null -w '%{http_code}' http://localhost:3903/api/validator/v0/wallet/user-status || true)"
@@ -659,6 +936,12 @@ run_smoke() {
 
   if ! curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -fsS http://scan.localhost:4000/api/scan/v0/dso-party-id >/dev/null 2>&1; then
     log "Scan API is not reachable."
+    exit 1
+  fi
+
+  ledger_code="$(curl --connect-timeout "${CURL_CONNECT_TIMEOUT}" --max-time "${CURL_MAX_TIME}" -sS -o /dev/null -w '%{http_code}' http://localhost:3975/v2/version || true)"
+  if [[ "${ledger_code}" != "200" && "${ledger_code}" != "401" ]]; then
+    log "Ledger JSON API is not reachable (HTTP ${ledger_code})."
     exit 1
   fi
 
@@ -751,6 +1034,7 @@ Environment:
   CANTON_LOCALNET_FAST_START=true|false       Enable fast startup path (default: true)
   CANTON_LOCALNET_FORCE_FULL_START=true|false Force full startup with rebuild
   CANTON_LOCALNET_INFRA_ONLY=true|false       Start only LocalNet + Keycloak infrastructure
+  CANTON_LOCALNET_AUTH_MODE=oauth2|shared-secret
   CANTON_LOCALNET_QUICKSTART_DIR=<path>       Use an existing cn-quickstart/quickstart directory
 USAGE
 }
@@ -763,6 +1047,7 @@ main() {
 
   case "$1" in
     setup)
+      validate_configuration
       ensure_docker_packages
       start_docker_daemon
       ensure_submodules
@@ -770,6 +1055,7 @@ main() {
       quickstart_setup
       ;;
     start)
+      validate_configuration
       require_command curl
       ensure_docker_packages
       start_docker_daemon
@@ -796,6 +1082,7 @@ main() {
       run_integration_tests
       ;;
     verify)
+      validate_configuration
       require_command curl
       ensure_docker_packages
       start_docker_daemon
