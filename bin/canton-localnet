@@ -20,6 +20,7 @@ PACKAGE_ROOT="$(cd "$(resolve_script_dir "${BASH_SOURCE[0]}")/.." && pwd)"
 LOCALNET_SCRIPT="${PACKAGE_ROOT}/scripts/localnet-cloud.sh"
 DEFAULT_QUICKSTART_REPO="https://github.com/digital-asset/cn-quickstart.git"
 DEFAULT_QUICKSTART_REF="46201cd27ee16c99f78ab97b7e6513c56f28e004"
+SUPPORTED_LOCALNET_PROFILES="ocp-canton-sdk, canton-fairmint-sdk"
 
 log() {
   printf '[canton-localnet] %s\n' "$*"
@@ -47,6 +48,7 @@ Environment:
   CANTON_LOCALNET_QUICKSTART_DIR   Use an existing cn-quickstart/quickstart directory
   CANTON_LOCALNET_CACHE_DIR        Cache root for fetched cn-quickstart assets
   CANTON_LOCALNET_QUICKSTART_REF   cn-quickstart git ref to fetch
+  CANTON_LOCALNET_PROFILE          Compatibility profile: ocp-canton-sdk, canton-fairmint-sdk
   CANTON_LOCALNET_INFRA_ONLY       Defaults to true for this package binary
 USAGE
 }
@@ -79,6 +81,36 @@ quickstart_ref() {
 
 quickstart_repo() {
   printf '%s' "${CANTON_LOCALNET_QUICKSTART_REPO:-${DEFAULT_QUICKSTART_REPO}}"
+}
+
+set_profile_default() {
+  local name="$1"
+  local value="$2"
+
+  if [[ -z "${!name:-}" ]]; then
+    export "${name}=${value}"
+  fi
+}
+
+apply_localnet_profile() {
+  case "${CANTON_LOCALNET_PROFILE:-}" in
+    "" | default)
+      ;;
+    ocp-canton-sdk)
+      set_profile_default CANTON_LOCALNET_QUICKSTART_REF "5c90cf4d0eb934712fd8c269b56e6272b605ccad"
+      ;;
+    canton-fairmint-sdk)
+      set_profile_default CANTON_LOCALNET_QUICKSTART_REF "2f4edfc17621a7dfb6d44357050c22f4b3914c89"
+      set_profile_default CANTON_LOCALNET_SPLICE_VERSION "0.6.11"
+      set_profile_default CANTON_LOCALNET_SCRIBE_VERSION "0.6.11"
+      set_profile_default CANTON_LOCALNET_PROTOCOL_VERSION "35"
+      ;;
+    *)
+      log "Unsupported CANTON_LOCALNET_PROFILE: ${CANTON_LOCALNET_PROFILE}"
+      log "Supported profiles: ${SUPPORTED_LOCALNET_PROFILES}"
+      exit 1
+      ;;
+  esac
 }
 
 default_quickstart_root() {
@@ -184,6 +216,8 @@ main() {
       exit 1
       ;;
   esac
+
+  apply_localnet_profile
 
   dir="$(quickstart_dir)"
   if ! use_repo_quickstart_default; then
