@@ -473,13 +473,14 @@ requested_auth_mode() {
   printf '%s' "${CANTON_LOCALNET_AUTH_MODE:-oauth2}"
 }
 
-configured_auth_mode() {
+quickstart_env_value() {
+  local key="$1"
   local parsed_value=""
 
   if [[ -f "${QUICKSTART_DIR}/.env.local" ]]; then
-    parsed_value="$(awk -F= '
+    parsed_value="$(awk -F= -v key="${key}" '
       $0 ~ /^[[:space:]]*#/ { next }
-      $1 == "AUTH_MODE" {
+      $1 == key {
         value = substr($0, index($0, "=") + 1)
         gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
         gsub(/^"|"$/, "", value)
@@ -495,6 +496,22 @@ configured_auth_mode() {
   fi
 
   printf '%s' "${parsed_value}"
+}
+
+configured_auth_mode() {
+  quickstart_env_value "AUTH_MODE"
+}
+
+quickstart_profile_config_complete() {
+  local key=""
+
+  for key in OBSERVABILITY_ENABLED AUTH_MODE PARTY_HINT TEST_MODE; do
+    if [[ -z "$(quickstart_env_value "${key}")" ]]; then
+      return 1
+    fi
+  done
+
+  return 0
 }
 
 verify_configured_auth_mode() {
@@ -554,6 +571,10 @@ run_quickstart_setup() {
 
 quickstart_setup() {
   if [[ ! -f "${QUICKSTART_DIR}/.env.local" ]]; then
+    run_quickstart_setup
+  elif ! quickstart_profile_config_complete; then
+    log "Regenerating incomplete cn-quickstart config."
+    rm -f "${QUICKSTART_DIR}/.env.local"
     run_quickstart_setup
   elif [[ -n "${CANTON_LOCALNET_AUTH_MODE:-}" && "$(configured_auth_mode)" != "${CANTON_LOCALNET_AUTH_MODE}" ]]; then
     log "Regenerating cn-quickstart config for CANTON_LOCALNET_AUTH_MODE=${CANTON_LOCALNET_AUTH_MODE}."
