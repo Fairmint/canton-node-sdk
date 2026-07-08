@@ -206,6 +206,11 @@ main() {
       fi
       exit 0
       ;;
+  esac
+
+  apply_localnet_profile
+
+  case "${command}" in
     setup | start | verify)
       ensure_quickstart_checkout
       ;;
@@ -216,8 +221,6 @@ main() {
       exit 1
       ;;
   esac
-
-  apply_localnet_profile
 
   dir="$(quickstart_dir)"
   if ! use_repo_quickstart_default; then
