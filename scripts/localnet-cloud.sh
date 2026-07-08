@@ -525,7 +525,11 @@ stop_localnet() {
 
   log "Stopping cn-quickstart..."
   stop_infra_only_localnet
-  run_quickstart_make stop || true
+  if [[ -f "${QUICKSTART_DIR}/Makefile" ]]; then
+    run_quickstart_make stop || true
+  else
+    log "Quickstart Makefile not found; skipping quickstart stop target."
+  fi
   stop_managed_dockerd
 }
 

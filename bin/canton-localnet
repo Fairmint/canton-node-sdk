@@ -159,10 +159,10 @@ main() {
       fi
       exit 0
       ;;
-    setup | start | stop | verify)
+    setup | start | verify)
       ensure_quickstart_checkout
       ;;
-    logs | status | smoke | test)
+    logs | status | stop | smoke | test)
       ;;
     *)
       usage
