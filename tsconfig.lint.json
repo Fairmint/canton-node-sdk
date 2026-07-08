@@ -3,7 +3,7 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "./build",
-    "types": ["jest"]
+    "types": ["node", "jest"]
   },
   "include": ["src/**/*", "test/**/*", "scripts/**/*", "examples/**/*"],
   "exclude": ["**/*.example.ts"]
