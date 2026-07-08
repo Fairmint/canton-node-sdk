@@ -463,13 +463,12 @@ configure_quickstart_localnet() {
   patch_quickstart_splice_healthcheck
 }
 
-current_auth_mode() {
-  local parsed_value=""
+requested_auth_mode() {
+  printf '%s' "${CANTON_LOCALNET_AUTH_MODE:-oauth2}"
+}
 
-  if [[ -n "${CANTON_LOCALNET_AUTH_MODE:-}" ]]; then
-    printf '%s' "${CANTON_LOCALNET_AUTH_MODE}"
-    return
-  fi
+configured_auth_mode() {
+  local parsed_value=""
 
   if [[ -f "${QUICKSTART_DIR}/.env.local" ]]; then
     parsed_value="$(awk -F= '
@@ -489,13 +488,25 @@ current_auth_mode() {
     ' "${QUICKSTART_DIR}/.env.local")"
   fi
 
-  printf '%s' "${parsed_value:-oauth2}"
+  printf '%s' "${parsed_value}"
+}
+
+current_auth_mode() {
+  local configured=""
+
+  configured="$(configured_auth_mode)"
+  if [[ -n "${configured}" ]]; then
+    printf '%s' "${configured}"
+    return
+  fi
+
+  requested_auth_mode
 }
 
 run_quickstart_setup() {
   local auth_mode=""
 
-  auth_mode="$(current_auth_mode)"
+  auth_mode="$(requested_auth_mode)"
   case "${auth_mode}" in
     shared-secret)
       log "Running cn-quickstart setup (shared-secret mode)..."
@@ -524,6 +535,10 @@ run_quickstart_setup() {
 
 quickstart_setup() {
   if [[ ! -f "${QUICKSTART_DIR}/.env.local" ]]; then
+    run_quickstart_setup
+  elif [[ -n "${CANTON_LOCALNET_AUTH_MODE:-}" && "$(configured_auth_mode)" != "${CANTON_LOCALNET_AUTH_MODE}" ]]; then
+    log "Regenerating cn-quickstart config for CANTON_LOCALNET_AUTH_MODE=${CANTON_LOCALNET_AUTH_MODE}."
+    rm -f "${QUICKSTART_DIR}/.env.local"
     run_quickstart_setup
   else
     log "Reusing existing ${QUICKSTART_DIR}/.env.local."
