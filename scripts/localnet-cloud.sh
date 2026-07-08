@@ -252,17 +252,26 @@ ensure_hosts_entries() {
 
 quickstart_setup() {
   if [[ ! -f "${QUICKSTART_DIR}/.env.local" ]]; then
-    log "Running cn-quickstart setup (OAuth2 enabled)..."
-    (
-      cd "${QUICKSTART_DIR}"
-      # Match CI behavior first, then fall back to prompt-based answers for newer setup flows.
-      echo "2" | make setup || true
-      if ! grep -Eq '^AUTH_MODE=oauth2$' "${QUICKSTART_DIR}/.env.local" 2>/dev/null; then
-        printf 'y\ny\n\nn\n' | make setup
-      fi
-    )
+    if quickstart_infra_only_enabled; then
+      write_quickstart_env_local
+    else
+      log "Running cn-quickstart setup (OAuth2 enabled)..."
+      (
+        cd "${QUICKSTART_DIR}"
+        # Match CI behavior first, then fall back to prompt-based answers for newer setup flows.
+        echo "2" | make setup || true
+        if ! grep -Eq '^AUTH_MODE=oauth2$' "${QUICKSTART_DIR}/.env.local" 2>/dev/null; then
+          printf 'y\ny\n\nn\n' | make setup
+        fi
+      )
+    fi
   else
     log "Reusing existing ${QUICKSTART_DIR}/.env.local."
+  fi
+
+  if quickstart_infra_only_enabled; then
+    log "Skipping Daml SDK install for infrastructure-only localnet."
+    return
   fi
 
   if [[ ! -x "${HOME}/.daml/bin/daml" ]]; then
@@ -276,12 +285,47 @@ quickstart_setup() {
   fi
 }
 
+default_party_hint() {
+  local clean_user=""
+  local raw_user="${USER:-runner}"
+
+  clean_user="$(printf '%s' "${raw_user}" | tr -cd '[:alpha:]')"
+  if [[ -z "${clean_user}" ]]; then
+    clean_user="runner"
+  fi
+
+  printf 'quickstart-%s-1' "${clean_user,,}"
+}
+
+write_quickstart_env_local() {
+  local auth_mode="${CANTON_LOCALNET_AUTH_MODE:-oauth2}"
+  local observability_enabled="${CANTON_LOCALNET_OBSERVABILITY_ENABLED:-false}"
+  local party_hint="${CANTON_LOCALNET_PARTY_HINT:-}"
+  local test_mode="${CANTON_LOCALNET_TEST_MODE:-off}"
+
+  if [[ -z "${party_hint}" ]]; then
+    party_hint="$(default_party_hint)"
+  fi
+
+  log "Writing non-interactive cn-quickstart localnet config."
+  cat >"${QUICKSTART_DIR}/.env.local" <<EOF
+OBSERVABILITY_ENABLED=${observability_enabled}
+AUTH_MODE=${auth_mode}
+PARTY_HINT=${party_hint}
+TEST_MODE=${test_mode}
+EOF
+}
+
 quickstart_fast_start_enabled() {
   is_truthy "${CANTON_LOCALNET_FAST_START:-true}"
 }
 
 quickstart_force_full_start() {
   is_truthy "${CANTON_LOCALNET_FORCE_FULL_START:-false}"
+}
+
+quickstart_infra_only_enabled() {
+  is_truthy "${CANTON_LOCALNET_INFRA_ONLY:-false}"
 }
 
 quickstart_build_artifacts_ready() {
@@ -329,6 +373,44 @@ try_fast_start_localnet() {
 
   log "Starting cn-quickstart with fast path (skip quickstart rebuild)..."
   run_quickstart_command "${compose_up_command}"
+}
+
+start_infra_only_localnet() {
+  log "Starting cn-quickstart LocalNet infrastructure only (skip quickstart app, PQS, and onboarding)."
+  run_quickstart_command 'docker compose \
+    -f "${LOCALNET_DIR}/compose.yaml" \
+    -f "${MODULES_DIR}/keycloak/compose.yaml" \
+    --env-file .env \
+    --env-file .env.local \
+    --env-file "${LOCALNET_DIR}/compose.env" \
+    --env-file "${LOCALNET_DIR}/env/common.env" \
+    --env-file "${MODULES_DIR}/keycloak/compose.env" \
+    --profile app-provider \
+    --profile app-user \
+    --profile sv \
+    --profile keycloak \
+    up -d --no-recreate'
+}
+
+stop_infra_only_localnet() {
+  if [[ ! -f "${QUICKSTART_DIR}/.env.local" ]]; then
+    return
+  fi
+
+  log "Stopping cn-quickstart LocalNet infrastructure-only stack..."
+  run_quickstart_command 'docker compose \
+    -f "${LOCALNET_DIR}/compose.yaml" \
+    -f "${MODULES_DIR}/keycloak/compose.yaml" \
+    --env-file .env \
+    --env-file .env.local \
+    --env-file "${LOCALNET_DIR}/compose.env" \
+    --env-file "${LOCALNET_DIR}/env/common.env" \
+    --env-file "${MODULES_DIR}/keycloak/compose.env" \
+    --profile app-provider \
+    --profile app-user \
+    --profile sv \
+    --profile keycloak \
+    down' || true
 }
 
 wait_for_services() {
@@ -381,6 +463,12 @@ start_localnet() {
     return
   fi
 
+  if quickstart_infra_only_enabled; then
+    start_infra_only_localnet
+    wait_for_services
+    return
+  fi
+
   if quickstart_fast_start_enabled && quickstart_build_artifacts_ready; then
     if try_fast_start_localnet; then
       wait_for_services
@@ -402,6 +490,7 @@ stop_localnet() {
   fi
 
   log "Stopping cn-quickstart..."
+  stop_infra_only_localnet
   run_quickstart_make stop || true
   stop_managed_dockerd
 }
@@ -589,6 +678,7 @@ Commands:
 Environment:
   CANTON_LOCALNET_FAST_START=true|false       Enable fast startup path (default: true)
   CANTON_LOCALNET_FORCE_FULL_START=true|false Force full startup with rebuild
+  CANTON_LOCALNET_INFRA_ONLY=true|false       Start only LocalNet + Keycloak infrastructure
 USAGE
 }
 

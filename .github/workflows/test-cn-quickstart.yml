@@ -16,14 +16,6 @@ jobs:
         with:
           submodules: false
 
-      - name: Compute Submodule Cache Key
-        id: submodule-cache-key
-        run: |
-          set -euo pipefail
-          # Works even when submodules are not initialized: uses gitlinks recorded in this repo.
-          key="$(git submodule status --recursive | tr -s ' ' | cut -d' ' -f1-2 | sha256sum | cut -d' ' -f1)"
-          echo "value=$key" >> $GITHUB_OUTPUT
-
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -31,17 +23,6 @@ jobs:
 
       - name: Upgrade npm
         run: npm install --global npm@^11.10.0
-
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-read-only: false
 
       - name: Initialize Submodules
         run: |
@@ -63,26 +44,13 @@ jobs:
           init_submodule libs/splice --depth 1
           init_submodule libs/cn-quickstart --recursive
 
-      - name: Restore Quickstart Preparation Cache
-        id: quickstart-prep-cache-restore
+      - name: Restore Node Dependencies Cache
+        id: node-cache-restore
         uses: actions/cache/restore@v6
         with:
           path: |
             ${{ github.workspace }}/node_modules
-            ${{ github.workspace }}/artifacts
-            ${{ github.workspace }}/build
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.env.local
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.gradle
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.daml
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.config
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.cache
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/frontend/node_modules
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/frontend/dist
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/backend/build
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/integration-test/node_modules
-            /home/runner/.daml
-            /home/runner/.gradle
-          key: quickstart-prep-${{ runner.os }}-${{ hashFiles('package.json', 'package-lock.json') }}-${{ steps.submodule-cache-key.outputs.value }}
+          key: node-deps-${{ runner.os }}-${{ hashFiles('package.json', 'package-lock.json') }}
 
       - name: Verify Cached Prerequisites
         id: verify-cache
@@ -95,94 +63,24 @@ jobs:
             echo "has_node_modules=false" >> $GITHUB_OUTPUT
           fi
 
-          if [ -f "libs/cn-quickstart/quickstart/.env.local" ]; then
-            echo "has_quickstart_env=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_quickstart_env=false" >> $GITHUB_OUTPUT
-          fi
-
-          if [ -x "$HOME/.daml/bin/daml" ]; then
-            echo "has_daml=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_daml=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Install Dependencies
         if: steps.verify-cache.outputs.has_node_modules != 'true'
         run: npm install
 
-      - name: Setup CN-Quickstart
-        if: steps.verify-cache.outputs.has_quickstart_env != 'true'
-        run: |
-          cd libs/cn-quickstart/quickstart
-          echo "Running setup with OAuth2..."
-          # Setup with OAuth2 non-interactively
-          echo "2" | make setup || true  # Select option 2 (with OAuth2)
-          echo "✓ CN-Quickstart setup complete"
-        timeout-minutes: 15
-
-      - name: Install Daml SDK
-        if: steps.verify-cache.outputs.has_daml != 'true'
-        run: |
-          cd libs/cn-quickstart/quickstart
-          # Retry logic for transient Maven Central 403 errors
-          max_attempts=5
-          attempt=1
-          while [ $attempt -le $max_attempts ]; do
-            echo "Attempt $attempt of $max_attempts: Installing Daml SDK..."
-            if make install-daml-sdk; then
-              echo "✓ Daml SDK installed successfully"
-              exit 0
-            fi
-            echo "Attempt $attempt failed"
-            if [ $attempt -lt $max_attempts ]; then
-              sleep_time=$((30 * attempt))
-              echo "Waiting ${sleep_time}s before retry..."
-              sleep $sleep_time
-            fi
-            attempt=$((attempt + 1))
-          done
-          echo "All $max_attempts attempts failed"
-          exit 1
-        timeout-minutes: 15
-
-      - name: Add Daml CLI to PATH
-        run: echo "$HOME/.daml/bin" >> $GITHUB_PATH
-
       - name: Start CN-Quickstart
         run: |
-          CANTON_LOCALNET_FAST_START=true bash ./scripts/localnet/localnet-cloud.sh start
+          CANTON_LOCALNET_INFRA_ONLY=true bash ./scripts/localnet/localnet-cloud.sh start
           echo "✓ CN-Quickstart started"
         timeout-minutes: 15
 
-      # Cache the prepared quickstart environment to speed up subsequent runs.
-      # This cache will be invalidated when:
-      # - package.json changes (dependency additions/removals)
-      # - package-lock.json changes (exact dependency versions)
-      # - libs/cn-quickstart submodule HEAD changes (submodule updated to different commit)
-      # - libs/splice submodule HEAD changes (submodule updated to different commit)
-      # - Runner OS changes (unlikely in practice)
-      - name: Save Quickstart Preparation Cache
-        if: steps.quickstart-prep-cache-restore.outputs.cache-hit != 'true'
-        id: quickstart-prep-cache-save
+      - name: Save Node Dependencies Cache
+        if: steps.node-cache-restore.outputs.cache-hit != 'true'
+        id: node-cache-save
         uses: actions/cache/save@v6
         with:
           path: |
             ${{ github.workspace }}/node_modules
-            ${{ github.workspace }}/artifacts
-            ${{ github.workspace }}/build
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.env.local
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.gradle
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.daml
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.config
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/.cache
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/frontend/node_modules
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/frontend/dist
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/backend/build
-            ${{ github.workspace }}/libs/cn-quickstart/quickstart/integration-test/node_modules
-            /home/runner/.daml
-            /home/runner/.gradle
-          key: ${{ steps.quickstart-prep-cache-restore.outputs.cache-primary-key }}
+          key: ${{ steps.node-cache-restore.outputs.cache-primary-key }}
 
       - name: Build SDK
         run: npm run build
@@ -203,7 +101,19 @@ jobs:
           echo "==================== Docker Compose Logs ===================="
           if [ -d "libs/cn-quickstart/quickstart" ]; then
             cd libs/cn-quickstart/quickstart
-            docker compose logs --tail=100 || true
+            docker compose \
+              -f docker/modules/localnet/compose.yaml \
+              -f docker/modules/keycloak/compose.yaml \
+              --env-file .env \
+              --env-file .env.local \
+              --env-file docker/modules/localnet/compose.env \
+              --env-file docker/modules/localnet/env/common.env \
+              --env-file docker/modules/keycloak/compose.env \
+              --profile app-provider \
+              --profile app-user \
+              --profile sv \
+              --profile keycloak \
+              logs --tail=100 || true
           fi
 
           echo "==================== Canton Logs ===================="
