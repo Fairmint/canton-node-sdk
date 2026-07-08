@@ -10,9 +10,9 @@ DOCKERD_LOG_FILE="/tmp/localnet-dockerd.log"
 HOSTS_ENTRY="127.0.0.1 scan.localhost sv.localhost wallet.localhost"
 CURL_CONNECT_TIMEOUT=2
 CURL_MAX_TIME=5
-DEVNET_ALIGNED_SPLICE_VERSION="${CANTON_LOCALNET_SPLICE_VERSION:-0.6.11}"
-DEVNET_ALIGNED_SCRIBE_VERSION="${CANTON_LOCALNET_SCRIBE_VERSION:-0.6.11}"
-DEVNET_ALIGNED_PROTOCOL_VERSION="${CANTON_LOCALNET_PROTOCOL_VERSION:-35}"
+LOCALNET_SPLICE_VERSION="${CANTON_LOCALNET_SPLICE_VERSION:-}"
+LOCALNET_SCRIBE_VERSION="${CANTON_LOCALNET_SCRIBE_VERSION:-}"
+LOCALNET_PROTOCOL_VERSION="${CANTON_LOCALNET_PROTOCOL_VERSION:-}"
 VALIDATOR_READY_ATTEMPTS="${CANTON_LOCALNET_VALIDATOR_READY_ATTEMPTS:-90}"
 SCAN_READY_ATTEMPTS="${CANTON_LOCALNET_SCAN_READY_ATTEMPTS:-90}"
 
@@ -440,8 +440,12 @@ configure_quickstart_localnet() {
   local canton_conf="${QUICKSTART_DIR}/docker/modules/localnet/conf/canton/app.conf"
 
   for env_file in "${QUICKSTART_DIR}/.env" "${QUICKSTART_DIR}/.env.local"; do
-    set_quickstart_env_value "${env_file}" "SPLICE_VERSION" "${DEVNET_ALIGNED_SPLICE_VERSION}"
-    set_quickstart_env_value "${env_file}" "SCRIBE_VERSION" "${DEVNET_ALIGNED_SCRIBE_VERSION}"
+    if [[ -n "${LOCALNET_SPLICE_VERSION}" ]]; then
+      set_quickstart_env_value "${env_file}" "SPLICE_VERSION" "${LOCALNET_SPLICE_VERSION}"
+    fi
+    if [[ -n "${LOCALNET_SCRIBE_VERSION}" ]]; then
+      set_quickstart_env_value "${env_file}" "SCRIBE_VERSION" "${LOCALNET_SCRIBE_VERSION}"
+    fi
     if [[ -n "${CANTON_LOCALNET_DAML_RUNTIME_VERSION:-}" ]]; then
       set_quickstart_env_value "${env_file}" "DAML_RUNTIME_VERSION" "${CANTON_LOCALNET_DAML_RUNTIME_VERSION}"
     fi
@@ -452,12 +456,14 @@ configure_quickstart_localnet() {
     exit 1
   fi
 
-  PROTOCOL_VERSION="${DEVNET_ALIGNED_PROTOCOL_VERSION}" perl -0pi -e '
-    my $protocol_version = $ENV{"PROTOCOL_VERSION"};
-    s/initial-protocol-version = \d+/initial-protocol-version = $protocol_version/g;
-    s/(non-standard-config = yes\n)(?![[:space:]]*alpha-version-support = yes)/$1    alpha-version-support = yes\n/;
-    s/(initial-protocol-version = \d+\n)(?![[:space:]]*alpha-version-support = yes)/$1    alpha-version-support = yes\n/;
-  ' "${canton_conf}"
+  if [[ -n "${LOCALNET_PROTOCOL_VERSION}" ]]; then
+    PROTOCOL_VERSION="${LOCALNET_PROTOCOL_VERSION}" perl -0pi -e '
+      my $protocol_version = $ENV{"PROTOCOL_VERSION"};
+      s/initial-protocol-version = \d+/initial-protocol-version = $protocol_version/g;
+      s/(non-standard-config = yes\n)(?![[:space:]]*alpha-version-support = yes)/$1    alpha-version-support = yes\n/;
+      s/(initial-protocol-version = \d+\n)(?![[:space:]]*alpha-version-support = yes)/$1    alpha-version-support = yes\n/;
+    ' "${canton_conf}"
+  fi
 
   patch_quickstart_canton_healthcheck
   patch_quickstart_splice_healthcheck
