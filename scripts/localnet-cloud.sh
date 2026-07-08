@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PROJECT_ROOT="${CANTON_LOCALNET_PROJECT_ROOT:-$(pwd)}"
-QUICKSTART_DIR="${REPO_ROOT}/libs/cn-quickstart/quickstart"
+QUICKSTART_DIR="${CANTON_LOCALNET_QUICKSTART_DIR:-${REPO_ROOT}/libs/cn-quickstart/quickstart}"
 DOCKERD_PID_FILE="/tmp/localnet-dockerd.pid"
 DOCKERD_LOG_FILE="/tmp/localnet-dockerd.log"
 HOSTS_ENTRY="127.0.0.1 scan.localhost sv.localhost wallet.localhost"
@@ -35,16 +35,25 @@ require_command() {
 }
 
 ensure_sudo() {
-  if ! sudo -n true >/dev/null 2>&1; then
+  if ! sudo_noninteractive_available; then
     log "Passwordless sudo is required in this cloud environment."
     exit 1
   fi
+}
+
+sudo_noninteractive_available() {
+  command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1
 }
 
 ensure_docker_packages() {
   if command -v docker >/dev/null 2>&1 \
     && docker compose version >/dev/null 2>&1; then
     return
+  fi
+
+  if ! sudo_noninteractive_available || ! command -v apt-get >/dev/null 2>&1; then
+    log "Docker with Compose is required. Install Docker and start it, then retry."
+    exit 1
   fi
 
   log "Installing Docker packages..."
@@ -71,11 +80,15 @@ ensure_legacy_iptables() {
 }
 
 docker_ready() {
-  docker info >/dev/null 2>&1 || sudo docker info >/dev/null 2>&1
+  docker info >/dev/null 2>&1 || (sudo_noninteractive_available && sudo docker info >/dev/null 2>&1)
 }
 
 configure_docker_socket_permissions() {
   if [[ ! -S /var/run/docker.sock ]]; then
+    return
+  fi
+
+  if ! sudo_noninteractive_available; then
     return
   fi
 
@@ -88,6 +101,10 @@ run_docker() {
   if docker info >/dev/null 2>&1; then
     docker "$@"
     return
+  fi
+  if ! sudo_noninteractive_available || ! sudo docker info >/dev/null 2>&1; then
+    log "Docker daemon is not available."
+    exit 1
   fi
   sudo docker "$@"
 }
@@ -180,12 +197,35 @@ run_quickstart_make() {
   run_quickstart_command "make ${target}"
 }
 
+run_infra_compose() {
+  local compose_args="$1"
+
+  run_quickstart_command "docker compose \
+    -f \"\${LOCALNET_DIR}/compose.yaml\" \
+    -f \"\${MODULES_DIR}/keycloak/compose.yaml\" \
+    --env-file .env \
+    --env-file .env.local \
+    --env-file \"\${LOCALNET_DIR}/compose.env\" \
+    --env-file \"\${LOCALNET_DIR}/env/common.env\" \
+    --env-file \"\${MODULES_DIR}/keycloak/compose.env\" \
+    --profile app-provider \
+    --profile app-user \
+    --profile sv \
+    --profile keycloak \
+    ${compose_args}"
+}
+
 start_docker_daemon() {
   local dockerd_pid=""
 
   if docker_ready; then
     configure_docker_socket_permissions
     return
+  fi
+
+  if ! sudo_noninteractive_available; then
+    log "Docker daemon is not running. Start Docker and retry."
+    exit 1
   fi
 
   ensure_legacy_iptables
@@ -214,6 +254,14 @@ start_docker_daemon() {
 }
 
 ensure_submodules() {
+  if [[ -n "${CANTON_LOCALNET_QUICKSTART_DIR:-}" ]]; then
+    if [[ -d "${QUICKSTART_DIR}" ]]; then
+      return
+    fi
+    log "Configured CANTON_LOCALNET_QUICKSTART_DIR does not exist: ${QUICKSTART_DIR}"
+    exit 1
+  fi
+
   if [[ -d "${REPO_ROOT}/libs/splice" && -d "${QUICKSTART_DIR}" ]]; then
     return
   fi
@@ -246,23 +294,42 @@ ensure_hosts_entries() {
     || ! grep -Eq '(^|[[:space:]])sv\.localhost([[:space:]]|$)' /etc/hosts \
     || ! grep -Eq '(^|[[:space:]])wallet\.localhost([[:space:]]|$)' /etc/hosts; then
     log "Adding localnet host aliases to /etc/hosts..."
-    echo "${HOSTS_ENTRY}" | sudo tee -a /etc/hosts >/dev/null
+    if sudo_noninteractive_available; then
+      echo "${HOSTS_ENTRY}" | sudo tee -a /etc/hosts >/dev/null
+      return
+    fi
+    if [[ -t 0 ]] && command -v sudo >/dev/null 2>&1; then
+      echo "${HOSTS_ENTRY}" | sudo tee -a /etc/hosts >/dev/null
+      return
+    fi
+    log "Missing localnet host aliases. Add this line to /etc/hosts, then retry:"
+    log "${HOSTS_ENTRY}"
+    exit 1
   fi
 }
 
 quickstart_setup() {
   if [[ ! -f "${QUICKSTART_DIR}/.env.local" ]]; then
-    log "Running cn-quickstart setup (OAuth2 enabled)..."
-    (
-      cd "${QUICKSTART_DIR}"
-      # Match CI behavior first, then fall back to prompt-based answers for newer setup flows.
-      echo "2" | make setup || true
-      if ! grep -Eq '^AUTH_MODE=oauth2$' "${QUICKSTART_DIR}/.env.local" 2>/dev/null; then
-        printf 'y\ny\n\nn\n' | make setup
-      fi
-    )
+    if quickstart_infra_only_enabled; then
+      write_quickstart_env_local
+    else
+      log "Running cn-quickstart setup (OAuth2 enabled)..."
+      (
+        cd "${QUICKSTART_DIR}"
+        # Match CI behavior first, then fall back to prompt-based answers for newer setup flows.
+        echo "2" | make setup || true
+        if ! grep -Eq '^AUTH_MODE=oauth2$' "${QUICKSTART_DIR}/.env.local" 2>/dev/null; then
+          printf 'y\ny\n\nn\n' | make setup
+        fi
+      )
+    fi
   else
     log "Reusing existing ${QUICKSTART_DIR}/.env.local."
+  fi
+
+  if quickstart_infra_only_enabled; then
+    log "Skipping Daml SDK install for infrastructure-only localnet."
+    return
   fi
 
   if [[ ! -x "${HOME}/.daml/bin/daml" ]]; then
@@ -276,12 +343,47 @@ quickstart_setup() {
   fi
 }
 
+default_party_hint() {
+  local clean_user=""
+  local raw_user="${USER:-runner}"
+
+  clean_user="$(printf '%s' "${raw_user}" | tr -cd '[:alpha:]')"
+  if [[ -z "${clean_user}" ]]; then
+    clean_user="runner"
+  fi
+
+  printf 'quickstart-%s-1' "${clean_user,,}"
+}
+
+write_quickstart_env_local() {
+  local auth_mode="${CANTON_LOCALNET_AUTH_MODE:-oauth2}"
+  local observability_enabled="${CANTON_LOCALNET_OBSERVABILITY_ENABLED:-false}"
+  local party_hint="${CANTON_LOCALNET_PARTY_HINT:-}"
+  local test_mode="${CANTON_LOCALNET_TEST_MODE:-off}"
+
+  if [[ -z "${party_hint}" ]]; then
+    party_hint="$(default_party_hint)"
+  fi
+
+  log "Writing non-interactive cn-quickstart localnet config."
+  cat >"${QUICKSTART_DIR}/.env.local" <<EOF
+OBSERVABILITY_ENABLED=${observability_enabled}
+AUTH_MODE=${auth_mode}
+PARTY_HINT=${party_hint}
+TEST_MODE=${test_mode}
+EOF
+}
+
 quickstart_fast_start_enabled() {
   is_truthy "${CANTON_LOCALNET_FAST_START:-true}"
 }
 
 quickstart_force_full_start() {
   is_truthy "${CANTON_LOCALNET_FORCE_FULL_START:-false}"
+}
+
+quickstart_infra_only_enabled() {
+  is_truthy "${CANTON_LOCALNET_INFRA_ONLY:-false}"
 }
 
 quickstart_build_artifacts_ready() {
@@ -329,6 +431,20 @@ try_fast_start_localnet() {
 
   log "Starting cn-quickstart with fast path (skip quickstart rebuild)..."
   run_quickstart_command "${compose_up_command}"
+}
+
+start_infra_only_localnet() {
+  log "Starting cn-quickstart LocalNet infrastructure only (skip quickstart app, PQS, and onboarding)."
+  run_infra_compose 'up -d --no-recreate'
+}
+
+stop_infra_only_localnet() {
+  if [[ ! -f "${QUICKSTART_DIR}/.env.local" ]]; then
+    return
+  fi
+
+  log "Stopping cn-quickstart LocalNet infrastructure-only stack..."
+  run_infra_compose down || true
 }
 
 wait_for_services() {
@@ -381,6 +497,12 @@ start_localnet() {
     return
   fi
 
+  if quickstart_infra_only_enabled; then
+    start_infra_only_localnet
+    wait_for_services
+    return
+  fi
+
   if quickstart_fast_start_enabled && quickstart_build_artifacts_ready; then
     if try_fast_start_localnet; then
       wait_for_services
@@ -402,7 +524,12 @@ stop_localnet() {
   fi
 
   log "Stopping cn-quickstart..."
-  run_quickstart_make stop || true
+  stop_infra_only_localnet
+  if [[ -f "${QUICKSTART_DIR}/Makefile" ]]; then
+    run_quickstart_make stop || true
+  else
+    log "Quickstart Makefile not found; skipping quickstart stop target."
+  fi
   stop_managed_dockerd
 }
 
@@ -479,6 +606,39 @@ status_localnet() {
   printf 'Keycloak ready: %s\n' "${keycloak_ok}"
   printf 'Validator ready: %s (HTTP %s)\n' "${validator_ok}" "${validator_code:-n/a}"
   printf 'Scan ready: %s\n' "${scan_ok}"
+}
+
+show_localnet_logs() {
+  log "==================== Docker Containers ===================="
+  if docker_ready; then
+    run_docker ps -a || true
+  else
+    log "Docker daemon is not running."
+  fi
+
+  echo
+  log "==================== Docker Compose Logs ===================="
+  if [[ -f "${QUICKSTART_DIR}/.env.local" ]]; then
+    run_infra_compose 'logs --tail=100' || true
+  elif [[ -d "${QUICKSTART_DIR}" ]]; then
+    log "Quickstart local env not found; skipping compose logs: ${QUICKSTART_DIR}/.env.local"
+  else
+    log "cn-quickstart directory not found: ${QUICKSTART_DIR}"
+  fi
+
+  echo
+  log "==================== Canton Logs ===================="
+  if [[ -f "${QUICKSTART_DIR}/logs/canton.log" ]]; then
+    tail -100 "${QUICKSTART_DIR}/logs/canton.log" || true
+  else
+    log "Canton log not found: ${QUICKSTART_DIR}/logs/canton.log"
+  fi
+
+  if [[ -f "${DOCKERD_LOG_FILE}" ]]; then
+    echo
+    log "==================== Managed Docker Daemon Logs ===================="
+    tail -100 "${DOCKERD_LOG_FILE}" || true
+  fi
 }
 
 run_smoke() {
@@ -581,6 +741,7 @@ Commands:
   setup    Install prerequisites, init submodules, configure quickstart
   start    Start localnet and wait for ready endpoints
   stop     Stop localnet services
+  logs     Show localnet diagnostic logs
   status   Show docker + endpoint status
   smoke    Run endpoint smoke checks
   test     Run project integration tests (if configured)
@@ -589,6 +750,8 @@ Commands:
 Environment:
   CANTON_LOCALNET_FAST_START=true|false       Enable fast startup path (default: true)
   CANTON_LOCALNET_FORCE_FULL_START=true|false Force full startup with rebuild
+  CANTON_LOCALNET_INFRA_ONLY=true|false       Start only LocalNet + Keycloak infrastructure
+  CANTON_LOCALNET_QUICKSTART_DIR=<path>       Use an existing cn-quickstart/quickstart directory
 USAGE
 }
 
@@ -600,7 +763,6 @@ main() {
 
   case "$1" in
     setup)
-      ensure_sudo
       ensure_docker_packages
       start_docker_daemon
       ensure_submodules
@@ -609,7 +771,6 @@ main() {
       ;;
     start)
       require_command curl
-      ensure_sudo
       ensure_docker_packages
       start_docker_daemon
       ensure_submodules
@@ -619,6 +780,9 @@ main() {
       ;;
     stop)
       stop_localnet
+      ;;
+    logs)
+      show_localnet_logs
       ;;
     status)
       require_command curl
@@ -633,7 +797,6 @@ main() {
       ;;
     verify)
       require_command curl
-      ensure_sudo
       ensure_docker_packages
       start_docker_daemon
       ensure_submodules

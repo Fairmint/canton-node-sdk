@@ -1,5 +1,6 @@
 LICENSE
 README.md
+bin/canton-localnet
 build/src/clients/index
 build/src/clients/ledger-json-api/LedgerJsonApiClient.generated
 build/src/clients/ledger-json-api/index
@@ -212,3 +213,4 @@ build/src/utils/transactions/TransactionBatch
 build/src/utils/transactions/find-created-event
 build/src/utils/transactions/index
 package.json
+scripts/localnet-cloud.sh

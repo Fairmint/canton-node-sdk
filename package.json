@@ -21,7 +21,12 @@
   "author": "Fairmint",
   "main": "build/src/index.js",
   "types": "build/src/index.d.ts",
+  "bin": {
+    "canton-localnet": "bin/canton-localnet"
+  },
   "files": [
+    "bin/canton-localnet",
+    "scripts/localnet-cloud.sh",
     "build/**"
   ],
   "scripts": {
@@ -42,13 +47,14 @@
     "lint:fix": "eslint . --fix",
     "lint:npm": "npmPkgJsonLint . --fix",
     "lint:npm:check": "npmPkgJsonLint .",
-    "localnet:quickstart": "bash ./scripts/localnet/setup-quickstart-localnet.sh",
-    "localnet:setup": "bash ./scripts/localnet/setup-localnet.sh",
-    "localnet:smoke": "bash ./scripts/localnet/localnet-cloud.sh smoke",
-    "localnet:start": "bash ./scripts/localnet/start-localnet.sh",
-    "localnet:status": "bash ./scripts/localnet/localnet-status.sh",
-    "localnet:stop": "bash ./scripts/localnet/stop-localnet.sh",
-    "localnet:verify": "bash ./scripts/localnet/localnet-cloud.sh verify",
+    "localnet:quickstart": "bash ./bin/canton-localnet setup",
+    "localnet:logs": "bash ./bin/canton-localnet logs",
+    "localnet:setup": "bash ./bin/canton-localnet setup",
+    "localnet:smoke": "bash ./bin/canton-localnet smoke",
+    "localnet:start": "bash ./bin/canton-localnet start",
+    "localnet:status": "bash ./bin/canton-localnet status",
+    "localnet:stop": "bash ./bin/canton-localnet stop",
+    "localnet:verify": "bash ./bin/canton-localnet verify",
     "prepack": "npm run clean && npm run build:core",
     "prepare-release": "tsx scripts/prepare-release.ts",
     "prepublishOnly": "npm run prepack",
