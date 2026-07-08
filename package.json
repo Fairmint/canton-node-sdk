@@ -60,10 +60,6 @@
     "test:watch": "jest --watch",
     "tsc7": "node node_modules/typescript-7/bin/tsc"
   },
-  "overrides": {
-    "@typescript/typescript-darwin-arm64": "https://registry.npmjs.org/@typescript/typescript-darwin-arm64/-/typescript-darwin-arm64-7.0.2.tgz",
-    "@typescript/typescript-linux-x64": "https://registry.npmjs.org/@typescript/typescript-linux-x64/-/typescript-linux-x64-7.0.2.tgz"
-  },
   "dependencies": {
     "@canton-network/wallet-sdk": "1.3.1",
     "@hardlydifficult/rest-client": "1.0.65",
@@ -100,7 +96,7 @@
     "ts-jest": "29.4.11",
     "tsx": "4.22.4",
     "typescript": "5.9.3",
-    "typescript-7": "https://registry.npmjs.org/typescript/-/typescript-7.0.2.tgz"
+    "typescript-7": "npm:typescript@7.0.2"
   },
   "engines": {
     "node": ">=22.0.0"
