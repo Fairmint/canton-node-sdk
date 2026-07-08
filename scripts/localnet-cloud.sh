@@ -497,6 +497,17 @@ configured_auth_mode() {
   printf '%s' "${parsed_value}"
 }
 
+verify_configured_auth_mode() {
+  local expected_auth_mode="$1"
+  local actual_auth_mode=""
+
+  actual_auth_mode="$(configured_auth_mode)"
+  if [[ "${actual_auth_mode}" != "${expected_auth_mode}" ]]; then
+    log "cn-quickstart setup did not configure AUTH_MODE=${expected_auth_mode}; found '${actual_auth_mode:-unset}'."
+    exit 1
+  fi
+}
+
 current_auth_mode() {
   local configured=""
 
@@ -520,6 +531,7 @@ run_quickstart_setup() {
         cd "${QUICKSTART_DIR}"
         printf 'Y\nn\n\n' | make setup || true
       )
+      verify_configured_auth_mode "shared-secret"
       ;;
     oauth2)
       log "Running cn-quickstart setup (OAuth2 enabled)..."
@@ -527,10 +539,11 @@ run_quickstart_setup() {
         cd "${QUICKSTART_DIR}"
         # Match CI behavior first, then fall back to prompt-based answers for newer setup flows.
         echo "2" | make setup || true
-        if ! grep -Eq '^AUTH_MODE=oauth2$' "${QUICKSTART_DIR}/.env.local" 2>/dev/null; then
+        if [[ "$(configured_auth_mode)" != "oauth2" ]]; then
           printf 'y\ny\n\nn\n' | make setup
         fi
       )
+      verify_configured_auth_mode "oauth2"
       ;;
     *)
       log "Unsupported CANTON_LOCALNET_AUTH_MODE: ${auth_mode}"
