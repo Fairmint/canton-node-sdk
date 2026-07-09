@@ -5,9 +5,9 @@ import { ensureValidatorUserOnboarded, getClient, VALIDATOR_ONBOARDING_HOOK_TIME
 describe('ValidatorApiClient / ANS', () => {
   beforeAll(ensureValidatorUserOnboarded, VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS);
 
-  test('listAnsEntries returns ANS entries', async () => {
+  test('listOwnedAnsEntries returns ANS entries owned by the validator user', async () => {
     const client = getClient();
-    const response = await client.listAnsEntries();
+    const response = await client.listOwnedAnsEntries();
 
     expect(response).toBeDefined();
     expect(Array.isArray(response.entries)).toBe(true);

@@ -7,7 +7,13 @@ import {
 
 const createMockValidatorClient = (): jest.Mocked<ValidatorApiClient> =>
   ({
-    lookupTransferCommandCounterByParty: jest.fn().mockResolvedValue({ counter: 7 }),
+    lookupTransferCommandCounterByParty: jest.fn().mockResolvedValue({
+      transfer_command_counter: {
+        contract: {
+          payload: { nextNonce: '7' },
+        },
+      },
+    }),
     prepareTransferPreapprovalSend: jest.fn().mockResolvedValue({
       transaction: 'prepared-transaction-base64',
       tx_hash: 'abc123',
@@ -67,6 +73,46 @@ describe('external party CC transfer helpers', () => {
     });
 
     expect(validatorClient.prepareTransferPreapprovalSend).toHaveBeenCalledWith(expect.objectContaining({ nonce: 0 }));
+  });
+
+  it('accepts a numeric nextNonce payload', async (): Promise<void> => {
+    validatorClient.lookupTransferCommandCounterByParty.mockResolvedValueOnce({
+      transfer_command_counter: {
+        contract: {
+          payload: { nextNonce: 8 },
+        },
+      },
+    } as never);
+
+    await prepareExternalPartyCcTransfer(validatorClient, {
+      senderPartyId: 'sender::fingerprint',
+      receiverPartyId: 'receiver::fingerprint',
+      amount: 1,
+      expiresAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    expect(validatorClient.prepareTransferPreapprovalSend).toHaveBeenCalledWith(expect.objectContaining({ nonce: 8 }));
+  });
+
+  it('rejects a malformed transfer-command counter payload', async (): Promise<void> => {
+    validatorClient.lookupTransferCommandCounterByParty.mockResolvedValueOnce({
+      transfer_command_counter: {
+        contract: {
+          payload: {},
+        },
+      },
+    } as never);
+
+    await expect(
+      prepareExternalPartyCcTransfer(validatorClient, {
+        senderPartyId: 'sender::fingerprint',
+        receiverPartyId: 'receiver::fingerprint',
+        amount: 1,
+        expiresAt: '2026-01-01T00:00:00.000Z',
+      })
+    ).rejects.toThrow('Transfer command counter payload must include nextNonce as a non-negative integer');
+
+    expect(validatorClient.prepareTransferPreapprovalSend).not.toHaveBeenCalled();
   });
 
   it('submits a signed CC transfer through the validator endpoint', async (): Promise<void> => {

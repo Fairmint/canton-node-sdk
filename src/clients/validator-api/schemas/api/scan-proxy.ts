@@ -83,20 +83,6 @@ export const GetAmuletRulesResponseSchema = z.object({
 
 export type GetAmuletRulesResponse = z.infer<typeof GetAmuletRulesResponseSchema>;
 
-// Transfer Command Schemas
-export const LookupTransferCommandCounterByPartyResponseSchema = z.object({
-  counter: z.number(),
-});
-
-export const LookupTransferCommandStatusResponseSchema = z.object({
-  status: z.string(),
-});
-
-export type LookupTransferCommandCounterByPartyResponse = z.infer<
-  typeof LookupTransferCommandCounterByPartyResponseSchema
->;
-export type LookupTransferCommandStatusResponse = z.infer<typeof LookupTransferCommandStatusResponseSchema>;
-
 // Transfer Preapproval Schema - local contract schema for scan-proxy
 const ScanProxyTransferPreapprovalContractSchema = z.object({
   template_id: z.string(),

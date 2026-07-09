@@ -1,9 +1,17 @@
-import { createApiOperation } from '../../../../../core';
-import { type LookupTransferCommandCounterByPartyResponse } from '../../../schemas/api';
-import {
-  LookupTransferCommandCounterByPartyParamsSchema,
-  type LookupTransferCommandCounterByPartyParams,
-} from '../../../schemas/operations';
+import { z } from 'zod';
+import { createApiOperation, createRequestSchema } from '../../../../../core';
+import { type operations } from '../../../../../generated/apps/validator/src/main/openapi/scan-proxy';
+
+export type LookupTransferCommandCounterByPartyParams =
+  operations['lookupTransferCommandCounterByParty']['parameters']['path'];
+export type LookupTransferCommandCounterByPartyResponse =
+  operations['lookupTransferCommandCounterByParty']['responses']['200']['content']['application/json'];
+
+/** Runtime schema kept in exact key/type parity with the generated path parameters. */
+export const LookupTransferCommandCounterByPartyParamsSchema =
+  createRequestSchema<LookupTransferCommandCounterByPartyParams>()({
+    party: z.string(),
+  });
 
 /**
  * Lookup transfer command counter by party
@@ -21,5 +29,5 @@ export const LookupTransferCommandCounterByParty = createApiOperation<
   paramsSchema: LookupTransferCommandCounterByPartyParamsSchema,
   method: 'GET',
   buildUrl: (params, apiUrl: string) =>
-    `${apiUrl}/api/validator/v0/scan-proxy/transfer-commands/${params.party}/counter`,
+    `${apiUrl}/api/validator/v0/scan-proxy/transfer-command-counter/${encodeURIComponent(params.party)}`,
 });
