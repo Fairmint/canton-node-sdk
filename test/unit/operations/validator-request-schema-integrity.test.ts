@@ -42,6 +42,15 @@ describe('validator request schema integrity', () => {
     ).toEqual({ name: 'Alice' });
   });
 
+  it('rejects request keys that are absent from the generated contract', () => {
+    expect(() =>
+      CreateUserParamsSchema.parse({
+        name: 'Alice',
+        createPartyIfMising: true,
+      })
+    ).toThrow();
+  });
+
   it('models transfer-preapproval send as a no-content response', async () => {
     const request = {
       receiver_party_id: 'bob::namespace',

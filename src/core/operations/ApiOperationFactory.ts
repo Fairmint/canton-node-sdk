@@ -6,12 +6,26 @@ import { ApiOperation } from './ApiOperation';
 /**
  * Exact Zod object shape for a generated request type.
  *
- * Used by {@link createRequestSchema} to make every generated request property—including optional properties—explicit
- * in the runtime schema and reject keys that are not part of the generated contract.
+ * Used by {@link createRequestSchema} to make every generated request property—including optional properties—explicit in
+ * the runtime schema and reject keys that are not part of the generated contract.
  */
-export type ZodObjectShapeFor<T extends object> = {
-  readonly [Key in keyof T]-?: z.ZodType<T[Key]>;
+type ZodPropertyFor<Value, Schema extends z.ZodType> = [z.output<Schema>] extends [Value]
+  ? [Value] extends [z.input<Schema>]
+    ? Schema
+    : never
+  : never;
+
+export type ZodObjectShapeFor<T extends object, Shape extends z.ZodRawShape> = {
+  readonly [Key in keyof T]-?: Key extends keyof Shape
+    ? Shape[Key] extends z.ZodType
+      ? ZodPropertyFor<T[Key], Shape[Key]>
+      : never
+    : never;
 };
+
+export type RequestSchemaBuilder<T extends object> = <Shape extends z.ZodRawShape>(
+  shape: Shape & ZodObjectShapeFor<T, Shape> & Record<Exclude<keyof Shape, keyof T>, never>
+) => z.ZodType<T>;
 
 /**
  * Creates an exact runtime schema for a generated JSON request object.
@@ -20,18 +34,16 @@ export type ZodObjectShapeFor<T extends object> = {
  * to the generated property type. Undefined top-level properties are removed so the result honors
  * `exactOptionalPropertyTypes` and mirrors JSON serialization.
  */
-export function createRequestSchema<T extends object>(): <Shape extends z.ZodRawShape>(
-  shape: Shape & ZodObjectShapeFor<T> & Record<Exclude<keyof Shape, keyof T>, never>
-) => z.ZodType<T> {
-  return <Shape extends z.ZodRawShape>(
-    shape: Shape & ZodObjectShapeFor<T> & Record<Exclude<keyof Shape, keyof T>, never>
-  ): z.ZodType<T> =>
-    z.object(shape).transform((value): T => {
+export function createRequestSchema<T extends object>(): RequestSchemaBuilder<T> {
+  const createSchema: RequestSchemaBuilder<T> = (shape) =>
+    z.strictObject(shape).transform((value): T => {
       const definedEntries = Object.entries(value).filter(
         (entry): entry is [string, unknown] => entry[1] !== undefined
       );
       return Object.fromEntries(definedEntries) as T;
     });
+
+  return createSchema;
 }
 
 /**

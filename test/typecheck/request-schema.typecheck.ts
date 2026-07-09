@@ -29,3 +29,9 @@ createExampleRequestSchema({
   // @ts-expect-error The validator output must match the generated property type.
   optional: z.string().optional(),
 });
+
+createExampleRequestSchema({
+  required: z.string(),
+  // @ts-expect-error An optional generated property requires a validator that accepts undefined input.
+  optional: z.boolean(),
+});
