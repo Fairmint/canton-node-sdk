@@ -6,15 +6,18 @@ const HEX_BYTES_PATTERN = /^(?:[0-9a-fA-F]{2})+$/;
 
 type SubmitTransferPreapprovalSendRequest =
   operations['submitTransferPreapprovalSend']['requestBody']['content']['application/json'];
+type SubmitTransferPreapprovalSendSubmission = SubmitTransferPreapprovalSendRequest['submission'];
+
+const SubmitTransferPreapprovalSendSubmissionSchema = createRequestSchema<SubmitTransferPreapprovalSendSubmission>()({
+  party_id: z.string().min(1),
+  transaction: z.string().min(1),
+  signed_tx_hash: z.string().regex(HEX_BYTES_PATTERN),
+  public_key: z.string().regex(HEX_BYTES_PATTERN),
+});
 
 /** Runtime schema kept in exact key/type parity with the generated transfer-submission request. */
 export const SubmitTransferPreapprovalSendParamsSchema = createRequestSchema<SubmitTransferPreapprovalSendRequest>()({
-  submission: z.object({
-    party_id: z.string().min(1),
-    transaction: z.string().min(1),
-    signed_tx_hash: z.string().regex(HEX_BYTES_PATTERN),
-    public_key: z.string().regex(HEX_BYTES_PATTERN),
-  }),
+  submission: SubmitTransferPreapprovalSendSubmissionSchema,
 });
 
 /**
