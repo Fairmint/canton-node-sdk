@@ -1,4 +1,5 @@
 import { CreateUser, CreateUserParamsSchema } from '../../../src/clients/validator-api/operations/v0/admin/create-user';
+import { SubmitTransferPreapprovalSendParamsSchema } from '../../../src/clients/validator-api/operations/v0/admin/submit-transfer-preapproval-send';
 import {
   TransferPreapprovalSend,
   TransferPreapprovalSendParamsSchema,
@@ -47,6 +48,20 @@ describe('validator request schema integrity', () => {
       CreateUserParamsSchema.parse({
         name: 'Alice',
         createPartyIfMising: true,
+      })
+    ).toThrow();
+  });
+
+  it('rejects request keys that are absent from a nested generated contract', () => {
+    expect(() =>
+      SubmitTransferPreapprovalSendParamsSchema.parse({
+        submission: {
+          party_id: 'alice::namespace',
+          transaction: 'prepared-transaction',
+          signed_tx_hash: 'abcd',
+          public_key: '1234',
+          signed_transaction_hash: 'silent-typo',
+        },
       })
     ).toThrow();
   });

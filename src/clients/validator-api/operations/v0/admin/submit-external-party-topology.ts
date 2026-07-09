@@ -4,16 +4,17 @@ import { type operations } from '../../../../../generated/apps/validator/src/mai
 
 type SubmitExternalPartyTopologyRequest =
   operations['submitExternalPartyTopology']['requestBody']['content']['application/json'];
+type SignedTopologyTransaction = SubmitExternalPartyTopologyRequest['signed_topology_txs'][number];
+
+const SignedTopologyTransactionSchema = createRequestSchema<SignedTopologyTransaction>()({
+  topology_tx: z.string(),
+  signed_hash: z.string(),
+});
 
 /** Runtime schema kept in exact key/type parity with the generated topology-submission request. */
 export const SubmitExternalPartyTopologyParamsSchema = createRequestSchema<SubmitExternalPartyTopologyRequest>()({
   public_key: z.string(),
-  signed_topology_txs: z.array(
-    z.object({
-      topology_tx: z.string(),
-      signed_hash: z.string(),
-    })
-  ),
+  signed_topology_txs: z.array(SignedTopologyTransactionSchema),
 });
 
 /**
