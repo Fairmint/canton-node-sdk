@@ -1,7 +1,7 @@
 import { type ValidatorApiClient } from '../../clients/validator-api';
 import { ApiError, ValidationError } from '../../core/errors';
 import { isRecord } from '../../core/utils';
-import { objectOrEmpty, readContractWithStateContractId, readOptionalCantonUpdateId } from '../canton-response-utils';
+import { objectOrEmpty, readContractWithStateContractId } from '../canton-response-utils';
 import {
   assertCantonHashSignature,
   assertCantonPartyMatchesPublicKey,
@@ -74,8 +74,6 @@ export interface SentWalletTransferToPreapprovedParty {
   readonly amount: string;
   readonly description: string | null;
   readonly deduplicationId: string;
-  readonly updateId: string | null;
-  readonly raw: unknown;
 }
 
 export async function lookupExternalPartyTransferPreapproval(
@@ -209,7 +207,7 @@ export async function sendWalletTransferToPreapprovedParty(
     throw new ValidationError('deduplicationId is required');
   }
 
-  const raw = await validatorClient.transferPreapprovalSend({
+  await validatorClient.transferPreapprovalSend({
     receiver_party_id: params.receiverPartyId,
     amount,
     deduplication_id: deduplicationId,
@@ -221,8 +219,6 @@ export async function sendWalletTransferToPreapprovedParty(
     amount,
     description,
     deduplicationId,
-    updateId: readOptionalCantonUpdateId(raw),
-    raw,
   };
 }
 

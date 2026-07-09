@@ -108,9 +108,7 @@ const createMockValidatorClient = (): jest.Mocked<ValidatorApiClient> =>
       transfer_preapproval_contract_id: 'transfer-preapproval-contract-id',
       update_id: 'transfer-preapproval-update-1',
     }),
-    transferPreapprovalSend: jest.fn().mockResolvedValue({
-      transaction_id: 'provider-preapproval-send-update-1',
-    }),
+    transferPreapprovalSend: jest.fn().mockResolvedValue(undefined),
     getWalletBalance: jest.fn().mockResolvedValue({ effective_unlocked_qty: '100.0' }),
     createTransferOffer: jest.fn().mockResolvedValue({
       offer_contract_id: OFFER_CONTRACT_ID,
@@ -531,16 +529,12 @@ describe('external-party wallet bridge', (): void => {
       amount: '3.5',
       description: 'preapproved funding',
       transferPreapprovalContractId: 'transfer-preapproval-contract-id',
-      updateId: 'provider-preapproval-send-update-1',
       sourceBalanceAfter: { effective_unlocked_qty: '100.0' },
       raw: {
         transferPreapproval: {
           contract: {
             contract_id: 'transfer-preapproval-contract-id',
           },
-        },
-        transferPreapprovalSend: {
-          transaction_id: 'provider-preapproval-send-update-1',
         },
       },
     });

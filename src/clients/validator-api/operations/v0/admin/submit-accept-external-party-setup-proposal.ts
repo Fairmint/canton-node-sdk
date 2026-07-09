@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createApiOperation } from '../../../../../core';
+import { createApiOperation, createRequestSchema } from '../../../../../core';
 import { type operations } from '../../../../../generated/apps/validator/src/main/openapi/validator-internal';
 
 const HEX_BYTES_PATTERN = /^(?:[0-9a-fA-F]{2})+$/;
@@ -9,19 +9,23 @@ type SubmitAcceptExternalPartySetupProposalRequest =
 type SubmitAcceptExternalPartySetupProposalResponse =
   operations['submitAcceptExternalPartySetupProposal']['responses']['200']['content']['application/json'];
 
-/** Submit an externally signed ExternalPartySetupProposal acceptance transaction. */
-export const SubmitAcceptExternalPartySetupProposal = createApiOperation<
-  SubmitAcceptExternalPartySetupProposalRequest,
-  SubmitAcceptExternalPartySetupProposalResponse
->({
-  paramsSchema: z.object({
+/** Runtime schema kept in exact key/type parity with the generated submit-accept request. */
+export const SubmitAcceptExternalPartySetupProposalParamsSchema =
+  createRequestSchema<SubmitAcceptExternalPartySetupProposalRequest>()({
     submission: z.object({
       party_id: z.string().min(1),
       transaction: z.string().min(1),
       signed_tx_hash: z.string().regex(HEX_BYTES_PATTERN),
       public_key: z.string().regex(HEX_BYTES_PATTERN),
     }),
-  }) as z.ZodType<SubmitAcceptExternalPartySetupProposalRequest>,
+  });
+
+/** Submit an externally signed ExternalPartySetupProposal acceptance transaction. */
+export const SubmitAcceptExternalPartySetupProposal = createApiOperation<
+  SubmitAcceptExternalPartySetupProposalRequest,
+  SubmitAcceptExternalPartySetupProposalResponse
+>({
+  paramsSchema: SubmitAcceptExternalPartySetupProposalParamsSchema,
   method: 'POST',
   buildUrl: (_params, apiUrl: string): string =>
     `${apiUrl}/api/validator/v0/admin/external-party/setup-proposal/submit-accept`,
