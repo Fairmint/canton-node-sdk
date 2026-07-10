@@ -14,10 +14,6 @@ type RawRegistryInstrument = Omit<RegistryInstrument, 'totalSupply' | 'totalSupp
   totalSupplyAsOf?: string | null;
 };
 
-export function getRegistryApiUrl(scanApiUrl: string): string {
-  return scanApiUrl.replace(/\/api\/scan\/?$/, '').replace(/\/$/, '');
-}
-
 export function normalizeRegistryInstrument(response: RegistryInstrument): RegistryInstrument {
   const raw = response as RawRegistryInstrument;
   const { totalSupply, totalSupplyAsOf, ...instrument } = raw;

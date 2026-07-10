@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { createApiOperation } from '../../../../../../../core';
 import type { paths } from '../../../../../../../generated/token-standard/splice-api-token-metadata-v1/openapi/token-metadata-v1';
-import { getRegistryApiUrl, normalizeRegistryInstrument, publicRegistryRequestConfig } from './registry-metadata';
+import { getScanHostRoot } from '../../../../../scan-endpoints';
+import { normalizeRegistryInstrument, publicRegistryRequestConfig } from './registry-metadata';
 
 type ApiPath = '/registry/metadata/v1/instruments';
 
@@ -63,7 +64,7 @@ export const ListInstruments = createApiOperation<ListInstrumentsParams, ListIns
     }
 
     const queryString = query.toString();
-    return `${getRegistryApiUrl(apiUrl)}${endpoint}${queryString ? `?${queryString}` : ''}`;
+    return `${getScanHostRoot(apiUrl)}${endpoint}${queryString ? `?${queryString}` : ''}`;
   },
   requestConfig: publicRegistryRequestConfig,
   transformResponse: normalizeListInstrumentsResponse,

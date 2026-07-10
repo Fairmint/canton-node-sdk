@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { createApiOperation } from '../../../../../../../core';
 import type { paths } from '../../../../../../../generated/token-standard/splice-api-token-metadata-v1/openapi/token-metadata-v1';
-import { getRegistryApiUrl, publicRegistryRequestConfig } from './registry-metadata';
+import { getScanHostRoot } from '../../../../../scan-endpoints';
+import { publicRegistryRequestConfig } from './registry-metadata';
 
 type ApiPath = '/registry/metadata/v1/info';
 
@@ -13,6 +14,6 @@ export type GetRegistryInfoResponse = paths[ApiPath]['get']['responses']['200'][
 export const GetRegistryInfo = createApiOperation<void, GetRegistryInfoResponse>({
   paramsSchema: z.void(),
   method: 'GET',
-  buildUrl: (_params, apiUrl): string => `${getRegistryApiUrl(apiUrl)}${endpoint}`,
+  buildUrl: (_params, apiUrl): string => `${getScanHostRoot(apiUrl)}${endpoint}`,
   requestConfig: publicRegistryRequestConfig,
 });

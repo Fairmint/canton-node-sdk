@@ -25,6 +25,9 @@ describe('ScanApiClient / Registry metadata', () => {
     const instrument = response.instruments.find(({ id }) => id === 'Amulet');
 
     expect(instrument).toBeDefined();
+    if (instrument === undefined) {
+      throw new Error('LocalNet registry did not expose the Amulet instrument');
+    }
     expect(instrument).toMatchObject({
       id: 'Amulet',
       name: expect.any(String),
@@ -37,8 +40,16 @@ describe('ScanApiClient / Registry metadata', () => {
       }),
     });
     expect(response.nextPageToken).toBeUndefined();
-    expect(instrument?.totalSupply).not.toBeNull();
-    expect(instrument?.totalSupplyAsOf).not.toBeNull();
+    if (instrument.totalSupply === undefined) {
+      expect(instrument).not.toHaveProperty('totalSupply');
+    } else {
+      expect(instrument.totalSupply).toEqual(expect.any(String));
+    }
+    if (instrument.totalSupplyAsOf === undefined) {
+      expect(instrument).not.toHaveProperty('totalSupplyAsOf');
+    } else {
+      expect(Number.isNaN(Date.parse(instrument.totalSupplyAsOf))).toBe(false);
+    }
   });
 
   test('getInstrument returns Amulet metadata', async () => {
