@@ -255,6 +255,23 @@ describe('validator request schema integrity', () => {
     );
   });
 
+  it('rejects an unexpected wallet transaction discriminator at the response boundary', async (): Promise<void> => {
+    const makePostRequest = jest.fn().mockResolvedValue({
+      items: [
+        {
+          transaction_type: 'future_transaction_type',
+          transaction_subtype: { template_id: 'future', choice: 'FutureChoice' },
+          event_id: 'future-event',
+          date: '2026-07-10T02:00:04Z',
+        },
+      ],
+    });
+
+    await expect(new ListTransactions(createClient(makePostRequest)).execute({ page_size: 25 })).rejects.toThrow(
+      'Unsupported wallet transaction discriminator'
+    );
+  });
+
   it('validates the transaction-history cursor and handler page limits exactly', () => {
     expect(ListTransactionsParamsSchema.parse({ page_size: 1, begin_after_id: undefined })).toEqual({
       page_size: 1,

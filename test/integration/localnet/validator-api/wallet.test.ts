@@ -136,19 +136,28 @@ describe('ValidatorApiClient / Wallet', () => {
       async (): Promise<ValidatorWalletTransaction[]> => {
         const response = await client.listTransactions({ page_size: 1_000 });
         response.items.forEach(expectTransactionWireShape);
-        const matchingTaps = response.items.filter(
-          (item) =>
-            item.transaction_type === 'balance_change' &&
-            item.transaction_subtype.choice === 'AmuletRules_DevNet_Tap' &&
-            tappedUpdateIds.some((updateId) => item.event_id.startsWith(`#${updateId}:`))
-        );
-        const missingUpdateIds = tappedUpdateIds.filter(
-          (updateId) => !matchingTaps.some((item) => item.event_id.startsWith(`#${updateId}:`))
-        );
+        const matchingTaps: Array<{ historyIndex: number; transaction: ValidatorWalletTransaction }> = [];
+        const missingUpdateIds: string[] = [];
+        for (const updateId of tappedUpdateIds) {
+          const historyIndex = response.items.findIndex(
+            (item): boolean =>
+              item.transaction_type === 'balance_change' &&
+              item.transaction_subtype.choice === 'AmuletRules_DevNet_Tap' &&
+              item.event_id.startsWith(`#${updateId}:`)
+          );
+          const transaction = response.items[historyIndex];
+          if (transaction === undefined) {
+            missingUpdateIds.push(updateId);
+          } else {
+            matchingTaps.push({ historyIndex, transaction });
+          }
+        }
         if (missingUpdateIds.length > 0) {
           throw new Error(`Wallet history is missing tap updates: ${missingUpdateIds.join(', ')}`);
         }
-        return matchingTaps;
+        return matchingTaps
+          .sort((left, right): number => left.historyIndex - right.historyIndex)
+          .map(({ transaction }): ValidatorWalletTransaction => transaction);
       },
       {
         timeoutMs: 120_000,
@@ -165,6 +174,7 @@ describe('ValidatorApiClient / Wallet', () => {
       expect(tap.receivers.length).toBeGreaterThan(0);
       tap.receivers.forEach(expectPartyAndAmount);
     }
+    expect(new Set(newTapTransactions.map((tap): string => tap.event_id)).size).toBe(tappedUpdateIds.length);
 
     const firstPage = await client.listTransactions({ page_size: 1 });
     expect(firstPage.items).toHaveLength(1);

@@ -102,6 +102,10 @@ function normalizeTransaction(item: RawValidatorWalletTransaction): ValidatorWal
     case 'notification':
     case 'unknown':
       return { ...item, transaction_subtype };
+    default: {
+      const unsupportedTransaction: never = item;
+      throw new Error(`Unsupported wallet transaction discriminator: ${JSON.stringify(unsupportedTransaction)}`);
+    }
   }
 }
 
