@@ -25,7 +25,8 @@ const PREPARED_TRANSACTION_BASE64 = Buffer.from('prepared-transaction').toString
 const PREPARED_HASH_BASE64 = Buffer.from(`1220${'11'.repeat(32)}`, 'hex').toString('base64');
 const SIGNATURE_BASE64 = Buffer.alloc(64, 1).toString('base64');
 const PROTO_VALUE_BASE64 = Buffer.from('encoded-protobuf').toString('base64');
-const EXTERNAL_TRANSACTION_HASH = `1220${'ab'.repeat(32)}`;
+const EXTERNAL_TRANSACTION_HASH = 'ab'.repeat(32);
+const TRACEPARENT = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';
 
 function createClient(): LedgerJsonApiClient {
   return new LedgerJsonApiClient(new CantonRuntime(config));
@@ -403,6 +404,24 @@ describe('LedgerJsonApiClient interactive submission execution', () => {
     expect(result.transaction.events[1]).not.toHaveProperty('ExercisedEvent.interfaceId');
   });
 
+  it('accepts the live raw transaction hash and normalizes a wire-null trace state', async () => {
+    const client = createClient();
+    const response = createWireTransactionResponse();
+    const transaction = response['transaction'] as Record<string, unknown>;
+    transaction['traceContext'] = {
+      traceparent: TRACEPARENT,
+      tracestate: null,
+    };
+    transaction['externalTransactionHash'] = EXTERNAL_TRANSACTION_HASH;
+    jest.spyOn(client, 'makePostRequest').mockResolvedValue(response);
+
+    const result = await client.interactiveSubmissionExecuteAndWaitForTransaction(createExecuteAndWaitRequest());
+
+    expect(result.transaction.traceContext).toEqual({ traceparent: TRACEPARENT });
+    expect(result.transaction.traceContext).not.toHaveProperty('tracestate');
+    expect(result.transaction.externalTransactionHash).toBe(EXTERNAL_TRANSACTION_HASH);
+  });
+
   it('omits JSON-valued transaction fields only when they are absent on the wire', async () => {
     const client = createClient();
     const response = createWireTransactionResponse();
@@ -610,7 +629,9 @@ describe('LedgerJsonApiClient interactive submission execution', () => {
   });
 
   it.each([
-    ['a malformed hash', 'not-a-canton-hash'],
+    ['a malformed hash', 'not-a-daml-lf-hash'],
+    ['a Canton multihash prefix', `1220${EXTERNAL_TRANSACTION_HASH}`],
+    ['a short hash', 'ab'.repeat(31)],
     ['an uppercase hash', EXTERNAL_TRANSACTION_HASH.toUpperCase()],
   ])('rejects a transaction response with %s', async (_description, externalTransactionHash) => {
     const client = createClient();
@@ -920,63 +941,63 @@ describe('LedgerJsonApiClient interactive submission execution', () => {
       {
         ...createExecuteAndWaitRequest(),
         deduplicationPeriod: { DeduplicationOffset: { value: -1 } },
-      } as unknown as InteractiveSubmissionExecuteAndWaitRequest,
+      },
     ],
     [
       'fractional deduplication offsets',
       {
         ...createExecuteAndWaitRequest(),
         deduplicationPeriod: { DeduplicationOffset: { value: 1.5 } },
-      } as unknown as InteractiveSubmissionExecuteAndWaitRequest,
+      },
     ],
     [
       'unsafe deduplication offsets',
       {
         ...createExecuteAndWaitRequest(),
         deduplicationPeriod: { DeduplicationOffset: { value: Number.MAX_SAFE_INTEGER + 1 } },
-      } as unknown as InteractiveSubmissionExecuteAndWaitRequest,
+      },
     ],
     [
       'negative deduplication duration seconds',
       {
         ...createExecuteAndWaitRequest(),
         deduplicationPeriod: { DeduplicationDuration: { value: { seconds: -1, nanos: 0 } } },
-      } as unknown as InteractiveSubmissionExecuteAndWaitRequest,
+      },
     ],
     [
       'negative deduplication duration nanos',
       {
         ...createExecuteAndWaitRequest(),
         deduplicationPeriod: { DeduplicationDuration: { value: { seconds: 0, nanos: -1 } } },
-      } as unknown as InteractiveSubmissionExecuteAndWaitRequest,
+      },
     ],
     [
       'malformed prepared transaction Base64',
       {
         ...createExecuteAndWaitRequest(),
         preparedTransaction: 'not base64!',
-      } as unknown as InteractiveSubmissionExecuteAndWaitRequest,
+      },
     ],
     [
       'base64url prepared transaction bytes',
       {
         ...createExecuteAndWaitRequest(),
         preparedTransaction: '-_8=',
-      } as unknown as InteractiveSubmissionExecuteAndWaitRequest,
+      },
     ],
     [
       'unpadded prepared transaction Base64',
       {
         ...createExecuteAndWaitRequest(),
         preparedTransaction: 'YWJjZA',
-      } as unknown as InteractiveSubmissionExecuteAndWaitRequest,
+      },
     ],
     [
       'noncanonical prepared transaction Base64 padding',
       {
         ...createExecuteAndWaitRequest(),
         preparedTransaction: 'YQ====',
-      } as unknown as InteractiveSubmissionExecuteAndWaitRequest,
+      },
     ],
     [
       'malformed signature Base64',
@@ -1002,14 +1023,14 @@ describe('LedgerJsonApiClient interactive submission execution', () => {
       {
         ...createExecuteAndWaitRequest(),
         minLedgerTime: { time: { MinLedgerTimeAbs: { value: '2026-07-09 12:00:00' } } },
-      } as unknown as InteractiveSubmissionExecuteAndWaitRequest,
+      },
     ],
     [
       'an empty submission ID',
       {
         ...createExecuteAndWaitRequest(),
         submissionId: '',
-      } as unknown as InteractiveSubmissionExecuteAndWaitRequest,
+      },
     ],
     [
       'empty party signature collections',
