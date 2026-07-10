@@ -9,7 +9,7 @@ export type LookupTransferCommandStatusResponse =
 /** Runtime schema kept in exact key/type parity with the generated query parameters. */
 export const LookupTransferCommandStatusParamsSchema = createRequestSchema<LookupTransferCommandStatusParams>()({
   sender: z.string(),
-  nonce: z.number().int(),
+  nonce: z.number().int().nonnegative().safe(),
 });
 
 /**
