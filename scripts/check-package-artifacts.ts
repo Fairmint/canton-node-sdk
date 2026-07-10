@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 
 import { spawnSync, type SpawnSyncReturns } from 'child_process';
-import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'fs';
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -119,6 +119,25 @@ function verifyPackagedLocalnetBinary(): void {
     rmSync(tempDir, { recursive: true, force: true });
   }
 }
+
+function verifyPackagedLocalnetPins(): void {
+  const localnetBin = readFileSync(join(process.cwd(), 'bin', 'canton-localnet'), 'utf8');
+  const spliceVersion = readFileSync(join(process.cwd(), 'libs', 'splice', 'VERSION'), 'utf8').trim();
+  const quickstartRef = spawnSync('git', ['rev-parse', 'HEAD:libs/cn-quickstart'], { encoding: 'utf8' });
+
+  throwIfSpawnFailed('resolve pinned cn-quickstart revision', quickstartRef);
+
+  if (!localnetBin.includes(`DEFAULT_SPLICE_VERSION="${spliceVersion}"`)) {
+    throw new Error(`bin/canton-localnet must default to the pinned Splice version ${spliceVersion}`);
+  }
+
+  const expectedQuickstartRef = quickstartRef.stdout.trim();
+  if (!localnetBin.includes(`DEFAULT_QUICKSTART_REF="${expectedQuickstartRef}"`)) {
+    throw new Error(`bin/canton-localnet must default to the pinned cn-quickstart revision ${expectedQuickstartRef}`);
+  }
+}
+
+verifyPackagedLocalnetPins();
 
 const prepack = spawnSync('npm', ['run', 'prepack'], {
   encoding: 'utf8',

@@ -1,5 +1,6 @@
 import { type ValidatorApiClient } from '../../clients/validator-api';
 import { ApiError, ValidationError } from '../../core/errors';
+import { objectOrEmpty } from '../canton-response-utils';
 
 const DEFAULT_TRANSFER_EXPIRY_MS = 60 * 60 * 1000;
 
@@ -118,14 +119,34 @@ export async function submitExternalPartyCcTransfer(
 async function lookupNextNonce(validatorClient: ValidatorApiClient, party: string): Promise<number> {
   try {
     const response = await validatorClient.lookupTransferCommandCounterByParty({ party });
-    validateNonce(response.counter);
-    return response.counter;
+    const responseObject = objectOrEmpty(response);
+    const counter = objectOrEmpty(responseObject['transfer_command_counter']);
+    const contract = objectOrEmpty(counter['contract']);
+    const payload = objectOrEmpty(contract['payload']);
+    const nextNonce = normalizeNonce(payload['nextNonce']);
+    validateNonce(nextNonce);
+    return nextNonce;
   } catch (error) {
     if (isNotFound(error)) {
       return 0;
     }
     throw error;
   }
+}
+
+function normalizeNonce(value: unknown): number {
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (typeof value === 'string' && /^(?:0|[1-9]\d*)$/.test(value)) {
+    if (BigInt(value) > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new ValidationError('Transfer nonce must be a non-negative safe integer', { nonce: value });
+    }
+    return Number(value);
+  }
+  throw new ValidationError('Transfer command counter payload must include nextNonce as a non-negative integer', {
+    nextNonce: value,
+  });
 }
 
 function normalizePositiveAmount(amount: number | string): number {
@@ -156,8 +177,8 @@ function normalizeExpiresAt(expiresAt?: Date | string): string {
 }
 
 function validateNonce(nonce: number): void {
-  if (!Number.isInteger(nonce) || nonce < 0) {
-    throw new ValidationError('Transfer nonce must be a non-negative integer', { nonce });
+  if (!Number.isSafeInteger(nonce) || nonce < 0) {
+    throw new ValidationError('Transfer nonce must be a non-negative safe integer', { nonce });
   }
 }
 
