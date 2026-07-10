@@ -20,7 +20,7 @@ describe('ValidatorApiClient / Admin', () => {
     expect(Array.isArray(response.usernames)).toBe(true);
   });
 
-  test('getDecentralizedSynchronizerConnectionConfig returns the complete live wire shape', async () => {
+  test('getDecentralizedSynchronizerConnectionConfig returns the complete live wire shape', async (): Promise<void> => {
     const response = await getClient().getDecentralizedSynchronizerConnectionConfig();
 
     expect(GetDecentralizedSynchronizerConnectionConfigResponseSchema.parse(response)).toEqual(response);
