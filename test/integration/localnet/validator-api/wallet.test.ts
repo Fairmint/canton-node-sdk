@@ -66,7 +66,8 @@ function expectTransactionWireShape(item: ValidatorWalletTransaction): void {
       break;
     default: {
       const unsupportedTransaction: never = item;
-      throw new Error(`Unsupported wallet transaction discriminator: ${JSON.stringify(unsupportedTransaction)}`);
+      const discriminator = (unsupportedTransaction as unknown as { transaction_type?: unknown }).transaction_type;
+      throw new Error(`Unsupported wallet transaction discriminator: ${String(discriminator)}`);
     }
   }
 }
