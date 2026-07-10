@@ -224,6 +224,81 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
     expect(fixture.signCantonPayload).not.toHaveBeenCalled();
   });
 
+  it('preserves a synchronous signer result that settles before external abort', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const controller = new AbortController();
+    fixture.signCantonPayload.mockImplementation((request) => {
+      queueMicrotask(() => controller.abort());
+      return {
+        signatureHex: sign(null, Buffer.from(request.payloadHex, 'hex'), fixture.privateKey).toString('hex'),
+      };
+    });
+
+    await expect(
+      signAndVerifyCantonEd25519Payload({
+        signer: fixture.signer,
+        purpose: CantonEd25519SigningPurpose.EXTERNAL_PARTY_TOPOLOGY,
+        operationId: fixture.partyId,
+        partyId: fixture.partyId,
+        synchronizerId: SYNCHRONIZER_ID,
+        payloadHex: MULTI_HASH_HEX,
+        signal: controller.signal,
+      })
+    ).resolves.toMatchObject({ signatureBase64: expect.any(String) as string });
+  });
+
+  it('aborts an unresolved signer after its call begins', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const controller = new AbortController();
+    let signerSignal: AbortSignal | undefined;
+    let markSignerStarted: (() => void) | undefined;
+    const signerStarted = new Promise<void>((resolve) => {
+      markSignerStarted = resolve;
+    });
+    fixture.signCantonPayload.mockImplementation(
+      async (_request, options) =>
+        new Promise<CantonEd25519Signature>(() => {
+          signerSignal = options?.signal;
+          markSignerStarted?.();
+        })
+    );
+
+    const signed = signAndVerifyCantonEd25519Payload({
+      signer: fixture.signer,
+      purpose: CantonEd25519SigningPurpose.EXTERNAL_PARTY_TOPOLOGY,
+      operationId: fixture.partyId,
+      partyId: fixture.partyId,
+      synchronizerId: SYNCHRONIZER_ID,
+      payloadHex: MULTI_HASH_HEX,
+      signal: controller.signal,
+    });
+    await signerStarted;
+    controller.abort();
+
+    await expect(signed).rejects.toThrow('signing request was aborted');
+    expect(signerSignal?.aborted).toBe(true);
+  });
+
+  it('copies signing context keys without allowing __proto__ to change the result prototype', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const context = JSON.parse('{"__proto__":null,"provider":"test-provider"}') as Record<string, null | string>;
+
+    const signed = await signAndVerifyCantonEd25519Payload({
+      signer: fixture.signer,
+      purpose: CantonEd25519SigningPurpose.EXTERNAL_PARTY_TOPOLOGY,
+      operationId: fixture.partyId,
+      partyId: fixture.partyId,
+      synchronizerId: SYNCHRONIZER_ID,
+      payloadHex: MULTI_HASH_HEX,
+      context,
+    });
+
+    const normalizedContext = signed.request.context;
+    expect(normalizedContext).toBeDefined();
+    expect(Object.getPrototypeOf(normalizedContext)).toBe(Object.prototype);
+    expect(Object.getOwnPropertyDescriptor(normalizedContext ?? {}, '__proto__')).toMatchObject({ value: null });
+  });
+
   it('returns structured reconciliation after an ambiguous allocation outcome', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient(fixture);

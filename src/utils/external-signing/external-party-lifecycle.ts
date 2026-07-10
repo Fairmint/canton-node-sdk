@@ -2,6 +2,7 @@ import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import {
   isDefiniteCantonMutationRejection,
   normalizeCantonError,
+  OperationError,
   readCantonDefiniteAnswer,
   ValidationError,
   type NormalizedCantonErrorDetails,
@@ -255,7 +256,9 @@ export function classifyExternalPartyAllocationFailure(error: unknown): External
   }
 
   const definiteAnswer = readCantonDefiniteAnswer(error);
-  const definite = definiteAnswer ?? (error instanceof ValidationError || isDefiniteCantonMutationRejection(error));
+  const definite =
+    definiteAnswer ??
+    (error instanceof ValidationError || error instanceof OperationError || isDefiniteCantonMutationRejection(error));
   return {
     kind: definite ? 'definite-rejection' : 'ambiguous',
     definite,

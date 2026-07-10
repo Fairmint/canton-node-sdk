@@ -151,8 +151,9 @@ async function waitForCantonSigner(
       callback();
     };
     const onAbort = (): void => {
+      // Preserve a signer result that settled before abort but whose promise handler is already queued.
+      queueMicrotask(() => finish(() => reject(signingAborted(request.operationId))));
       controller.abort();
-      finish(() => reject(signingAborted(request.operationId)));
     };
     const timeout = setTimeout(() => {
       controller.abort();
@@ -171,17 +172,23 @@ async function waitForCantonSigner(
       return;
     }
 
-    Promise.resolve()
-      .then(async () => {
-        if (settled || controller.signal.aborted) {
-          throw signingAborted(request.operationId);
-        }
-        return signer.signCantonPayload(request, { signal: controller.signal });
-      })
-      .then(
+    queueMicrotask(() => {
+      if (settled || controller.signal.aborted) {
+        finish(() => reject(signingAborted(request.operationId)));
+        return;
+      }
+      let pending: CantonEd25519Signature | Promise<CantonEd25519Signature>;
+      try {
+        pending = signer.signCantonPayload(request, { signal: controller.signal });
+      } catch (error) {
+        finish(() => reject(error));
+        return;
+      }
+      Promise.resolve(pending).then(
         (signature) => finish(() => resolve(signature)),
         (error: unknown) => finish(() => reject(error))
       );
+    });
   });
 }
 
@@ -273,7 +280,7 @@ function normalizeSigningContext(context: unknown): CantonEd25519SigningContext 
   if (typeof context !== 'object' || context === null || Array.isArray(context)) {
     throw new ValidationError('Canton signing context must be an object of primitive JSON values');
   }
-  const normalized: Record<string, CantonEd25519SigningContextValue> = {};
+  const entries: Array<readonly [string, CantonEd25519SigningContextValue]> = [];
   for (const [key, value] of Object.entries(context)) {
     if (!key.trim()) {
       throw new ValidationError('Canton signing context keys must not be empty');
@@ -286,9 +293,10 @@ function normalizeSigningContext(context: unknown): CantonEd25519SigningContext 
     ) {
       throw new ValidationError('Canton signing context values must be primitive JSON values', { key });
     }
-    normalized[key] = value;
+    entries.push([key, value]);
   }
-  return normalized;
+  // Object.fromEntries defines `__proto__` as an own data property instead of invoking Object.prototype's setter.
+  return Object.fromEntries(entries);
 }
 
 function validateSigningPurpose(value: unknown): CantonEd25519SigningPurposeType {
