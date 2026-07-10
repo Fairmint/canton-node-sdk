@@ -8,7 +8,11 @@ export interface EventFormatBuilderParams {
   parties: string[];
   /** Optional template filters applied server-side. */
   templateIds?: string[] | undefined;
-  /** Include created event blob in TemplateFilter results (default false). */
+  /** Optional interface filters applied server-side. */
+  interfaceIds?: string[] | undefined;
+  /** Include interface views in InterfaceFilter results (default true). */
+  includeInterfaceView?: boolean | undefined;
+  /** Include created event blobs in template and interface filter results (default false). */
   includeCreatedEventBlob?: boolean | undefined;
 }
 
@@ -18,6 +22,17 @@ type FilterCumulative = Array<
         TemplateFilter: {
           value: {
             templateId: string;
+            includeCreatedEventBlob: boolean;
+          };
+        };
+      };
+    }
+  | {
+      identifierFilter: {
+        InterfaceFilter: {
+          value: {
+            interfaceId: string;
+            includeInterfaceView: boolean;
             includeCreatedEventBlob: boolean;
           };
         };
@@ -52,17 +67,32 @@ export function buildEventFormat(params: EventFormatBuilderParams): {
 
   // Build the cumulative filter array
   const buildCumulative = (): FilterCumulative => {
-    if (params.templateIds && params.templateIds.length > 0) {
-      return params.templateIds.map((templateId) => ({
-        identifierFilter: {
-          TemplateFilter: {
-            value: {
-              templateId,
-              includeCreatedEventBlob: params.includeCreatedEventBlob ?? false,
-            },
+    const includeCreatedEventBlob = params.includeCreatedEventBlob ?? false;
+    const templateFilters: FilterCumulative = (params.templateIds ?? []).map((templateId) => ({
+      identifierFilter: {
+        TemplateFilter: {
+          value: {
+            templateId,
+            includeCreatedEventBlob,
           },
         },
-      }));
+      },
+    }));
+    const interfaceFilters: FilterCumulative = (params.interfaceIds ?? []).map((interfaceId) => ({
+      identifierFilter: {
+        InterfaceFilter: {
+          value: {
+            interfaceId,
+            includeInterfaceView: params.includeInterfaceView ?? true,
+            includeCreatedEventBlob,
+          },
+        },
+      },
+    }));
+    const identifierFilters = [...templateFilters, ...interfaceFilters];
+
+    if (identifierFilters.length > 0) {
+      return identifierFilters;
     }
     if (params.includeCreatedEventBlob) {
       return [
