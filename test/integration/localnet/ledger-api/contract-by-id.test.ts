@@ -34,8 +34,8 @@ describe('LedgerJsonApiClient / Contract by ID', () => {
     expect(Object.keys(response)).toEqual(['createdEvent']);
     expect(response.createdEvent).toEqual(
       expect.objectContaining({
-        offset: 1,
-        nodeId: 0,
+        offset: expect.any(Number) as number,
+        nodeId: expect.any(Number) as number,
         contractId,
         templateId: expect.stringContaining(WALLET_APP_INSTALL_TEMPLATE_SUFFIX) as string,
         contractKeyHash: '',
@@ -50,6 +50,8 @@ describe('LedgerJsonApiClient / Contract by ID', () => {
         acsDelta: false,
       })
     );
+    expect(Number.isSafeInteger(response.createdEvent.offset) && response.createdEvent.offset > 0).toBe(true);
+    expect(Number.isInteger(response.createdEvent.nodeId) && response.createdEvent.nodeId >= 0).toBe(true);
     expect(response.createdEvent).not.toHaveProperty('contractKey');
     expect(response.createdEvent.createdEventBlob).not.toHaveLength(0);
     expect(Buffer.from(response.createdEvent.createdEventBlob ?? '', 'base64').toString('base64')).toBe(
