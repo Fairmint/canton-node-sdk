@@ -94,6 +94,27 @@ describe('external party CC transfer helpers', () => {
     expect(validatorClient.prepareTransferPreapprovalSend).toHaveBeenCalledWith(expect.objectContaining({ nonce: 8 }));
   });
 
+  it('rejects a string nextNonce above the JavaScript safe-integer range without rounding it', async (): Promise<void> => {
+    validatorClient.lookupTransferCommandCounterByParty.mockResolvedValueOnce({
+      transfer_command_counter: {
+        contract: {
+          payload: { nextNonce: '9007199254740992' },
+        },
+      },
+    } as never);
+
+    await expect(
+      prepareExternalPartyCcTransfer(validatorClient, {
+        senderPartyId: 'sender::fingerprint',
+        receiverPartyId: 'receiver::fingerprint',
+        amount: 1,
+        expiresAt: '2026-01-01T00:00:00.000Z',
+      })
+    ).rejects.toThrow('Transfer nonce must be a non-negative safe integer');
+
+    expect(validatorClient.prepareTransferPreapprovalSend).not.toHaveBeenCalled();
+  });
+
   it('rejects a malformed transfer-command counter payload', async (): Promise<void> => {
     validatorClient.lookupTransferCommandCounterByParty.mockResolvedValueOnce({
       transfer_command_counter: {
