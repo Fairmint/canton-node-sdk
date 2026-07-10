@@ -23,8 +23,8 @@ const synchronizerId = 'global-domain::1220primary';
 function activeHolding(params: {
   readonly contractId: string;
   readonly amount: string;
-  readonly account?: TokenStandardV2Account;
-  readonly instrumentId?: TokenStandardV2InstrumentId;
+  readonly account?: unknown;
+  readonly instrumentId?: unknown;
   readonly lock?: unknown;
   readonly createdAt?: string;
   readonly viewStatusCode?: number;
@@ -99,7 +99,7 @@ describe('Token Standard V2 holdings', () => {
     const ledger = createLedger([
       activeHolding({ contractId: '#four', amount: '4.0000000000' }),
       seven,
-      seven,
+      activeHolding({ contractId: '#seven', amount: '7.0000000000' }),
       activeHolding({
         contractId: '#other-synchronizer',
         amount: '1000.0',
@@ -187,6 +187,42 @@ describe('Token Standard V2 holdings', () => {
         amountBaseUnits: '1000000',
       }),
     ]);
+  });
+
+  test('skips failed or malformed views when either filter proves the row is out of scope', async () => {
+    const ledger = createLedger([
+      activeHolding({
+        contractId: '#failed-other-account',
+        amount: 'not-a-decimal',
+        account: { ...account, owner: 'Other::owner' },
+        viewStatusCode: 3,
+        viewStatusMessage: 'HoldingV2 view computation failed',
+      }),
+      activeHolding({
+        contractId: '#malformed-other-instrument',
+        amount: 'not-a-decimal',
+        account: { owner: 42, provider: null, id: '' },
+        instrumentId: { ...instrumentId, id: 'EUR' },
+        omitLock: true,
+      }),
+      activeHolding({ contractId: '#match', amount: '1.0' }),
+    ]);
+
+    await expect(
+      selectTokenStandardV2Holdings({
+        ledger,
+        parties: ['Buyer::alice'],
+        account,
+        instrumentId,
+        instrumentDecimals: 6,
+        synchronizerId,
+        activeAtOffset: 42,
+        amountBaseUnits: '1000000',
+      })
+    ).resolves.toMatchObject({
+      contractIds: ['#match'],
+      totalBaseUnits: '1000000',
+    });
   });
 
   test('throws the typed interface error when the requested view fails on the selected synchronizer', async () => {
@@ -342,6 +378,43 @@ describe('Token Standard V2 holdings', () => {
         instrumentDecimals: 6,
       })
     ).rejects.toBeInstanceOf(TokenStandardV2HoldingError);
+  });
+
+  test.each([
+    [
+      'lock',
+      activeHolding({ contractId: '#duplicate', amount: '1.0' }),
+      activeHolding({
+        contractId: '#duplicate',
+        amount: '1.0',
+        lock: {
+          holders: ['CashAdmin::issuer'],
+          expiresAt: null,
+          expiresAfter: null,
+          context: 'settlement',
+        },
+      }),
+    ],
+    [
+      'metadata',
+      activeHolding({ contractId: '#duplicate', amount: '1.0', meta: { values: { source: 'first' } } }),
+      activeHolding({ contractId: '#duplicate', amount: '1.0', meta: { values: { source: 'second' } } }),
+    ],
+  ])('rejects duplicate contract rows with inconsistent %s values', async (_field, first, second) => {
+    const ledger = createLedger([first, second]);
+
+    await expect(
+      listTokenStandardV2Holdings({
+        ledger,
+        parties: ['Buyer::alice'],
+        account,
+        instrumentId,
+        instrumentDecimals: 6,
+      })
+    ).rejects.toMatchObject({
+      code: 'TOKEN_STANDARD_V2_HOLDING_INTERFACE_VIEW_INVALID',
+      context: { contractId: '#duplicate' },
+    });
   });
 
   test('reports insufficient balances in base units', async () => {

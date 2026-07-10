@@ -28,6 +28,7 @@ export const GetAnsRules = createApiOperation<
 >({
   paramsSchema: GetAnsRulesParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/scan-proxy/ans-rules`,
   buildRequestData: (params) => params,
 });

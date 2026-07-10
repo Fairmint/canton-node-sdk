@@ -10,6 +10,10 @@ export const TOKEN_STANDARD_V2_AMOUNT_DECIMALS = 10;
 
 const ISO_8601_TIMESTAMP_PATTERN =
   /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,9})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
+const SIGNED_INTEGER_PATTERN = /^-?\d+$/;
+const DECIMAL_AMOUNT_PATTERN = /^(\d+)(?:\.(\d+))?$/;
+const TRAILING_ZEROS_PATTERN = /0+$/;
+const NON_NEGATIVE_INTEGER_PATTERN = /^\d+$/;
 
 export const TokenStandardV2HoldingErrorCode = {
   INPUT_INVALID: 'TOKEN_STANDARD_V2_HOLDING_INPUT_INVALID',
@@ -260,7 +264,7 @@ function readLock(value: unknown): TokenStandardV2Lock | null | undefined {
   } else if (
     isRecord(rawExpiresAfter) &&
     typeof rawExpiresAfter['microseconds'] === 'string' &&
-    /^-?\d+$/.test(rawExpiresAfter['microseconds'])
+    SIGNED_INTEGER_PATTERN.test(rawExpiresAfter['microseconds'])
   ) {
     expiresAfter = { microseconds: rawExpiresAfter['microseconds'] };
   } else {
@@ -276,6 +280,25 @@ function accountsEqual(left: TokenStandardV2Account, right: TokenStandardV2Accou
 
 function instrumentIdsEqual(left: TokenStandardV2InstrumentId, right: TokenStandardV2InstrumentId): boolean {
   return left.admin === right.admin && left.id === right.id;
+}
+
+function locksEqual(left: TokenStandardV2Lock | null, right: TokenStandardV2Lock | null): boolean {
+  if (left === null || right === null) return left === right;
+  return (
+    left.expiresAt === right.expiresAt &&
+    left.expiresAfter?.microseconds === right.expiresAfter?.microseconds &&
+    left.context === right.context &&
+    left.holders.length === right.holders.length &&
+    left.holders.every((holder, index) => holder === right.holders[index])
+  );
+}
+
+function metadataEqual(left: TokenStandardV2Metadata, right: TokenStandardV2Metadata): boolean {
+  const leftEntries = Object.entries(left.values);
+  return (
+    leftEntries.length === Object.keys(right.values).length &&
+    leftEntries.every(([key, value]) => right.values[key] === value)
+  );
 }
 
 function identifierModuleEntitySuffix(identifier: string): string | undefined {
@@ -304,11 +327,11 @@ function failedInterfaceView(params: {
 }
 
 function decimalAmountToBaseUnits(amount: string, decimals: number): string {
-  const match = /^(\d+)(?:\.(\d+))?$/.exec(amount.trim());
+  const match = DECIMAL_AMOUNT_PATTERN.exec(amount.trim());
   if (!match) throw new Error('amount must be a non-negative decimal');
 
   const whole = match[1] ?? '0';
-  const fractional = (match[2] ?? '').replace(/0+$/, '');
+  const fractional = (match[2] ?? '').replace(TRAILING_ZEROS_PATTERN, '');
   if (fractional.length > decimals) {
     throw new Error(`amount exceeds ${decimals} decimal places`);
   }
@@ -317,7 +340,7 @@ function decimalAmountToBaseUnits(amount: string, decimals: number): string {
 }
 
 function normalizeBaseUnitAmount(value: string): string {
-  if (typeof value !== 'string' || !/^\d+$/.test(value.trim())) {
+  if (typeof value !== 'string' || !NON_NEGATIVE_INTEGER_PATTERN.test(value.trim())) {
     inputInvalid('amountBaseUnits must be a non-negative integer string.', {
       field: 'amountBaseUnits',
     });
@@ -358,6 +381,16 @@ function readHolding(params: {
       contractId: createdEvent.contractId,
     });
   }
+  const viewValue = isRecord(interfaceView.viewValue) ? interfaceView.viewValue : undefined;
+  const account = viewValue ? readAccount(viewValue['account']) : undefined;
+  const instrumentId = viewValue ? readInstrumentId(viewValue['instrumentId']) : undefined;
+  if (
+    (account && !accountsEqual(account, params.account)) ||
+    (instrumentId && !instrumentIdsEqual(instrumentId, params.instrumentId))
+  ) {
+    return undefined;
+  }
+
   if (interfaceView.viewStatus.code !== 0) {
     failedInterfaceView({
       itemIndex: params.itemIndex,
@@ -367,32 +400,26 @@ function readHolding(params: {
       statusMessage: interfaceView.viewStatus.message,
     });
   }
-  if (!isRecord(interfaceView.viewValue)) {
+  if (!viewValue) {
     interfaceViewInvalid('HoldingV2 interface view is missing viewValue.', {
       itemIndex: params.itemIndex,
       contractId: createdEvent.contractId,
     });
   }
 
-  const account = readAccount(interfaceView.viewValue['account']);
-  const instrumentId = readInstrumentId(interfaceView.viewValue['instrumentId']);
   if (!account || !instrumentId) {
     interfaceViewInvalid('HoldingV2 interface view is missing a valid account or instrumentId.', {
       itemIndex: params.itemIndex,
       contractId: createdEvent.contractId,
     });
   }
-  if (!accountsEqual(account, params.account) || !instrumentIdsEqual(instrumentId, params.instrumentId)) {
-    return undefined;
-  }
-
   const createdAt = requireCreatedAt(createdEvent.createdAt, {
     itemIndex: params.itemIndex,
     contractId: createdEvent.contractId,
   });
 
-  const lock = readLock(interfaceView.viewValue['lock']);
-  const meta = readMetadata(interfaceView.viewValue['meta']);
+  const lock = readLock(viewValue['lock']);
+  const meta = readMetadata(viewValue['meta']);
   if (lock === undefined || !meta) {
     interfaceViewInvalid('HoldingV2 interface view has an invalid lock or metadata value.', {
       itemIndex: params.itemIndex,
@@ -400,7 +427,7 @@ function readHolding(params: {
     });
   }
 
-  const { amount } = interfaceView.viewValue;
+  const { amount } = viewValue;
   if (!isNonEmptyString(amount)) {
     interfaceViewInvalid('HoldingV2 interface view is missing amount.', {
       itemIndex: params.itemIndex,
@@ -489,7 +516,10 @@ export async function listTokenStandardV2Holdings(
       (existing.templateId !== holding.templateId ||
         existing.synchronizerId !== holding.synchronizerId ||
         existing.createdAt !== holding.createdAt ||
-        existing.amount !== holding.amount)
+        existing.amount !== holding.amount ||
+        existing.amountBaseUnits !== holding.amountBaseUnits ||
+        !locksEqual(existing.lock, holding.lock) ||
+        !metadataEqual(existing.meta, holding.meta))
     ) {
       interfaceViewInvalid('Duplicate HoldingV2 contract rows contain inconsistent data.', {
         contractId: holding.contractId,

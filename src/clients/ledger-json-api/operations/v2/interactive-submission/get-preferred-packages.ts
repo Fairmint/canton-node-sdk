@@ -28,6 +28,7 @@ export const InteractiveSubmissionGetPreferredPackages = createApiOperation<
 >({
   paramsSchema: InteractiveSubmissionGetPreferredPackagesParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params: InteractiveSubmissionGetPreferredPackagesParams, apiUrl: string) =>
     `${apiUrl}/v2/interactive-submission/preferred-packages`,
   buildRequestData: (params: InteractiveSubmissionGetPreferredPackagesParams) => ({

@@ -137,6 +137,32 @@ describe('Token Standard V2 allocation helpers', () => {
     );
   });
 
+  test('omits unknown caller properties from the ledger choice argument', () => {
+    const transferLegSide = allocationParams.allocation.transferLegSides[0];
+    if (!transferLegSide) throw new Error('test fixture must include one transfer-leg side');
+    const choiceArgument = buildTokenStandardV2AllocationChoiceArgument({
+      ...allocationParams,
+      settlement: {
+        ...allocationParams.settlement,
+        callerOnlySettlementField: 'must-not-reach-canton',
+      },
+      allocation: {
+        ...allocationParams.allocation,
+        callerOnlyAllocationField: 'must-not-reach-canton',
+        transferLegSides: [
+          {
+            ...transferLegSide,
+            callerOnlyTransferLegField: 'must-not-reach-canton',
+          },
+        ],
+      },
+    } as unknown as BuildTokenStandardV2AllocationChoiceArgumentParams);
+
+    expect(choiceArgument.settlement).not.toHaveProperty('callerOnlySettlementField');
+    expect(choiceArgument.allocation).not.toHaveProperty('callerOnlyAllocationField');
+    expect(choiceArgument.allocation.transferLegSides[0]).not.toHaveProperty('callerOnlyTransferLegField');
+  });
+
   test('rejects malformed runtime objects and null optional metadata with typed errors', () => {
     const transferLegSide = allocationParams.allocation.transferLegSides[0];
     if (!transferLegSide) throw new Error('test fixture must include one transfer-leg side');
@@ -368,6 +394,29 @@ describe('Token Standard V2 allocation helpers', () => {
     });
   });
 
+  test('rejects malformed scan clients with typed input errors before registry access', async () => {
+    const malformedScans: readonly unknown[] = [
+      null,
+      undefined,
+      {},
+      { getAllocationFactoryV2FromRegistry: null },
+      { getAllocationFactoryV2FromRegistry: 'not-a-function' },
+    ];
+
+    for (const scan of malformedScans) {
+      await expect(
+        prepareTokenStandardV2AllocationCommand({
+          ...allocationParams,
+          registryUrl: 'https://cash.example/token-registry',
+          scan: scan as TokenStandardV2AllocationRegistryClient,
+        })
+      ).rejects.toMatchObject({
+        name: 'TokenStandardV2AllocationError',
+        code: 'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      });
+    }
+  });
+
   test.each([
     [
       'AllocationInstructionResult_Completed',
@@ -546,5 +595,50 @@ describe('Token Standard V2 allocation helpers', () => {
       })
     ).rejects.toThrow(TokenStandardV2AllocationError);
     expect(submitAndWaitForTransactionTree).toHaveBeenCalledTimes(1);
+  });
+
+  test('rejects malformed submit inputs with typed errors before ledger submission', async () => {
+    const prepared = await prepareTokenStandardV2AllocationCommand({
+      ...allocationParams,
+      registryUrl: 'https://cash.example',
+      scan: createRegistryClient({
+        factoryId: '#allocation-factory',
+        choiceContext: {
+          choiceContextData: { values: {} },
+          disclosedContracts: [],
+        },
+      }),
+    });
+    const submitAndWaitForTransactionTree = jest.fn();
+    const validParams = {
+      ledger: { submitAndWaitForTransactionTree },
+      prepared,
+      actAs: ['Buyer::alice'],
+      commandId: 'allocation-command',
+    };
+    const malformedParams: readonly unknown[] = [
+      null,
+      undefined,
+      { ...validParams, prepared: null },
+      { ...validParams, prepared: undefined },
+      { ...validParams, prepared: {} },
+      { ...validParams, prepared: { ...prepared, command: null } },
+      { ...validParams, prepared: { ...prepared, disclosedContracts: null } },
+      { ...validParams, prepared: { ...prepared, allocationFactoryContractId: null } },
+      { ...validParams, ledger: null },
+      { ...validParams, ledger: undefined },
+      { ...validParams, ledger: {} },
+      { ...validParams, ledger: { submitAndWaitForTransactionTree: null } },
+    ];
+
+    for (const params of malformedParams) {
+      await expect(
+        submitPreparedTokenStandardV2Allocation(params as Parameters<typeof submitPreparedTokenStandardV2Allocation>[0])
+      ).rejects.toMatchObject({
+        name: 'TokenStandardV2AllocationError',
+        code: 'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      });
+    }
+    expect(submitAndWaitForTransactionTree).not.toHaveBeenCalled();
   });
 });

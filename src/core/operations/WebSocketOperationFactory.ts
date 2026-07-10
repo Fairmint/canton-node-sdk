@@ -63,9 +63,7 @@ export function createWebSocketOperation<Params, RequestMessage, InboundMessage>
       const wrappedHandlers: WebSocketHandlers<InboundMessage> = transformInbound
         ? {
             ...handlers,
-            onMessage: (msg) => {
-              handlers.onMessage(transformInbound(msg));
-            },
+            onMessage: (msg): void | Promise<void> => handlers.onMessage(transformInbound(msg)),
           }
         : handlers;
 

@@ -396,14 +396,8 @@ function defaultWhenUndefined<T>(value: T | undefined, fallback: T): T {
   return value;
 }
 
-function withDefaultTokenStandardV2Metadata<T extends { readonly meta?: TokenStandardV2Metadata }>(
-  value: T,
-  fieldName: string
-): Omit<T, 'meta'> & { readonly meta: TokenStandardV2Metadata } {
-  return {
-    ...value,
-    meta: normalizeMetadata(defaultWhenUndefined(value.meta, { values: {} }), `${fieldName}.meta`),
-  };
+function normalizeMetadataOrDefault(value: unknown, fieldName: string): TokenStandardV2Metadata {
+  return normalizeMetadata(defaultWhenUndefined(value, { values: {} }), fieldName);
 }
 
 export function buildTokenStandardV2AllocationChoiceArgument(
@@ -428,8 +422,6 @@ export function buildTokenStandardV2AllocationChoiceArgument(
       { field: 'allocation.committed' }
     );
   }
-  const settlement = withDefaultTokenStandardV2Metadata(params.settlement, 'settlement');
-  const allocation = withDefaultTokenStandardV2Metadata(params.allocation, 'allocation');
   const transferLegSides: TokenStandardV2AllocationChoiceArgument['allocation']['transferLegSides'] =
     params.allocation.transferLegSides.map((transferLegSide, index) => {
       const fieldName = `allocation.transferLegSides[${index}]`;
@@ -449,12 +441,12 @@ export function buildTokenStandardV2AllocationChoiceArgument(
         );
       }
       return {
-        ...withDefaultTokenStandardV2Metadata(transferLegSide, fieldName),
         transferLegId: requireText(transferLegId, `${fieldName}.transferLegId`),
         side,
         otherside: normalizeAccount(otherside, `${fieldName}.otherside`),
         amount: normalizePositiveDecimal(amount, `${fieldName}.amount`),
         instrumentId: requireText(instrumentId, `${fieldName}.instrumentId`),
+        meta: normalizeMetadataOrDefault(transferLegSide['meta'], `${fieldName}.meta`),
       };
     });
   const transferLegSideKeys = transferLegSides.map(({ side, transferLegId }) => JSON.stringify([transferLegId, side]));
@@ -478,13 +470,12 @@ export function buildTokenStandardV2AllocationChoiceArgument(
   }
   return {
     settlement: {
-      ...settlement,
       executors: normalizeStrings(params.settlement.executors, 'settlement.executors'),
       id: requireText(params.settlement.id, 'settlement.id'),
       cid: params.settlement.cid === null ? null : requireNonEmpty(params.settlement.cid, 'settlement.cid'),
+      meta: normalizeMetadataOrDefault(params.settlement.meta, 'settlement.meta'),
     },
     allocation: {
-      ...allocation,
       admin: requireNonEmpty(params.allocation.admin, 'allocation.admin'),
       authorizer: normalizeAccount(params.allocation.authorizer, 'allocation.authorizer'),
       transferLegSides,
@@ -494,6 +485,7 @@ export function buildTokenStandardV2AllocationChoiceArgument(
           : requireNonEmpty(params.allocation.settlementDeadline, 'allocation.settlementDeadline'),
       nextIterationFunding,
       committed: params.allocation.committed,
+      meta: normalizeMetadataOrDefault(params.allocation.meta, 'allocation.meta'),
     },
     requestedAt: requireNonEmpty(params.requestedAt, 'requestedAt'),
     inputHoldingCids: normalizeStrings(params.inputHoldingCids, 'inputHoldingCids', true),
@@ -587,6 +579,14 @@ export async function prepareTokenStandardV2AllocationCommand(
   params: PrepareTokenStandardV2AllocationCommandParams
 ): Promise<PreparedTokenStandardV2AllocationCommand> {
   requireInputRecord(params, 'params');
+  requireInputRecord(params.scan, 'scan');
+  if (typeof params.scan.getAllocationFactoryV2FromRegistry !== 'function') {
+    throw new TokenStandardV2AllocationError(
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
+      'scan.getAllocationFactoryV2FromRegistry must be a function.',
+      { field: 'scan.getAllocationFactoryV2FromRegistry' }
+    );
+  }
   const registryUrl = requireNonEmpty(params.registryUrl, 'registryUrl');
   const registryChoiceArgument = buildTokenStandardV2AllocationChoiceArgument({
     ...params,
@@ -722,8 +722,30 @@ function readTransactionTreeUpdateId(response: unknown): string | undefined {
 export async function submitPreparedTokenStandardV2Allocation(
   params: SubmitPreparedTokenStandardV2AllocationParams
 ): Promise<SubmitPreparedTokenStandardV2AllocationResult> {
+  requireInputRecord(params, 'params');
+  requireInputRecord(params.prepared, 'prepared');
+  requireInputRecord(params.ledger, 'ledger');
+  if (typeof params.ledger.submitAndWaitForTransactionTree !== 'function') {
+    throw new TokenStandardV2AllocationError(
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
+      'ledger.submitAndWaitForTransactionTree must be a function.',
+      { field: 'ledger.submitAndWaitForTransactionTree' }
+    );
+  }
+  requireInputRecord(params.prepared.command, 'prepared.command');
+  if (!Array.isArray(params.prepared.disclosedContracts)) {
+    throw new TokenStandardV2AllocationError(
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
+      'prepared.disclosedContracts must be an array.',
+      { field: 'prepared.disclosedContracts' }
+    );
+  }
+  const allocationFactoryContractId = requireNonEmpty(
+    params.prepared.allocationFactoryContractId,
+    'prepared.allocationFactoryContractId'
+  );
   const actAs = normalizeStrings(params.actAs, 'actAs');
-  const readAs = params.readAs ? normalizeStrings(params.readAs, 'readAs', true) : [];
+  const readAs = params.readAs === undefined ? [] : normalizeStrings(params.readAs, 'readAs', true);
   const submitParams: SubmitAndWaitForTransactionTreeParams = {
     commands: [params.prepared.command],
     actAs,
@@ -741,7 +763,7 @@ export async function submitPreparedTokenStandardV2Allocation(
     ...(params.workflowId !== undefined ? { workflowId: requireNonEmpty(params.workflowId, 'workflowId') } : {}),
   };
   const response = await params.ledger.submitAndWaitForTransactionTree(submitParams);
-  const result = findTokenStandardV2AllocationInstructionResult(response, params.prepared.allocationFactoryContractId);
+  const result = findTokenStandardV2AllocationInstructionResult(response, allocationFactoryContractId);
   if (!result) {
     throw new TokenStandardV2AllocationError(
       TokenStandardV2AllocationErrorCode.RESULT_NOT_FOUND,

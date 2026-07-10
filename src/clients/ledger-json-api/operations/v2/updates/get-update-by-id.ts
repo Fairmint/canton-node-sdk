@@ -20,6 +20,7 @@ export const GetUpdateById = createApiOperation<GetUpdateByIdParams, GetUpdateBy
     readAs: z.array(z.string()),
   }),
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
   buildRequestData: (params) => {
     // Validate updateId parameter

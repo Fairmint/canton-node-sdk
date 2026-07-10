@@ -180,6 +180,7 @@ export const GetOpenAndIssuingMiningRounds = createApiOperation<
 >({
   paramsSchema: GetOpenAndIssuingMiningRoundsParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/open-and-issuing-mining-rounds`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -194,6 +195,7 @@ export const GetUpdateHistoryV2 = createApiOperation<
 >({
   paramsSchema: GetUpdateHistoryV2ParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v2/updates`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -227,6 +229,7 @@ export const GetUpdateHistoryV1 = createApiOperation<
 >({
   paramsSchema: GetUpdateHistoryV1ParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v1/updates`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -251,14 +254,33 @@ export const GetUpdateByIdV1 = createApiOperation<
   requestConfig: publicRequestConfig,
 });
 
-const GetDateOfMostRecentSnapshotBeforeParamsSchema = z.object({
-  before: z.string(),
-  migrationId: z.number().int(),
-});
-export type GetDateOfMostRecentSnapshotBeforeParams = z.infer<typeof GetDateOfMostRecentSnapshotBeforeParamsSchema>;
+type GetDateOfMostRecentSnapshotBeforeQuery = operations['getDateOfMostRecentSnapshotBefore']['parameters']['query'];
+export interface GetDateOfMostRecentSnapshotBeforeParams {
+  readonly before: GetDateOfMostRecentSnapshotBeforeQuery['before'];
+  readonly migrationId: GetDateOfMostRecentSnapshotBeforeQuery['migration_id'];
+}
+export type GetDateOfMostRecentSnapshotBeforeResponse =
+  operations['getDateOfMostRecentSnapshotBefore']['responses']['200']['content']['application/json'];
+
+type GetDateOfFirstSnapshotAfterQuery = operations['getDateOfFirstSnapshotAfter']['parameters']['query'];
+export interface GetDateOfFirstSnapshotAfterParams {
+  readonly after: GetDateOfFirstSnapshotAfterQuery['after'];
+  readonly migrationId: GetDateOfFirstSnapshotAfterQuery['migration_id'];
+}
+export type GetDateOfFirstSnapshotAfterResponse =
+  operations['getDateOfFirstSnapshotAfter']['responses']['200']['content']['application/json'];
+
+const AcsSnapshotTimestampResponseSchema = z.strictObject({
+  record_time: z.iso.datetime({ offset: true }),
+}) satisfies z.ZodType<GetDateOfMostRecentSnapshotBeforeResponse & GetDateOfFirstSnapshotAfterResponse>;
+const GetDateOfMostRecentSnapshotBeforeParamsSchema: z.ZodType<GetDateOfMostRecentSnapshotBeforeParams> =
+  z.strictObject({
+    before: z.iso.datetime({ offset: true }),
+    migrationId: z.number().int().safe(),
+  });
 export const GetDateOfMostRecentSnapshotBefore = createApiOperation<
   GetDateOfMostRecentSnapshotBeforeParams,
-  operations['getDateOfMostRecentSnapshotBefore']['responses']['200']['content']['application/json']
+  GetDateOfMostRecentSnapshotBeforeResponse
 >({
   paramsSchema: GetDateOfMostRecentSnapshotBeforeParamsSchema,
   method: 'GET',
@@ -269,6 +291,29 @@ export const GetDateOfMostRecentSnapshotBefore = createApiOperation<
     return `${apiUrl}/v0/state/acs/snapshot-timestamp${toQueryString(qs)}`;
   },
   requestConfig: publicRequestConfig,
+  transformResponse: (response): GetDateOfMostRecentSnapshotBeforeResponse =>
+    AcsSnapshotTimestampResponseSchema.parse(response),
+});
+
+const GetDateOfFirstSnapshotAfterParamsSchema: z.ZodType<GetDateOfFirstSnapshotAfterParams> = z.strictObject({
+  after: z.iso.datetime({ offset: true }),
+  migrationId: z.number().int().safe(),
+});
+export const GetDateOfFirstSnapshotAfter = createApiOperation<
+  GetDateOfFirstSnapshotAfterParams,
+  GetDateOfFirstSnapshotAfterResponse
+>({
+  paramsSchema: GetDateOfFirstSnapshotAfterParamsSchema,
+  method: 'GET',
+  buildUrl: (params, apiUrl) => {
+    const qs = new URLSearchParams();
+    qs.set('after', params.after);
+    qs.set('migration_id', String(params.migrationId));
+    return `${apiUrl}/v0/state/acs/snapshot-timestamp-after${toQueryString(qs)}`;
+  },
+  requestConfig: publicRequestConfig,
+  transformResponse: (response): GetDateOfFirstSnapshotAfterResponse =>
+    AcsSnapshotTimestampResponseSchema.parse(response),
 });
 
 type GetAcsSnapshotAtRequest = operations['getAcsSnapshotAt']['requestBody']['content']['application/json'];
@@ -280,6 +325,7 @@ export const GetAcsSnapshotAt = createApiOperation<
 >({
   paramsSchema: GetAcsSnapshotAtParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/state/acs`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -305,6 +351,7 @@ export const GetHoldingsStateAt = createApiOperation<
 >({
   paramsSchema: GetHoldingsStateAtParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/holdings/state`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -319,6 +366,7 @@ export const GetHoldingsSummaryAt = createApiOperation<
 >({
   paramsSchema: GetHoldingsSummaryAtParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/holdings/summary`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -387,6 +435,7 @@ export const GetAmuletRules = createApiOperation<
 >({
   paramsSchema: GetAmuletRulesParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/amulet-rules`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -402,6 +451,7 @@ export const GetExternalPartyAmuletRules = createApiOperation<
 >({
   paramsSchema: GetExternalPartyAmuletRulesParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/external-party-amulet-rules`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -416,6 +466,7 @@ export const GetAnsRules = createApiOperation<
 >({
   paramsSchema: GetAnsRulesParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/ans-rules`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -554,6 +605,7 @@ export const ListVoteRequestsByTrackingCid = createApiOperation<
 >({
   paramsSchema: ListVoteRequestsByTrackingCidParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/voterequest`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -590,6 +642,7 @@ export const ListVoteRequestResults = createApiOperation<
 >({
   paramsSchema: ListVoteRequestResultsParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/admin/sv/voteresults`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -604,6 +657,7 @@ export const GetMigrationInfo = createApiOperation<
 >({
   paramsSchema: GetMigrationInfoParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/backfilling/migration-info`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -618,6 +672,7 @@ export const GetUpdatesBefore = createApiOperation<
 >({
   paramsSchema: GetUpdatesBeforeParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/backfilling/updates-before`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -671,6 +726,7 @@ export const ListTransactionHistory = createApiOperation<
 >({
   paramsSchema: ListTransactionHistoryParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/transactions`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -685,6 +741,7 @@ export const GetUpdateHistory = createApiOperation<
 >({
   paramsSchema: GetUpdateHistoryParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/updates`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -725,6 +782,7 @@ export const GetImportUpdates = createApiOperation<
 >({
   paramsSchema: GetImportUpdatesParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/backfilling/import-updates`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -739,6 +797,7 @@ export const GetEventHistory = createApiOperation<
 >({
   paramsSchema: GetEventHistoryParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/events`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,

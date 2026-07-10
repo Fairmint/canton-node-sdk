@@ -1,4 +1,4 @@
-import { ApiOperation } from '../../../../../core';
+import { ApiOperation, snapshotOperationExecuteOptions, type OperationExecuteOptions } from '../../../../../core';
 import {
   fetchAllParties,
   PartiesAggregationParamsSchema,
@@ -11,7 +11,11 @@ export type { GetPartiesParams, GetPartiesResponse };
 
 /** List all parties known to the participant (legacy alias). */
 export class GetParties extends ApiOperation<GetPartiesParams, GetPartiesResponse> {
-  public async execute(params: GetPartiesParams): Promise<GetPartiesResponse> {
-    return fetchAllParties(this, params);
+  public async execute(
+    params: GetPartiesParams,
+    options?: OperationExecuteOptions<GetPartiesParams>
+  ): Promise<GetPartiesResponse> {
+    const operationOptions = snapshotOperationExecuteOptions(options);
+    return fetchAllParties(this, params, operationOptions);
   }
 }

@@ -12,6 +12,7 @@ export type GetTransactionByOffsetResponse =
 export const GetTransactionByOffset = createApiOperation<GetTransactionByOffsetParams, GetTransactionByOffsetResponse>({
   paramsSchema: GetTransactionByOffsetParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
   buildRequestData: (params) => params,
 });

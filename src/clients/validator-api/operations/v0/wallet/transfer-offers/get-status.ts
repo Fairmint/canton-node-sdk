@@ -18,6 +18,7 @@ export const GetTransferOfferStatus = createApiOperation<
 >({
   paramsSchema: GetTransferOfferStatusParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (params, apiUrl: string) => `${apiUrl}/api/validator/v0/wallet/transfer-offers/${params.trackingId}/status`,
   buildRequestData: () => ({}),
 });

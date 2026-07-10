@@ -1,3 +1,6 @@
+// Admin schemas
+export * from './admin';
+
 // Wallet schemas
 export * from './wallet';
 
