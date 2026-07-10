@@ -43,7 +43,7 @@ export interface TokenStandardV2TransferLeg {
 export interface TokenStandardV2FinalizedAllocation {
   readonly allocationCid: string;
   readonly extraTransferLegSides?: readonly TokenStandardV2TransferLegSide[];
-  /** Undefined selects the helper default; null is the Token Standard optional value sent to the ledger. */
+  /** Omission and null both encode the absent Token Standard optional value sent to the ledger. */
   readonly nextIterationFunding?: Readonly<Record<string, string>> | null;
 }
 
