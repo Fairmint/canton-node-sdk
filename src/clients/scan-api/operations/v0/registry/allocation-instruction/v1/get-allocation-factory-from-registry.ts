@@ -56,6 +56,7 @@ export const GetAllocationFactoryFromRegistry = createApiOperation<
 >({
   paramsSchema: GetAllocationFactoryFromRegistryParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (params) => buildRegistryEndpoint(params.registryUrl),
   buildRequestData: (params) => ({
     choiceArguments: params.choiceArguments,

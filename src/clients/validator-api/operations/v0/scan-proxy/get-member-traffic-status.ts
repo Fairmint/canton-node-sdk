@@ -1,4 +1,10 @@
-import { type BaseClient } from '../../../../../core';
+import {
+  createOperationHttpRequestOptions,
+  snapshotOperationExecuteOptions,
+  type BaseClient,
+  type OperationExecuteOptions,
+} from '../../../../../core';
+import { awaitWithAbort } from '../../../../../core/http/abort';
 import { ApiOperation } from '../../../../../core/operations/ApiOperation';
 import { type operations } from '../../../../../generated/apps/scan/src/main/openapi/scan';
 import { getCurrentMiningRoundDomainId, type MiningRoundClient } from '../../../../../utils/mining/mining-rounds';
@@ -39,25 +45,64 @@ function hasMiningRoundMethods(client: BaseClient): client is BaseClient & Minin
  *   ```;
  */
 export class GetMemberTrafficStatus extends ApiOperation<GetMemberTrafficStatusParams, GetMemberTrafficStatusResponse> {
-  public async execute(params: GetMemberTrafficStatusParams = {}): Promise<GetMemberTrafficStatusResponse> {
+  public async execute(
+    params: GetMemberTrafficStatusParams = {},
+    options?: OperationExecuteOptions<GetMemberTrafficStatusParams>
+  ): Promise<GetMemberTrafficStatusResponse> {
+    const operationOptions = snapshotOperationExecuteOptions(options);
     const validatedParams = this.validateParams(params, GetMemberTrafficStatusParamsSchema);
+    const discoveryOptions: OperationExecuteOptions<void> | undefined =
+      operationOptions === undefined
+        ? undefined
+        : Object.freeze({
+            ...(operationOptions.signal !== undefined ? { signal: operationOptions.signal } : {}),
+            // Discovery is a separate semantic read. Honor an explicit retry disable; hooks whose params describe the
+            // traffic-status request remain scoped to that final request.
+            ...(operationOptions.retry?.kind === 'none' ? { retry: Object.freeze({ kind: 'none' as const }) } : {}),
+          });
+    const buildUrl = async (attemptParams: GetMemberTrafficStatusParams): Promise<string> => {
+      const validatedAttemptParams = this.validateParams(attemptParams, GetMemberTrafficStatusParamsSchema);
 
-    // Auto-determine domainId if not provided
-    let { domainId } = validatedParams;
-    if (!domainId) {
-      if (!hasMiningRoundMethods(this.client)) {
-        throw new Error('Client does not support getOpenAndIssuingMiningRounds - use ValidatorApiClient');
+      // Auto-determine domainId if not provided
+      let { domainId } = validatedAttemptParams;
+      if (!domainId) {
+        if (!hasMiningRoundMethods(this.client)) {
+          throw new Error('Client does not support getOpenAndIssuingMiningRounds - use ValidatorApiClient');
+        }
+        const miningRoundClient = this.client;
+        domainId = await awaitWithAbort(
+          async (): Promise<string> => getCurrentMiningRoundDomainId(miningRoundClient, discoveryOptions),
+          operationOptions?.signal
+        );
       }
-      domainId = await getCurrentMiningRoundDomainId(this.client);
-    }
 
-    // Auto-determine memberId if not provided
-    const memberId = validatedParams.memberId ?? this.client.getPartyId();
+      // Auto-determine memberId if not provided
+      const memberId = validatedAttemptParams.memberId ?? this.client.getPartyId();
 
-    const url = `${this.getApiUrl()}/api/validator/v0/scan-proxy/domains/${encodeURIComponent(domainId)}/members/${encodeURIComponent(memberId)}/traffic-status`;
+      return `${this.getApiUrl()}/api/validator/v0/scan-proxy/domains/${encodeURIComponent(domainId)}/members/${encodeURIComponent(memberId)}/traffic-status`;
+    };
 
-    return this.makeGetRequest<GetMemberTrafficStatusResponse>(url, {
-      includeBearerToken: true,
-    });
+    const url = await buildUrl(validatedParams);
+    const httpOptions =
+      operationOptions === undefined
+        ? undefined
+        : createOperationHttpRequestOptions({
+            initialParams: validatedParams,
+            options: operationOptions,
+            requestSemantics: 'read',
+            initialUrl: url,
+            validateParams: (derivedParams): GetMemberTrafficStatusParams =>
+              this.validateParams(derivedParams, GetMemberTrafficStatusParamsSchema),
+            buildUrl,
+            buildBody: (): undefined => undefined,
+          });
+
+    return this.makeGetRequest<GetMemberTrafficStatusResponse>(
+      url,
+      {
+        includeBearerToken: true,
+      },
+      httpOptions
+    );
   }
 }

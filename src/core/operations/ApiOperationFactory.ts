@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import { type BaseClient } from '../BaseClient';
+import { ConfigurationError } from '../errors';
+import { awaitWithAbort } from '../http/abort';
+import { type HttpRequestOptionsForSemantics, type RequestSemantics } from '../http/request-retry';
 import { type RequestConfig } from '../types';
 import { ApiOperation } from './ApiOperation';
+import { type OperationExecuteOptions, snapshotOperationExecuteOptions } from './operation-execute-options';
+import { createOperationHttpRequestOptions } from './operation-request-options';
 
 /**
  * Exact Zod object shape for a generated request type.
@@ -60,12 +65,12 @@ export type RequestDataBuilder<Params> = (
   | undefined
   | Promise<Record<string, unknown> | Buffer | string | undefined>;
 
-/** Configuration for a factory-created API operation. */
-export interface ApiOperationConfig<Params, Response> {
+/** HTTP request body supported by factory-created operations. */
+export type OperationRequestData = Record<string, unknown> | Buffer | string | undefined;
+
+interface ApiOperationConfigBase<Params, Response> {
   /** Zod schema used to validate params before the request. */
   readonly paramsSchema: z.ZodSchema<Params>;
-  /** HTTP method. */
-  readonly method: 'GET' | 'POST' | 'DELETE' | 'PATCH';
   /** Builds the full request URL from validated params and the client's base API URL. */
   readonly buildUrl: (params: Params, apiUrl: string, client: BaseClient) => string;
   /** Builds the request body. Only called for POST and PATCH. */
@@ -75,6 +80,23 @@ export interface ApiOperationConfig<Params, Response> {
   /** Transform the raw API response before returning it. */
   readonly transformResponse?: (response: Response) => Response;
 }
+
+/** Configuration for a factory-created API operation. GET is read-only by construction. */
+export type ApiOperationConfig<Params, Response> = ApiOperationConfigBase<Params, Response> &
+  (
+    | {
+        readonly method: 'GET';
+        readonly requestSemantics?: 'read';
+      }
+    | {
+        readonly method: 'POST' | 'DELETE' | 'PATCH';
+        /**
+         * Explicitly classify the operation as a semantic read or mutation. Required for read-only POST endpoints that
+         * may be safely retried or rotated across equivalent Scan nodes.
+         */
+        readonly requestSemantics?: RequestSemantics;
+      }
+  );
 
 /**
  * Creates an {@link ApiOperation} class from a declarative configuration object.
@@ -92,29 +114,80 @@ export function createApiOperation<Params, Response>(
   config: ApiOperationConfig<Params, Response>
 ): new (client: BaseClient) => ApiOperation<Params, Response> {
   return class extends ApiOperation<Params, Response> {
-    async execute(params: Params): Promise<Response> {
-      // Validate parameters
-      const validatedParams = this.validateParams(params, config.paramsSchema);
+    async execute(params: Params, options?: OperationExecuteOptions<Params>): Promise<Response> {
+      const operationOptions = snapshotOperationExecuteOptions(options);
+      const effectiveOperationOptions: OperationExecuteOptions<Params> = operationOptions ?? Object.freeze({});
 
-      const url = config.buildUrl(validatedParams, this.getApiUrl(), this.client);
+      // Validate parameters
+      const currentParams = this.validateParams(params, config.paramsSchema);
+
+      const apiUrl = this.getApiUrl();
+      const url = config.buildUrl(currentParams, apiUrl, this.client);
+      const requestSemantics = config.requestSemantics ?? (config.method === 'GET' ? 'read' : 'mutation');
       const requestConfig: RequestConfig = config.requestConfig ?? {
         contentType: 'application/json',
         includeBearerToken: true,
       };
 
+      const buildRequestData = async (attemptParams: Params): Promise<OperationRequestData> => {
+        if (config.method !== 'POST' && config.method !== 'PATCH') return undefined;
+        return config.buildRequestData?.(attemptParams, this.client);
+      };
+
+      const buildHttpRequestOptions = <Body, Semantics extends RequestSemantics>(
+        semantics: Semantics,
+        snapshottedOptions: OperationExecuteOptions<Params>,
+        buildBody: (attemptParams: Params) => Body | Promise<Body>
+      ): HttpRequestOptionsForSemantics<Body, Semantics> =>
+        createOperationHttpRequestOptions({
+          initialParams: currentParams,
+          options: snapshottedOptions,
+          requestSemantics: semantics,
+          initialUrl: url,
+          validateParams: (derivedParams): Params => this.validateParams(derivedParams, config.paramsSchema),
+          buildUrl: (derivedParams): string => config.buildUrl(derivedParams, apiUrl, this.client),
+          buildBody,
+        });
+
       let response: Response;
 
       if (config.method === 'GET') {
-        response = await this.makeGetRequest<Response>(url, requestConfig);
+        if (requestSemantics !== 'read') {
+          throw new ConfigurationError('Factory-created GET operations must use read semantics');
+        }
+        const httpOptions =
+          operationOptions === undefined && config.requestSemantics === undefined
+            ? undefined
+            : buildHttpRequestOptions<undefined, 'read'>('read', effectiveOperationOptions, (): undefined => undefined);
+        response = await this.makeGetRequest<Response>(url, requestConfig, httpOptions);
       } else if (config.method === 'DELETE') {
-        response = await this.makeDeleteRequest<Response>(url, requestConfig);
+        const httpOptions =
+          operationOptions === undefined && config.requestSemantics === undefined
+            ? undefined
+            : buildHttpRequestOptions<undefined, RequestSemantics>(
+                requestSemantics,
+                effectiveOperationOptions,
+                (): undefined => undefined
+              );
+        response = await this.makeDeleteRequest<Response>(url, requestConfig, httpOptions);
       } else {
-        const data = await config.buildRequestData?.(validatedParams, this.client);
+        const data = await awaitWithAbort(async (): Promise<OperationRequestData> => {
+          const requestData = await buildRequestData(currentParams);
+          return requestData;
+        }, operationOptions?.signal);
+        const httpOptions =
+          operationOptions === undefined && config.requestSemantics === undefined
+            ? undefined
+            : buildHttpRequestOptions<OperationRequestData, RequestSemantics>(
+                requestSemantics,
+                effectiveOperationOptions,
+                buildRequestData
+              );
         if (config.method === 'POST') {
-          response = await this.makePostRequest<Response>(url, data, requestConfig);
+          response = await this.makePostRequest<Response, OperationRequestData>(url, data, requestConfig, httpOptions);
         } else {
           // config.method === 'PATCH'
-          response = await this.makePatchRequest<Response>(url, data, requestConfig);
+          response = await this.makePatchRequest<Response, OperationRequestData>(url, data, requestConfig, httpOptions);
         }
       }
 

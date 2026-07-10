@@ -180,6 +180,7 @@ export const GetOpenAndIssuingMiningRounds = createApiOperation<
 >({
   paramsSchema: GetOpenAndIssuingMiningRoundsParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/open-and-issuing-mining-rounds`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -194,6 +195,7 @@ export const GetUpdateHistoryV2 = createApiOperation<
 >({
   paramsSchema: GetUpdateHistoryV2ParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v2/updates`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -227,6 +229,7 @@ export const GetUpdateHistoryV1 = createApiOperation<
 >({
   paramsSchema: GetUpdateHistoryV1ParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v1/updates`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -280,6 +283,7 @@ export const GetAcsSnapshotAt = createApiOperation<
 >({
   paramsSchema: GetAcsSnapshotAtParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/state/acs`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -305,6 +309,7 @@ export const GetHoldingsStateAt = createApiOperation<
 >({
   paramsSchema: GetHoldingsStateAtParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/holdings/state`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -319,6 +324,7 @@ export const GetHoldingsSummaryAt = createApiOperation<
 >({
   paramsSchema: GetHoldingsSummaryAtParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/holdings/summary`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -387,6 +393,7 @@ export const GetAmuletRules = createApiOperation<
 >({
   paramsSchema: GetAmuletRulesParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/amulet-rules`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -402,6 +409,7 @@ export const GetExternalPartyAmuletRules = createApiOperation<
 >({
   paramsSchema: GetExternalPartyAmuletRulesParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/external-party-amulet-rules`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -416,6 +424,7 @@ export const GetAnsRules = createApiOperation<
 >({
   paramsSchema: GetAnsRulesParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/ans-rules`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -554,6 +563,7 @@ export const ListVoteRequestsByTrackingCid = createApiOperation<
 >({
   paramsSchema: ListVoteRequestsByTrackingCidParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/voterequest`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -590,6 +600,7 @@ export const ListVoteRequestResults = createApiOperation<
 >({
   paramsSchema: ListVoteRequestResultsParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/admin/sv/voteresults`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -604,6 +615,7 @@ export const GetMigrationInfo = createApiOperation<
 >({
   paramsSchema: GetMigrationInfoParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/backfilling/migration-info`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -618,6 +630,7 @@ export const GetUpdatesBefore = createApiOperation<
 >({
   paramsSchema: GetUpdatesBeforeParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/backfilling/updates-before`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -671,6 +684,7 @@ export const ListTransactionHistory = createApiOperation<
 >({
   paramsSchema: ListTransactionHistoryParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/transactions`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -685,6 +699,7 @@ export const GetUpdateHistory = createApiOperation<
 >({
   paramsSchema: GetUpdateHistoryParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/updates`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -725,6 +740,7 @@ export const GetImportUpdates = createApiOperation<
 >({
   paramsSchema: GetImportUpdatesParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/backfilling/import-updates`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,
@@ -739,6 +755,7 @@ export const GetEventHistory = createApiOperation<
 >({
   paramsSchema: GetEventHistoryParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v0/events`,
   buildRequestData: (params) => params.body,
   requestConfig: publicRequestConfig,

@@ -16,13 +16,27 @@ jest.mock('axios', () => {
 });
 
 import { ScanApiClient, type ScanApiClientOptions } from '../../../src/clients/scan-api';
-import { CantonRuntime, type ClientConfig } from '../../../src/core';
+import {
+  ApiError,
+  CantonRuntime,
+  NetworkError,
+  UnknownMutationOutcomeError,
+  type ClientConfig,
+  type HttpRequestOptions,
+} from '../../../src/core';
 
 interface MockAxiosInstance {
   get: jest.Mock;
   post: jest.Mock;
   delete: jest.Mock;
   patch: jest.Mock;
+}
+
+function createAxiosNetworkError(): Error {
+  return Object.assign(new Error('connection reset'), {
+    isAxiosError: true,
+    code: 'ECONNRESET',
+  });
 }
 
 function createClient(
@@ -104,6 +118,325 @@ describe('ScanApiClient', () => {
       'https://scan-b.example/api/scan/v0/scan/health',
       'https://scan-b.example/api/scan/v0/scan/health',
     ]);
+  });
+
+  it('rotates semantic-read POST operations across Scan endpoints', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan-a.example/api/scan', 'https://scan-b.example/api/scan'],
+      }
+    );
+    mockAxiosInstance.post
+      .mockRejectedValueOnce(createAxiosNetworkError())
+      .mockResolvedValueOnce({ data: { created_events: [] } });
+
+    await expect(
+      client.getAcsSnapshotAt({
+        body: {
+          migration_id: 0,
+          record_time: '2026-07-10T00:00:00Z',
+          record_time_match: 'exact',
+          page_size: 10,
+        },
+      })
+    ).resolves.toEqual({ created_events: [] });
+
+    expect(mockAxiosInstance.post.mock.calls.map((call) => call[0])).toEqual([
+      'https://scan-a.example/api/scan/v0/state/acs',
+      'https://scan-b.example/api/scan/v0/state/acs',
+    ]);
+  });
+
+  it('uses one exact-body attempt budget and history across Scan endpoints', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan-a.example/api/scan', 'https://scan-b.example/api/scan'],
+      }
+    );
+    mockAxiosInstance.post
+      .mockRejectedValueOnce(createAxiosNetworkError())
+      .mockRejectedValueOnce(createAxiosNetworkError())
+      .mockResolvedValueOnce({ data: { mustNotBeReached: true } });
+    const attempts: Array<{ readonly attempt: number; readonly previousAttempts: number }> = [];
+    const params = {
+      body: {
+        migration_id: 0,
+        record_time: '2026-07-10T00:00:00Z',
+        record_time_match: 'exact' as const,
+        page_size: 10,
+      },
+    };
+
+    await expect(
+      client.getAcsSnapshotAt(params, {
+        retry: {
+          kind: 'exact-body',
+          maxAttempts: 2,
+          backoffMs: 0,
+          beforeAttempt: ({ attempt, previousAttempts }) => {
+            attempts.push({ attempt, previousAttempts: previousAttempts.length });
+          },
+        },
+      })
+    ).rejects.toBeInstanceOf(ApiError);
+
+    expect(mockAxiosInstance.post).toHaveBeenCalledTimes(2);
+    expect(mockAxiosInstance.post.mock.calls.map((call) => call[0])).toEqual([
+      'https://scan-a.example/api/scan/v0/state/acs',
+      'https://scan-b.example/api/scan/v0/state/acs',
+    ]);
+    expect(mockAxiosInstance.post.mock.calls.map((call) => call[1])).toEqual([params.body, params.body]);
+    expect(attempts).toEqual([
+      { attempt: 1, previousAttempts: 0 },
+      { attempt: 2, previousAttempts: 1 },
+    ]);
+  });
+
+  it('keeps derived params and bodies aligned while failing over between Scan endpoints', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan-a.example/api/scan', 'https://scan-b.example/api/scan'],
+      }
+    );
+    mockAxiosInstance.post
+      .mockRejectedValueOnce(createAxiosNetworkError())
+      .mockResolvedValueOnce({ data: { created_events: [] } });
+    const observedPageSizes: number[] = [];
+
+    await expect(
+      client.getAcsSnapshotAt(
+        {
+          body: {
+            migration_id: 0,
+            record_time: '2026-07-10T00:00:00Z',
+            record_time_match: 'exact',
+            page_size: 10,
+          },
+        },
+        {
+          retry: {
+            kind: 'derived-body',
+            maxAttempts: 2,
+            backoffMs: 0,
+            deriveParams: ({ params }) => ({
+              ...params,
+              body: { ...params.body, page_size: 20 },
+            }),
+            beforeAttempt: ({ params }) => {
+              observedPageSizes.push(params.body.page_size);
+            },
+          },
+        }
+      )
+    ).resolves.toEqual({ created_events: [] });
+
+    expect(mockAxiosInstance.post.mock.calls.map((call) => call[0])).toEqual([
+      'https://scan-a.example/api/scan/v0/state/acs',
+      'https://scan-b.example/api/scan/v0/state/acs',
+    ]);
+    expect(mockAxiosInstance.post.mock.calls.map((call) => call[1]?.page_size)).toEqual([10, 20]);
+    expect(observedPageSizes).toEqual([10, 20]);
+  });
+
+  it('keeps a derived operation endpoint stable when a nested request changes the active Scan', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan-a.example/api/scan', 'https://scan-b.example/api/scan'],
+      }
+    );
+    mockAxiosInstance.post
+      .mockRejectedValueOnce(createAxiosNetworkError())
+      .mockResolvedValueOnce({ data: { created_events: [] } });
+    mockAxiosInstance.get
+      .mockRejectedValueOnce(createAxiosNetworkError())
+      .mockResolvedValueOnce({ data: { endpoint: 'scan-b' } });
+
+    await expect(
+      client.getAcsSnapshotAt(
+        {
+          body: {
+            migration_id: 0,
+            record_time: '2026-07-10T00:00:00Z',
+            record_time_match: 'exact',
+            page_size: 10,
+          },
+        },
+        {
+          retry: {
+            kind: 'derived-body',
+            maxAttempts: 2,
+            backoffMs: 0,
+            shouldRetry: async ({ retryable }): Promise<boolean> => {
+              await client.makeGetRequest('https://scan-a.example/api/scan/v0/read');
+              return retryable;
+            },
+            deriveParams: ({ params }) => ({
+              ...params,
+              body: { ...params.body, page_size: 20 },
+            }),
+          },
+        }
+      )
+    ).resolves.toEqual({ created_events: [] });
+
+    expect(client.getApiUrl()).toBe('https://scan-b.example/api/scan');
+    expect(mockAxiosInstance.post.mock.calls.map((call) => call[0])).toEqual([
+      'https://scan-a.example/api/scan/v0/state/acs',
+      'https://scan-b.example/api/scan/v0/state/acs',
+    ]);
+    expect(mockAxiosInstance.post.mock.calls.map((call) => call[1]?.page_size)).toEqual([10, 20]);
+  });
+
+  it('keeps one immutable request policy across Scan failover attempts', async () => {
+    const scanApiUrls = ['https://scan-a.example/api/scan', 'https://scan-b.example/api/scan'];
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls,
+      }
+    );
+    let rejectFirstAttempt: ((error: Error) => void) | undefined;
+    let markFirstAttemptStarted: (() => void) | undefined;
+    const firstAttemptStarted = new Promise<void>((resolve) => {
+      markFirstAttemptStarted = resolve;
+    });
+    mockAxiosInstance.post
+      .mockImplementationOnce(
+        async (): Promise<never> =>
+          new Promise<never>((_resolve, reject) => {
+            rejectFirstAttempt = reject;
+            markFirstAttemptStarted?.();
+          })
+      )
+      .mockResolvedValueOnce({ data: { ok: true } });
+    const entryController = new AbortController();
+    const replacementController = new AbortController();
+    const config: {
+      includeBearerToken: boolean;
+      contentType: 'application/json' | 'application/octet-stream';
+    } = { includeBearerToken: false, contentType: 'application/json' };
+    const options: {
+      signal: AbortSignal;
+      requestSemantics: 'read' | 'mutation';
+      retry: Exclude<HttpRequestOptions<Record<string, never>>['retry'], undefined>;
+    } = {
+      signal: entryController.signal,
+      requestSemantics: 'read',
+      retry: { kind: 'exact-body', maxAttempts: 2, backoffMs: 0 },
+    };
+
+    const request = client.makePostRequest('https://scan-a.example/api/scan/v0/read', {}, config, options);
+    await firstAttemptStarted;
+    config.contentType = 'application/octet-stream';
+    options.signal = replacementController.signal;
+    options.requestSemantics = 'mutation';
+    options.retry = { kind: 'none' };
+    scanApiUrls[1] = 'https://attacker.example/api/scan';
+    scanApiUrls.push('https://unexpected.example/api/scan');
+    replacementController.abort(new Error('replacement policy must not affect failover'));
+    rejectFirstAttempt?.(createAxiosNetworkError());
+
+    await expect(request).resolves.toEqual({ ok: true });
+    expect(mockAxiosInstance.post.mock.calls.map((call) => call[0])).toEqual([
+      'https://scan-a.example/api/scan/v0/read',
+      'https://scan-b.example/api/scan/v0/read',
+    ]);
+    expect(mockAxiosInstance.post.mock.calls[1]?.[2]).toEqual(
+      expect.objectContaining({
+        signal: entryController.signal,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+  });
+
+  it('lets a caller-supplied read endpoint resolver take precedence over built-in Scan failover', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan-a.example/api/scan', 'https://scan-b.example/api/scan'],
+      }
+    );
+    mockAxiosInstance.get.mockResolvedValueOnce({ data: { endpoint: 'custom' } });
+
+    await expect(
+      client.makeGetRequest(
+        'https://scan-a.example/api/scan/v0/read',
+        {},
+        {
+          retry: { kind: 'exact-body', maxAttempts: 1 },
+          resolveReadAttemptUrl: () => 'https://custom.example/api/scan/v0/read',
+        }
+      )
+    ).resolves.toEqual({ endpoint: 'custom' });
+
+    expect(mockAxiosInstance.get.mock.calls[0]?.[0]).toBe('https://custom.example/api/scan/v0/read');
+  });
+
+  it('uses a stable starting endpoint while concurrent requests update the active Scan', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan-a.example/api/scan', 'https://scan-b.example/api/scan'],
+      }
+    );
+    let rejectSlowRequest: ((error: Error) => void) | undefined;
+    let markSlowRequestStarted: (() => void) | undefined;
+    const slowRequestStarted = new Promise<void>((resolve) => {
+      markSlowRequestStarted = resolve;
+    });
+    mockAxiosInstance.get
+      .mockImplementationOnce(
+        async (): Promise<never> =>
+          new Promise<never>((_resolve, reject) => {
+            rejectSlowRequest = reject;
+            markSlowRequestStarted?.();
+          })
+      )
+      .mockRejectedValueOnce(createAxiosNetworkError())
+      .mockResolvedValueOnce({ data: { request: 'fast', endpoint: 'scan-b' } })
+      .mockResolvedValueOnce({ data: { request: 'slow', endpoint: 'scan-b' } });
+
+    const slowRequest = client.makeGetRequest<{ request: string; endpoint: string }>(
+      'https://scan-a.example/api/scan/v0/read'
+    );
+    await slowRequestStarted;
+    await expect(
+      client.makeGetRequest<{ request: string; endpoint: string }>('https://scan-a.example/api/scan/v0/read')
+    ).resolves.toEqual({ request: 'fast', endpoint: 'scan-b' });
+    rejectSlowRequest?.(createAxiosNetworkError());
+    await expect(slowRequest).resolves.toEqual({ request: 'slow', endpoint: 'scan-b' });
+
+    expect(mockAxiosInstance.get.mock.calls.map((call) => call[0])).toEqual([
+      'https://scan-a.example/api/scan/v0/read',
+      'https://scan-a.example/api/scan/v0/read',
+      'https://scan-b.example/api/scan/v0/read',
+      'https://scan-b.example/api/scan/v0/read',
+    ]);
+  });
+
+  it('never rotates a semantic mutation when transport and logger both fail', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      {
+        network: 'mainnet',
+        logger: {
+          logRequestResponse: async (): Promise<void> => {
+            throw new NetworkError('logger failed');
+          },
+        },
+      },
+      {
+        scanApiUrls: ['https://scan-a.example/api/scan', 'https://scan-b.example/api/scan'],
+      }
+    );
+    mockAxiosInstance.post.mockRejectedValueOnce(createAxiosNetworkError());
+
+    await expect(client.forceAcsSnapshotNow()).rejects.toBeInstanceOf(UnknownMutationOutcomeError);
+    expect(mockAxiosInstance.post).toHaveBeenCalledTimes(1);
+    expect(mockAxiosInstance.post.mock.calls[0]?.[0]).toBe('https://scan-a.example/api/scan/v0/state/acs/force');
   });
 
   it('gets token metadata instruments from the direct scan endpoint', async () => {

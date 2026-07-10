@@ -29,6 +29,7 @@ export type EventsByContractIdResponse =
 export const GetEventsByContractId = createApiOperation<EventsByContractIdParams, EventsByContractIdResponse>({
   paramsSchema: EventsByContractIdParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
   buildRequestData: (params, client): EventsByContractIdRequest => {
     const readParties = [...new Set([client.getPartyId(), ...(params.readAs ?? [])])];

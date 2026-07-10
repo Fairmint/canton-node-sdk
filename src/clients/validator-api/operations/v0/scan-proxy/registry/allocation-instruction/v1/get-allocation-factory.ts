@@ -35,6 +35,7 @@ export type GetAllocationFactoryResponse = paths[ApiPath]['post']['responses']['
 export const GetAllocationFactory = createApiOperation<GetAllocationFactoryParams, GetAllocationFactoryResponse>({
   paramsSchema: GetAllocationFactoryParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params: GetAllocationFactoryParams, apiUrl: string) => `${apiUrl}${endpoint}`,
   buildRequestData: (params: GetAllocationFactoryParams) => ({
     choiceArguments: params.choiceArguments,

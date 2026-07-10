@@ -31,6 +31,7 @@ export const GetTransferInstructionAcceptContext = createApiOperation<
 >({
   paramsSchema: GetTransferInstructionAcceptContextParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (params: GetTransferInstructionAcceptContextParams, apiUrl: string) =>
     `${apiUrl}/api/validator/v0/scan-proxy/registry/transfer-instruction/v1/${params.transferInstructionId}/choice-contexts/accept`,
   buildRequestData: (

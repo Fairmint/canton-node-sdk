@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import type { ApiOperation } from '../../../../../core';
+import {
+  createOperationHttpRequestOptions,
+  type ApiOperation,
+  type OperationExecuteOptions,
+} from '../../../../../core';
 import { ApiError } from '../../../../../core/errors';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 
@@ -17,7 +21,8 @@ type PartyDetail = NonNullable<PartiesAggregationResponse['partyDetails']>[numbe
 
 export async function fetchAllParties(
   operation: ApiOperation<PartiesAggregationParams, PartiesAggregationResponse>,
-  params: PartiesAggregationParams
+  params: PartiesAggregationParams,
+  options: OperationExecuteOptions<PartiesAggregationParams> | undefined
 ): Promise<PartiesAggregationResponse> {
   const validatedParams = operation.validateParams(params, PartiesAggregationParamsSchema);
 
@@ -26,16 +31,30 @@ export async function fetchAllParties(
 
   // Loop until the API stops returning nextPageToken (or fails to advance)
   for (;;) {
-    const url = new URL(`${operation.getApiUrl()}${endpoint}`);
-    url.searchParams.set('pageSize', DEFAULT_PAGE_SIZE.toString());
-    if (currentPageToken.length > 0) {
-      url.searchParams.set('pageToken', currentPageToken);
-    }
+    const pageParams: PartiesAggregationParams = currentPageToken.length > 0 ? { pageToken: currentPageToken } : {};
+    const url = buildPartiesPageUrl(operation, pageParams);
+    const httpOptions =
+      options === undefined
+        ? undefined
+        : createOperationHttpRequestOptions({
+            initialParams: pageParams,
+            options,
+            requestSemantics: 'read',
+            initialUrl: url,
+            validateParams: (derivedParams): PartiesAggregationParams =>
+              operation.validateParams(derivedParams, PartiesAggregationParamsSchema),
+            buildUrl: (derivedParams): string => buildPartiesPageUrl(operation, derivedParams),
+            buildBody: (): undefined => undefined,
+          });
 
-    const response = await operation.makeGetRequest<PartiesAggregationResponse>(url.toString(), {
-      contentType: 'application/json',
-      includeBearerToken: true,
-    });
+    const response = await operation.makeGetRequest<PartiesAggregationResponse>(
+      url,
+      {
+        contentType: 'application/json',
+        includeBearerToken: true,
+      },
+      httpOptions
+    );
 
     const rawPartyDetails: unknown = response.partyDetails;
     if (!Array.isArray(rawPartyDetails)) {
@@ -62,4 +81,15 @@ export async function fetchAllParties(
     partyDetails: aggregatedPartyDetails,
     nextPageToken: '',
   };
+}
+
+function buildPartiesPageUrl(
+  operation: ApiOperation<PartiesAggregationParams, PartiesAggregationResponse>,
+  params: PartiesAggregationParams
+): string {
+  const url = new URL(`${operation.getApiUrl()}${endpoint}`);
+  url.searchParams.set('pageSize', DEFAULT_PAGE_SIZE.toString());
+  const pageToken = params.pageToken?.trim() ?? '';
+  if (pageToken.length > 0) url.searchParams.set('pageToken', pageToken);
+  return url.toString();
 }

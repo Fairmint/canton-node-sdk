@@ -38,6 +38,7 @@ export const GetAllocationCancelContext = createApiOperation<
 >({
   paramsSchema: GetAllocationCancelContextParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (params: GetAllocationCancelContextParams, apiUrl: string) =>
     `${apiUrl}${endpoint}/${params.allocationId}/choice-contexts/cancel`,
   buildRequestData: (params: GetAllocationCancelContextParams): GetAllocationCancelContextRequest => {
