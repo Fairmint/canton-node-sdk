@@ -1,9 +1,18 @@
 import { z } from 'zod';
 import { ApiError } from '../../../../../core/errors';
-import { WebSocketClient, type WebSocketOptions } from '../../../../../core/ws/WebSocketClient';
+import {
+  WebSocketClient,
+  type WebSocketOptions,
+  type WebSocketSubscription,
+} from '../../../../../core/ws/WebSocketClient';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
-import { type JsCantonError, type WsCantonError } from '../../../schemas/api/errors';
-import { type JsUpdateSchema, type WsUpdateSchema } from '../../../schemas/api/updates';
+import {
+  JsCantonErrorSchema,
+  WsCantonErrorSchema,
+  type JsCantonError,
+  type WsCantonError,
+} from '../../../schemas/api/errors';
+import { JsUpdateSchema, WsUpdateSchema } from '../../../schemas/api/updates';
 import { buildEventFormat } from '../utils/event-format-builder';
 
 const path = '/v2/updates' as const;
@@ -65,7 +74,7 @@ const SubscribeToUpdatesParamsSchema = z.object({
 
 export type SubscribeToUpdatesParams = z.infer<typeof SubscribeToUpdatesParamsSchema> & {
   /** Optional per-message callback to consume updates as they arrive. */
-  onMessage?: (message: UpdatesWsMessage) => void;
+  onMessage?: (message: UpdatesWsMessage) => void | Promise<void>;
 
   /**
    * Called when the token is about to expire and refresh is scheduled. Use this to prepare for reconnection (e.g., save
@@ -81,11 +90,14 @@ export type SubscribeToUpdatesParams = z.infer<typeof SubscribeToUpdatesParamsSc
   onTokenRefreshNeeded?: WebSocketOptions['onTokenRefreshNeeded'];
 };
 
-export type UpdatesWsMessage =
-  | { update: z.infer<typeof JsUpdateSchema> }
-  | { update: z.infer<typeof WsUpdateSchema> }
-  | JsCantonError
-  | WsCantonError;
+const UpdatesWsMessageSchema = z.union([
+  z.object({ update: JsUpdateSchema }),
+  z.object({ update: WsUpdateSchema }),
+  JsCantonErrorSchema,
+  WsCantonErrorSchema,
+]);
+
+export type UpdatesWsMessage = z.infer<typeof UpdatesWsMessageSchema>;
 
 /**
  * Subscribes to ledger updates via WebSocket connection.
@@ -203,6 +215,15 @@ export class SubscribeToUpdates {
 
     return new Promise<void>((resolve, reject) => {
       let settled = false;
+      let subscription: WebSocketSubscription | undefined;
+      let closeWhenConnected = false;
+      const closeSubscription = (): void => {
+        if (subscription) {
+          subscription.close();
+        } else {
+          closeWhenConnected = true;
+        }
+      };
 
       /** Convert a Canton error response to a proper Error object */
       const toError = (errorResponse: JsCantonError | WsCantonError): Error => {
@@ -217,25 +238,38 @@ export class SubscribeToUpdates {
 
       /** Check if a message is a Canton error response */
       const isErrorMessage = (msg: UpdatesWsMessage): msg is JsCantonError | WsCantonError =>
-        typeof msg === 'object' && ('cause' in msg || ('code' in msg && 'message' in msg && !('update' in msg)));
+        'cause' in msg || ('code' in msg && 'message' in msg && !('update' in msg));
 
       void wsClient
-        .connect<typeof requestMessage, UpdatesWsMessage>(
+        .connect<typeof requestMessage, unknown>(
           path,
           requestMessage,
           {
-            onMessage: (parsed) => {
-              // Call user's onMessage callback if provided
-              if (typeof params.onMessage === 'function') {
-                params.onMessage(parsed);
+            onMessage: async (parsed): Promise<void> => {
+              const decoded = UpdatesWsMessageSchema.safeParse(parsed);
+              if (!decoded.success) {
+                throw new ApiError('Unexpected ledger updates WebSocket message');
               }
+              const message = decoded.data;
 
-              // Check if it's an error
-              if (isErrorMessage(parsed)) {
+              // Surface Canton error frames immediately; a slow consumer callback must not delay stream failure.
+              if (isErrorMessage(message)) {
+                const error = toError(message);
                 if (!settled) {
                   settled = true;
-                  reject(toError(parsed));
+                  reject(error);
                 }
+                closeSubscription();
+
+                if (typeof params.onMessage === 'function') {
+                  await params.onMessage(message);
+                }
+                throw error;
+              }
+
+              // Call user's onMessage callback if provided
+              if (typeof params.onMessage === 'function') {
+                await params.onMessage(message);
               }
             },
             onError: (err) => {
@@ -253,6 +287,12 @@ export class SubscribeToUpdates {
           },
           wsOptions
         )
+        .then((connected) => {
+          subscription = connected;
+          if (closeWhenConnected) {
+            connected.close();
+          }
+        })
         .catch((err: unknown) => {
           if (!settled) {
             settled = true;

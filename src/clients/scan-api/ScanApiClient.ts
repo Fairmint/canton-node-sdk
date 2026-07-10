@@ -1,5 +1,5 @@
 import { ApiError, ConfigurationError, NetworkError, type CantonRuntime, type RequestConfig } from '../../core';
-import { resolveScanApiUrls } from './scan-endpoints';
+import { getScanHostRoot, resolveScanApiUrls } from './scan-endpoints';
 import { ScanApiClient as ScanApiClientGenerated } from './ScanApiClient.generated';
 
 export interface ScanApiClientOptions {
@@ -40,10 +40,6 @@ function resolveConfiguredScanApiUrl(runtime: CantonRuntime): string | undefined
   }
 }
 
-function getScanHostRoot(scanApiUrl: string): string {
-  return scanApiUrl.replace(/\/api\/scan\/?$/, '').replace(/\/$/, '');
-}
-
 interface RotatableScanUrl {
   readonly buildUrl: (baseUrl: string) => string;
 }
@@ -80,7 +76,7 @@ export class ScanApiClient extends ScanApiClientGenerated {
             auth: { grantType: 'client_credentials', clientId: '' },
           },
         },
-      }),
+      })
     );
 
     this.scanApiUrls = scanApiUrls;

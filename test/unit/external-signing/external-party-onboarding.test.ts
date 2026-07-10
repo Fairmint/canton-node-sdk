@@ -244,7 +244,10 @@ describe('external-party onboarding helpers', () => {
         publicKeyBase64: fixture.publicKeyBase64,
         signMultiHash: () => ({ signatureHex: 'deadbeef' }),
       })
-    ).rejects.toThrow('External-party signer must return a 64-byte Ed25519 signature');
+    ).rejects.toMatchObject({
+      message: 'External-party signer must return a 64-byte Ed25519 signature',
+      context: { actualLength: 4, expectedLength: 64 },
+    });
 
     expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
   });
