@@ -71,9 +71,12 @@ describe('custom ApiOperation execution options', () => {
     const getPartiesResult = { partyDetails: [], nextPageToken: '' };
     const getParties = jest.spyOn(GetParties.prototype, 'execute').mockResolvedValue(getPartiesResult);
     const listParties = jest.spyOn(ListParties.prototype, 'execute').mockResolvedValue(getPartiesResult);
-    const getMemberTrafficStatus = jest
-      .spyOn(GetMemberTrafficStatus.prototype, 'execute')
-      .mockResolvedValue({} as never);
+    const getMemberTrafficStatus = jest.spyOn(GetMemberTrafficStatus.prototype, 'execute').mockResolvedValue({
+      traffic_status: {
+        actual: { total_consumed: 0, total_limit: 0 },
+        target: { total_purchased: 0 },
+      },
+    });
     const ledgerClient = new LedgerJsonApiClient(new CantonRuntime(createRuntimeConfig('LEDGER_JSON_API')));
     const validatorClient = new ValidatorApiClient(new CantonRuntime(createRuntimeConfig('VALIDATOR_API')));
     const options = { signal: new AbortController().signal };

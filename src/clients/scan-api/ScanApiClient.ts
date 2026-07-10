@@ -179,6 +179,8 @@ export class ScanApiClient extends ScanApiClientGenerated {
       readonly retryable: boolean;
     }): boolean => retryable || shouldRotateOnError(error);
     const configuredRetry = readOptions.retry;
+    // A caller-supplied predicate is authoritative, matching HttpClient semantics. Scan contributes its transport and
+    // rotation classification only when the caller supplies an attempt budget without a custom predicate.
     const retry =
       configuredRetry === undefined
         ? Object.freeze({

@@ -174,6 +174,31 @@ describe('ScanApiClient', () => {
     ]);
   });
 
+  it('treats a caller-supplied retry predicate as authoritative for Scan rotation', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan-a.example/api/scan', 'https://scan-b.example/api/scan'],
+      }
+    );
+    const shouldRetry = jest.fn((): boolean => false);
+    mockAxiosInstance.get.mockRejectedValueOnce(createAxiosHttpError(429));
+
+    await expect(
+      client.makeGetRequest(
+        'https://scan-a.example/api/scan/v0/scan/health',
+        {},
+        {
+          retry: { kind: 'exact-body', maxAttempts: 2, backoffMs: 0, shouldRetry },
+        }
+      )
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(shouldRetry).toHaveBeenCalledTimes(1);
+    expect(mockAxiosInstance.get.mock.calls.map((call) => call[0])).toEqual([
+      'https://scan-a.example/api/scan/v0/scan/health',
+    ]);
+  });
+
   it('rotates semantic-read POST operations across Scan endpoints', async () => {
     const { client, mockAxiosInstance } = createClient(
       { network: 'mainnet' },
