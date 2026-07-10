@@ -154,7 +154,7 @@ describe('Token Standard V2 settlement-factory helpers', () => {
             provider: null,
             id: '',
           },
-          amount: '+125.50',
+          amount: '125.50',
           instrumentId: '  opaque instrument id  ',
         },
       ],
@@ -174,7 +174,7 @@ describe('Token Standard V2 settlement-factory helpers', () => {
               instrumentId: '  opaque instrument id  ',
             },
           ],
-          nextIterationFunding: { '  opaque instrument id  ': '+50.0' },
+          nextIterationFunding: { '  opaque instrument id  ': '50.0' },
         },
       ],
       actors: ['  VenueOperator::1220venue  '],
@@ -198,7 +198,7 @@ describe('Token Standard V2 settlement-factory helpers', () => {
             owner: 'Seller::1220seller',
             id: '',
           },
-          amount: '+125.50',
+          amount: '125.50',
           instrumentId: '  opaque instrument id  ',
         },
       ],
@@ -216,7 +216,7 @@ describe('Token Standard V2 settlement-factory helpers', () => {
               instrumentId: '  opaque instrument id  ',
             },
           ],
-          nextIterationFunding: { '  opaque instrument id  ': '+50.0' },
+          nextIterationFunding: { '  opaque instrument id  ': '50.0' },
         },
       ],
       actors: ['VenueOperator::1220venue'],
@@ -300,7 +300,7 @@ describe('Token Standard V2 settlement-factory helpers', () => {
       });
 
     const maximumDecimal = `${'9'.repeat(28)}.${'9'.repeat(10)}`;
-    for (const amount of ['1', '+1.0', '0001.2300', maximumDecimal]) {
+    for (const amount of ['1', '1.0', '0001.2300', maximumDecimal]) {
       const choiceArgument = buildWithAmounts({
         transferAmount: amount,
         extraTransferAmount: amount,
@@ -314,6 +314,7 @@ describe('Token Standard V2 settlement-factory helpers', () => {
     const invalidTransferAmounts = [
       '0',
       '+0.0',
+      '+1.0',
       '-0',
       '-1.0',
       '1.',

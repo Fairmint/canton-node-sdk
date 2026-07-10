@@ -136,7 +136,7 @@ function requireText(value: unknown, field: string): string {
 
 function parseDecimalText(value: unknown, field: string): { readonly text: string; readonly sign: -1 | 0 | 1 } {
   const text = requireText(value, field);
-  const match = /^([+-]?)(\d{1,28})(?:\.(\d{1,10}))?$/.exec(text);
+  const match = /^(-?)(\d{1,28})(?:\.(\d{1,10}))?$/.exec(text);
   if (match?.[0] !== text) {
     inputInvalid(`${field} must be a valid Daml Decimal string.`, { field, value });
   }
