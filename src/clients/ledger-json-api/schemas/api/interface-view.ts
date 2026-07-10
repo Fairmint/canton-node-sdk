@@ -10,14 +10,12 @@ export const JsInterfaceViewStatusSchema = z
   .strict();
 
 /** View of a created event selected by an interface filter. */
-export const JsInterfaceViewSchema = z
-  .object({
-    interfaceId: z.string(),
-    implementationPackageId: z.string().optional(),
-    viewStatus: JsInterfaceViewStatusSchema,
-    viewValue: z.unknown().optional(),
-  })
-  .strict();
+export const JsInterfaceViewSchema = z.strictObject({
+  interfaceId: z.string(),
+  implementationPackageId: z.string().optional(),
+  viewStatus: JsInterfaceViewStatusSchema,
+  viewValue: z.unknown().optional(),
+});
 
 export type JsInterfaceViewStatus = z.infer<typeof JsInterfaceViewStatusSchema>;
 export type JsInterfaceView = z.infer<typeof JsInterfaceViewSchema>;
