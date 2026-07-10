@@ -18,6 +18,6 @@ const LookupAnsEntryByNameParamsSchema = z.object({
 export const LookupAnsEntryByName = createApiOperation<{ name: string }, LookupScanProxyAnsEntryByNameResponse>({
   paramsSchema: LookupAnsEntryByNameParamsSchema,
   method: 'GET',
-  buildUrl: (params, apiUrl: string) =>
+  buildUrl: (params, apiUrl: string): string =>
     `${apiUrl}/api/validator/v0/scan-proxy/ans-entries/by-name/${encodeURIComponent(params.name)}`,
 });

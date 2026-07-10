@@ -56,14 +56,14 @@ const CONTRACT_WITH_STATE: components['schemas']['ContractWithState'] = {
 
 function createClient(makeGetRequest: jest.Mock = jest.fn(), makePostRequest: jest.Mock = jest.fn()): BaseClient {
   return {
-    getApiUrl: () => 'https://validator.example',
+    getApiUrl: (): string => 'https://validator.example',
     makeGetRequest,
     makePostRequest,
   } as unknown as BaseClient;
 }
 
-describe('validator scan-proxy parity', () => {
-  it('gets a transfer-command counter from the current encoded party path and preserves its generated response', async () => {
+describe('validator scan-proxy parity', (): void => {
+  it('gets a transfer-command counter from the current encoded party path and preserves its generated response', async (): Promise<void> => {
     const response: LookupTransferCommandCounterByPartyResponse = {
       transfer_command_counter: CONTRACT_WITH_STATE,
     };
@@ -81,7 +81,7 @@ describe('validator scan-proxy parity', () => {
     );
   });
 
-  it('gets transfer-command statuses with sender and nonce query parameters', async () => {
+  it('gets transfer-command statuses with sender and nonce query parameters', async (): Promise<void> => {
     const response: LookupTransferCommandStatusResponse = {
       transfer_commands_by_contract_id: {
         '00transfer-command': {
@@ -109,7 +109,7 @@ describe('validator scan-proxy parity', () => {
     );
   });
 
-  it('preserves nonce zero and rejects fractional transfer-command nonces', async () => {
+  it('preserves nonce zero and rejects fractional transfer-command nonces', async (): Promise<void> => {
     const makeGetRequest = jest.fn().mockResolvedValue({
       transfer_commands_by_contract_id: {},
     } satisfies LookupTransferCommandStatusResponse);
@@ -129,7 +129,7 @@ describe('validator scan-proxy parity', () => {
     expect(makeGetRequest).not.toHaveBeenCalled();
   });
 
-  it('gets DSO information through the validator scan proxy', async () => {
+  it('gets DSO information through the validator scan proxy', async (): Promise<void> => {
     const response: GetDsoInfoResponse = {
       sv_user: 'sv-user',
       sv_party_id: 'sv::namespace',
@@ -153,7 +153,7 @@ describe('validator scan-proxy parity', () => {
     );
   });
 
-  it('lists scan-wide ANS entries with exact query parameter names', async () => {
+  it('lists scan-wide ANS entries with exact query parameter names', async (): Promise<void> => {
     const response: ListAnsEntriesResponse = {
       entries: [
         {
@@ -189,7 +189,7 @@ describe('validator scan-proxy parity', () => {
     );
   });
 
-  it('encodes reserved ANS prefix characters and enforces an int32 page size', async () => {
+  it('encodes reserved ANS prefix characters and enforces an int32 page size', async (): Promise<void> => {
     const makeGetRequest = jest.fn().mockResolvedValue({ entries: [] } satisfies ListAnsEntriesResponse);
     const operation = new ListAnsEntries(createClient(makeGetRequest));
 
@@ -206,7 +206,7 @@ describe('validator scan-proxy parity', () => {
     expect(makeGetRequest).not.toHaveBeenCalled();
   });
 
-  it('preserves nullable DSO ANS fields and encodes lookup path parameters', async () => {
+  it('preserves nullable DSO ANS fields and encodes lookup path parameters', async (): Promise<void> => {
     const byNameResponse: LookupScanProxyAnsEntryByNameResponse = {
       entry: {
         contract_id: null,
@@ -240,7 +240,7 @@ describe('validator scan-proxy parity', () => {
     );
   });
 
-  it('keeps the authenticated owned-entry listing under its distinct method name', async () => {
+  it('keeps the authenticated owned-entry listing under its distinct method name', async (): Promise<void> => {
     const response: ListOwnedAnsEntriesResponse = {
       entries: [
         {
@@ -263,7 +263,7 @@ describe('validator scan-proxy parity', () => {
     expect(makeGetRequest).toHaveBeenCalledWith('https://validator.example/api/validator/v0/entry/all', REQUEST_CONFIG);
   });
 
-  it('posts the v1 holdings request without overriding the server exact-match default', async () => {
+  it('posts the v1 holdings request without overriding the server exact-match default', async (): Promise<void> => {
     const request = {
       migration_id: 7,
       record_time: '2026-07-09T12:00:00Z',
@@ -295,7 +295,7 @@ describe('validator scan-proxy parity', () => {
     expect(makePostRequest.mock.calls[0]?.[1]).not.toHaveProperty('record_time_match');
   });
 
-  it('sends an at-or-before holdings override and rejects an empty owner list', async () => {
+  it('sends an at-or-before holdings override and rejects an empty owner list', async (): Promise<void> => {
     const makePostRequest = jest.fn().mockResolvedValue({
       record_time: '2026-07-09T12:00:00Z',
       migration_id: 7,
@@ -328,7 +328,7 @@ describe('validator scan-proxy parity', () => {
     expect(makePostRequest).not.toHaveBeenCalled();
   });
 
-  it('rejects a holdings record time that is not an OpenAPI date-time', async () => {
+  it('rejects a holdings record time that is not an OpenAPI date-time', async (): Promise<void> => {
     const makePostRequest = jest.fn();
     const operation = new GetHoldingsSummaryAtV1(createClient(undefined, makePostRequest));
 
@@ -342,7 +342,7 @@ describe('validator scan-proxy parity', () => {
     expect(makePostRequest).not.toHaveBeenCalled();
   });
 
-  it('lists unclaimed development-fund coupons through the current scan-proxy path', async () => {
+  it('lists unclaimed development-fund coupons through the current scan-proxy path', async (): Promise<void> => {
     const response: ListUnclaimedDevelopmentFundCouponsResponse = {
       'unclaimed-development-fund-coupons': [CONTRACT_WITH_STATE],
     };

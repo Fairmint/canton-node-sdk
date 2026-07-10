@@ -18,6 +18,6 @@ const LookupAnsEntryByPartyParamsSchema = z.object({
 export const LookupAnsEntryByParty = createApiOperation<{ party: string }, LookupScanProxyAnsEntryByPartyResponse>({
   paramsSchema: LookupAnsEntryByPartyParamsSchema,
   method: 'GET',
-  buildUrl: (params, apiUrl: string) =>
+  buildUrl: (params, apiUrl: string): string =>
     `${apiUrl}/api/validator/v0/scan-proxy/ans-entries/by-party/${encodeURIComponent(params.party)}`,
 });

@@ -20,7 +20,7 @@ export const ListAnsEntriesParamsSchema = createRequestSchema<ListAnsEntriesPara
 export const ListAnsEntries = createApiOperation<ListAnsEntriesParams, ListAnsEntriesResponse>({
   paramsSchema: ListAnsEntriesParamsSchema,
   method: 'GET',
-  buildUrl: (params, apiUrl: string) => {
+  buildUrl: (params, apiUrl: string): string => {
     const query = new URLSearchParams();
     if (params.name_prefix !== undefined) {
       query.set('name_prefix', params.name_prefix);
