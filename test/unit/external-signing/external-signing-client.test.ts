@@ -13,6 +13,7 @@ import {
   type CantonEd25519Signature,
   type CantonEd25519Signer,
   type CantonEd25519SigningRequest,
+  type NonEmptyPrepareExternalTransactionCommands,
 } from '../../../src/utils/external-signing';
 import {
   buildExternalPartyId,
@@ -23,6 +24,16 @@ import {
 const SYNCHRONIZER_ID = 'global-domain::sync';
 const MULTI_HASH_HEX = `1220${'11'.repeat(32)}`;
 const NOW_MS = Date.parse('2026-07-09T12:00:00.000Z');
+const ARCHIVE_COMMANDS = [
+  {
+    ExerciseCommand: {
+      templateId: '#pkg:Module:Template',
+      contractId: 'contract-1',
+      choice: 'Archive',
+      choiceArgument: {},
+    },
+  },
+] as const satisfies NonEmptyPrepareExternalTransactionCommands;
 
 interface SigningFixture {
   readonly privateKey: KeyObject;
@@ -73,8 +84,9 @@ function createMockLedgerClient(fixture: SigningFixture): jest.Mocked<LedgerJson
     preparedTransactionHash: Buffer.from('interactive-hash').toString('base64'),
     hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
   });
+  client.interactiveSubmissionExecuteAndWait = jest.fn().mockResolvedValue({ updateId: 'update-123' });
   client.getApiUrl = jest.fn().mockReturnValue('https://ledger.example.test');
-  client.makePostRequest = jest.fn().mockResolvedValue({ updateId: 'update-123' });
+  client.makePostRequest = jest.fn();
   return client;
 }
 
@@ -515,16 +527,7 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
 
     const result = await executeExternalTransactionWithEd25519Signer({
       ledgerClient,
-      commands: [
-        {
-          ExerciseCommand: {
-            templateId: '#pkg:Module:Template',
-            contractId: 'contract-1',
-            choice: 'Archive',
-            choiceArgument: {},
-          },
-        },
-      ],
+      commands: ARCHIVE_COMMANDS,
       commandId: 'command-123',
       submissionId: 'submission-123',
       userId: 'user-123',
@@ -550,28 +553,24 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
       }),
       { signal: expect.any(AbortSignal) as AbortSignal }
     );
-    expect(ledgerClient.makePostRequest.mock.calls).toEqual([
-      [
-        'https://ledger.example.test/v2/interactive-submission/executeAndWait',
-        expect.objectContaining({
-          submissionId: 'submission-123',
-          partySignatures: {
-            signatures: [
-              {
-                party: fixture.partyId,
-                signatures: [
-                  expect.objectContaining({
-                    signature: expect.any(String) as string,
-                    signedBy: fixture.publicKeyFingerprint,
-                  }),
-                ],
-              },
-            ],
-          },
-        }),
-        { contentType: 'application/json', includeBearerToken: true },
-      ],
-    ]);
+    expect(ledgerClient.interactiveSubmissionExecuteAndWait).toHaveBeenCalledWith(
+      expect.objectContaining({
+        submissionId: 'submission-123',
+        partySignatures: {
+          signatures: [
+            {
+              party: fixture.partyId,
+              signatures: [
+                expect.objectContaining({
+                  signature: expect.any(String) as string,
+                  signedBy: fixture.publicKeyFingerprint,
+                }),
+              ],
+            },
+          ],
+        },
+      })
+    );
     expect(result).toMatchObject({
       commandId: 'command-123',
       submissionId: 'submission-123',
@@ -588,7 +587,7 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
     await expect(
       executeExternalTransactionWithEd25519Signer({
         ledgerClient,
-        commands: [],
+        commands: ARCHIVE_COMMANDS,
         commandId: 'command-mismatch',
         submissionId: 'submission-mismatch',
         userId: 'user-123',
@@ -603,12 +602,14 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
   it('preserves caller-stable IDs and signing evidence on an ambiguous submission outcome', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient(fixture);
-    ledgerClient.makePostRequest.mockRejectedValueOnce(new NetworkError('connection reset after submit'));
+    ledgerClient.interactiveSubmissionExecuteAndWait.mockRejectedValueOnce(
+      new NetworkError('connection reset after submit')
+    );
 
     try {
       await executeExternalTransactionWithEd25519Signer({
         ledgerClient,
-        commands: [],
+        commands: ARCHIVE_COMMANDS,
         commandId: 'stable-command',
         submissionId: 'stable-submission',
         userId: 'user-123',
@@ -637,7 +638,7 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
           submissionId: 'stable-submission',
           hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
           deduplicationPeriod: {
-            DeduplicationDuration: { value: { duration: '30s' } },
+            DeduplicationDuration: { value: { seconds: 30, nanos: 0 } },
           },
           partySignatures: expect.any(Array) as unknown[],
         },
@@ -650,14 +651,14 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
   it('honors structured Canton submission certainty over HTTP status heuristics', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient(fixture);
-    ledgerClient.makePostRequest
+    ledgerClient.interactiveSubmissionExecuteAndWait
       .mockRejectedValueOnce(new ApiError('committed rejection', 503, 'Unavailable', { definiteAnswer: true }))
       .mockRejectedValueOnce(new ApiError('uncertain rejection', 400, 'Bad Request', { definiteAnswer: false }));
 
     const execute = async (suffix: string): Promise<void> => {
       await executeExternalTransactionWithEd25519Signer({
         ledgerClient,
-        commands: [],
+        commands: ARCHIVE_COMMANDS,
         commandId: `certainty-${suffix}`,
         submissionId: `certainty-${suffix}`,
         userId: 'user-123',
