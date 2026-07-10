@@ -63,8 +63,8 @@ describe('waitForCompletionWithMetadata', () => {
     if (!firstHandlers) {
       throw new Error('Expected first completion subscription');
     }
-    firstHandlers.onClose?.(1000, 'stream complete');
-    firstHandlers.onClose?.(1000, 'duplicate close');
+    await firstHandlers.onClose?.(1000, 'stream complete');
+    await firstHandlers.onClose?.(1000, 'duplicate close');
     jest.advanceTimersByTime(250);
     await Promise.resolve();
 
@@ -79,7 +79,7 @@ describe('waitForCompletionWithMetadata', () => {
     if (!secondHandlers) {
       throw new Error('Expected second completion subscription');
     }
-    secondHandlers.onMessage(completionMessage('submission-123'));
+    await secondHandlers.onMessage(completionMessage('submission-123'));
 
     await expect(resultPromise).resolves.toEqual({
       updateId: 'update-123',
@@ -125,7 +125,7 @@ describe('waitForCompletionWithMetadata', () => {
       throw new Error('Expected first completion subscription');
     }
 
-    firstHandlers.onClose?.(1000, 'stream complete');
+    await firstHandlers.onClose?.(1000, 'stream complete');
     jest.advanceTimersByTime(250);
     await Promise.resolve();
 
@@ -144,7 +144,7 @@ describe('waitForCompletionWithMetadata', () => {
     if (!secondHandlers) {
       throw new Error('Expected second completion subscription');
     }
-    secondHandlers.onMessage(completionMessage('submission-123'));
+    await secondHandlers.onMessage(completionMessage('submission-123'));
 
     await expect(resultPromise).resolves.toEqual({
       updateId: 'update-123',
