@@ -119,7 +119,10 @@ export async function submitExternalPartyCcTransfer(
 async function lookupNextNonce(validatorClient: ValidatorApiClient, party: string): Promise<number> {
   try {
     const response = await validatorClient.lookupTransferCommandCounterByParty({ party });
-    const payload = objectOrEmpty(response?.transfer_command_counter?.contract?.payload);
+    const responseObject = objectOrEmpty(response);
+    const counter = objectOrEmpty(responseObject['transfer_command_counter']);
+    const contract = objectOrEmpty(counter['contract']);
+    const payload = objectOrEmpty(contract['payload']);
     const nextNonce = normalizeNonce(payload['nextNonce']);
     validateNonce(nextNonce);
     return nextNonce;
@@ -136,6 +139,9 @@ function normalizeNonce(value: unknown): number {
     return value;
   }
   if (typeof value === 'string' && /^(?:0|[1-9]\d*)$/.test(value)) {
+    if (BigInt(value) > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new ValidationError('Transfer nonce must be a non-negative safe integer', { nonce: value });
+    }
     return Number(value);
   }
   throw new ValidationError('Transfer command counter payload must include nextNonce as a non-negative integer', {

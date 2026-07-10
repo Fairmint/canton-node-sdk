@@ -40,14 +40,19 @@ function expectTransferCommandStatuses(response: TransferCommandStatusResponse):
     expect(contractId.length).toBeGreaterThan(0);
     expectContract(command.contract);
 
-    switch (command.status.status) {
+    const { status } = command;
+    switch (status.status) {
       case 'created':
       case 'sent':
         break;
       case 'failed':
-        expect(['failed', 'expired', 'withdrawn']).toContain(command.status.failure_kind);
-        expect(command.status.reason).toEqual(expect.any(String));
+        expect(['failed', 'expired', 'withdrawn']).toContain(status.failure_kind);
+        expect(status.reason).toEqual(expect.any(String));
         break;
+      default: {
+        const unsupportedStatus: never = status;
+        throw new Error(`Unexpected transfer command status: ${JSON.stringify(unsupportedStatus)}`);
+      }
     }
   }
 }
