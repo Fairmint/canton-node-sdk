@@ -89,12 +89,17 @@ export type ApiOperationConfig<Params, Response> = ApiOperationConfigBase<Params
         readonly requestSemantics?: 'read';
       }
     | {
-        readonly method: 'POST' | 'DELETE' | 'PATCH';
+        readonly method: 'POST';
         /**
-         * Explicitly classify the operation as a semantic read or mutation. Required for read-only POST endpoints that
-         * may be safely retried or rotated across equivalent Scan nodes.
+         * Explicitly classify POST as a semantic read or mutation. Required for read-only POST endpoints that may be
+         * safely retried or rotated across equivalent Scan nodes.
          */
         readonly requestSemantics?: RequestSemantics;
+      }
+    | {
+        /** DELETE and PATCH are mutation-only by construction. */
+        readonly method: 'DELETE' | 'PATCH';
+        readonly requestSemantics?: 'mutation';
       }
   );
 

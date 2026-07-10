@@ -132,6 +132,24 @@ const invalidGetOperationConfig = {
 } satisfies ApiOperationConfig<void, unknown>;
 void invalidGetOperationConfig;
 
+const invalidDeleteOperationConfig = {
+  paramsSchema: z.void(),
+  method: 'DELETE',
+  buildUrl: (): string => 'https://api.example/mutation',
+  requestSemantics: 'read',
+  // @ts-expect-error Factory-created DELETE operations cannot use read semantics.
+} satisfies ApiOperationConfig<void, unknown>;
+void invalidDeleteOperationConfig;
+
+const invalidPatchOperationConfig = {
+  paramsSchema: z.void(),
+  method: 'PATCH',
+  buildUrl: (): string => 'https://api.example/mutation',
+  requestSemantics: 'read',
+  // @ts-expect-error Factory-created PATCH operations cannot use read semantics.
+} satisfies ApiOperationConfig<void, unknown>;
+void invalidPatchOperationConfig;
+
 // Custom ApiOperation subclasses retain their declared params while forwarding the same typed options.
 void client.getParties({}, { signal: new AbortController().signal });
 void client.listParties({}, { retry: { kind: 'exact-body', maxAttempts: 2 } });
