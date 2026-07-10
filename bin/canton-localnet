@@ -20,6 +20,7 @@ PACKAGE_ROOT="$(cd "$(resolve_script_dir "${BASH_SOURCE[0]}")/.." && pwd)"
 LOCALNET_SCRIPT="${PACKAGE_ROOT}/scripts/localnet-cloud.sh"
 DEFAULT_QUICKSTART_REPO="https://github.com/digital-asset/cn-quickstart.git"
 DEFAULT_QUICKSTART_REF="2f4edfc17621a7dfb6d44357050c22f4b3914c89"
+DEFAULT_SPLICE_VERSION="0.6.8"
 
 log() {
   printf '[canton-localnet] %s\n' "$*"
@@ -47,6 +48,7 @@ Environment:
   CANTON_LOCALNET_QUICKSTART_DIR   Use an existing cn-quickstart/quickstart directory
   CANTON_LOCALNET_CACHE_DIR        Cache root for fetched cn-quickstart assets
   CANTON_LOCALNET_QUICKSTART_REF   cn-quickstart git ref to fetch
+  CANTON_LOCALNET_SPLICE_VERSION   Splice image tag (defaults to the SDK's pinned API version)
   CANTON_LOCALNET_INFRA_ONLY       Defaults to true for this package binary
 USAGE
 }
@@ -79,6 +81,19 @@ quickstart_ref() {
 
 quickstart_repo() {
   printf '%s' "${CANTON_LOCALNET_QUICKSTART_REPO:-${DEFAULT_QUICKSTART_REPO}}"
+}
+
+default_splice_version() {
+  if [[ -f "${PACKAGE_ROOT}/libs/splice/VERSION" ]]; then
+    local version=""
+    version="$(tr -d '[:space:]' < "${PACKAGE_ROOT}/libs/splice/VERSION")"
+    if [[ -n "${version}" ]]; then
+      printf '%s' "${version}"
+      return
+    fi
+  fi
+
+  printf '%s' "${DEFAULT_SPLICE_VERSION}"
 }
 
 default_quickstart_root() {
@@ -189,6 +204,7 @@ main() {
   if ! use_repo_quickstart_default; then
     export CANTON_LOCALNET_QUICKSTART_DIR="${dir}"
   fi
+  export CANTON_LOCALNET_SPLICE_VERSION="${CANTON_LOCALNET_SPLICE_VERSION:-$(default_splice_version)}"
   export CANTON_LOCALNET_INFRA_ONLY="${CANTON_LOCALNET_INFRA_ONLY:-true}"
 
   exec bash "${LOCALNET_SCRIPT}" "$@"

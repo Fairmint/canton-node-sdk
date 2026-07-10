@@ -1,6 +1,12 @@
 import { CreateUser, CreateUserParamsSchema } from '../../../src/clients/validator-api/operations/v0/admin/create-user';
 import { SubmitTransferPreapprovalSendParamsSchema } from '../../../src/clients/validator-api/operations/v0/admin/submit-transfer-preapproval-send';
 import {
+  Tap,
+  type TapParams,
+  TapParamsSchema,
+  type TapResponse,
+} from '../../../src/clients/validator-api/operations/v0/wallet/tap';
+import {
   TransferPreapprovalSend,
   TransferPreapprovalSendParamsSchema,
 } from '../../../src/clients/validator-api/operations/v0/wallet/transfer-preapproval-send';
@@ -87,5 +93,48 @@ describe('validator request schema integrity', () => {
         includeBearerToken: true,
       }
     );
+  });
+
+  it('posts the exact generated wallet tap request and returns its contract id', async (): Promise<void> => {
+    const request = {
+      amount: '10.5',
+      command_id: 'tap-command-123',
+    } satisfies TapParams;
+    const response = { contract_id: 'tap-contract-123' } satisfies TapResponse;
+
+    expect(TapParamsSchema.parse(request)).toEqual(request);
+
+    const makePostRequest = jest.fn().mockResolvedValue(response);
+    await expect(new Tap(createClient(makePostRequest)).execute(request)).resolves.toEqual(response);
+
+    expect(makePostRequest).toHaveBeenCalledWith('https://validator.example/api/validator/v0/wallet/tap', request, {
+      contentType: 'application/json',
+      includeBearerToken: true,
+    });
+  });
+
+  it('keeps the tap command id optional while rejecting invalid request shapes', (): void => {
+    expect(TapParamsSchema.parse({ amount: '1', command_id: undefined })).toEqual({ amount: '1' });
+    for (const amount of ['', ' ', '1e3', '12345678901234567890123456789', '0.12345678901', '.5', '1.']) {
+      expect(() => TapParamsSchema.parse({ amount })).toThrow();
+    }
+    expect(() => TapParamsSchema.parse({ amount: 1 })).toThrow();
+    expect(() => TapParamsSchema.parse({ amount: '1', commandId: 'typo' })).toThrow();
+  });
+
+  it('generates a client-side UUID command id before posting when the caller omits it', async (): Promise<void> => {
+    const response = { contract_id: 'tap-contract-456' } satisfies TapResponse;
+    const makePostRequest = jest.fn().mockResolvedValue(response);
+
+    await new Tap(createClient(makePostRequest)).execute({ amount: '1' });
+
+    expect(makePostRequest).toHaveBeenCalledTimes(1);
+    const body = makePostRequest.mock.calls[0]?.[1];
+    expect(body).toEqual({
+      amount: '1',
+      command_id: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      ) as string,
+    });
   });
 });

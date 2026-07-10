@@ -224,6 +224,19 @@ export function isDefiniteCantonMutationRejection(error: unknown): boolean {
   return status >= 400 && status < 500 && status !== 408 && status !== 425 && status !== 429;
 }
 
+/** Read Canton's structured mutation-outcome signal when the API supplies one. */
+export function readCantonDefiniteAnswer(error: unknown): boolean | undefined {
+  const direct = readDefiniteAnswerProperty(error);
+  if (direct !== undefined) return direct;
+  return readDefiniteAnswerProperty(normalizeCantonError(error)?.context);
+}
+
+function readDefiniteAnswerProperty(source: unknown): boolean | undefined {
+  if (!isObjectRecord(source)) return undefined;
+  const value = source['definiteAnswer'] ?? source['definite_answer'];
+  return typeof value === 'boolean' ? value : undefined;
+}
+
 /** Read normalized error context from current and legacy SDK error fields. */
 function readErrorContext(source: Record<string, unknown>): unknown {
   const { context } = source;

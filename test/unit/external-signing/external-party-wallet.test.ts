@@ -81,7 +81,13 @@ const createMockLedgerClient = (): jest.Mocked<LedgerJsonApiClient> =>
 
 const createMockValidatorClient = (): jest.Mocked<ValidatorApiClient> =>
   ({
-    lookupTransferCommandCounterByParty: jest.fn().mockResolvedValue({ counter: 3 }),
+    lookupTransferCommandCounterByParty: jest.fn().mockResolvedValue({
+      transfer_command_counter: {
+        contract: {
+          payload: { nextNonce: '3' },
+        },
+      },
+    }),
     prepareTransferPreapprovalSend: jest.fn().mockResolvedValue({
       transaction: 'prepared-cc-transfer',
       tx_hash: PREPARED_TRANSACTION_HASH_HEX,

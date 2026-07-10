@@ -1,5 +1,7 @@
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
 import {
+  createDefaultInteractiveSubmissionDeduplicationPeriod,
+  DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD,
   executeExternalTransaction,
   executeExternalTransactionAndWait,
   type NonEmptyPartySignatures,
@@ -34,6 +36,20 @@ describe('executeExternalTransaction', () => {
 
   beforeEach(() => {
     mockClient = createMockLedgerClient();
+  });
+
+  it('creates an isolated default deduplication period for each submission', () => {
+    const first = createDefaultInteractiveSubmissionDeduplicationPeriod();
+    const second = createDefaultInteractiveSubmissionDeduplicationPeriod();
+
+    expect(first).toEqual(second);
+    expect(first).not.toBe(second);
+    expect(first.DeduplicationDuration).not.toBe(second.DeduplicationDuration);
+    first.DeduplicationDuration.value.seconds = 60;
+    expect(second.DeduplicationDuration.value.seconds).toBe(30);
+    expect(DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD.DeduplicationDuration.value.seconds).toBe(30);
+    expect(Object.isFrozen(DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD)).toBe(true);
+    expect(Object.isFrozen(DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD.DeduplicationDuration)).toBe(true);
   });
 
   it('executes external transaction and returns result', async () => {
