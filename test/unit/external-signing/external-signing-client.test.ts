@@ -1,6 +1,6 @@
 import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import { ApiError, NetworkError } from '../../../src/core/errors';
+import { ApiError, NetworkError, OperationError, OperationErrorCode } from '../../../src/core/errors';
 import {
   CantonEd25519SigningPurpose,
   createExternalPartyWithEd25519Signer,
@@ -247,6 +247,109 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
         signatureBase64: expect.any(String) as string,
       });
     }
+  });
+
+  it('rejects when submit readiness does not settle within the requested wait window', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    ledgerClient.getConnectedSynchronizers.mockResolvedValue({
+      connectedSynchronizers: [
+        {
+          synchronizerAlias: 'global-domain',
+          synchronizerId: SYNCHRONIZER_ID,
+          permission: 'PARTICIPANT_PERMISSION_OBSERVATION',
+        },
+      ],
+    });
+
+    try {
+      await createExternalPartyWithEd25519Signer({
+        ledgerClient,
+        synchronizerId: SYNCHRONIZER_ID,
+        partyHint: 'external-test',
+        signer: fixture.signer,
+        readinessDelaysMs: [0],
+      });
+      throw new Error('Expected external-party readiness to fail');
+    } catch (error) {
+      expect(error).toBeInstanceOf(OperationError);
+      expect(error).toMatchObject({
+        code: OperationErrorCode.MISSING_DOMAIN_ID,
+        context: {
+          party: fixture.partyId,
+          synchronizerId: SYNCHRONIZER_ID,
+          readyWithinWaitWindow: false,
+          status: { state: 'in-flight', exists: true, ready: false },
+        },
+      });
+    }
+  });
+
+  it('accepts readiness observed by final reconciliation after the poll window', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    ledgerClient.getConnectedSynchronizers
+      .mockResolvedValueOnce({
+        connectedSynchronizers: [
+          {
+            synchronizerAlias: 'global-domain',
+            synchronizerId: SYNCHRONIZER_ID,
+            permission: 'PARTICIPANT_PERMISSION_OBSERVATION',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        connectedSynchronizers: [
+          {
+            synchronizerAlias: 'global-domain',
+            synchronizerId: SYNCHRONIZER_ID,
+            permission: 'PARTICIPANT_PERMISSION_SUBMISSION',
+          },
+        ],
+      });
+
+    await expect(
+      createExternalPartyWithEd25519Signer({
+        ledgerClient,
+        synchronizerId: SYNCHRONIZER_ID,
+        partyHint: 'external-test',
+        signer: fixture.signer,
+        readinessDelaysMs: [0],
+      })
+    ).resolves.toMatchObject({
+      partyId: fixture.partyId,
+      status: { state: 'ready', exists: true, ready: true },
+    });
+  });
+
+  it('treats observation-only onboarding as allocated without polling for submit readiness', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    ledgerClient.getConnectedSynchronizers.mockResolvedValue({
+      connectedSynchronizers: [
+        {
+          synchronizerAlias: 'global-domain',
+          synchronizerId: SYNCHRONIZER_ID,
+          permission: 'PARTICIPANT_PERMISSION_OBSERVATION',
+        },
+      ],
+    });
+
+    await expect(
+      createExternalPartyWithEd25519Signer({
+        ledgerClient,
+        synchronizerId: SYNCHRONIZER_ID,
+        partyHint: 'external-test',
+        signer: fixture.signer,
+        localParticipantObservationOnly: true,
+        waitForReady: true,
+        readinessDelaysMs: [0],
+      })
+    ).resolves.toMatchObject({
+      partyId: fixture.partyId,
+      status: { state: 'allocated', exists: true, ready: false },
+    });
+    expect(ledgerClient.getConnectedSynchronizers).toHaveBeenCalledTimes(1);
   });
 
   it('prepares, signs, verifies, executes, and waits for an interactive submission', async (): Promise<void> => {

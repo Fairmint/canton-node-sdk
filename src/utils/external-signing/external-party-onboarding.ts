@@ -295,10 +295,7 @@ function normalizeExternalPartyHashSignature(signature: ExternalPartyHashSignatu
   try {
     return normalizeCantonEd25519Signature(signature);
   } catch (error) {
-    if (
-      error instanceof ValidationError &&
-      error.message === 'External Canton signer must return a 64-byte Ed25519 signature'
-    ) {
+    if (error instanceof ValidationError && error.context?.['expectedLength'] === 64) {
       throw new ValidationError('External-party signer must return a 64-byte Ed25519 signature', error.context);
     }
     throw error;
