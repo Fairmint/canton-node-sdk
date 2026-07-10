@@ -13,7 +13,7 @@ export type ListTransactionsResponse =
 export type ValidatorWalletTransaction = components['schemas']['ListTransactionsResponseItem'];
 
 type NullableWireOptionals<T> = {
-  [Key in keyof T]: undefined extends T[Key] ? Exclude<T[Key], undefined> | null : T[Key];
+  [Key in keyof T]: {} extends Pick<T, Key> ? Exclude<T[Key], undefined> | null : T[Key];
 };
 
 type RawTransactionSubtype = Omit<components['schemas']['TransactionSubtype'], 'amulet_operation' | 'interface_id'> & {
