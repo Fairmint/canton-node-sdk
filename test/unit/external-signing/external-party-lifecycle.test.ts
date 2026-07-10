@@ -155,6 +155,54 @@ describe('external-party lifecycle reconciliation', (): void => {
       failure: { name: 'NetworkError' },
     });
   });
+
+  it('throws cancellation instead of normalizing an aborted reconciliation as unknown', async (): Promise<void> => {
+    const fixture = createPartyFixture();
+    const ledgerClient = createMockLedgerClient(fixture.partyId);
+    const controller = new AbortController();
+    ledgerClient.getPartyDetails.mockImplementationOnce(async () => new Promise<never>(() => undefined));
+    const reconciliation = reconcileExternalPartyOnboarding({
+      ledgerClient,
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+      synchronizerId: SYNCHRONIZER_ID,
+      signal: controller.signal,
+    });
+
+    controller.abort();
+
+    await expect(reconciliation).rejects.toThrow('Canton external-party reconciliation was aborted');
+    expect(ledgerClient.getConnectedSynchronizers).not.toHaveBeenCalled();
+  });
+
+  it('cancels an unresolved readiness read during reconciliation', async (): Promise<void> => {
+    const fixture = createPartyFixture();
+    const ledgerClient = createMockLedgerClient(fixture.partyId);
+    const controller = new AbortController();
+    let markReadinessStarted: (() => void) | undefined;
+    const readinessStarted = new Promise<void>((resolve) => {
+      markReadinessStarted = resolve;
+    });
+    ledgerClient.getConnectedSynchronizers.mockImplementationOnce(async () => {
+      markReadinessStarted?.();
+      return new Promise<never>(() => undefined);
+    });
+    const reconciliation = reconcileExternalPartyOnboarding({
+      ledgerClient,
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+      synchronizerId: SYNCHRONIZER_ID,
+      signal: controller.signal,
+    });
+
+    await readinessStarted;
+    controller.abort();
+
+    await expect(reconciliation).rejects.toMatchObject({
+      message: 'Canton external-party reconciliation was aborted',
+      context: { step: 'readiness' },
+    });
+  });
 });
 
 describe('external-party allocation failure classification', (): void => {
@@ -205,6 +253,21 @@ describe('external-party allocation failure classification', (): void => {
       kind: 'ambiguous',
       definite: false,
       shouldReconcile: true,
+    });
+  });
+
+  it('preserves diagnostics from non-Error thrown objects with a serialization fallback', (): void => {
+    expect(classifyExternalPartyAllocationFailure({ code: 'PROVIDER_FAILURE', retryable: true })).toMatchObject({
+      details: {
+        name: 'UnknownError',
+        message: '{"code":"PROVIDER_FAILURE","retryable":true}',
+      },
+    });
+
+    const circular = Object.create(null) as { self?: unknown };
+    circular.self = circular;
+    expect(classifyExternalPartyAllocationFailure(circular)).toMatchObject({
+      details: { name: 'UnknownError', message: 'Unserializable thrown value' },
     });
   });
 

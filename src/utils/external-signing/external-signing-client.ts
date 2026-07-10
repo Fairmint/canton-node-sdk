@@ -20,7 +20,7 @@ import {
   preparedTransactionHashToHex,
 } from './canton-protocol';
 import {
-  DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD,
+  createDefaultInteractiveSubmissionDeduplicationPeriod,
   executeExternalTransactionAndWait,
   type ExecuteExternalTransactionAndWaitResult,
   type ExecuteExternalTransactionOptions,
@@ -60,6 +60,7 @@ export interface CreateExternalPartyWithEd25519SignerOptions extends Omit<
   readonly signingContext?: CantonEd25519SigningContext;
   readonly requestTtlMs?: number;
   readonly now?: () => number;
+  /** Cancels signing and post-allocation readiness reads; it cannot undo an allocation already submitted to Canton. */
   readonly signal?: AbortSignal;
 }
 
@@ -170,6 +171,7 @@ export async function createExternalPartyWithEd25519Signer(
         ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
         ...(options.readinessDelaysMs !== undefined ? { delaysMs: options.readinessDelaysMs } : {}),
         ...(options.onReadinessCheckError !== undefined ? { onCheckError: options.onReadinessCheckError } : {}),
+        ...(options.signal !== undefined ? { signal: options.signal } : {}),
       })
     : null;
 
@@ -181,6 +183,7 @@ export async function createExternalPartyWithEd25519Signer(
     ...(options.identityProviderId !== undefined ? { identityProviderId: options.identityProviderId } : {}),
     ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
     expectSubmitReady,
+    ...(options.signal !== undefined ? { signal: options.signal } : {}),
   });
 
   if (shouldWaitForReady && status.state !== 'ready') {
@@ -336,7 +339,7 @@ export async function executeExternalTransactionWithEd25519Signer(
     preparedTransaction,
     hashingSchemeVersion,
     submissionId,
-    deduplicationPeriod: options.deduplicationPeriod ?? DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD,
+    deduplicationPeriod: options.deduplicationPeriod ?? createDefaultInteractiveSubmissionDeduplicationPeriod(),
     partySignatures: [
       {
         party: options.partyId,

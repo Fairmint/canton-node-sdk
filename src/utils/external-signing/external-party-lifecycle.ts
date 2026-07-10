@@ -6,9 +6,10 @@ import {
   ValidationError,
   type NormalizedCantonErrorDetails,
 } from '../../core/errors';
-import { isRecord } from '../../core/utils';
+import { runWithAbortSignal } from '../../core/utils/abort';
 import { checkPartySynchronizerReadiness, type PartySynchronizerReadiness } from '../party-readiness';
 import { assertCantonPartyMatchesPublicKey } from './canton-protocol';
+import { readMatchingExternalPartyDetails } from './external-party-details';
 import { DEFAULT_CANTON_IDENTITY_PROVIDER_ID } from './external-party-onboarding';
 
 export type ExternalPartyOnboardingState = 'not-found' | 'allocated' | 'in-flight' | 'ready' | 'unknown';
@@ -86,6 +87,8 @@ export interface ReconcileExternalPartyOnboardingOptions {
   readonly participantId?: string;
   /** Set false when local observation, rather than local submit permission, is the intended terminal state. */
   readonly expectSubmitReady?: boolean;
+  /** Cancels pending reconciliation reads. */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -108,12 +111,15 @@ export async function reconcileExternalPartyOnboarding(
   };
 
   let partyDetails: Record<string, unknown>;
+  const createPartyDetailsAbortError = (): ValidationError => reconciliationAborted(options, 'party-details');
   try {
-    const raw = await options.ledgerClient.getPartyDetails({
-      party: options.partyId,
-      identityProviderId: options.identityProviderId ?? DEFAULT_CANTON_IDENTITY_PROVIDER_ID,
-    });
-    const matched = readMatchingPartyDetails(raw, options.partyId);
+    const raw = await runWithAbortSignal(options.signal, createPartyDetailsAbortError, async () =>
+      options.ledgerClient.getPartyDetails({
+        party: options.partyId,
+        identityProviderId: options.identityProviderId ?? DEFAULT_CANTON_IDENTITY_PROVIDER_ID,
+      })
+    );
+    const matched = readMatchingExternalPartyDetails(raw, options.partyId);
     if (!matched) {
       return {
         ...base,
@@ -129,6 +135,7 @@ export async function reconcileExternalPartyOnboarding(
     }
     partyDetails = matched;
   } catch (error) {
+    if (options.signal?.aborted) throw createPartyDetailsAbortError();
     if (readErrorStatus(error) === 404) {
       return {
         ...base,
@@ -148,13 +155,16 @@ export async function reconcileExternalPartyOnboarding(
     };
   }
 
+  const createReadinessAbortError = (): ValidationError => reconciliationAborted(options, 'readiness');
   try {
-    const readiness = await checkPartySynchronizerReadiness({
-      ledgerClient: options.ledgerClient,
-      party: options.partyId,
-      synchronizerId: options.synchronizerId,
-      ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
-    });
+    const readiness = await runWithAbortSignal(options.signal, createReadinessAbortError, async () =>
+      checkPartySynchronizerReadiness({
+        ledgerClient: options.ledgerClient,
+        party: options.partyId,
+        synchronizerId: options.synchronizerId,
+        ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
+      })
+    );
     if (readiness.ready) {
       return {
         ...base,
@@ -184,6 +194,7 @@ export async function reconcileExternalPartyOnboarding(
       readiness,
     };
   } catch (error) {
+    if (options.signal?.aborted) throw createReadinessAbortError();
     return {
       ...base,
       state: 'unknown',
@@ -194,6 +205,17 @@ export async function reconcileExternalPartyOnboarding(
       partyDetails,
     };
   }
+}
+
+function reconciliationAborted(
+  options: ReconcileExternalPartyOnboardingOptions,
+  step: 'party-details' | 'readiness'
+): ValidationError {
+  return new ValidationError('Canton external-party reconciliation was aborted', {
+    partyId: options.partyId,
+    synchronizerId: options.synchronizerId,
+    step,
+  });
 }
 
 export type ExternalPartyAllocationFailureKind = 'already-exists' | 'definite-rejection' | 'ambiguous';
@@ -252,24 +274,28 @@ export async function reconcileExternalPartyAllocationFailure(
   return { failure, status };
 }
 
-function readMatchingPartyDetails(source: unknown, partyId: string): Record<string, unknown> | null {
-  if (!isRecord(source)) return null;
-  const { partyDetails } = source;
-  const details = Array.isArray(partyDetails) ? partyDetails : [partyDetails];
-  for (const detail of details) {
-    if (!isRecord(detail) || detail['party'] !== partyId) continue;
-    return detail;
-  }
-  return null;
-}
-
 function normalizeStatusFailure(error: unknown): ExternalPartyStatusFailure {
   const normalized = normalizeCantonError(error);
   if (normalized) return toStatusFailure(normalized);
   if (error instanceof Error) {
     return { name: error.name, message: error.message };
   }
-  return { name: 'UnknownError', message: String(error) };
+  return { name: 'UnknownError', message: describeUnknownFailure(error) };
+}
+
+function describeUnknownFailure(error: unknown): string {
+  if (typeof error === 'string') return error;
+  try {
+    const serialized: unknown = JSON.stringify(error);
+    if (typeof serialized === 'string') return serialized;
+  } catch {
+    // Fall through when the thrown value is not JSON-serializable.
+  }
+  try {
+    return String(error);
+  } catch {
+    return 'Unserializable thrown value';
+  }
 }
 
 function toStatusFailure(details: NormalizedCantonErrorDetails): ExternalPartyStatusFailure {

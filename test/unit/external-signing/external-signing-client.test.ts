@@ -226,7 +226,11 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
   it('returns structured reconciliation after an ambiguous allocation outcome', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient(fixture);
-    ledgerClient.allocateExternalParty.mockRejectedValueOnce(new NetworkError('connection reset after upload'));
+    const controller = new AbortController();
+    ledgerClient.allocateExternalParty.mockImplementationOnce(async () => {
+      controller.abort();
+      throw new NetworkError('connection reset after upload');
+    });
 
     try {
       await createExternalPartyWithEd25519Signer({
@@ -234,6 +238,7 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
         synchronizerId: SYNCHRONIZER_ID,
         partyHint: 'external-test',
         signer: fixture.signer,
+        signal: controller.signal,
       });
       throw new Error('Expected external-party onboarding to fail');
     } catch (error) {
@@ -247,6 +252,28 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
         signatureBase64: expect.any(String) as string,
       });
     }
+  });
+
+  it('aborts readiness after allocation without returning a successful onboarding result', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    const controller = new AbortController();
+    ledgerClient.allocateExternalParty.mockImplementationOnce(async () => {
+      controller.abort();
+      return { partyId: fixture.partyId };
+    });
+
+    await expect(
+      createExternalPartyWithEd25519Signer({
+        ledgerClient,
+        synchronizerId: SYNCHRONIZER_ID,
+        partyHint: 'external-test',
+        signer: fixture.signer,
+        readinessDelaysMs: [0],
+        signal: controller.signal,
+      })
+    ).rejects.toThrow('Canton party readiness wait was aborted');
+    expect(ledgerClient.getConnectedSynchronizers).not.toHaveBeenCalled();
   });
 
   it('rejects when submit readiness does not settle within the requested wait window', async (): Promise<void> => {

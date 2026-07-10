@@ -14,6 +14,7 @@ import {
   normalizeCantonHashToHex,
   normalizeEd25519PublicKeyForCanton,
 } from './canton-protocol';
+import { readMatchingExternalPartyDetails } from './external-party-details';
 import { generateExternalPartyTopology } from './generate-external-party';
 
 export const CANTON_DER_X509_PUBLIC_KEY_FORMAT = 'CRYPTO_KEY_FORMAT_DER_X509_SUBJECT_PUBLIC_KEY_INFO';
@@ -339,7 +340,7 @@ export async function getExternalPartyIdForHintAndPublicKey(
     return {
       publicKeyFingerprint,
       partyId,
-      exists: Boolean(readMatchingPartyDetails(raw, partyId)),
+      exists: Boolean(readMatchingExternalPartyDetails(raw, partyId)),
       raw,
     };
   } catch (error) {
@@ -388,7 +389,7 @@ async function readExistingExternalPartyAfterAllocationConflict(
       party: partyId,
       identityProviderId,
     });
-    const partyDetails = readMatchingPartyDetails(partyDetailsResponse, partyId);
+    const partyDetails = readMatchingExternalPartyDetails(partyDetailsResponse, partyId);
     if (!partyDetails) return null;
     return {
       alreadyExisted: true,
@@ -405,7 +406,7 @@ function readAllocatedExternalPartyId(source: unknown): string {
   if (typeof directPartyId === 'string' && directPartyId.trim()) {
     return directPartyId;
   }
-  const partyDetails = readMatchingPartyDetails(source);
+  const partyDetails = readMatchingExternalPartyDetails(source);
   const party = partyDetails?.['party'];
   if (typeof party === 'string' && party.trim()) {
     return party;
@@ -414,19 +415,6 @@ function readAllocatedExternalPartyId(source: unknown): string {
     'Canton external-party allocation response did not include partyId',
     OperationErrorCode.TRANSACTION_FAILED
   );
-}
-
-function readMatchingPartyDetails(source: unknown, partyId?: string): Record<string, unknown> | null {
-  if (!isRecord(source)) return null;
-  const { partyDetails } = source;
-  const details = Array.isArray(partyDetails) ? partyDetails : [partyDetails];
-  for (const detail of details) {
-    if (!isRecord(detail)) continue;
-    if (partyId && detail['party'] !== partyId) continue;
-    const { party } = detail;
-    if (typeof party === 'string' && party.trim()) return detail;
-  }
-  return null;
 }
 
 function readPartyIdsByFingerprint(source: unknown, publicKeyFingerprint: string): string[] {

@@ -7,11 +7,23 @@ import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
 
 export type PartySignature = InteractiveSubmissionExecuteRequest['partySignatures']['signatures'][number];
 
-export const DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD = {
-  DeduplicationDuration: {
-    value: { duration: '30s' },
-  },
-} as const satisfies NonNullable<InteractiveSubmissionExecuteRequest['deduplicationPeriod']>;
+/** Immutable compatibility value. Use the factory below when building a submission request. */
+export const DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD = Object.freeze({
+  DeduplicationDuration: Object.freeze({
+    value: Object.freeze({ duration: '30s' }),
+  }),
+}) satisfies NonNullable<InteractiveSubmissionExecuteRequest['deduplicationPeriod']>;
+
+/** Returns an isolated default deduplication period for one interactive submission. */
+export function createDefaultInteractiveSubmissionDeduplicationPeriod(): {
+  DeduplicationDuration: { value: { duration: string } };
+} {
+  return {
+    DeduplicationDuration: {
+      value: { duration: DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD.DeduplicationDuration.value.duration },
+    },
+  } satisfies NonNullable<InteractiveSubmissionExecuteRequest['deduplicationPeriod']>;
+}
 
 export interface ExecuteExternalTransactionOptions {
   readonly ledgerClient: LedgerJsonApiClient;
@@ -72,7 +84,7 @@ function buildExecuteExternalTransactionRequest(
     preparedTransaction: options.preparedTransaction,
     hashingSchemeVersion: options.hashingSchemeVersion ?? 'HASHING_SCHEME_VERSION_V2',
     submissionId: options.submissionId,
-    deduplicationPeriod: options.deduplicationPeriod ?? DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD,
+    deduplicationPeriod: options.deduplicationPeriod ?? createDefaultInteractiveSubmissionDeduplicationPeriod(),
     partySignatures: {
       signatures: [...options.partySignatures],
     },
