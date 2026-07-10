@@ -91,6 +91,31 @@ export class ExternalPartyOnboardingError extends Error {
   }
 }
 
+/** Thrown when Canton allocated the party but readiness confirmation or reconciliation did not complete. */
+export class ExternalPartyPostAllocationError extends Error {
+  readonly created: CreatedExternalPartyWithSigner;
+  readonly signingRequest: CantonEd25519SigningRequest;
+  readonly signatureBase64: string;
+  readonly status?: ExternalPartyOnboardingStatus;
+  declare readonly cause: unknown;
+
+  constructor(options: {
+    readonly cause: unknown;
+    readonly created: CreatedExternalPartyWithSigner;
+    readonly signingRequest: CantonEd25519SigningRequest;
+    readonly signatureBase64: string;
+    readonly status?: ExternalPartyOnboardingStatus;
+  }) {
+    super('Canton external party was allocated but readiness confirmation failed');
+    this.name = 'ExternalPartyPostAllocationError';
+    this.cause = options.cause;
+    this.created = options.created;
+    this.signingRequest = options.signingRequest;
+    this.signatureBase64 = options.signatureBase64;
+    if (options.status !== undefined) this.status = options.status;
+  }
+}
+
 /** Prepares, externally signs, verifies, allocates, and reconciles an Ed25519-controlled Canton party. */
 export async function createExternalPartyWithEd25519Signer(
   options: CreateExternalPartyWithEd25519SignerOptions
@@ -163,48 +188,59 @@ export async function createExternalPartyWithEd25519Signer(
 
   const expectSubmitReady = options.localParticipantObservationOnly !== true;
   const shouldWaitForReady = expectSubmitReady && (options.waitForReady ?? true);
-  const readyWithinWaitWindow = shouldWaitForReady
-    ? await waitForPartyCanSubmit({
-        ledgerClient: options.ledgerClient,
-        party: created.partyId,
-        synchronizerId: created.synchronizerId,
-        ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
-        ...(options.readinessDelaysMs !== undefined ? { delaysMs: options.readinessDelaysMs } : {}),
-        ...(options.onReadinessCheckError !== undefined ? { onCheckError: options.onReadinessCheckError } : {}),
-        ...(options.signal !== undefined ? { signal: options.signal } : {}),
-      })
-    : null;
+  let status: ExternalPartyOnboardingStatus | undefined;
+  try {
+    const readyWithinWaitWindow = shouldWaitForReady
+      ? await waitForPartyCanSubmit({
+          ledgerClient: options.ledgerClient,
+          party: created.partyId,
+          synchronizerId: created.synchronizerId,
+          ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
+          ...(options.readinessDelaysMs !== undefined ? { delaysMs: options.readinessDelaysMs } : {}),
+          ...(options.onReadinessCheckError !== undefined ? { onCheckError: options.onReadinessCheckError } : {}),
+          ...(options.signal !== undefined ? { signal: options.signal } : {}),
+        })
+      : null;
 
-  const status = await reconcileExternalPartyOnboarding({
-    ledgerClient: options.ledgerClient,
-    partyId: created.partyId,
-    publicKeyBase64,
-    synchronizerId: created.synchronizerId,
-    ...(options.identityProviderId !== undefined ? { identityProviderId: options.identityProviderId } : {}),
-    ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
-    expectSubmitReady,
-    ...(options.signal !== undefined ? { signal: options.signal } : {}),
-  });
+    status = await reconcileExternalPartyOnboarding({
+      ledgerClient: options.ledgerClient,
+      partyId: created.partyId,
+      publicKeyBase64,
+      synchronizerId: created.synchronizerId,
+      ...(options.identityProviderId !== undefined ? { identityProviderId: options.identityProviderId } : {}),
+      ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
+      expectSubmitReady,
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
+    });
 
-  if (shouldWaitForReady && status.state !== 'ready') {
-    throw new OperationError(
-      'Canton external party is not confirmed submit-ready on the requested synchronizer',
-      OperationErrorCode.MISSING_DOMAIN_ID,
-      {
-        party: created.partyId,
-        synchronizerId: created.synchronizerId,
-        readyWithinWaitWindow,
-        status,
-      }
-    );
+    if (shouldWaitForReady && status.state !== 'ready') {
+      throw new OperationError(
+        'Canton external party is not confirmed submit-ready on the requested synchronizer',
+        OperationErrorCode.MISSING_DOMAIN_ID,
+        {
+          party: created.partyId,
+          synchronizerId: created.synchronizerId,
+          readyWithinWaitWindow,
+          status,
+        }
+      );
+    }
+
+    return {
+      ...created,
+      signingRequest: signed.request,
+      signatureBase64: signed.signatureBase64,
+      status,
+    };
+  } catch (cause) {
+    throw new ExternalPartyPostAllocationError({
+      cause,
+      created,
+      signingRequest: signed.request,
+      signatureBase64: signed.signatureBase64,
+      ...(status !== undefined ? { status } : {}),
+    });
   }
-
-  return {
-    ...created,
-    signingRequest: signed.request,
-    signatureBase64: signed.signatureBase64,
-    status,
-  };
 }
 
 export interface ExecuteExternalTransactionWithEd25519SignerOptions extends Omit<

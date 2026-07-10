@@ -1,11 +1,12 @@
 import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import { ApiError, NetworkError, OperationError, OperationErrorCode } from '../../../src/core/errors';
+import { ApiError, NetworkError, OperationErrorCode } from '../../../src/core/errors';
 import {
   CantonEd25519SigningPurpose,
   createExternalPartyWithEd25519Signer,
   executeExternalTransactionWithEd25519Signer,
   ExternalPartyOnboardingError,
+  ExternalPartyPostAllocationError,
   ExternalTransactionSubmissionError,
   MAX_CANTON_ED25519_SIGNING_REQUEST_TTL_MS,
   signAndVerifyCantonEd25519Payload,
@@ -263,17 +264,65 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
       return { partyId: fixture.partyId };
     });
 
-    await expect(
-      createExternalPartyWithEd25519Signer({
+    try {
+      await createExternalPartyWithEd25519Signer({
         ledgerClient,
         synchronizerId: SYNCHRONIZER_ID,
         partyHint: 'external-test',
         signer: fixture.signer,
         readinessDelaysMs: [0],
         signal: controller.signal,
-      })
-    ).rejects.toThrow('Canton party readiness wait was aborted');
+      });
+      throw new Error('Expected external-party readiness to abort');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ExternalPartyPostAllocationError);
+      expect(error).toMatchObject({
+        created: { partyId: fixture.partyId, synchronizerId: SYNCHRONIZER_ID },
+        signingRequest: { partyId: fixture.partyId },
+        signatureBase64: expect.any(String) as string,
+        cause: { message: 'Canton party readiness wait was aborted' },
+      });
+    }
     expect(ledgerClient.getConnectedSynchronizers).not.toHaveBeenCalled();
+  });
+
+  it('preserves allocated-party recovery data when final reconciliation is aborted', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    const controller = new AbortController();
+    let markReconciliationStarted: (() => void) | undefined;
+    const reconciliationStarted = new Promise<void>((resolve) => {
+      markReconciliationStarted = resolve;
+    });
+    ledgerClient.getPartyDetails.mockImplementationOnce(async () => {
+      markReconciliationStarted?.();
+      return new Promise<never>(() => undefined);
+    });
+    const onboarding = createExternalPartyWithEd25519Signer({
+      ledgerClient,
+      synchronizerId: SYNCHRONIZER_ID,
+      partyHint: 'external-test',
+      signer: fixture.signer,
+      readinessDelaysMs: [0],
+      signal: controller.signal,
+    });
+
+    await reconciliationStarted;
+    controller.abort();
+
+    try {
+      await onboarding;
+      throw new Error('Expected external-party reconciliation to abort');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ExternalPartyPostAllocationError);
+      expect(error).toMatchObject({
+        created: { partyId: fixture.partyId, synchronizerId: SYNCHRONIZER_ID },
+        signingRequest: { partyId: fixture.partyId },
+        signatureBase64: expect.any(String) as string,
+        cause: { message: 'Canton external-party reconciliation was aborted' },
+      });
+      expect(error).not.toHaveProperty('status');
+    }
   });
 
   it('rejects when submit readiness does not settle within the requested wait window', async (): Promise<void> => {
@@ -299,14 +348,20 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
       });
       throw new Error('Expected external-party readiness to fail');
     } catch (error) {
-      expect(error).toBeInstanceOf(OperationError);
+      expect(error).toBeInstanceOf(ExternalPartyPostAllocationError);
       expect(error).toMatchObject({
-        code: OperationErrorCode.MISSING_DOMAIN_ID,
-        context: {
-          party: fixture.partyId,
-          synchronizerId: SYNCHRONIZER_ID,
-          readyWithinWaitWindow: false,
-          status: { state: 'in-flight', exists: true, ready: false },
+        created: { partyId: fixture.partyId, synchronizerId: SYNCHRONIZER_ID },
+        signingRequest: { partyId: fixture.partyId },
+        signatureBase64: expect.any(String) as string,
+        status: { state: 'in-flight', exists: true, ready: false },
+        cause: {
+          code: OperationErrorCode.MISSING_DOMAIN_ID,
+          context: {
+            party: fixture.partyId,
+            synchronizerId: SYNCHRONIZER_ID,
+            readyWithinWaitWindow: false,
+            status: { state: 'in-flight', exists: true, ready: false },
+          },
         },
       });
     }
