@@ -241,10 +241,15 @@ function readInstrumentId(value: unknown): TokenStandardV2InstrumentId | undefin
 
 function readMetadata(value: unknown): TokenStandardV2Metadata | undefined {
   if (!isRecord(value) || !isRecord(value['values'])) return undefined;
-  const values: Record<string, string> = {};
+  const values = Object.create(null) as Record<string, string>;
   for (const [key, metadataValue] of Object.entries(value['values'])) {
     if (typeof metadataValue !== 'string') return undefined;
-    values[key] = metadataValue;
+    Object.defineProperty(values, key, {
+      value: metadataValue,
+      enumerable: true,
+      configurable: true,
+      writable: false,
+    });
   }
   return { values };
 }

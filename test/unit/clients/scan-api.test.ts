@@ -934,7 +934,7 @@ describe('ScanApiClient', () => {
         registryUrl: 'file:///tmp/token-registry',
         choiceArguments: {},
       })
-    ).rejects.toThrow('Parameter validation failed');
+    ).rejects.toThrow('registryUrl must use http or https');
     expect(mockAxiosInstance.post).not.toHaveBeenCalled();
   });
 });

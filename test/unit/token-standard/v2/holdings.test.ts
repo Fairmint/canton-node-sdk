@@ -314,6 +314,32 @@ describe('Token Standard V2 holdings', () => {
     });
   });
 
+  test('preserves special metadata keys without inheriting an attacker-controlled prototype', async () => {
+    const values = JSON.parse('{"__proto__":"ledger-value","constructor":"ledger-constructor"}') as Record<
+      string,
+      string
+    >;
+    const ledger = createLedger([
+      activeHolding({
+        contractId: '#special-metadata',
+        amount: '1.0',
+        meta: { values },
+      }),
+    ]);
+
+    const [holding] = await listTokenStandardV2Holdings({
+      ledger,
+      parties: ['Buyer::alice'],
+      account,
+      instrumentId,
+      instrumentDecimals: 6,
+    });
+
+    expect(Object.getPrototypeOf(holding?.meta.values)).toBeNull();
+    expect(holding?.meta.values).toEqual(values);
+    expect(Object.prototype.hasOwnProperty.call(holding?.meta.values, '__proto__')).toBe(true);
+  });
+
   test.each([
     [
       'missing',
