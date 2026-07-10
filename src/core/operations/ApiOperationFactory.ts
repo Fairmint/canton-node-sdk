@@ -96,12 +96,17 @@ export type ApiOperationConfig<Params, Response> = ApiOperationConfigBase<Params
         readonly requestSemantics?: 'read';
       }
     | {
-        readonly method: 'POST' | 'DELETE' | 'PATCH';
+        readonly method: 'POST';
         /**
-         * Explicitly classify the operation as a semantic read or mutation. Required for read-only POST endpoints that
-         * may be safely retried or rotated across equivalent Scan nodes.
+         * Explicitly classify POST as a semantic read or mutation. Required for read-only POST endpoints that may be
+         * safely retried or rotated across equivalent Scan nodes.
          */
         readonly requestSemantics?: RequestSemantics;
+      }
+    | {
+        /** DELETE and PATCH are mutation-only by construction. */
+        readonly method: 'DELETE' | 'PATCH';
+        readonly requestSemantics?: 'mutation';
       }
   );
 
@@ -151,6 +156,9 @@ export function createApiOperation<Params, Response>(
       const apiUrl = this.getApiUrl();
       const url = config.buildUrl(currentParams, apiUrl, this.client);
       const requestSemantics = config.requestSemantics ?? (config.method === 'GET' ? 'read' : 'mutation');
+      if ((config.method === 'DELETE' || config.method === 'PATCH') && requestSemantics !== 'mutation') {
+        throw new ConfigurationError(`Factory-created ${config.method} operations must use mutation semantics`);
+      }
       const requestConfig: RequestConfig = config.requestConfig ?? {
         contentType: 'application/json',
         includeBearerToken: true,

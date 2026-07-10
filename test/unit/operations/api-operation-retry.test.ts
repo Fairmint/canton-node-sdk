@@ -10,7 +10,9 @@ import type { InteractiveSubmissionExecuteRequest } from '../../../src/clients/l
 import { CreateTransferOffer } from '../../../src/clients/validator-api/operations/v0/wallet/transfer-offers/create';
 import { GetTransferOfferStatus } from '../../../src/clients/validator-api/operations/v0/wallet/transfer-offers/get-status';
 import {
+  type ApiOperationConfig,
   type BaseClient,
+  ConfigurationError,
   HttpClient,
   type OperationExecuteOptions,
   type OperationRetryContext,
@@ -416,6 +418,42 @@ describe('factory-created operation retry plumbing', () => {
     ]);
     expect(post.mock.calls[0]?.[2]).toEqual(expect.objectContaining({ signal: initialController.signal }));
   });
+});
+
+describe('factory-created operation runtime semantics', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it.each(['DELETE', 'PATCH'] as const)(
+    'rejects an untyped-JavaScript read semantic on mutation-only %s before dispatch',
+    async (method) => {
+      const makeDeleteRequest = jest.fn();
+      const makePatchRequest = jest.fn();
+      const buildRequestData = jest.fn(() => ({ value: 'request-body' }));
+      const client = {
+        getApiUrl: (): string => 'https://api.example',
+        makeDeleteRequest,
+        makePatchRequest,
+      } as unknown as BaseClient;
+      const unsafeConfig = {
+        paramsSchema: z.void(),
+        method,
+        requestSemantics: 'read',
+        buildUrl: (_params: void, apiUrl: string): string => `${apiUrl}/mutation`,
+        buildRequestData,
+      } as unknown as ApiOperationConfig<void, unknown>;
+      const UnsafeOperation = createApiOperation<void, unknown>(unsafeConfig);
+
+      const execution = new UnsafeOperation(client).execute();
+
+      await expect(execution).rejects.toBeInstanceOf(ConfigurationError);
+      await expect(execution).rejects.toThrow(`Factory-created ${method} operations must use mutation semantics`);
+      expect(buildRequestData).not.toHaveBeenCalled();
+      expect(makeDeleteRequest).not.toHaveBeenCalled();
+      expect(makePatchRequest).not.toHaveBeenCalled();
+    }
+  );
 });
 
 describe('semantic POST operation coverage matrix', () => {
