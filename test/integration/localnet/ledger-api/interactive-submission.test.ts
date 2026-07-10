@@ -2,6 +2,7 @@
 
 import { Keypair } from '@stellar/stellar-base';
 import {
+  ApiError,
   CantonRuntime,
   type LedgerJsonApiClient,
   ValidatorApiClient,
@@ -135,23 +136,31 @@ async function prepareSignedAppInstall(options: {
     endUserName: uniqueId,
     endUserParty: options.externalParty,
   } as const;
-  const prepared = await options.client.interactiveSubmissionPrepare({
-    userId: options.userId,
-    commandId: uniqueId,
-    commands: [
-      {
-        CreateCommand: {
-          templateId: WALLET_APP_INSTALL_TEMPLATE,
-          createArguments: expectedPayload,
+  let prepared: Awaited<ReturnType<LedgerJsonApiClient['interactiveSubmissionPrepare']>>;
+  try {
+    prepared = await options.client.interactiveSubmissionPrepare({
+      userId: options.userId,
+      commandId: uniqueId,
+      commands: [
+        {
+          CreateCommand: {
+            templateId: WALLET_APP_INSTALL_TEMPLATE,
+            createArguments: expectedPayload,
+          },
         },
-      },
-    ],
-    actAs: [options.externalParty, options.validatorParty],
-    synchronizerId: options.synchronizerId,
-    packageIdSelectionPreference: [options.packageId],
-    estimateTrafficCost: { disabled: true },
-    hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
-  });
+      ],
+      actAs: [options.externalParty, options.validatorParty],
+      synchronizerId: options.synchronizerId,
+      packageIdSelectionPreference: [options.packageId],
+      estimateTrafficCost: { disabled: true },
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
+    });
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw new Error(`${error.message} [response body: ${JSON.stringify(error.response)}]`);
+    }
+    throw error;
+  }
   expect(prepared).toEqual({
     preparedTransaction: expect.any(String) as string,
     preparedTransactionHash: expect.any(String) as string,
