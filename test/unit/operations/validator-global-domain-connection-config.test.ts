@@ -35,7 +35,7 @@ describe('validator global synchronizer connection configuration', () => {
     const makeGetRequest = jest.fn().mockResolvedValue(response);
 
     await expect(
-      new GetDecentralizedSynchronizerConnectionConfig(createClient(makeGetRequest)).execute()
+      new GetDecentralizedSynchronizerConnectionConfig(createClient(makeGetRequest)).execute(undefined)
     ).resolves.toEqual(response);
 
     expect(makeGetRequest).toHaveBeenCalledWith(
