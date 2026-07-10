@@ -31,6 +31,9 @@ const signedRequest = {
 interface NonEmptyTuplePayload {
   readonly values: readonly [string, ...string[]];
 }
+type ParameterizedRequestCallback = (value: string, count: number) => boolean;
+const parameterizedRequestCallback: DeepReadonly<ParameterizedRequestCallback> = (value, count) =>
+  value.length === count;
 const validTuplePayload: DeepReadonly<NonEmptyTuplePayload> = { values: ['required'] };
 const invalidTuplePayload: DeepReadonly<NonEmptyTuplePayload> = {
   // @ts-expect-error DeepReadonly must preserve non-empty tuple constraints.
@@ -38,6 +41,7 @@ const invalidTuplePayload: DeepReadonly<NonEmptyTuplePayload> = {
 };
 void validTuplePayload;
 void invalidTuplePayload;
+void parameterizedRequestCallback('value', 5);
 
 void client.allocateExternalParty(signedRequest, {
   retry: {

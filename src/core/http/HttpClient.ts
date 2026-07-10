@@ -311,6 +311,9 @@ export class HttpClient {
     if (retry) {
       if (retry.kind === 'none') return Object.freeze({ kind: 'none' });
       if (retry.kind === 'exact-body') return Object.freeze({ ...retry });
+      if (typeof retry.deriveBody !== 'function') {
+        throw new ConfigurationError('HTTP derived-body retry requires a deriveBody function');
+      }
       return Object.freeze({ ...retry });
     }
 

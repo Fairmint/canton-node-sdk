@@ -2,7 +2,7 @@
 export type MaybePromise<T> = T | Promise<T>;
 
 /** Recursively marks a request value as readonly while it is exposed to retry callbacks. */
-export type DeepReadonly<T> = T extends (...args: never[]) => unknown
+export type DeepReadonly<T> = T extends (...args: infer _Arguments) => infer _Return
   ? T
   : T extends readonly unknown[]
     ? { readonly [Index in keyof T]: DeepReadonly<T[Index]> }

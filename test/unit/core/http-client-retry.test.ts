@@ -1,6 +1,7 @@
 import axios from 'axios';
-import { ApiError, NetworkError, UnknownMutationOutcomeError } from '../../../src/core/errors';
+import { ApiError, ConfigurationError, NetworkError, UnknownMutationOutcomeError } from '../../../src/core/errors';
 import { HttpClient } from '../../../src/core/http/HttpClient';
+import { type HttpRequestOptions } from '../../../src/core/http/request-retry';
 import { type Logger } from '../../../src/core/logging';
 
 jest.mock('axios', () => {
@@ -233,6 +234,28 @@ describe('HttpClient mutation retry safety', () => {
       { submissionId: 'submission-2', payload: 'prepared-transaction' },
     ]);
     expect(body).toEqual({ submissionId: 'submission-1', payload: 'prepared-transaction' });
+  });
+
+  it('rejects a malformed derived-body strategy before dispatch', async () => {
+    const { client, axiosInstance } = createClient();
+    const malformedOptions = {
+      retry: { kind: 'derived-body', maxAttempts: 2 },
+    } as unknown as HttpRequestOptions<{ submissionId: string }>;
+
+    await expect(
+      client.makePostRequest(
+        'https://ledger.example/v2/interactive-submission/execute',
+        { submissionId: 'submission-1' },
+        {},
+        malformedOptions
+      )
+    ).rejects.toEqual(
+      expect.objectContaining({
+        name: ConfigurationError.name,
+        message: 'HTTP derived-body retry requires a deriveBody function',
+      })
+    );
+    expect(axiosInstance.post).not.toHaveBeenCalled();
   });
 
   it('preserves definite mutation rejections and redacts ambiguous outcomes', async () => {
