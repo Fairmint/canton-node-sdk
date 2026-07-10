@@ -123,6 +123,12 @@ function factoryResponseInvalid(message: string, context: ErrorContext): never {
 
 type InvalidValueHandler = (message: string, context: ErrorContext) => never;
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (!isRecord(value)) return false;
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
 function createSafeRecord<T>(entries: Iterable<readonly [string, T]>): Readonly<Record<string, T>> {
   const result = Object.create(null) as Record<string, T>;
   for (const [key, value] of entries) {
@@ -182,7 +188,7 @@ function normalizeParties(value: unknown, field: string): string[] {
 }
 
 function normalizeMetadata(value: unknown, field: string): TokenStandardV2Metadata {
-  if (!isRecord(value) || !isRecord(value['values'])) {
+  if (!isPlainRecord(value) || !isPlainRecord(value['values'])) {
     inputInvalid(`${field} must contain a values record.`, { field, value });
   }
   if (Object.getOwnPropertySymbols(value['values']).length > 0) {
@@ -210,7 +216,7 @@ function cloneChoiceContextValue(value: unknown, field: string, invalid: Invalid
   if (Array.isArray(value)) {
     return value.map((item, index) => cloneChoiceContextValue(item, `${field}[${index}]`, invalid));
   }
-  if (!isRecord(value) || Object.getOwnPropertySymbols(value).length > 0) {
+  if (!isPlainRecord(value) || Object.getOwnPropertySymbols(value).length > 0) {
     invalid(`${field} must contain only JSON-compatible values.`, { field, value });
   }
   return createSafeRecord(
@@ -225,11 +231,11 @@ function normalizeChoiceContext(
   field: string,
   invalid: InvalidValueHandler
 ): TokenStandardV2SettlementChoiceContext {
-  if (!isRecord(value)) {
+  if (!isPlainRecord(value)) {
     invalid(`${field} must be a ChoiceContext record.`, { field, value });
   }
   const keys = Reflect.ownKeys(value);
-  if (keys.length !== 1 || keys[0] !== 'values' || !isRecord(value['values'])) {
+  if (keys.length !== 1 || keys[0] !== 'values' || !isPlainRecord(value['values'])) {
     invalid(`${field} must have exactly the shape { values: Record<string, unknown> }.`, { field, value });
   }
   if (Object.getOwnPropertySymbols(value['values']).length > 0) {
@@ -310,7 +316,7 @@ function normalizeTransferLegSide(
 
 function normalizeFunding(value: unknown, field: string): Readonly<Record<string, string>> | null {
   if (value === undefined || value === null) return null;
-  if (!isRecord(value)) {
+  if (!isPlainRecord(value)) {
     inputInvalid(`${field} must be a record or null.`, { field, value });
   }
   if (Object.getOwnPropertySymbols(value).length > 0) {

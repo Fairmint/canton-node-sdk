@@ -56,10 +56,15 @@ const settlementParams: BuildTokenStandardV2SettlementChoiceArgumentParams = {
 };
 
 function createRegistryClient(response: unknown): TokenStandardV2SettlementRegistryClient & {
-  readonly getSettlementFactoryFromRegistry: jest.Mock;
+  readonly getSettlementFactoryFromRegistry: jest.MockedFunction<
+    TokenStandardV2SettlementRegistryClient['getSettlementFactoryFromRegistry']
+  >;
 } {
   return {
-    getSettlementFactoryFromRegistry: jest.fn(async () => response),
+    getSettlementFactoryFromRegistry: jest.fn(
+      async (_params: Parameters<TokenStandardV2SettlementRegistryClient['getSettlementFactoryFromRegistry']>[0]) =>
+        response
+    ),
   };
 }
 
@@ -401,27 +406,36 @@ describe('Token Standard V2 settlement-factory helpers', () => {
     });
   });
 
-  test.each([{}, { values: [] }, { values: {}, unexpected: true }, { values: { invalid: undefined } }])(
-    'rejects malformed caller ChoiceContext %# with a typed input error',
-    (context) => {
-      let thrown: unknown;
-      try {
-        buildTokenStandardV2SettlementChoiceArgument({
-          ...settlementParams,
-          extraArgs: {
-            context: context as never,
-            meta: { values: {} },
-          },
-        });
-      } catch (error) {
-        thrown = error;
-      }
-      expect(thrown).toMatchObject({
-        name: 'TokenStandardV2SettlementFactoryError',
-        code: TokenStandardV2SettlementFactoryErrorCode.INPUT_INVALID,
+  const customPrototypeContext = Object.assign(Object.create({ inherited: true }) as Record<string, unknown>, {
+    values: {},
+  });
+
+  test.each([
+    {},
+    { values: [] },
+    { values: {}, unexpected: true },
+    { values: { invalid: undefined } },
+    { values: new Map([['registry.example/value', 'silently dropped']]) },
+    { values: { nested: new Map([['value', 'silently dropped']]) } },
+    customPrototypeContext,
+  ])('rejects malformed caller ChoiceContext %# with a typed input error', (context) => {
+    let thrown: unknown;
+    try {
+      buildTokenStandardV2SettlementChoiceArgument({
+        ...settlementParams,
+        extraArgs: {
+          context: context as never,
+          meta: { values: {} },
+        },
       });
+    } catch (error) {
+      thrown = error;
     }
-  );
+    expect(thrown).toMatchObject({
+      name: 'TokenStandardV2SettlementFactoryError',
+      code: TokenStandardV2SettlementFactoryErrorCode.INPUT_INVALID,
+    });
+  });
 
   test('looks up with empty extraArgs then combines registry context with caller metadata', async () => {
     const choiceContextData = {
@@ -566,6 +580,13 @@ describe('Token Standard V2 settlement-factory helpers', () => {
     },
     { factoryId: '#factory', choiceContext: { choiceContextData: {}, disclosedContracts: [] } },
     { factoryId: '#factory', choiceContext: { choiceContextData: { values: [] }, disclosedContracts: [] } },
+    {
+      factoryId: '#factory',
+      choiceContext: {
+        choiceContextData: { values: new Map([['registry.example/value', 'silently dropped']]) },
+        disclosedContracts: [],
+      },
+    },
     {
       factoryId: '#factory',
       choiceContext: { choiceContextData: { values: {}, unexpected: true }, disclosedContracts: [] },
