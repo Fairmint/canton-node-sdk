@@ -17,6 +17,7 @@ describe('SubscribeToUpdates', (): void => {
 
   it('rejects an error frame without waiting for a never-settling consumer callback', async (): Promise<void> => {
     const neverSettles = new Promise<void>(() => undefined);
+    const close = jest.fn();
     const onMessage = jest.fn(async (): Promise<void> => {
       await neverSettles;
     });
@@ -32,7 +33,7 @@ describe('SubscribeToUpdates', (): void => {
           errorCategory: 1,
         });
         return {
-          close: jest.fn(),
+          close,
           isConnected: (): boolean => true,
           getConnectionState: (): number => 1,
         };
@@ -50,6 +51,8 @@ describe('SubscribeToUpdates', (): void => {
       })
     ).rejects.toThrow('WebSocket error [INTERNAL]: stream failed');
     expect(onMessage).toHaveBeenCalledTimes(1);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(close).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a null frame without invoking the typed consumer callback', async (): Promise<void> => {

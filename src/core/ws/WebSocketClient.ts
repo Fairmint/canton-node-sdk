@@ -188,13 +188,10 @@ export class WebSocketClient {
         tokenRefreshTimer = null;
         void (async () => {
           if (options.onTokenExpiring) {
-            try {
-              await options.onTokenExpiring();
-            } catch (err) {
-              const error = toError(err);
+            observeCallback(options.onTokenExpiring, (error) => {
               notifyError(error);
               log('token_expiring_handler_error', { error: error.message });
-            }
+            });
           }
 
           log('token_refresh_triggered', { reason: 'proactive_refresh' });

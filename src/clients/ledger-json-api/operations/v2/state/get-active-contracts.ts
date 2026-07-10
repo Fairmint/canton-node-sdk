@@ -135,8 +135,10 @@ export class GetActiveContracts {
               }
             } else if (!settled) {
               // Treat any non-item as an error message
+              const error = toError(message);
               settled = true;
-              reject(toError(message));
+              reject(error);
+              throw error;
             }
           },
           onError: (err) => {

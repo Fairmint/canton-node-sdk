@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { ApiError } from '../../../../../core/errors';
-import { WebSocketClient, type WebSocketOptions } from '../../../../../core/ws/WebSocketClient';
+import {
+  WebSocketClient,
+  type WebSocketOptions,
+  type WebSocketSubscription,
+} from '../../../../../core/ws/WebSocketClient';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
 import {
   JsCantonErrorSchema,
@@ -211,6 +215,15 @@ export class SubscribeToUpdates {
 
     return new Promise<void>((resolve, reject) => {
       let settled = false;
+      let subscription: WebSocketSubscription | undefined;
+      let closeWhenConnected = false;
+      const closeSubscription = (): void => {
+        if (subscription) {
+          subscription.close();
+        } else {
+          closeWhenConnected = true;
+        }
+      };
 
       /** Convert a Canton error response to a proper Error object */
       const toError = (errorResponse: JsCantonError | WsCantonError): Error => {
@@ -240,9 +253,18 @@ export class SubscribeToUpdates {
               const message = decoded.data;
 
               // Surface Canton error frames immediately; a slow consumer callback must not delay stream failure.
-              if (isErrorMessage(message) && !settled) {
-                settled = true;
-                reject(toError(message));
+              if (isErrorMessage(message)) {
+                const error = toError(message);
+                if (!settled) {
+                  settled = true;
+                  reject(error);
+                }
+                closeSubscription();
+
+                if (typeof params.onMessage === 'function') {
+                  await params.onMessage(message);
+                }
+                throw error;
               }
 
               // Call user's onMessage callback if provided
@@ -265,6 +287,12 @@ export class SubscribeToUpdates {
           },
           wsOptions
         )
+        .then((connected) => {
+          subscription = connected;
+          if (closeWhenConnected) {
+            connected.close();
+          }
+        })
         .catch((err: unknown) => {
           if (!settled) {
             settled = true;

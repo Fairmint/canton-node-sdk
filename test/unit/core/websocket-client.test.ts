@@ -376,8 +376,8 @@ describe('WebSocketClient', () => {
 
     expect(onTokenExpiring).toHaveBeenCalledTimes(1);
     expect(onTokenRefreshNeeded).toHaveBeenCalledTimes(1);
-    expect(onError).toHaveBeenNthCalledWith(1, expiringError);
-    expect(onError).toHaveBeenNthCalledWith(2, refreshError);
+    expect(onError).toHaveBeenCalledWith(expiringError);
+    expect(onError).toHaveBeenCalledWith(refreshError);
     expect(socket.close).toHaveBeenCalledWith(4000, 'Token refresh required');
     expect(logRequestResponse).toHaveBeenCalledWith(
       'wss://ledger.example/v2/state/active-contracts',
@@ -389,6 +389,37 @@ describe('WebSocketClient', () => {
       expect.objectContaining({ event: 'token_refresh_handler_error' }),
       { error: 'refresh callback failed' }
     );
+  });
+
+  it('does not let a pending token-expiring callback block refresh close', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-07-10T04:00:00.000Z'));
+    const now = Date.now();
+    const logRequestResponse = jest.fn().mockResolvedValue(undefined);
+    const client = {
+      getApiUrl: () => 'https://ledger.example',
+      authenticate: jest.fn().mockResolvedValue('token'),
+      getTokenIssuedAt: () => now - 120_000,
+      getTokenExpiryTime: () => now - 60_000,
+      getLogger: () => ({ logRequestResponse }),
+    } as unknown as BaseClient;
+    const onTokenExpiring = jest.fn(async (): Promise<void> => new Promise<void>(() => undefined));
+    const onTokenRefreshNeeded = jest.fn().mockResolvedValue(undefined);
+
+    await new WebSocketClient(client).connect(
+      '/v2/state/active-contracts',
+      { activeAtOffset: 42 },
+      { onMessage: jest.fn() },
+      { onTokenExpiring, onTokenRefreshNeeded }
+    );
+    const socket = mockSockets[0];
+    if (!socket) throw new Error('Expected WebSocketClient to construct one socket.');
+
+    await jest.runOnlyPendingTimersAsync();
+
+    expect(onTokenExpiring).toHaveBeenCalledTimes(1);
+    expect(onTokenRefreshNeeded).toHaveBeenCalledTimes(1);
+    expect(socket.close).toHaveBeenCalledWith(4000, 'Token refresh required');
   });
 
   it('isolates a rejected close callback after delivering the close event', async () => {
