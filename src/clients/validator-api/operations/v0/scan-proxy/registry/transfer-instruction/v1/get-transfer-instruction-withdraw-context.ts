@@ -33,6 +33,7 @@ export const GetTransferInstructionWithdrawContext = createApiOperation<
 >({
   paramsSchema: GetTransferInstructionWithdrawContextParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (params: GetTransferInstructionWithdrawContextParams, apiUrl: string) =>
     `${apiUrl}/api/validator/v0/scan-proxy/registry/transfer-instruction/v1/${params.transferInstructionId}/choice-contexts/withdraw`,
   buildRequestData: (

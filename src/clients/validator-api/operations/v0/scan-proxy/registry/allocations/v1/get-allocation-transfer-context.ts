@@ -38,6 +38,7 @@ export const GetAllocationTransferContext = createApiOperation<
 >({
   paramsSchema: GetAllocationTransferContextParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (params: GetAllocationTransferContextParams, apiUrl: string) =>
     `${apiUrl}${endpoint}/${params.allocationId}/choice-contexts/execute-transfer`,
   buildRequestData: (params: GetAllocationTransferContextParams): GetAllocationTransferContextRequest => {

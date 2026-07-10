@@ -2,8 +2,17 @@ import { z } from 'zod';
 import { ApiError } from '../../../../../core/errors';
 import { WebSocketClient } from '../../../../../core/ws/WebSocketClient';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
-import { type JsCantonError, type WsCantonError } from '../../../schemas/api/errors';
-import { type JsGetActiveContractsResponse, type JsGetActiveContractsResponseItem } from '../../../schemas/api/state';
+import {
+  JsCantonErrorSchema,
+  WsCantonErrorSchema,
+  type JsCantonError,
+  type WsCantonError,
+} from '../../../schemas/api/errors';
+import {
+  JsGetActiveContractsResponseItemSchema,
+  type JsGetActiveContractsResponse,
+  type JsGetActiveContractsResponseItem,
+} from '../../../schemas/api/state';
 import { buildEventFormat } from '../utils/event-format-builder';
 
 const path = '/v2/state/active-contracts' as const;
@@ -20,7 +29,11 @@ const ActiveContractsParamsSchema = z.object({
   parties: z.array(z.string()).optional(),
   /** Optional template filters applied server-side. */
   templateIds: z.array(z.string()).optional(),
-  /** Include created event blob in TemplateFilter results (default false). */
+  /** Optional interface filters applied server-side. */
+  interfaceIds: z.array(z.string()).optional(),
+  /** Include interface views in InterfaceFilter results (default true). */
+  includeInterfaceView: z.boolean().optional(),
+  /** Include created event blobs in template and interface filter results (default false). */
   includeCreatedEventBlob: z.boolean().optional(),
   /** Allow caller to omit activeAtOffset; we'll default to ledger end */
   activeAtOffset: z.number().optional(),
@@ -28,7 +41,7 @@ const ActiveContractsParamsSchema = z.object({
 
 export type GetActiveContractsParams = z.infer<typeof ActiveContractsParamsSchema> & {
   /** Optional per-item callback to consume results as they arrive. */
-  onItem?: (item: JsGetActiveContractsResponseItem) => void;
+  onItem?: (item: JsGetActiveContractsResponseItem) => void | Promise<void>;
 };
 
 export class GetActiveContracts {
@@ -43,10 +56,11 @@ export class GetActiveContracts {
       ({ activeAtOffset } = validated);
     } else {
       const ledgerEnd = await this.client.getLedgerEnd({});
-      if (ledgerEnd.offset === undefined) {
+      const { offset } = ledgerEnd;
+      if (offset === undefined) {
         throw new ApiError('Ledger end response did not include an offset');
       }
-      activeAtOffset = ledgerEnd.offset;
+      activeAtOffset = offset;
     }
 
     // Build party list - default to client's party list if not provided
@@ -57,6 +71,10 @@ export class GetActiveContracts {
     const eventFormat = buildEventFormat({
       parties: partyList,
       ...(validated.templateIds !== undefined && { templateIds: validated.templateIds }),
+      ...(validated.interfaceIds !== undefined && { interfaceIds: validated.interfaceIds }),
+      ...(validated.includeInterfaceView !== undefined && {
+        includeInterfaceView: validated.includeInterfaceView,
+      }),
       ...(validated.includeCreatedEventBlob !== undefined && {
         includeCreatedEventBlob: validated.includeCreatedEventBlob,
       }),
@@ -69,8 +87,11 @@ export class GetActiveContracts {
       eventFormat: ReturnType<typeof buildEventFormat>;
     }
 
-    // Response message can be a contract item or an error
-    type ActiveContractsResponseMessage = JsGetActiveContractsResponseItem | JsCantonError | WsCantonError;
+    const ActiveContractsResponseMessageSchema = z.union([
+      JsGetActiveContractsResponseItemSchema,
+      JsCantonErrorSchema,
+      WsCantonErrorSchema,
+    ]);
 
     const requestMessage: ActiveContractsRequestMessage = {
       verbose: false,
@@ -98,18 +119,26 @@ export class GetActiveContracts {
       };
 
       void wsClient
-        .connect<ActiveContractsRequestMessage, ActiveContractsResponseMessage>(path, requestMessage, {
-          onMessage: (parsed) => {
+        .connect<ActiveContractsRequestMessage, unknown>(path, requestMessage, {
+          onMessage: async (parsed): Promise<void> => {
+            const decoded = ActiveContractsResponseMessageSchema.safeParse(parsed);
+            if (!decoded.success) {
+              throw new ApiError('Unexpected active-contracts WebSocket message');
+            }
+            const message = decoded.data;
+
             // Distinguish item vs error union members
-            if (typeof parsed === 'object' && 'contractEntry' in parsed) {
-              results.push(parsed);
+            if ('contractEntry' in message) {
+              results.push(message);
               if (typeof params.onItem === 'function') {
-                params.onItem(parsed);
+                await params.onItem(message);
               }
             } else if (!settled) {
               // Treat any non-item as an error message
+              const error = toError(message);
               settled = true;
-              reject(toError(parsed));
+              reject(error);
+              throw error;
             }
           },
           onError: (err) => {

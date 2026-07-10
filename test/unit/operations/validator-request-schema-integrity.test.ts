@@ -143,7 +143,6 @@ describe('validator request schema integrity', () => {
       ) as string,
     });
   });
-
   it('posts the exact wallet transaction-history request and returns every discriminated response branch', async (): Promise<void> => {
     const request = {
       begin_after_id: 'event-cursor-123',

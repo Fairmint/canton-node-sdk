@@ -27,6 +27,7 @@ export const ErrorCode = {
   API_ERROR: 'API_ERROR',
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   NETWORK_ERROR: 'NETWORK_ERROR',
+  UNKNOWN_MUTATION_OUTCOME: 'UNKNOWN_MUTATION_OUTCOME',
 } as const;
 
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -108,6 +109,55 @@ export class NetworkError extends CantonError {
   }
 }
 
+/** HTTP methods whose requests may have changed server state before the response was lost. */
+export type MutationHttpMethod = 'POST' | 'PATCH' | 'DELETE';
+
+/** Safe, redacted details for a mutation whose server-side outcome cannot be determined. */
+export interface UnknownMutationOutcomeDetails {
+  readonly method: MutationHttpMethod;
+  readonly endpoint: string;
+  readonly attempts: number;
+  readonly attemptIdentifiers?: readonly string[];
+}
+
+/**
+ * Error thrown when a mutation was dispatched but the transport could not determine whether the server applied it.
+ *
+ * Request bodies, signatures, and tokens are deliberately excluded from the message and serializable context. Callers
+ * may opt into a retry strategy and supply explicitly redacted attempt identifiers when an operation is safe to retry.
+ */
+export class UnknownMutationOutcomeError extends CantonError {
+  public override readonly name: string;
+  public readonly method: MutationHttpMethod;
+  public readonly endpoint: string;
+  public readonly attempts: number;
+  public readonly attemptIdentifiers: readonly string[];
+  public readonly cause: Error;
+
+  constructor(details: UnknownMutationOutcomeDetails, cause: Error) {
+    const attemptIdentifiers = Object.freeze([...(details.attemptIdentifiers ?? [])]);
+    const context: ErrorContext = {
+      method: details.method,
+      endpoint: details.endpoint,
+      attempts: details.attempts,
+      ...(attemptIdentifiers.length > 0 ? { attemptIdentifiers } : {}),
+    };
+
+    super(
+      `The outcome of ${details.method} ${details.endpoint} is unknown after ${details.attempts} request attempt${details.attempts === 1 ? '' : 's'}`,
+      ErrorCode.UNKNOWN_MUTATION_OUTCOME,
+      context
+    );
+    this.name = 'UnknownMutationOutcomeError';
+    this.method = details.method;
+    this.endpoint = details.endpoint;
+    this.attempts = details.attempts;
+    this.attemptIdentifiers = attemptIdentifiers;
+    this.cause = cause;
+    Object.defineProperty(this, 'cause', { enumerable: false });
+  }
+}
+
 /** Error codes for operation-specific errors. */
 export const OperationErrorCode = {
   MISSING_CONTRACT: 'MISSING_CONTRACT',
@@ -139,6 +189,7 @@ const CANTON_SDK_ERROR_NAMES = new Set([
   'ConfigurationError',
   'NetworkError',
   'OperationError',
+  'UnknownMutationOutcomeError',
   'ValidationError',
 ]);
 
@@ -165,21 +216,25 @@ export function normalizeCantonError(error: unknown): NormalizedCantonErrorDetai
   };
 }
 
-/** Return true when a Canton error represents a non-retryable 4xx mutation rejection. */
+/** Return true when a Canton response proves that a mutation was rejected, independently from retryability. */
 export function isDefiniteCantonMutationRejection(error: unknown): boolean {
   const details = normalizeCantonError(error);
   const status = details?.status;
   if (status === undefined) return false;
-  if (isRetryableCantonApiCode(status, details?.code)) return false;
   return status >= 400 && status < 500 && status !== 408 && status !== 425 && status !== 429;
 }
 
-/** Return true when a Canton API status/code pair is known to be transient. */
-function isRetryableCantonApiCode(status: number, code: string | undefined): boolean {
-  return (
-    (status === 400 && code === 'UNKNOWN_CONTRACT_SYNCHRONIZERS') ||
-    (status === 409 && code === 'SEQUENCER_BACKPRESSURE')
-  );
+/** Read Canton's structured mutation-outcome signal when the API supplies one. */
+export function readCantonDefiniteAnswer(error: unknown): boolean | undefined {
+  const direct = readDefiniteAnswerProperty(error);
+  if (direct !== undefined) return direct;
+  return readDefiniteAnswerProperty(normalizeCantonError(error)?.context);
+}
+
+function readDefiniteAnswerProperty(source: unknown): boolean | undefined {
+  if (!isObjectRecord(source)) return undefined;
+  const value = source['definiteAnswer'] ?? source['definite_answer'];
+  return typeof value === 'boolean' ? value : undefined;
 }
 
 /** Read normalized error context from current and legacy SDK error fields. */

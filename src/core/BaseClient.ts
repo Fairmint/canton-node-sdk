@@ -1,8 +1,16 @@
 import { type PartyId, type UserId } from './branded-types';
 import { ConfigurationError } from './errors';
 import { HttpClient } from './http/HttpClient';
+import { type HttpReadRequestOptions, type HttpRequestOptions } from './http/request-retry';
 import { type CantonRuntime } from './runtime';
-import { type ApiType, type ClientConfig, type NetworkType, type PartialProviderConfig, type ProviderType, type RequestConfig } from './types';
+import {
+  type ApiType,
+  type ClientConfig,
+  type NetworkType,
+  type PartialProviderConfig,
+  type ProviderType,
+  type RequestConfig,
+} from './types';
 
 /** Abstract base class providing common functionality for all API clients */
 export abstract class BaseClient {
@@ -40,7 +48,7 @@ export abstract class BaseClient {
     }
 
     this.httpClient = new HttpClient(this.clientConfig.logger, async () =>
-      this.runtime.getAuthenticationManager(this.config.authUrl, apiConfig.auth).authenticate(),
+      this.runtime.getAuthenticationManager(this.config.authUrl, apiConfig.auth).authenticate()
     );
   }
 
@@ -97,20 +105,38 @@ export abstract class BaseClient {
     return this.runtime.getAuthenticationManager(this.config.authUrl, apiConfig.auth).getTokenLifetimeMs();
   }
 
-  public async makeGetRequest<T>(url: string, config: RequestConfig = {}): Promise<T> {
-    return this.httpClient.makeGetRequest<T>(url, config);
+  public async makeGetRequest<T>(
+    url: string,
+    config: RequestConfig = {},
+    options: HttpReadRequestOptions<undefined> = {}
+  ): Promise<T> {
+    return this.httpClient.makeGetRequest<T>(url, config, options);
   }
 
-  public async makePostRequest<T>(url: string, data: unknown, config: RequestConfig = {}): Promise<T> {
-    return this.httpClient.makePostRequest<T>(url, data, config);
+  public async makePostRequest<T, Body = unknown>(
+    url: string,
+    data: Body,
+    config: RequestConfig = {},
+    options: HttpRequestOptions<Body> = {}
+  ): Promise<T> {
+    return this.httpClient.makePostRequest<T, Body>(url, data, config, options);
   }
 
-  public async makeDeleteRequest<T>(url: string, config: RequestConfig = {}): Promise<T> {
-    return this.httpClient.makeDeleteRequest<T>(url, config);
+  public async makeDeleteRequest<T>(
+    url: string,
+    config: RequestConfig = {},
+    options: HttpRequestOptions<undefined> = {}
+  ): Promise<T> {
+    return this.httpClient.makeDeleteRequest<T>(url, config, options);
   }
 
-  public async makePatchRequest<T>(url: string, data: unknown, config: RequestConfig = {}): Promise<T> {
-    return this.httpClient.makePatchRequest<T>(url, data, config);
+  public async makePatchRequest<T, Body = unknown>(
+    url: string,
+    data: Body,
+    config: RequestConfig = {},
+    options: HttpRequestOptions<Body> = {}
+  ): Promise<T> {
+    return this.httpClient.makePatchRequest<T, Body>(url, data, config, options);
   }
 
   public getLogger(): import('./logging').Logger | undefined {
@@ -196,5 +222,4 @@ export abstract class BaseClient {
   public getApiType(): ApiType {
     return this.apiType;
   }
-
 }
