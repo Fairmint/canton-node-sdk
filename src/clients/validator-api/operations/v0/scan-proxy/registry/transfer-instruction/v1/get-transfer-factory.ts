@@ -33,6 +33,7 @@ export type GetTransferFactoryResponse = paths[ApiPath]['post']['responses']['20
 export const GetTransferFactory = createApiOperation<GetTransferFactoryParams, GetTransferFactoryResponse>({
   paramsSchema: GetTransferFactoryParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params: GetTransferFactoryParams, apiUrl: string) => `${apiUrl}${endpoint}`,
   buildRequestData: (params: GetTransferFactoryParams) => ({
     choiceArguments: params.choiceArguments,

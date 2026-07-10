@@ -318,11 +318,14 @@ describe('discoverTokenStandardV2AllocationState', () => {
     expect(ledger.getActiveContracts).toHaveBeenCalledTimes(1);
   });
 
-  test('fails closed when a requested allocation interface view fails', async () => {
+  test.each([
+    ['Completed', 'Token Standard V2 allocation interface view request failed.'],
+    ['Pending', 'Token Standard V2 allocation instruction interface view request failed.'],
+  ] as const)('fails closed when a requested %s interface view fails', async (kind, message) => {
     const ledger = createLedger([
       activeContract({
         contractId: '#failed-view',
-        kind: 'Completed',
+        kind,
         viewStatusCode: 13,
       }),
     ]);
@@ -336,12 +339,42 @@ describe('discoverTokenStandardV2AllocationState', () => {
         activeAtOffset: 42,
       })
     ).rejects.toMatchObject({
+      message,
       code: TokenStandardV2AllocationStateErrorCode.INTERFACE_VIEW_INVALID,
       context: {
         contractId: '#failed-view',
         viewStatusCode: 13,
         viewStatusMessage: 'view unavailable',
       },
+    });
+  });
+
+  test('rejects inconsistent duplicate visibility rows when one contains sparse nested arrays', async () => {
+    const sparseActions = new Array<unknown>(1);
+    const ledger = createLedger([
+      activeContract({
+        contractId: '#allocation',
+        kind: 'Completed',
+        viewValue: { ...completedView, availableActions: sparseActions },
+      }),
+      activeContract({
+        contractId: '#allocation',
+        kind: 'Completed',
+        viewValue: { ...completedView, availableActions: [undefined] },
+      }),
+    ]);
+
+    await expect(
+      discoverTokenStandardV2AllocationState({
+        ledger,
+        parties: ['Buyer::alice'],
+        synchronizerId,
+        request,
+        activeAtOffset: 42,
+      })
+    ).rejects.toMatchObject({
+      code: TokenStandardV2AllocationStateErrorCode.INTERFACE_VIEW_INVALID,
+      context: { contractId: '#allocation' },
     });
   });
 
@@ -617,6 +650,23 @@ describe('discoverTokenStandardV2AllocationState', () => {
         },
       },
     ],
+    [
+      'sparse input holding IDs',
+      {
+        ...request,
+        inputHoldingCids: new Array<string>(1),
+      },
+    ],
+    [
+      'sparse transfer-leg sides',
+      {
+        ...request,
+        allocation: {
+          ...request.allocation,
+          transferLegSides: new Array<typeof cashLeg>(1),
+        },
+      },
+    ],
   ] as const)('rejects a request containing %s before querying Canton', async (_case, invalidRequest) => {
     const ledger = createLedger([]);
 
@@ -860,6 +910,7 @@ describe('getTokenStandardV2AllocationViewsByContractIds', () => {
 
   test('rejects duplicate or empty allocation CID inputs before querying Canton', async () => {
     const ledger = createLedger([]);
+    const sparseAllocationCids = new Array<string>(1);
     await expect(
       getTokenStandardV2AllocationViewsByContractIds({
         ledger,
@@ -875,6 +926,15 @@ describe('getTokenStandardV2AllocationViewsByContractIds', () => {
         parties: ['Buyer::alice'],
         synchronizerId,
         allocationCids: [],
+        activeAtOffset: 42,
+      })
+    ).rejects.toMatchObject({ code: TokenStandardV2AllocationStateErrorCode.INPUT_INVALID });
+    await expect(
+      getTokenStandardV2AllocationViewsByContractIds({
+        ledger,
+        parties: ['Buyer::alice'],
+        synchronizerId,
+        allocationCids: sparseAllocationCids,
         activeAtOffset: 42,
       })
     ).rejects.toMatchObject({ code: TokenStandardV2AllocationStateErrorCode.INPUT_INVALID });

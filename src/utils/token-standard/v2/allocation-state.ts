@@ -163,6 +163,22 @@ function readNullableNonEmptyString(value: unknown, field: string, invalid: Inva
   return value === null || value === undefined ? null : requireTrimmedNonEmpty(value, field, invalid);
 }
 
+function mapDenseArray<T>(
+  value: readonly unknown[],
+  field: string,
+  invalid: InvalidValueHandler,
+  transform: (item: unknown, index: number) => T
+): T[] {
+  const result: T[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    if (!(index in value)) {
+      invalid(`${field} must not contain missing elements.`, { field: `${field}[${index}]` });
+    }
+    result.push(transform(value[index], index));
+  }
+  return result;
+}
+
 function readStringArray(
   value: unknown,
   field: string,
@@ -172,7 +188,7 @@ function readStringArray(
   if (!Array.isArray(value) || (!options.allowEmpty && value.length === 0)) {
     invalid(`${field} must be ${options.allowEmpty ? 'an array' : 'a non-empty array'}.`, { field, value });
   }
-  return value.map((item, index) => {
+  return mapDenseArray(value, field, invalid, (item, index) => {
     const itemField = `${field}[${index}]`;
     return options.trim ? requireTrimmedNonEmpty(item, itemField, invalid) : requireText(item, itemField, invalid);
   });
@@ -270,28 +286,33 @@ function readAllocation(
   if (!isRecord(value) || !Array.isArray(value['transferLegSides'])) {
     invalid(`${field} must be an allocation record.`, { field, value });
   }
-  const transferLegSides = value['transferLegSides'].map((transferLegSide, index) => {
-    const legField = `${field}.transferLegSides[${index}]`;
-    if (!isRecord(transferLegSide)) {
-      invalid(`${legField} must be a transfer-leg side.`, { field: legField, value: transferLegSide });
+  const transferLegSides = mapDenseArray(
+    value['transferLegSides'],
+    `${field}.transferLegSides`,
+    invalid,
+    (transferLegSide, index) => {
+      const legField = `${field}.transferLegSides[${index}]`;
+      if (!isRecord(transferLegSide)) {
+        invalid(`${legField} must be a transfer-leg side.`, { field: legField, value: transferLegSide });
+      }
+      const { side } = transferLegSide;
+      if (side !== 'SenderSide' && side !== 'ReceiverSide') {
+        invalid(`${legField}.side must be SenderSide or ReceiverSide.`, {
+          field: `${legField}.side`,
+          value: side,
+        });
+      }
+      const normalizedSide: 'SenderSide' | 'ReceiverSide' = side === 'SenderSide' ? 'SenderSide' : 'ReceiverSide';
+      return {
+        transferLegId: requireText(transferLegSide['transferLegId'], `${legField}.transferLegId`, invalid),
+        side: normalizedSide,
+        otherside: readAccount(transferLegSide['otherside'], `${legField}.otherside`, invalid),
+        amount: readDecimal(transferLegSide['amount'], `${legField}.amount`, invalid, false),
+        instrumentId: requireText(transferLegSide['instrumentId'], `${legField}.instrumentId`, invalid),
+        meta: readMetadata(transferLegSide['meta'], `${legField}.meta`, invalid),
+      };
     }
-    const { side } = transferLegSide;
-    if (side !== 'SenderSide' && side !== 'ReceiverSide') {
-      invalid(`${legField}.side must be SenderSide or ReceiverSide.`, {
-        field: `${legField}.side`,
-        value: side,
-      });
-    }
-    const normalizedSide: 'SenderSide' | 'ReceiverSide' = side === 'SenderSide' ? 'SenderSide' : 'ReceiverSide';
-    return {
-      transferLegId: requireText(transferLegSide['transferLegId'], `${legField}.transferLegId`, invalid),
-      side: normalizedSide,
-      otherside: readAccount(transferLegSide['otherside'], `${legField}.otherside`, invalid),
-      amount: readDecimal(transferLegSide['amount'], `${legField}.amount`, invalid, false),
-      instrumentId: requireText(transferLegSide['instrumentId'], `${legField}.instrumentId`, invalid),
-      meta: readMetadata(transferLegSide['meta'], `${legField}.meta`, invalid),
-    };
-  });
+  );
   const transferLegSideKeys = transferLegSides.map(({ side, transferLegId }) => JSON.stringify([transferLegId, side]));
   if (new Set(transferLegSideKeys).size !== transferLegSideKeys.length) {
     invalid(`${field}.transferLegSides must not contain duplicate transfer-leg sides.`, {
@@ -450,7 +471,11 @@ function interfaceIdsMatch(left: string, right: string): boolean {
 }
 
 function arraysEqual<T>(left: readonly T[], right: readonly T[], equal: (a: T, b: T) => boolean): boolean {
-  return left.length === right.length && left.every((value, index) => equal(value, right[index] as T));
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (!(index in left) || !(index in right) || !equal(left[index] as T, right[index] as T)) return false;
+  }
+  return true;
 }
 
 function stringArraysEqual(left: readonly string[], right: readonly string[]): boolean {
@@ -609,7 +634,7 @@ function normalizeAllocationCids(value: unknown): string[] {
       allocationCids: value,
     });
   }
-  const allocationCids = value.map((contractId, index) =>
+  const allocationCids = mapDenseArray(value, 'allocationCids', inputInvalid, (contractId, index) =>
     requireTrimmedNonEmpty(contractId, `allocationCids[${index}]`, inputInvalid)
   );
   if (new Set(allocationCids).size !== allocationCids.length) {
@@ -799,11 +824,14 @@ export async function discoverTokenStandardV2AllocationState(
         interfaceId: interfaceView.interfaceId,
       };
       if (interfaceView.viewStatus.code !== 0) {
-        interfaceViewInvalid('Token Standard V2 allocation interface view request failed.', {
-          ...context,
-          viewStatusCode: interfaceView.viewStatus.code,
-          viewStatusMessage: interfaceView.viewStatus.message,
-        });
+        interfaceViewInvalid(
+          `Token Standard V2 ${isAllocation ? 'allocation' : 'allocation instruction'} interface view request failed.`,
+          {
+            ...context,
+            viewStatusCode: interfaceView.viewStatus.code,
+            viewStatusMessage: interfaceView.viewStatus.message,
+          }
+        );
       }
       if (!isNonEmptyString(createdEvent.contractId)) {
         interfaceViewInvalid('Matching active contract is missing contractId.', context);

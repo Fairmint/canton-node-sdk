@@ -1,4 +1,13 @@
-import { ApiError, ConfigurationError, NetworkError, type CantonRuntime, type RequestConfig } from '../../core';
+import {
+  ApiError,
+  ConfigurationError,
+  NetworkError,
+  snapshotHttpRequestOptions,
+  type CantonRuntime,
+  type HttpReadRequestOptions,
+  type HttpRequestOptions,
+  type RequestConfig,
+} from '../../core';
 import { getScanHostRoot, resolveScanApiUrls } from './scan-endpoints';
 import { ScanApiClient as ScanApiClientGenerated } from './ScanApiClient.generated';
 
@@ -58,7 +67,7 @@ export class ScanApiClient extends ScanApiClientGenerated {
   constructor(runtime: CantonRuntime, options: ScanApiClientOptions = {}) {
     const resolvedUrls = options.scanApiUrls ?? resolveScanApiUrls(runtime.getNetwork(), runtime.getProvider());
     const fallbackUrl = resolvedUrls.length > 0 ? undefined : resolveConfiguredScanApiUrl(runtime);
-    const scanApiUrls = resolvedUrls.length > 0 ? resolvedUrls : fallbackUrl ? [fallbackUrl] : [];
+    const scanApiUrls = Object.freeze([...(resolvedUrls.length > 0 ? resolvedUrls : fallbackUrl ? [fallbackUrl] : [])]);
 
     const [firstApiUrl] = scanApiUrls;
     if (!firstApiUrl) {
@@ -81,6 +90,9 @@ export class ScanApiClient extends ScanApiClientGenerated {
 
     this.scanApiUrls = scanApiUrls;
     this.maxEndpointAttempts = options.maxEndpointAttempts ?? scanApiUrls.length;
+    if (!Number.isInteger(this.maxEndpointAttempts) || this.maxEndpointAttempts < 1) {
+      throw new ConfigurationError('maxEndpointAttempts must be a positive integer');
+    }
     this.activeBaseUrlIndex = 0;
 
     // Prefer rotating quickly across endpoints rather than waiting on per-endpoint retries.
@@ -131,55 +143,130 @@ export class ScanApiClient extends ScanApiClientGenerated {
     return null;
   }
 
-  private async rotateRequest<T>(fullUrl: string, doRequest: (url: string) => Promise<T>): Promise<T> {
-    if (this.scanApiUrls.length <= 1) {
-      return doRequest(fullUrl);
+  /** Run Scan failover inside one HttpClient retry loop so attempt budgets, bodies, and hook history stay coherent. */
+  private async makeReadRequestWithFailover<T, Body>(
+    fullUrl: string,
+    options: Readonly<HttpReadRequestOptions<Body> | HttpRequestOptions<Body>>,
+    doRequest: (requestOptions: HttpReadRequestOptions<Body>) => Promise<T>
+  ): Promise<T> {
+    const readOptions = snapshotHttpRequestOptions<Body>({ ...options, requestSemantics: 'read' });
+    // An explicit resolver is the caller's failover policy and takes precedence over Scan's built-in endpoint list.
+    if (
+      this.scanApiUrls.length <= 1 ||
+      readOptions.retry?.kind === 'none' ||
+      readOptions.resolveReadAttemptUrl !== undefined
+    ) {
+      return doRequest(readOptions);
     }
 
     const rotatableUrl = this.getRotatableUrl(fullUrl);
     if (rotatableUrl === null) {
-      return doRequest(fullUrl);
+      return doRequest(readOptions);
     }
 
-    const maxAttempts = Math.min(this.maxEndpointAttempts, this.scanApiUrls.length);
-    let lastError: unknown;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const index = (this.activeBaseUrlIndex + attempt) % this.scanApiUrls.length;
-      const base = this.scanApiUrls[index];
-      if (!base) {
-        continue;
-      }
-      const url = rotatableUrl.buildUrl(base);
-
-      try {
-        const result = await doRequest(url);
-        this.setActiveBaseUrl(index);
-        return result;
-      } catch (error) {
-        if (!shouldRotateOnError(error)) {
-          throw error;
+    const maxDistinctEndpoints = Math.min(this.maxEndpointAttempts, this.scanApiUrls.length);
+    const startingBaseUrlIndex = this.activeBaseUrlIndex;
+    let selectedBaseUrlIndex = startingBaseUrlIndex;
+    const shouldRetryScanFailure = ({
+      error,
+      retryable,
+    }: {
+      readonly error: Error;
+      readonly retryable: boolean;
+    }): boolean => retryable || shouldRotateOnError(error);
+    const configuredRetry = readOptions.retry;
+    // A caller-supplied predicate is authoritative, matching HttpClient semantics. Scan contributes its transport and
+    // rotation classification only when the caller supplies an attempt budget without a custom predicate.
+    const retry =
+      configuredRetry === undefined
+        ? Object.freeze({
+            kind: 'exact-body' as const,
+            maxAttempts: maxDistinctEndpoints,
+            backoffMs: 0,
+            shouldRetry: shouldRetryScanFailure,
+          })
+        : configuredRetry.shouldRetry === undefined
+          ? Object.freeze({ ...configuredRetry, shouldRetry: shouldRetryScanFailure })
+          : configuredRetry;
+    const failoverOptions = snapshotHttpRequestOptions<Body>({
+      ...readOptions,
+      retry,
+      requestSemantics: 'read',
+      resolveReadAttemptUrl: ({ attempt }): string => {
+        const endpointOffset = (attempt - 1) % maxDistinctEndpoints;
+        selectedBaseUrlIndex = (startingBaseUrlIndex + endpointOffset) % this.scanApiUrls.length;
+        const baseUrl = this.scanApiUrls[selectedBaseUrlIndex];
+        if (!baseUrl) {
+          throw new ConfigurationError(`Missing Scan endpoint at index ${selectedBaseUrlIndex}`);
         }
-        lastError = error;
-      }
+        return rotatableUrl.buildUrl(baseUrl);
+      },
+    });
+
+    const result = await doRequest(failoverOptions);
+    this.setActiveBaseUrl(selectedBaseUrlIndex);
+    return result;
+  }
+
+  public override async makeGetRequest<T>(
+    url: string,
+    config: RequestConfig = {},
+    options: HttpReadRequestOptions<undefined> = {}
+  ): Promise<T> {
+    const requestConfig: RequestConfig = Object.freeze({ ...config });
+    const requestOptions = snapshotHttpRequestOptions(options);
+    if (requestOptions.retry?.kind === 'none') {
+      return super.makeGetRequest<T>(url, requestConfig, requestOptions);
     }
-
-    throw lastError instanceof Error ? lastError : new NetworkError(`Scan request failed: ${String(lastError)}`);
+    return this.makeReadRequestWithFailover(url, requestOptions, async (failoverOptions) =>
+      super.makeGetRequest<T>(url, requestConfig, failoverOptions)
+    );
   }
 
-  public override async makeGetRequest<T>(url: string, config: RequestConfig = {}): Promise<T> {
-    return this.rotateRequest(url, async (u) => super.makeGetRequest<T>(u, config));
+  public override async makePostRequest<T, Body = unknown>(
+    url: string,
+    data: Body,
+    config: RequestConfig = {},
+    options: HttpRequestOptions<Body> = {}
+  ): Promise<T> {
+    const requestConfig: RequestConfig = Object.freeze({ ...config });
+    const requestOptions = snapshotHttpRequestOptions(options);
+    if (requestOptions.requestSemantics !== 'read' || requestOptions.retry?.kind === 'none') {
+      return super.makePostRequest<T, Body>(url, data, requestConfig, requestOptions);
+    }
+    return this.makeReadRequestWithFailover(url, requestOptions, async (failoverOptions) =>
+      super.makePostRequest<T, Body>(url, data, requestConfig, failoverOptions)
+    );
   }
 
-  public override async makePostRequest<T>(url: string, data: unknown, config: RequestConfig = {}): Promise<T> {
-    return this.rotateRequest(url, async (u) => super.makePostRequest<T>(u, data, config));
+  public override async makeDeleteRequest<T>(
+    url: string,
+    config: RequestConfig = {},
+    options: HttpRequestOptions<undefined> = {}
+  ): Promise<T> {
+    const requestConfig: RequestConfig = Object.freeze({ ...config });
+    const requestOptions = snapshotHttpRequestOptions(options);
+    if (requestOptions.requestSemantics !== 'read' || requestOptions.retry?.kind === 'none') {
+      return super.makeDeleteRequest<T>(url, requestConfig, requestOptions);
+    }
+    return this.makeReadRequestWithFailover(url, requestOptions, async (failoverOptions) =>
+      super.makeDeleteRequest<T>(url, requestConfig, failoverOptions)
+    );
   }
 
-  public override async makeDeleteRequest<T>(url: string, config: RequestConfig = {}): Promise<T> {
-    return this.rotateRequest(url, async (u) => super.makeDeleteRequest<T>(u, config));
-  }
-
-  public override async makePatchRequest<T>(url: string, data: unknown, config: RequestConfig = {}): Promise<T> {
-    return this.rotateRequest(url, async (u) => super.makePatchRequest<T>(u, data, config));
+  public override async makePatchRequest<T, Body = unknown>(
+    url: string,
+    data: Body,
+    config: RequestConfig = {},
+    options: HttpRequestOptions<Body> = {}
+  ): Promise<T> {
+    const requestConfig: RequestConfig = Object.freeze({ ...config });
+    const requestOptions = snapshotHttpRequestOptions(options);
+    if (requestOptions.requestSemantics !== 'read' || requestOptions.retry?.kind === 'none') {
+      return super.makePatchRequest<T, Body>(url, data, requestConfig, requestOptions);
+    }
+    return this.makeReadRequestWithFailover(url, requestOptions, async (failoverOptions) =>
+      super.makePatchRequest<T, Body>(url, data, requestConfig, failoverOptions)
+    );
   }
 }

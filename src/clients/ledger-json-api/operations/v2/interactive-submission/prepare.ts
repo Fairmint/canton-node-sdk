@@ -12,6 +12,7 @@ export const InteractiveSubmissionPrepare = createApiOperation<
 >({
   paramsSchema: InteractiveSubmissionPrepareRequestSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params: InteractiveSubmissionPrepareRequest, apiUrl: string) =>
     `${apiUrl}/v2/interactive-submission/prepare`,
   buildRequestData: (params) => params,

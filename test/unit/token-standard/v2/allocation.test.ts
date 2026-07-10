@@ -137,6 +137,32 @@ describe('Token Standard V2 allocation helpers', () => {
     );
   });
 
+  test('omits unknown caller properties from the ledger choice argument', () => {
+    const transferLegSide = allocationParams.allocation.transferLegSides[0];
+    if (!transferLegSide) throw new Error('test fixture must include one transfer-leg side');
+    const choiceArgument = buildTokenStandardV2AllocationChoiceArgument({
+      ...allocationParams,
+      settlement: {
+        ...allocationParams.settlement,
+        callerOnlySettlementField: 'must-not-reach-canton',
+      },
+      allocation: {
+        ...allocationParams.allocation,
+        callerOnlyAllocationField: 'must-not-reach-canton',
+        transferLegSides: [
+          {
+            ...transferLegSide,
+            callerOnlyTransferLegField: 'must-not-reach-canton',
+          },
+        ],
+      },
+    } as unknown as BuildTokenStandardV2AllocationChoiceArgumentParams);
+
+    expect(choiceArgument.settlement).not.toHaveProperty('callerOnlySettlementField');
+    expect(choiceArgument.allocation).not.toHaveProperty('callerOnlyAllocationField');
+    expect(choiceArgument.allocation.transferLegSides[0]).not.toHaveProperty('callerOnlyTransferLegField');
+  });
+
   test('rejects malformed runtime objects and null optional metadata with typed errors', () => {
     const transferLegSide = allocationParams.allocation.transferLegSides[0];
     if (!transferLegSide) throw new Error('test fixture must include one transfer-leg side');

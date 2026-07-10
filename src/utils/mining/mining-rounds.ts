@@ -5,10 +5,13 @@ import {
   type OpenMiningRound,
 } from '../../clients/validator-api/schemas/api';
 import { OperationError, OperationErrorCode } from '../../core/errors';
+import { type OperationExecuteOptions } from '../../core/operations';
 
 /** Minimal Validator/client operations dependency surface required by mining helper utilities. */
 export interface MiningRoundClient {
-  getOpenAndIssuingMiningRounds: () => Promise<GetOpenAndIssuingMiningRoundsResponse>;
+  getOpenAndIssuingMiningRounds: (
+    options?: OperationExecuteOptions<void>
+  ) => Promise<GetOpenAndIssuingMiningRoundsResponse>;
 }
 
 /** Sleep utility function */
@@ -51,9 +54,12 @@ export interface MiningRoundContext {
  *
  * @throws Error if no mining round satisfies the criteria
  */
-export async function getCurrentMiningRoundContext(validatorClient: MiningRoundClient): Promise<MiningRoundContext> {
+export async function getCurrentMiningRoundContext(
+  validatorClient: MiningRoundClient,
+  options?: OperationExecuteOptions<void>
+): Promise<MiningRoundContext> {
   const miningRoundsResponse: GetOpenAndIssuingMiningRoundsResponse =
-    await validatorClient.getOpenAndIssuingMiningRounds();
+    await validatorClient.getOpenAndIssuingMiningRounds(options);
 
   // Filter for rounds that have opened already (opensAt <= now)
   const now = new Date();
@@ -112,8 +118,11 @@ export async function getCurrentMiningRoundContext(validatorClient: MiningRoundC
  * @returns Promise resolving to the domain ID string
  * @throws Error if no mining round satisfies the criteria
  */
-export async function getCurrentMiningRoundDomainId(validatorClient: MiningRoundClient): Promise<string> {
-  const miningRoundContext = await getCurrentMiningRoundContext(validatorClient);
+export async function getCurrentMiningRoundDomainId(
+  validatorClient: MiningRoundClient,
+  options?: OperationExecuteOptions<void>
+): Promise<string> {
+  const miningRoundContext = await getCurrentMiningRoundContext(validatorClient, options);
   return miningRoundContext.openMiningRoundContract.synchronizerId;
 }
 
