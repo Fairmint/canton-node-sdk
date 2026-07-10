@@ -107,6 +107,11 @@ export function toScanApiUrl(hostUrl: string): string {
   return `${trimmed}/api/scan`;
 }
 
+/** Return the host root for a full Scan API base URL. */
+export function getScanHostRoot(scanApiUrl: string): string {
+  return scanApiUrl.replace(/\/api\/scan\/?$/, '').replace(/\/$/, '');
+}
+
 /**
  * Returns scan API base URLs ordered for retry.
  *

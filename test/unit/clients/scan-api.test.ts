@@ -140,6 +140,116 @@ describe('ScanApiClient', () => {
     );
   });
 
+  it('gets registry metadata information from the direct scan host root', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan.example/api/scan'],
+      }
+    );
+
+    mockAxiosInstance.get.mockResolvedValueOnce({
+      data: {
+        adminId: 'registry::1220',
+        supportedApis: {
+          'splice-api-token-metadata-v1': 1,
+        },
+      },
+    });
+
+    await expect(client.getRegistryInfo()).resolves.toEqual({
+      adminId: 'registry::1220',
+      supportedApis: {
+        'splice-api-token-metadata-v1': 1,
+      },
+    });
+
+    expect(mockAxiosInstance.get.mock.calls[0]?.[0]).toBe('https://scan.example/registry/metadata/v1/info');
+  });
+
+  it('lists instruments with encoded pagination and normalizes nullable optional fields', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan.example/api/scan'],
+      }
+    );
+
+    mockAxiosInstance.get.mockResolvedValueOnce({
+      data: {
+        instruments: [
+          {
+            id: 'Amulet',
+            name: 'Amulet',
+            symbol: 'AMT',
+            decimals: 10,
+            totalSupply: null,
+            totalSupplyAsOf: null,
+            supportedApis: {},
+          },
+          {
+            id: 'Amulet/USD',
+            name: 'Amulet USD',
+            symbol: 'AMT/USD',
+            decimals: 10,
+            totalSupply: '42.0',
+            totalSupplyAsOf: '2026-07-09T12:00:00Z',
+            supportedApis: {},
+          },
+        ],
+        nextPageToken: 'next/page + 2',
+      },
+    });
+
+    const response = await client.listInstruments({
+      pageSize: 25,
+      pageToken: 'Amulet/USD + next',
+    });
+
+    expect(response.instruments[0]?.totalSupply).toBeUndefined();
+    expect(response.instruments[0]?.totalSupplyAsOf).toBeUndefined();
+    expect(response.instruments[1]?.totalSupply).toBe('42.0');
+    expect(response.instruments[1]?.totalSupplyAsOf).toBe('2026-07-09T12:00:00Z');
+    expect(response.nextPageToken).toBe('next/page + 2');
+    expect(mockAxiosInstance.get.mock.calls[0]?.[0]).toBe(
+      'https://scan.example/registry/metadata/v1/instruments?pageSize=25&pageToken=Amulet%2FUSD+%2B+next'
+    );
+  });
+
+  it('preserves explicit zero and empty pagination values', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan.example/api/scan'],
+      }
+    );
+
+    mockAxiosInstance.get.mockResolvedValueOnce({
+      data: {
+        instruments: [],
+        nextPageToken: null,
+      },
+    });
+
+    await expect(client.listInstruments({ pageSize: 0, pageToken: '' })).resolves.toEqual({ instruments: [] });
+    expect(mockAxiosInstance.get.mock.calls[0]?.[0]).toBe(
+      'https://scan.example/registry/metadata/v1/instruments?pageSize=0&pageToken='
+    );
+  });
+
+  it('rejects non-integer and negative instrument page sizes before making a request', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan.example/api/scan'],
+      }
+    );
+
+    await expect(client.listInstruments({ pageSize: 1.5 })).rejects.toThrow('Parameter validation failed');
+    await expect(client.listInstruments({ pageSize: -1 })).rejects.toThrow('Parameter validation failed');
+    expect(mockAxiosInstance.get).not.toHaveBeenCalled();
+  });
+
   it('rotates token metadata registry requests across scan endpoints', async () => {
     const { client, mockAxiosInstance } = createClient(
       { network: 'mainnet' },
@@ -167,6 +277,28 @@ describe('ScanApiClient', () => {
     expect(requestedUrls).toEqual([
       'https://scan-a.example/registry/metadata/v1/instruments/Amulet',
       'https://scan-b.example/registry/metadata/v1/instruments/Amulet',
+    ]);
+    expect(client.getApiUrl()).toBe('https://scan-b.example/api/scan');
+  });
+
+  it('rotates list-instruments requests across scan endpoints', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan-a.example/api/scan', 'https://scan-b.example/api/scan'],
+      }
+    );
+
+    mockAxiosInstance.get
+      .mockRejectedValueOnce(new Error('first endpoint unavailable'))
+      .mockResolvedValueOnce({ data: { instruments: [] } });
+
+    await expect(client.listInstruments({})).resolves.toEqual({ instruments: [] });
+
+    const requestedUrls = mockAxiosInstance.get.mock.calls.map((call) => call[0] as string);
+    expect(requestedUrls).toEqual([
+      'https://scan-a.example/registry/metadata/v1/instruments',
+      'https://scan-b.example/registry/metadata/v1/instruments',
     ]);
     expect(client.getApiUrl()).toBe('https://scan-b.example/api/scan');
   });
