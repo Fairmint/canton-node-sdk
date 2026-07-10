@@ -13,6 +13,7 @@ describe('CreatedEventDetailsSchema interface views', () => {
       interfaceViews: [
         {
           interfaceId: '#token-standard:Splice.Api.Token.HoldingV1:Holding',
+          implementationPackageId: 'implementation-package-id',
           viewStatus: {
             code: 0,
             message: '',
@@ -33,6 +34,7 @@ describe('CreatedEventDetailsSchema interface views', () => {
 
     expect(result.interfaceViews[0]).toEqual({
       interfaceId: '#token-standard:Splice.Api.Token.HoldingV1:Holding',
+      implementationPackageId: 'implementation-package-id',
       viewStatus: { code: 0, message: '', details: [] },
       viewValue: {
         amount: '1000.0000000000',

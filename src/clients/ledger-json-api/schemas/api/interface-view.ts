@@ -13,6 +13,7 @@ export const JsInterfaceViewStatusSchema = z
 export const JsInterfaceViewSchema = z
   .object({
     interfaceId: z.string(),
+    implementationPackageId: z.string().optional(),
     viewStatus: JsInterfaceViewStatusSchema,
     viewValue: z.unknown().optional(),
   })
