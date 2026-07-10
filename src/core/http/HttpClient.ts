@@ -136,7 +136,7 @@ export class HttpClient {
     this.validateMaxAttempts(maxAttempts);
 
     const requiresImmutableBody = strategy.kind !== 'none';
-    let currentBody = this.cloneBody(initialBody, requiresImmutableBody);
+    let currentBody = this.cloneBody(initialBody);
     let lastFailure: AttemptFailure<Body> | undefined;
     const failedAttempts: RequestAttemptSummary[] = [];
 
@@ -208,7 +208,7 @@ export class HttpClient {
           return builtHeaders;
         }, signal);
         throwIfAborted(signal);
-        const requestBody = this.cloneBody(currentBody, requiresImmutableBody);
+        const requestBody = this.cloneBody(currentBody);
         dispatched = true;
         const response = await this.dispatchRequest<T, Body>(method, attemptUrl, requestBody, headers, signal);
 
@@ -396,16 +396,15 @@ export class HttpClient {
   }
 
   private createReadonlyBody<Body>(body: Body): DeepReadonly<Body> {
-    const cloned = this.cloneBody(body, true);
+    const cloned = this.cloneBody(body);
     return deepFreezeRequestValue(cloned) as DeepReadonly<Body>;
   }
 
-  private cloneBody<Body>(body: Body, required: boolean): Body {
+  private cloneBody<Body>(body: Body): Body {
     try {
       return cloneRequestValue(body);
     } catch (error) {
-      if (!required) return body;
-      throw new ConfigurationError('Retryable HTTP request bodies must be structured-cloneable', {
+      throw new ConfigurationError('HTTP request bodies must be structured-cloneable', {
         cause: error instanceof Error ? error.message : 'unknown clone failure',
       });
     }
