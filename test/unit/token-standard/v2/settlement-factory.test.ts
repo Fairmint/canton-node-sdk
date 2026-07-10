@@ -532,6 +532,17 @@ describe('Token Standard V2 settlement-factory helpers', () => {
     expect(scan.getSettlementFactoryFromRegistry).not.toHaveBeenCalled();
   });
 
+  test.each([undefined, null, 0, 'invalid', []])(
+    'rejects a non-record prepare input %# with a typed input error',
+    async (params) => {
+      await expect(prepareTokenStandardV2SettlementCommand(params as never)).rejects.toMatchObject({
+        name: 'TokenStandardV2SettlementFactoryError',
+        code: TokenStandardV2SettlementFactoryErrorCode.INPUT_INVALID,
+        context: { field: 'params', value: params },
+      });
+    }
+  );
+
   test.each([
     null,
     {

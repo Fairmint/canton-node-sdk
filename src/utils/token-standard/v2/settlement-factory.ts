@@ -475,6 +475,9 @@ function parseSettlementFactoryResponse(value: unknown): {
 export async function prepareTokenStandardV2SettlementCommand(
   params: PrepareTokenStandardV2SettlementCommandParams
 ): Promise<PreparedTokenStandardV2SettlementCommand> {
+  if (!isRecord(params)) {
+    inputInvalid('params must be a record.', { field: 'params', value: params });
+  }
   if (!isRecord(params.scan) || typeof params.scan.getSettlementFactoryFromRegistry !== 'function') {
     inputInvalid('scan must provide getSettlementFactoryFromRegistry.', { field: 'scan' });
   }
