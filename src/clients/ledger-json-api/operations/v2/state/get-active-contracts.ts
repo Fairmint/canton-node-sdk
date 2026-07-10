@@ -20,7 +20,11 @@ const ActiveContractsParamsSchema = z.object({
   parties: z.array(z.string()).optional(),
   /** Optional template filters applied server-side. */
   templateIds: z.array(z.string()).optional(),
-  /** Include created event blob in TemplateFilter results (default false). */
+  /** Optional interface filters applied server-side. */
+  interfaceIds: z.array(z.string()).optional(),
+  /** Include interface views in InterfaceFilter results (default true). */
+  includeInterfaceView: z.boolean().optional(),
+  /** Include created event blobs in template and interface filter results (default false). */
   includeCreatedEventBlob: z.boolean().optional(),
   /** Allow caller to omit activeAtOffset; we'll default to ledger end */
   activeAtOffset: z.number().optional(),
@@ -57,6 +61,10 @@ export class GetActiveContracts {
     const eventFormat = buildEventFormat({
       parties: partyList,
       ...(validated.templateIds !== undefined && { templateIds: validated.templateIds }),
+      ...(validated.interfaceIds !== undefined && { interfaceIds: validated.interfaceIds }),
+      ...(validated.includeInterfaceView !== undefined && {
+        includeInterfaceView: validated.includeInterfaceView,
+      }),
       ...(validated.includeCreatedEventBlob !== undefined && {
         includeCreatedEventBlob: validated.includeCreatedEventBlob,
       }),
