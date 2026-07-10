@@ -198,10 +198,25 @@ describe('validator request schema integrity', () => {
         },
       ],
     } satisfies ListTransactionsResponse;
+    const rawResponse = {
+      ...response,
+      items: response.items.map((item) =>
+        item.event_id === 'balance-event'
+          ? {
+              ...item,
+              transaction_subtype: {
+                ...item.transaction_subtype,
+                amulet_operation: null,
+                interface_id: null,
+              },
+            }
+          : item
+      ),
+    } as unknown as ListTransactionsResponse;
 
     expect(ListTransactionsParamsSchema.parse(request)).toEqual(request);
 
-    const makePostRequest = jest.fn().mockResolvedValue(response);
+    const makePostRequest = jest.fn().mockResolvedValue(rawResponse);
     await expect(new ListTransactions(createClient(makePostRequest)).execute(request)).resolves.toEqual(response);
 
     expect(makePostRequest).toHaveBeenCalledWith(
