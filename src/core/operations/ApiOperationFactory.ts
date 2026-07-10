@@ -129,6 +129,9 @@ export function createApiOperation<Params, Response>(
       const apiUrl = this.getApiUrl();
       const url = config.buildUrl(currentParams, apiUrl, this.client);
       const requestSemantics = config.requestSemantics ?? (config.method === 'GET' ? 'read' : 'mutation');
+      if ((config.method === 'DELETE' || config.method === 'PATCH') && requestSemantics !== 'mutation') {
+        throw new ConfigurationError(`Factory-created ${config.method} operations must use mutation semantics`);
+      }
       const requestConfig: RequestConfig = config.requestConfig ?? {
         contentType: 'application/json',
         includeBearerToken: true,
