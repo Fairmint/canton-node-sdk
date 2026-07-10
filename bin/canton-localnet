@@ -19,7 +19,7 @@ resolve_script_dir() {
 PACKAGE_ROOT="$(cd "$(resolve_script_dir "${BASH_SOURCE[0]}")/.." && pwd)"
 LOCALNET_SCRIPT="${PACKAGE_ROOT}/scripts/localnet-cloud.sh"
 DEFAULT_QUICKSTART_REPO="https://github.com/digital-asset/cn-quickstart.git"
-DEFAULT_QUICKSTART_REF="46201cd27ee16c99f78ab97b7e6513c56f28e004"
+DEFAULT_QUICKSTART_REF="2f4edfc17621a7dfb6d44357050c22f4b3914c89"
 
 log() {
   printf '[canton-localnet] %s\n' "$*"
