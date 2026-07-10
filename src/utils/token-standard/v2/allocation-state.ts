@@ -178,6 +178,21 @@ function readStringArray(
   });
 }
 
+function createReadonlyStringRecord(
+  entries: ReadonlyArray<readonly [string, string]>
+): Readonly<Record<string, string>> {
+  const result = Object.create(null) as Record<string, string>;
+  for (const [key, value] of entries) {
+    Object.defineProperty(result, key, {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: false,
+    });
+  }
+  return result;
+}
+
 function readMetadata(value: unknown, field: string, invalid: InvalidValueHandler): TokenStandardV2Metadata {
   if (!isRecord(value) || !isRecord(value['values'])) {
     invalid(`${field} must contain a values record.`, { field, value });
@@ -188,7 +203,7 @@ function readMetadata(value: unknown, field: string, invalid: InvalidValueHandle
     }
     return [key, metadataValue] as const;
   });
-  return { values: Object.fromEntries(entries) };
+  return { values: createReadonlyStringRecord(entries) };
 }
 
 function readAccount(value: unknown, field: string, invalid: InvalidValueHandler): TokenStandardV2Account {
@@ -223,7 +238,7 @@ function readDecimalMap(
   if (!isRecord(value)) {
     invalid(`${field} must be null or a decimal map.`, { field, value });
   }
-  return Object.fromEntries(
+  return createReadonlyStringRecord(
     Object.entries(value).map(([key, amount]) => [key, readDecimal(amount, `${field}.${key}`, invalid, false)])
   );
 }

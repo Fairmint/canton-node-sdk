@@ -737,6 +737,47 @@ describe('getTokenStandardV2AllocationViewsByContractIds', () => {
     ]);
   });
 
+  test('normalizes string maps to null-prototype records with non-writable prototype keys', async () => {
+    const metadataValues = Object.fromEntries([
+      ['__proto__', 'metadata-prototype'],
+      ['constructor', 'metadata-constructor'],
+    ]);
+    const fundingValues = Object.fromEntries([
+      ['__proto__', '1.0'],
+      ['constructor', '2.0'],
+    ]);
+    const viewValue = {
+      ...completedView,
+      allocation: {
+        ...completedView.allocation,
+        meta: { values: metadataValues },
+        nextIterationFunding: fundingValues,
+      },
+    };
+    const ledger = createLedger([activeContract({ contractId: '#allocation', kind: 'Completed', viewValue })]);
+
+    const [allocation] = await getTokenStandardV2AllocationViewsByContractIds({
+      ledger,
+      parties: ['Buyer::alice'],
+      synchronizerId,
+      allocationCids: ['#allocation'],
+      activeAtOffset: 42,
+    });
+    if (!allocation) throw new Error('Expected the allocation fixture');
+    const normalizedMetadata = allocation.view.allocation.meta.values;
+    const normalizedFunding = allocation.view.allocation.nextIterationFunding;
+    if (!normalizedFunding) throw new Error('Expected next-iteration funding');
+
+    expect(Object.getPrototypeOf(normalizedMetadata)).toBeNull();
+    expect(Reflect.get(normalizedMetadata, '__proto__')).toBe('metadata-prototype');
+    expect(normalizedMetadata['constructor']).toBe('metadata-constructor');
+    expect(Object.getOwnPropertyDescriptor(normalizedMetadata, '__proto__')?.writable).toBe(false);
+    expect(Object.getPrototypeOf(normalizedFunding)).toBeNull();
+    expect(Reflect.get(normalizedFunding, '__proto__')).toBe('1.0');
+    expect(normalizedFunding['constructor']).toBe('2.0');
+    expect(Object.getOwnPropertyDescriptor(normalizedFunding, 'constructor')?.writable).toBe(false);
+  });
+
   test('returns exact allocation CIDs in caller order from one ACS snapshot', async () => {
     const firstTransferLegSide = requireFixtureValue(
       completedView.allocation.transferLegSides[0],
