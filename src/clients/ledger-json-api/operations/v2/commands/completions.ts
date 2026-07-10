@@ -19,12 +19,12 @@ export type CompletionsResponse = paths[typeof endpoint]['post']['responses']['2
 /**
  * Polls command completions over **HTTP** POST `/v2/commands/completions` (cursor batch).
  *
- * For waiting on a **specific submission**, prefer `waitForCompletion` / `subscribeToCompletions`
- * streaming instead.
+ * For waiting on a **specific submission**, prefer `waitForCompletion` / `subscribeToCompletions` streaming instead.
  */
 export const Completions = createApiOperation<CompletionsParams, CompletionsResponse>({
   paramsSchema: CompletionsParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (params, apiUrl) => {
     const url = new URL(`${apiUrl}${endpoint}`);
     if (params.limit !== undefined) {

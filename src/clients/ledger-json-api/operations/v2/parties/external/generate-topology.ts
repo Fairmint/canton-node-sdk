@@ -66,6 +66,7 @@ export const GenerateExternalPartyTopology = createApiOperation<
 >({
   paramsSchema: GenerateExternalPartyTopologyParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params: GenerateExternalPartyTopologyParams, apiUrl: string) =>
     `${apiUrl}/v2/parties/external/generate-topology`,
   buildRequestData: (params: GenerateExternalPartyTopologyParams, _client: BaseClient): GeneratedRequest => ({

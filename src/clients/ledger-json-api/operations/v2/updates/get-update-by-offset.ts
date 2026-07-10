@@ -12,6 +12,7 @@ export type GetUpdateByOffsetResponse =
 export const GetUpdateByOffset = createApiOperation<GetUpdateByOffsetParams, GetUpdateByOffsetResponse>({
   paramsSchema: GetUpdateByOffsetParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
   buildRequestData: (params) => params,
 });

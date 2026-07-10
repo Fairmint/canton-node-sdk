@@ -28,6 +28,7 @@ export const PrepareTransferPreapprovalSend = createApiOperation<
 >({
   paramsSchema: PrepareTransferPreapprovalSendParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl: string) =>
     `${apiUrl}/api/validator/v0/admin/external-party/transfer-preapproval/prepare-send`,
   buildRequestData: (params) => params,

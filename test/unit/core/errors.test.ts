@@ -6,6 +6,7 @@ import {
   NetworkError,
   OperationError,
   OperationErrorCode,
+  UnknownMutationOutcomeError,
   ValidationError,
   isDefiniteCantonMutationRejection,
   normalizeCantonError,
@@ -118,6 +119,29 @@ describe('CantonError hierarchy', () => {
     it('inherits from CantonError', () => {
       const error = new NetworkError('Test');
       expect(error).toBeInstanceOf(CantonError);
+    });
+  });
+
+  describe('UnknownMutationOutcomeError', () => {
+    it('exposes only redacted mutation metadata', () => {
+      const error = new UnknownMutationOutcomeError(
+        {
+          method: 'POST',
+          endpoint: 'https://ledger.example/v2/commands',
+          attempts: 2,
+          attemptIdentifiers: ['command-1', 'command-2'],
+        },
+        new NetworkError('connection reset')
+      );
+
+      expect(error.code).toBe('UNKNOWN_MUTATION_OUTCOME');
+      expect(error.context).toEqual({
+        method: 'POST',
+        endpoint: 'https://ledger.example/v2/commands',
+        attempts: 2,
+        attemptIdentifiers: ['command-1', 'command-2'],
+      });
+      expect(error.cause).toBeInstanceOf(NetworkError);
     });
   });
 
@@ -263,7 +287,7 @@ describe('normalizeCantonError', () => {
       context: { code: 'UNKNOWN_CONTRACT_SYNCHRONIZERS' },
       response: { code: 'UNKNOWN_CONTRACT_SYNCHRONIZERS' },
     });
-    expect(isDefiniteCantonMutationRejection(error)).toBe(false);
+    expect(isDefiniteCantonMutationRejection(error)).toBe(true);
   });
 
   it('ignores plain errors without SDK markers', () => {
@@ -272,7 +296,7 @@ describe('normalizeCantonError', () => {
 });
 
 describe('isDefiniteCantonMutationRejection', () => {
-  it('treats non-transient 4xx API responses as definite rejections', () => {
+  it('treats received 4xx responses as definite independently from retryability', () => {
     expect(isDefiniteCantonMutationRejection(new ApiError('bad request', 400))).toBe(true);
     expect(isDefiniteCantonMutationRejection(new ApiError('conflict', 409))).toBe(true);
     expect(isDefiniteCantonMutationRejection(new ApiError('not found', 404))).toBe(true);
@@ -284,19 +308,19 @@ describe('isDefiniteCantonMutationRejection', () => {
     expect(
       isDefiniteCantonMutationRejection(new ApiError('conflict', 409, 'Conflict', { code: 'ALREADY_EXISTS' }))
     ).toBe(true);
-  });
-
-  it('does not treat retryable or non-HTTP errors as definite rejections', () => {
     expect(
       isDefiniteCantonMutationRejection(
         new ApiError('unknown contract synchronizers', 400, 'Bad Request', { code: 'UNKNOWN_CONTRACT_SYNCHRONIZERS' })
       )
-    ).toBe(false);
+    ).toBe(true);
     expect(
       isDefiniteCantonMutationRejection(
         new ApiError('sequencer backpressure', 409, 'Conflict', { code: 'SEQUENCER_BACKPRESSURE' })
       )
-    ).toBe(false);
+    ).toBe(true);
+  });
+
+  it('does not treat ambiguous or non-HTTP errors as definite rejections', () => {
     expect(isDefiniteCantonMutationRejection(new ApiError('timeout', 408))).toBe(false);
     expect(isDefiniteCantonMutationRejection(new ApiError('too early', 425))).toBe(false);
     expect(isDefiniteCantonMutationRejection(new ApiError('rate limited', 429))).toBe(false);
