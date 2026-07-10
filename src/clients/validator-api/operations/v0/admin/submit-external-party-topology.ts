@@ -1,6 +1,21 @@
 import { z } from 'zod';
-import { createApiOperation } from '../../../../../core';
+import { createApiOperation, createRequestSchema } from '../../../../../core';
 import { type operations } from '../../../../../generated/apps/validator/src/main/openapi/validator-internal';
+
+type SubmitExternalPartyTopologyRequest =
+  operations['submitExternalPartyTopology']['requestBody']['content']['application/json'];
+type SignedTopologyTransaction = SubmitExternalPartyTopologyRequest['signed_topology_txs'][number];
+
+const SignedTopologyTransactionSchema = createRequestSchema<SignedTopologyTransaction>()({
+  topology_tx: z.string(),
+  signed_hash: z.string(),
+});
+
+/** Runtime schema kept in exact key/type parity with the generated topology-submission request. */
+export const SubmitExternalPartyTopologyParamsSchema = createRequestSchema<SubmitExternalPartyTopologyRequest>()({
+  public_key: z.string(),
+  signed_topology_txs: z.array(SignedTopologyTransactionSchema),
+});
 
 /**
  * Submit signed external party topology transactions
@@ -21,18 +36,10 @@ import { type operations } from '../../../../../generated/apps/validator/src/mai
  *   ```;
  */
 export const SubmitExternalPartyTopology = createApiOperation<
-  operations['submitExternalPartyTopology']['requestBody']['content']['application/json'],
+  SubmitExternalPartyTopologyRequest,
   operations['submitExternalPartyTopology']['responses']['200']['content']['application/json']
 >({
-  paramsSchema: z.object({
-    public_key: z.string(),
-    signed_topology_txs: z.array(
-      z.object({
-        topology_tx: z.string(),
-        signed_hash: z.string(),
-      })
-    ),
-  }) as z.ZodType<operations['submitExternalPartyTopology']['requestBody']['content']['application/json']>,
+  paramsSchema: SubmitExternalPartyTopologyParamsSchema,
   method: 'POST',
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/admin/external-party/topology/submit`,
   buildRequestData: (params) => params,

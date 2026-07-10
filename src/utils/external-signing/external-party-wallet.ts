@@ -252,11 +252,9 @@ export interface ExternalPartyWalletProviderTransferToPreapproved {
   readonly amount: string;
   readonly description: string | null;
   readonly transferPreapprovalContractId: string;
-  readonly updateId: string | null;
   readonly sourceBalanceAfter: unknown | null;
   readonly raw: {
     readonly transferPreapproval: unknown;
-    readonly transferPreapprovalSend: unknown;
   };
 }
 
@@ -812,7 +810,7 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
           { receiverPartyId: input.receiverPartyId }
         );
       }
-      const sent = await sendWalletTransferToPreapprovedParty(validatorClient, {
+      await sendWalletTransferToPreapprovedParty(validatorClient, {
         receiverPartyId: input.receiverPartyId,
         amount,
         deduplicationId: input.idempotencyKey,
@@ -825,11 +823,9 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
         amount,
         description,
         transferPreapprovalContractId: transferPreapproval.contractId,
-        updateId: sent.updateId,
         sourceBalanceAfter,
         raw: {
           transferPreapproval: transferPreapproval.raw,
-          transferPreapprovalSend: sent.raw,
         },
       };
     },

@@ -78,9 +78,9 @@ describe('Canton response helpers / LocalNet', (): void => {
       tokens: [
         {
           instrumentId: { admin: dsoPartyId, id: 'Amulet' },
-          totalUnlockedBalance: String(walletBalance.effective_unlocked_qty ?? '0'),
+          totalUnlockedBalance: String(walletBalance.effective_unlocked_qty),
           totalLockedBalance: '0',
-          totalBalance: String(walletBalance.effective_unlocked_qty ?? '0'),
+          totalBalance: String(walletBalance.effective_unlocked_qty),
           unlockedUtxos: unlockedAmulets.map(toUtxo),
           lockedUtxos: lockedAmulets.map(toUtxo),
         },
