@@ -148,6 +148,32 @@ describe('ScanApiClient', () => {
     ]);
   });
 
+  it.each([408, 429])('preserves Scan-specific %i rotation with an explicit retry budget', async (status) => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan-a.example/api/scan', 'https://scan-b.example/api/scan'],
+      }
+    );
+    mockAxiosInstance.get
+      .mockRejectedValueOnce(createAxiosHttpError(status))
+      .mockResolvedValueOnce({ data: { endpoint: 'scan-b' } });
+
+    await expect(
+      client.makeGetRequest<{ endpoint: string }>(
+        'https://scan-a.example/api/scan/v0/scan/health',
+        {},
+        {
+          retry: { kind: 'exact-body', maxAttempts: 2, backoffMs: 0 },
+        }
+      )
+    ).resolves.toEqual({ endpoint: 'scan-b' });
+    expect(mockAxiosInstance.get.mock.calls.map((call) => call[0])).toEqual([
+      'https://scan-a.example/api/scan/v0/scan/health',
+      'https://scan-b.example/api/scan/v0/scan/health',
+    ]);
+  });
+
   it('rotates semantic-read POST operations across Scan endpoints', async () => {
     const { client, mockAxiosInstance } = createClient(
       { network: 'mainnet' },

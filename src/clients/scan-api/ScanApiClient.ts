@@ -171,15 +171,25 @@ export class ScanApiClient extends ScanApiClientGenerated {
     const maxDistinctEndpoints = Math.min(this.maxEndpointAttempts, this.scanApiUrls.length);
     const startingBaseUrlIndex = this.activeBaseUrlIndex;
     let selectedBaseUrlIndex = startingBaseUrlIndex;
+    const shouldRetryScanFailure = ({
+      error,
+      retryable,
+    }: {
+      readonly error: Error;
+      readonly retryable: boolean;
+    }): boolean => retryable || shouldRotateOnError(error);
+    const configuredRetry = readOptions.retry;
     const retry =
-      readOptions.retry ??
-      Object.freeze({
-        kind: 'exact-body' as const,
-        maxAttempts: maxDistinctEndpoints,
-        backoffMs: 0,
-        shouldRetry: ({ error, retryable }: { readonly error: Error; readonly retryable: boolean }): boolean =>
-          retryable || shouldRotateOnError(error),
-      });
+      configuredRetry === undefined
+        ? Object.freeze({
+            kind: 'exact-body' as const,
+            maxAttempts: maxDistinctEndpoints,
+            backoffMs: 0,
+            shouldRetry: shouldRetryScanFailure,
+          })
+        : configuredRetry.shouldRetry === undefined
+          ? Object.freeze({ ...configuredRetry, shouldRetry: shouldRetryScanFailure })
+          : configuredRetry;
     const failoverOptions = snapshotHttpRequestOptions<Body>({
       ...readOptions,
       retry,
