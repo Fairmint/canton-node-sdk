@@ -91,6 +91,54 @@ describe('HttpClient mutation retry safety', () => {
     });
   });
 
+  it('rejects an unsupported mutation body before asynchronous pre-dispatch work', async () => {
+    const bearerTokenProvider = jest.fn(async (): Promise<string> => 'unused-token');
+    const { client, axiosInstance } = createClient(undefined, bearerTokenProvider);
+
+    await expect(
+      client.makePostRequest(
+        'https://ledger.example/v2/commands',
+        new Map<string, string>([['commandId', 'command-1']]),
+        { includeBearerToken: true }
+      )
+    ).rejects.toEqual(
+      expect.objectContaining({
+        name: ConfigurationError.name,
+        message: 'HTTP request bodies must be structured-cloneable',
+      })
+    );
+
+    expect(bearerTokenProvider).not.toHaveBeenCalled();
+    expect(axiosInstance.post).not.toHaveBeenCalled();
+  });
+
+  it('snapshots a single-attempt mutation body before asynchronous authentication', async () => {
+    let releaseToken: ((token: string) => void) | undefined;
+    const token = new Promise<string>((resolve) => {
+      releaseToken = resolve;
+    });
+    const { client, axiosInstance } = createClient(undefined, async (): Promise<string> => token);
+    const body = {
+      commandId: 'command-original',
+      nested: { signature: 'signature-original' },
+    };
+    axiosInstance.post.mockResolvedValueOnce({ data: { ok: true } });
+
+    const request = client.makePostRequest('https://ledger.example/v2/commands', body, {
+      includeBearerToken: true,
+    });
+    await Promise.resolve();
+    body.commandId = 'command-mutated';
+    body.nested.signature = 'signature-mutated';
+    releaseToken?.('token');
+
+    await expect(request).resolves.toEqual({ ok: true });
+    expect(axiosInstance.post.mock.calls[0]?.[1]).toEqual({
+      commandId: 'command-original',
+      nested: { signature: 'signature-original' },
+    });
+  });
+
   it('does not retry an ambiguous mutation by default even with an explicit exact-body strategy', async () => {
     const { client, axiosInstance } = createClient();
     axiosInstance.post.mockRejectedValueOnce(createAxiosError(503)).mockResolvedValueOnce({ data: { ok: true } });
