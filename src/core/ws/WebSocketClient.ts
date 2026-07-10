@@ -93,6 +93,21 @@ export class WebSocketClient {
         await logger.logRequestResponse(wsUrl, { event, requestMessage }, payload);
       }
     };
+    const logMessageEvent = async (event: string, payload: unknown): Promise<void> => {
+      try {
+        await log(event, payload);
+      } catch (err) {
+        // Request/response logging is auxiliary and must not change WebSocket delivery semantics.
+        try {
+          logger?.error?.('WebSocket request/response logging failed', {
+            event,
+            error: toError(err).message,
+          });
+        } catch {
+          // A failing logger cannot report its own failure.
+        }
+      }
+    };
 
     await log('connect', { headers: token ? { Authorization: '[REDACTED]' } : undefined, protocols });
 
@@ -156,19 +171,30 @@ export class WebSocketClient {
         dataString = new TextDecoder().decode(rawData);
       }
       void (async () => {
+        let parsed: unknown;
         try {
-          const parsed = WebSocketErrorUtils.safeJsonParse(dataString, 'WebSocket message');
-          // Servers may close immediately after their final frame. Dispatch it before async logging so close handlers
-          // cannot observe an incomplete stream.
-          handlers.onMessage(parsed as InboundMessage);
-          await log('message', parsed);
+          parsed = WebSocketErrorUtils.safeJsonParse(dataString, 'WebSocket message');
         } catch (err) {
           const error = toError(err);
-          await log('parse_error', { raw: dataString, error: error.message });
-          // Close connection on JSON parse failure to prevent inconsistent state
-          socket.close(1003, 'Invalid JSON received');
           if (handlers.onError) handlers.onError(error);
+          socket.close(1003, 'Invalid JSON received');
+          await logMessageEvent('parse_error', { raw: dataString, error: error.message });
+          return;
         }
+
+        try {
+          handlers.onMessage(parsed as InboundMessage);
+        } catch (err) {
+          const error = toError(err);
+          if (handlers.onError) handlers.onError(error);
+          socket.close(1011, 'Message handler failed');
+          await logMessageEvent('message_handler_error', { error: error.message });
+          return;
+        }
+
+        // Servers may close immediately after their final frame. Dispatch it before async logging so close handlers
+        // cannot observe an incomplete stream.
+        await logMessageEvent('message', parsed);
       })();
     });
 
