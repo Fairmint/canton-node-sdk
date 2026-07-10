@@ -104,7 +104,7 @@ describe('ValidatorApiClient / ScanProxy', () => {
           owner_party_ids: ownerPartyIds,
         }),
       {
-        timeoutMs: 60_000,
+        timeoutMs: 45_000,
         pollIntervalMs: 2_000,
         description: 'validator scan-proxy v1 holdings summary',
       }

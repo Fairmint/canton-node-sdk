@@ -2,6 +2,12 @@ import {
   ListOwnedAnsEntries,
   type ListOwnedAnsEntriesResponse,
 } from '../../../src/clients/validator-api/operations/v0/ans/list-owned-entries';
+import { LookupAnsEntryByName } from '../../../src/clients/validator-api/operations/v0/ans/lookup-by-name';
+import { LookupAnsEntryByParty } from '../../../src/clients/validator-api/operations/v0/ans/lookup-by-party';
+import type {
+  LookupScanProxyAnsEntryByNameResponse,
+  LookupScanProxyAnsEntryByPartyResponse,
+} from '../../../src/clients/validator-api/operations/v0/scan-proxy/ans-entry';
 import {
   GetDsoInfo,
   type GetDsoInfoResponse,
@@ -158,6 +164,14 @@ describe('validator scan-proxy parity', () => {
           description: 'Alice Labs',
           expires_at: '2027-07-09T12:00:00Z',
         },
+        {
+          contract_id: null,
+          user: 'dso::namespace',
+          name: 'dso.unverified.ans',
+          url: '',
+          description: 'DSO',
+          expires_at: null,
+        },
       ],
     };
     const makeGetRequest = jest.fn().mockResolvedValue(response);
@@ -190,6 +204,40 @@ describe('validator scan-proxy parity', () => {
     await expect(operation.execute({ page_size: 1.5 })).rejects.toThrow('Parameter validation failed');
     await expect(operation.execute({ page_size: 2_147_483_648 })).rejects.toThrow('Parameter validation failed');
     expect(makeGetRequest).not.toHaveBeenCalled();
+  });
+
+  it('preserves nullable DSO ANS fields and encodes lookup path parameters', async () => {
+    const byNameResponse: LookupScanProxyAnsEntryByNameResponse = {
+      entry: {
+        contract_id: null,
+        user: 'dso/ops::namespace',
+        name: 'dso & ops.unverified.ans',
+        url: '',
+        description: 'DSO',
+        expires_at: null,
+      },
+    };
+    const byPartyResponse: LookupScanProxyAnsEntryByPartyResponse = byNameResponse;
+    const makeGetRequest = jest.fn().mockResolvedValueOnce(byNameResponse).mockResolvedValueOnce(byPartyResponse);
+    const client = createClient(makeGetRequest);
+
+    await expect(new LookupAnsEntryByName(client).execute({ name: 'dso & ops.unverified.ans' })).resolves.toBe(
+      byNameResponse
+    );
+    await expect(new LookupAnsEntryByParty(client).execute({ party: 'dso/ops::namespace' })).resolves.toBe(
+      byPartyResponse
+    );
+
+    expect(makeGetRequest).toHaveBeenNthCalledWith(
+      1,
+      'https://validator.example/api/validator/v0/scan-proxy/ans-entries/by-name/dso%20%26%20ops.unverified.ans',
+      REQUEST_CONFIG
+    );
+    expect(makeGetRequest).toHaveBeenNthCalledWith(
+      2,
+      'https://validator.example/api/validator/v0/scan-proxy/ans-entries/by-party/dso%2Fops%3A%3Anamespace',
+      REQUEST_CONFIG
+    );
   });
 
   it('keeps the authenticated owned-entry listing under its distinct method name', async () => {

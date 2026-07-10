@@ -1,9 +1,14 @@
 import { z } from 'zod';
 import { createApiOperation, createRequestSchema } from '../../../../../core';
 import { type operations } from '../../../../../generated/apps/validator/src/main/openapi/scan-proxy';
+import type { ScanProxyAnsEntry } from './ans-entry';
 
 export type ListAnsEntriesParams = operations['listAnsEntries']['parameters']['query'];
-export type ListAnsEntriesResponse = operations['listAnsEntries']['responses']['200']['content']['application/json'];
+type GeneratedListAnsEntriesResponse = operations['listAnsEntries']['responses']['200']['content']['application/json'];
+
+export type ListAnsEntriesResponse = Omit<GeneratedListAnsEntriesResponse, 'entries'> & {
+  entries: ScanProxyAnsEntry[];
+};
 
 /** Runtime schema kept in exact key/type parity with the generated query parameters. */
 export const ListAnsEntriesParamsSchema = createRequestSchema<ListAnsEntriesParams>()({
