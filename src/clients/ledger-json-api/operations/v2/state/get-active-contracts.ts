@@ -47,9 +47,6 @@ export class GetActiveContracts {
       ({ activeAtOffset } = validated);
     } else {
       const ledgerEnd = await this.client.getLedgerEnd({});
-      if (ledgerEnd.offset === undefined) {
-        throw new ApiError('Ledger end response did not include an offset');
-      }
       activeAtOffset = ledgerEnd.offset;
     }
 

@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { createApiOperation } from '../../../../../../../../core';
+import { createApiOperation } from '../../../../../../../core';
 import type {
   components,
   paths,
-} from '../../../../../../../../generated/token-standard/splice-api-token-allocation-instruction-v1/openapi/allocation-instruction-v1';
-import { RecordSchema } from '../../../../../../../ledger-json-api/schemas/base';
+} from '../../../../../../../generated/token-standard/splice-api-token-allocation-instruction-v1/openapi/allocation-instruction-v1';
+import { RecordSchema } from '../../../../../../ledger-json-api/schemas/base';
 
 type ApiPath = '/registry/allocation-instruction/v1/allocation-factory';
 
@@ -15,8 +15,12 @@ const publicRequestConfig = {
 } as const;
 
 const RegistryUrlSchema = z.url().refine((value) => {
-  const protocol = new URL(value).protocol;
-  return protocol === 'http:' || protocol === 'https:';
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
 }, 'registryUrl must use http or https');
 
 export const GetAllocationFactoryFromRegistryParamsSchema = z.object({

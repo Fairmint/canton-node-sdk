@@ -206,11 +206,12 @@ describe('ScanApiClient', () => {
       },
       {
         headers: {
-          Accept: 'application/json',
           'Content-Type': 'application/json',
         },
       }
     );
+    const requestHeaders = mockAxiosInstance.post.mock.calls[0]?.[2]?.headers;
+    expect(requestHeaders).not.toHaveProperty('Authorization');
   });
 
   it('rejects a malformed or non-http registry URL before making a request', async () => {
