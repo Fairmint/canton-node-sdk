@@ -115,6 +115,21 @@ describe('external party CC transfer helpers', () => {
     expect(validatorClient.prepareTransferPreapprovalSend).not.toHaveBeenCalled();
   });
 
+  it('rejects a malformed transfer-command counter envelope with a ValidationError', async (): Promise<void> => {
+    validatorClient.lookupTransferCommandCounterByParty.mockResolvedValueOnce({} as never);
+
+    await expect(
+      prepareExternalPartyCcTransfer(validatorClient, {
+        senderPartyId: 'sender::fingerprint',
+        receiverPartyId: 'receiver::fingerprint',
+        amount: 1,
+        expiresAt: '2026-01-01T00:00:00.000Z',
+      })
+    ).rejects.toThrow('Transfer command counter payload must include nextNonce as a non-negative integer');
+
+    expect(validatorClient.prepareTransferPreapprovalSend).not.toHaveBeenCalled();
+  });
+
   it('submits a signed CC transfer through the validator endpoint', async (): Promise<void> => {
     const result = await submitExternalPartyCcTransfer(validatorClient, {
       senderPartyId: 'sender::fingerprint',

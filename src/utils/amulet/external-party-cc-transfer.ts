@@ -119,7 +119,7 @@ export async function submitExternalPartyCcTransfer(
 async function lookupNextNonce(validatorClient: ValidatorApiClient, party: string): Promise<number> {
   try {
     const response = await validatorClient.lookupTransferCommandCounterByParty({ party });
-    const payload = objectOrEmpty(response.transfer_command_counter.contract.payload);
+    const payload = objectOrEmpty(response?.transfer_command_counter?.contract?.payload);
     const nextNonce = normalizeNonce(payload['nextNonce']);
     validateNonce(nextNonce);
     return nextNonce;
