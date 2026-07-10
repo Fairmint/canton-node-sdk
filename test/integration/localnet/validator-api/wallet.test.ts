@@ -46,10 +46,18 @@ function expectTransactionWireShape(item: ValidatorWalletTransaction): void {
       if (item.transfer_instruction_amount !== undefined) {
         expect(item.transfer_instruction_amount).toMatch(DAML_DECIMAL_PATTERN);
       }
+      for (const value of [item.transfer_instruction_receiver, item.transfer_instruction_cid, item.description]) {
+        if (value !== undefined) {
+          expect(value).toEqual(expect.any(String));
+        }
+      }
       break;
     case 'balance_change':
       expect(Array.isArray(item.receivers)).toBe(true);
       item.receivers.forEach(expectPartyAndAmount);
+      if (item.transfer_instruction_cid !== undefined) {
+        expect(item.transfer_instruction_cid).toEqual(expect.any(String));
+      }
       break;
     case 'notification':
       expect(item.details).toEqual(expect.any(String));

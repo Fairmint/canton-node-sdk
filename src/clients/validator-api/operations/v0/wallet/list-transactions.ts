@@ -12,14 +12,21 @@ export type ListTransactionsResponse =
   operations['listTransactions']['responses']['200']['content']['application/json'];
 export type ValidatorWalletTransaction = components['schemas']['ListTransactionsResponseItem'];
 
+type NullableWireOptionals<T> = {
+  [Key in keyof T]: undefined extends T[Key] ? Exclude<T[Key], undefined> | null : T[Key];
+};
+
 type RawTransactionSubtype = Omit<components['schemas']['TransactionSubtype'], 'amulet_operation' | 'interface_id'> & {
   amulet_operation?: string | null;
   interface_id?: string | null;
 };
 
-type RawValidatorWalletTransaction = Omit<ValidatorWalletTransaction, 'transaction_subtype'> & {
-  transaction_subtype: RawTransactionSubtype;
-};
+type RawValidatorWalletTransaction<Transaction extends ValidatorWalletTransaction = ValidatorWalletTransaction> =
+  Transaction extends ValidatorWalletTransaction
+    ? NullableWireOptionals<Omit<Transaction, 'transaction_subtype'>> & {
+        transaction_subtype: RawTransactionSubtype;
+      }
+    : never;
 
 type RawListTransactionsResponse = Omit<ListTransactionsResponse, 'items'> & {
   items: RawValidatorWalletTransaction[];
@@ -32,8 +39,8 @@ export const ListTransactionsParamsSchema = createRequestSchema<ListTransactions
   page_size: z.number().int().min(1).max(MAX_PAGE_SIZE),
 });
 
-function normalizeTransaction(item: RawValidatorWalletTransaction): ValidatorWalletTransaction {
-  const { amulet_operation, interface_id, ...requiredSubtype } = item.transaction_subtype;
+function normalizeTransactionSubtype(subtype: RawTransactionSubtype): components['schemas']['TransactionSubtype'] {
+  const { amulet_operation, interface_id, ...requiredSubtype } = subtype;
   const transaction_subtype: components['schemas']['TransactionSubtype'] = requiredSubtype;
 
   if (amulet_operation != null) {
@@ -43,7 +50,59 @@ function normalizeTransaction(item: RawValidatorWalletTransaction): ValidatorWal
     transaction_subtype.interface_id = interface_id;
   }
 
-  return { ...item, transaction_subtype } as ValidatorWalletTransaction;
+  return transaction_subtype;
+}
+
+function normalizeTransaction(item: RawValidatorWalletTransaction): ValidatorWalletTransaction {
+  const transaction_subtype = normalizeTransactionSubtype(item.transaction_subtype);
+
+  switch (item.transaction_type) {
+    case 'transfer': {
+      const {
+        transaction_subtype: _rawSubtype,
+        transfer_instruction_receiver,
+        transfer_instruction_amount,
+        transfer_instruction_cid,
+        description,
+        ...requiredTransaction
+      } = item;
+      const transaction: components['schemas']['TransferResponseItem'] = {
+        ...requiredTransaction,
+        transaction_subtype,
+      };
+
+      if (transfer_instruction_receiver != null) {
+        transaction.transfer_instruction_receiver = transfer_instruction_receiver;
+      }
+      if (transfer_instruction_amount != null) {
+        transaction.transfer_instruction_amount = transfer_instruction_amount;
+      }
+      if (transfer_instruction_cid != null) {
+        transaction.transfer_instruction_cid = transfer_instruction_cid;
+      }
+      if (description != null) {
+        transaction.description = description;
+      }
+
+      return transaction;
+    }
+    case 'balance_change': {
+      const { transaction_subtype: _rawSubtype, transfer_instruction_cid, ...requiredTransaction } = item;
+      const transaction: components['schemas']['BalanceChangeResponseItem'] = {
+        ...requiredTransaction,
+        transaction_subtype,
+      };
+
+      if (transfer_instruction_cid != null) {
+        transaction.transfer_instruction_cid = transfer_instruction_cid;
+      }
+
+      return transaction;
+    }
+    case 'notification':
+    case 'unknown':
+      return { ...item, transaction_subtype };
+  }
 }
 
 function normalizeListTransactionsResponse(response: ListTransactionsResponse): ListTransactionsResponse {

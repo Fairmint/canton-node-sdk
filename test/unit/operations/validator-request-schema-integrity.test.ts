@@ -168,7 +168,6 @@ describe('validator request schema integrity', () => {
           validator_rewards_used: '0',
           sv_rewards_used: '0',
           development_fund_coupons_used: '0',
-          description: 'test transfer',
         },
         {
           transaction_type: 'balance_change',
@@ -200,24 +199,51 @@ describe('validator request schema integrity', () => {
     } satisfies ListTransactionsResponse;
     const rawResponse = {
       ...response,
-      items: response.items.map((item) =>
-        item.event_id === 'balance-event'
-          ? {
-              ...item,
-              transaction_subtype: {
-                ...item.transaction_subtype,
-                amulet_operation: null,
-                interface_id: null,
-              },
-            }
-          : item
-      ),
+      items: response.items.map((item) => {
+        if (item.event_id === 'transfer-event') {
+          return {
+            ...item,
+            transfer_instruction_receiver: null,
+            transfer_instruction_amount: null,
+            transfer_instruction_cid: null,
+            description: null,
+          };
+        }
+        if (item.event_id === 'balance-event') {
+          return {
+            ...item,
+            transaction_subtype: {
+              ...item.transaction_subtype,
+              amulet_operation: null,
+              interface_id: null,
+            },
+            transfer_instruction_cid: null,
+          };
+        }
+        return item;
+      }),
     } as unknown as ListTransactionsResponse;
 
     expect(ListTransactionsParamsSchema.parse(request)).toEqual(request);
 
     const makePostRequest = jest.fn().mockResolvedValue(rawResponse);
-    await expect(new ListTransactions(createClient(makePostRequest)).execute(request)).resolves.toEqual(response);
+    const result = await new ListTransactions(createClient(makePostRequest)).execute(request);
+    expect(result).toStrictEqual(response);
+
+    const transfer = result.items[0];
+    expect(transfer).toMatchObject({ transaction_type: 'transfer' });
+    expect(transfer?.transaction_subtype.amulet_operation).toBe('transfer');
+    expect(transfer?.transaction_subtype.interface_id).toBe('package:Module:TransferInterface');
+    expect(transfer).not.toHaveProperty('transfer_instruction_receiver');
+    expect(transfer).not.toHaveProperty('transfer_instruction_amount');
+    expect(transfer).not.toHaveProperty('transfer_instruction_cid');
+    expect(transfer).not.toHaveProperty('description');
+
+    const balanceChange = result.items[1];
+    expect(balanceChange).toMatchObject({ transaction_type: 'balance_change' });
+    expect(balanceChange?.transaction_subtype).not.toHaveProperty('amulet_operation');
+    expect(balanceChange?.transaction_subtype).not.toHaveProperty('interface_id');
+    expect(balanceChange).not.toHaveProperty('transfer_instruction_cid');
 
     expect(makePostRequest).toHaveBeenCalledWith(
       'https://validator.example/api/validator/v0/wallet/transactions',
