@@ -75,7 +75,7 @@ export function readRequiredString(source: unknown, key: string, operation: stri
 
 export function readContractWithStateContractId(contractWithState: unknown): string | null {
   if (!isRecord(contractWithState)) return null;
-  const contract = contractWithState['contract'];
+  const { contract } = contractWithState;
   if (!isRecord(contract)) return null;
   const contractId = contract['contract_id'];
   return typeof contractId === 'string' && contractId.trim() ? contractId : null;

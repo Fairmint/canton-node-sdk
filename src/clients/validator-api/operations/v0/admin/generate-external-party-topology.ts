@@ -1,6 +1,15 @@
 import { z } from 'zod';
-import { createApiOperation } from '../../../../../core';
+import { createApiOperation, createRequestSchema } from '../../../../../core';
 import { type operations } from '../../../../../generated/apps/validator/src/main/openapi/validator-internal';
+
+type GenerateExternalPartyTopologyRequest =
+  operations['generateExternalPartyTopology']['requestBody']['content']['application/json'];
+
+/** Runtime schema kept in exact key/type parity with the generated topology request. */
+export const GenerateExternalPartyTopologyParamsSchema = createRequestSchema<GenerateExternalPartyTopologyRequest>()({
+  party_hint: z.string(),
+  public_key: z.string(),
+});
 
 /**
  * Generate external party topology transactions
@@ -17,13 +26,10 @@ import { type operations } from '../../../../../generated/apps/validator/src/mai
  *   ```;
  */
 export const GenerateExternalPartyTopology = createApiOperation<
-  operations['generateExternalPartyTopology']['requestBody']['content']['application/json'],
+  GenerateExternalPartyTopologyRequest,
   operations['generateExternalPartyTopology']['responses']['200']['content']['application/json']
 >({
-  paramsSchema: z.object({
-    party_hint: z.string(),
-    public_key: z.string(),
-  }) as z.ZodType<operations['generateExternalPartyTopology']['requestBody']['content']['application/json']>,
+  paramsSchema: GenerateExternalPartyTopologyParamsSchema,
   method: 'POST',
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/admin/external-party/topology/generate`,
   buildRequestData: (params) => params,

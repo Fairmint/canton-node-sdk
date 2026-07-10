@@ -1,9 +1,11 @@
 import { z } from 'zod';
-import { createApiOperation } from '../../../../../core';
+import { createApiOperation, createRequestSchema } from '../../../../../core';
 import { type operations } from '../../../../../generated/apps/validator/src/main/openapi/scan-proxy';
 
-// Create Zod schema for the request parameters
-const GetAnsRulesParamsSchema = z.object({
+type GetAnsRulesRequest = operations['getAnsRules']['requestBody']['content']['application/json'];
+
+/** Runtime schema kept in exact key/type parity with the generated ANS-rules request. */
+export const GetAnsRulesParamsSchema = createRequestSchema<GetAnsRulesRequest>()({
   cached_ans_rules_contract_id: z.string().optional(),
   cached_ans_rules_domain_id: z.string().optional(),
 });
@@ -21,12 +23,10 @@ const GetAnsRulesParamsSchema = z.object({
  *   ```;
  */
 export const GetAnsRules = createApiOperation<
-  operations['getAnsRules']['requestBody']['content']['application/json'],
+  GetAnsRulesRequest,
   operations['getAnsRules']['responses']['200']['content']['application/json']
 >({
-  paramsSchema: GetAnsRulesParamsSchema as z.ZodType<
-    operations['getAnsRules']['requestBody']['content']['application/json']
-  >,
+  paramsSchema: GetAnsRulesParamsSchema,
   method: 'POST',
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/scan-proxy/ans-rules`,
   buildRequestData: (params) => params,
