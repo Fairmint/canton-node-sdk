@@ -277,6 +277,12 @@ function readAllocation(
       meta: readMetadata(transferLegSide['meta'], `${legField}.meta`, invalid),
     };
   });
+  const transferLegSideKeys = transferLegSides.map(({ side, transferLegId }) => JSON.stringify([transferLegId, side]));
+  if (new Set(transferLegSideKeys).size !== transferLegSideKeys.length) {
+    invalid(`${field}.transferLegSides must not contain duplicate transfer-leg sides.`, {
+      field: `${field}.transferLegSides`,
+    });
+  }
   const nextIterationFunding = readDecimalMap(value['nextIterationFunding'], `${field}.nextIterationFunding`, invalid);
   if (transferLegSides.length === 0 && nextIterationFunding === null) {
     invalid(`${field}.transferLegSides may be empty only when iterated settlement is enabled.`, {

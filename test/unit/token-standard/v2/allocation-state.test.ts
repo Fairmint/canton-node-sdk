@@ -553,6 +553,39 @@ describe('discoverTokenStandardV2AllocationState', () => {
     expect(ledger.getActiveContracts).toHaveBeenCalledTimes(1);
   });
 
+  test('rejects duplicate transfer-leg sides in a matching interface view', async () => {
+    const ledger = createLedger([
+      activeContract({
+        contractId: '#duplicate-transfer-leg-side',
+        kind: 'Completed',
+        viewValue: {
+          ...completedView,
+          allocation: {
+            ...completedView.allocation,
+            transferLegSides: [cashLeg, { ...cashLeg, amount: '26.0' }],
+          },
+        },
+      }),
+    ]);
+
+    await expect(
+      discoverTokenStandardV2AllocationState({
+        ledger,
+        parties: ['Buyer::alice'],
+        synchronizerId,
+        request,
+        activeAtOffset: 42,
+      })
+    ).rejects.toMatchObject({
+      code: TokenStandardV2AllocationStateErrorCode.INTERFACE_VIEW_INVALID,
+      context: {
+        contractId: '#duplicate-transfer-leg-side',
+        field: 'view.allocation.transferLegSides',
+      },
+    });
+    expect(ledger.getActiveContracts).toHaveBeenCalledTimes(1);
+  });
+
   test.each([
     [
       'leading-plus decimal',
@@ -561,6 +594,16 @@ describe('discoverTokenStandardV2AllocationState', () => {
         allocation: {
           ...request.allocation,
           transferLegSides: [{ ...cashLeg, amount: '+25.0' }, feeLeg],
+        },
+      },
+    ],
+    [
+      'duplicate transfer-leg sides',
+      {
+        ...request,
+        allocation: {
+          ...request.allocation,
+          transferLegSides: [cashLeg, { ...cashLeg, amount: '26.0' }],
         },
       },
     ],
