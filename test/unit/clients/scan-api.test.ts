@@ -214,6 +214,33 @@ describe('ScanApiClient', () => {
     expect(requestHeaders).not.toHaveProperty('Authorization');
   });
 
+  it('strips embedded credentials and normalizes trailing slashes from registry URLs', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan.example/api/scan'],
+      }
+    );
+    mockAxiosInstance.post.mockResolvedValueOnce({
+      data: {
+        factoryId: '#allocation-factory',
+        choiceContext: {
+          choiceContextData: { values: {} },
+          disclosedContracts: [],
+        },
+      },
+    });
+
+    await client.getAllocationFactoryFromRegistry({
+      registryUrl: 'https://registry-user:registry-password@cash-token.example/token-registry///',
+      choiceArguments: {},
+    });
+
+    expect(mockAxiosInstance.post.mock.calls[0]?.[0]).toBe(
+      'https://cash-token.example/token-registry/registry/allocation-instruction/v1/allocation-factory'
+    );
+  });
+
   it('rejects a malformed or non-http registry URL before making a request', async () => {
     const { client, mockAxiosInstance } = createClient(
       { network: 'mainnet' },

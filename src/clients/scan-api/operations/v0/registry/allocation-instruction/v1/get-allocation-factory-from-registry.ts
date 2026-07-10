@@ -38,9 +38,11 @@ export type GetAllocationFactoryFromRegistryResponse =
 
 function buildRegistryEndpoint(registryUrl: string): string {
   const url = new URL(registryUrl);
+  url.username = '';
+  url.password = '';
   url.search = '';
   url.hash = '';
-  url.pathname = `${url.pathname.replace(/\/$/, '')}${endpoint}`;
+  url.pathname = `${url.pathname.replace(/\/+$/, '')}${endpoint}`;
   return url.toString();
 }
 
