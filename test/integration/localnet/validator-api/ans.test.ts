@@ -12,4 +12,24 @@ describe('ValidatorApiClient / ANS', () => {
     expect(response).toBeDefined();
     expect(Array.isArray(response.entries)).toBe(true);
   });
+
+  test('listAnsEntries returns scan-wide entries in the generated wire format', async () => {
+    const client = getClient();
+    const response = await client.listAnsEntries({ page_size: 20 });
+
+    expect(Array.isArray(response.entries)).toBe(true);
+    expect(response.entries.length).toBeLessThanOrEqual(20);
+    for (const entry of response.entries) {
+      expect(entry.user).toEqual(expect.any(String));
+      expect(entry.name).toEqual(expect.any(String));
+      expect(entry.url).toEqual(expect.any(String));
+      expect(entry.description).toEqual(expect.any(String));
+      if (entry.contract_id !== undefined) {
+        expect(entry.contract_id).toEqual(expect.any(String));
+      }
+      if (entry.expires_at !== undefined) {
+        expect(Number.isNaN(Date.parse(entry.expires_at))).toBe(false);
+      }
+    }
+  });
 });
