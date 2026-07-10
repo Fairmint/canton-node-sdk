@@ -3,10 +3,11 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
-const LOCALNET_SCRIPT = resolve(__dirname, '../../../scripts/localnet-cloud.sh');
+const REPO_ROOT = resolve(__dirname, '../../..');
 
 function runSourcedLocalnetScript(body: string, args: readonly string[] = []): string {
-  return execFileSync('bash', ['-c', `source "$1"\n${body}`, 'localnet-cloud-test', LOCALNET_SCRIPT, ...args], {
+  return execFileSync('bash', ['-c', `source scripts/localnet-cloud.sh\n${body}`, 'localnet-cloud-test', ...args], {
+    cwd: REPO_ROOT,
     encoding: 'utf8',
   });
 }
@@ -32,11 +33,11 @@ describe('localnet-cloud configuration lifecycle', () => {
 
     try {
       const setupOutput = runSourcedLocalnetScript(
-        'QUICKSTART_DIR="$2"\n' + 'configure_quickstart_localnet\n' + 'printf "%s\\n" "${SPLICE_CONFIG_CHANGED}"',
+        'QUICKSTART_DIR="$1"\n' + 'configure_quickstart_localnet\n' + 'printf "%s\\n" "${SPLICE_CONFIG_CHANGED}"',
         [quickstart]
       );
       const startOutput = runSourcedLocalnetScript(
-        'QUICKSTART_DIR="$2"\n' +
+        'QUICKSTART_DIR="$1"\n' +
           'configure_quickstart_localnet\n' +
           'printf "pending:%s\\n" "${SPLICE_CONFIG_CHANGED}"\n' +
           'quickstart_force_full_start() { return 1; }\n' +
