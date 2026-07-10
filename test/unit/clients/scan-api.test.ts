@@ -157,14 +157,14 @@ describe('ScanApiClient', () => {
     mockAxiosInstance.get.mockResolvedValueOnce({ data: response });
 
     const result = await client.getDateOfFirstSnapshotAfter({
-      after: '2026-07-10T12:00:00.000Z',
+      after: '2026-07-10T12:00:00.123456Z',
       migrationId: 7,
     });
     const typedResult: GetDateOfFirstSnapshotAfterResponse = result;
 
     expect(typedResult).toEqual(response);
     expect(mockAxiosInstance.get.mock.calls[0]?.[0]).toBe(
-      'https://scan.example/api/scan/v0/state/acs/snapshot-timestamp-after?after=2026-07-10T12%3A00%3A00.000Z&migration_id=7'
+      'https://scan.example/api/scan/v0/state/acs/snapshot-timestamp-after?after=2026-07-10T12%3A00%3A00.123456Z&migration_id=7'
     );
   });
 
