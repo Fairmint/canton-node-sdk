@@ -268,7 +268,7 @@ describe('validator request schema integrity', () => {
     });
 
     await expect(new ListTransactions(createClient(makePostRequest)).execute({ page_size: 25 })).rejects.toThrow(
-      'Unsupported wallet transaction discriminator'
+      'Unsupported wallet transaction discriminator: future_transaction_type'
     );
   });
 
