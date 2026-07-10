@@ -7,6 +7,7 @@
 import { ApiError } from '../../../../src';
 import type { components } from '../../../../src/generated/apps/validator/src/main/openapi/scan-proxy';
 import { retry } from '../../../utils/testConfig';
+import { getClient as getScanClient } from '../scan-api/setup';
 import { ensureValidatorUserOnboarded, getClient, VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS } from './setup';
 
 type Contract = components['schemas']['Contract'];
@@ -88,31 +89,30 @@ describe('ValidatorApiClient / ScanProxy', () => {
     }
   });
 
-  test('getHoldingsSummaryAtV1 returns a typed snapshot for the onboarded validator party', async () => {
+  test('getHoldingsSummaryAtV1 returns the exact typed snapshot selected by Scan', async () => {
     const client = getClient();
+    const scanClient = getScanClient();
     const userStatus = await client.getUserStatus();
     expect(userStatus.party_id).toEqual(expect.any(String));
     const ownerPartyIds = [userStatus.party_id];
 
     const requestedAt = new Date().toISOString();
-    const response = await retry(
-      async () =>
-        client.getHoldingsSummaryAtV1({
-          migration_id: 0,
-          record_time: requestedAt,
-          record_time_match: 'at_or_before',
-          owner_party_ids: ownerPartyIds,
-        }),
+    const snapshot = await retry(
+      async () => scanClient.getDateOfMostRecentSnapshotBefore({ before: requestedAt, migrationId: 0 }),
       {
-        timeoutMs: 45_000,
+        timeoutMs: 30_000,
         pollIntervalMs: 2_000,
-        description: 'validator scan-proxy v1 holdings summary',
+        description: 'most recent Scan ACS snapshot',
       }
     );
+    const response = await client.getHoldingsSummaryAtV1({
+      migration_id: 0,
+      record_time: snapshot.record_time,
+      owner_party_ids: ownerPartyIds,
+    });
 
     expect(response.migration_id).toBe(0);
-    expect(Number.isNaN(Date.parse(response.record_time))).toBe(false);
-    expect(Date.parse(response.record_time)).toBeLessThanOrEqual(Date.parse(requestedAt));
+    expect(response.record_time).toBe(snapshot.record_time);
     expect(Array.isArray(response.summaries)).toBe(true);
     for (const summary of response.summaries) {
       expect(summary.party_id).toBe(userStatus.party_id);
@@ -122,14 +122,15 @@ describe('ValidatorApiClient / ScanProxy', () => {
       }
     }
 
-    await expect(
-      client.getHoldingsSummaryAtV1({
-        migration_id: 0,
-        record_time: response.record_time,
-        owner_party_ids: ownerPartyIds,
-      })
-    ).resolves.toEqual(response);
-  });
+    const atOrBeforeResponse = await client.getHoldingsSummaryAtV1({
+      migration_id: 0,
+      record_time: requestedAt,
+      record_time_match: 'at_or_before',
+      owner_party_ids: ownerPartyIds,
+    });
+
+    expect(atOrBeforeResponse).toEqual(response);
+  }, 120_000);
 
   test('listUnclaimedDevelopmentFundCoupons preserves the hyphenated response key and contract format', async () => {
     const client = getClient();
