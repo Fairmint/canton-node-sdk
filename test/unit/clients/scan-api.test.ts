@@ -25,7 +25,10 @@ interface MockAxiosInstance {
   patch: jest.Mock;
 }
 
-function createClient(config: ClientConfig, options: ScanApiClientOptions = {}): {
+function createClient(
+  config: ClientConfig,
+  options: ScanApiClientOptions = {}
+): {
   client: ScanApiClient;
   mockAxiosInstance: MockAxiosInstance;
 } {
@@ -166,5 +169,98 @@ describe('ScanApiClient', () => {
       'https://scan-b.example/registry/metadata/v1/instruments/Amulet',
     ]);
     expect(client.getApiUrl()).toBe('https://scan-b.example/api/scan');
+  });
+
+  it('gets an allocation factory from an arbitrary Token Standard registry without auth', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan.example/api/scan'],
+      }
+    );
+    const choiceArguments = {
+      settlement: { id: 'settlement-3' },
+      extraArgs: { context: { values: {} }, meta: { values: {} } },
+    };
+    const response = {
+      factoryId: '#allocation-factory',
+      choiceContext: {
+        choiceContextData: { values: {} },
+        disclosedContracts: [],
+      },
+    };
+    mockAxiosInstance.post.mockResolvedValueOnce({ data: response });
+
+    await expect(
+      client.getAllocationFactoryFromRegistry({
+        registryUrl: 'https://cash-token.example/token-registry/',
+        choiceArguments,
+      })
+    ).resolves.toEqual(response);
+
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+      'https://cash-token.example/token-registry/registry/allocation-instruction/v1/allocation-factory',
+      {
+        choiceArguments,
+        excludeDebugFields: false,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    const requestHeaders = mockAxiosInstance.post.mock.calls[0]?.[2]?.headers;
+    expect(requestHeaders).not.toHaveProperty('Authorization');
+  });
+
+  it('strips embedded credentials and normalizes trailing slashes from registry URLs', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan.example/api/scan'],
+      }
+    );
+    mockAxiosInstance.post.mockResolvedValueOnce({
+      data: {
+        factoryId: '#allocation-factory',
+        choiceContext: {
+          choiceContextData: { values: {} },
+          disclosedContracts: [],
+        },
+      },
+    });
+
+    await client.getAllocationFactoryFromRegistry({
+      registryUrl: 'https://registry-user:registry-password@cash-token.example/token-registry///',
+      choiceArguments: {},
+    });
+
+    expect(mockAxiosInstance.post.mock.calls[0]?.[0]).toBe(
+      'https://cash-token.example/token-registry/registry/allocation-instruction/v1/allocation-factory'
+    );
+  });
+
+  it('rejects a malformed or non-http registry URL before making a request', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan.example/api/scan'],
+      }
+    );
+
+    await expect(
+      client.getAllocationFactoryFromRegistry({
+        registryUrl: 'not-a-url',
+        choiceArguments: {},
+      })
+    ).rejects.toThrow('Parameter validation failed');
+    await expect(
+      client.getAllocationFactoryFromRegistry({
+        registryUrl: 'file:///tmp/token-registry',
+        choiceArguments: {},
+      })
+    ).rejects.toThrow('registryUrl must use http or https');
+    expect(mockAxiosInstance.post).not.toHaveBeenCalled();
   });
 });

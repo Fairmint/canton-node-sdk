@@ -158,9 +158,10 @@ export class WebSocketClient {
       void (async () => {
         try {
           const parsed = WebSocketErrorUtils.safeJsonParse(dataString, 'WebSocket message');
-          await log('message', parsed);
-
+          // Servers may close immediately after their final frame. Dispatch it before async logging so close handlers
+          // cannot observe an incomplete stream.
           handlers.onMessage(parsed as InboundMessage);
+          await log('message', parsed);
         } catch (err) {
           const error = toError(err);
           await log('parse_error', { raw: dataString, error: error.message });

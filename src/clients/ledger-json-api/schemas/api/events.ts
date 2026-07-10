@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { RecordSchema } from '../base';
 import { CumulativeFilterSchema } from '../operations/updates';
+import { JsInterfaceViewSchema } from './interface-view';
 
 export const CreatedTreeEventSchema = z
   .object({
@@ -23,8 +24,8 @@ export const CreatedTreeEventSchema = z
             createArgument: RecordSchema,
             /** Serialized event blob for the created contract. */
             createdEventBlob: z.string(),
-            /** List of interface view names implemented by the contract. */
-            interfaceViews: z.array(z.string()),
+            /** Interface views requested by matching interface filters. */
+            interfaceViews: z.array(JsInterfaceViewSchema).optional().default([]),
             /** Parties that witnessed the creation. */
             witnessParties: z.array(z.string()),
             /** Parties that must sign the contract. */
@@ -171,8 +172,8 @@ export const CreatedEventSchema = z
         createArgument: RecordSchema,
         /** Serialized event blob for the created contract. */
         createdEventBlob: z.string(),
-        /** List of interface view names implemented by the contract. */
-        interfaceViews: z.array(z.string()),
+        /** Interface views requested by matching interface filters. */
+        interfaceViews: z.array(JsInterfaceViewSchema).optional().default([]),
         /** Parties that witnessed the creation. */
         witnessParties: z.array(z.string()),
         /** Parties that must sign the contract. */
