@@ -1,15 +1,9 @@
 /** ValidatorApiClient integration tests: ANS Operations. */
 
+import type { ScanProxyAnsEntry } from '../../../../src/clients/validator-api/operations/v0/scan-proxy';
 import { ensureValidatorUserOnboarded, getClient, VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS } from './setup';
 
-function expectScanProxyAnsEntry(entry: {
-  contract_id?: string | null;
-  user: string;
-  name: string;
-  url: string;
-  description: string;
-  expires_at?: string | null;
-}): void {
+function expectScanProxyAnsEntry(entry: ScanProxyAnsEntry): void {
   expect(entry.user).toEqual(expect.any(String));
   expect(entry.name).toEqual(expect.any(String));
   expect(entry.url).toEqual(expect.any(String));
@@ -20,6 +14,18 @@ function expectScanProxyAnsEntry(entry: {
   if (entry.expires_at != null) {
     expect(Number.isNaN(Date.parse(entry.expires_at))).toBe(false);
   }
+}
+
+async function getDsoAnsEntry(client: ReturnType<typeof getClient>): Promise<ScanProxyAnsEntry> {
+  const dso = await client.getDsoPartyId();
+  const response = await client.lookupAnsEntryByParty({ party: dso.dso_party_id });
+
+  expectScanProxyAnsEntry(response.entry);
+  expect(response.entry.user).toBe(dso.dso_party_id);
+  expect(response.entry.contract_id).toBeNull();
+  expect(response.entry.expires_at).toBeNull();
+
+  return response.entry;
 }
 
 describe('ValidatorApiClient / ANS', () => {
@@ -35,35 +41,28 @@ describe('ValidatorApiClient / ANS', () => {
 
   test('listAnsEntries returns scan-wide entries in the generated wire format', async () => {
     const client = getClient();
-    const response = await client.listAnsEntries({ page_size: 20 });
+    const dsoEntry = await getDsoAnsEntry(client);
+    const response = await client.listAnsEntries({ name_prefix: dsoEntry.name, page_size: 20 });
 
     expect(Array.isArray(response.entries)).toBe(true);
     expect(response.entries.length).toBeGreaterThan(0);
     expect(response.entries.length).toBeLessThanOrEqual(20);
     response.entries.forEach(expectScanProxyAnsEntry);
 
-    const dsoEntry = response.entries.find((entry) => entry.contract_id === null && entry.expires_at === null);
-    expect(dsoEntry).toBeDefined();
+    const listedDsoEntry = response.entries.find((entry) => entry.name === dsoEntry.name);
+    expect(listedDsoEntry).toEqual(dsoEntry);
+    expect(listedDsoEntry?.contract_id).toBeNull();
+    expect(listedDsoEntry?.expires_at).toBeNull();
   });
 
   test('lookupAnsEntryByName and lookupAnsEntryByParty preserve nullable DSO fields', async () => {
     const client = getClient();
-    const listed = await client.listAnsEntries({ page_size: 20 });
-    const dsoEntry = listed.entries.find((entry) => entry.contract_id === null && entry.expires_at === null);
-
-    expect(dsoEntry).toBeDefined();
-    if (dsoEntry === undefined) {
-      throw new Error('LocalNet did not expose its expected DSO-provided ANS entry');
-    }
-
-    const [byName, byParty] = await Promise.all([
-      client.lookupAnsEntryByName({ name: dsoEntry.name }),
-      client.lookupAnsEntryByParty({ party: dsoEntry.user }),
-    ]);
+    const dsoEntry = await getDsoAnsEntry(client);
+    const byName = await client.lookupAnsEntryByName({ name: dsoEntry.name });
 
     expect(byName.entry).toEqual(dsoEntry);
-    expectScanProxyAnsEntry(byParty.entry);
-    expect(byParty.entry.contract_id).toBeNull();
-    expect(byParty.entry.expires_at).toBeNull();
+    expectScanProxyAnsEntry(byName.entry);
+    expect(byName.entry.contract_id).toBeNull();
+    expect(byName.entry.expires_at).toBeNull();
   });
 });

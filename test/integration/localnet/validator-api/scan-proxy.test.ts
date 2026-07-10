@@ -4,6 +4,7 @@
  * Tests for the scan proxy endpoints exposed through the validator API.
  */
 
+import { randomUUID } from 'node:crypto';
 import { ApiError } from '../../../../src';
 import type { components } from '../../../../src/generated/apps/validator/src/main/openapi/scan-proxy';
 import { retry } from '../../../utils/testConfig';
@@ -56,6 +57,14 @@ function expectNotFound(error: unknown): void {
   expect((error as ApiError).status).toBe(404);
 }
 
+function expectDecimalString(value: string): number {
+  expect(value).not.toHaveLength(0);
+  expect(value).toMatch(/^-?\d{1,28}(?:\.\d{1,10})?$/);
+  const parsed = Number(value);
+  expect(Number.isFinite(parsed)).toBe(true);
+  return parsed;
+}
+
 describe('ValidatorApiClient / ScanProxy', () => {
   beforeAll(ensureValidatorUserOnboarded, VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS);
 
@@ -96,41 +105,63 @@ describe('ValidatorApiClient / ScanProxy', () => {
     expect(userStatus.party_id).toEqual(expect.any(String));
     const ownerPartyIds = [userStatus.party_id];
 
-    const requestedAt = new Date().toISOString();
-    const snapshot = await retry(
-      async () => scanClient.getDateOfMostRecentSnapshotBefore({ before: requestedAt, migrationId: 0 }),
+    const tapResponse = await client.tap({
+      amount: '10',
+      command_id: `holdings-summary-${randomUUID()}`,
+    });
+    expect(tapResponse.contract_id).toEqual(expect.any(String));
+    expect(tapResponse.contract_id).not.toHaveLength(0);
+
+    const { snapshot, response, summary } = await retry(
+      async () => {
+        const forcedSnapshot = await scanClient.forceAcsSnapshotNow();
+        const exactResponse = await client.getHoldingsSummaryAtV1({
+          migration_id: forcedSnapshot.migration_id,
+          record_time: forcedSnapshot.record_time,
+          owner_party_ids: ownerPartyIds,
+        });
+        const partySummary = exactResponse.summaries.find((entry) => entry.party_id === userStatus.party_id);
+        if (partySummary === undefined) {
+          throw new Error(`Forced snapshot ${forcedSnapshot.record_time} does not yet contain the tapped holding`);
+        }
+        return { snapshot: forcedSnapshot, response: exactResponse, summary: partySummary };
+      },
       {
-        timeoutMs: 30_000,
+        timeoutMs: 120_000,
         pollIntervalMs: 2_000,
-        description: 'most recent Scan ACS snapshot',
+        description: 'forced Scan ACS snapshot containing the tapped holding',
       }
     );
-    const response = await client.getHoldingsSummaryAtV1({
-      migration_id: 0,
-      record_time: snapshot.record_time,
-      owner_party_ids: ownerPartyIds,
-    });
 
-    expect(response.migration_id).toBe(0);
+    expect(response.migration_id).toBe(snapshot.migration_id);
     expect(response.record_time).toBe(snapshot.record_time);
     expect(Array.isArray(response.summaries)).toBe(true);
-    for (const summary of response.summaries) {
-      expect(summary.party_id).toBe(userStatus.party_id);
-      for (const amount of [summary.total_unlocked_coin, summary.total_locked_coin, summary.total_coin_holdings]) {
-        expect(amount).toEqual(expect.any(String));
-        expect(Number.isFinite(Number(amount))).toBe(true);
+    expect(response.summaries.length).toBeGreaterThan(0);
+    expect(summary.party_id).toBe(userStatus.party_id);
+    expect(expectDecimalString(summary.total_coin_holdings)).toBeGreaterThan(0);
+    for (const entrySummary of response.summaries) {
+      expect(entrySummary.party_id).toBe(userStatus.party_id);
+      for (const amount of [
+        entrySummary.total_unlocked_coin,
+        entrySummary.total_locked_coin,
+        entrySummary.total_coin_holdings,
+      ]) {
+        expect(expectDecimalString(amount)).toBeGreaterThanOrEqual(0);
       }
     }
 
+    const snapshotTime = Date.parse(snapshot.record_time);
+    expect(Number.isNaN(snapshotTime)).toBe(false);
+    const afterSnapshot = new Date(snapshotTime + 1).toISOString();
     const atOrBeforeResponse = await client.getHoldingsSummaryAtV1({
-      migration_id: 0,
-      record_time: requestedAt,
+      migration_id: snapshot.migration_id,
+      record_time: afterSnapshot,
       record_time_match: 'at_or_before',
       owner_party_ids: ownerPartyIds,
     });
 
     expect(atOrBeforeResponse).toEqual(response);
-  }, 120_000);
+  }, 180_000);
 
   test('listUnclaimedDevelopmentFundCoupons preserves the hyphenated response key and contract format', async () => {
     const client = getClient();
