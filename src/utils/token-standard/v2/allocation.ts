@@ -366,18 +366,6 @@ function normalizePositiveDecimal(value: unknown, fieldName: string): string {
   return decimal.text;
 }
 
-function normalizeNonNegativeDecimal(value: unknown, fieldName: string): string {
-  const decimal = parseDecimalText(value, fieldName);
-  if (decimal.sign === -1) {
-    throw new TokenStandardV2AllocationError(
-      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
-      `${fieldName} must be non-negative.`,
-      { field: fieldName }
-    );
-  }
-  return decimal.text;
-}
-
 function normalizeFunding(
   value: Readonly<Record<string, string>> | null | undefined,
   fieldName: string
@@ -387,7 +375,7 @@ function normalizeFunding(
   const normalized = Object.create(null) as Record<string, string>;
   for (const [key, amount] of Object.entries(funding)) {
     Object.defineProperty(normalized, key, {
-      value: normalizeNonNegativeDecimal(amount, `${fieldName}.${key}`),
+      value: normalizePositiveDecimal(amount, `${fieldName}.${key}`),
       enumerable: true,
       configurable: true,
       writable: false,

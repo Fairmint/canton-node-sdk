@@ -262,18 +262,20 @@ describe('Token Standard V2 allocation helpers', () => {
       ).toThrow(TokenStandardV2AllocationError);
     }
 
-    expect(() =>
-      buildWithAllocation({
-        ...allocationParams.allocation,
-        nextIterationFunding: { USD: '-1.0' },
-      })
-    ).toThrow(TokenStandardV2AllocationError);
+    for (const amount of ['-1.0', '0']) {
+      expect(() =>
+        buildWithAllocation({
+          ...allocationParams.allocation,
+          nextIterationFunding: { USD: amount },
+        })
+      ).toThrow(TokenStandardV2AllocationError);
+    }
     expect(
       buildWithAllocation({
         ...allocationParams.allocation,
-        nextIterationFunding: { USD: '0' },
+        nextIterationFunding: { USD: '0.1' },
       }).allocation.nextIterationFunding
-    ).toEqual({ USD: '0' });
+    ).toEqual({ USD: '0.1' });
   });
 
   test('prepares through an arbitrary registry and preserves its context and disclosures', async () => {
