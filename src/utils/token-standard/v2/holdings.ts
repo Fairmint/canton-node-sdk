@@ -8,6 +8,9 @@ import type { TokenStandardV2Account, TokenStandardV2InstrumentId, TokenStandard
 export const TOKEN_STANDARD_V2_HOLDING_INTERFACE_ID = '#splice-api-token-holding-v2:Splice.Api.Token.HoldingV2:Holding';
 export const TOKEN_STANDARD_V2_AMOUNT_DECIMALS = 10;
 
+const ISO_8601_TIMESTAMP_PATTERN =
+  /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,9})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
+
 export const TokenStandardV2HoldingErrorCode = {
   INPUT_INVALID: 'TOKEN_STANDARD_V2_HOLDING_INPUT_INVALID',
   INTERFACE_VIEW_INVALID: 'TOKEN_STANDARD_V2_HOLDING_INTERFACE_VIEW_INVALID',
@@ -18,10 +21,11 @@ export type TokenStandardV2HoldingErrorCode =
   (typeof TokenStandardV2HoldingErrorCode)[keyof typeof TokenStandardV2HoldingErrorCode];
 
 export class TokenStandardV2HoldingError extends CantonError {
-  public override readonly name = 'TokenStandardV2HoldingError';
+  public override readonly name: string;
 
   public constructor(code: TokenStandardV2HoldingErrorCode, message: string, context?: ErrorContext) {
     super(message, code, context);
+    this.name = 'TokenStandardV2HoldingError';
   }
 }
 
@@ -32,6 +36,7 @@ export interface TokenStandardV2HoldingActiveContractsClient {
 export interface TokenStandardV2Lock {
   readonly holders: readonly string[];
   readonly expiresAt: string | null;
+  /** Duration from the holding's createdAt ledger time after which the lock expires. */
   readonly expiresAfter: { readonly microseconds: string } | null;
   readonly context: string | null;
 }
@@ -40,6 +45,8 @@ export interface TokenStandardV2Holding {
   readonly contractId: string;
   readonly templateId: string;
   readonly synchronizerId: string;
+  /** ISO 8601 ledger effective time at which the active holding was created. */
+  readonly createdAt: string;
   readonly account: TokenStandardV2Account;
   readonly instrumentId: TokenStandardV2InstrumentId;
   readonly amount: string;
@@ -59,10 +66,18 @@ export interface ListTokenStandardV2HoldingsParams {
   readonly holdingInterfaceId?: string;
 }
 
-export interface SelectTokenStandardV2HoldingsParams extends Omit<ListTokenStandardV2HoldingsParams, 'synchronizerId'> {
+export interface SelectTokenStandardV2HoldingsParams extends Omit<
+  ListTokenStandardV2HoldingsParams,
+  'synchronizerId' | 'activeAtOffset'
+> {
   readonly synchronizerId: string;
+  /** ACS snapshot offset. Requiring it keeps selection to one Canton network read. */
+  readonly activeAtOffset: number;
   readonly amountBaseUnits: string;
-  /** Defaults to holdings whose HoldingV2 lock is None. */
+  /**
+   * Token-specific spendability policy. Use holding.createdAt with lock.expiresAfter to derive a relative lock's
+   * absolute expiry. Defaults to holdings whose HoldingV2 lock is None.
+   */
   readonly isSpendable?: (holding: TokenStandardV2Holding) => boolean;
 }
 
@@ -121,8 +136,7 @@ function normalizeInstrumentDecimals(value: number): number {
   return value;
 }
 
-function normalizeActiveAtOffset(value: number | undefined): number | undefined {
-  if (value === undefined) return undefined;
+function normalizeActiveAtOffset(value: number): number {
   if (!Number.isSafeInteger(value) || value < 0) {
     inputInvalid('activeAtOffset must be a non-negative safe integer.', {
       field: 'activeAtOffset',
@@ -130,6 +144,21 @@ function normalizeActiveAtOffset(value: number | undefined): number | undefined 
     });
   }
   return value;
+}
+
+function normalizeRequiredActiveAtOffset(value: unknown): number {
+  if (value === undefined) {
+    inputInvalid('activeAtOffset is required for Token Standard V2 holding selection.', {
+      field: 'activeAtOffset',
+    });
+  }
+  if (typeof value !== 'number') {
+    inputInvalid('activeAtOffset must be a non-negative safe integer.', {
+      field: 'activeAtOffset',
+      activeAtOffset: value,
+    });
+  }
+  return normalizeActiveAtOffset(value);
 }
 
 function validateAccount(account: TokenStandardV2Account): void {
@@ -154,6 +183,38 @@ function validateInstrumentId(instrumentId: TokenStandardV2InstrumentId): void {
 function readNullableString(value: unknown): string | null | undefined {
   if (value === null) return null;
   return isNonEmptyString(value) ? value : undefined;
+}
+
+function readCreatedAt(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const match = ISO_8601_TIMESTAMP_PATTERN.exec(value);
+  if (!match || Number.isNaN(Date.parse(value))) return undefined;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const isLeapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = month === 2 ? (isLeapYear ? 29 : 28) : [4, 6, 9, 11].includes(month) ? 30 : 31;
+  return day <= daysInMonth ? value : undefined;
+}
+
+function requireCreatedAt(value: unknown, context: ErrorContext): string {
+  const createdAt = readCreatedAt(value);
+  if (createdAt === undefined) {
+    interfaceViewInvalid('Active Holding contract is missing a valid createdAt ledger timestamp.', {
+      ...context,
+      createdAt: value,
+    });
+  }
+  return createdAt;
+}
+
+function readRawActiveContract(item: unknown): Readonly<Record<string, unknown>> | undefined {
+  if (!isRecord(item)) return undefined;
+  const { contractEntry } = item;
+  if (!isRecord(contractEntry)) return undefined;
+  const activeContract = contractEntry['JsActiveContract'];
+  return isRecord(activeContract) ? activeContract : undefined;
 }
 
 function readAccount(value: unknown): TokenStandardV2Account | undefined {
@@ -226,6 +287,22 @@ function interfaceIdsMatch(left: string, right: string): boolean {
   return identifierModuleEntitySuffix(left) === identifierModuleEntitySuffix(right);
 }
 
+function failedInterfaceView(params: {
+  readonly itemIndex: number;
+  readonly contractId: unknown;
+  readonly interfaceId: unknown;
+  readonly statusCode: number;
+  readonly statusMessage: unknown;
+}): never {
+  interfaceViewInvalid('HoldingV2 interface view request failed.', {
+    itemIndex: params.itemIndex,
+    contractId: params.contractId,
+    interfaceId: params.interfaceId,
+    viewStatusCode: params.statusCode,
+    viewStatusMessage: params.statusMessage,
+  });
+}
+
 function decimalAmountToBaseUnits(amount: string, decimals: number): string {
   const match = /^(\d+)(?:\.(\d+))?$/.exec(amount.trim());
   if (!match) throw new Error('amount must be a non-negative decimal');
@@ -282,7 +359,13 @@ function readHolding(params: {
     });
   }
   if (interfaceView.viewStatus.code !== 0) {
-    return undefined;
+    failedInterfaceView({
+      itemIndex: params.itemIndex,
+      contractId: createdEvent.contractId,
+      interfaceId: interfaceView.interfaceId,
+      statusCode: interfaceView.viewStatus.code,
+      statusMessage: interfaceView.viewStatus.message,
+    });
   }
   if (!isRecord(interfaceView.viewValue)) {
     interfaceViewInvalid('HoldingV2 interface view is missing viewValue.', {
@@ -302,6 +385,11 @@ function readHolding(params: {
   if (!accountsEqual(account, params.account) || !instrumentIdsEqual(instrumentId, params.instrumentId)) {
     return undefined;
   }
+
+  const createdAt = requireCreatedAt(createdEvent.createdAt, {
+    itemIndex: params.itemIndex,
+    contractId: createdEvent.contractId,
+  });
 
   const lock = readLock(interfaceView.viewValue['lock']);
   const meta = readMetadata(interfaceView.viewValue['meta']);
@@ -335,6 +423,7 @@ function readHolding(params: {
     contractId: createdEvent.contractId,
     templateId: createdEvent.templateId,
     synchronizerId: activeContract.synchronizerId,
+    createdAt,
     account,
     instrumentId,
     amount,
@@ -360,7 +449,8 @@ export async function listTokenStandardV2Holdings(
   );
   const synchronizerId =
     params.synchronizerId === undefined ? undefined : normalizeRequiredString(params.synchronizerId, 'synchronizerId');
-  const activeAtOffset = normalizeActiveAtOffset(params.activeAtOffset);
+  const activeAtOffset =
+    params.activeAtOffset === undefined ? undefined : normalizeActiveAtOffset(params.activeAtOffset);
   const response = await params.ledger.getActiveContracts({
     parties,
     interfaceIds: [holdingInterfaceId],
@@ -371,7 +461,17 @@ export async function listTokenStandardV2Holdings(
 
   const holdings = new Map<string, TokenStandardV2Holding>();
   for (const [itemIndex, item] of response.entries()) {
-    if (!isJsActiveContractItem(item)) continue;
+    if (!isJsActiveContractItem(item)) {
+      const activeContract = readRawActiveContract(item);
+      if (activeContract && (synchronizerId === undefined || activeContract['synchronizerId'] === synchronizerId)) {
+        const { createdEvent } = activeContract;
+        requireCreatedAt(isRecord(createdEvent) ? createdEvent['createdAt'] : undefined, {
+          itemIndex,
+          contractId: isRecord(createdEvent) ? createdEvent['contractId'] : undefined,
+        });
+      }
+      continue;
+    }
     const holding = readHolding({
       item,
       itemIndex,
@@ -388,6 +488,7 @@ export async function listTokenStandardV2Holdings(
       existing &&
       (existing.templateId !== holding.templateId ||
         existing.synchronizerId !== holding.synchronizerId ||
+        existing.createdAt !== holding.createdAt ||
         existing.amount !== holding.amount)
     ) {
       interfaceViewInvalid('Duplicate HoldingV2 contract rows contain inconsistent data.', {
@@ -402,6 +503,7 @@ export async function listTokenStandardV2Holdings(
 export async function selectTokenStandardV2Holdings(
   params: SelectTokenStandardV2HoldingsParams
 ): Promise<SelectedTokenStandardV2Holdings> {
+  const activeAtOffset = normalizeRequiredActiveAtOffset(params.activeAtOffset);
   const required = BigInt(normalizeBaseUnitAmount(params.amountBaseUnits));
   if (required <= 0n) {
     inputInvalid('amountBaseUnits must be positive.', {
@@ -411,7 +513,7 @@ export async function selectTokenStandardV2Holdings(
   }
 
   const isSpendable = params.isSpendable ?? ((holding: TokenStandardV2Holding) => holding.lock === null);
-  const holdings = [...(await listTokenStandardV2Holdings(params))]
+  const holdings = [...(await listTokenStandardV2Holdings({ ...params, activeAtOffset }))]
     .filter((holding) => isSpendable(holding) && BigInt(holding.amountBaseUnits) > 0n)
     .sort((left, right) => {
       const difference = BigInt(right.amountBaseUnits) - BigInt(left.amountBaseUnits);

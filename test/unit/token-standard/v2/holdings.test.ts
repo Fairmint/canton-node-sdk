@@ -26,7 +26,9 @@ function activeHolding(params: {
   readonly account?: TokenStandardV2Account;
   readonly instrumentId?: TokenStandardV2InstrumentId;
   readonly lock?: unknown;
+  readonly createdAt?: string;
   readonly viewStatusCode?: number;
+  readonly viewStatusMessage?: string;
   readonly synchronizerId?: string;
   readonly interfaceId?: string;
   readonly omitViewValue?: boolean;
@@ -58,7 +60,7 @@ function activeHolding(params: {
               interfaceId: params.interfaceId ?? '#holding-package-id:Splice.Api.Token.HoldingV2:Holding',
               viewStatus: {
                 code: params.viewStatusCode ?? 0,
-                message: '',
+                message: params.viewStatusMessage ?? '',
               },
               ...(!params.omitViewValue ? { viewValue } : {}),
             },
@@ -66,13 +68,19 @@ function activeHolding(params: {
           witnessParties: ['Buyer::alice'],
           signatories: ['CashAdmin::issuer'],
           observers: ['Buyer::alice'],
-          createdAt: '2026-07-10T01:00:00.000Z',
+          createdAt: params.createdAt ?? '2026-07-10T01:00:00.000Z',
           packageName: 'cash-token',
           implementedInterfaces: ['#holding-package-id:Splice.Api.Token.HoldingV2:Holding'],
         },
       },
     },
   };
+}
+
+function withoutCreatedAt(item: JsGetActiveContractsResponseItem): JsGetActiveContractsResponseItem {
+  if (!('JsActiveContract' in item.contractEntry)) throw new Error('Expected an active contract fixture');
+  delete (item.contractEntry.JsActiveContract.createdEvent as { createdAt?: unknown }).createdAt;
+  return item;
 }
 
 function createLedger(
@@ -157,13 +165,11 @@ describe('Token Standard V2 holdings', () => {
         contractId: '#other-account-id',
         amount: '2.0000001',
         account: { ...account, id: 'custody-2' },
-        viewStatusCode: 3,
       }),
       activeHolding({
         contractId: '#other-instrument',
         amount: '3.0000001',
         instrumentId: { ...instrumentId, id: 'EUR' },
-        viewStatusCode: 3,
       }),
     ]);
 
@@ -183,36 +189,47 @@ describe('Token Standard V2 holdings', () => {
     ]);
   });
 
-  test('ignores a failed interface view without requiring viewValue', async () => {
+  test('throws the typed interface error when the requested view fails on the selected synchronizer', async () => {
     const ledger = createLedger([
       activeHolding({
         contractId: '#failed-view',
         amount: '1.0',
         viewStatusCode: 3,
+        viewStatusMessage: 'HoldingV2 view computation failed',
         omitViewValue: true,
       }),
     ]);
 
     await expect(
-      listTokenStandardV2Holdings({
+      selectTokenStandardV2Holdings({
         ledger,
         parties: ['Buyer::alice'],
         account,
         instrumentId,
         instrumentDecimals: 6,
+        synchronizerId,
+        activeAtOffset: 42,
+        amountBaseUnits: '1000000',
       })
-    ).resolves.toEqual([]);
+    ).rejects.toMatchObject({
+      code: 'TOKEN_STANDARD_V2_HOLDING_INTERFACE_VIEW_INVALID',
+      context: {
+        contractId: '#failed-view',
+        viewStatusCode: 3,
+        viewStatusMessage: 'HoldingV2 view computation failed',
+      },
+    });
   });
 
-  test('returns lock metadata and accepts an explicit token spendability policy', async () => {
+  test('exposes createdAt for a token-specific relative-lock spendability policy', async () => {
     const ledger = createLedger([
       activeHolding({
-        contractId: '#expired-lock',
+        contractId: '#relative-expired-lock',
         amount: '5.0',
         lock: {
           holders: ['CashAdmin::issuer'],
-          expiresAt: '2026-07-10T01:00:00.000Z',
-          expiresAfter: null,
+          expiresAt: null,
+          expiresAfter: { microseconds: '3600000000' },
           context: 'cash-lock',
         },
         meta: { values: { source: 'cash-token' } },
@@ -230,7 +247,8 @@ describe('Token Standard V2 holdings', () => {
       })
     ).resolves.toEqual([
       expect.objectContaining({
-        contractId: '#expired-lock',
+        contractId: '#relative-expired-lock',
+        createdAt: '2026-07-10T01:00:00.000Z',
         lock: expect.objectContaining({ context: 'cash-lock' }),
         meta: { values: { source: 'cash-token' } },
       }),
@@ -244,15 +262,52 @@ describe('Token Standard V2 holdings', () => {
         instrumentId,
         instrumentDecimals: 6,
         synchronizerId,
+        activeAtOffset: 42,
         amountBaseUnits: '5000000',
-        isSpendable: (holding) =>
-          holding.lock?.expiresAt !== null &&
-          holding.lock?.expiresAt !== undefined &&
-          holding.lock.expiresAt <= '2026-07-10T02:00:00.000Z',
+        isSpendable: (holding) => {
+          if (!holding.lock?.expiresAfter) return false;
+          const createdAtMicroseconds = BigInt(Date.parse(holding.createdAt)) * 1000n;
+          const absoluteExpiryMicroseconds = createdAtMicroseconds + BigInt(holding.lock.expiresAfter.microseconds);
+          const evaluationTimeMicroseconds = BigInt(Date.parse('2026-07-10T02:00:00.000Z')) * 1000n;
+          return absoluteExpiryMicroseconds <= evaluationTimeMicroseconds;
+        },
       })
     ).resolves.toMatchObject({
-      contractIds: ['#expired-lock'],
+      contractIds: ['#relative-expired-lock'],
       totalBaseUnits: '5000000',
+    });
+  });
+
+  test.each([
+    [
+      'missing',
+      '#missing-created-at',
+      withoutCreatedAt(activeHolding({ contractId: '#missing-created-at', amount: '1.0' })),
+    ],
+    [
+      'malformed',
+      '#malformed-created-at',
+      activeHolding({
+        contractId: '#malformed-created-at',
+        amount: '1.0',
+        createdAt: '2026-02-31T00:00:00.000Z',
+      }),
+    ],
+  ] as const)('fails closed when a matching active holding has a %s createdAt', async (_case, contractId, holding) => {
+    const ledger = createLedger([holding]);
+
+    await expect(
+      listTokenStandardV2Holdings({
+        ledger,
+        parties: ['Buyer::alice'],
+        account,
+        instrumentId,
+        instrumentDecimals: 6,
+        synchronizerId,
+      })
+    ).rejects.toMatchObject({
+      code: 'TOKEN_STANDARD_V2_HOLDING_INTERFACE_VIEW_INVALID',
+      context: { contractId },
     });
   });
 
@@ -300,6 +355,7 @@ describe('Token Standard V2 holdings', () => {
         instrumentId,
         instrumentDecimals: 6,
         synchronizerId,
+        activeAtOffset: 42,
         amountBaseUnits: '2000000',
       })
     ).rejects.toMatchObject({
@@ -338,10 +394,32 @@ describe('Token Standard V2 holdings', () => {
         instrumentId,
         instrumentDecimals: 6,
         synchronizerId,
+        activeAtOffset: 42,
         amountBaseUnits: '0',
       })
     ).rejects.toMatchObject({
       code: 'TOKEN_STANDARD_V2_HOLDING_INPUT_INVALID',
+    });
+    expect(ledger.getActiveContracts).not.toHaveBeenCalled();
+  });
+
+  test('requires activeAtOffset at compile time and rejects runtime omission before querying Canton', async () => {
+    const ledger = createLedger([]);
+    const requestWithoutOffset = {
+      ledger,
+      parties: ['Buyer::alice'],
+      account,
+      instrumentId,
+      instrumentDecimals: 6,
+      synchronizerId,
+      amountBaseUnits: '1000000',
+    };
+
+    // @ts-expect-error activeAtOffset is required by the high-level selection request.
+    const selection = selectTokenStandardV2Holdings(requestWithoutOffset);
+    await expect(selection).rejects.toMatchObject({
+      code: 'TOKEN_STANDARD_V2_HOLDING_INPUT_INVALID',
+      context: { field: 'activeAtOffset' },
     });
     expect(ledger.getActiveContracts).not.toHaveBeenCalled();
   });
