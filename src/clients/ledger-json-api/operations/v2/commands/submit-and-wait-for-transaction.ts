@@ -21,10 +21,17 @@ export const SubmitAndWaitForTransaction = createApiOperation<
   paramsSchema: SubmitAndWaitForTransactionParamsSchema,
   method: 'POST',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,
-  buildRequestData: (params, client) => ({
-    ...params,
-    commandId:
-      params.commandId ?? `submit-and-wait-for-transaction-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-    actAs: params.actAs ?? [client.getPartyId()],
-  }),
+  buildRequestData: (params, client) => {
+    const { transactionFormat, ...commands } = params;
+    return {
+      commands: {
+        ...commands,
+        commandId:
+          params.commandId ??
+          `submit-and-wait-for-transaction-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+        actAs: params.actAs ?? [client.getPartyId()],
+      },
+      ...(transactionFormat !== undefined ? { transactionFormat } : {}),
+    };
+  },
 });
