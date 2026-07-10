@@ -123,11 +123,7 @@ export class GetActiveContracts {
           onMessage: async (parsed): Promise<void> => {
             const decoded = ActiveContractsResponseMessageSchema.safeParse(parsed);
             if (!decoded.success) {
-              if (!settled) {
-                settled = true;
-                reject(new ApiError('Unexpected active-contracts WebSocket message'));
-              }
-              return;
+              throw new ApiError('Unexpected active-contracts WebSocket message');
             }
             const message = decoded.data;
 

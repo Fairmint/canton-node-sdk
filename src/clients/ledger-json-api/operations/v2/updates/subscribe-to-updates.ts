@@ -235,11 +235,7 @@ export class SubscribeToUpdates {
             onMessage: async (parsed): Promise<void> => {
               const decoded = UpdatesWsMessageSchema.safeParse(parsed);
               if (!decoded.success) {
-                if (!settled) {
-                  settled = true;
-                  reject(new ApiError('Unexpected ledger updates WebSocket message'));
-                }
-                return;
+                throw new ApiError('Unexpected ledger updates WebSocket message');
               }
               const message = decoded.data;
 
