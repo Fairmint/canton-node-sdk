@@ -929,6 +929,12 @@ describe('ScanApiClient', () => {
         choiceArguments: {},
       })
     ).rejects.toThrow('registryUrl must use http or https');
+    await expect(
+      client.getAllocationFactoryV2FromRegistry({
+        registryUrl: 'file:///tmp/token-registry',
+        choiceArguments: {},
+      })
+    ).rejects.toThrow('registryUrl must use http or https');
     expect(mockAxiosInstance.post).not.toHaveBeenCalled();
   });
 });
