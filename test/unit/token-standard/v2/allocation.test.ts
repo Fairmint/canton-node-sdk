@@ -39,22 +39,28 @@ const allocationParams: BuildTokenStandardV2AllocationChoiceArgumentParams = {
       },
     ],
     settlementDeadline: '2026-07-10T02:00:00.000Z',
+    committed: true,
   },
   requestedAt: '2026-07-10T01:00:00.000Z',
   inputHoldingCids: ['#cash-holding'],
   actors: ['Buyer::alice'],
 };
 
+const allocationResultCommon = {
+  authorizerChangeCids: { change: ['#change-holding'] },
+  meta: { values: { source: 'registry' } },
+} as const;
+
 function createRegistryClient(response: unknown): TokenStandardV2AllocationRegistryClient & {
-  readonly getAllocationFactoryFromRegistry: jest.Mock;
+  readonly getAllocationFactoryV2FromRegistry: jest.Mock;
 } {
   return {
-    getAllocationFactoryFromRegistry: jest.fn(async () => response),
+    getAllocationFactoryV2FromRegistry: jest.fn(async () => response),
   };
 }
 
 describe('Token Standard V2 allocation helpers', () => {
-  test('builds the exact V2 AllocationFactory_Allocate command and defaults committed to true', () => {
+  test('builds the exact V2 AllocationFactory_Allocate command with explicit commitment', () => {
     expect(
       buildTokenStandardV2AllocationCommand({
         ...allocationParams,
@@ -117,6 +123,125 @@ describe('Token Standard V2 allocation helpers', () => {
     });
   });
 
+  test('requires callers to choose whether the allocation is committed', () => {
+    const missingCommitment = {
+      ...allocationParams,
+      allocation: {
+        ...allocationParams.allocation,
+        committed: undefined,
+      },
+    } as unknown as BuildTokenStandardV2AllocationChoiceArgumentParams;
+
+    expect(() => buildTokenStandardV2AllocationChoiceArgument(missingCommitment)).toThrow(
+      TokenStandardV2AllocationError
+    );
+  });
+
+  test('preserves settlement text identifiers and normalizes parties and contract ids', () => {
+    expect(
+      buildTokenStandardV2AllocationChoiceArgument({
+        ...allocationParams,
+        settlement: {
+          ...allocationParams.settlement,
+          executors: [' Venue::operator '],
+          id: ' settlement-3 ',
+          cid: ' #settlement-context ',
+        },
+      }).settlement
+    ).toMatchObject({
+      executors: ['Venue::operator'],
+      id: ' settlement-3 ',
+      cid: '#settlement-context',
+    });
+    expect(
+      buildTokenStandardV2AllocationChoiceArgument({
+        ...allocationParams,
+        settlement: { ...allocationParams.settlement, id: '', cid: '#settlement-context' },
+      }).settlement.id
+    ).toBe('');
+
+    expect(() =>
+      buildTokenStandardV2AllocationChoiceArgument({
+        ...allocationParams,
+        settlement: { ...allocationParams.settlement, executors: [] },
+      })
+    ).toThrow(TokenStandardV2AllocationError);
+    expect(() =>
+      buildTokenStandardV2AllocationChoiceArgument({
+        ...allocationParams,
+        settlement: { ...allocationParams.settlement, executors: [' '] },
+      })
+    ).toThrow(TokenStandardV2AllocationError);
+  });
+
+  test('enforces the upstream V2 allocation invariants without narrowing valid decimal text', () => {
+    const transferLegSide = allocationParams.allocation.transferLegSides[0];
+    if (!transferLegSide) throw new Error('test fixture must include one transfer-leg side');
+    const buildWithAllocation = (
+      allocation: BuildTokenStandardV2AllocationChoiceArgumentParams['allocation']
+    ): ReturnType<typeof buildTokenStandardV2AllocationChoiceArgument> =>
+      buildTokenStandardV2AllocationChoiceArgument({ ...allocationParams, allocation });
+
+    expect(() =>
+      buildWithAllocation({
+        ...allocationParams.allocation,
+        transferLegSides: [],
+        nextIterationFunding: null,
+      })
+    ).toThrow(TokenStandardV2AllocationError);
+    expect(
+      buildWithAllocation({
+        ...allocationParams.allocation,
+        transferLegSides: [],
+        nextIterationFunding: {},
+      }).allocation.transferLegSides
+    ).toEqual([]);
+    expect(() =>
+      buildWithAllocation({
+        ...allocationParams.allocation,
+        transferLegSides: [transferLegSide, { ...transferLegSide }],
+      })
+    ).toThrow(TokenStandardV2AllocationError);
+
+    for (const amount of ['0', '-1.0']) {
+      expect(() =>
+        buildWithAllocation({
+          ...allocationParams.allocation,
+          transferLegSides: [{ ...transferLegSide, amount }],
+        })
+      ).toThrow(TokenStandardV2AllocationError);
+    }
+    for (const amount of ['+1.0', '9999999999999999999999999999.1234567890']) {
+      expect(
+        buildWithAllocation({
+          ...allocationParams.allocation,
+          transferLegSides: [{ ...transferLegSide, amount }],
+        }).allocation.transferLegSides[0]?.amount
+      ).toBe(amount);
+    }
+    for (const amount of ['1.', '10000000000000000000000000000', '1.12345678901']) {
+      expect(() =>
+        buildWithAllocation({
+          ...allocationParams.allocation,
+          transferLegSides: [{ ...transferLegSide, amount }],
+        })
+      ).toThrow(TokenStandardV2AllocationError);
+    }
+
+    expect(() =>
+      buildWithAllocation({
+        ...allocationParams.allocation,
+        nextIterationFunding: { USD: '-1.0' },
+      })
+    ).toThrow(TokenStandardV2AllocationError);
+    expect(
+      buildWithAllocation({
+        ...allocationParams.allocation,
+        nextIterationFunding: { USD: '0' },
+      }).allocation.nextIterationFunding
+    ).toEqual({ USD: '0' });
+  });
+
   test('prepares through an arbitrary registry and preserves its context and disclosures', async () => {
     const choiceContextData = {
       values: {
@@ -144,29 +269,25 @@ describe('Token Standard V2 allocation helpers', () => {
     });
     const prepared = await prepareTokenStandardV2AllocationCommand({
       ...allocationParams,
-      extraArgs: {
-        context: { values: { ignored: true } },
-        meta: { values: { source: 'test' } },
-      },
+      metadata: { values: { source: 'test' } },
       registryUrl: 'https://cash.example/token-registry',
       scan,
-      excludeDebugFields: true,
     });
 
-    expect(scan.getAllocationFactoryFromRegistry).toHaveBeenCalledWith({
+    expect(scan.getAllocationFactoryV2FromRegistry).toHaveBeenCalledWith({
       registryUrl: 'https://cash.example/token-registry',
       choiceArguments: {
         ...buildTokenStandardV2AllocationChoiceArgument({
           ...allocationParams,
           extraArgs: {
-            context: { values: { ignored: true } },
-            meta: { values: { source: 'test' } },
+            context: { values: {} },
+            meta: { values: {} },
           },
         }),
       },
       excludeDebugFields: true,
     });
-    expect(prepared.choiceArgument.extraArgs.context).toBe(choiceContextData);
+    expect(prepared.choiceArgument.extraArgs.context).toEqual(choiceContextData);
     expect(prepared.choiceArgument.extraArgs.meta).toEqual({ values: { source: 'test' } });
     expect(prepared.disclosedContracts).toEqual([
       {
@@ -193,16 +314,21 @@ describe('Token Standard V2 allocation helpers', () => {
     [
       'AllocationInstructionResult_Completed',
       { allocationCid: '#allocation' },
-      { type: 'Completed', allocationCid: '#allocation' },
+      { type: 'Completed', allocationCid: '#allocation', ...allocationResultCommon },
     ],
     [
       'AllocationInstructionResult_Pending',
       { allocationInstructionCid: '#instruction' },
-      { type: 'Pending', allocationInstructionCid: '#instruction' },
+      { type: 'Pending', allocationInstructionCid: '#instruction', ...allocationResultCommon },
     ],
-    ['AllocationInstructionResult_Failed', {}, { type: 'Failed' }],
+    ['AllocationInstructionResult_Failed', {}, { type: 'Failed', ...allocationResultCommon }],
   ] as const)('parses the %s result variant', (tag, value, expected) => {
-    expect(parseTokenStandardV2AllocationInstructionResult({ output: { tag, value } })).toEqual(expected);
+    expect(
+      parseTokenStandardV2AllocationInstructionResult({
+        output: { tag, value },
+        ...allocationResultCommon,
+      })
+    ).toEqual(expected);
   });
 
   test('rejects malformed registry and result responses with typed errors', async () => {
@@ -249,7 +375,10 @@ describe('Token Standard V2 allocation helpers', () => {
     ).toThrow(TokenStandardV2AllocationError);
     let unknownTagError: unknown;
     try {
-      parseTokenStandardV2AllocationInstructionResult({ output: { tag: 'Unknown', value: {} } });
+      parseTokenStandardV2AllocationInstructionResult({
+        output: { tag: 'Unknown', value: {} },
+        ...allocationResultCommon,
+      });
     } catch (error) {
       unknownTagError = error;
     }
@@ -285,6 +414,22 @@ describe('Token Standard V2 allocation helpers', () => {
           0: {
             ExercisedTreeEvent: {
               value: {
+                contractId: '#other-allocation-factory',
+                templateId: TOKEN_STANDARD_V2_ALLOCATION_FACTORY_INTERFACE_ID,
+                choice: TOKEN_STANDARD_V2_ALLOCATION_FACTORY_ALLOCATE_CHOICE,
+                exerciseResult: {
+                  output: {
+                    tag: 'AllocationInstructionResult_Completed',
+                    value: { allocationCid: '#wrong-allocation' },
+                  },
+                  ...allocationResultCommon,
+                },
+              },
+            },
+          },
+          1: {
+            ExercisedTreeEvent: {
+              value: {
                 contractId: '#allocation-factory',
                 templateId: TOKEN_STANDARD_V2_ALLOCATION_FACTORY_INTERFACE_ID,
                 choice: TOKEN_STANDARD_V2_ALLOCATION_FACTORY_ALLOCATE_CHOICE,
@@ -293,6 +438,7 @@ describe('Token Standard V2 allocation helpers', () => {
                     tag: 'AllocationInstructionResult_Completed',
                     value: { allocationCid: '#allocation' },
                   },
+                  ...allocationResultCommon,
                 },
               },
             },
@@ -310,10 +456,14 @@ describe('Token Standard V2 allocation helpers', () => {
         readAs: ['Observer::ops'],
         commandId: 'allocation-command',
         submissionId: 'allocation-submission',
+        deduplicationPeriod: { DeduplicationDuration: { seconds: 300 } },
+        synchronizerId: 'sync::id',
+        userId: 'worker-user',
+        workflowId: 'scenario-3',
       })
     ).resolves.toEqual({
       updateId: 'update-3',
-      result: { type: 'Completed', allocationCid: '#allocation' },
+      result: { type: 'Completed', allocationCid: '#allocation', ...allocationResultCommon },
       response,
     });
     expect(submitAndWaitForTransactionTree).toHaveBeenCalledWith({
@@ -323,6 +473,20 @@ describe('Token Standard V2 allocation helpers', () => {
       disclosedContracts: [...prepared.disclosedContracts],
       commandId: 'allocation-command',
       submissionId: 'allocation-submission',
+      deduplicationPeriod: { DeduplicationDuration: { seconds: 300 } },
+      synchronizerId: 'sync::id',
+      userId: 'worker-user',
+      workflowId: 'scenario-3',
     });
+
+    await expect(
+      submitPreparedTokenStandardV2Allocation({
+        ledger: { submitAndWaitForTransactionTree },
+        prepared,
+        actAs: ['Buyer::alice'],
+        commandId: ' ',
+      })
+    ).rejects.toThrow(TokenStandardV2AllocationError);
+    expect(submitAndWaitForTransactionTree).toHaveBeenCalledTimes(1);
   });
 });

@@ -214,6 +214,49 @@ describe('ScanApiClient', () => {
     expect(requestHeaders).not.toHaveProperty('Authorization');
   });
 
+  it('gets a V2 allocation factory from its dedicated registry endpoint without auth', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan.example/api/scan'],
+      }
+    );
+    const choiceArguments = {
+      settlement: { id: 'settlement-3' },
+      extraArgs: { context: { values: {} }, meta: { values: {} } },
+    };
+    const response = {
+      factoryId: '#allocation-factory-v2',
+      choiceContext: {
+        choiceContextData: { values: {} },
+        disclosedContracts: [],
+      },
+    };
+    mockAxiosInstance.post.mockResolvedValueOnce({ data: response });
+
+    await expect(
+      client.getAllocationFactoryV2FromRegistry({
+        registryUrl: 'https://cash-token.example/token-registry/',
+        choiceArguments,
+      })
+    ).resolves.toEqual(response);
+
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+      'https://cash-token.example/token-registry/registry/allocation-instruction/v2/allocation-factory',
+      {
+        choiceArguments,
+        excludeDebugFields: false,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    const requestHeaders = mockAxiosInstance.post.mock.calls[0]?.[2]?.headers;
+    expect(requestHeaders).not.toHaveProperty('Authorization');
+  });
+
   it('gets a V2 settlement factory from a canonical arbitrary registry URL without auth', async () => {
     const { client, mockAxiosInstance } = createClient(
       { network: 'mainnet' },
