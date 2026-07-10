@@ -47,7 +47,11 @@ export class GetActiveContracts {
       ({ activeAtOffset } = validated);
     } else {
       const ledgerEnd = await this.client.getLedgerEnd({});
-      activeAtOffset = ledgerEnd.offset;
+      const { offset } = ledgerEnd;
+      if (offset === undefined) {
+        throw new ApiError('Ledger end response did not include an offset');
+      }
+      activeAtOffset = offset;
     }
 
     // Build party list - default to client's party list if not provided
