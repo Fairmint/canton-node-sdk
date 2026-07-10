@@ -83,7 +83,11 @@ jobs:
 
       - name: Start CN-Quickstart
         run: |
-          splice_version="$(git -C libs/splice describe --tags --exact-match)"
+          splice_version="$(tr -d '[:space:]' < libs/splice/VERSION)"
+          if [[ ! "${splice_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid pinned Splice version: ${splice_version}" >&2
+            exit 1
+          fi
           echo "Starting CN-Quickstart with pinned Splice ${splice_version}"
           CANTON_LOCALNET_SPLICE_VERSION="${splice_version}" npm run localnet:start
           echo "✓ CN-Quickstart started"
