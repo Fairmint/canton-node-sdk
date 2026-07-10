@@ -39,6 +39,14 @@ function createAxiosNetworkError(): Error {
   });
 }
 
+function createAxiosHttpError(status: number): Error {
+  return Object.assign(new Error(`HTTP ${status}`), {
+    isAxiosError: true,
+    code: 'ERR_BAD_RESPONSE',
+    response: { status, statusText: status === 404 ? 'Not Found' : 'Request Failed', data: {} },
+  });
+}
+
 function createClient(
   config: ClientConfig,
   options: ScanApiClientOptions = {}
@@ -116,6 +124,26 @@ describe('ScanApiClient', () => {
     expect(requestedUrls).toEqual([
       'https://scan-a.example/api/scan/v0/scan/health',
       'https://scan-b.example/api/scan/v0/scan/health',
+      'https://scan-b.example/api/scan/v0/scan/health',
+    ]);
+  });
+
+  it('rotates a retryable 404 across Scan endpoints', async () => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan-a.example/api/scan', 'https://scan-b.example/api/scan'],
+      }
+    );
+    mockAxiosInstance.get
+      .mockRejectedValueOnce(createAxiosHttpError(404))
+      .mockResolvedValueOnce({ data: { endpoint: 'scan-b' } });
+
+    await expect(
+      client.makeGetRequest<{ endpoint: string }>('https://scan-a.example/api/scan/v0/scan/health')
+    ).resolves.toEqual({ endpoint: 'scan-b' });
+    expect(mockAxiosInstance.get.mock.calls.map((call) => call[0])).toEqual([
+      'https://scan-a.example/api/scan/v0/scan/health',
       'https://scan-b.example/api/scan/v0/scan/health',
     ]);
   });

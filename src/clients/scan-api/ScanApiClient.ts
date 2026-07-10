@@ -177,7 +177,8 @@ export class ScanApiClient extends ScanApiClientGenerated {
         kind: 'exact-body' as const,
         maxAttempts: maxDistinctEndpoints,
         backoffMs: 0,
-        shouldRetry: ({ error }: { readonly error: Error }): boolean => shouldRotateOnError(error),
+        shouldRetry: ({ error, retryable }: { readonly error: Error; readonly retryable: boolean }): boolean =>
+          retryable || shouldRotateOnError(error),
       });
     const failoverOptions = snapshotHttpRequestOptions<Body>({
       ...readOptions,
