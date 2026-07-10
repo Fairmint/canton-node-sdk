@@ -3,7 +3,7 @@ import type {
   SubmitAndWaitForTransactionTreeResponse,
 } from '../../../clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction-tree';
 import type { Command, DisclosedContract, ExerciseCommand } from '../../../clients/ledger-json-api/schemas';
-import type { GetAllocationFactoryFromRegistryParams } from '../../../clients/scan-api/operations/v0/registry/allocation-instruction/v1/get-allocation-factory-from-registry';
+import type { GetAllocationFactoryV2FromRegistryParams } from '../../../clients/scan-api/operations/v0/registry/allocation-instruction/v2/get-allocation-factory-v2-from-registry';
 import { CantonError, type ErrorContext } from '../../../core/errors';
 import { isRecord } from '../../../core/utils';
 import { extractEventsFromTransaction } from '../../parsers';
@@ -32,7 +32,9 @@ export class TokenStandardV2AllocationError extends CantonError {
   }
 }
 
-export type TokenStandardV2ChoiceContext = Readonly<Record<string, unknown>>;
+export interface TokenStandardV2ChoiceContext {
+  readonly values: Readonly<Record<string, unknown>>;
+}
 
 export interface TokenStandardV2ExtraArgs {
   readonly context: TokenStandardV2ChoiceContext;
@@ -62,10 +64,8 @@ export interface TokenStandardV2AllocationSpecification {
   readonly authorizer: TokenStandardV2Account;
   readonly transferLegSides: readonly TokenStandardV2TransferLegSide[];
   readonly settlementDeadline: string | null;
-  /** Undefined selects the helper default; null is the Token Standard optional value sent to the ledger. */
   readonly nextIterationFunding?: Readonly<Record<string, string>> | null;
-  /** Token Standard V2 allocation instructions are committed by default. */
-  readonly committed?: boolean;
+  readonly committed: boolean;
   readonly meta?: TokenStandardV2Metadata;
 }
 
@@ -104,12 +104,17 @@ export interface BuildTokenStandardV2AllocationCommandParams extends BuildTokenS
 }
 
 export interface TokenStandardV2AllocationRegistryClient {
-  getAllocationFactoryFromRegistry(params: GetAllocationFactoryFromRegistryParams): Promise<unknown>;
+  getAllocationFactoryV2FromRegistry(params: GetAllocationFactoryV2FromRegistryParams): Promise<unknown>;
 }
 
-export interface PrepareTokenStandardV2AllocationCommandParams extends BuildTokenStandardV2AllocationChoiceArgumentParams {
+export interface PrepareTokenStandardV2AllocationCommandParams extends Omit<
+  BuildTokenStandardV2AllocationChoiceArgumentParams,
+  'extraArgs'
+> {
   readonly registryUrl: string;
   readonly scan: TokenStandardV2AllocationRegistryClient;
+  /** Caller metadata is applied only after the registry returns its choice context. */
+  readonly metadata?: TokenStandardV2Metadata;
   readonly allocationFactoryInterfaceId?: string;
   readonly excludeDebugFields?: boolean;
 }
@@ -132,21 +137,31 @@ export interface SubmitPreparedTokenStandardV2AllocationParams {
   readonly prepared: PreparedTokenStandardV2AllocationCommand;
   readonly actAs: readonly string[];
   readonly readAs?: readonly string[];
-  readonly commandId?: string;
+  /** Stable across retries so Canton command deduplication can protect against duplicate allocations. */
+  readonly commandId: string;
   readonly submissionId?: string;
+  readonly deduplicationPeriod?: SubmitAndWaitForTransactionTreeParams['deduplicationPeriod'];
+  readonly synchronizerId?: string;
+  readonly userId?: string;
+  readonly workflowId?: string;
 }
 
-export interface TokenStandardV2AllocationInstructionCompleted {
+export interface TokenStandardV2AllocationInstructionResultBase {
+  readonly authorizerChangeCids: Readonly<Record<string, readonly string[]>>;
+  readonly meta: TokenStandardV2Metadata;
+}
+
+export interface TokenStandardV2AllocationInstructionCompleted extends TokenStandardV2AllocationInstructionResultBase {
   readonly type: 'Completed';
   readonly allocationCid: string;
 }
 
-export interface TokenStandardV2AllocationInstructionPending {
+export interface TokenStandardV2AllocationInstructionPending extends TokenStandardV2AllocationInstructionResultBase {
   readonly type: 'Pending';
   readonly allocationInstructionCid: string;
 }
 
-export interface TokenStandardV2AllocationInstructionFailed {
+export interface TokenStandardV2AllocationInstructionFailed extends TokenStandardV2AllocationInstructionResultBase {
   readonly type: 'Failed';
 }
 
@@ -161,7 +176,14 @@ export interface SubmitPreparedTokenStandardV2AllocationResult {
   readonly response: SubmitAndWaitForTransactionTreeResponse;
 }
 
-function requireNonEmpty(value: string, fieldName: string): string {
+function requireNonEmpty(value: unknown, fieldName: string): string {
+  if (typeof value !== 'string') {
+    throw new TokenStandardV2AllocationError(
+      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      `${fieldName} must be a string.`,
+      { field: fieldName }
+    );
+  }
   const normalized = value.trim();
   if (normalized.length === 0) {
     throw new TokenStandardV2AllocationError(
@@ -173,6 +195,17 @@ function requireNonEmpty(value: string, fieldName: string): string {
   return normalized;
 }
 
+function requireText(value: unknown, fieldName: string): string {
+  if (typeof value !== 'string') {
+    throw new TokenStandardV2AllocationError(
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
+      `${fieldName} must be text.`,
+      { field: fieldName }
+    );
+  }
+  return value;
+}
+
 function readNonEmptyString(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const normalized = value.trim();
@@ -180,6 +213,13 @@ function readNonEmptyString(value: unknown): string | undefined {
 }
 
 function normalizeStrings(values: readonly string[], fieldName: string, allowEmpty = false): string[] {
+  if (!Array.isArray(values)) {
+    throw new TokenStandardV2AllocationError(
+      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      `${fieldName} must be an array.`,
+      { field: fieldName }
+    );
+  }
   if (!allowEmpty && values.length === 0) {
     throw new TokenStandardV2AllocationError(
       'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
@@ -190,6 +230,161 @@ function normalizeStrings(values: readonly string[], fieldName: string, allowEmp
   return values.map((value, index) => requireNonEmpty(value, `${fieldName}[${index}]`));
 }
 
+function copyStringRecord(value: unknown, fieldName: string): Readonly<Record<string, string>> {
+  if (!isRecord(value)) {
+    throw new TokenStandardV2AllocationError(
+      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      `${fieldName} must be a string map.`,
+      { field: fieldName }
+    );
+  }
+  const result = Object.create(null) as Record<string, string>;
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry !== 'string') {
+      throw new TokenStandardV2AllocationError(
+        'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+        `${fieldName}.${key} must be a string.`,
+        { field: `${fieldName}.${key}` }
+      );
+    }
+    Object.defineProperty(result, key, {
+      value: entry,
+      enumerable: true,
+      configurable: true,
+      writable: false,
+    });
+  }
+  return result;
+}
+
+function normalizeMetadata(value: unknown, fieldName: string): TokenStandardV2Metadata {
+  if (!isRecord(value)) {
+    throw new TokenStandardV2AllocationError(
+      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      `${fieldName} must be Token Standard metadata.`,
+      { field: fieldName }
+    );
+  }
+  return { values: copyStringRecord(value['values'], `${fieldName}.values`) };
+}
+
+function normalizeChoiceContext(
+  value: unknown,
+  fieldName: string,
+  code: TokenStandardV2AllocationErrorCode = TokenStandardV2AllocationErrorCode.FACTORY_RESPONSE_INVALID
+): TokenStandardV2ChoiceContext {
+  if (!isRecord(value) || !isRecord(value['values'])) {
+    throw new TokenStandardV2AllocationError(code, `${fieldName} must be a Token Standard choice context.`, {
+      field: fieldName,
+    });
+  }
+  const values = Object.create(null) as Record<string, unknown>;
+  for (const [key, entry] of Object.entries(value['values'])) {
+    Object.defineProperty(values, key, {
+      value: entry,
+      enumerable: true,
+      configurable: true,
+      writable: false,
+    });
+  }
+  return { values };
+}
+
+function normalizeAccount(value: unknown, fieldName: string): TokenStandardV2Account {
+  if (!isRecord(value)) {
+    throw new TokenStandardV2AllocationError(
+      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      `${fieldName} must be a Token Standard V2 account.`,
+      { field: fieldName }
+    );
+  }
+  const { id, owner, provider } = value;
+  if (typeof id !== 'string') {
+    throw new TokenStandardV2AllocationError(
+      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      `${fieldName} must be a Token Standard V2 account.`,
+      { field: fieldName }
+    );
+  }
+  if (owner !== null && typeof owner !== 'string') {
+    throw new TokenStandardV2AllocationError(
+      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      `${fieldName}.owner must be a party or null.`,
+      { field: `${fieldName}.owner` }
+    );
+  }
+  if (provider !== null && typeof provider !== 'string') {
+    throw new TokenStandardV2AllocationError(
+      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      `${fieldName}.provider must be a party or null.`,
+      { field: `${fieldName}.provider` }
+    );
+  }
+  return {
+    owner: owner === null ? null : requireNonEmpty(owner, `${fieldName}.owner`),
+    provider: provider === null ? null : requireNonEmpty(provider, `${fieldName}.provider`),
+    // CIP-112 uses the empty string as the default account identifier.
+    id,
+  };
+}
+
+function parseDecimalText(value: unknown, fieldName: string): { readonly text: string; readonly sign: -1 | 0 | 1 } {
+  const text = requireNonEmpty(value, fieldName);
+  const match = /^([+-]?)(?:(\d+)(?:\.(\d*))?|\.(\d+))$/.exec(text);
+  if (!match) {
+    throw new TokenStandardV2AllocationError(
+      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      `${fieldName} must be a base-10 decimal string.`,
+      { field: fieldName }
+    );
+  }
+  const digits = `${match[2] ?? ''}${match[3] ?? ''}${match[4] ?? ''}`;
+  const sign = /^0+$/.test(digits) ? 0 : match[1] === '-' ? -1 : 1;
+  return { text, sign };
+}
+
+function normalizePositiveDecimal(value: unknown, fieldName: string): string {
+  const decimal = parseDecimalText(value, fieldName);
+  if (decimal.sign !== 1) {
+    throw new TokenStandardV2AllocationError(
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
+      `${fieldName} must be positive.`,
+      { field: fieldName }
+    );
+  }
+  return decimal.text;
+}
+
+function normalizeNonNegativeDecimal(value: unknown, fieldName: string): string {
+  const decimal = parseDecimalText(value, fieldName);
+  if (decimal.sign === -1) {
+    throw new TokenStandardV2AllocationError(
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
+      `${fieldName} must be non-negative.`,
+      { field: fieldName }
+    );
+  }
+  return decimal.text;
+}
+
+function normalizeFunding(
+  value: Readonly<Record<string, string>> | null | undefined,
+  fieldName: string
+): Readonly<Record<string, string>> | null {
+  if (value === null || value === undefined) return null;
+  const funding = copyStringRecord(value, fieldName);
+  const normalized = Object.create(null) as Record<string, string>;
+  for (const [key, amount] of Object.entries(funding)) {
+    Object.defineProperty(normalized, key, {
+      value: normalizeNonNegativeDecimal(amount, `${fieldName}.${key}`),
+      enumerable: true,
+      configurable: true,
+      writable: false,
+    });
+  }
+  return normalized;
+}
+
 function emptyTokenStandardV2ExtraArgs(): TokenStandardV2ExtraArgs {
   return {
     context: { values: {} },
@@ -198,11 +393,12 @@ function emptyTokenStandardV2ExtraArgs(): TokenStandardV2ExtraArgs {
 }
 
 function withDefaultTokenStandardV2Metadata<T extends { readonly meta?: TokenStandardV2Metadata }>(
-  value: T
+  value: T,
+  fieldName: string
 ): Omit<T, 'meta'> & { readonly meta: TokenStandardV2Metadata } {
   return {
     ...value,
-    meta: value.meta ?? { values: {} },
+    meta: normalizeMetadata(value.meta ?? { values: {} }, `${fieldName}.meta`),
   };
 }
 
@@ -210,22 +406,96 @@ export function buildTokenStandardV2AllocationChoiceArgument(
   params: BuildTokenStandardV2AllocationChoiceArgumentParams
 ): TokenStandardV2AllocationChoiceArgument {
   const extraArgs = params.extraArgs ?? emptyTokenStandardV2ExtraArgs();
+  if (!Array.isArray(params.allocation.transferLegSides)) {
+    throw new TokenStandardV2AllocationError(
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
+      'allocation.transferLegSides must be an array.',
+      { field: 'allocation.transferLegSides' }
+    );
+  }
+  if (typeof params.allocation.committed !== 'boolean') {
+    throw new TokenStandardV2AllocationError(
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
+      'allocation.committed must be a boolean.',
+      { field: 'allocation.committed' }
+    );
+  }
+  const settlement = withDefaultTokenStandardV2Metadata(params.settlement, 'settlement');
+  const allocation = withDefaultTokenStandardV2Metadata(params.allocation, 'allocation');
+  const transferLegSides: TokenStandardV2AllocationChoiceArgument['allocation']['transferLegSides'] =
+    params.allocation.transferLegSides.map((transferLegSide, index) => {
+      const fieldName = `allocation.transferLegSides[${index}]`;
+      if (!isRecord(transferLegSide)) {
+        throw new TokenStandardV2AllocationError(
+          TokenStandardV2AllocationErrorCode.INPUT_INVALID,
+          `${fieldName} must be a transfer-leg side.`,
+          { field: fieldName }
+        );
+      }
+      const { amount, instrumentId, otherside, side, transferLegId } = transferLegSide;
+      if (side !== 'SenderSide' && side !== 'ReceiverSide') {
+        throw new TokenStandardV2AllocationError(
+          TokenStandardV2AllocationErrorCode.INPUT_INVALID,
+          `${fieldName}.side must be SenderSide or ReceiverSide.`,
+          { field: `${fieldName}.side` }
+        );
+      }
+      return {
+        ...withDefaultTokenStandardV2Metadata(transferLegSide, fieldName),
+        transferLegId: requireText(transferLegId, `${fieldName}.transferLegId`),
+        side,
+        otherside: normalizeAccount(otherside, `${fieldName}.otherside`),
+        amount: normalizePositiveDecimal(amount, `${fieldName}.amount`),
+        instrumentId: requireText(instrumentId, `${fieldName}.instrumentId`),
+      };
+    });
+  const transferLegSideKeys = transferLegSides.map(({ side, transferLegId }) => JSON.stringify([transferLegId, side]));
+  if (new Set(transferLegSideKeys).size !== transferLegSideKeys.length) {
+    throw new TokenStandardV2AllocationError(
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
+      'allocation.transferLegSides must not contain duplicate transfer-leg sides.',
+      { field: 'allocation.transferLegSides' }
+    );
+  }
+  const nextIterationFunding = normalizeFunding(
+    params.allocation.nextIterationFunding,
+    'allocation.nextIterationFunding'
+  );
+  if (transferLegSides.length === 0 && nextIterationFunding === null) {
+    throw new TokenStandardV2AllocationError(
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
+      'allocation.transferLegSides may be empty only when iterated settlement is enabled.',
+      { field: 'allocation.transferLegSides' }
+    );
+  }
   return {
-    settlement: withDefaultTokenStandardV2Metadata(params.settlement),
+    settlement: {
+      ...settlement,
+      executors: normalizeStrings(params.settlement.executors, 'settlement.executors'),
+      id: requireText(params.settlement.id, 'settlement.id'),
+      cid: params.settlement.cid === null ? null : requireNonEmpty(params.settlement.cid, 'settlement.cid'),
+    },
     allocation: {
-      ...withDefaultTokenStandardV2Metadata(params.allocation),
+      ...allocation,
       admin: requireNonEmpty(params.allocation.admin, 'allocation.admin'),
-      transferLegSides: params.allocation.transferLegSides.map((transferLegSide) =>
-        withDefaultTokenStandardV2Metadata(transferLegSide)
-      ),
-      nextIterationFunding: params.allocation.nextIterationFunding ?? null,
-      committed: params.allocation.committed ?? true,
+      authorizer: normalizeAccount(params.allocation.authorizer, 'allocation.authorizer'),
+      transferLegSides,
+      settlementDeadline:
+        params.allocation.settlementDeadline === null
+          ? null
+          : requireNonEmpty(params.allocation.settlementDeadline, 'allocation.settlementDeadline'),
+      nextIterationFunding,
+      committed: params.allocation.committed,
     },
     requestedAt: requireNonEmpty(params.requestedAt, 'requestedAt'),
     inputHoldingCids: normalizeStrings(params.inputHoldingCids, 'inputHoldingCids', true),
     extraArgs: {
-      context: extraArgs.context,
-      meta: extraArgs.meta,
+      context: normalizeChoiceContext(
+        extraArgs.context,
+        'extraArgs.context',
+        TokenStandardV2AllocationErrorCode.INPUT_INVALID
+      ),
+      meta: normalizeMetadata(extraArgs.meta, 'extraArgs.meta'),
     },
     actors: normalizeStrings(params.actors, 'actors'),
   };
@@ -288,12 +558,10 @@ function parseAllocationFactoryResponse(value: unknown): {
 } {
   const response = isRecord(value) ? value : undefined;
   const choiceContext = isRecord(response?.['choiceContext']) ? response['choiceContext'] : undefined;
-  const choiceContextData = isRecord(choiceContext?.['choiceContextData'])
-    ? choiceContext['choiceContextData']
-    : undefined;
+  const choiceContextData = choiceContext?.['choiceContextData'];
   const disclosedContracts = choiceContext?.['disclosedContracts'];
   const factoryId = readNonEmptyString(response?.['factoryId']);
-  if (!factoryId || !choiceContextData || !Array.isArray(disclosedContracts)) {
+  if (!factoryId || !Array.isArray(disclosedContracts)) {
     throw new TokenStandardV2AllocationError(
       'TOKEN_STANDARD_V2_ALLOCATION_FACTORY_RESPONSE_INVALID',
       'Token Standard V2 allocation registry returned an invalid factory choice context.',
@@ -302,7 +570,7 @@ function parseAllocationFactoryResponse(value: unknown): {
   }
   return {
     factoryId,
-    choiceContextData,
+    choiceContextData: normalizeChoiceContext(choiceContextData, 'choiceContext.choiceContextData'),
     disclosedContracts: disclosedContracts.map(parseDisclosedContract),
   };
 }
@@ -311,18 +579,21 @@ export async function prepareTokenStandardV2AllocationCommand(
   params: PrepareTokenStandardV2AllocationCommandParams
 ): Promise<PreparedTokenStandardV2AllocationCommand> {
   const registryUrl = requireNonEmpty(params.registryUrl, 'registryUrl');
-  const initialChoiceArgument = buildTokenStandardV2AllocationChoiceArgument(params);
-  const request: GetAllocationFactoryFromRegistryParams = {
+  const registryChoiceArgument = buildTokenStandardV2AllocationChoiceArgument({
+    ...params,
+    extraArgs: emptyTokenStandardV2ExtraArgs(),
+  });
+  const request: GetAllocationFactoryV2FromRegistryParams = {
     registryUrl,
-    choiceArguments: initialChoiceArgument as unknown as GetAllocationFactoryFromRegistryParams['choiceArguments'],
-    ...(params.excludeDebugFields === undefined ? {} : { excludeDebugFields: params.excludeDebugFields }),
+    choiceArguments: registryChoiceArgument as unknown as GetAllocationFactoryV2FromRegistryParams['choiceArguments'],
+    excludeDebugFields: params.excludeDebugFields ?? true,
   };
-  const factory = parseAllocationFactoryResponse(await params.scan.getAllocationFactoryFromRegistry(request));
+  const factory = parseAllocationFactoryResponse(await params.scan.getAllocationFactoryV2FromRegistry(request));
   const choiceArgument: TokenStandardV2AllocationChoiceArgument = {
-    ...initialChoiceArgument,
+    ...registryChoiceArgument,
     extraArgs: {
-      ...initialChoiceArgument.extraArgs,
       context: factory.choiceContextData,
+      meta: normalizeMetadata(params.metadata ?? { values: {} }, 'metadata'),
     },
   };
   return {
@@ -339,6 +610,41 @@ export async function prepareTokenStandardV2AllocationCommand(
   };
 }
 
+function tryReadMetadata(value: unknown): TokenStandardV2Metadata | undefined {
+  if (!isRecord(value) || !isRecord(value['values'])) return undefined;
+  const values = Object.create(null) as Record<string, string>;
+  for (const [key, entry] of Object.entries(value['values'])) {
+    if (typeof entry !== 'string') return undefined;
+    Object.defineProperty(values, key, {
+      value: entry,
+      enumerable: true,
+      configurable: true,
+      writable: false,
+    });
+  }
+  return { values };
+}
+
+function tryReadAuthorizerChangeCids(value: unknown): Readonly<Record<string, readonly string[]>> | undefined {
+  if (!isRecord(value)) return undefined;
+  const result = Object.create(null) as Record<string, readonly string[]>;
+  for (const [key, entry] of Object.entries(value)) {
+    if (
+      !Array.isArray(entry) ||
+      !entry.every((contractId) => typeof contractId === 'string' && contractId.trim().length > 0)
+    ) {
+      return undefined;
+    }
+    Object.defineProperty(result, key, {
+      value: entry.map((contractId) => contractId.trim()),
+      enumerable: true,
+      configurable: true,
+      writable: false,
+    });
+  }
+  return result;
+}
+
 function tryParseTokenStandardV2AllocationInstructionResult(
   value: unknown
 ): TokenStandardV2AllocationInstructionResult | undefined {
@@ -347,17 +653,21 @@ function tryParseTokenStandardV2AllocationInstructionResult(
   const tag = readNonEmptyString(output?.['tag']);
   if (!tag) return undefined;
   const variant = isRecord(output?.['value']) ? output['value'] : undefined;
+  const authorizerChangeCids = tryReadAuthorizerChangeCids(record?.['authorizerChangeCids']);
+  const meta = tryReadMetadata(record?.['meta']);
+  if (!authorizerChangeCids || !meta) return undefined;
+  const common = { authorizerChangeCids, meta };
   switch (tag) {
     case 'AllocationInstructionResult_Completed': {
       const allocationCid = readNonEmptyString(variant?.['allocationCid']);
-      return allocationCid ? { type: 'Completed', allocationCid } : undefined;
+      return allocationCid ? { type: 'Completed', allocationCid, ...common } : undefined;
     }
     case 'AllocationInstructionResult_Pending': {
       const allocationInstructionCid = readNonEmptyString(variant?.['allocationInstructionCid']);
-      return allocationInstructionCid ? { type: 'Pending', allocationInstructionCid } : undefined;
+      return allocationInstructionCid ? { type: 'Pending', allocationInstructionCid, ...common } : undefined;
     }
     case 'AllocationInstructionResult_Failed':
-      return { type: 'Failed' };
+      return { type: 'Failed', ...common };
     default:
       return undefined;
   }
@@ -378,7 +688,8 @@ export function parseTokenStandardV2AllocationInstructionResult(
 }
 
 export function findTokenStandardV2AllocationInstructionResult(
-  input: unknown
+  input: unknown,
+  allocationFactoryContractId?: string
 ): TokenStandardV2AllocationInstructionResult | undefined {
   const direct = tryParseTokenStandardV2AllocationInstructionResult(input);
   if (direct) return direct;
@@ -386,6 +697,7 @@ export function findTokenStandardV2AllocationInstructionResult(
   const { exercised } = extractEventsFromTransaction(input);
   for (const event of exercised) {
     if (event.choice !== TOKEN_STANDARD_V2_ALLOCATION_FACTORY_ALLOCATE_CHOICE) continue;
+    if (allocationFactoryContractId !== undefined && event.contractId !== allocationFactoryContractId) continue;
     const parsed = tryParseTokenStandardV2AllocationInstructionResult(event.exerciseResult);
     if (parsed) return parsed;
   }
@@ -406,13 +718,21 @@ export async function submitPreparedTokenStandardV2Allocation(
   const submitParams: SubmitAndWaitForTransactionTreeParams = {
     commands: [params.prepared.command],
     actAs,
+    commandId: requireNonEmpty(params.commandId, 'commandId'),
     ...(readAs.length > 0 ? { readAs } : {}),
     disclosedContracts: [...params.prepared.disclosedContracts],
-    ...(params.commandId ? { commandId: params.commandId } : {}),
-    ...(params.submissionId ? { submissionId: params.submissionId } : {}),
+    ...(params.submissionId !== undefined
+      ? { submissionId: requireNonEmpty(params.submissionId, 'submissionId') }
+      : {}),
+    ...(params.deduplicationPeriod !== undefined ? { deduplicationPeriod: params.deduplicationPeriod } : {}),
+    ...(params.synchronizerId !== undefined
+      ? { synchronizerId: requireNonEmpty(params.synchronizerId, 'synchronizerId') }
+      : {}),
+    ...(params.userId !== undefined ? { userId: requireNonEmpty(params.userId, 'userId') } : {}),
+    ...(params.workflowId !== undefined ? { workflowId: requireNonEmpty(params.workflowId, 'workflowId') } : {}),
   };
   const response = await params.ledger.submitAndWaitForTransactionTree(submitParams);
-  const result = findTokenStandardV2AllocationInstructionResult(response);
+  const result = findTokenStandardV2AllocationInstructionResult(response, params.prepared.allocationFactoryContractId);
   if (!result) {
     throw new TokenStandardV2AllocationError(
       'TOKEN_STANDARD_V2_ALLOCATION_RESULT_NOT_FOUND',
