@@ -1,5 +1,5 @@
 import { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import { CantonRuntime, type ClientConfig, ValidationError } from '../../../src/core';
+import { CantonRuntime, ContractId, PartyId, ValidationError, type ClientConfig } from '../../../src/core';
 
 const config: ClientConfig = {
   network: 'localnet',
@@ -16,7 +16,10 @@ const config: ClientConfig = {
   },
 };
 
-const PROTO_VALUE_BASE64 = Buffer.from('encoded-protobuf').toString('base64');
+const CONTRACT_ID_TEXT = `00${'ab'.repeat(32)}`;
+const CONTRACT_ID = ContractId(CONTRACT_ID_TEXT);
+const QUERYING_PARTY = PartyId('validator::fingerprint');
+const CREATED_EVENT_BLOB_BASE64 = Buffer.from('encoded-created-event').toString('base64');
 
 function createClient(): LedgerJsonApiClient {
   return new LedgerJsonApiClient(new CantonRuntime(config));
@@ -27,7 +30,7 @@ function createWireResponse(): Record<string, unknown> {
     createdEvent: {
       offset: 1,
       nodeId: 0,
-      contractId: '00contract-id',
+      contractId: CONTRACT_ID,
       templateId: 'package-id:Splice.Wallet.Install:WalletAppInstall',
       contractKey: null,
       contractKeyHash: '',
@@ -36,28 +39,10 @@ function createWireResponse(): Record<string, unknown> {
         nestedNull: null,
         values: [1, true, null],
       },
-      createdEventBlob: '',
-      interfaceViews: [
-        {
-          interfaceId: 'package-id:Module:Interface',
-          viewStatus: {
-            code: 0,
-            message: '',
-            details: [
-              {
-                typeUrl: 'type.googleapis.com/google.rpc.ErrorInfo',
-                value: PROTO_VALUE_BASE64,
-                unknownFields: { fields: {} },
-                valueDecoded: { reason: 'TEST', metadata: { retryable: false, attempts: [1, null] } },
-              },
-            ],
-          },
-          viewValue: null,
-          implementationPackageId: null,
-        },
-      ],
-      witnessParties: ['validator::fingerprint'],
-      signatories: ['validator::fingerprint'],
+      createdEventBlob: CREATED_EVENT_BLOB_BASE64,
+      interfaceViews: [],
+      witnessParties: [QUERYING_PARTY],
+      signatories: [QUERYING_PARTY],
       observers: [],
       createdAt: '2026-07-10T12:00:00.123456789Z',
       packageName: 'splice-wallet',
@@ -77,8 +62,8 @@ describe('LedgerJsonApiClient contract-by-id', () => {
     const wireResponse = createWireResponse();
     const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue(wireResponse);
     const request = {
-      contractId: '00contract-id',
-      queryingParties: ['validator::fingerprint'],
+      contractId: CONTRACT_ID,
+      queryingParties: [QUERYING_PARTY],
     };
 
     const result = await client.getContractById(request);
@@ -95,28 +80,39 @@ describe('LedgerJsonApiClient contract-by-id', () => {
     );
     expect(result.createdEvent).not.toHaveProperty('contractKey');
     expect(result.createdEvent.contractKeyHash).toBe('');
-    expect(result.createdEvent.createdEventBlob).toBe('');
     expect(result.createdEvent.createArgument).toEqual(
       expect.objectContaining({ nestedNull: null, values: [1, true, null] })
     );
-    expect(result.createdEvent.interfaceViews?.[0]).toEqual(
-      expect.objectContaining({
-        viewValue: null,
-        viewStatus: expect.objectContaining({ code: 0 }),
-      })
-    );
-    expect(result.createdEvent.interfaceViews?.[0]).not.toHaveProperty('implementationPackageId');
+    expect(result.createdEvent).not.toHaveProperty('offset');
+    expect(result.createdEvent).not.toHaveProperty('nodeId');
+    expect(result.createdEvent).not.toHaveProperty('createdEventBlob');
+    expect(result.createdEvent).not.toHaveProperty('interfaceViews');
+    expect(result.createdEvent).not.toHaveProperty('acsDelta');
+  });
+
+  it('preserves a present top-level-null Daml contract key when its hash is non-empty', async () => {
+    const client = createClient();
+    const wireResponse = createWireResponse();
+    Object.assign(createdEventOf(wireResponse), {
+      contractKey: null,
+      contractKeyHash: Buffer.from('contract-key-hash').toString('base64'),
+    });
+    jest.spyOn(client, 'makePostRequest').mockResolvedValue(wireResponse);
+
+    const result = await client.getContractById({ contractId: CONTRACT_ID });
+
+    expect(result.createdEvent).toHaveProperty('contractKey', null);
   });
 
   it('preserves omission versus an explicitly empty querying-party list', async () => {
     const client = createClient();
     const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue(createWireResponse());
 
-    await client.getContractById({ contractId: '00contract-id' });
-    await client.getContractById({ contractId: '00contract-id', queryingParties: [] });
+    await client.getContractById({ contractId: CONTRACT_ID });
+    await client.getContractById({ contractId: CONTRACT_ID, queryingParties: [] });
 
-    expect(post.mock.calls[0]?.[1]).toEqual({ contractId: '00contract-id' });
-    expect(post.mock.calls[1]?.[1]).toEqual({ contractId: '00contract-id', queryingParties: [] });
+    expect(post.mock.calls[0]?.[1]).toEqual({ contractId: CONTRACT_ID });
+    expect(post.mock.calls[1]?.[1]).toEqual({ contractId: CONTRACT_ID, queryingParties: [] });
   });
 
   it.each([
@@ -135,8 +131,40 @@ describe('LedgerJsonApiClient contract-by-id', () => {
         Object.assign(createdEventOf(response), { createdAt: '2026-07-10T12:00:00' }),
     ],
     [
-      'the synthetic ledger-begin offset',
-      (response: Record<string, unknown>) => Object.assign(createdEventOf(response), { offset: 0 }),
+      'a non-placeholder offset',
+      (response: Record<string, unknown>) => Object.assign(createdEventOf(response), { offset: 2 }),
+    ],
+    [
+      'a non-placeholder node ID',
+      (response: Record<string, unknown>) => Object.assign(createdEventOf(response), { nodeId: 1 }),
+    ],
+    [
+      'a non-placeholder ACS delta',
+      (response: Record<string, unknown>) => Object.assign(createdEventOf(response), { acsDelta: true }),
+    ],
+    [
+      'an omitted interface-view placeholder',
+      (response: Record<string, unknown>) => {
+        delete createdEventOf(response)['interfaceViews'];
+      },
+    ],
+    [
+      'a populated interface-view placeholder',
+      (response: Record<string, unknown>) =>
+        Object.assign(createdEventOf(response), {
+          interfaceViews: [
+            {
+              interfaceId: 'package-id:Module:Interface',
+              viewStatus: { code: 0, message: '', details: [] },
+              viewValue: { owner: QUERYING_PARTY },
+              implementationPackageId: null,
+            },
+          ],
+        }),
+    ],
+    [
+      'an empty created-event blob placeholder',
+      (response: Record<string, unknown>) => Object.assign(createdEventOf(response), { createdEventBlob: '' }),
     ],
     [
       'an empty witness list',
@@ -154,7 +182,7 @@ describe('LedgerJsonApiClient contract-by-id', () => {
 
     await expect(
       client.getContractById(
-        { contractId: '00contract-id' },
+        { contractId: CONTRACT_ID },
         {
           retry: {
             kind: 'exact-body',
@@ -168,8 +196,15 @@ describe('LedgerJsonApiClient contract-by-id', () => {
 
   it.each([
     ['an empty contract ID', { contractId: '' }],
-    ['an empty querying party', { contractId: '00contract-id', queryingParties: [''] }],
-    ['an unknown request field', { contractId: '00contract-id', unsupported: true }],
+    ['a non-hex contract ID', { contractId: '00contract-id' }],
+    ['an uppercase contract ID', { contractId: CONTRACT_ID_TEXT.toUpperCase() }],
+    ['a V1 contract ID with an odd-length suffix', { contractId: `${CONTRACT_ID_TEXT}a` }],
+    ['a V1 contract ID with an oversized suffix', { contractId: `${CONTRACT_ID_TEXT}${'aa'.repeat(95)}` }],
+    ['a V2 contract ID with an oversized suffix', { contractId: `01${'22'.repeat(12)}${'aa'.repeat(34)}` }],
+    ['an empty querying party', { contractId: CONTRACT_ID, queryingParties: [''] }],
+    ['a querying party containing a newline', { contractId: CONTRACT_ID, queryingParties: ['bad\nparty'] }],
+    ['an overlong querying party', { contractId: CONTRACT_ID, queryingParties: ['p'.repeat(256)] }],
+    ['an unknown request field', { contractId: CONTRACT_ID, unsupported: true }],
   ])('rejects %s before dispatch', async (_label, request) => {
     const client = createClient();
     const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue(createWireResponse());

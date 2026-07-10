@@ -3,8 +3,10 @@ export { LedgerJsonApiClient } from './LedgerJsonApiClient.generated';
 export {
   GetContractByIdRequestSchema,
   GetContractByIdResponseSchema,
+  LedgerContractIdSchema,
   LedgerCreatedEventSchema,
   LedgerJsonValueSchema,
+  LedgerPartyIdSchema,
 } from './schemas';
 export type {
   AssignCommand,
@@ -16,6 +18,7 @@ export type {
   DisclosedContract,
   ExerciseByKeyCommand,
   ExerciseCommand,
+  GetContractByIdCreatedEvent,
   GetContractByIdParams,
   GetContractByIdRequest,
   GetContractByIdResponse,

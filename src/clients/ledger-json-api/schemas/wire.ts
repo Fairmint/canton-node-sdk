@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ContractId as brandContractId, PartyId as brandPartyId, type ContractId, type PartyId } from '../../../core';
 
 /** Any losslessly representable JSON value carried by the Ledger JSON API. */
 export type LedgerJsonValue = string | number | boolean | null | LedgerJsonValue[] | { [key: string]: LedgerJsonValue };
@@ -12,15 +13,6 @@ export const LedgerJsonValueSchema: z.ZodType<LedgerJsonValue> = z
     message: 'Expected a JSON-serializable value',
   })
   .transform(cloneLedgerJsonValue);
-
-/**
- * Optional Daml JSON field as represented on the wire.
- *
- * Scala `Option.None` is encoded as JSON null. Normalize that transport representation to an absent property while
- * continuing to allow nested JSON nulls inside present values.
- */
-export const LedgerNullableOptionalJsonValueSchema: z.ZodType<LedgerNonNullJsonValue | undefined> =
-  LedgerJsonValueSchema.nullish().transform((value): LedgerNonNullJsonValue | undefined => value ?? undefined);
 
 /** Accept a wire-null Scala `Option.None`, then expose the generated optional-property shape. */
 export const ledgerNullableOptionalResponseField = <Schema extends z.ZodType>(
@@ -64,6 +56,27 @@ export const LedgerNameSchema = z
   .max(1_000)
   .regex(/^[A-Za-z$_][A-Za-z0-9$_]*$/, { message: 'Expected a valid Daml-LF Name' });
 
+/**
+ * A pinned Canton V1 or V2 contract ID.
+ *
+ * V1 is `00`, a 32-byte discriminator, and at most 94 suffix bytes. V2 is `01`, a 12-byte local prefix, and at most 33
+ * suffix bytes. Canton's parser accepts local, relative, and absolute IDs, so the suffix may be empty.
+ */
+export const LedgerContractIdSchema = z
+  .string()
+  .refine(isPinnedCantonContractId, {
+    message: 'Expected a canonical lowercase Canton V1 or V2 contract ID',
+  })
+  .transform((value): ContractId => brandContractId(value));
+
+/** Non-empty Daml-LF Party (ASCII letters, digits, space, colon, minus, and underscore; at most 255 characters). */
+export const LedgerPartyIdSchema = z
+  .string()
+  .min(1)
+  .max(255)
+  .regex(/^[A-Za-z0-9:_ -]+$/, { message: 'Expected a valid Daml-LF Party' })
+  .transform((value): PartyId => brandPartyId(value));
+
 function isCanonicalStandardBase64(value: string): boolean {
   if (value.length === 0) return true;
   if (value.length % 4 !== 0) return false;
@@ -74,6 +87,10 @@ function isCanonicalStandardBase64(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function isPinnedCantonContractId(value: string): boolean {
+  return /^00[0-9a-f]{64}(?:[0-9a-f]{2}){0,94}$/.test(value) || /^01[0-9a-f]{24}(?:[0-9a-f]{2}){0,33}$/.test(value);
 }
 
 function cloneLedgerJsonValue(value: LedgerJsonValue): LedgerJsonValue {

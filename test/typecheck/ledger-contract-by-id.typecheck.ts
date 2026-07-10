@@ -1,29 +1,55 @@
-import type { GetContractByIdParams, LedgerCreatedEvent, LedgerJsonApiClient, LedgerJsonValue } from '../../src';
+import {
+  ContractId,
+  PartyId,
+  type GetContractByIdCreatedEvent,
+  type GetContractByIdParams,
+  type LedgerJsonApiClient,
+  type LedgerJsonValue,
+} from '../../src';
 
 declare const ledgerClient: LedgerJsonApiClient;
 
 type ContractByIdOptions = Parameters<LedgerJsonApiClient['getContractById']>[1];
 type ContractByIdResponse = Awaited<ReturnType<LedgerJsonApiClient['getContractById']>>;
 
+const contractId = ContractId(`00${'ab'.repeat(32)}`);
+const partyId = PartyId('validator::fingerprint');
+
 const request: GetContractByIdParams = {
-  contractId: '00contract-id',
-  queryingParties: ['validator::fingerprint'],
+  contractId,
+  queryingParties: [partyId],
 };
 
 const requestWithoutParties: GetContractByIdParams = {
-  contractId: '00contract-id',
+  contractId,
 };
 
 const requestWithUnknownField: GetContractByIdParams = {
-  contractId: '00contract-id',
+  contractId,
   // @ts-expect-error Contract lookup accepts only the exact pinned request fields.
   unsupported: true,
 };
 
 // @ts-expect-error exactOptionalPropertyTypes requires omission instead of explicit undefined.
 const requestWithUndefinedOptional: GetContractByIdParams = {
-  contractId: '00contract-id',
+  contractId,
   queryingParties: undefined,
+};
+
+const requestWithPlainString: GetContractByIdParams = {
+  // @ts-expect-error Contract IDs must be validated and branded.
+  contractId: `00${'ab'.repeat(32)}`,
+};
+
+const requestWithPartyAsContract: GetContractByIdParams = {
+  // @ts-expect-error A PartyId cannot be used as a ContractId.
+  contractId: partyId,
+};
+
+const requestWithContractAsParty: GetContractByIdParams = {
+  contractId,
+  // @ts-expect-error A ContractId cannot be used as a PartyId.
+  queryingParties: [contractId],
 };
 
 const exactBodyRetry: ContractByIdOptions = {
@@ -45,23 +71,31 @@ const derivedBodyRetry: ContractByIdOptions = {
 };
 
 declare const response: ContractByIdResponse;
-const { createdEvent }: { createdEvent: LedgerCreatedEvent } = response;
+const { createdEvent }: { createdEvent: GetContractByIdCreatedEvent } = response;
 const { createArgument }: { createArgument: LedgerJsonValue } = createdEvent;
 const { contractKey: optionalContractKey }: { contractKey?: LedgerJsonValue } = createdEvent;
+const responseContractId: ContractId = createdEvent.contractId;
+const responseWitness: PartyId | undefined = createdEvent.witnessParties[0];
+const nullContractKey: GetContractByIdCreatedEvent['contractKey'] = null;
 
 // @ts-expect-error Daml values must be losslessly representable JSON.
-const invalidCreateArgument: LedgerCreatedEvent['createArgument'] = {
+const invalidCreateArgument: GetContractByIdCreatedEvent['createArgument'] = {
   callback: () => undefined,
 };
 
-// @ts-expect-error A present contract key cannot be top-level JSON null.
-const invalidContractKey: NonNullable<LedgerCreatedEvent['contractKey']> = null;
+// @ts-expect-error Synthetic contract-service offsets are not exposed publicly.
+createdEvent.offset;
 
 void ledgerClient.getContractById(request, exactBodyRetry);
 void ledgerClient.getContractById(requestWithoutParties, derivedBodyRetry);
 void requestWithUnknownField;
 void requestWithUndefinedOptional;
+void requestWithPlainString;
+void requestWithPartyAsContract;
+void requestWithContractAsParty;
 void createArgument;
 void optionalContractKey;
+void responseContractId;
+void responseWitness;
+void nullContractKey;
 void invalidCreateArgument;
-void invalidContractKey;

@@ -26,6 +26,7 @@ const PREPARED_HASH_BASE64 = Buffer.from(`1220${'11'.repeat(32)}`, 'hex').toStri
 const SIGNATURE_BASE64 = Buffer.alloc(64, 1).toString('base64');
 const PROTO_VALUE_BASE64 = Buffer.from('encoded-protobuf').toString('base64');
 const EXTERNAL_TRANSACTION_HASH = `1220${'ab'.repeat(32)}`;
+const CREATED_CONTRACT_ID = `00${'ab'.repeat(32)}`;
 
 function createClient(): LedgerJsonApiClient {
   return new LedgerJsonApiClient(new CantonRuntime(config));
@@ -82,7 +83,7 @@ function createWireTransactionResponse(transactionOffset = 124, eventOffset = 12
           CreatedEvent: {
             offset: eventOffset,
             nodeId: 0,
-            contractId: 'contract-1',
+            contractId: CREATED_CONTRACT_ID,
             templateId: 'pkg:Module:Template',
             contractKey: null,
             contractKeyHash: '',
