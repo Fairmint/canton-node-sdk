@@ -44,14 +44,14 @@ const GetContractByIdCreatedEventSchema: z.ZodType<GetContractByIdCreatedEvent> 
 
     addExactPlaceholderIssue(event.offset === 1, ['offset'], 'Expected pinned placeholder offset 1');
     addExactPlaceholderIssue(event.nodeId === 0, ['nodeId'], 'Expected pinned placeholder nodeId 0');
-    addExactPlaceholderIssue(event.acsDelta === false, ['acsDelta'], 'Expected pinned placeholder acsDelta false');
+    addExactPlaceholderIssue(!event.acsDelta, ['acsDelta'], 'Expected pinned placeholder acsDelta false');
     addExactPlaceholderIssue(
-      event.interfaceViews !== undefined && event.interfaceViews.length === 0,
+      event.interfaceViews?.length === 0,
       ['interfaceViews'],
       'Expected pinned empty interfaceViews placeholder'
     );
     addExactPlaceholderIssue(
-      event.createdEventBlob !== undefined && event.createdEventBlob.length > 0,
+      (event.createdEventBlob?.length ?? 0) > 0,
       ['createdEventBlob'],
       'Expected pinned non-empty createdEventBlob placeholder'
     );

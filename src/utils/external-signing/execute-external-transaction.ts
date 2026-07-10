@@ -16,6 +16,27 @@ export type PartySignature = Omit<GeneratedPartySignature, 'signatures'> & {
 export type NonEmptyPartySignatures = NonEmptyReadonlyArray<PartySignature>;
 export type InteractiveSubmissionHashingSchemeVersion = InteractiveSubmissionExecuteRequest['hashingSchemeVersion'];
 
+/** Immutable compatibility value. Use the factory below when building a submission request. */
+export const DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD = Object.freeze({
+  DeduplicationDuration: Object.freeze({
+    value: Object.freeze({ seconds: 30, nanos: 0 }),
+  }),
+}) satisfies NonNullable<InteractiveSubmissionExecuteRequest['deduplicationPeriod']>;
+
+/** Returns an isolated default deduplication period for one interactive submission. */
+export function createDefaultInteractiveSubmissionDeduplicationPeriod(): {
+  DeduplicationDuration: { value: { seconds: number; nanos: number } };
+} {
+  return {
+    DeduplicationDuration: {
+      value: {
+        seconds: DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD.DeduplicationDuration.value.seconds,
+        nanos: DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD.DeduplicationDuration.value.nanos,
+      },
+    },
+  } satisfies NonNullable<InteractiveSubmissionExecuteRequest['deduplicationPeriod']>;
+}
+
 export interface ExecuteExternalTransactionOptions {
   readonly ledgerClient: LedgerJsonApiClient;
   readonly userId?: string;
@@ -72,11 +93,7 @@ function buildExecuteExternalTransactionRequest(
     preparedTransaction: options.preparedTransaction,
     hashingSchemeVersion: normalizeHashingSchemeVersion(options.hashingSchemeVersion),
     submissionId: options.submissionId,
-    deduplicationPeriod: options.deduplicationPeriod ?? {
-      DeduplicationDuration: {
-        value: { seconds: 30, nanos: 0 },
-      },
-    },
+    deduplicationPeriod: options.deduplicationPeriod ?? createDefaultInteractiveSubmissionDeduplicationPeriod(),
     partySignatures: {
       signatures: [
         toRequestPartySignature(firstPartySignature),

@@ -8,7 +8,7 @@ import {
   type HttpRequestOptions,
   type RequestConfig,
 } from '../../core';
-import { resolveScanApiUrls } from './scan-endpoints';
+import { getScanHostRoot, resolveScanApiUrls } from './scan-endpoints';
 import { ScanApiClient as ScanApiClientGenerated } from './ScanApiClient.generated';
 
 export interface ScanApiClientOptions {
@@ -47,10 +47,6 @@ function resolveConfiguredScanApiUrl(runtime: CantonRuntime): string | undefined
     }
     throw error;
   }
-}
-
-function getScanHostRoot(scanApiUrl: string): string {
-  return scanApiUrl.replace(/\/api\/scan\/?$/, '').replace(/\/$/, '');
 }
 
 interface RotatableScanUrl {

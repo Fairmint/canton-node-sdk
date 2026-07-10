@@ -2,8 +2,17 @@ import { z } from 'zod';
 import { ApiError } from '../../../../../core/errors';
 import { WebSocketClient } from '../../../../../core/ws/WebSocketClient';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
-import { type JsCantonError, type WsCantonError } from '../../../schemas/api/errors';
-import { type JsGetActiveContractsResponse, type JsGetActiveContractsResponseItem } from '../../../schemas/api/state';
+import {
+  JsCantonErrorSchema,
+  WsCantonErrorSchema,
+  type JsCantonError,
+  type WsCantonError,
+} from '../../../schemas/api/errors';
+import {
+  JsGetActiveContractsResponseItemSchema,
+  type JsGetActiveContractsResponse,
+  type JsGetActiveContractsResponseItem,
+} from '../../../schemas/api/state';
 import { buildEventFormat } from '../utils/event-format-builder';
 
 const path = '/v2/state/active-contracts' as const;
@@ -32,7 +41,7 @@ const ActiveContractsParamsSchema = z.object({
 
 export type GetActiveContractsParams = z.infer<typeof ActiveContractsParamsSchema> & {
   /** Optional per-item callback to consume results as they arrive. */
-  onItem?: (item: JsGetActiveContractsResponseItem) => void;
+  onItem?: (item: JsGetActiveContractsResponseItem) => void | Promise<void>;
 };
 
 export class GetActiveContracts {
@@ -78,8 +87,11 @@ export class GetActiveContracts {
       eventFormat: ReturnType<typeof buildEventFormat>;
     }
 
-    // Response message can be a contract item or an error
-    type ActiveContractsResponseMessage = JsGetActiveContractsResponseItem | JsCantonError | WsCantonError;
+    const ActiveContractsResponseMessageSchema = z.union([
+      JsGetActiveContractsResponseItemSchema,
+      JsCantonErrorSchema,
+      WsCantonErrorSchema,
+    ]);
 
     const requestMessage: ActiveContractsRequestMessage = {
       verbose: false,
@@ -107,18 +119,26 @@ export class GetActiveContracts {
       };
 
       void wsClient
-        .connect<ActiveContractsRequestMessage, ActiveContractsResponseMessage>(path, requestMessage, {
-          onMessage: (parsed) => {
+        .connect<ActiveContractsRequestMessage, unknown>(path, requestMessage, {
+          onMessage: async (parsed): Promise<void> => {
+            const decoded = ActiveContractsResponseMessageSchema.safeParse(parsed);
+            if (!decoded.success) {
+              throw new ApiError('Unexpected active-contracts WebSocket message');
+            }
+            const message = decoded.data;
+
             // Distinguish item vs error union members
-            if (typeof parsed === 'object' && 'contractEntry' in parsed) {
-              results.push(parsed);
+            if ('contractEntry' in message) {
+              results.push(message);
               if (typeof params.onItem === 'function') {
-                params.onItem(parsed);
+                await params.onItem(message);
               }
             } else if (!settled) {
               // Treat any non-item as an error message
+              const error = toError(message);
               settled = true;
-              reject(toError(parsed));
+              reject(error);
+              throw error;
             }
           },
           onError: (err) => {

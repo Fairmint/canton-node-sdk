@@ -22,5 +22,13 @@ export const InteractiveSubmissionPrepare = createApiOperation<
     ...params,
     synchronizerId: params.synchronizerId ?? '',
     packageIdSelectionPreference: params.packageIdSelectionPreference ?? [],
+    ...(params.estimateTrafficCost === undefined
+      ? {}
+      : {
+          estimateTrafficCost: {
+            ...params.estimateTrafficCost,
+            expectedSignatures: params.estimateTrafficCost.expectedSignatures ?? [],
+          },
+        }),
   }),
 });

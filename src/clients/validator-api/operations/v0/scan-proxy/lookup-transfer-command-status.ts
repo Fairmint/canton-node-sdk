@@ -1,9 +1,16 @@
-import { createApiOperation } from '../../../../../core';
-import { type LookupTransferCommandStatusResponse } from '../../../schemas/api';
-import {
-  LookupTransferCommandStatusParamsSchema,
-  type LookupTransferCommandStatusParams,
-} from '../../../schemas/operations';
+import { z } from 'zod';
+import { createApiOperation, createRequestSchema } from '../../../../../core';
+import { type operations } from '../../../../../generated/apps/validator/src/main/openapi/scan-proxy';
+
+export type LookupTransferCommandStatusParams = operations['lookupTransferCommandStatus']['parameters']['query'];
+export type LookupTransferCommandStatusResponse =
+  operations['lookupTransferCommandStatus']['responses']['200']['content']['application/json'];
+
+/** Runtime schema kept in exact key/type parity with the generated query parameters. */
+export const LookupTransferCommandStatusParamsSchema = createRequestSchema<LookupTransferCommandStatusParams>()({
+  sender: z.string(),
+  nonce: z.number().int(),
+});
 
 /**
  * Lookup transfer command status
@@ -23,6 +30,11 @@ export const LookupTransferCommandStatus = createApiOperation<
 >({
   paramsSchema: LookupTransferCommandStatusParamsSchema,
   method: 'GET',
-  buildUrl: (params, apiUrl: string) =>
-    `${apiUrl}/api/validator/v0/scan-proxy/transfer-commands/${params.sender}/${params.nonce}/status`,
+  buildUrl: (params, apiUrl: string): string => {
+    const query = new URLSearchParams({
+      sender: params.sender,
+      nonce: String(params.nonce),
+    });
+    return `${apiUrl}/api/validator/v0/scan-proxy/transfer-command/status?${query.toString()}`;
+  },
 });

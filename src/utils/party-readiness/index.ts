@@ -1,5 +1,6 @@
 import { OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
 import { isRecord } from '../../core/utils';
+import { delayWithAbortSignal, runWithAbortSignal } from '../../core/utils/abort';
 
 export interface PartySynchronizerReadinessLedgerClient {
   readonly getConnectedSynchronizers: (params: {
@@ -75,6 +76,8 @@ export interface ResolveActiveSubmissionSynchronizerOptions {
 
 export interface WaitForPartyCanSubmitOptions extends PartySynchronizerReadinessOptions {
   readonly delaysMs?: readonly number[];
+  /** Cancels pending delays and readiness reads. Cancellation does not undo party allocation. */
+  readonly signal?: AbortSignal;
   readonly onCheckError?: (
     error: unknown,
     context: {
@@ -321,28 +324,50 @@ export async function waitForPartyCanSubmit(options: WaitForPartyCanSubmitOption
   const party = validateRequiredString('party', options.party);
   const synchronizerId = validateRequiredString('synchronizerId', options.synchronizerId);
   const delaysMs = normalizeWaitDelays(options.delaysMs);
+  const createAbortError = (): ValidationError =>
+    new ValidationError('Canton party readiness wait was aborted', { party, synchronizerId });
 
   for (let attempt = 0; attempt < delaysMs.length; attempt += 1) {
     const delayMs = delaysMs[attempt] ?? 0;
-    if (delayMs > 0) await delay(delayMs);
+    if (delayMs > 0) await delayWithAbortSignal(delayMs, options.signal, createAbortError);
     try {
       if (
-        await partyCanSubmitOnSynchronizer({
-          ledgerClient: options.ledgerClient,
-          party,
-          synchronizerId,
-          ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
-        })
+        await runWithAbortSignal(
+          options.signal,
+          createAbortError,
+          // Preserve the readiness promise's exact settlement order relative to abort.
+          // eslint-disable-next-line @typescript-eslint/promise-function-async
+          () =>
+            partyCanSubmitOnSynchronizer({
+              ledgerClient: options.ledgerClient,
+              party,
+              synchronizerId,
+              ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
+            })
+        )
       ) {
         return true;
       }
     } catch (error) {
-      await options.onCheckError?.(error, {
-        party,
-        synchronizerId,
-        delayMs,
-        attempt,
-      });
+      if (options.signal?.aborted) throw createAbortError();
+      const { onCheckError } = options;
+      if (onCheckError) {
+        await runWithAbortSignal(
+          options.signal,
+          createAbortError,
+          // Preserve an async callback's exact settlement order relative to abort.
+          // eslint-disable-next-line @typescript-eslint/promise-function-async
+          () =>
+            Promise.resolve(
+              onCheckError(error, {
+                party,
+                synchronizerId,
+                delayMs,
+                attempt,
+              })
+            )
+        );
+      }
     }
   }
 
@@ -471,10 +496,6 @@ function normalizeWaitDelays(delaysMs: readonly number[] | undefined): readonly 
     }
   }
   return delays;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function validateRequiredString(name: string, value: string): string {

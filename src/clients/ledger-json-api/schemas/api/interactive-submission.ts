@@ -1,11 +1,10 @@
 import { z } from 'zod';
-import { createRequestSchema } from '../../../../core';
+import { createRequestSchema, type Brand } from '../../../../core';
 import type {
   components,
   paths,
 } from '../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 import {
-  CantonSha256HashHexSchema,
   LedgerJsonValueSchema,
   LedgerNameSchema,
   LedgerNonEmptyBase64BytesSchema,
@@ -219,8 +218,25 @@ type InteractiveSubmissionEventVariants =
   | { ExercisedEvent: InteractiveSubmissionExercisedEvent };
 export type InteractiveSubmissionEvent = ExactOneOf<InteractiveSubmissionEventVariants>;
 
-export type InteractiveSubmissionTransaction = Omit<LedgerSchemas['JsTransaction'], 'events'> & {
+/** Normalized Ledger trace context; protobuf option nulls are exposed as omitted properties. */
+export type InteractiveSubmissionTraceContext = Omit<LedgerSchemas['TraceContext'], 'traceparent' | 'tracestate'> & {
+  traceparent?: string;
+  tracestate?: string;
+};
+
+/** Raw 32-byte Daml-LF SHA-256 transaction hash encoded as 64 lowercase hex characters. */
+export type InteractiveSubmissionExternalTransactionHashHex = Brand<
+  string,
+  'InteractiveSubmissionExternalTransactionHashHex'
+>;
+
+export type InteractiveSubmissionTransaction = Omit<
+  LedgerSchemas['JsTransaction'],
+  'events' | 'externalTransactionHash' | 'traceContext'
+> & {
   events: InteractiveSubmissionEvent[];
+  traceContext?: InteractiveSubmissionTraceContext;
+  externalTransactionHash?: InteractiveSubmissionExternalTransactionHashHex;
 };
 
 export type InteractiveSubmissionExecuteAndWaitForTransactionResponse = Omit<
@@ -591,10 +607,19 @@ const EventSchema: z.ZodType<InteractiveSubmissionEvent> = z.union([
   }),
 ]);
 
-const TraceContextSchema = createRequestSchema<LedgerSchemas['TraceContext']>()({
-  traceparent: z.string().optional(),
-  tracestate: z.string().optional(),
+const TraceContextSchema = createRequestSchema<InteractiveSubmissionTraceContext>()({
+  traceparent: nullableOptionalResponseField(z.string()),
+  tracestate: nullableOptionalResponseField(z.string()),
 });
+
+const ExternalTransactionHashHexSchema: z.ZodType<InteractiveSubmissionExternalTransactionHashHex> = z
+  .string()
+  .regex(/^[0-9a-f]{64}$/, {
+    message: 'Expected a canonical lowercase 32-byte Daml-LF transaction hash',
+  })
+  .transform(
+    (value): InteractiveSubmissionExternalTransactionHashHex => value as InteractiveSubmissionExternalTransactionHashHex
+  );
 
 const TransactionSchema = createRequestSchema<InteractiveSubmissionTransaction>()({
   updateId: z.string(),
@@ -606,7 +631,7 @@ const TransactionSchema = createRequestSchema<InteractiveSubmissionTransaction>(
   synchronizerId: z.string().min(1),
   traceContext: nullableOptionalResponseField(TraceContextSchema),
   recordTime: LedgerRfc3339TimestampSchema,
-  externalTransactionHash: nullableOptionalResponseField(CantonSha256HashHexSchema),
+  externalTransactionHash: nullableOptionalResponseField(ExternalTransactionHashHexSchema),
   paidTrafficCost: nullableOptionalResponseField(NonNegativeInt64Schema),
 });
 

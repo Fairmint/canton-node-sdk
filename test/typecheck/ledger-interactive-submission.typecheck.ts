@@ -2,9 +2,11 @@ import type { LedgerJsonApiClient } from '../../src/clients/ledger-json-api';
 import type {
   InteractiveSubmissionCommand,
   InteractiveSubmissionEvent,
+  InteractiveSubmissionExternalTransactionHashHex,
   InteractiveSubmissionIdentifierFilter,
   InteractiveSubmissionProtoAny,
   InteractiveSubmissionSignature,
+  InteractiveSubmissionTraceContext,
 } from '../../src/clients/ledger-json-api/schemas/api/interactive-submission';
 import type {
   ExecuteExternalTransactionOptions,
@@ -223,6 +225,21 @@ const unspecifiedSigningAlgorithm: InteractiveSubmissionSignature = {
 
 type TransactionEvents = ExecuteAndWaitForTransactionResponse['transaction']['events'];
 const emptyTransactionEvents: TransactionEvents = [];
+type TransactionTraceContext = NonNullable<ExecuteAndWaitForTransactionResponse['transaction']['traceContext']>;
+const normalizedTraceContext: InteractiveSubmissionTraceContext = {
+  traceparent: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
+};
+const normalizedTraceState: TransactionTraceContext['tracestate'] = 'vendor=value';
+// @ts-expect-error Wire null trace state is normalized to an omitted property for consumers.
+const nullTraceState: TransactionTraceContext['tracestate'] = null;
+type TransactionExternalHash = NonNullable<
+  ExecuteAndWaitForTransactionResponse['transaction']['externalTransactionHash']
+>;
+declare const validatedExternalHash: TransactionExternalHash;
+const typedExternalHash: InteractiveSubmissionExternalTransactionHashHex = validatedExternalHash;
+const rawExternalHashString: string = typedExternalHash;
+// @ts-expect-error Transaction hashes are validated and branded before they reach consumers.
+const unvalidatedExternalHash: TransactionExternalHash = 'ab'.repeat(32);
 type CreatedTransactionEvent = Extract<TransactionEvents[number], { CreatedEvent: unknown }>['CreatedEvent'];
 type ExercisedTransactionEvent = Extract<TransactionEvents[number], { ExercisedEvent: unknown }>['ExercisedEvent'];
 type InterfaceView = NonNullable<CreatedTransactionEvent['interfaceViews']>[number];
@@ -238,6 +255,12 @@ const invalidCreatedEventArgument: CreatedTransactionEvent['createArgument'] = {
 const invalidExerciseChoiceArgument: ExercisedTransactionEvent['choiceArgument'] = { invalid: 1n };
 // @ts-expect-error Exercise results are JSON values when present.
 const invalidExerciseResult: ExercisedTransactionEvent['exerciseResult'] = Symbol('invalid');
+
+void normalizedTraceContext;
+void normalizedTraceState;
+void nullTraceState;
+void rawExternalHashString;
+void unvalidatedExternalHash;
 
 type PrepareCommand = PrepareRequest['commands'][number];
 type CreateArguments = Extract<PrepareCommand, { CreateCommand: unknown }>['CreateCommand']['createArguments'];
