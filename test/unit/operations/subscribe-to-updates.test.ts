@@ -51,4 +51,35 @@ describe('SubscribeToUpdates', (): void => {
     ).rejects.toThrow('WebSocket error [INTERNAL]: stream failed');
     expect(onMessage).toHaveBeenCalledTimes(1);
   });
+
+  it('rejects a null frame without invoking the typed consumer callback', async (): Promise<void> => {
+    const onMessage = jest.fn().mockResolvedValue(undefined);
+    mockConnect.mockImplementation(
+      async (
+        _path: string,
+        _request: unknown,
+        handlers: {
+          onMessage: (message: unknown) => Promise<void>;
+          onClose?: (code: number, reason: string) => void;
+        }
+      ): Promise<unknown> => {
+        await handlers.onMessage(null);
+        handlers.onClose?.(1000, 'stream complete');
+        return {
+          close: jest.fn(),
+          isConnected: (): boolean => false,
+          getConnectionState: (): number => 3,
+        };
+      }
+    );
+    const client = {
+      buildPartyList: (): string[] => ['Alice'],
+      getLedgerEnd: jest.fn().mockResolvedValue({ offset: 42 }),
+    };
+
+    await expect(new SubscribeToUpdates(client as never).connect({ beginExclusive: 42, onMessage })).rejects.toThrow(
+      'Unexpected ledger updates WebSocket message'
+    );
+    expect(onMessage).not.toHaveBeenCalled();
+  });
 });

@@ -2,8 +2,13 @@ import { z } from 'zod';
 import { ApiError } from '../../../../../core/errors';
 import { WebSocketClient, type WebSocketOptions } from '../../../../../core/ws/WebSocketClient';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
-import { type JsCantonError, type WsCantonError } from '../../../schemas/api/errors';
-import { type JsUpdateSchema, type WsUpdateSchema } from '../../../schemas/api/updates';
+import {
+  JsCantonErrorSchema,
+  WsCantonErrorSchema,
+  type JsCantonError,
+  type WsCantonError,
+} from '../../../schemas/api/errors';
+import { JsUpdateSchema, WsUpdateSchema } from '../../../schemas/api/updates';
 import { buildEventFormat } from '../utils/event-format-builder';
 
 const path = '/v2/updates' as const;
@@ -81,11 +86,14 @@ export type SubscribeToUpdatesParams = z.infer<typeof SubscribeToUpdatesParamsSc
   onTokenRefreshNeeded?: WebSocketOptions['onTokenRefreshNeeded'];
 };
 
-export type UpdatesWsMessage =
-  | { update: z.infer<typeof JsUpdateSchema> }
-  | { update: z.infer<typeof WsUpdateSchema> }
-  | JsCantonError
-  | WsCantonError;
+const UpdatesWsMessageSchema = z.union([
+  z.object({ update: JsUpdateSchema }),
+  z.object({ update: WsUpdateSchema }),
+  JsCantonErrorSchema,
+  WsCantonErrorSchema,
+]);
+
+export type UpdatesWsMessage = z.infer<typeof UpdatesWsMessageSchema>;
 
 /**
  * Subscribes to ledger updates via WebSocket connection.
@@ -217,23 +225,33 @@ export class SubscribeToUpdates {
 
       /** Check if a message is a Canton error response */
       const isErrorMessage = (msg: UpdatesWsMessage): msg is JsCantonError | WsCantonError =>
-        typeof msg === 'object' && ('cause' in msg || ('code' in msg && 'message' in msg && !('update' in msg)));
+        'cause' in msg || ('code' in msg && 'message' in msg && !('update' in msg));
 
       void wsClient
-        .connect<typeof requestMessage, UpdatesWsMessage>(
+        .connect<typeof requestMessage, unknown>(
           path,
           requestMessage,
           {
             onMessage: async (parsed): Promise<void> => {
+              const decoded = UpdatesWsMessageSchema.safeParse(parsed);
+              if (!decoded.success) {
+                if (!settled) {
+                  settled = true;
+                  reject(new ApiError('Unexpected ledger updates WebSocket message'));
+                }
+                return;
+              }
+              const message = decoded.data;
+
               // Surface Canton error frames immediately; a slow consumer callback must not delay stream failure.
-              if (isErrorMessage(parsed) && !settled) {
+              if (isErrorMessage(message) && !settled) {
                 settled = true;
-                reject(toError(parsed));
+                reject(toError(message));
               }
 
               // Call user's onMessage callback if provided
               if (typeof params.onMessage === 'function') {
-                await params.onMessage(parsed);
+                await params.onMessage(message);
               }
             },
             onError: (err) => {
