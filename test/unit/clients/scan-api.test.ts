@@ -15,7 +15,11 @@ jest.mock('axios', () => {
   };
 });
 
-import { ScanApiClient, type ScanApiClientOptions } from '../../../src/clients/scan-api';
+import {
+  ScanApiClient,
+  type GetDateOfFirstSnapshotAfterResponse,
+  type ScanApiClientOptions,
+} from '../../../src/clients/scan-api';
 import { CantonRuntime, type ClientConfig } from '../../../src/core';
 
 interface MockAxiosInstance {
@@ -138,6 +142,83 @@ describe('ScanApiClient', () => {
     expect(mockAxiosInstance.get.mock.calls[0]?.[0]).toBe(
       'https://scan.example/registry/metadata/v1/instruments/Amulet%2FUSD'
     );
+  });
+
+  it('gets the first snapshot after an exact boundary with the generated response envelope', async (): Promise<void> => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan.example/api/scan'],
+      }
+    );
+    const response: GetDateOfFirstSnapshotAfterResponse = {
+      record_time: '2026-07-10T12:00:01.123456Z',
+    };
+    mockAxiosInstance.get.mockResolvedValueOnce({ data: response });
+
+    const result = await client.getDateOfFirstSnapshotAfter({
+      after: '2026-07-10T12:00:00.123456Z',
+      migrationId: 7,
+    });
+    const typedResult: GetDateOfFirstSnapshotAfterResponse = result;
+
+    expect(typedResult).toEqual(response);
+    expect(mockAxiosInstance.get.mock.calls[0]?.[0]).toBe(
+      'https://scan.example/api/scan/v0/state/acs/snapshot-timestamp-after?after=2026-07-10T12%3A00%3A00.123456Z&migration_id=7'
+    );
+  });
+
+  it('rejects invalid snapshot-after query parameters before sending a request', async (): Promise<void> => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan.example/api/scan'],
+      }
+    );
+
+    await expect(
+      client.getDateOfFirstSnapshotAfter({
+        after: 'July 10, 2026',
+        migrationId: 7,
+      })
+    ).rejects.toThrow('Parameter validation failed');
+    await expect(
+      client.getDateOfFirstSnapshotAfter({
+        after: '2026-07-10T12:00:00Z',
+        migrationId: Number.MAX_SAFE_INTEGER + 1,
+      })
+    ).rejects.toThrow('Parameter validation failed');
+
+    expect(mockAxiosInstance.get).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid snapshot timestamp response envelope', async (): Promise<void> => {
+    const { client, mockAxiosInstance } = createClient(
+      { network: 'mainnet' },
+      {
+        scanApiUrls: ['https://scan.example/api/scan'],
+      }
+    );
+    mockAxiosInstance.get
+      .mockResolvedValueOnce({
+        data: { record_time: 'not-an-openapi-date-time' },
+      })
+      .mockResolvedValueOnce({
+        data: { record_time: '2026-07-10T12:00:01Z', unexpected: true },
+      });
+
+    await expect(
+      client.getDateOfFirstSnapshotAfter({
+        after: '2026-07-10T12:00:00Z',
+        migrationId: 7,
+      })
+    ).rejects.toThrow();
+    await expect(
+      client.getDateOfFirstSnapshotAfter({
+        after: '2026-07-10T12:00:00Z',
+        migrationId: 7,
+      })
+    ).rejects.toThrow();
   });
 
   it('gets registry metadata information from the direct scan host root', async () => {
