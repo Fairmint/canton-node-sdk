@@ -371,9 +371,24 @@ describe('Token Standard V2 settlement-factory helpers', () => {
     expect(choiceArgument.allocations[0]?.nextIterationFunding).toEqual(funding);
     expect(Object.prototype.hasOwnProperty.call(choiceArgument.extraArgs.context.values, '__proto__')).toBe(true);
     expect(Object.prototype.hasOwnProperty.call(choiceArgument.extraArgs.meta.values, '__proto__')).toBe(true);
-    expect(Object.prototype.hasOwnProperty.call(choiceArgument.allocations[0]?.nextIterationFunding, '__proto__')).toBe(
-      true
-    );
+    const normalizedFunding = choiceArgument.allocations[0]?.nextIterationFunding;
+    expect(Object.prototype.hasOwnProperty.call(normalizedFunding, '__proto__')).toBe(true);
+    expect(Object.getPrototypeOf(choiceArgument.extraArgs.context.values)).toBeNull();
+    expect(Object.getPrototypeOf(choiceArgument.extraArgs.meta.values)).toBeNull();
+    expect(Object.getPrototypeOf(normalizedFunding)).toBeNull();
+    expect(Object.getOwnPropertyDescriptor(choiceArgument.extraArgs.context.values, '__proto__')).toMatchObject({
+      writable: false,
+    });
+    expect(Object.getOwnPropertyDescriptor(choiceArgument.extraArgs.meta.values, '__proto__')).toMatchObject({
+      writable: false,
+    });
+    expect(Object.getOwnPropertyDescriptor(normalizedFunding, '__proto__')).toMatchObject({ writable: false });
+    const normalizedNested = choiceArgument.extraArgs.context.values['registry.example/nested'] as Record<
+      string,
+      unknown
+    >;
+    expect(Object.getPrototypeOf(normalizedNested)).toBeNull();
+    expect(Object.getOwnPropertyDescriptor(normalizedNested, 'value')).toMatchObject({ writable: false });
 
     const nested = context.values['registry.example/nested'] as {
       value: Array<{ value: string }>;
@@ -426,7 +441,7 @@ describe('Token Standard V2 settlement-factory helpers', () => {
           {
             templateId: '#cash-package:Cash:InstrumentRules',
             contractId: '#instrument-rules',
-            createdEventBlob: 'encoded-created-event',
+            createdEventBlob: ' \n encoded-created-event\t ',
             synchronizerId: 'global-domain::1220synchronizer',
             debugPackageName: 'cash-package',
             debugPayload: { instrumentId: 'USDx' },

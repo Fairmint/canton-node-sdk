@@ -14,6 +14,9 @@ export const TOKEN_STANDARD_V2_SETTLEMENT_FACTORY_INTERFACE_ID =
 
 export const TOKEN_STANDARD_V2_SETTLEMENT_FACTORY_SETTLE_BATCH_CHOICE = 'SettlementFactory_SettleBatch';
 
+const DAML_DECIMAL_PATTERN = /^(-?)(\d{1,28})(?:\.(\d{1,10}))?$/;
+const ZERO_DIGITS_PATTERN = /^0+$/;
+
 export const TokenStandardV2SettlementFactoryErrorCode = {
   INPUT_INVALID: 'TOKEN_STANDARD_V2_SETTLEMENT_FACTORY_INPUT_INVALID',
   FACTORY_RESPONSE_INVALID: 'TOKEN_STANDARD_V2_SETTLEMENT_FACTORY_RESPONSE_INVALID',
@@ -120,6 +123,19 @@ function factoryResponseInvalid(message: string, context: ErrorContext): never {
 
 type InvalidValueHandler = (message: string, context: ErrorContext) => never;
 
+function createSafeRecord<T>(entries: Iterable<readonly [string, T]>): Readonly<Record<string, T>> {
+  const result = Object.create(null) as Record<string, T>;
+  for (const [key, value] of entries) {
+    Object.defineProperty(result, key, {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: false,
+    });
+  }
+  return result;
+}
+
 function requireTrimmedNonEmpty(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     inputInvalid(`${field} must be a non-empty string.`, { field, value });
@@ -136,12 +152,12 @@ function requireText(value: unknown, field: string): string {
 
 function parseDecimalText(value: unknown, field: string): { readonly text: string; readonly sign: -1 | 0 | 1 } {
   const text = requireText(value, field);
-  const match = /^(-?)(\d{1,28})(?:\.(\d{1,10}))?$/.exec(text);
+  const match = DAML_DECIMAL_PATTERN.exec(text);
   if (match?.[0] !== text) {
     inputInvalid(`${field} must be a valid Daml Decimal string.`, { field, value });
   }
   const digits = `${match[2]}${match[3] ?? ''}`;
-  const sign = /^0+$/.test(digits) ? 0 : match[1] === '-' ? -1 : 1;
+  const sign = ZERO_DIGITS_PATTERN.test(digits) ? 0 : match[1] === '-' ? -1 : 1;
   return { text, sign };
 }
 
@@ -178,11 +194,11 @@ function normalizeMetadata(value: unknown, field: string): TokenStandardV2Metada
     }
     return [key, metadataValue] as const;
   });
-  return { values: Object.fromEntries(entries) };
+  return { values: createSafeRecord(entries) };
 }
 
 function normalizeOptionalMetadata(value: unknown, field: string): TokenStandardV2Metadata {
-  return value === undefined ? { values: {} } : normalizeMetadata(value, field);
+  return value === undefined ? { values: createSafeRecord<string>([]) } : normalizeMetadata(value, field);
 }
 
 function cloneChoiceContextValue(value: unknown, field: string, invalid: InvalidValueHandler): unknown {
@@ -197,8 +213,10 @@ function cloneChoiceContextValue(value: unknown, field: string, invalid: Invalid
   if (!isRecord(value) || Object.getOwnPropertySymbols(value).length > 0) {
     invalid(`${field} must contain only JSON-compatible values.`, { field, value });
   }
-  return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [key, cloneChoiceContextValue(item, `${field}.${key}`, invalid)])
+  return createSafeRecord(
+    Object.entries(value).map(
+      ([key, item]) => [key, cloneChoiceContextValue(item, `${field}.${key}`, invalid)] as const
+    )
   );
 }
 
@@ -218,11 +236,10 @@ function normalizeChoiceContext(
     invalid(`${field}.values must contain only string keys.`, { field, value });
   }
   return {
-    values: Object.fromEntries(
-      Object.entries(value['values']).map(([key, item]) => [
-        key,
-        cloneChoiceContextValue(item, `${field}.values.${key}`, invalid),
-      ])
+    values: createSafeRecord(
+      Object.entries(value['values']).map(
+        ([key, item]) => [key, cloneChoiceContextValue(item, `${field}.values.${key}`, invalid)] as const
+      )
     ),
   };
 }
@@ -302,7 +319,7 @@ function normalizeFunding(value: unknown, field: string): Readonly<Record<string
   const entries = Object.entries(value).map(
     ([instrumentId, amount]) => [instrumentId, normalizePositiveDecimal(amount, `${field}.${instrumentId}`)] as const
   );
-  return Object.fromEntries(entries);
+  return createSafeRecord(entries);
 }
 
 function normalizeFinalizedAllocation(
@@ -342,8 +359,8 @@ function normalizeExtraArgs(value: unknown): TokenStandardV2SettlementExtraArgs 
 
 function emptyTokenStandardV2ExtraArgs(): TokenStandardV2SettlementExtraArgs {
   return {
-    context: { values: {} },
-    meta: { values: {} },
+    context: { values: createSafeRecord<unknown>([]) },
+    meta: { values: createSafeRecord<string>([]) },
   };
 }
 
@@ -423,13 +440,6 @@ function readResponseTrimmedNonEmpty(value: unknown, field: string): string {
   return value.trim();
 }
 
-function readResponseOpaqueNonEmpty(value: unknown, field: string): string {
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    factoryResponseInvalid(`Settlement-factory registry response has an invalid ${field}.`, { field, value });
-  }
-  return value;
-}
-
 function parseDisclosedContract(value: unknown, index: number): DisclosedContract {
   if (!isRecord(value)) {
     factoryResponseInvalid('Settlement-factory registry returned a malformed disclosed contract.', { index, value });
@@ -437,7 +447,7 @@ function parseDisclosedContract(value: unknown, index: number): DisclosedContrac
   return {
     templateId: readResponseTrimmedNonEmpty(value['templateId'], `disclosedContracts[${index}].templateId`),
     contractId: readResponseTrimmedNonEmpty(value['contractId'], `disclosedContracts[${index}].contractId`),
-    createdEventBlob: readResponseOpaqueNonEmpty(
+    createdEventBlob: readResponseTrimmedNonEmpty(
       value['createdEventBlob'],
       `disclosedContracts[${index}].createdEventBlob`
     ),

@@ -3,6 +3,7 @@ import { createApiOperation } from '../../../../../../../core';
 import { RecordSchema } from '../../../../../../ledger-json-api/schemas/base';
 
 const endpoint = '/registry/allocation/v2/settlement-factory';
+const TRAILING_SLASHES_PATTERN = /\/+$/;
 const publicRequestConfig = {
   contentType: 'application/json',
   includeBearerToken: false,
@@ -61,7 +62,7 @@ function buildRegistryEndpoint(registryUrl: string): string {
   url.password = '';
   url.search = '';
   url.hash = '';
-  url.pathname = `${url.pathname.replace(/\/+$/, '')}${endpoint}`;
+  url.pathname = `${url.pathname.replace(TRAILING_SLASHES_PATTERN, '')}${endpoint}`;
   return url.toString();
 }
 
