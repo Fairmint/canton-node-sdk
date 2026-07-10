@@ -83,7 +83,9 @@ jobs:
 
       - name: Start CN-Quickstart
         run: |
-          npm run localnet:start
+          splice_version="$(git -C libs/splice describe --tags --exact-match)"
+          echo "Starting CN-Quickstart with pinned Splice ${splice_version}"
+          CANTON_LOCALNET_SPLICE_VERSION="${splice_version}" npm run localnet:start
           echo "✓ CN-Quickstart started"
         timeout-minutes: 15
 

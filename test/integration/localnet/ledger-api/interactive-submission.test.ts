@@ -18,16 +18,17 @@ import { buildIntegrationTestClientConfig, retry } from '../../../utils/testConf
 import { getClient } from './setup';
 
 const WALLET_APP_INSTALL_TEMPLATE = '#splice-wallet:Splice.Wallet.Install:WalletAppInstall';
-const WALLET_APP_INSTALL_TEMPLATE_SUFFIX = 'Splice.Wallet.Install:WalletAppInstall';
+const TRANSFER_PREAPPROVAL_PROPOSAL_TEMPLATE =
+  '#splice-wallet:Splice.Wallet.TransferPreapproval:TransferPreapprovalProposal';
+const TRANSFER_PREAPPROVAL_PROPOSAL_TEMPLATE_SUFFIX = 'Splice.Wallet.TransferPreapproval:TransferPreapprovalProposal';
 
-interface PreparedSignedWalletInstall {
+interface PreparedSignedTransferPreapprovalProposal {
   readonly request: InteractiveSubmissionExecuteRequest;
   readonly preparedTransactionHashHex: string;
   readonly expectedPayload: {
-    readonly dsoParty: string;
-    readonly validatorParty: string;
-    readonly endUserName: string;
-    readonly endUserParty: string;
+    readonly receiver: string;
+    readonly provider: string;
+    readonly expectedDso: string;
   };
 }
 
@@ -105,19 +106,19 @@ function lookupTransactionFormatFor(partyId: string): LookupTransactionFormat {
   };
 }
 
-function expectSubmittedAppInstall(
+function expectSubmittedTransferPreapprovalProposal(
   transaction: InteractiveSubmissionTransaction | LookupTransaction,
-  prepared: PreparedSignedWalletInstall
+  prepared: PreparedSignedTransferPreapprovalProposal
 ): void {
   expect(transaction.externalTransactionHash).toBe(prepared.preparedTransactionHashHex);
   const createdEvent = transaction.events
     .map((event) => ('CreatedEvent' in event ? event.CreatedEvent : undefined))
-    .find((event) => event?.templateId.includes(WALLET_APP_INSTALL_TEMPLATE_SUFFIX));
+    .find((event) => event?.templateId.includes(TRANSFER_PREAPPROVAL_PROPOSAL_TEMPLATE_SUFFIX));
   expect(createdEvent).toBeDefined();
   expect(createdEvent?.createArgument).toEqual(prepared.expectedPayload);
 }
 
-async function prepareSignedAppInstall(options: {
+async function prepareSignedTransferPreapprovalProposal(options: {
   readonly client: LedgerJsonApiClient;
   readonly keypair: Keypair;
   readonly dsoParty: string;
@@ -128,13 +129,12 @@ async function prepareSignedAppInstall(options: {
   readonly synchronizerId: string;
   readonly packageId: string;
   readonly label: string;
-}): Promise<PreparedSignedWalletInstall> {
+}): Promise<PreparedSignedTransferPreapprovalProposal> {
   const uniqueId = `${options.label}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const expectedPayload = {
-    dsoParty: options.dsoParty,
-    validatorParty: options.validatorParty,
-    endUserName: uniqueId,
-    endUserParty: options.externalParty,
+    receiver: options.externalParty,
+    provider: options.validatorParty,
+    expectedDso: options.dsoParty,
   } as const;
   let prepared: Awaited<ReturnType<LedgerJsonApiClient['interactiveSubmissionPrepare']>>;
   try {
@@ -144,12 +144,12 @@ async function prepareSignedAppInstall(options: {
       commands: [
         {
           CreateCommand: {
-            templateId: WALLET_APP_INSTALL_TEMPLATE,
+            templateId: TRANSFER_PREAPPROVAL_PROPOSAL_TEMPLATE,
             createArguments: expectedPayload,
           },
         },
       ],
-      actAs: [options.externalParty, options.validatorParty],
+      actAs: [options.externalParty],
       synchronizerId: options.synchronizerId,
       packageIdSelectionPreference: [options.packageId],
       estimateTrafficCost: { disabled: true },
@@ -256,7 +256,7 @@ describe('LedgerJsonApiClient / Interactive submission', () => {
     expect(packageReference.packageName).toBe('splice-wallet');
     expect(preferredVersion.packagePreference?.packageReference).toEqual(packageReference);
 
-    const asyncPrepared = await prepareSignedAppInstall({
+    const asyncPrepared = await prepareSignedTransferPreapprovalProposal({
       client,
       keypair,
       dsoParty,
@@ -287,9 +287,9 @@ describe('LedgerJsonApiClient / Interactive submission', () => {
       transactionFormat: lookupTransactionFormat,
     });
     expect(asyncTransaction.transaction.updateId).toBe(completion.updateId);
-    expectSubmittedAppInstall(asyncTransaction.transaction, asyncPrepared);
+    expectSubmittedTransferPreapprovalProposal(asyncTransaction.transaction, asyncPrepared);
 
-    const waitPrepared = await prepareSignedAppInstall({
+    const waitPrepared = await prepareSignedTransferPreapprovalProposal({
       client,
       keypair,
       dsoParty,
@@ -309,9 +309,9 @@ describe('LedgerJsonApiClient / Interactive submission', () => {
       transactionFormat: lookupTransactionFormat,
     });
     expect(waitedTransaction.transaction.updateId).toBe(waitResult.updateId);
-    expectSubmittedAppInstall(waitedTransaction.transaction, waitPrepared);
+    expectSubmittedTransferPreapprovalProposal(waitedTransaction.transaction, waitPrepared);
 
-    const transactionPrepared = await prepareSignedAppInstall({
+    const transactionPrepared = await prepareSignedTransferPreapprovalProposal({
       client,
       keypair,
       dsoParty,
@@ -328,7 +328,7 @@ describe('LedgerJsonApiClient / Interactive submission', () => {
       transactionFormat: interactiveTransactionFormatFor(external.partyId),
     });
     expect(transactionResult.transaction.updateId).toMatch(/\S+/);
-    expectSubmittedAppInstall(transactionResult.transaction, transactionPrepared);
+    expectSubmittedTransferPreapprovalProposal(transactionResult.transaction, transactionPrepared);
 
     expect(
       new Set([
