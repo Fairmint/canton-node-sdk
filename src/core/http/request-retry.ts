@@ -160,6 +160,9 @@ export function snapshotHttpRequestOptions<Body>(
 export function snapshotHttpRequestOptions<Body>(options: HttpRequestOptions<Body>): Readonly<HttpRequestOptions<Body>>;
 export function snapshotHttpRequestOptions<Body>(
   options: HttpReadRequestOptions<Body> | HttpRequestOptions<Body>
+): Readonly<HttpReadRequestOptions<Body> | HttpRequestOptions<Body>>;
+export function snapshotHttpRequestOptions<Body>(
+  options: HttpReadRequestOptions<Body> | HttpRequestOptions<Body>
 ): Readonly<HttpReadRequestOptions<Body> | HttpRequestOptions<Body>> {
   const { signal, retry, requestSemantics, resolveReadAttemptUrl } = options;
   const retrySnapshot: HttpRequestRetryStrategy<Body> | undefined =

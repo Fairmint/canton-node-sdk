@@ -150,7 +150,7 @@ export class ScanApiClient extends ScanApiClientGenerated {
   /** Run Scan failover inside one HttpClient retry loop so attempt budgets, bodies, and hook history stay coherent. */
   private async makeReadRequestWithFailover<T, Body>(
     fullUrl: string,
-    options: Readonly<HttpRequestOptions<Body>>,
+    options: Readonly<HttpReadRequestOptions<Body> | HttpRequestOptions<Body>>,
     doRequest: (requestOptions: HttpReadRequestOptions<Body>) => Promise<T>
   ): Promise<T> {
     const readOptions = snapshotHttpRequestOptions<Body>({ ...options, requestSemantics: 'read' });

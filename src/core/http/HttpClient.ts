@@ -112,7 +112,7 @@ export class HttpClient {
     url: string,
     initialBody: Body,
     config: RequestConfig,
-    options: HttpRequestOptions<Body>
+    options: HttpReadRequestOptions<Body> | HttpRequestOptions<Body>
   ): Promise<T> {
     // Snapshot every caller-owned option before the first asynchronous boundary. In particular, never let replacing an
     // options signal or retry object while a token/hook is pending change the in-flight request contract.
