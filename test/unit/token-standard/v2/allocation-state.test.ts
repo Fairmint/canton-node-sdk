@@ -640,6 +640,60 @@ describe('discoverTokenStandardV2AllocationState', () => {
 });
 
 describe('getTokenStandardV2AllocationViewsByContractIds', () => {
+  test('normalizes omitted optional interface-view fields to null', async () => {
+    const viewValue = {
+      ...completedView,
+      originalAllocationCid: undefined,
+      settlement: {
+        ...completedView.settlement,
+        cid: undefined,
+      },
+      allocation: {
+        ...completedView.allocation,
+        authorizer: {
+          ...completedView.allocation.authorizer,
+          provider: undefined,
+        },
+        settlementDeadline: undefined,
+        nextIterationFunding: undefined,
+      },
+      expiresAt: undefined,
+    };
+    const ledger = createLedger([activeContract({ contractId: '#allocation', kind: 'Completed', viewValue })]);
+
+    await expect(
+      getTokenStandardV2AllocationViewsByContractIds({
+        ledger,
+        parties: ['Buyer::alice'],
+        synchronizerId,
+        allocationCids: ['#allocation'],
+        activeAtOffset: 42,
+      })
+    ).resolves.toEqual([
+      {
+        allocationCid: '#allocation',
+        view: {
+          ...completedView,
+          originalAllocationCid: null,
+          settlement: {
+            ...completedView.settlement,
+            cid: null,
+          },
+          allocation: {
+            ...completedView.allocation,
+            authorizer: {
+              ...completedView.allocation.authorizer,
+              provider: null,
+            },
+            settlementDeadline: null,
+            nextIterationFunding: null,
+          },
+          expiresAt: null,
+        },
+      },
+    ]);
+  });
+
   test('returns exact allocation CIDs in caller order from one ACS snapshot', async () => {
     const firstTransferLegSide = requireFixtureValue(
       completedView.allocation.transferLegSides[0],

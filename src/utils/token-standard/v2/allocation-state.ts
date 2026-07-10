@@ -160,7 +160,7 @@ function requireText(value: unknown, field: string, invalid: InvalidValueHandler
 }
 
 function readNullableNonEmptyString(value: unknown, field: string, invalid: InvalidValueHandler): string | null {
-  return value === null ? null : requireTrimmedNonEmpty(value, field, invalid);
+  return value === null || value === undefined ? null : requireTrimmedNonEmpty(value, field, invalid);
 }
 
 function readStringArray(
@@ -219,7 +219,7 @@ function readDecimalMap(
   field: string,
   invalid: InvalidValueHandler
 ): Readonly<Record<string, string>> | null {
-  if (value === null) return null;
+  if (value === null || value === undefined) return null;
   if (!isRecord(value)) {
     invalid(`${field} must be null or a decimal map.`, { field, value });
   }
