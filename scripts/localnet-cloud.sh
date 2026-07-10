@@ -15,6 +15,8 @@ LOCALNET_SCRIBE_VERSION="${CANTON_LOCALNET_SCRIBE_VERSION:-}"
 LOCALNET_PROTOCOL_VERSION="${CANTON_LOCALNET_PROTOCOL_VERSION:-}"
 VALIDATOR_READY_ATTEMPTS="${CANTON_LOCALNET_VALIDATOR_READY_ATTEMPTS:-90}"
 SCAN_READY_ATTEMPTS="${CANTON_LOCALNET_SCAN_READY_ATTEMPTS:-90}"
+SPLICE_CONFIG_PENDING_KEY="CANTON_NODE_SDK_SPLICE_CONFIG_PENDING"
+SPLICE_CONFIG_CHANGED="false"
 
 log() {
   printf '[localnet] %s\n' "$*"
@@ -447,6 +449,12 @@ EOF
 configure_quickstart_localnet() {
   local env_file=""
   local canton_conf="${QUICKSTART_DIR}/docker/modules/localnet/conf/canton/app.conf"
+  local splice_sv_conf="${QUICKSTART_DIR}/docker/modules/localnet/conf/splice/sv/app.conf"
+
+  SPLICE_CONFIG_CHANGED="false"
+  if [[ "$(quickstart_env_value "${SPLICE_CONFIG_PENDING_KEY}")" == "true" ]]; then
+    SPLICE_CONFIG_CHANGED="true"
+  fi
 
   for env_file in "${QUICKSTART_DIR}/.env" "${QUICKSTART_DIR}/.env.local"; do
     if [[ -n "${LOCALNET_SPLICE_VERSION}" ]]; then
@@ -463,6 +471,21 @@ configure_quickstart_localnet() {
   if [[ ! -f "${canton_conf}" ]]; then
     log "Canton quickstart config not found: ${canton_conf}"
     exit 1
+  fi
+
+  if [[ ! -f "${splice_sv_conf}" ]]; then
+    log "Splice SV quickstart config not found: ${splice_sv_conf}"
+    exit 1
+  fi
+
+  if ! grep -Eq '^[[:space:]]*canton\.scan-apps\.scan-app\.enable-forced-acs-snapshots[[:space:]]*=[[:space:]]*(true|yes|on)[[:space:]]*$' "${splice_sv_conf}"; then
+    cat >>"${splice_sv_conf}" <<'EOF'
+
+# LocalNet integration tests use this endpoint to create deterministic snapshot-backed fixtures.
+canton.scan-apps.scan-app.enable-forced-acs-snapshots = true
+EOF
+    set_quickstart_env_value "${QUICKSTART_DIR}/.env.local" "${SPLICE_CONFIG_PENDING_KEY}" "true"
+    SPLICE_CONFIG_CHANGED="true"
   fi
 
   if [[ -n "${LOCALNET_PROTOCOL_VERSION}" ]]; then
@@ -680,6 +703,33 @@ start_infra_only_localnet() {
   run_infra_compose 'up -d --no-recreate'
 }
 
+splice_container_running() {
+  local running=""
+
+  running="$(run_docker inspect --format '{{.State.Running}}' splice 2>/dev/null || true)"
+  [[ "${running}" == "true" ]]
+}
+
+recreate_splice_after_config_change() {
+  local should_recreate="$1"
+
+  if [[ "${should_recreate}" != "true" ]]; then
+    return
+  fi
+
+  log "Recreating the running Splice service to apply updated LocalNet configuration."
+  run_infra_compose 'up -d --no-deps --force-recreate splice'
+}
+
+mark_splice_config_applied() {
+  if [[ "${SPLICE_CONFIG_CHANGED}" != "true" ]]; then
+    return
+  fi
+
+  set_quickstart_env_value "${QUICKSTART_DIR}/.env.local" "${SPLICE_CONFIG_PENDING_KEY}" "false"
+  SPLICE_CONFIG_CHANGED="false"
+}
+
 stop_infra_only_localnet() {
   if [[ ! -f "${QUICKSTART_DIR}/.env.local" ]]; then
     return
@@ -763,22 +813,34 @@ wait_for_services() {
 }
 
 start_localnet() {
+  local should_recreate_splice="false"
+
+  if [[ "${SPLICE_CONFIG_CHANGED}" == "true" ]] && splice_container_running; then
+    should_recreate_splice="true"
+  fi
+
   if quickstart_force_full_start; then
     log "Forcing full cn-quickstart start (CANTON_LOCALNET_FORCE_FULL_START=true)."
     run_quickstart_make start
+    recreate_splice_after_config_change "${should_recreate_splice}"
     wait_for_services
+    mark_splice_config_applied
     return
   fi
 
   if quickstart_infra_only_enabled; then
     start_infra_only_localnet
+    recreate_splice_after_config_change "${should_recreate_splice}"
     wait_for_services
+    mark_splice_config_applied
     return
   fi
 
   if quickstart_fast_start_enabled && quickstart_build_artifacts_ready; then
     if try_fast_start_localnet; then
+      recreate_splice_after_config_change "${should_recreate_splice}"
       wait_for_services
+      mark_splice_config_applied
       return
     fi
     log "Fast start failed; falling back to full cn-quickstart start."
@@ -786,7 +848,9 @@ start_localnet() {
 
   log "Starting cn-quickstart with full build..."
   run_quickstart_make start
+  recreate_splice_after_config_change "${should_recreate_splice}"
   wait_for_services
+  mark_splice_config_applied
 }
 
 stop_localnet() {
@@ -1109,4 +1173,6 @@ main() {
   esac
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

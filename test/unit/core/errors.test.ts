@@ -9,6 +9,7 @@ import {
   ValidationError,
   isDefiniteCantonMutationRejection,
   normalizeCantonError,
+  readCantonDefiniteAnswer,
 } from '../../../src/core/errors';
 
 describe('CantonError hierarchy', () => {
@@ -304,5 +305,20 @@ describe('isDefiniteCantonMutationRejection', () => {
     expect(isDefiniteCantonMutationRejection(new OperationError('failed', OperationErrorCode.TRANSACTION_FAILED))).toBe(
       false
     );
+  });
+});
+
+describe('readCantonDefiniteAnswer', () => {
+  it('reads certainty from raw Canton errors and normalized API response bodies', () => {
+    expect(readCantonDefiniteAnswer({ definiteAnswer: true })).toBe(true);
+    expect(readCantonDefiniteAnswer({ definite_answer: false })).toBe(false);
+    expect(
+      readCantonDefiniteAnswer(new ApiError('uncertain rejection', 400, 'Bad Request', { definiteAnswer: false }))
+    ).toBe(false);
+  });
+
+  it('ignores absent and non-boolean certainty fields', () => {
+    expect(readCantonDefiniteAnswer({ definiteAnswer: 'true' })).toBeUndefined();
+    expect(readCantonDefiniteAnswer(new ApiError('no certainty', 503))).toBeUndefined();
   });
 });

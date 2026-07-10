@@ -392,6 +392,64 @@ describe('party synchronizer readiness helpers', (): void => {
     ).resolves.toBe(false);
   });
 
+  it('rejects a pre-aborted readiness wait without calling Canton', async (): Promise<void> => {
+    const controller = new AbortController();
+    controller.abort();
+    const ledgerClient = createMockLedgerClient({});
+
+    await expect(
+      waitForPartyCanSubmit({
+        ledgerClient,
+        party: 'external::party',
+        synchronizerId: 'global-domain::sync',
+        delaysMs: [0],
+        signal: controller.signal,
+      })
+    ).rejects.toThrow('Canton party readiness wait was aborted');
+    expect(ledgerClient.getConnectedSynchronizers).not.toHaveBeenCalled();
+  });
+
+  it('cancels a pending readiness delay without running the check', async (): Promise<void> => {
+    const controller = new AbortController();
+    const ledgerClient = createMockLedgerClient({});
+    const waiting = waitForPartyCanSubmit({
+      ledgerClient,
+      party: 'external::party',
+      synchronizerId: 'global-domain::sync',
+      delaysMs: [60_000],
+      signal: controller.signal,
+    });
+
+    controller.abort();
+
+    await expect(waiting).rejects.toThrow('Canton party readiness wait was aborted');
+    expect(ledgerClient.getConnectedSynchronizers).not.toHaveBeenCalled();
+  });
+
+  it('cancels an unresolved readiness read without treating abort as a transient error', async (): Promise<void> => {
+    const controller = new AbortController();
+    const onCheckError = jest.fn();
+    const ledgerClient: MockLedgerClient = {
+      getConnectedSynchronizers: jest.fn(
+        async (_params: { readonly party: string; readonly participantId?: string }) =>
+          new Promise<unknown>(() => undefined)
+      ),
+    };
+    const waiting = waitForPartyCanSubmit({
+      ledgerClient,
+      party: 'external::party',
+      synchronizerId: 'global-domain::sync',
+      delaysMs: [0],
+      signal: controller.signal,
+      onCheckError,
+    });
+
+    controller.abort();
+
+    await expect(waiting).rejects.toThrow('Canton party readiness wait was aborted');
+    expect(onCheckError).not.toHaveBeenCalled();
+  });
+
   it('handles single-synchronizer and permission helper edge cases', (): void => {
     expect(
       readSingleConnectedSynchronizerId({ connectedSynchronizers: [' sync-1 ', { synchronizerId: 'sync-1' }] })

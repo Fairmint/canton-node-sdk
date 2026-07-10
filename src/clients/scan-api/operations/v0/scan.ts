@@ -251,14 +251,33 @@ export const GetUpdateByIdV1 = createApiOperation<
   requestConfig: publicRequestConfig,
 });
 
-const GetDateOfMostRecentSnapshotBeforeParamsSchema = z.object({
-  before: z.string(),
-  migrationId: z.number().int(),
-});
-export type GetDateOfMostRecentSnapshotBeforeParams = z.infer<typeof GetDateOfMostRecentSnapshotBeforeParamsSchema>;
+type GetDateOfMostRecentSnapshotBeforeQuery = operations['getDateOfMostRecentSnapshotBefore']['parameters']['query'];
+export interface GetDateOfMostRecentSnapshotBeforeParams {
+  readonly before: GetDateOfMostRecentSnapshotBeforeQuery['before'];
+  readonly migrationId: GetDateOfMostRecentSnapshotBeforeQuery['migration_id'];
+}
+export type GetDateOfMostRecentSnapshotBeforeResponse =
+  operations['getDateOfMostRecentSnapshotBefore']['responses']['200']['content']['application/json'];
+
+type GetDateOfFirstSnapshotAfterQuery = operations['getDateOfFirstSnapshotAfter']['parameters']['query'];
+export interface GetDateOfFirstSnapshotAfterParams {
+  readonly after: GetDateOfFirstSnapshotAfterQuery['after'];
+  readonly migrationId: GetDateOfFirstSnapshotAfterQuery['migration_id'];
+}
+export type GetDateOfFirstSnapshotAfterResponse =
+  operations['getDateOfFirstSnapshotAfter']['responses']['200']['content']['application/json'];
+
+const AcsSnapshotTimestampResponseSchema = z.strictObject({
+  record_time: z.iso.datetime({ offset: true }),
+}) satisfies z.ZodType<GetDateOfMostRecentSnapshotBeforeResponse & GetDateOfFirstSnapshotAfterResponse>;
+const GetDateOfMostRecentSnapshotBeforeParamsSchema: z.ZodType<GetDateOfMostRecentSnapshotBeforeParams> =
+  z.strictObject({
+    before: z.iso.datetime({ offset: true }),
+    migrationId: z.number().int().safe(),
+  });
 export const GetDateOfMostRecentSnapshotBefore = createApiOperation<
   GetDateOfMostRecentSnapshotBeforeParams,
-  operations['getDateOfMostRecentSnapshotBefore']['responses']['200']['content']['application/json']
+  GetDateOfMostRecentSnapshotBeforeResponse
 >({
   paramsSchema: GetDateOfMostRecentSnapshotBeforeParamsSchema,
   method: 'GET',
@@ -269,6 +288,29 @@ export const GetDateOfMostRecentSnapshotBefore = createApiOperation<
     return `${apiUrl}/v0/state/acs/snapshot-timestamp${toQueryString(qs)}`;
   },
   requestConfig: publicRequestConfig,
+  transformResponse: (response): GetDateOfMostRecentSnapshotBeforeResponse =>
+    AcsSnapshotTimestampResponseSchema.parse(response),
+});
+
+const GetDateOfFirstSnapshotAfterParamsSchema: z.ZodType<GetDateOfFirstSnapshotAfterParams> = z.strictObject({
+  after: z.iso.datetime({ offset: true }),
+  migrationId: z.number().int().safe(),
+});
+export const GetDateOfFirstSnapshotAfter = createApiOperation<
+  GetDateOfFirstSnapshotAfterParams,
+  GetDateOfFirstSnapshotAfterResponse
+>({
+  paramsSchema: GetDateOfFirstSnapshotAfterParamsSchema,
+  method: 'GET',
+  buildUrl: (params, apiUrl) => {
+    const qs = new URLSearchParams();
+    qs.set('after', params.after);
+    qs.set('migration_id', String(params.migrationId));
+    return `${apiUrl}/v0/state/acs/snapshot-timestamp-after${toQueryString(qs)}`;
+  },
+  requestConfig: publicRequestConfig,
+  transformResponse: (response): GetDateOfFirstSnapshotAfterResponse =>
+    AcsSnapshotTimestampResponseSchema.parse(response),
 });
 
 type GetAcsSnapshotAtRequest = operations['getAcsSnapshotAt']['requestBody']['content']['application/json'];

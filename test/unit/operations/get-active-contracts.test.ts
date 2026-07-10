@@ -67,4 +67,25 @@ describe('GetActiveContracts', () => {
       expect.any(Object)
     );
   });
+
+  it('rejects a null frame without treating it as a contract or Canton error', async () => {
+    mockConnect.mockImplementation(
+      async (
+        _path: string,
+        _request: unknown,
+        handlers: { onMessage: (message: unknown) => Promise<void> }
+      ): Promise<unknown> => {
+        await handlers.onMessage(null);
+        return {
+          close: jest.fn(),
+          isConnected: () => false,
+          getConnectionState: () => 3,
+        };
+      }
+    );
+
+    await expect(
+      new GetActiveContracts({} as never).execute({ parties: ['Alice'], activeAtOffset: 42 })
+    ).rejects.toThrow('Unexpected active-contracts WebSocket message');
+  });
 });

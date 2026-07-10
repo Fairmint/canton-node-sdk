@@ -587,6 +587,14 @@ export async function prepareTokenStandardV2AllocationCommand(
   params: PrepareTokenStandardV2AllocationCommandParams
 ): Promise<PreparedTokenStandardV2AllocationCommand> {
   requireInputRecord(params, 'params');
+  requireInputRecord(params.scan, 'scan');
+  if (typeof params.scan.getAllocationFactoryV2FromRegistry !== 'function') {
+    throw new TokenStandardV2AllocationError(
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
+      'scan.getAllocationFactoryV2FromRegistry must be a function.',
+      { field: 'scan.getAllocationFactoryV2FromRegistry' }
+    );
+  }
   const registryUrl = requireNonEmpty(params.registryUrl, 'registryUrl');
   const registryChoiceArgument = buildTokenStandardV2AllocationChoiceArgument({
     ...params,
@@ -722,8 +730,30 @@ function readTransactionTreeUpdateId(response: unknown): string | undefined {
 export async function submitPreparedTokenStandardV2Allocation(
   params: SubmitPreparedTokenStandardV2AllocationParams
 ): Promise<SubmitPreparedTokenStandardV2AllocationResult> {
+  requireInputRecord(params, 'params');
+  requireInputRecord(params.prepared, 'prepared');
+  requireInputRecord(params.ledger, 'ledger');
+  if (typeof params.ledger.submitAndWaitForTransactionTree !== 'function') {
+    throw new TokenStandardV2AllocationError(
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
+      'ledger.submitAndWaitForTransactionTree must be a function.',
+      { field: 'ledger.submitAndWaitForTransactionTree' }
+    );
+  }
+  requireInputRecord(params.prepared.command, 'prepared.command');
+  if (!Array.isArray(params.prepared.disclosedContracts)) {
+    throw new TokenStandardV2AllocationError(
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
+      'prepared.disclosedContracts must be an array.',
+      { field: 'prepared.disclosedContracts' }
+    );
+  }
+  const allocationFactoryContractId = requireNonEmpty(
+    params.prepared.allocationFactoryContractId,
+    'prepared.allocationFactoryContractId'
+  );
   const actAs = normalizeStrings(params.actAs, 'actAs');
-  const readAs = params.readAs ? normalizeStrings(params.readAs, 'readAs', true) : [];
+  const readAs = params.readAs === undefined ? [] : normalizeStrings(params.readAs, 'readAs', true);
   const submitParams: SubmitAndWaitForTransactionTreeParams = {
     commands: [params.prepared.command],
     actAs,
@@ -741,7 +771,7 @@ export async function submitPreparedTokenStandardV2Allocation(
     ...(params.workflowId !== undefined ? { workflowId: requireNonEmpty(params.workflowId, 'workflowId') } : {}),
   };
   const response = await params.ledger.submitAndWaitForTransactionTree(submitParams);
-  const result = findTokenStandardV2AllocationInstructionResult(response, params.prepared.allocationFactoryContractId);
+  const result = findTokenStandardV2AllocationInstructionResult(response, allocationFactoryContractId);
   if (!result) {
     throw new TokenStandardV2AllocationError(
       TokenStandardV2AllocationErrorCode.RESULT_NOT_FOUND,
