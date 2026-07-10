@@ -17,5 +17,10 @@ export const InteractiveSubmissionPrepare = createApiOperation<
   requestSemantics: 'read',
   buildUrl: (_params: InteractiveSubmissionPrepareRequest, apiUrl: string) =>
     `${apiUrl}/v2/interactive-submission/prepare`,
-  buildRequestData: (params) => params,
+  // Canton models these OpenAPI-optional fields as non-defaulted Scala values at the JSON boundary.
+  buildRequestData: (params) => ({
+    ...params,
+    synchronizerId: params.synchronizerId ?? '',
+    packageIdSelectionPreference: params.packageIdSelectionPreference ?? [],
+  }),
 });

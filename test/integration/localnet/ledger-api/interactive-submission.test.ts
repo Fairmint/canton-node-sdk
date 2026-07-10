@@ -14,19 +14,19 @@ import {
 } from '../../../../src';
 import type { InteractiveSubmissionExecuteRequest } from '../../../../src/clients/ledger-json-api/schemas/api/interactive-submission';
 import { buildIntegrationTestClientConfig, retry } from '../../../utils/testConfig';
-import { getClient, resolveWalletAppInstallContext } from './setup';
+import { getClient } from './setup';
 
-const APP_INSTALL_REQUEST_TEMPLATE = '#quickstart-licensing:Licensing.AppInstall:AppInstallRequest';
-const APP_INSTALL_REQUEST_TEMPLATE_SUFFIX = 'Licensing.AppInstall:AppInstallRequest';
 const WALLET_APP_INSTALL_TEMPLATE = '#splice-wallet:Splice.Wallet.Install:WalletAppInstall';
+const WALLET_APP_INSTALL_TEMPLATE_SUFFIX = 'Splice.Wallet.Install:WalletAppInstall';
 
-interface PreparedSignedAppInstall {
+interface PreparedSignedWalletInstall {
   readonly request: InteractiveSubmissionExecuteRequest;
   readonly preparedTransactionHashHex: string;
   readonly expectedPayload: {
-    readonly provider: string;
-    readonly user: string;
-    readonly meta: { readonly values: { readonly test: string } };
+    readonly dsoParty: string;
+    readonly validatorParty: string;
+    readonly endUserName: string;
+    readonly endUserParty: string;
   };
 }
 
@@ -106,12 +106,12 @@ function lookupTransactionFormatFor(partyId: string): LookupTransactionFormat {
 
 function expectSubmittedAppInstall(
   transaction: InteractiveSubmissionTransaction | LookupTransaction,
-  prepared: PreparedSignedAppInstall
+  prepared: PreparedSignedWalletInstall
 ): void {
   expect(transaction.externalTransactionHash).toBe(prepared.preparedTransactionHashHex);
   const createdEvent = transaction.events
     .map((event) => ('CreatedEvent' in event ? event.CreatedEvent : undefined))
-    .find((event) => event?.templateId.includes(APP_INSTALL_REQUEST_TEMPLATE_SUFFIX));
+    .find((event) => event?.templateId.includes(WALLET_APP_INSTALL_TEMPLATE_SUFFIX));
   expect(createdEvent).toBeDefined();
   expect(createdEvent?.createArgument).toEqual(prepared.expectedPayload);
 }
@@ -119,6 +119,7 @@ function expectSubmittedAppInstall(
 async function prepareSignedAppInstall(options: {
   readonly client: LedgerJsonApiClient;
   readonly keypair: Keypair;
+  readonly dsoParty: string;
   readonly externalParty: string;
   readonly publicKeyFingerprint: string;
   readonly validatorParty: string;
@@ -126,12 +127,13 @@ async function prepareSignedAppInstall(options: {
   readonly synchronizerId: string;
   readonly packageId: string;
   readonly label: string;
-}): Promise<PreparedSignedAppInstall> {
+}): Promise<PreparedSignedWalletInstall> {
   const uniqueId = `${options.label}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const expectedPayload = {
-    provider: options.validatorParty,
-    user: options.externalParty,
-    meta: { values: { test: uniqueId } },
+    dsoParty: options.dsoParty,
+    validatorParty: options.validatorParty,
+    endUserName: uniqueId,
+    endUserParty: options.externalParty,
   } as const;
   const prepared = await options.client.interactiveSubmissionPrepare({
     userId: options.userId,
@@ -139,15 +141,20 @@ async function prepareSignedAppInstall(options: {
     commands: [
       {
         CreateCommand: {
-          templateId: APP_INSTALL_REQUEST_TEMPLATE,
+          templateId: WALLET_APP_INSTALL_TEMPLATE,
           createArguments: expectedPayload,
         },
       },
     ],
-    actAs: [options.externalParty],
+    actAs: [options.externalParty, options.validatorParty],
     synchronizerId: options.synchronizerId,
     packageIdSelectionPreference: [options.packageId],
     estimateTrafficCost: { disabled: true },
+    hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
+  });
+  expect(prepared).toEqual({
+    preparedTransaction: expect.any(String) as string,
+    preparedTransactionHash: expect.any(String) as string,
     hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
   });
   const preparedTransactionHashHex = preparedTransactionHashToHex(prepared.preparedTransactionHash);
@@ -180,61 +187,6 @@ async function prepareSignedAppInstall(options: {
 }
 
 describe('LedgerJsonApiClient / Interactive submission', () => {
-  test('prepare validates the live endpoint and normalizes nullable response options', async () => {
-    const client = getClient();
-    const validatorClient = new ValidatorApiClient(new CantonRuntime(buildIntegrationTestClientConfig()));
-    const validatorInfo = await validatorClient.getValidatorUserInfo();
-    const partyId = validatorInfo.party_id;
-    if (!partyId) {
-      throw new Error('getValidatorUserInfo returned empty party_id');
-    }
-    client.setPartyId(partyId);
-
-    const partiesResponse = await client.listParties({});
-    const receiverParty = partiesResponse.partyDetails
-      .map((entry: { party: string }) => entry.party)
-      .find((id: string) => id !== partyId);
-    if (!receiverParty) {
-      throw new Error(
-        'Integration precondition failed: need at least two distinct parties on the ledger (transfer offer cannot use self as receiver)'
-      );
-    }
-
-    const { contractId: walletInstallCid, synchronizerId } = await resolveWalletAppInstallContext(client, partyId);
-    const commandId = `interactive-prepare-it-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    const response = await client.interactiveSubmissionPrepare({
-      commandId,
-      ...(synchronizerId !== undefined ? { synchronizerId } : {}),
-      commands: [
-        {
-          ExerciseCommand: {
-            templateId: '#splice-wallet:Splice.Wallet.Install:WalletAppInstall',
-            contractId: walletInstallCid,
-            choice: 'WalletAppInstall_CreateTransferOffer',
-            choiceArgument: {
-              receiver: receiverParty,
-              amount: { amount: '0.0000001', unit: 'AmuletUnit' },
-              description: 'interactive submission prepare integration test',
-              expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-              trackingId: commandId,
-            },
-          },
-        },
-      ],
-      actAs: [partyId],
-      verboseHashing: false,
-      estimateTrafficCost: { disabled: true },
-    });
-
-    expect(response).toEqual({
-      preparedTransaction: expect.any(String) as string,
-      preparedTransactionHash: expect.any(String) as string,
-      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
-    });
-    expect(response.preparedTransaction).not.toHaveLength(0);
-    expect(response.preparedTransactionHash).not.toHaveLength(0);
-  }, 120_000);
-
   test('externally signed Ed25519 submissions validate every execute variant end to end', async () => {
     const client = getClient();
     const validatorClient = new ValidatorApiClient(new CantonRuntime(buildIntegrationTestClientConfig()));
@@ -248,6 +200,10 @@ describe('LedgerJsonApiClient / Interactive submission', () => {
 
     const userId = await resolveLedgerUserId(client, validatorUserName);
     const synchronizerId = await resolveSynchronizerId(client, validatorParty);
+    const { dso_party_id: dsoParty } = await validatorClient.getDsoPartyId();
+    if (!dsoParty) {
+      throw new Error('getDsoPartyId returned an empty dso_party_id');
+    }
     const keypair = Keypair.random();
     const external = await createExternalPartyWithSigner({
       ledgerClient: client,
@@ -276,24 +232,25 @@ describe('LedgerJsonApiClient / Interactive submission', () => {
     });
 
     const preferredVersion = await client.interactiveSubmissionGetPreferredPackageVersion({
-      packageName: 'quickstart-licensing',
-      parties: [external.partyId],
+      packageName: 'splice-wallet',
+      parties: [external.partyId, validatorParty],
       synchronizerId,
     });
     const preferredPackages = await client.interactiveSubmissionGetPreferredPackages({
-      packageVettingRequirements: [{ packageName: 'quickstart-licensing', parties: [external.partyId] }],
+      packageVettingRequirements: [{ packageName: 'splice-wallet', parties: [external.partyId, validatorParty] }],
       synchronizerId,
     });
     const packageReference = preferredPackages.packageReferences[0];
     if (!packageReference) {
-      throw new Error('preferred-packages returned no quickstart-licensing reference');
+      throw new Error('preferred-packages returned no splice-wallet reference');
     }
-    expect(packageReference.packageName).toBe('quickstart-licensing');
+    expect(packageReference.packageName).toBe('splice-wallet');
     expect(preferredVersion.packagePreference?.packageReference).toEqual(packageReference);
 
     const asyncPrepared = await prepareSignedAppInstall({
       client,
       keypair,
+      dsoParty,
       externalParty: external.partyId,
       publicKeyFingerprint: external.publicKeyFingerprint,
       validatorParty,
@@ -326,6 +283,7 @@ describe('LedgerJsonApiClient / Interactive submission', () => {
     const waitPrepared = await prepareSignedAppInstall({
       client,
       keypair,
+      dsoParty,
       externalParty: external.partyId,
       publicKeyFingerprint: external.publicKeyFingerprint,
       validatorParty,
@@ -347,6 +305,7 @@ describe('LedgerJsonApiClient / Interactive submission', () => {
     const transactionPrepared = await prepareSignedAppInstall({
       client,
       keypair,
+      dsoParty,
       externalParty: external.partyId,
       publicKeyFingerprint: external.publicKeyFingerprint,
       validatorParty,

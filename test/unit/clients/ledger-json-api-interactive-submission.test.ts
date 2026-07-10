@@ -85,7 +85,9 @@ function createWireTransactionResponse(transactionOffset = 124, eventOffset = 12
             contractId: 'contract-1',
             templateId: 'pkg:Module:Template',
             contractKey: null,
+            contractKeyHash: '',
             createArgument: { owner: 'party::fingerprint' },
+            createdEventBlob: '',
             interfaceViews: [
               {
                 interfaceId: 'pkg:Module:Interface',
@@ -198,7 +200,7 @@ describe('LedgerJsonApiClient interactive submission execution', () => {
 
     expect(post).toHaveBeenCalledWith(
       'https://ledger.example.test/v2/interactive-submission/prepare',
-      request,
+      { ...request, synchronizerId: '' },
       {
         contentType: 'application/json',
         includeBearerToken: true,
@@ -209,7 +211,7 @@ describe('LedgerJsonApiClient interactive submission execution', () => {
 
   it('accepts wire-null optional prepare fields and normalizes them to omitted properties', async () => {
     const client = createClient();
-    jest.spyOn(client, 'makePostRequest').mockResolvedValue({
+    const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({
       preparedTransaction: PREPARED_TRANSACTION_BASE64,
       preparedTransactionHash: PREPARED_HASH_BASE64,
       hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
@@ -224,6 +226,30 @@ describe('LedgerJsonApiClient interactive submission execution', () => {
       preparedTransactionHash: PREPARED_HASH_BASE64,
       hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
     });
+    expect(post.mock.calls[0]?.[1]).toEqual({
+      ...createPrepareRequest(),
+      synchronizerId: '',
+      packageIdSelectionPreference: [],
+    });
+  });
+
+  it('snapshots nested Daml JSON values before asynchronous request construction', async () => {
+    const client = createClient();
+    const createArguments = { owner: { name: 'Alice' } };
+    const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({
+      preparedTransaction: PREPARED_TRANSACTION_BASE64,
+      preparedTransactionHash: PREPARED_HASH_BASE64,
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
+    });
+
+    const pending = client.interactiveSubmissionPrepare({
+      ...createPrepareRequest(),
+      commands: [{ CreateCommand: { templateId: 'pkg:Module:Template', createArguments } }],
+    });
+    createArguments.owner.name = 'Mallory';
+    await pending;
+
+    expect(post.mock.calls[0]?.[1]).toHaveProperty('commands.0.CreateCommand.createArguments.owner.name', 'Alice');
   });
 
   it('posts asynchronous execute to the exact route and validates the empty response', async () => {
@@ -231,14 +257,19 @@ describe('LedgerJsonApiClient interactive submission execution', () => {
     const response = {};
     const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue(response);
     const request = createExecuteAndWaitRequest();
+    delete request.deduplicationPeriod;
 
     await expect(client.interactiveSubmissionExecute(request)).resolves.toEqual(response);
 
     expect(post).toHaveBeenCalledTimes(1);
-    expect(post).toHaveBeenCalledWith('https://ledger.example.test/v2/interactive-submission/execute', request, {
-      contentType: 'application/json',
-      includeBearerToken: true,
-    });
+    expect(post).toHaveBeenCalledWith(
+      'https://ledger.example.test/v2/interactive-submission/execute',
+      { ...request, deduplicationPeriod: { Empty: {} } },
+      {
+        contentType: 'application/json',
+        includeBearerToken: true,
+      }
+    );
   });
 
   it('posts executeAndWait to the exact case-sensitive route and returns its typed response', async () => {
@@ -246,13 +277,18 @@ describe('LedgerJsonApiClient interactive submission execution', () => {
     const response = { updateId: 'update-1', completionOffset: 123 };
     const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue(response);
     const request = createExecuteAndWaitRequest();
+    delete request.deduplicationPeriod;
 
     await expect(client.interactiveSubmissionExecuteAndWait(request)).resolves.toEqual(response);
 
-    expect(post).toHaveBeenCalledWith('https://ledger.example.test/v2/interactive-submission/executeAndWait', request, {
-      contentType: 'application/json',
-      includeBearerToken: true,
-    });
+    expect(post).toHaveBeenCalledWith(
+      'https://ledger.example.test/v2/interactive-submission/executeAndWait',
+      { ...request, deduplicationPeriod: { Empty: {} } },
+      {
+        contentType: 'application/json',
+        includeBearerToken: true,
+      }
+    );
   });
 
   it('posts executeAndWaitForTransaction with a generated-contract transaction format', async () => {
@@ -301,12 +337,13 @@ describe('LedgerJsonApiClient interactive submission execution', () => {
         transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA',
       },
     };
+    delete request.deduplicationPeriod;
 
     await expect(client.interactiveSubmissionExecuteAndWaitForTransaction(request)).resolves.toEqual(response);
 
     expect(post).toHaveBeenCalledWith(
       'https://ledger.example.test/v2/interactive-submission/executeAndWaitForTransaction',
-      request,
+      { ...request, deduplicationPeriod: { Empty: {} } },
       {
         contentType: 'application/json',
         includeBearerToken: true,
@@ -324,6 +361,8 @@ describe('LedgerJsonApiClient interactive submission execution', () => {
     expect(result.transaction).not.toHaveProperty('externalTransactionHash');
     expect(result.transaction).not.toHaveProperty('paidTrafficCost');
     expect(result.transaction.events[0]).not.toHaveProperty('CreatedEvent.contractKey');
+    expect(result.transaction.events[0]).toHaveProperty('CreatedEvent.contractKeyHash', '');
+    expect(result.transaction.events[0]).toHaveProperty('CreatedEvent.createdEventBlob', '');
     expect(result.transaction.events[0]).toHaveProperty('CreatedEvent.interfaceViews.0.viewValue', null);
     expect(result.transaction.events[0]).toHaveProperty(
       'CreatedEvent.interfaceViews.0.viewStatus.details.0.valueDecoded',
@@ -638,6 +677,63 @@ describe('LedgerJsonApiClient interactive submission execution', () => {
 
   it.each([
     ['an empty command list', { ...createPrepareRequest(), commands: [] }],
+    ['an empty command ID', { ...createPrepareRequest(), commandId: '' }],
+    ['an invalid command ID', { ...createPrepareRequest(), commandId: 'invalid@command' }],
+    [
+      'an empty template ID',
+      {
+        ...createPrepareRequest(),
+        commands: [{ CreateCommand: { templateId: '', createArguments: {} } }],
+      },
+    ],
+    [
+      'an empty contract ID',
+      {
+        ...createPrepareRequest(),
+        commands: [
+          {
+            ExerciseCommand: {
+              templateId: 'pkg:Module:Template',
+              contractId: '',
+              choice: 'Archive',
+              choiceArgument: {},
+            },
+          },
+        ],
+      },
+    ],
+    [
+      'an empty choice name',
+      {
+        ...createPrepareRequest(),
+        commands: [
+          {
+            ExerciseCommand: {
+              templateId: 'pkg:Module:Template',
+              contractId: 'contract-id',
+              choice: '',
+              choiceArgument: {},
+            },
+          },
+        ],
+      },
+    ],
+    [
+      'an invalid choice name',
+      {
+        ...createPrepareRequest(),
+        commands: [
+          {
+            ExerciseCommand: {
+              templateId: 'pkg:Module:Template',
+              contractId: 'contract-id',
+              choice: 'Archive-Now',
+              choiceArgument: {},
+            },
+          },
+        ],
+      },
+    ],
     [
       'more than one command',
       {
@@ -813,6 +909,20 @@ describe('LedgerJsonApiClient interactive submission execution', () => {
       {
         ...createExecuteAndWaitRequest(),
         deduplicationPeriod: { DeduplicationOffset: { value: Number.MAX_SAFE_INTEGER + 1 } },
+      } as unknown as InteractiveSubmissionExecuteAndWaitRequest,
+    ],
+    [
+      'negative deduplication duration seconds',
+      {
+        ...createExecuteAndWaitRequest(),
+        deduplicationPeriod: { DeduplicationDuration: { value: { seconds: -1, nanos: 0 } } },
+      } as unknown as InteractiveSubmissionExecuteAndWaitRequest,
+    ],
+    [
+      'negative deduplication duration nanos',
+      {
+        ...createExecuteAndWaitRequest(),
+        deduplicationPeriod: { DeduplicationDuration: { value: { seconds: 0, nanos: -1 } } },
       } as unknown as InteractiveSubmissionExecuteAndWaitRequest,
     ],
     [

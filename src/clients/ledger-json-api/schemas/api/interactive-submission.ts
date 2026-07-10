@@ -7,8 +7,10 @@ import type {
 import {
   CantonSha256HashHexSchema,
   LedgerBase64BytesSchema,
+  LedgerNameSchema,
   LedgerNonEmptyBase64BytesSchema,
   LedgerRfc3339TimestampSchema,
+  LedgerStringSchema,
 } from '../wire';
 
 type LedgerSchemas = components['schemas'];
@@ -303,10 +305,21 @@ function isJsonValue(value: unknown, ancestors: Set<object> = new Set<object>())
   }
 }
 
-const RequiredJsonValueSchema: z.ZodType<InteractiveSubmissionJsonValue> = z.custom<InteractiveSubmissionJsonValue>(
-  (value) => isJsonValue(value),
-  { message: 'Expected a JSON-serializable value' }
-);
+const RequiredJsonValueSchema: z.ZodType<InteractiveSubmissionJsonValue> = z
+  .custom<InteractiveSubmissionJsonValue>((value) => isJsonValue(value), {
+    message: 'Expected a JSON-serializable value',
+  })
+  .transform(cloneJsonValue);
+
+function cloneJsonValue(value: InteractiveSubmissionJsonValue): InteractiveSubmissionJsonValue {
+  if (Array.isArray(value)) {
+    return value.map(cloneJsonValue);
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, cloneJsonValue(nested)]));
+  }
+  return value;
+}
 
 const NullableOptionalJsonValueSchema: z.ZodType<InteractiveSubmissionNonNullJsonValue | undefined> =
   RequiredJsonValueSchema.nullish().transform(
@@ -362,7 +375,9 @@ const DurationSchema = createRequestSchema<LedgerSchemas['Duration']>()({
 });
 
 const DeduplicationDurationSchema = createRequestSchema<LedgerSchemas['DeduplicationDuration2']>()({
-  value: DurationSchema,
+  value: DurationSchema.refine((duration) => duration.seconds > 0 || (duration.seconds === 0 && duration.nanos >= 0), {
+    message: 'Deduplication duration must be non-negative',
+  }),
 });
 
 const DeduplicationOffsetSchema = createRequestSchema<LedgerSchemas['DeduplicationOffset2']>()({
@@ -406,28 +421,28 @@ const MinLedgerTimeSchema = createRequestSchema<InteractiveSubmissionMinLedgerTi
 });
 
 const CreateCommandContentSchema = createRequestSchema<InteractiveSubmissionCreateCommand>()({
-  templateId: z.string(),
+  templateId: z.string().min(1),
   createArguments: RequiredJsonValueSchema,
 });
 
 const ExerciseCommandContentSchema = createRequestSchema<InteractiveSubmissionExerciseCommand>()({
-  templateId: z.string(),
-  contractId: z.string(),
-  choice: z.string(),
+  templateId: z.string().min(1),
+  contractId: z.string().min(1),
+  choice: LedgerNameSchema,
   choiceArgument: RequiredJsonValueSchema,
 });
 
 const CreateAndExerciseCommandContentSchema = createRequestSchema<InteractiveSubmissionCreateAndExerciseCommand>()({
-  templateId: z.string(),
+  templateId: z.string().min(1),
   createArguments: RequiredJsonValueSchema,
-  choice: z.string(),
+  choice: LedgerNameSchema,
   choiceArgument: RequiredJsonValueSchema,
 });
 
 const ExerciseByKeyCommandContentSchema = createRequestSchema<InteractiveSubmissionExerciseByKeyCommand>()({
-  templateId: z.string(),
+  templateId: z.string().min(1),
   contractKey: RequiredJsonValueSchema,
-  choice: z.string(),
+  choice: LedgerNameSchema,
   choiceArgument: RequiredJsonValueSchema,
 });
 
@@ -466,7 +481,7 @@ const DisclosedContractSchema = createRequestSchema<LedgerSchemas['DisclosedCont
 });
 
 const PrefetchContractKeySchema = createRequestSchema<InteractiveSubmissionPrefetchContractKey>()({
-  templateId: z.string(),
+  templateId: z.string().min(1),
   contractKey: RequiredJsonValueSchema,
   limit: PositiveInt32Schema.optional(),
 });
@@ -479,7 +494,7 @@ const CostEstimationHintsSchema = createRequestSchema<InteractiveSubmissionCostE
 /** Exact interactive-submission prepare request from the pinned Ledger OpenAPI. */
 export const InteractiveSubmissionPrepareRequestSchema = createRequestSchema<InteractiveSubmissionPrepareRequest>()({
   userId: z.string().optional(),
-  commandId: z.string(),
+  commandId: LedgerStringSchema,
   commands: SingleCommandSchema,
   minLedgerTime: MinLedgerTimeSchema.optional(),
   actAs: NonEmptyActAsSchema,
@@ -609,7 +624,7 @@ const ExecuteRequestShape = {
   preparedTransaction: LedgerNonEmptyBase64BytesSchema,
   partySignatures: PartySignaturesSchema,
   deduplicationPeriod: DeduplicationPeriodSchema.optional(),
-  submissionId: z.string().min(1),
+  submissionId: LedgerStringSchema,
   userId: z.string().optional(),
   hashingSchemeVersion: HashingSchemeVersionSchema,
   minLedgerTime: MinLedgerTimeSchema.optional(),
@@ -669,9 +684,9 @@ const CreatedEventSchema = createRequestSchema<InteractiveSubmissionCreatedEvent
   contractId: z.string(),
   templateId: z.string(),
   contractKey: NullableOptionalJsonValueSchema,
-  contractKeyHash: LedgerNonEmptyBase64BytesSchema.optional(),
+  contractKeyHash: LedgerBase64BytesSchema.optional(),
   createArgument: RequiredJsonValueSchema,
-  createdEventBlob: LedgerNonEmptyBase64BytesSchema.optional(),
+  createdEventBlob: LedgerBase64BytesSchema.optional(),
   interfaceViews: z.array(InterfaceViewSchema).optional(),
   witnessParties: z.array(z.string()).min(1),
   signatories: z.array(z.string()).min(1),

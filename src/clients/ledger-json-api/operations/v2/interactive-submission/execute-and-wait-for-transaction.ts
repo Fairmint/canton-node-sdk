@@ -14,6 +14,9 @@ export const InteractiveSubmissionExecuteAndWaitForTransaction = createApiOperat
   responseSchema: InteractiveSubmissionExecuteAndWaitForTransactionResponseSchema,
   method: 'POST',
   buildUrl: (_params, apiUrl) => `${apiUrl}/v2/interactive-submission/executeAndWaitForTransaction`,
-  buildRequestData: (params) => params,
+  buildRequestData: (params) => ({
+    ...params,
+    deduplicationPeriod: params.deduplicationPeriod ?? { Empty: {} },
+  }),
   getFreshRetryIdentifier: (params) => params.submissionId,
 });

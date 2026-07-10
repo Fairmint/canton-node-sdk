@@ -15,6 +15,9 @@ export const InteractiveSubmissionExecute = createApiOperation<
   method: 'POST',
   buildUrl: (_params: InteractiveSubmissionExecuteRequest, apiUrl: string) =>
     `${apiUrl}/v2/interactive-submission/execute`,
-  buildRequestData: (params) => params,
+  buildRequestData: (params) => ({
+    ...params,
+    deduplicationPeriod: params.deduplicationPeriod ?? { Empty: {} },
+  }),
   getFreshRetryIdentifier: (params) => params.submissionId,
 });

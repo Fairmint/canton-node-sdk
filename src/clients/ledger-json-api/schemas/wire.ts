@@ -22,6 +22,20 @@ export const CantonSha256HashHexSchema = z.string().regex(/^1220[0-9a-f]{64}$/, 
   message: 'Expected a canonical lowercase Canton SHA-256 hash',
 });
 
+/** Non-empty Daml-LF LedgerString (ASCII, at most 255 characters). */
+export const LedgerStringSchema = z
+  .string()
+  .min(1)
+  .max(255)
+  .regex(/^[A-Za-z0-9._:#/ \-]+$/, { message: 'Expected a valid Daml-LF LedgerString' });
+
+/** Daml-LF Name used for choices (Java-like ASCII identifier, at most 1,000 characters). */
+export const LedgerNameSchema = z
+  .string()
+  .min(1)
+  .max(1_000)
+  .regex(/^[A-Za-z$_][A-Za-z0-9$_]*$/, { message: 'Expected a valid Daml-LF Name' });
+
 function isCanonicalStandardBase64(value: string): boolean {
   if (value.length === 0) return true;
   if (value.length % 4 !== 0) return false;
