@@ -384,6 +384,9 @@ function normalizeRegistryUrl(value: unknown): string {
 export function buildTokenStandardV2SettlementChoiceArgument(
   params: BuildTokenStandardV2SettlementChoiceArgumentParams
 ): TokenStandardV2SettlementChoiceArgument {
+  if (!isRecord(params)) {
+    inputInvalid('params must be a record.', { field: 'params', value: params });
+  }
   if (!Array.isArray(params.transferLegs) || params.transferLegs.length === 0) {
     inputInvalid('transferLegs must contain at least one transfer leg.', {
       field: 'transferLegs',
