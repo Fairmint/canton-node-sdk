@@ -65,7 +65,7 @@ const SubscribeToUpdatesParamsSchema = z.object({
 
 export type SubscribeToUpdatesParams = z.infer<typeof SubscribeToUpdatesParamsSchema> & {
   /** Optional per-message callback to consume updates as they arrive. */
-  onMessage?: (message: UpdatesWsMessage) => void;
+  onMessage?: (message: UpdatesWsMessage) => void | Promise<void>;
 
   /**
    * Called when the token is about to expire and refresh is scheduled. Use this to prepare for reconnection (e.g., save
@@ -224,10 +224,10 @@ export class SubscribeToUpdates {
           path,
           requestMessage,
           {
-            onMessage: (parsed) => {
+            onMessage: async (parsed): Promise<void> => {
               // Call user's onMessage callback if provided
               if (typeof params.onMessage === 'function') {
-                params.onMessage(parsed);
+                await params.onMessage(parsed);
               }
 
               // Check if it's an error

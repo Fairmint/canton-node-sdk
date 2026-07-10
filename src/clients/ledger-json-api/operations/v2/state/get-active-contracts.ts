@@ -32,7 +32,7 @@ const ActiveContractsParamsSchema = z.object({
 
 export type GetActiveContractsParams = z.infer<typeof ActiveContractsParamsSchema> & {
   /** Optional per-item callback to consume results as they arrive. */
-  onItem?: (item: JsGetActiveContractsResponseItem) => void;
+  onItem?: (item: JsGetActiveContractsResponseItem) => void | Promise<void>;
 };
 
 export class GetActiveContracts {
@@ -108,12 +108,12 @@ export class GetActiveContracts {
 
       void wsClient
         .connect<ActiveContractsRequestMessage, ActiveContractsResponseMessage>(path, requestMessage, {
-          onMessage: (parsed) => {
+          onMessage: async (parsed): Promise<void> => {
             // Distinguish item vs error union members
             if (typeof parsed === 'object' && 'contractEntry' in parsed) {
               results.push(parsed);
               if (typeof params.onItem === 'function') {
-                params.onItem(parsed);
+                await params.onItem(parsed);
               }
             } else if (!settled) {
               // Treat any non-item as an error message

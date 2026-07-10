@@ -15,10 +15,10 @@ export interface WebSocketSubscription {
 
 /** Callbacks for WebSocket lifecycle events. Only `onMessage` is required. */
 export interface WebSocketHandlers<Message> {
-  readonly onOpen?: () => void;
-  readonly onMessage: (msg: Message) => void;
-  readonly onError?: (err: Error) => void;
-  readonly onClose?: (code: number, reason: string) => void;
+  readonly onOpen?: () => void | Promise<void>;
+  readonly onMessage: (msg: Message) => void | Promise<void>;
+  readonly onError?: (err: Error) => void | Promise<void>;
+  readonly onClose?: (code: number, reason: string) => void | Promise<void>;
 }
 
 /** Converts an unknown error to an Error instance */
@@ -35,13 +35,16 @@ export interface WebSocketOptions {
    * Called when the token is about to expire and refresh is scheduled. Use this to prepare for reconnection (e.g.,
    * track current offset for resumption).
    */
-  readonly onTokenExpiring?: () => void;
+  readonly onTokenExpiring?: () => void | Promise<void>;
 
   /**
    * Called when token refresh timer fires. The WebSocket will close after this callback returns, and the caller should
    * initiate a new connection with a fresh token. Returns the close code and reason.
    */
-  readonly onTokenRefreshNeeded?: () => { code?: number; reason?: string } | void;
+  readonly onTokenRefreshNeeded?: () =>
+    | { code?: number; reason?: string }
+    | void
+    | Promise<{ code?: number; reason?: string } | void>;
 }
 
 // calculateTokenRefreshTime is imported from @hardlydifficult/websocket
@@ -95,10 +98,17 @@ export class WebSocketClient {
         // A failing logger cannot report its own failure.
       }
     };
-    const log = async (event: string, payload: unknown): Promise<void> => {
+    const log = (event: string, payload: unknown): void => {
       if (!logger) return;
       try {
-        await logger.logRequestResponse(wsUrl, { event, requestMessage }, payload);
+        void Promise.resolve(logger.logRequestResponse(wsUrl, { event, requestMessage }, payload)).catch(
+          (err: unknown) => {
+            reportAuxiliaryFailure('WebSocket request/response logging failed', {
+              event,
+              error: toError(err).message,
+            });
+          }
+        );
       } catch (err) {
         // Request/response logging is auxiliary and must not change WebSocket delivery semantics.
         reportAuxiliaryFailure('WebSocket request/response logging failed', {
@@ -107,75 +117,122 @@ export class WebSocketClient {
         });
       }
     };
-    const notifyError = (error: Error): void => {
+    const runCallback = async (
+      callback: () => void | Promise<void>,
+      onFailure: (error: Error) => void,
+      onSuccess?: () => void
+    ): Promise<void> => {
       try {
-        handlers.onError?.(error);
+        await callback();
+        onSuccess?.();
       } catch (err) {
-        reportAuxiliaryFailure('WebSocket onError handler failed', {
-          error: toError(err).message,
-          originalError: error.message,
-        });
+        onFailure(toError(err));
       }
     };
+    const observeCallback = (
+      callback: () => void | Promise<void>,
+      onFailure: (error: Error) => void,
+      onSuccess?: () => void
+    ): void => {
+      void runCallback(callback, onFailure, onSuccess).catch((err: unknown) => {
+        reportAuxiliaryFailure('WebSocket callback failure handling failed', { error: toError(err).message });
+      });
+    };
+    const notifyError = (error: Error): void => {
+      const { onError } = handlers;
+      if (!onError) return;
+      observeCallback(
+        (): void | Promise<void> => onError(error),
+        (err) => {
+          reportAuxiliaryFailure('WebSocket onError handler failed', {
+            error: err.message,
+            originalError: error.message,
+          });
+        }
+      );
+    };
+    let pendingMessageCallbacks = Promise.resolve();
 
-    await log('connect', { headers: token ? { Authorization: '[REDACTED]' } : undefined, protocols });
+    log('connect', { headers: token ? { Authorization: '[REDACTED]' } : undefined, protocols });
 
     // Schedule proactive token refresh if we have token timing and callbacks
     if (tokenIssuedAt !== null && tokenExpiresAt !== null && options?.onTokenRefreshNeeded) {
       const refreshTime = calculateTokenRefreshTime(tokenIssuedAt, tokenExpiresAt);
       const delayMs = Math.max(0, refreshTime - Date.now());
 
-      if (delayMs > 0) {
-        await log('token_refresh_scheduled', {
-          tokenIssuedAt: new Date(tokenIssuedAt).toISOString(),
-          tokenExpiresAt: new Date(tokenExpiresAt).toISOString(),
-          refreshAt: new Date(refreshTime).toISOString(),
-          delayMs,
-        });
+      log('token_refresh_scheduled', {
+        tokenIssuedAt: new Date(tokenIssuedAt).toISOString(),
+        tokenExpiresAt: new Date(tokenExpiresAt).toISOString(),
+        refreshAt: new Date(refreshTime).toISOString(),
+        delayMs,
+      });
 
-        tokenRefreshTimer = setTimeout(() => {
-          void (async () => {
-            // Notify that token is expiring
-            if (options.onTokenExpiring) {
-              options.onTokenExpiring();
+      tokenRefreshTimer = setTimeout(() => {
+        tokenRefreshTimer = null;
+        void (async () => {
+          if (options.onTokenExpiring) {
+            try {
+              await options.onTokenExpiring();
+            } catch (err) {
+              const error = toError(err);
+              notifyError(error);
+              log('token_expiring_handler_error', { error: error.message });
             }
+          }
 
-            await log('token_refresh_triggered', { reason: 'proactive_refresh' });
+          log('token_refresh_triggered', { reason: 'proactive_refresh' });
 
-            // Get close params from callback
-            const closeParams = options.onTokenRefreshNeeded?.();
-            const closeCode = closeParams?.code ?? 4000;
-            const closeReason = closeParams?.reason ?? 'Token refresh required';
+          let closeCode = 4000;
+          let closeReason = 'Token refresh required';
+          try {
+            const closeParams = await options.onTokenRefreshNeeded?.();
+            closeCode = closeParams?.code ?? closeCode;
+            closeReason = closeParams?.reason ?? closeReason;
+          } catch (err) {
+            const error = toError(err);
+            notifyError(error);
+            log('token_refresh_handler_error', { error: error.message });
+          }
 
-            // Close the socket to trigger reconnection from the caller
+          try {
             socket.close(closeCode, closeReason);
-          })();
-        }, delayMs);
-      }
+          } catch (err) {
+            const error = toError(err);
+            notifyError(error);
+            log('token_refresh_close_error', { error: error.message });
+          }
+        })().catch((err: unknown) => {
+          const error = toError(err);
+          notifyError(error);
+          log('token_refresh_error', { error: error.message });
+          try {
+            socket.close(4000, 'Token refresh required');
+          } catch {
+            // The original refresh failure was already reported.
+          }
+        });
+      }, delayMs);
     }
 
     socket.on('open', () => {
-      void (async () => {
-        try {
-          socket.send(JSON.stringify(requestMessage));
-          await log('send', requestMessage);
-        } catch (err) {
-          const error = toError(err);
-          await log('send_error', { message: error.message });
-          notifyError(error);
-          socket.close();
-          return;
-        }
+      try {
+        socket.send(JSON.stringify(requestMessage));
+        log('send', requestMessage);
+      } catch (err) {
+        const error = toError(err);
+        log('send_error', { message: error.message });
+        notifyError(error);
+        socket.close();
+        return;
+      }
 
-        try {
-          handlers.onOpen?.();
-        } catch (err) {
-          const error = toError(err);
+      if (handlers.onOpen) {
+        observeCallback(handlers.onOpen, (error) => {
           notifyError(error);
           socket.close(1011, 'Open handler failed');
-          await log('open_handler_error', { error: error.message });
-        }
-      })();
+          log('open_handler_error', { error: error.message });
+        });
+      }
     });
 
     socket.on('message', (rawData: RawData) => {
@@ -188,57 +245,70 @@ export class WebSocketClient {
       } else {
         dataString = new TextDecoder().decode(rawData);
       }
-      void (async () => {
-        let parsed: unknown;
-        try {
-          parsed = WebSocketErrorUtils.safeJsonParse(dataString, 'WebSocket message');
-        } catch (err) {
-          const error = toError(err);
-          notifyError(error);
-          socket.close(1003, 'Invalid JSON received');
-          await log('parse_error', { raw: dataString, error: error.message });
-          return;
-        }
+      let parsed: unknown;
+      try {
+        parsed = WebSocketErrorUtils.safeJsonParse(dataString, 'WebSocket message');
+      } catch (err) {
+        const error = toError(err);
+        notifyError(error);
+        socket.close(1003, 'Invalid JSON received');
+        log('parse_error', { raw: dataString, error: error.message });
+        return;
+      }
 
-        try {
-          handlers.onMessage(parsed as InboundMessage);
-        } catch (err) {
-          const error = toError(err);
+      let markMessageCallbackComplete: (() => void) | undefined;
+      const messageCallbackComplete = new Promise<void>((resolve) => {
+        markMessageCallbackComplete = resolve;
+      });
+      pendingMessageCallbacks = Promise.all([pendingMessageCallbacks, messageCallbackComplete]).then(() => undefined);
+
+      void runCallback(
+        (): void | Promise<void> => handlers.onMessage(parsed as InboundMessage),
+        (error) => {
           notifyError(error);
           socket.close(1011, 'Message handler failed');
-          await log('message_handler_error', { error: error.message });
-          return;
-        }
-
-        // Servers may close immediately after their final frame. Dispatch it before async logging so close handlers
-        // cannot observe an incomplete stream.
-        await log('message', parsed);
-      })();
+          log('message_handler_error', { error: error.message });
+        },
+        () => log('message', parsed)
+      )
+        .catch((err: unknown) => {
+          reportAuxiliaryFailure('WebSocket message callback failure handling failed', {
+            error: toError(err).message,
+          });
+        })
+        .finally(() => markMessageCallbackComplete?.());
     });
 
     socket.on('error', (err: Error) => {
-      void (async () => {
-        await log('socket_error', { message: err.message });
-        notifyError(err);
-      })();
+      log('socket_error', { message: err.message });
+      notifyError(err);
     });
 
     socket.on('close', (code: number, reason: Buffer) => {
-      void (async () => {
-        // Clear token refresh timer on close
-        if (tokenRefreshTimer) {
-          clearTimeout(tokenRefreshTimer);
-          tokenRefreshTimer = null;
-        }
-        await log('close', { code, reason: reason.toString() });
-        if (handlers.onClose) handlers.onClose(code, reason.toString());
-      })();
+      // Clear token refresh timer on close
+      if (tokenRefreshTimer !== null) {
+        clearTimeout(tokenRefreshTimer);
+        tokenRefreshTimer = null;
+      }
+      const closeReason = reason.toString();
+      log('close', { code, reason: closeReason });
+      const { onClose } = handlers;
+      if (onClose) {
+        void pendingMessageCallbacks.then(() => {
+          observeCallback(
+            (): void | Promise<void> => onClose(code, closeReason),
+            (error) => {
+              reportAuxiliaryFailure('WebSocket onClose handler failed', { error: error.message });
+            }
+          );
+        });
+      }
     });
 
     return {
       close: () => {
         // Clear token refresh timer
-        if (tokenRefreshTimer) {
+        if (tokenRefreshTimer !== null) {
           clearTimeout(tokenRefreshTimer);
           tokenRefreshTimer = null;
         }

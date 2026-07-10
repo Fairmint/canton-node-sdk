@@ -49,6 +49,10 @@ describe('WebSocketClient', () => {
     mockSockets.length = 0;
   });
 
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('dispatches the final message before a close while message logging is pending', async () => {
     const messageLog = deferred();
     const logRequestResponse = jest.fn(async (_url: string, request: { event?: string }): Promise<void> => {
@@ -123,6 +127,44 @@ describe('WebSocketClient', () => {
     }
   });
 
+  it('does not let a never-settling logger block connection or lifecycle callbacks', async () => {
+    const logRequestResponse = jest.fn(async (): Promise<void> => {
+      await new Promise<void>(() => undefined);
+    });
+    const client = {
+      getApiUrl: () => 'https://ledger.example',
+      authenticate: jest.fn().mockResolvedValue('token'),
+      getTokenIssuedAt: () => null,
+      getTokenExpiryTime: () => null,
+      getLogger: () => ({ logRequestResponse }),
+    } as unknown as BaseClient;
+    const onOpen = jest.fn();
+    const onMessage = jest.fn();
+    const onClose = jest.fn();
+    let subscription: Awaited<ReturnType<WebSocketClient['connect']>> | undefined;
+
+    void new WebSocketClient(client)
+      .connect('/v2/state/active-contracts', { activeAtOffset: 42 }, { onOpen, onMessage, onClose })
+      .then((result) => {
+        subscription = result;
+      });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(subscription).toBeDefined();
+    const socket = mockSockets[0];
+    if (!socket) throw new Error('Expected WebSocketClient to construct one socket.');
+
+    socket.emit('open');
+    socket.emit('message', Buffer.from(JSON.stringify({ contractEntry: { JsActiveContract: {} } })));
+    socket.emit('close', 1000, Buffer.from('snapshot complete'));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(onMessage).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(socket.close).not.toHaveBeenCalled();
+  });
+
   it('reports an open handler failure without labeling it a send failure', async () => {
     const logRequestResponse = jest.fn().mockResolvedValue(undefined);
     const client = {
@@ -133,7 +175,8 @@ describe('WebSocketClient', () => {
       getLogger: () => ({ logRequestResponse }),
     } as unknown as BaseClient;
     const handlerError = new Error('open callback failed');
-    const onOpen = jest.fn(() => {
+    const onOpen = jest.fn(async (): Promise<void> => {
+      await Promise.resolve();
       throw handlerError;
     });
     const onError = jest.fn();
@@ -174,7 +217,8 @@ describe('WebSocketClient', () => {
       getTokenExpiryTime: () => null,
       getLogger: () => ({ logRequestResponse, error: loggerError }),
     } as unknown as BaseClient;
-    const onError = jest.fn(() => {
+    const onError = jest.fn(async (): Promise<void> => {
+      await Promise.resolve();
       throw new Error('error callback failed');
     });
 
@@ -213,22 +257,26 @@ describe('WebSocketClient', () => {
       getLogger: () => ({ logRequestResponse, error: loggerError }),
     } as unknown as BaseClient;
     const handlerError = new Error('consumer failed');
-    const onMessage = jest.fn(() => {
+    const onMessage = jest.fn(async (): Promise<void> => {
+      await Promise.resolve();
       throw handlerError;
     });
-    const onError = jest.fn(() => {
+    const onError = jest.fn(async (): Promise<void> => {
+      await Promise.resolve();
       throw new Error('error callback failed');
     });
+    const onClose = jest.fn();
 
     await new WebSocketClient(client).connect(
       '/v2/state/active-contracts',
       { activeAtOffset: 42 },
-      { onMessage, onError }
+      { onMessage, onError, onClose }
     );
     const socket = mockSockets[0];
     if (!socket) throw new Error('Expected WebSocketClient to construct one socket.');
 
     socket.emit('message', Buffer.from(JSON.stringify({ contractEntry: { JsActiveContract: {} } })));
+    socket.emit('close', 1000, Buffer.from('server closed'));
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(onError).toHaveBeenCalledWith(handlerError);
@@ -246,6 +294,93 @@ describe('WebSocketClient', () => {
     expect(loggerError).toHaveBeenCalledWith('WebSocket onError handler failed', {
       error: 'error callback failed',
       originalError: 'consumer failed',
+    });
+    expect(onClose).toHaveBeenCalledWith(1000, 'server closed');
+    expect(onError.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0] ?? 0);
+  });
+
+  it('still closes for token refresh when async refresh callbacks reject', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-07-10T04:00:00.000Z'));
+    const now = Date.now();
+    const logRequestResponse = jest.fn().mockResolvedValue(undefined);
+    const client = {
+      getApiUrl: () => 'https://ledger.example',
+      authenticate: jest.fn().mockResolvedValue('token'),
+      getTokenIssuedAt: () => now - 120_000,
+      getTokenExpiryTime: () => now - 60_000,
+      getLogger: () => ({ logRequestResponse }),
+    } as unknown as BaseClient;
+    const expiringError = new Error('expiring callback failed');
+    const refreshError = new Error('refresh callback failed');
+    const onTokenExpiring = jest.fn(async (): Promise<void> => {
+      await Promise.resolve();
+      throw expiringError;
+    });
+    const onTokenRefreshNeeded = jest.fn(async (): Promise<void> => {
+      await Promise.resolve();
+      throw refreshError;
+    });
+    const onError = jest.fn();
+
+    await new WebSocketClient(client).connect(
+      '/v2/state/active-contracts',
+      { activeAtOffset: 42 },
+      { onMessage: jest.fn(), onError },
+      { onTokenExpiring, onTokenRefreshNeeded }
+    );
+    const socket = mockSockets[0];
+    if (!socket) throw new Error('Expected WebSocketClient to construct one socket.');
+
+    await jest.runOnlyPendingTimersAsync();
+
+    expect(onTokenExpiring).toHaveBeenCalledTimes(1);
+    expect(onTokenRefreshNeeded).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenNthCalledWith(1, expiringError);
+    expect(onError).toHaveBeenNthCalledWith(2, refreshError);
+    expect(socket.close).toHaveBeenCalledWith(4000, 'Token refresh required');
+    expect(logRequestResponse).toHaveBeenCalledWith(
+      'wss://ledger.example/v2/state/active-contracts',
+      expect.objectContaining({ event: 'token_expiring_handler_error' }),
+      { error: 'expiring callback failed' }
+    );
+    expect(logRequestResponse).toHaveBeenCalledWith(
+      'wss://ledger.example/v2/state/active-contracts',
+      expect.objectContaining({ event: 'token_refresh_handler_error' }),
+      { error: 'refresh callback failed' }
+    );
+  });
+
+  it('isolates a rejected close callback after delivering the close event', async () => {
+    const loggerError = jest.fn();
+    const logRequestResponse = jest.fn().mockResolvedValue(undefined);
+    const client = {
+      getApiUrl: () => 'https://ledger.example',
+      authenticate: jest.fn().mockResolvedValue('token'),
+      getTokenIssuedAt: () => null,
+      getTokenExpiryTime: () => null,
+      getLogger: () => ({ logRequestResponse, error: loggerError }),
+    } as unknown as BaseClient;
+    const closeError = new Error('close callback failed');
+    const onClose = jest.fn(async (): Promise<void> => {
+      await Promise.resolve();
+      throw closeError;
+    });
+
+    await new WebSocketClient(client).connect(
+      '/v2/state/active-contracts',
+      { activeAtOffset: 42 },
+      { onMessage: jest.fn(), onClose }
+    );
+    const socket = mockSockets[0];
+    if (!socket) throw new Error('Expected WebSocketClient to construct one socket.');
+
+    socket.emit('close', 1000, Buffer.from('snapshot complete'));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(onClose).toHaveBeenCalledWith(1000, 'snapshot complete');
+    expect(loggerError).toHaveBeenCalledWith('WebSocket onClose handler failed', {
+      error: closeError.message,
     });
   });
 });
