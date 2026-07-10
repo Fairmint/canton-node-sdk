@@ -159,12 +159,21 @@ export class WebSocketClient {
         try {
           socket.send(JSON.stringify(requestMessage));
           await log('send', requestMessage);
-          if (handlers.onOpen) handlers.onOpen();
         } catch (err) {
           const error = toError(err);
           await log('send_error', { message: error.message });
           notifyError(error);
           socket.close();
+          return;
+        }
+
+        try {
+          handlers.onOpen?.();
+        } catch (err) {
+          const error = toError(err);
+          notifyError(error);
+          socket.close(1011, 'Open handler failed');
+          await log('open_handler_error', { error: error.message });
         }
       })();
     });

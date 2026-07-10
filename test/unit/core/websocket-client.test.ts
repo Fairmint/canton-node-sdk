@@ -123,6 +123,47 @@ describe('WebSocketClient', () => {
     }
   });
 
+  it('reports an open handler failure without labeling it a send failure', async () => {
+    const logRequestResponse = jest.fn().mockResolvedValue(undefined);
+    const client = {
+      getApiUrl: () => 'https://ledger.example',
+      authenticate: jest.fn().mockResolvedValue('token'),
+      getTokenIssuedAt: () => null,
+      getTokenExpiryTime: () => null,
+      getLogger: () => ({ logRequestResponse }),
+    } as unknown as BaseClient;
+    const handlerError = new Error('open callback failed');
+    const onOpen = jest.fn(() => {
+      throw handlerError;
+    });
+    const onError = jest.fn();
+
+    await new WebSocketClient(client).connect(
+      '/v2/state/active-contracts',
+      { activeAtOffset: 42 },
+      { onOpen, onMessage: jest.fn(), onError }
+    );
+    const socket = mockSockets[0];
+    if (!socket) throw new Error('Expected WebSocketClient to construct one socket.');
+
+    socket.emit('open');
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(socket.send).toHaveBeenCalledWith(JSON.stringify({ activeAtOffset: 42 }));
+    expect(onError).toHaveBeenCalledWith(handlerError);
+    expect(socket.close).toHaveBeenCalledWith(1011, 'Open handler failed');
+    expect(logRequestResponse).toHaveBeenCalledWith(
+      'wss://ledger.example/v2/state/active-contracts',
+      expect.objectContaining({ event: 'open_handler_error' }),
+      { error: 'open callback failed' }
+    );
+    expect(logRequestResponse).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ event: 'send_error' }),
+      expect.anything()
+    );
+  });
+
   it('closes after invalid JSON even when the error handler throws', async () => {
     const logRequestResponse = jest.fn().mockResolvedValue(undefined);
     const loggerError = jest.fn();
