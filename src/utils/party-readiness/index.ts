@@ -332,13 +332,18 @@ export async function waitForPartyCanSubmit(options: WaitForPartyCanSubmitOption
     if (delayMs > 0) await delayWithAbortSignal(delayMs, options.signal, createAbortError);
     try {
       if (
-        await runWithAbortSignal(options.signal, createAbortError, async () =>
-          partyCanSubmitOnSynchronizer({
-            ledgerClient: options.ledgerClient,
-            party,
-            synchronizerId,
-            ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
-          })
+        await runWithAbortSignal(
+          options.signal,
+          createAbortError,
+          // Preserve the readiness promise's exact settlement order relative to abort.
+          // eslint-disable-next-line @typescript-eslint/promise-function-async
+          () =>
+            partyCanSubmitOnSynchronizer({
+              ledgerClient: options.ledgerClient,
+              party,
+              synchronizerId,
+              ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
+            })
         )
       ) {
         return true;
@@ -347,14 +352,21 @@ export async function waitForPartyCanSubmit(options: WaitForPartyCanSubmitOption
       if (options.signal?.aborted) throw createAbortError();
       const { onCheckError } = options;
       if (onCheckError) {
-        await runWithAbortSignal(options.signal, createAbortError, async () => {
-          await onCheckError(error, {
-            party,
-            synchronizerId,
-            delayMs,
-            attempt,
-          });
-        });
+        await runWithAbortSignal(
+          options.signal,
+          createAbortError,
+          // Preserve an async callback's exact settlement order relative to abort.
+          // eslint-disable-next-line @typescript-eslint/promise-function-async
+          () =>
+            Promise.resolve(
+              onCheckError(error, {
+                party,
+                synchronizerId,
+                delayMs,
+                attempt,
+              })
+            )
+        );
       }
     }
   }

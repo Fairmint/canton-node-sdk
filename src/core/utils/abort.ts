@@ -6,10 +6,17 @@ export async function runWithAbortSignal<T>(
   if (!signal) return operation();
 
   return new Promise<T>((resolve, reject) => {
+    let settled = false;
     const cleanup = (): void => signal.removeEventListener('abort', onAbort);
-    const onAbort = (): void => {
+    const finish = (callback: () => void): void => {
+      if (settled) return;
+      settled = true;
       cleanup();
-      reject(createAbortError());
+      callback();
+    };
+    const onAbort = (): void => {
+      // Preserve event order when the operation fulfilled before a synchronous abort but its handler has not run yet.
+      queueMicrotask(() => finish(() => reject(createAbortError())));
     };
 
     signal.addEventListener('abort', onAbort, { once: true });
@@ -22,20 +29,13 @@ export async function runWithAbortSignal<T>(
     try {
       pending = operation();
     } catch (error) {
-      cleanup();
-      reject(error);
+      finish(() => reject(error));
       return;
     }
 
     pending.then(
-      (value) => {
-        cleanup();
-        resolve(value);
-      },
-      (error: unknown) => {
-        cleanup();
-        reject(error);
-      }
+      (value) => finish(() => resolve(value)),
+      (error: unknown) => finish(() => reject(error))
     );
   });
 }

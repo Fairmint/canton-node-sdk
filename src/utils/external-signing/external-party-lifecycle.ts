@@ -113,11 +113,16 @@ export async function reconcileExternalPartyOnboarding(
   let partyDetails: Record<string, unknown>;
   const createPartyDetailsAbortError = (): ValidationError => reconciliationAborted(options, 'party-details');
   try {
-    const raw = await runWithAbortSignal(options.signal, createPartyDetailsAbortError, async () =>
-      options.ledgerClient.getPartyDetails({
-        party: options.partyId,
-        identityProviderId: options.identityProviderId ?? DEFAULT_CANTON_IDENTITY_PROVIDER_ID,
-      })
+    const raw = await runWithAbortSignal(
+      options.signal,
+      createPartyDetailsAbortError,
+      // Preserve the ledger promise's exact settlement order relative to abort.
+      // eslint-disable-next-line @typescript-eslint/promise-function-async
+      () =>
+        options.ledgerClient.getPartyDetails({
+          party: options.partyId,
+          identityProviderId: options.identityProviderId ?? DEFAULT_CANTON_IDENTITY_PROVIDER_ID,
+        })
     );
     const matched = readMatchingExternalPartyDetails(raw, options.partyId);
     if (!matched) {
@@ -157,13 +162,18 @@ export async function reconcileExternalPartyOnboarding(
 
   const createReadinessAbortError = (): ValidationError => reconciliationAborted(options, 'readiness');
   try {
-    const readiness = await runWithAbortSignal(options.signal, createReadinessAbortError, async () =>
-      checkPartySynchronizerReadiness({
-        ledgerClient: options.ledgerClient,
-        party: options.partyId,
-        synchronizerId: options.synchronizerId,
-        ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
-      })
+    const readiness = await runWithAbortSignal(
+      options.signal,
+      createReadinessAbortError,
+      // Preserve the readiness promise's exact settlement order relative to abort.
+      // eslint-disable-next-line @typescript-eslint/promise-function-async
+      () =>
+        checkPartySynchronizerReadiness({
+          ledgerClient: options.ledgerClient,
+          party: options.partyId,
+          synchronizerId: options.synchronizerId,
+          ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
+        })
     );
     if (readiness.ready) {
       return {
