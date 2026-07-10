@@ -25,10 +25,11 @@ export type TokenStandardV2AllocationErrorCode =
   (typeof TokenStandardV2AllocationErrorCode)[keyof typeof TokenStandardV2AllocationErrorCode];
 
 export class TokenStandardV2AllocationError extends CantonError {
-  public override readonly name = 'TokenStandardV2AllocationError';
+  public override readonly name: string;
 
   public constructor(code: TokenStandardV2AllocationErrorCode, message: string, context?: ErrorContext) {
     super(message, code, context);
+    this.name = 'TokenStandardV2AllocationError';
   }
 }
 
@@ -179,7 +180,7 @@ export interface SubmitPreparedTokenStandardV2AllocationResult {
 function requireNonEmpty(value: unknown, fieldName: string): string {
   if (typeof value !== 'string') {
     throw new TokenStandardV2AllocationError(
-      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
       `${fieldName} must be a string.`,
       { field: fieldName }
     );
@@ -187,7 +188,7 @@ function requireNonEmpty(value: unknown, fieldName: string): string {
   const normalized = value.trim();
   if (normalized.length === 0) {
     throw new TokenStandardV2AllocationError(
-      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
       `${fieldName} must be non-empty.`,
       { field: fieldName }
     );
@@ -215,14 +216,14 @@ function readNonEmptyString(value: unknown): string | undefined {
 function normalizeStrings(values: readonly string[], fieldName: string, allowEmpty = false): string[] {
   if (!Array.isArray(values)) {
     throw new TokenStandardV2AllocationError(
-      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
       `${fieldName} must be an array.`,
       { field: fieldName }
     );
   }
   if (!allowEmpty && values.length === 0) {
     throw new TokenStandardV2AllocationError(
-      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
       `${fieldName} must contain at least one value.`,
       { field: fieldName }
     );
@@ -233,7 +234,7 @@ function normalizeStrings(values: readonly string[], fieldName: string, allowEmp
 function copyStringRecord(value: unknown, fieldName: string): Readonly<Record<string, string>> {
   if (!isRecord(value)) {
     throw new TokenStandardV2AllocationError(
-      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
       `${fieldName} must be a string map.`,
       { field: fieldName }
     );
@@ -242,7 +243,7 @@ function copyStringRecord(value: unknown, fieldName: string): Readonly<Record<st
   for (const [key, entry] of Object.entries(value)) {
     if (typeof entry !== 'string') {
       throw new TokenStandardV2AllocationError(
-        'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+        TokenStandardV2AllocationErrorCode.INPUT_INVALID,
         `${fieldName}.${key} must be a string.`,
         { field: `${fieldName}.${key}` }
       );
@@ -260,7 +261,7 @@ function copyStringRecord(value: unknown, fieldName: string): Readonly<Record<st
 function normalizeMetadata(value: unknown, fieldName: string): TokenStandardV2Metadata {
   if (!isRecord(value)) {
     throw new TokenStandardV2AllocationError(
-      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
       `${fieldName} must be Token Standard metadata.`,
       { field: fieldName }
     );
@@ -293,7 +294,7 @@ function normalizeChoiceContext(
 function normalizeAccount(value: unknown, fieldName: string): TokenStandardV2Account {
   if (!isRecord(value)) {
     throw new TokenStandardV2AllocationError(
-      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
       `${fieldName} must be a Token Standard V2 account.`,
       { field: fieldName }
     );
@@ -301,21 +302,21 @@ function normalizeAccount(value: unknown, fieldName: string): TokenStandardV2Acc
   const { id, owner, provider } = value;
   if (typeof id !== 'string') {
     throw new TokenStandardV2AllocationError(
-      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
       `${fieldName} must be a Token Standard V2 account.`,
       { field: fieldName }
     );
   }
   if (owner !== null && typeof owner !== 'string') {
     throw new TokenStandardV2AllocationError(
-      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
       `${fieldName}.owner must be a party or null.`,
       { field: `${fieldName}.owner` }
     );
   }
   if (provider !== null && typeof provider !== 'string') {
     throw new TokenStandardV2AllocationError(
-      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
       `${fieldName}.provider must be a party or null.`,
       { field: `${fieldName}.provider` }
     );
@@ -333,7 +334,7 @@ function parseDecimalText(value: unknown, fieldName: string): { readonly text: s
   const match = /^([+-]?)(\d{1,28})(?:\.(\d{1,10}))?$/.exec(text);
   if (!match) {
     throw new TokenStandardV2AllocationError(
-      'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
       `${fieldName} must be a valid Daml Decimal string.`,
       { field: fieldName }
     );
@@ -538,7 +539,7 @@ function parseDisclosedContract(value: unknown): DisclosedContract {
   const synchronizerId = readNonEmptyString(record?.['synchronizerId']);
   if (!templateId || !contractId || !createdEventBlob || !synchronizerId) {
     throw new TokenStandardV2AllocationError(
-      'TOKEN_STANDARD_V2_ALLOCATION_FACTORY_RESPONSE_INVALID',
+      TokenStandardV2AllocationErrorCode.FACTORY_RESPONSE_INVALID,
       'Token Standard V2 allocation registry returned an invalid disclosed contract.',
       { value }
     );
@@ -563,7 +564,7 @@ function parseAllocationFactoryResponse(value: unknown): {
   const factoryId = readNonEmptyString(response?.['factoryId']);
   if (!factoryId || !Array.isArray(disclosedContracts)) {
     throw new TokenStandardV2AllocationError(
-      'TOKEN_STANDARD_V2_ALLOCATION_FACTORY_RESPONSE_INVALID',
+      TokenStandardV2AllocationErrorCode.FACTORY_RESPONSE_INVALID,
       'Token Standard V2 allocation registry returned an invalid factory choice context.',
       { value }
     );
@@ -679,7 +680,7 @@ export function parseTokenStandardV2AllocationInstructionResult(
   const parsed = tryParseTokenStandardV2AllocationInstructionResult(value);
   if (!parsed) {
     throw new TokenStandardV2AllocationError(
-      'TOKEN_STANDARD_V2_ALLOCATION_RESULT_INVALID',
+      TokenStandardV2AllocationErrorCode.RESULT_INVALID,
       'Token Standard V2 AllocationInstructionResult is malformed.',
       { value }
     );
@@ -735,7 +736,7 @@ export async function submitPreparedTokenStandardV2Allocation(
   const result = findTokenStandardV2AllocationInstructionResult(response, params.prepared.allocationFactoryContractId);
   if (!result) {
     throw new TokenStandardV2AllocationError(
-      'TOKEN_STANDARD_V2_ALLOCATION_RESULT_NOT_FOUND',
+      TokenStandardV2AllocationErrorCode.RESULT_NOT_FOUND,
       `${TOKEN_STANDARD_V2_ALLOCATION_FACTORY_ALLOCATE_CHOICE} result was not found in the transaction tree.`,
       { updateId: readTransactionTreeUpdateId(response) }
     );
@@ -743,7 +744,7 @@ export async function submitPreparedTokenStandardV2Allocation(
   const updateId = readTransactionTreeUpdateId(response);
   if (!updateId) {
     throw new TokenStandardV2AllocationError(
-      'TOKEN_STANDARD_V2_ALLOCATION_RESULT_INVALID',
+      TokenStandardV2AllocationErrorCode.RESULT_INVALID,
       'Token Standard V2 allocation submission response did not include transactionTree.updateId.',
       { response }
     );
