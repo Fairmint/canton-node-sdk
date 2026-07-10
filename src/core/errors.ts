@@ -176,9 +176,14 @@ export function isDefiniteCantonMutationRejection(error: unknown): boolean {
 
 /** Read Canton's structured mutation-outcome signal when the API supplies one. */
 export function readCantonDefiniteAnswer(error: unknown): boolean | undefined {
-  const context = normalizeCantonError(error)?.context;
-  if (!isObjectRecord(context)) return undefined;
-  const value = context['definiteAnswer'] ?? context['definite_answer'];
+  const direct = readDefiniteAnswerProperty(error);
+  if (direct !== undefined) return direct;
+  return readDefiniteAnswerProperty(normalizeCantonError(error)?.context);
+}
+
+function readDefiniteAnswerProperty(source: unknown): boolean | undefined {
+  if (!isObjectRecord(source)) return undefined;
+  const value = source['definiteAnswer'] ?? source['definite_answer'];
   return typeof value === 'boolean' ? value : undefined;
 }
 

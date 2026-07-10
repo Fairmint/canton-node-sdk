@@ -254,6 +254,26 @@ describe('external-party allocation failure classification', (): void => {
       definite: false,
       shouldReconcile: true,
     });
+
+    const rawDefiniteServerError = Object.assign(new Error('committed rejection'), {
+      status: 503,
+      definiteAnswer: true,
+    });
+    expect(classifyExternalPartyAllocationFailure(rawDefiniteServerError)).toMatchObject({
+      kind: 'definite-rejection',
+      definite: true,
+      shouldReconcile: false,
+    });
+
+    const rawUncertainClientError = Object.assign(new Error('uncertain rejection'), {
+      status: 400,
+      definiteAnswer: false,
+    });
+    expect(classifyExternalPartyAllocationFailure(rawUncertainClientError)).toMatchObject({
+      kind: 'ambiguous',
+      definite: false,
+      shouldReconcile: true,
+    });
   });
 
   it('preserves diagnostics from non-Error thrown objects with a serialization fallback', (): void => {
