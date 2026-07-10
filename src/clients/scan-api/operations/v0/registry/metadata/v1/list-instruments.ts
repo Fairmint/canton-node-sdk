@@ -15,7 +15,7 @@ type ListInstrumentsParamsSchemaShape = {
 };
 
 const RawListInstrumentsParamsSchema = z.strictObject({
-  pageSize: z.number().int().min(-2_147_483_648).max(2_147_483_647).optional(),
+  pageSize: z.number().int().min(0).max(2_147_483_647).optional(),
   pageToken: z.string().optional(),
 } satisfies ListInstrumentsParamsSchemaShape);
 

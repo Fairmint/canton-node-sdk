@@ -237,7 +237,7 @@ describe('ScanApiClient', () => {
     );
   });
 
-  it('rejects non-integer instrument page sizes before making a request', async () => {
+  it('rejects non-integer and negative instrument page sizes before making a request', async () => {
     const { client, mockAxiosInstance } = createClient(
       { network: 'mainnet' },
       {
@@ -246,6 +246,7 @@ describe('ScanApiClient', () => {
     );
 
     await expect(client.listInstruments({ pageSize: 1.5 })).rejects.toThrow('Parameter validation failed');
+    await expect(client.listInstruments({ pageSize: -1 })).rejects.toThrow('Parameter validation failed');
     expect(mockAxiosInstance.get).not.toHaveBeenCalled();
   });
 
