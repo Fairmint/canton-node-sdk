@@ -85,8 +85,12 @@ quickstart_repo() {
 
 default_splice_version() {
   if [[ -f "${PACKAGE_ROOT}/libs/splice/VERSION" ]]; then
-    tr -d '[:space:]' < "${PACKAGE_ROOT}/libs/splice/VERSION"
-    return
+    local version=""
+    version="$(tr -d '[:space:]' < "${PACKAGE_ROOT}/libs/splice/VERSION")"
+    if [[ -n "${version}" ]]; then
+      printf '%s' "${version}"
+      return
+    fi
   fi
 
   printf '%s' "${DEFAULT_SPLICE_VERSION}"

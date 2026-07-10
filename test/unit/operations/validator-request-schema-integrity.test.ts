@@ -95,7 +95,7 @@ describe('validator request schema integrity', () => {
     );
   });
 
-  it('posts the exact generated wallet tap request and returns its contract id', async () => {
+  it('posts the exact generated wallet tap request and returns its contract id', async (): Promise<void> => {
     const request = {
       amount: '10.5',
       command_id: 'tap-command-123',
@@ -113,7 +113,7 @@ describe('validator request schema integrity', () => {
     });
   });
 
-  it('keeps the tap command id optional while rejecting invalid request shapes', () => {
+  it('keeps the tap command id optional while rejecting invalid request shapes', (): void => {
     expect(TapParamsSchema.parse({ amount: '1', command_id: undefined })).toEqual({ amount: '1' });
     for (const amount of ['', ' ', '1e3', '12345678901234567890123456789', '0.12345678901', '.5', '1.']) {
       expect(() => TapParamsSchema.parse({ amount })).toThrow();
@@ -122,7 +122,7 @@ describe('validator request schema integrity', () => {
     expect(() => TapParamsSchema.parse({ amount: '1', commandId: 'typo' })).toThrow();
   });
 
-  it('generates a client-side UUID command id before posting when the caller omits it', async () => {
+  it('generates a client-side UUID command id before posting when the caller omits it', async (): Promise<void> => {
     const response = { contract_id: 'tap-contract-456' } satisfies TapResponse;
     const makePostRequest = jest.fn().mockResolvedValue(response);
 

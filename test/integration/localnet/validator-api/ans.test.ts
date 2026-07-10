@@ -28,10 +28,10 @@ async function getDsoAnsEntry(client: ReturnType<typeof getClient>): Promise<Sca
   return response.entry;
 }
 
-describe('ValidatorApiClient / ANS', () => {
+describe('ValidatorApiClient / ANS', (): void => {
   beforeAll(ensureValidatorUserOnboarded, VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS);
 
-  test('listOwnedAnsEntries returns ANS entries owned by the validator user', async () => {
+  test('listOwnedAnsEntries returns ANS entries owned by the validator user', async (): Promise<void> => {
     const client = getClient();
     const response = await client.listOwnedAnsEntries();
 
@@ -39,7 +39,7 @@ describe('ValidatorApiClient / ANS', () => {
     expect(Array.isArray(response.entries)).toBe(true);
   });
 
-  test('listAnsEntries returns scan-wide entries in the generated wire format', async () => {
+  test('listAnsEntries returns scan-wide entries in the generated wire format', async (): Promise<void> => {
     const client = getClient();
     const dsoEntry = await getDsoAnsEntry(client);
     const response = await client.listAnsEntries({ name_prefix: dsoEntry.name, page_size: 20 });
@@ -49,13 +49,13 @@ describe('ValidatorApiClient / ANS', () => {
     expect(response.entries.length).toBeLessThanOrEqual(20);
     response.entries.forEach(expectScanProxyAnsEntry);
 
-    const listedDsoEntry = response.entries.find((entry) => entry.name === dsoEntry.name);
+    const listedDsoEntry = response.entries.find((entry): boolean => entry.name === dsoEntry.name);
     expect(listedDsoEntry).toEqual(dsoEntry);
     expect(listedDsoEntry?.contract_id).toBeNull();
     expect(listedDsoEntry?.expires_at).toBeNull();
   });
 
-  test('lookupAnsEntryByName and lookupAnsEntryByParty preserve nullable DSO fields', async () => {
+  test('lookupAnsEntryByName and lookupAnsEntryByParty preserve nullable DSO fields', async (): Promise<void> => {
     const client = getClient();
     const dsoEntry = await getDsoAnsEntry(client);
     const byName = await client.lookupAnsEntryByName({ name: dsoEntry.name });

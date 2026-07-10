@@ -28,6 +28,6 @@ export const LookupTransferCommandCounterByParty = createApiOperation<
 >({
   paramsSchema: LookupTransferCommandCounterByPartyParamsSchema,
   method: 'GET',
-  buildUrl: (params, apiUrl: string) =>
+  buildUrl: (params, apiUrl: string): string =>
     `${apiUrl}/api/validator/v0/scan-proxy/transfer-command-counter/${encodeURIComponent(params.party)}`,
 });

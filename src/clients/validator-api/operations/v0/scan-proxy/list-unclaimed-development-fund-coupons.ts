@@ -12,5 +12,6 @@ export const ListUnclaimedDevelopmentFundCoupons = createApiOperation<
 >({
   paramsSchema: z.void(),
   method: 'GET',
-  buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/scan-proxy/unclaimed-development-fund-coupons`,
+  buildUrl: (_params, apiUrl: string): string =>
+    `${apiUrl}/api/validator/v0/scan-proxy/unclaimed-development-fund-coupons`,
 });

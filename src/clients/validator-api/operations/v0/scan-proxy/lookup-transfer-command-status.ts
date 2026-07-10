@@ -30,7 +30,7 @@ export const LookupTransferCommandStatus = createApiOperation<
 >({
   paramsSchema: LookupTransferCommandStatusParamsSchema,
   method: 'GET',
-  buildUrl: (params, apiUrl: string) => {
+  buildUrl: (params, apiUrl: string): string => {
     const query = new URLSearchParams({
       sender: params.sender,
       nonce: String(params.nonce),

@@ -12,8 +12,8 @@ function runSourcedLocalnetScript(body: string, args: readonly string[] = []): s
   });
 }
 
-describe('localnet-cloud configuration lifecycle', () => {
-  it('persists a pending forced-snapshot restart across setup and start processes', () => {
+describe('localnet-cloud configuration lifecycle', (): void => {
+  it('persists a pending forced-snapshot restart across setup and start processes', (): void => {
     const quickstart = mkdtempSync(resolve(tmpdir(), 'canton-localnet-config-'));
     const localnet = resolve(quickstart, 'docker/modules/localnet');
     const cantonConfig = resolve(localnet, 'conf/canton/app.conf');
@@ -67,7 +67,7 @@ describe('localnet-cloud configuration lifecycle', () => {
     }
   });
 
-  it('recreates a previously running Splice service after infra-only startup and before readiness', () => {
+  it('recreates a previously running Splice service after infra-only startup and before readiness', (): void => {
     const output = runSourcedLocalnetScript(`
 quickstart_force_full_start() { return 1; }
 quickstart_infra_only_enabled() { return 0; }
@@ -88,7 +88,7 @@ start_localnet
     ]);
   });
 
-  it('recreates a previously running Splice service after fast startup and before readiness', () => {
+  it('recreates a previously running Splice service after fast startup and before readiness', (): void => {
     const output = runSourcedLocalnetScript(`
 quickstart_force_full_start() { return 1; }
 quickstart_infra_only_enabled() { return 1; }
@@ -111,7 +111,7 @@ start_localnet
     ]);
   });
 
-  it('does not recreate Splice for a fresh stack or unchanged configuration', () => {
+  it('does not recreate Splice for a fresh stack or unchanged configuration', (): void => {
     const output = runSourcedLocalnetScript(`
 quickstart_force_full_start() { return 1; }
 quickstart_infra_only_enabled() { return 0; }

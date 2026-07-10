@@ -8,5 +8,5 @@ export type GetDsoInfoResponse = operations['getDsoInfo']['responses']['200']['c
 export const GetDsoInfo = createApiOperation<void, GetDsoInfoResponse>({
   paramsSchema: z.void(),
   method: 'GET',
-  buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/scan-proxy/dso`,
+  buildUrl: (_params, apiUrl: string): string => `${apiUrl}/api/validator/v0/scan-proxy/dso`,
 });

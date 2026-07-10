@@ -14,6 +14,43 @@ import { ensureValidatorUserOnboarded, getClient, VALIDATOR_ONBOARDING_HOOK_TIME
 type Contract = components['schemas']['Contract'];
 type ContractWithState = components['schemas']['ContractWithState'];
 type TransferCommandStatusResponse = components['schemas']['LookupTransferCommandStatusResponse'];
+type ForcedAcsSnapshotResponse = Awaited<ReturnType<ReturnType<typeof getScanClient>['forceAcsSnapshotNow']>>;
+type HoldingsSummaryResponse = Awaited<ReturnType<ReturnType<typeof getClient>['getHoldingsSummaryAtV1']>>;
+interface HoldingsSnapshotResult {
+  snapshot: ForcedAcsSnapshotResponse;
+  response: HoldingsSummaryResponse;
+  summary: HoldingsSummaryResponse['summaries'][number];
+}
+interface SnapshotBoundarySelection {
+  boundaryTime: string;
+  selectedRecordTime: string;
+}
+interface StableHoldingsSelection {
+  atOrBeforeResponse: HoldingsSummaryResponse;
+  boundaryTime: string;
+  exactResponse: HoldingsSummaryResponse;
+  selectedRecordTime: string;
+}
+
+async function findNonSnapshotBoundary(
+  scanClient: ReturnType<typeof getScanClient>,
+  migrationId: number,
+  snapshotTimeMs: number
+): Promise<SnapshotBoundarySelection> {
+  for (let offsetMs = 1; offsetMs <= 10; offsetMs += 1) {
+    const boundaryTime = new Date(snapshotTimeMs + offsetMs).toISOString();
+    const selectedSnapshot = await scanClient.getDateOfMostRecentSnapshotBefore({
+      before: boundaryTime,
+      migrationId,
+    });
+
+    if (Date.parse(selectedSnapshot.record_time) !== Date.parse(boundaryTime)) {
+      return { boundaryTime, selectedRecordTime: selectedSnapshot.record_time };
+    }
+  }
+
+  throw new Error('Could not find a non-snapshot boundary after the forced snapshot');
+}
 
 function expectContract(contract: Contract): void {
   expect(contract.template_id).toEqual(expect.any(String));
@@ -82,7 +119,7 @@ describe('ValidatorApiClient / ScanProxy', () => {
     expect(typeof dsoResponse.dso_party_id).toBe('string');
   });
 
-  test('getDsoInfo returns the full current scan-proxy envelope', async () => {
+  test('getDsoInfo returns the full current scan-proxy envelope', async (): Promise<void> => {
     const client = getClient();
 
     const [response, dsoParty] = await Promise.all([client.getDsoInfo(), client.getDsoPartyId()]);
@@ -103,7 +140,7 @@ describe('ValidatorApiClient / ScanProxy', () => {
     }
   });
 
-  test('getHoldingsSummaryAtV1 returns the exact typed snapshot selected by Scan', async () => {
+  test('getHoldingsSummaryAtV1 returns the exact typed snapshot selected by Scan', async (): Promise<void> => {
     const client = getClient();
     const scanClient = getScanClient();
     const userStatus = await client.getUserStatus();
@@ -118,14 +155,14 @@ describe('ValidatorApiClient / ScanProxy', () => {
     expect(tapResponse.contract_id).not.toHaveLength(0);
 
     const { snapshot, response, summary } = await retry(
-      async () => {
+      async (): Promise<HoldingsSnapshotResult> => {
         const forcedSnapshot = await scanClient.forceAcsSnapshotNow();
         const exactResponse = await client.getHoldingsSummaryAtV1({
           migration_id: forcedSnapshot.migration_id,
           record_time: forcedSnapshot.record_time,
           owner_party_ids: ownerPartyIds,
         });
-        const partySummary = exactResponse.summaries.find((entry) => entry.party_id === userStatus.party_id);
+        const partySummary = exactResponse.summaries.find((entry): boolean => entry.party_id === userStatus.party_id);
         if (partySummary === undefined) {
           throw new Error(`Forced snapshot ${forcedSnapshot.record_time} does not yet contain the tapped holding`);
         }
@@ -157,18 +194,59 @@ describe('ValidatorApiClient / ScanProxy', () => {
 
     const snapshotTime = Date.parse(snapshot.record_time);
     expect(Number.isNaN(snapshotTime)).toBe(false);
-    const afterSnapshot = new Date(snapshotTime + 1).toISOString();
-    const atOrBeforeResponse = await client.getHoldingsSummaryAtV1({
-      migration_id: snapshot.migration_id,
-      record_time: afterSnapshot,
-      record_time_match: 'at_or_before',
-      owner_party_ids: ownerPartyIds,
-    });
+    const { atOrBeforeResponse, boundaryTime, exactResponse, selectedRecordTime } = await retry(
+      async (): Promise<StableHoldingsSelection> => {
+        const selectionBefore = await findNonSnapshotBoundary(scanClient, snapshot.migration_id, snapshotTime);
+        const selectedExactResponse =
+          selectionBefore.selectedRecordTime === response.record_time
+            ? response
+            : await client.getHoldingsSummaryAtV1({
+                migration_id: snapshot.migration_id,
+                record_time: selectionBefore.selectedRecordTime,
+                owner_party_ids: ownerPartyIds,
+              });
+        const selectedAtOrBeforeResponse = await client.getHoldingsSummaryAtV1({
+          migration_id: snapshot.migration_id,
+          record_time: selectionBefore.boundaryTime,
+          record_time_match: 'at_or_before',
+          owner_party_ids: ownerPartyIds,
+        });
+        const selectionAfter = await scanClient.getDateOfMostRecentSnapshotBefore({
+          before: selectionBefore.boundaryTime,
+          migrationId: snapshot.migration_id,
+        });
 
-    expect(atOrBeforeResponse).toEqual(response);
+        if (
+          selectionAfter.record_time !== selectionBefore.selectedRecordTime ||
+          selectedAtOrBeforeResponse.record_time !== selectionBefore.selectedRecordTime
+        ) {
+          throw new Error(`Snapshot selection changed while validating ${selectionBefore.boundaryTime}`);
+        }
+
+        return {
+          atOrBeforeResponse: selectedAtOrBeforeResponse,
+          boundaryTime: selectionBefore.boundaryTime,
+          exactResponse: selectedExactResponse,
+          selectedRecordTime: selectionBefore.selectedRecordTime,
+        };
+      },
+      {
+        timeoutMs: 30_000,
+        pollIntervalMs: 500,
+        description: 'stable at-or-before Scan snapshot selection',
+      }
+    );
+
+    const selectedSnapshotTime = Date.parse(selectedRecordTime);
+    const boundarySnapshotTime = Date.parse(boundaryTime);
+    expect(Number.isNaN(selectedSnapshotTime)).toBe(false);
+    expect(Number.isNaN(boundarySnapshotTime)).toBe(false);
+    expect(selectedSnapshotTime).toBeLessThan(boundarySnapshotTime);
+    expect(atOrBeforeResponse.record_time).toBe(selectedRecordTime);
+    expect(atOrBeforeResponse).toEqual(exactResponse);
   }, 180_000);
 
-  test('listUnclaimedDevelopmentFundCoupons preserves the hyphenated response key and contract format', async () => {
+  test('listUnclaimedDevelopmentFundCoupons preserves the hyphenated response key and contract format', async (): Promise<void> => {
     const client = getClient();
 
     const response = await client.listUnclaimedDevelopmentFundCoupons();
@@ -199,7 +277,7 @@ describe('ValidatorApiClient / ScanProxy', () => {
     ).rejects.toThrow();
   });
 
-  test('lookupTransferCommandCounterByParty returns the generated contract envelope when seeded', async () => {
+  test('lookupTransferCommandCounterByParty returns the generated contract envelope when seeded', async (): Promise<void> => {
     const client = getClient();
     const userStatus = await client.getUserStatus();
     expect(userStatus.party_id).toEqual(expect.any(String));
@@ -230,7 +308,7 @@ describe('ValidatorApiClient / ScanProxy', () => {
     ).rejects.toThrow();
   });
 
-  test('lookupTransferCommandStatus returns the generated status map when seeded', async () => {
+  test('lookupTransferCommandStatus returns the generated status map when seeded', async (): Promise<void> => {
     const client = getClient();
     const userStatus = await client.getUserStatus();
     expect(userStatus.party_id).toEqual(expect.any(String));
