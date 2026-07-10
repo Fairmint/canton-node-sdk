@@ -6,12 +6,21 @@ import type {
 } from '../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 import {
   CantonSha256HashHexSchema,
-  LedgerBase64BytesSchema,
+  LedgerJsonValueSchema,
   LedgerNameSchema,
   LedgerNonEmptyBase64BytesSchema,
   LedgerRfc3339TimestampSchema,
   LedgerStringSchema,
+  ledgerNullableOptionalResponseField,
+  type LedgerJsonValue,
+  type LedgerNonNullJsonValue,
 } from '../wire';
+import {
+  LedgerCreatedEventSchema,
+  LedgerUnknownFieldSetSchema,
+  type LedgerCreatedEvent,
+  type LedgerProtoAny,
+} from './created-event';
 
 type LedgerSchemas = components['schemas'];
 type PrepareEndpoint = '/v2/interactive-submission/prepare';
@@ -37,16 +46,10 @@ type GeneratedInteractiveSubmissionExecuteAndWaitForTransactionResponse =
   paths[ExecuteAndWaitForTransactionEndpoint]['post']['responses']['200']['content']['application/json'];
 
 /** Any losslessly representable JSON value. */
-export type InteractiveSubmissionJsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | InteractiveSubmissionJsonValue[]
-  | { [key: string]: InteractiveSubmissionJsonValue };
+export type InteractiveSubmissionJsonValue = LedgerJsonValue;
 
 /** A present Daml JSON value; nested JSON nulls remain valid. */
-export type InteractiveSubmissionNonNullJsonValue = Exclude<InteractiveSubmissionJsonValue, null>;
+export type InteractiveSubmissionNonNullJsonValue = LedgerNonNullJsonValue;
 
 /** A mutable non-empty array matching raw Ledger request shapes. */
 export type InteractiveSubmissionNonEmptyArray<Value> = [Value, ...Value[]];
@@ -197,27 +200,9 @@ export type InteractiveSubmissionExecuteAndWaitForTransactionRequest = Omit<
 };
 
 /** Canton protobuf Any details carry decoded JSON, despite the generated OpenAPI declaring a string. */
-export type InteractiveSubmissionProtoAny = Omit<LedgerSchemas['ProtoAny'], 'valueDecoded'> & {
-  valueDecoded?: InteractiveSubmissionJsonValue;
-};
+export type InteractiveSubmissionProtoAny = LedgerProtoAny;
 
-type InteractiveSubmissionStatus = Omit<LedgerSchemas['JsStatus'], 'details'> & {
-  details?: InteractiveSubmissionProtoAny[];
-};
-
-type InteractiveSubmissionInterfaceView = Omit<LedgerSchemas['JsInterfaceView'], 'viewStatus' | 'viewValue'> & {
-  viewStatus: InteractiveSubmissionStatus;
-  viewValue?: InteractiveSubmissionJsonValue;
-};
-
-type InteractiveSubmissionCreatedEvent = Omit<
-  LedgerSchemas['CreatedEvent'],
-  'contractKey' | 'createArgument' | 'interfaceViews'
-> & {
-  contractKey?: InteractiveSubmissionNonNullJsonValue;
-  createArgument: InteractiveSubmissionJsonValue;
-  interfaceViews?: InteractiveSubmissionInterfaceView[];
-};
+type InteractiveSubmissionCreatedEvent = LedgerCreatedEvent;
 
 type InteractiveSubmissionExercisedEvent = Omit<
   LedgerSchemas['ExercisedEvent'],
@@ -245,92 +230,19 @@ export type InteractiveSubmissionExecuteAndWaitForTransactionResponse = Omit<
   transaction: InteractiveSubmissionTransaction;
 };
 
-const INT32_MIN = -2_147_483_648;
 const INT32_MAX = 2_147_483_647;
 const DURATION_SECONDS_MIN = -315_576_000_000;
 const DURATION_SECONDS_MAX = 315_576_000_000;
 const DURATION_NANOS_MIN = -999_999_999;
 const DURATION_NANOS_MAX = 999_999_999;
 
-const Int32Schema = z.number().int().min(INT32_MIN).max(INT32_MAX);
 const NonNegativeInt32Schema = z.number().int().min(0).max(INT32_MAX);
 const PositiveInt32Schema = z.number().int().min(1).max(INT32_MAX);
-const Int64Schema = z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER);
 const NonNegativeInt64Schema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const PositiveInt64Schema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 
-function isJsonValue(value: unknown, ancestors: Set<object> = new Set<object>()): boolean {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
-    return true;
-  }
-  if (typeof value === 'number') {
-    return Number.isFinite(value) && !Object.is(value, -0);
-  }
-  if (typeof value !== 'object') {
-    return false;
-  }
-
-  if (ancestors.has(value)) {
-    return false;
-  }
-  ancestors.add(value);
-
-  try {
-    if (Array.isArray(value)) {
-      if (Object.keys(value).length !== value.length || Reflect.ownKeys(value).length !== value.length + 1) {
-        return false;
-      }
-      for (let index = 0; index < value.length; index += 1) {
-        if (!(index in value) || !isJsonValue(value[index], ancestors)) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    const prototype: unknown = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) {
-      return false;
-    }
-
-    const keys = Object.keys(value);
-    if (Reflect.ownKeys(value).length !== keys.length) {
-      return false;
-    }
-    return keys.every((key) => isJsonValue((value as Record<string, unknown>)[key], ancestors));
-  } catch {
-    return false;
-  } finally {
-    ancestors.delete(value);
-  }
-}
-
-const RequiredJsonValueSchema: z.ZodType<InteractiveSubmissionJsonValue> = z
-  .custom<InteractiveSubmissionJsonValue>((value) => isJsonValue(value), {
-    message: 'Expected a JSON-serializable value',
-  })
-  .transform(cloneJsonValue);
-
-function cloneJsonValue(value: InteractiveSubmissionJsonValue): InteractiveSubmissionJsonValue {
-  if (Array.isArray(value)) {
-    return value.map(cloneJsonValue);
-  }
-  if (value !== null && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, cloneJsonValue(nested)]));
-  }
-  return value;
-}
-
-const NullableOptionalJsonValueSchema: z.ZodType<InteractiveSubmissionNonNullJsonValue | undefined> =
-  RequiredJsonValueSchema.nullish().transform(
-    (value): InteractiveSubmissionNonNullJsonValue | undefined => value ?? undefined
-  );
-
-/** Accept Scala `Option.None` encoded as JSON null, then expose the generated optional-property shape. */
-const nullableOptionalResponseField = <Schema extends z.ZodType>(
-  schema: Schema
-): z.ZodType<z.output<Schema> | undefined, z.input<Schema> | null | undefined> =>
-  schema.nullish().transform((value): z.output<Schema> | undefined => value ?? undefined);
+const RequiredJsonValueSchema = LedgerJsonValueSchema;
+const nullableOptionalResponseField = ledgerNullableOptionalResponseField;
 
 const EmptyObjectSchema: z.ZodType<Record<string, never>> = z.record(z.string(), z.never());
 
@@ -349,16 +261,7 @@ const SigningAlgorithmSpecSchema = z.enum([
   'SIGNING_ALGORITHM_SPEC_EC_DSA_SHA_384',
 ]);
 
-const UnknownFieldSchema = createRequestSchema<LedgerSchemas['Field']>()({
-  varint: z.array(Int64Schema).optional(),
-  fixed64: z.array(Int64Schema).optional(),
-  fixed32: z.array(Int32Schema).optional(),
-  lengthDelimited: z.array(LedgerBase64BytesSchema).optional(),
-});
-
-const UnknownFieldSetSchema = createRequestSchema<LedgerSchemas['UnknownFieldSet']>()({
-  fields: z.record(z.string(), UnknownFieldSchema),
-});
+const UnknownFieldSetSchema = LedgerUnknownFieldSetSchema;
 
 const DurationSchema = createRequestSchema<LedgerSchemas['Duration']>()({
   seconds: z.number().int().min(DURATION_SECONDS_MIN).max(DURATION_SECONDS_MAX),
@@ -648,26 +551,6 @@ export const InteractiveSubmissionExecuteAndWaitForTransactionRequestSchema =
     transactionFormat: TransactionFormatSchema.optional(),
   });
 
-const ProtoAnySchema = createRequestSchema<InteractiveSubmissionProtoAny>()({
-  typeUrl: z.string(),
-  value: LedgerBase64BytesSchema,
-  unknownFields: UnknownFieldSetSchema,
-  valueDecoded: RequiredJsonValueSchema.optional(),
-});
-
-const StatusSchema = createRequestSchema<InteractiveSubmissionStatus>()({
-  code: Int32Schema,
-  message: z.string(),
-  details: z.array(ProtoAnySchema).optional(),
-});
-
-const InterfaceViewSchema = createRequestSchema<InteractiveSubmissionInterfaceView>()({
-  interfaceId: z.string(),
-  viewStatus: StatusSchema,
-  viewValue: RequiredJsonValueSchema.optional(),
-  implementationPackageId: nullableOptionalResponseField(z.string()),
-});
-
 const ArchivedEventSchema = createRequestSchema<LedgerSchemas['ArchivedEvent']>()({
   offset: PositiveInt64Schema,
   nodeId: NonNegativeInt32Schema,
@@ -676,25 +559,6 @@ const ArchivedEventSchema = createRequestSchema<LedgerSchemas['ArchivedEvent']>(
   witnessParties: z.array(z.string()).min(1),
   packageName: z.string(),
   implementedInterfaces: z.array(z.string()).optional(),
-});
-
-const CreatedEventSchema = createRequestSchema<InteractiveSubmissionCreatedEvent>()({
-  offset: PositiveInt64Schema,
-  nodeId: NonNegativeInt32Schema,
-  contractId: z.string(),
-  templateId: z.string(),
-  contractKey: NullableOptionalJsonValueSchema,
-  contractKeyHash: LedgerBase64BytesSchema.optional(),
-  createArgument: RequiredJsonValueSchema,
-  createdEventBlob: LedgerBase64BytesSchema.optional(),
-  interfaceViews: z.array(InterfaceViewSchema).optional(),
-  witnessParties: z.array(z.string()).min(1),
-  signatories: z.array(z.string()).min(1),
-  observers: z.array(z.string()).optional(),
-  createdAt: LedgerRfc3339TimestampSchema,
-  packageName: z.string().min(1),
-  representativePackageId: z.string().min(1),
-  acsDelta: z.boolean(),
 });
 
 const ExercisedEventSchema = createRequestSchema<InteractiveSubmissionExercisedEvent>()({
@@ -720,7 +584,7 @@ const EventSchema: z.ZodType<InteractiveSubmissionEvent> = z.union([
     ArchivedEvent: ArchivedEventSchema,
   }),
   createRequestSchema<Extract<InteractiveSubmissionEventVariants, { CreatedEvent: unknown }>>()({
-    CreatedEvent: CreatedEventSchema,
+    CreatedEvent: LedgerCreatedEventSchema,
   }),
   createRequestSchema<Extract<InteractiveSubmissionEventVariants, { ExercisedEvent: unknown }>>()({
     ExercisedEvent: ExercisedEventSchema,
