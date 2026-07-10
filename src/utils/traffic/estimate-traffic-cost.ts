@@ -89,8 +89,8 @@ export async function estimateTrafficCost(
   }
 
   const resolvedPartyId = ledgerClient.getPartyId();
-  const resolvedActAsValues = actAs ? [...actAs] : resolvedPartyId ? [resolvedPartyId] : undefined;
-  const firstActAs = resolvedActAsValues?.[0];
+  const resolvedActAsValues = actAs ? [...actAs] : resolvedPartyId ? [resolvedPartyId] : [];
+  const firstActAs = resolvedActAsValues[0];
   if (!firstActAs) {
     throw new Error('actAs is required: provide it in options or configure partyId on the ledger client');
   }
