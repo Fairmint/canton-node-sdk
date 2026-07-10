@@ -331,7 +331,7 @@ function normalizeAccount(value: unknown, fieldName: string): TokenStandardV2Acc
 
 function parseDecimalText(value: unknown, fieldName: string): { readonly text: string; readonly sign: -1 | 0 | 1 } {
   const text = requireNonEmpty(value, fieldName);
-  const match = /^([+-]?)(\d{1,28})(?:\.(\d{1,10}))?$/.exec(text);
+  const match = /^(-?)(\d{1,28})(?:\.(\d{1,10}))?$/.exec(text);
   if (!match) {
     throw new TokenStandardV2AllocationError(
       TokenStandardV2AllocationErrorCode.INPUT_INVALID,
