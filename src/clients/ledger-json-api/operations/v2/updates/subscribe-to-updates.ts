@@ -225,17 +225,15 @@ export class SubscribeToUpdates {
           requestMessage,
           {
             onMessage: async (parsed): Promise<void> => {
+              // Surface Canton error frames immediately; a slow consumer callback must not delay stream failure.
+              if (isErrorMessage(parsed) && !settled) {
+                settled = true;
+                reject(toError(parsed));
+              }
+
               // Call user's onMessage callback if provided
               if (typeof params.onMessage === 'function') {
                 await params.onMessage(parsed);
-              }
-
-              // Check if it's an error
-              if (isErrorMessage(parsed)) {
-                if (!settled) {
-                  settled = true;
-                  reject(toError(parsed));
-                }
               }
             },
             onError: (err) => {
