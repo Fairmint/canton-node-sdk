@@ -330,15 +330,15 @@ function normalizeAccount(value: unknown, fieldName: string): TokenStandardV2Acc
 
 function parseDecimalText(value: unknown, fieldName: string): { readonly text: string; readonly sign: -1 | 0 | 1 } {
   const text = requireNonEmpty(value, fieldName);
-  const match = /^([+-]?)(?:(\d+)(?:\.(\d*))?|\.(\d+))$/.exec(text);
+  const match = /^([+-]?)(\d{1,28})(?:\.(\d{1,10}))?$/.exec(text);
   if (!match) {
     throw new TokenStandardV2AllocationError(
       'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
-      `${fieldName} must be a base-10 decimal string.`,
+      `${fieldName} must be a valid Daml Decimal string.`,
       { field: fieldName }
     );
   }
-  const digits = `${match[2] ?? ''}${match[3] ?? ''}${match[4] ?? ''}`;
+  const digits = `${match[2]}${match[3] ?? ''}`;
   const sign = /^0+$/.test(digits) ? 0 : match[1] === '-' ? -1 : 1;
   return { text, sign };
 }

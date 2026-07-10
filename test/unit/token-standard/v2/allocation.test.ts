@@ -211,13 +211,21 @@ describe('Token Standard V2 allocation helpers', () => {
         })
       ).toThrow(TokenStandardV2AllocationError);
     }
-    for (const amount of ['+1.0', '1.']) {
+    for (const amount of ['+1.0', '9999999999999999999999999999.1234567890']) {
       expect(
         buildWithAllocation({
           ...allocationParams.allocation,
           transferLegSides: [{ ...transferLegSide, amount }],
         }).allocation.transferLegSides[0]?.amount
       ).toBe(amount);
+    }
+    for (const amount of ['1.', '10000000000000000000000000000', '1.12345678901']) {
+      expect(() =>
+        buildWithAllocation({
+          ...allocationParams.allocation,
+          transferLegSides: [{ ...transferLegSide, amount }],
+        })
+      ).toThrow(TokenStandardV2AllocationError);
     }
 
     expect(() =>
