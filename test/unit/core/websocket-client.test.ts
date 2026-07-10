@@ -299,6 +299,46 @@ describe('WebSocketClient', () => {
     expect(onError.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0] ?? 0);
   });
 
+  it('waits for every in-flight message callback before delivering close', async () => {
+    const firstMessage = deferred();
+    const secondMessage = deferred();
+    const logRequestResponse = jest.fn().mockResolvedValue(undefined);
+    const client = {
+      getApiUrl: () => 'https://ledger.example',
+      authenticate: jest.fn().mockResolvedValue('token'),
+      getTokenIssuedAt: () => null,
+      getTokenExpiryTime: () => null,
+      getLogger: () => ({ logRequestResponse }),
+    } as unknown as BaseClient;
+    const onMessage = jest
+      .fn<Promise<void>, [unknown]>()
+      .mockImplementationOnce(async () => firstMessage.promise)
+      .mockImplementationOnce(async () => secondMessage.promise);
+    const onClose = jest.fn();
+
+    await new WebSocketClient(client).connect(
+      '/v2/state/active-contracts',
+      { activeAtOffset: 42 },
+      { onMessage, onClose }
+    );
+    const socket = mockSockets[0];
+    if (!socket) throw new Error('Expected WebSocketClient to construct one socket.');
+
+    socket.emit('message', Buffer.from(JSON.stringify({ contractEntry: { id: 1 } })));
+    socket.emit('message', Buffer.from(JSON.stringify({ contractEntry: { id: 2 } })));
+    socket.emit('close', 1000, Buffer.from('snapshot complete'));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(onClose).not.toHaveBeenCalled();
+    firstMessage.resolve();
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(onClose).not.toHaveBeenCalled();
+
+    secondMessage.resolve();
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(onClose).toHaveBeenCalledWith(1000, 'snapshot complete');
+  });
+
   it('still closes for token refresh when async refresh callbacks reject', async () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-07-10T04:00:00.000Z'));

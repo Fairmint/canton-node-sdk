@@ -151,7 +151,24 @@ export class WebSocketClient {
         }
       );
     };
-    let pendingMessageCallbacks = Promise.resolve();
+    let inFlightMessageCallbacks = 0;
+    let resolveMessageCallbacksDrained: (() => void) | undefined;
+    let messageCallbacksDrained = Promise.resolve();
+    const beginMessageCallback = (): void => {
+      if (inFlightMessageCallbacks === 0) {
+        messageCallbacksDrained = new Promise<void>((resolve) => {
+          resolveMessageCallbacksDrained = resolve;
+        });
+      }
+      inFlightMessageCallbacks += 1;
+    };
+    const completeMessageCallback = (): void => {
+      inFlightMessageCallbacks -= 1;
+      if (inFlightMessageCallbacks === 0) {
+        resolveMessageCallbacksDrained?.();
+        resolveMessageCallbacksDrained = undefined;
+      }
+    };
 
     log('connect', { headers: token ? { Authorization: '[REDACTED]' } : undefined, protocols });
 
@@ -256,11 +273,7 @@ export class WebSocketClient {
         return;
       }
 
-      let markMessageCallbackComplete: (() => void) | undefined;
-      const messageCallbackComplete = new Promise<void>((resolve) => {
-        markMessageCallbackComplete = resolve;
-      });
-      pendingMessageCallbacks = Promise.all([pendingMessageCallbacks, messageCallbackComplete]).then(() => undefined);
+      beginMessageCallback();
 
       void runCallback(
         (): void | Promise<void> => handlers.onMessage(parsed as InboundMessage),
@@ -276,7 +289,7 @@ export class WebSocketClient {
             error: toError(err).message,
           });
         })
-        .finally(() => markMessageCallbackComplete?.());
+        .finally(completeMessageCallback);
     });
 
     socket.on('error', (err: Error) => {
@@ -294,7 +307,7 @@ export class WebSocketClient {
       log('close', { code, reason: closeReason });
       const { onClose } = handlers;
       if (onClose) {
-        void pendingMessageCallbacks.then(() => {
+        void messageCallbacksDrained.then(() => {
           observeCallback(
             (): void | Promise<void> => onClose(code, closeReason),
             (error) => {
