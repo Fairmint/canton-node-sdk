@@ -233,6 +233,31 @@ describe('LedgerJsonApiClient interactive submission execution', () => {
     });
   });
 
+  it('materializes the required empty expected-signatures wire default for cost-estimation hints', async () => {
+    const client = createClient();
+    const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({
+      preparedTransaction: PREPARED_TRANSACTION_BASE64,
+      preparedTransactionHash: PREPARED_HASH_BASE64,
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
+    });
+    const request: InteractiveSubmissionPrepareRequest = {
+      ...createPrepareRequest(),
+      estimateTrafficCost: { disabled: true },
+    };
+
+    await client.interactiveSubmissionPrepare(request);
+
+    expect(post.mock.calls[0]?.[1]).toEqual({
+      ...request,
+      synchronizerId: '',
+      packageIdSelectionPreference: [],
+      estimateTrafficCost: {
+        disabled: true,
+        expectedSignatures: [],
+      },
+    });
+  });
+
   it('snapshots nested Daml JSON values before asynchronous request construction', async () => {
     const client = createClient();
     const createArguments = { owner: { name: 'Alice' } };
