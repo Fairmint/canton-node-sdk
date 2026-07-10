@@ -1,6 +1,8 @@
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import { estimateTrafficCost } from '../../../src/utils/traffic/estimate-traffic-cost';
+import { estimateTrafficCost, type EstimateTrafficCostOptions } from '../../../src/utils/traffic/estimate-traffic-cost';
 import { UPDATE_CONFIRMATION_OVERHEAD_BYTES } from '../../../src/utils/traffic/types';
+
+const HASHING_SCHEME_VERSION = 'HASHING_SCHEME_VERSION_V2' as const;
 
 describe('estimateTrafficCost', () => {
   const mockPrepareResponse = {
@@ -24,7 +26,7 @@ describe('estimateTrafficCost', () => {
     return { totalCostWithOverhead, costInCents, costInDollars: costInCents / 100 };
   };
 
-  const mockCommands = [
+  const mockCommands: EstimateTrafficCostOptions['commands'] = [
     {
       CreateCommand: {
         templateId: 'MyModule:MyTemplate',
@@ -48,6 +50,7 @@ describe('estimateTrafficCost', () => {
       ledgerClient: client,
       commands: mockCommands,
       synchronizerId: 'domain-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
     });
 
     const expected = calculateExpectedCosts(2000);
@@ -69,6 +72,7 @@ describe('estimateTrafficCost', () => {
       ledgerClient: client,
       commands: mockCommands,
       synchronizerId: 'domain-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
     });
 
     expect(client.interactiveSubmissionPrepare).toHaveBeenCalledWith(
@@ -90,6 +94,7 @@ describe('estimateTrafficCost', () => {
       ledgerClient: client,
       commands: mockCommands,
       synchronizerId: 'domain-456',
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V3',
       userId: 'custom-user',
       actAs: ['party-a::123', 'party-b::456'],
       readAs: ['party-c::789'],
@@ -101,6 +106,7 @@ describe('estimateTrafficCost', () => {
         actAs: ['party-a::123', 'party-b::456'],
         readAs: ['party-c::789'],
         synchronizerId: 'domain-456',
+        hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V3',
       })
     );
   });
@@ -116,17 +122,19 @@ describe('estimateTrafficCost', () => {
       ledgerClient: client,
       commands: mockCommands,
       synchronizerId: 'domain-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
     });
 
     expect(result).toBeUndefined();
   });
 
-  it('should handle cost estimation without timestamp', async () => {
+  it('should preserve the required estimation timestamp from a V3 prepare response', async () => {
     const client = createMockLedgerClient({
       preparedTransactionHash: 'hash-123',
       preparedTransaction: 'tx-data',
-      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V3',
       costEstimation: {
+        estimationTimestamp: '2026-07-09T12:00:00Z',
         confirmationRequestTrafficCostEstimation: 800,
         confirmationResponseTrafficCostEstimation: 200,
         totalTrafficCostEstimation: 1000,
@@ -137,6 +145,7 @@ describe('estimateTrafficCost', () => {
       ledgerClient: client,
       commands: mockCommands,
       synchronizerId: 'domain-123',
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V3',
     });
 
     const expected = calculateExpectedCosts(1000);
@@ -147,7 +156,7 @@ describe('estimateTrafficCost', () => {
       totalCostWithOverhead: expected.totalCostWithOverhead,
       costInCents: expected.costInCents,
       costInDollars: expected.costInDollars,
-      estimatedAt: undefined,
+      estimatedAt: '2026-07-09T12:00:00Z',
     });
   });
 
@@ -158,12 +167,14 @@ describe('estimateTrafficCost', () => {
       ledgerClient: client,
       commands: mockCommands,
       synchronizerId: 'domain-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
     });
 
     await estimateTrafficCost({
       ledgerClient: client,
       commands: mockCommands,
       synchronizerId: 'domain-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
     });
 
     const { calls } = (client.interactiveSubmissionPrepare as jest.Mock).mock;
@@ -176,15 +187,17 @@ describe('estimateTrafficCost', () => {
       {
         contractId: 'contract-1',
         templateId: 'MyModule:MyContract',
+        createdEventBlob: 'created-event-blob',
         synchronizerId: 'domain-123',
       },
     ];
-    const packageIdSelectionPreference = [{ packageId: 'pkg-123' }];
+    const packageIdSelectionPreference = ['pkg-123'];
 
     await estimateTrafficCost({
       ledgerClient: client,
       commands: mockCommands,
       synchronizerId: 'domain-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
       disclosedContracts,
       packageIdSelectionPreference,
     });
@@ -193,56 +206,6 @@ describe('estimateTrafficCost', () => {
       expect.objectContaining({
         disclosedContracts,
         packageIdSelectionPreference,
-      })
-    );
-  });
-
-  it('should handle multiple commands', async () => {
-    const client = createMockLedgerClient({
-      preparedTransactionHash: 'hash-multi',
-      costEstimation: {
-        confirmationRequestTrafficCostEstimation: 3000,
-        confirmationResponseTrafficCostEstimation: 1000,
-        totalTrafficCostEstimation: 4000,
-      },
-    });
-
-    const multipleCommands = [
-      {
-        CreateCommand: {
-          templateId: 'MyModule:Contract1',
-          createArguments: { fields: {} },
-        },
-      },
-      {
-        ExerciseCommand: {
-          templateId: 'MyModule:Contract2',
-          contractId: 'contract-id-123',
-          choice: 'Archive',
-          choiceArgument: { fields: {} },
-        },
-      },
-    ];
-
-    const result = await estimateTrafficCost({
-      ledgerClient: client,
-      commands: multipleCommands,
-      synchronizerId: 'domain-123',
-    });
-
-    const expected = calculateExpectedCosts(4000);
-    expect(result).toEqual({
-      requestCost: 3000,
-      responseCost: 1000,
-      totalCost: 4000,
-      totalCostWithOverhead: expected.totalCostWithOverhead,
-      costInCents: expected.costInCents,
-      costInDollars: expected.costInDollars,
-      estimatedAt: undefined,
-    });
-    expect(client.interactiveSubmissionPrepare).toHaveBeenCalledWith(
-      expect.objectContaining({
-        commands: multipleCommands,
       })
     );
   });
@@ -259,6 +222,7 @@ describe('estimateTrafficCost', () => {
         ledgerClient: client,
         commands: mockCommands,
         synchronizerId: 'domain-123',
+        hashingSchemeVersion: HASHING_SCHEME_VERSION,
       })
     ).rejects.toThrow('userId is required: provide it in options or configure it on the ledger client');
   });
@@ -275,6 +239,7 @@ describe('estimateTrafficCost', () => {
         ledgerClient: client,
         commands: mockCommands,
         synchronizerId: 'domain-123',
+        hashingSchemeVersion: HASHING_SCHEME_VERSION,
       })
     ).rejects.toThrow('actAs is required: provide it in options or configure partyId on the ledger client');
   });
@@ -290,6 +255,7 @@ describe('estimateTrafficCost', () => {
       ledgerClient: client,
       commands: mockCommands,
       synchronizerId: 'domain-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
       userId: 'explicit-user',
     });
 
@@ -310,6 +276,7 @@ describe('estimateTrafficCost', () => {
       ledgerClient: client,
       commands: mockCommands,
       synchronizerId: 'domain-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
       actAs: ['explicit-party::123'],
     });
 

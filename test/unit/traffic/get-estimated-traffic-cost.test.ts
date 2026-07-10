@@ -45,10 +45,13 @@ describe('getEstimatedTrafficCost', () => {
     });
   });
 
-  it('should handle costEstimation without timestamp', () => {
+  it('should extract the required timestamp from a V3 prepare response', () => {
     const preparedTransaction: InteractiveSubmissionPrepareResponse = {
       preparedTransactionHash: 'abc123',
+      preparedTransaction: 'tx-data',
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V3',
       costEstimation: {
+        estimationTimestamp: '2026-07-09T12:00:00Z',
         confirmationRequestTrafficCostEstimation: 2000,
         confirmationResponseTrafficCostEstimation: 800,
         totalTrafficCostEstimation: 2800,
@@ -67,14 +70,17 @@ describe('getEstimatedTrafficCost', () => {
       totalCostWithOverhead: expectedTotalWithOverhead,
       costInCents: expectedCostInCents,
       costInDollars: expectedCostInCents / 100,
-      estimatedAt: undefined,
+      estimatedAt: '2026-07-09T12:00:00Z',
     });
   });
 
   it('should handle zero traffic costs (still includes overhead)', () => {
     const preparedTransaction: InteractiveSubmissionPrepareResponse = {
       preparedTransactionHash: 'abc123',
+      preparedTransaction: 'tx-data',
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
       costEstimation: {
+        estimationTimestamp: '2026-07-09T12:00:00Z',
         confirmationRequestTrafficCostEstimation: 0,
         confirmationResponseTrafficCostEstimation: 0,
         totalTrafficCostEstimation: 0,
@@ -94,7 +100,7 @@ describe('getEstimatedTrafficCost', () => {
       totalCostWithOverhead: expectedTotalWithOverhead,
       costInCents: expectedCostInCents,
       costInDollars: expectedCostInCents / 100,
-      estimatedAt: undefined,
+      estimatedAt: '2026-07-09T12:00:00Z',
     });
   });
 
@@ -103,7 +109,10 @@ describe('getEstimatedTrafficCost', () => {
     // Cost: 6000 * 55 / 1024 = ~322 cents = $3.22
     const preparedTransaction: InteractiveSubmissionPrepareResponse = {
       preparedTransactionHash: 'abc123',
+      preparedTransaction: 'tx-data',
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
       costEstimation: {
+        estimationTimestamp: '2026-07-09T12:00:00Z',
         confirmationRequestTrafficCostEstimation: 40 * 1024, // 40KB
         confirmationResponseTrafficCostEstimation: 10 * 1024, // 10KB
         totalTrafficCostEstimation: 50 * 1024, // 50KB

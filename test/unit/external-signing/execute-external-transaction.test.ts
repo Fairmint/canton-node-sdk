@@ -2,17 +2,30 @@ import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
 import {
   executeExternalTransaction,
   executeExternalTransactionAndWait,
+  type NonEmptyPartySignatures,
 } from '../../../src/utils/external-signing/execute-external-transaction';
+
+const PARTY_SIGNATURES = [
+  {
+    party: 'party::fingerprint',
+    signatures: [
+      {
+        format: 'SIGNATURE_FORMAT_RAW',
+        signature: 'sig-base64',
+        signedBy: 'fingerprint',
+        signingAlgorithmSpec: 'SIGNING_ALGORITHM_SPEC_ED25519',
+      },
+    ],
+  },
+] satisfies NonEmptyPartySignatures;
+const HASHING_SCHEME_VERSION = 'HASHING_SCHEME_VERSION_V2' as const;
 
 const createMockLedgerClient = (): jest.Mocked<LedgerJsonApiClient> =>
   ({
-    interactiveSubmissionExecute: jest.fn().mockResolvedValue({
-      updateId: 'update-123',
-      completionOffset: 'offset-456',
-    }),
-    getApiUrl: jest.fn().mockReturnValue('https://ledger.example.test'),
-    makePostRequest: jest.fn().mockResolvedValue({
+    interactiveSubmissionExecute: jest.fn().mockResolvedValue({}),
+    interactiveSubmissionExecuteAndWait: jest.fn().mockResolvedValue({
       updateId: 'update-wait-123',
+      completionOffset: 456,
     }),
   }) as unknown as jest.Mocked<LedgerJsonApiClient>;
 
@@ -29,39 +42,15 @@ describe('executeExternalTransaction', () => {
       userId: 'user-123',
       preparedTransaction: 'prepared-tx-base64',
       submissionId: 'submission-123',
-      partySignatures: [
-        {
-          party: 'party::fingerprint',
-          signatures: [
-            {
-              format: 'SIGNATURE_FORMAT_RAW',
-              signature: 'sig-base64',
-              signedBy: 'fingerprint',
-              signingAlgorithmSpec: 'SIGNING_ALGORITHM_SPEC_ED25519',
-            },
-          ],
-        },
-      ],
+      partySignatures: PARTY_SIGNATURES,
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
     });
 
-    expect(result['updateId']).toBe('update-123');
-    expect(result['completionOffset']).toBe('offset-456');
+    expect(result).toEqual({});
   });
 
   it('passes required parameters to ledger client', async () => {
-    const partySignatures = [
-      {
-        party: 'party::fingerprint',
-        signatures: [
-          {
-            format: 'SIGNATURE_FORMAT_RAW',
-            signature: 'sig-base64',
-            signedBy: 'fingerprint',
-            signingAlgorithmSpec: 'SIGNING_ALGORITHM_SPEC_ED25519',
-          },
-        ],
-      },
-    ];
+    const partySignatures = PARTY_SIGNATURES;
 
     await executeExternalTransaction({
       ledgerClient: mockClient,
@@ -69,6 +58,7 @@ describe('executeExternalTransaction', () => {
       preparedTransaction: 'prepared-tx-base64',
       submissionId: 'submission-123',
       partySignatures,
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
     });
 
     expect(mockClient.interactiveSubmissionExecute).toHaveBeenCalledWith({
@@ -78,7 +68,7 @@ describe('executeExternalTransaction', () => {
       hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
       deduplicationPeriod: {
         DeduplicationDuration: {
-          value: { duration: '30s' },
+          value: { seconds: 30, nanos: 0 },
         },
       },
       partySignatures: {
@@ -87,19 +77,19 @@ describe('executeExternalTransaction', () => {
     });
   });
 
-  it('uses custom hashingSchemeVersion when provided', async () => {
+  it('uses hashing scheme V3 when provided', async () => {
     await executeExternalTransaction({
       ledgerClient: mockClient,
       userId: 'user-123',
       preparedTransaction: 'prepared-tx-base64',
       submissionId: 'submission-123',
-      partySignatures: [],
-      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V1',
+      partySignatures: PARTY_SIGNATURES,
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V3',
     });
 
     expect(mockClient.interactiveSubmissionExecute).toHaveBeenCalledWith(
       expect.objectContaining({
-        hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V1',
+        hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V3',
       })
     );
   });
@@ -107,7 +97,7 @@ describe('executeExternalTransaction', () => {
   it('uses custom deduplicationPeriod when provided', async () => {
     const customDeduplication = {
       DeduplicationDuration: {
-        value: { duration: '60s' },
+        value: { seconds: 60, nanos: 0 },
       },
     };
 
@@ -116,7 +106,8 @@ describe('executeExternalTransaction', () => {
       userId: 'user-123',
       preparedTransaction: 'prepared-tx-base64',
       submissionId: 'submission-123',
-      partySignatures: [],
+      partySignatures: PARTY_SIGNATURES,
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
       deduplicationPeriod: customDeduplication,
     });
 
@@ -127,13 +118,14 @@ describe('executeExternalTransaction', () => {
     );
   });
 
-  it('defaults hashingSchemeVersion to V2', async () => {
+  it('forwards the explicitly selected hashing scheme', async () => {
     await executeExternalTransaction({
       ledgerClient: mockClient,
       userId: 'user-123',
       preparedTransaction: 'prepared-tx-base64',
       submissionId: 'submission-123',
-      partySignatures: [],
+      partySignatures: PARTY_SIGNATURES,
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
     });
 
     expect(mockClient.interactiveSubmissionExecute).toHaveBeenCalledWith(
@@ -149,14 +141,15 @@ describe('executeExternalTransaction', () => {
       userId: 'user-123',
       preparedTransaction: 'prepared-tx-base64',
       submissionId: 'submission-123',
-      partySignatures: [],
+      partySignatures: PARTY_SIGNATURES,
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
     });
 
     expect(mockClient.interactiveSubmissionExecute).toHaveBeenCalledWith(
       expect.objectContaining({
         deduplicationPeriod: {
           DeduplicationDuration: {
-            value: { duration: '30s' },
+            value: { seconds: 30, nanos: 0 },
           },
         },
       })
@@ -187,7 +180,7 @@ describe('executeExternalTransaction', () => {
           },
         ],
       },
-    ];
+    ] satisfies NonEmptyPartySignatures;
 
     await executeExternalTransaction({
       ledgerClient: mockClient,
@@ -195,6 +188,7 @@ describe('executeExternalTransaction', () => {
       preparedTransaction: 'prepared-tx-base64',
       submissionId: 'submission-123',
       partySignatures,
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
     });
 
     expect(mockClient.interactiveSubmissionExecute).toHaveBeenCalledWith(
@@ -206,76 +200,67 @@ describe('executeExternalTransaction', () => {
     );
   });
 
-  it('handles empty party signatures array', async () => {
-    await executeExternalTransaction({
-      ledgerClient: mockClient,
-      userId: 'user-123',
-      preparedTransaction: 'prepared-tx-base64',
-      submissionId: 'submission-123',
-      partySignatures: [],
-    });
-
-    expect(mockClient.interactiveSubmissionExecute).toHaveBeenCalledWith(
-      expect.objectContaining({
-        partySignatures: {
-          signatures: [],
-        },
-      })
-    );
-  });
-
-  it('executes external transaction with executeAndWait and returns the update id', async () => {
+  it('executes through the typed executeAndWait client method and returns the exact response', async () => {
     const result = await executeExternalTransactionAndWait({
       ledgerClient: mockClient,
       userId: 'user-123',
       preparedTransaction: 'prepared-tx-base64',
       submissionId: 'submission-123',
-      partySignatures: [],
+      partySignatures: PARTY_SIGNATURES,
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
     });
 
-    expect(mockClient.makePostRequest.mock.calls).toEqual([
-      [
-        'https://ledger.example.test/v2/interactive-submission/executeAndWait',
-        {
-          userId: 'user-123',
-          preparedTransaction: 'prepared-tx-base64',
-          hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
-          submissionId: 'submission-123',
-          deduplicationPeriod: {
-            DeduplicationDuration: {
-              value: { duration: '30s' },
-            },
-          },
-          partySignatures: {
-            signatures: [],
-          },
+    expect(mockClient.interactiveSubmissionExecuteAndWait).toHaveBeenCalledWith({
+      userId: 'user-123',
+      preparedTransaction: 'prepared-tx-base64',
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
+      submissionId: 'submission-123',
+      deduplicationPeriod: {
+        DeduplicationDuration: {
+          value: { seconds: 30, nanos: 0 },
         },
-        {
-          contentType: 'application/json',
-          includeBearerToken: true,
-        },
-      ],
-    ]);
+      },
+      partySignatures: {
+        signatures: PARTY_SIGNATURES,
+      },
+    });
     expect(result).toEqual({
       updateId: 'update-wait-123',
-      raw: { updateId: 'update-wait-123' },
+      completionOffset: 456,
+      raw: {
+        updateId: 'update-wait-123',
+        completionOffset: 456,
+      },
     });
   });
 
-  it('throws a typed operation error when executeAndWait does not return an update id', async () => {
-    mockClient.makePostRequest.mockResolvedValueOnce({ completionOffset: 'offset-only' });
-
-    await expect(
-      executeExternalTransactionAndWait({
-        ledgerClient: mockClient,
-        userId: 'user-123',
-        preparedTransaction: 'prepared-tx-base64',
-        submissionId: 'submission-123',
-        partySignatures: [],
-      })
-    ).rejects.toMatchObject({
-      name: 'OperationError',
-      code: 'TRANSACTION_FAILED',
+  it('omits optional user and forwards minimum ledger time', async () => {
+    await executeExternalTransactionAndWait({
+      ledgerClient: mockClient,
+      preparedTransaction: 'prepared-tx-base64',
+      submissionId: 'submission-123',
+      partySignatures: PARTY_SIGNATURES,
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
+      minLedgerTime: {
+        time: {
+          MinLedgerTimeRel: {
+            value: { seconds: 5, nanos: 0 },
+          },
+        },
+      },
     });
+
+    expect(mockClient.interactiveSubmissionExecuteAndWait.mock.calls[0]?.[0]).not.toHaveProperty('userId');
+    expect(mockClient.interactiveSubmissionExecuteAndWait).toHaveBeenCalledWith(
+      expect.objectContaining({
+        minLedgerTime: {
+          time: {
+            MinLedgerTimeRel: {
+              value: { seconds: 5, nanos: 0 },
+            },
+          },
+        },
+      })
+    );
   });
 });

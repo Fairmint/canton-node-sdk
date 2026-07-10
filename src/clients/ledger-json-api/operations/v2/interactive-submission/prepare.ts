@@ -1,6 +1,7 @@
 import { createApiOperation } from '../../../../../core';
 import {
   InteractiveSubmissionPrepareRequestSchema,
+  InteractiveSubmissionPrepareResponseSchema,
   type InteractiveSubmissionPrepareRequest,
   type InteractiveSubmissionPrepareResponse,
 } from '../../../schemas/api/interactive-submission';
@@ -11,6 +12,7 @@ export const InteractiveSubmissionPrepare = createApiOperation<
   InteractiveSubmissionPrepareResponse
 >({
   paramsSchema: InteractiveSubmissionPrepareRequestSchema,
+  responseSchema: InteractiveSubmissionPrepareResponseSchema,
   method: 'POST',
   requestSemantics: 'read',
   buildUrl: (_params: InteractiveSubmissionPrepareRequest, apiUrl: string) =>

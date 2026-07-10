@@ -71,8 +71,10 @@ const createMockLedgerClient = (): jest.Mocked<LedgerJsonApiClient> =>
       preparedTransactionHash: PREPARED_TRANSACTION_HASH_BASE64,
       hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
     }),
-    getApiUrl: jest.fn().mockReturnValue('https://ledger.example.test'),
-    makePostRequest: jest.fn().mockResolvedValue({ updateId: 'provider-accept-update-1' }),
+    interactiveSubmissionExecuteAndWait: jest.fn().mockResolvedValue({
+      updateId: 'provider-accept-update-1',
+      completionOffset: 456,
+    }),
     listParties: jest.fn().mockResolvedValue({ partyDetails: [] }),
     getPartyDetails: jest.fn().mockResolvedValue({ partyDetails: [] }),
   }) as unknown as jest.Mocked<LedgerJsonApiClient>;
@@ -383,8 +385,7 @@ describe('external-party wallet bridge', (): void => {
       tokenContext: { userId: 'user-1' },
     });
 
-    expect(ledgerClient.makePostRequest.mock.calls[0]).toEqual([
-      'https://ledger.example.test/v2/interactive-submission/executeAndWait',
+    expect(ledgerClient.interactiveSubmissionExecuteAndWait).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'provider-user',
         preparedTransaction: 'prepared-provider-accept',
@@ -402,13 +403,10 @@ describe('external-party wallet bridge', (): void => {
             },
           ],
         },
-      }),
-      {
-        contentType: 'application/json',
-        includeBearerToken: true,
-      },
-    ]);
+      })
+    );
     expect(submitted.updateId).toBe('provider-accept-update-1');
+    expect(submitted.raw).toEqual({ updateId: 'provider-accept-update-1', completionOffset: 456 });
   });
 
   it('prepares and submits transfer preapproval setup through validator endpoints', async (): Promise<void> => {

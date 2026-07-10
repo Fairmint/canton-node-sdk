@@ -1,5 +1,5 @@
 import { createApiOperation } from '../../../../../core';
-import { type GetPreferredPackagesResponse } from '../../../schemas/api';
+import { GetPreferredPackagesResponseSchema, type GetPreferredPackagesResponse } from '../../../schemas/api';
 import {
   InteractiveSubmissionGetPreferredPackagesParamsSchema,
   type InteractiveSubmissionGetPreferredPackagesParams,
@@ -27,13 +27,10 @@ export const InteractiveSubmissionGetPreferredPackages = createApiOperation<
   GetPreferredPackagesResponse
 >({
   paramsSchema: InteractiveSubmissionGetPreferredPackagesParamsSchema,
+  responseSchema: GetPreferredPackagesResponseSchema,
   method: 'POST',
   requestSemantics: 'read',
   buildUrl: (_params: InteractiveSubmissionGetPreferredPackagesParams, apiUrl: string) =>
     `${apiUrl}/v2/interactive-submission/preferred-packages`,
-  buildRequestData: (params: InteractiveSubmissionGetPreferredPackagesParams) => ({
-    packageVettingRequirements: params.packageVettingRequirements,
-    synchronizerId: params.synchronizerId,
-    vettingValidAt: params.vettingValidAt,
-  }),
+  buildRequestData: (params: InteractiveSubmissionGetPreferredPackagesParams) => params,
 });
