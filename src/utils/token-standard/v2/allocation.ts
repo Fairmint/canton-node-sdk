@@ -196,6 +196,16 @@ function requireNonEmpty(value: unknown, fieldName: string): string {
   return normalized;
 }
 
+function requireInputRecord(value: unknown, fieldName: string): asserts value is Record<string, unknown> {
+  if (!isRecord(value)) {
+    throw new TokenStandardV2AllocationError(
+      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
+      `${fieldName} must be an object.`,
+      { field: fieldName }
+    );
+  }
+}
+
 function requireText(value: unknown, fieldName: string): string {
   if (typeof value !== 'string') {
     throw new TokenStandardV2AllocationError(
@@ -331,7 +341,7 @@ function normalizeAccount(value: unknown, fieldName: string): TokenStandardV2Acc
 
 function parseDecimalText(value: unknown, fieldName: string): { readonly text: string; readonly sign: -1 | 0 | 1 } {
   const text = requireNonEmpty(value, fieldName);
-  const match = /^([+-]?)(\d{1,28})(?:\.(\d{1,10}))?$/.exec(text);
+  const match = /^(-?)(\d{1,28})(?:\.(\d{1,10}))?$/.exec(text);
   if (!match) {
     throw new TokenStandardV2AllocationError(
       TokenStandardV2AllocationErrorCode.INPUT_INVALID,
@@ -356,18 +366,6 @@ function normalizePositiveDecimal(value: unknown, fieldName: string): string {
   return decimal.text;
 }
 
-function normalizeNonNegativeDecimal(value: unknown, fieldName: string): string {
-  const decimal = parseDecimalText(value, fieldName);
-  if (decimal.sign === -1) {
-    throw new TokenStandardV2AllocationError(
-      TokenStandardV2AllocationErrorCode.INPUT_INVALID,
-      `${fieldName} must be non-negative.`,
-      { field: fieldName }
-    );
-  }
-  return decimal.text;
-}
-
 function normalizeFunding(
   value: Readonly<Record<string, string>> | null | undefined,
   fieldName: string
@@ -377,7 +375,7 @@ function normalizeFunding(
   const normalized = Object.create(null) as Record<string, string>;
   for (const [key, amount] of Object.entries(funding)) {
     Object.defineProperty(normalized, key, {
-      value: normalizeNonNegativeDecimal(amount, `${fieldName}.${key}`),
+      value: normalizePositiveDecimal(amount, `${fieldName}.${key}`),
       enumerable: true,
       configurable: true,
       writable: false,
@@ -393,20 +391,29 @@ function emptyTokenStandardV2ExtraArgs(): TokenStandardV2ExtraArgs {
   };
 }
 
+function defaultWhenUndefined<T>(value: T | undefined, fallback: T): T {
+  if (value === undefined) return fallback;
+  return value;
+}
+
 function withDefaultTokenStandardV2Metadata<T extends { readonly meta?: TokenStandardV2Metadata }>(
   value: T,
   fieldName: string
 ): Omit<T, 'meta'> & { readonly meta: TokenStandardV2Metadata } {
   return {
     ...value,
-    meta: normalizeMetadata(value.meta ?? { values: {} }, `${fieldName}.meta`),
+    meta: normalizeMetadata(defaultWhenUndefined(value.meta, { values: {} }), `${fieldName}.meta`),
   };
 }
 
 export function buildTokenStandardV2AllocationChoiceArgument(
   params: BuildTokenStandardV2AllocationChoiceArgumentParams
 ): TokenStandardV2AllocationChoiceArgument {
-  const extraArgs = params.extraArgs ?? emptyTokenStandardV2ExtraArgs();
+  requireInputRecord(params, 'params');
+  requireInputRecord(params.settlement, 'settlement');
+  requireInputRecord(params.allocation, 'allocation');
+  if (params.extraArgs !== undefined) requireInputRecord(params.extraArgs, 'extraArgs');
+  const extraArgs = defaultWhenUndefined(params.extraArgs, emptyTokenStandardV2ExtraArgs());
   if (!Array.isArray(params.allocation.transferLegSides)) {
     throw new TokenStandardV2AllocationError(
       TokenStandardV2AllocationErrorCode.INPUT_INVALID,
@@ -579,6 +586,7 @@ function parseAllocationFactoryResponse(value: unknown): {
 export async function prepareTokenStandardV2AllocationCommand(
   params: PrepareTokenStandardV2AllocationCommandParams
 ): Promise<PreparedTokenStandardV2AllocationCommand> {
+  requireInputRecord(params, 'params');
   const registryUrl = requireNonEmpty(params.registryUrl, 'registryUrl');
   const registryChoiceArgument = buildTokenStandardV2AllocationChoiceArgument({
     ...params,
@@ -594,7 +602,7 @@ export async function prepareTokenStandardV2AllocationCommand(
     ...registryChoiceArgument,
     extraArgs: {
       context: factory.choiceContextData,
-      meta: normalizeMetadata(params.metadata ?? { values: {} }, 'metadata'),
+      meta: normalizeMetadata(defaultWhenUndefined(params.metadata, { values: {} }), 'metadata'),
     },
   };
   return {

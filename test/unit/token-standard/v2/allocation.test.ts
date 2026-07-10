@@ -137,6 +137,40 @@ describe('Token Standard V2 allocation helpers', () => {
     );
   });
 
+  test('rejects malformed runtime objects and null optional metadata with typed errors', () => {
+    const transferLegSide = allocationParams.allocation.transferLegSides[0];
+    if (!transferLegSide) throw new Error('test fixture must include one transfer-leg side');
+    const malformedParams: readonly unknown[] = [
+      null,
+      undefined,
+      { ...allocationParams, settlement: null },
+      { ...allocationParams, allocation: null },
+      { ...allocationParams, extraArgs: null },
+      { ...allocationParams, settlement: { ...allocationParams.settlement, meta: null } },
+      { ...allocationParams, allocation: { ...allocationParams.allocation, meta: null } },
+      {
+        ...allocationParams,
+        allocation: {
+          ...allocationParams.allocation,
+          transferLegSides: [{ ...transferLegSide, meta: null }],
+        },
+      },
+    ];
+
+    for (const value of malformedParams) {
+      let error: unknown;
+      try {
+        buildTokenStandardV2AllocationChoiceArgument(value as BuildTokenStandardV2AllocationChoiceArgumentParams);
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({
+        name: 'TokenStandardV2AllocationError',
+        code: 'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
+      });
+    }
+  });
+
   test('preserves settlement text identifiers and normalizes parties and contract ids', () => {
     expect(
       buildTokenStandardV2AllocationChoiceArgument({
@@ -211,7 +245,7 @@ describe('Token Standard V2 allocation helpers', () => {
         })
       ).toThrow(TokenStandardV2AllocationError);
     }
-    for (const amount of ['+1.0', '9999999999999999999999999999.1234567890']) {
+    for (const amount of ['1.0', '9999999999999999999999999999.1234567890']) {
       expect(
         buildWithAllocation({
           ...allocationParams.allocation,
@@ -219,7 +253,7 @@ describe('Token Standard V2 allocation helpers', () => {
         }).allocation.transferLegSides[0]?.amount
       ).toBe(amount);
     }
-    for (const amount of ['1.', '10000000000000000000000000000', '1.12345678901']) {
+    for (const amount of ['+1.0', '1.', '10000000000000000000000000000', '1.12345678901']) {
       expect(() =>
         buildWithAllocation({
           ...allocationParams.allocation,
@@ -228,18 +262,20 @@ describe('Token Standard V2 allocation helpers', () => {
       ).toThrow(TokenStandardV2AllocationError);
     }
 
-    expect(() =>
-      buildWithAllocation({
-        ...allocationParams.allocation,
-        nextIterationFunding: { USD: '-1.0' },
-      })
-    ).toThrow(TokenStandardV2AllocationError);
+    for (const amount of ['-1.0', '0']) {
+      expect(() =>
+        buildWithAllocation({
+          ...allocationParams.allocation,
+          nextIterationFunding: { USD: amount },
+        })
+      ).toThrow(TokenStandardV2AllocationError);
+    }
     expect(
       buildWithAllocation({
         ...allocationParams.allocation,
-        nextIterationFunding: { USD: '0' },
+        nextIterationFunding: { USD: '0.1' },
       }).allocation.nextIterationFunding
-    ).toEqual({ USD: '0' });
+    ).toEqual({ USD: '0.1' });
   });
 
   test('prepares through an arbitrary registry and preserves its context and disclosures', async () => {
@@ -307,6 +343,28 @@ describe('Token Standard V2 allocation helpers', () => {
           },
         },
       },
+    });
+  });
+
+  test('rejects null prepare metadata instead of treating it as absent', async () => {
+    const scan = createRegistryClient({
+      factoryId: '#allocation-factory',
+      choiceContext: {
+        choiceContextData: { values: {} },
+        disclosedContracts: [],
+      },
+    });
+
+    await expect(
+      prepareTokenStandardV2AllocationCommand({
+        ...allocationParams,
+        registryUrl: 'https://cash.example/token-registry',
+        scan,
+        metadata: null as never,
+      })
+    ).rejects.toMatchObject({
+      name: 'TokenStandardV2AllocationError',
+      code: 'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
     });
   });
 
