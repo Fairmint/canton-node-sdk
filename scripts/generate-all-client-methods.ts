@@ -2,6 +2,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import ts from 'typescript';
 
 interface ClientConfig {
   name: string;
@@ -54,6 +55,7 @@ type OperationInfo =
       paramsType: string;
       responseType: string;
       methodName?: string | undefined;
+      paramsOptional?: boolean | undefined;
       jsdoc?: string | undefined;
     }
   | {
@@ -140,20 +142,7 @@ function extractOperationInfos(fileContent: string): OperationInfo[] {
     }
   }
 
-  // Class-based operations: export class OperationName { ... execute(...) }
-  const classRegex = /export class (\w+)[^{]*{[\s\S]*?public async (execute|connect)\(/s;
-  const classMatch = classRegex.exec(fileContent);
-  if (classMatch?.[1]) {
-    const methodName = classMatch[2]; // 'execute' or 'connect'
-    results.push({
-      kind: 'api',
-      operationName: classMatch[1],
-      paramsType: 'unknown',
-      responseType: 'unknown',
-      ...(methodName && { methodName }), // Only include if defined
-      jsdoc: extractJsDoc(fileContent, classMatch[1]),
-    });
-  }
+  results.push(...extractClassOperationInfos(fileContent));
 
   // WebSocket operations: createWebSocketOperation<Params, RequestMessage, InboundMessage>
   // Note: Generic types can contain nested angle brackets (e.g., z.infer<...>),
@@ -173,6 +162,54 @@ function extractOperationInfos(fileContent: string): OperationInfo[] {
   }
 
   return results;
+}
+
+/** Extract class operations with the TypeScript AST so generic/optional method signatures remain intact. */
+function extractClassOperationInfos(fileContent: string): OperationInfo[] {
+  const sourceFile = ts.createSourceFile('operation.ts', fileContent, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const results: OperationInfo[] = [];
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isClassDeclaration(statement) || !statement.name || !hasModifier(statement, ts.SyntaxKind.ExportKeyword)) {
+      continue;
+    }
+
+    const method = statement.members.find(
+      (member): member is ts.MethodDeclaration =>
+        ts.isMethodDeclaration(member) &&
+        ts.isIdentifier(member.name) &&
+        (member.name.text === 'execute' || member.name.text === 'connect') &&
+        hasModifier(member, ts.SyntaxKind.AsyncKeyword)
+    );
+    if (!method || !ts.isIdentifier(method.name)) continue;
+
+    const apiOperationHeritage = statement.heritageClauses
+      ?.flatMap((clause) => [...clause.types])
+      .find((heritageType) => {
+        const expressionParts = heritageType.expression.getText(sourceFile).split('.');
+        return expressionParts[expressionParts.length - 1] === 'ApiOperation';
+      });
+    const [paramsTypeNode, responseTypeNode] = apiOperationHeritage?.typeArguments ?? [];
+    const firstParameter = method.parameters[0];
+
+    results.push({
+      kind: 'api',
+      operationName: statement.name.text,
+      paramsType: paramsTypeNode?.getText(sourceFile) ?? 'unknown',
+      responseType: responseTypeNode?.getText(sourceFile) ?? 'unknown',
+      methodName: method.name.text,
+      ...(firstParameter?.questionToken !== undefined || firstParameter?.initializer !== undefined
+        ? { paramsOptional: true }
+        : {}),
+      jsdoc: extractJsDoc(fileContent, statement.name.text),
+    });
+  }
+
+  return results;
+}
+
+function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
+  return ts.canHaveModifiers(node) && (ts.getModifiers(node)?.some((modifier) => modifier.kind === kind) ?? false);
 }
 
 function relativeImportPath(from: string, to: string): string {
@@ -211,9 +248,14 @@ function generateMethodDeclarations(ops: Array<OperationInfo & { importPath: str
       if (op.kind === 'api') {
         const opMethodName = op.methodName ?? 'execute';
         const methodParamsType = `Parameters<InstanceType<typeof ${op.operationName}>['${opMethodName}']>[0]`;
+        const methodOptionsType = `Parameters<InstanceType<typeof ${op.operationName}>['${opMethodName}']>[1]`;
         const methodReturnType = `ReturnType<InstanceType<typeof ${op.operationName}>['${opMethodName}']>`;
         if (op.paramsType === 'void') {
-          return `${jsdocComment}\n  public ${methodName}!: () => ${methodReturnType};`;
+          return `${jsdocComment}\n  public ${methodName}!: (options?: ${methodOptionsType}) => ${methodReturnType};`;
+        }
+        if (op.paramsType !== 'unknown' && opMethodName === 'execute') {
+          const optionalMarker = op.paramsOptional ? '?' : '';
+          return `${jsdocComment}\n  public ${methodName}!: (params${optionalMarker}: ${methodParamsType}, options?: ${methodOptionsType}) => ${methodReturnType};`;
         }
         return `${jsdocComment}\n  public ${methodName}!: (params: ${methodParamsType}) => ${methodReturnType};`;
       }
@@ -230,9 +272,14 @@ function generateMethodImplementations(ops: Array<OperationInfo & { importPath: 
     .map((op) => {
       const methodName = operationNameToMethodName(op.operationName);
       if (op.kind === 'api') {
-        const params = op.paramsType === 'void' ? '' : 'params';
         const opMethodName = op.methodName ?? 'execute';
-        return `    this.${methodName} = (${params}) => new ${op.operationName}(this).${opMethodName}(${params});`;
+        if (op.paramsType === 'void') {
+          return `    this.${methodName} = (options) => new ${op.operationName}(this).${opMethodName}(undefined, options);`;
+        }
+        if (op.paramsType !== 'unknown' && opMethodName === 'execute') {
+          return `    this.${methodName} = (params, options) => new ${op.operationName}(this).${opMethodName}(params, options);`;
+        }
+        return `    this.${methodName} = (params) => new ${op.operationName}(this).${opMethodName}(params);`;
       }
       return `    this.${methodName} = (params, handlers) => new ${op.operationName}(this).subscribe(params, handlers);`;
     })

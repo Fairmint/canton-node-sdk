@@ -38,6 +38,7 @@ export const GetAllocationWithdrawContext = createApiOperation<
 >({
   paramsSchema: GetAllocationWithdrawContextParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (params: GetAllocationWithdrawContextParams, apiUrl: string) =>
     `${apiUrl}${endpoint}/${params.allocationId}/choice-contexts/withdraw`,
   buildRequestData: (params: GetAllocationWithdrawContextParams): GetAllocationWithdrawContextRequest => {

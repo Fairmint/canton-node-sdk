@@ -22,6 +22,7 @@ export const PrepareAcceptExternalPartySetupProposal = createApiOperation<
 >({
   paramsSchema: PrepareAcceptExternalPartySetupProposalParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl: string): string =>
     `${apiUrl}/api/validator/v0/admin/external-party/setup-proposal/prepare-accept`,
   buildRequestData: (params): PrepareAcceptExternalPartySetupProposalRequest => params,

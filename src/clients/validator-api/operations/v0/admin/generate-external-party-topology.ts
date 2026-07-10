@@ -31,6 +31,7 @@ export const GenerateExternalPartyTopology = createApiOperation<
 >({
   paramsSchema: GenerateExternalPartyTopologyParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (_params, apiUrl: string) => `${apiUrl}/api/validator/v0/admin/external-party/topology/generate`,
   buildRequestData: (params) => params,
 });

@@ -18,6 +18,7 @@ export const GetBuyTrafficRequestStatus = createApiOperation<
 >({
   paramsSchema: GetBuyTrafficRequestStatusParamsSchema,
   method: 'POST',
+  requestSemantics: 'read',
   buildUrl: (params, apiUrl: string) =>
     `${apiUrl}/api/validator/v0/wallet/buy-traffic-requests/${params.trackingId}/status`,
   buildRequestData: () => ({}),
