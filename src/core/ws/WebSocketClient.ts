@@ -88,24 +88,33 @@ export class WebSocketClient {
     let tokenRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
     const logger = this.client.getLogger();
-    const log = async (event: string, payload: unknown): Promise<void> => {
-      if (logger) {
-        await logger.logRequestResponse(wsUrl, { event, requestMessage }, payload);
+    const reportAuxiliaryFailure = (message: string, context: Record<string, unknown>): void => {
+      try {
+        logger?.error?.(message, context);
+      } catch {
+        // A failing logger cannot report its own failure.
       }
     };
-    const logMessageEvent = async (event: string, payload: unknown): Promise<void> => {
+    const log = async (event: string, payload: unknown): Promise<void> => {
+      if (!logger) return;
       try {
-        await log(event, payload);
+        await logger.logRequestResponse(wsUrl, { event, requestMessage }, payload);
       } catch (err) {
         // Request/response logging is auxiliary and must not change WebSocket delivery semantics.
-        try {
-          logger?.error?.('WebSocket request/response logging failed', {
-            event,
-            error: toError(err).message,
-          });
-        } catch {
-          // A failing logger cannot report its own failure.
-        }
+        reportAuxiliaryFailure('WebSocket request/response logging failed', {
+          event,
+          error: toError(err).message,
+        });
+      }
+    };
+    const notifyError = (error: Error): void => {
+      try {
+        handlers.onError?.(error);
+      } catch (err) {
+        reportAuxiliaryFailure('WebSocket onError handler failed', {
+          error: toError(err).message,
+          originalError: error.message,
+        });
       }
     };
 
@@ -154,7 +163,7 @@ export class WebSocketClient {
         } catch (err) {
           const error = toError(err);
           await log('send_error', { message: error.message });
-          if (handlers.onError) handlers.onError(error);
+          notifyError(error);
           socket.close();
         }
       })();
@@ -176,9 +185,9 @@ export class WebSocketClient {
           parsed = WebSocketErrorUtils.safeJsonParse(dataString, 'WebSocket message');
         } catch (err) {
           const error = toError(err);
-          if (handlers.onError) handlers.onError(error);
+          notifyError(error);
           socket.close(1003, 'Invalid JSON received');
-          await logMessageEvent('parse_error', { raw: dataString, error: error.message });
+          await log('parse_error', { raw: dataString, error: error.message });
           return;
         }
 
@@ -186,22 +195,22 @@ export class WebSocketClient {
           handlers.onMessage(parsed as InboundMessage);
         } catch (err) {
           const error = toError(err);
-          if (handlers.onError) handlers.onError(error);
+          notifyError(error);
           socket.close(1011, 'Message handler failed');
-          await logMessageEvent('message_handler_error', { error: error.message });
+          await log('message_handler_error', { error: error.message });
           return;
         }
 
         // Servers may close immediately after their final frame. Dispatch it before async logging so close handlers
         // cannot observe an incomplete stream.
-        await logMessageEvent('message', parsed);
+        await log('message', parsed);
       })();
     });
 
     socket.on('error', (err: Error) => {
       void (async () => {
         await log('socket_error', { message: err.message });
-        if (handlers.onError) handlers.onError(err);
+        notifyError(err);
       })();
     });
 

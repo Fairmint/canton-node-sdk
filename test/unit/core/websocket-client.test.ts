@@ -85,13 +85,9 @@ describe('WebSocketClient', () => {
     messageLog.resolve();
   });
 
-  it('does not turn a message logging failure into a stream failure', async () => {
+  it('does not let logging failures interrupt the stream lifecycle', async () => {
     const loggerError = jest.fn();
-    const logRequestResponse = jest.fn(async (_url: string, request: { event?: string }): Promise<void> => {
-      if (request.event === 'message') {
-        throw new Error('logger unavailable');
-      }
-    });
+    const logRequestResponse = jest.fn().mockRejectedValue(new Error('logger unavailable'));
     const client = {
       getApiUrl: () => 'https://ledger.example',
       authenticate: jest.fn().mockResolvedValue('token'),
@@ -119,26 +115,69 @@ describe('WebSocketClient', () => {
     expect(onError).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(socket.close).not.toHaveBeenCalled();
-    expect(loggerError).toHaveBeenCalledWith('WebSocket request/response logging failed', {
-      event: 'message',
-      error: 'logger unavailable',
-    });
+    for (const event of ['connect', 'message', 'close']) {
+      expect(loggerError).toHaveBeenCalledWith('WebSocket request/response logging failed', {
+        event,
+        error: 'logger unavailable',
+      });
+    }
   });
 
-  it('reports a message handler failure without labeling it invalid JSON', async () => {
+  it('closes after invalid JSON even when the error handler throws', async () => {
     const logRequestResponse = jest.fn().mockResolvedValue(undefined);
+    const loggerError = jest.fn();
     const client = {
       getApiUrl: () => 'https://ledger.example',
       authenticate: jest.fn().mockResolvedValue('token'),
       getTokenIssuedAt: () => null,
       getTokenExpiryTime: () => null,
-      getLogger: () => ({ logRequestResponse }),
+      getLogger: () => ({ logRequestResponse, error: loggerError }),
+    } as unknown as BaseClient;
+    const onError = jest.fn(() => {
+      throw new Error('error callback failed');
+    });
+
+    await new WebSocketClient(client).connect(
+      '/v2/state/active-contracts',
+      { activeAtOffset: 42 },
+      { onMessage: jest.fn(), onError }
+    );
+    const socket = mockSockets[0];
+    if (!socket) throw new Error('Expected WebSocketClient to construct one socket.');
+
+    socket.emit('message', Buffer.from('{invalid json'));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(socket.close).toHaveBeenCalledWith(1003, 'Invalid JSON received');
+    expect(logRequestResponse).toHaveBeenCalledWith(
+      'wss://ledger.example/v2/state/active-contracts',
+      expect.objectContaining({ event: 'parse_error' }),
+      expect.objectContaining({ raw: '{invalid json' })
+    );
+    expect(loggerError).toHaveBeenCalledWith('WebSocket onError handler failed', {
+      error: 'error callback failed',
+      originalError: expect.any(String),
+    });
+  });
+
+  it('reports a message handler failure without labeling it invalid JSON', async () => {
+    const logRequestResponse = jest.fn().mockResolvedValue(undefined);
+    const loggerError = jest.fn();
+    const client = {
+      getApiUrl: () => 'https://ledger.example',
+      authenticate: jest.fn().mockResolvedValue('token'),
+      getTokenIssuedAt: () => null,
+      getTokenExpiryTime: () => null,
+      getLogger: () => ({ logRequestResponse, error: loggerError }),
     } as unknown as BaseClient;
     const handlerError = new Error('consumer failed');
     const onMessage = jest.fn(() => {
       throw handlerError;
     });
-    const onError = jest.fn();
+    const onError = jest.fn(() => {
+      throw new Error('error callback failed');
+    });
 
     await new WebSocketClient(client).connect(
       '/v2/state/active-contracts',
@@ -163,5 +202,9 @@ describe('WebSocketClient', () => {
       expect.objectContaining({ event: 'parse_error' }),
       expect.anything()
     );
+    expect(loggerError).toHaveBeenCalledWith('WebSocket onError handler failed', {
+      error: 'error callback failed',
+      originalError: 'consumer failed',
+    });
   });
 });
