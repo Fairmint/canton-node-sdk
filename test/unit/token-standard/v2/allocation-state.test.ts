@@ -2,6 +2,7 @@ import type { JsGetActiveContractsResponseItem } from '../../../../src/clients/l
 import {
   buildTokenStandardV2AllocationChoiceArgument,
   discoverTokenStandardV2AllocationState,
+  getTokenStandardV2AllocationViewsByContractIds,
   TOKEN_STANDARD_V2_ALLOCATION_INSTRUCTION_INTERFACE_ID,
   TOKEN_STANDARD_V2_ALLOCATION_INTERFACE_ID,
   TokenStandardV2AllocationStateError,
@@ -631,6 +632,111 @@ describe('discoverTokenStandardV2AllocationState', () => {
         parties: ['Buyer::alice'],
         synchronizerId: ' ',
         request,
+        activeAtOffset: 42,
+      })
+    ).rejects.toMatchObject({ code: TokenStandardV2AllocationStateErrorCode.INPUT_INVALID });
+    expect(ledger.getActiveContracts).not.toHaveBeenCalled();
+  });
+});
+
+describe('getTokenStandardV2AllocationViewsByContractIds', () => {
+  test('returns exact allocation CIDs in caller order from one ACS snapshot', async () => {
+    const firstTransferLegSide = requireFixtureValue(
+      completedView.allocation.transferLegSides[0],
+      'completed allocation first transfer-leg side'
+    );
+    const secondView: TokenStandardV2AllocationView = {
+      ...completedView,
+      allocation: {
+        ...completedView.allocation,
+        authorizer: firstTransferLegSide.otherside,
+        transferLegSides: [
+          {
+            ...firstTransferLegSide,
+            side: 'ReceiverSide',
+            otherside: completedView.allocation.authorizer,
+          },
+        ],
+      },
+    };
+    const ledger = createLedger([
+      activeContract({ contractId: '#sender', kind: 'Completed', viewValue: completedView }),
+      activeContract({ contractId: '#receiver', kind: 'Completed', viewValue: secondView }),
+      activeContract({
+        contractId: '#unrelated',
+        kind: 'Completed',
+        viewValue: { malformed: true },
+      }),
+      activeContract({
+        contractId: '#wrong-synchronizer',
+        kind: 'Completed',
+        synchronizerId: 'other-domain::1220other',
+        viewValue: { malformed: true },
+      }),
+    ]);
+
+    await expect(
+      getTokenStandardV2AllocationViewsByContractIds({
+        ledger,
+        parties: [' Buyer::alice ', 'Venue::operator'],
+        synchronizerId,
+        allocationCids: ['#receiver', '#sender'],
+        activeAtOffset: 42,
+      })
+    ).resolves.toEqual([
+      { allocationCid: '#receiver', view: secondView },
+      { allocationCid: '#sender', view: completedView },
+    ]);
+    expect(ledger.getActiveContracts).toHaveBeenCalledTimes(1);
+    expect(ledger.getActiveContracts).toHaveBeenCalledWith({
+      parties: ['Buyer::alice', 'Venue::operator'],
+      interfaceIds: [TOKEN_STANDARD_V2_ALLOCATION_INTERFACE_ID],
+      includeInterfaceView: true,
+      includeCreatedEventBlob: false,
+      activeAtOffset: 42,
+    });
+  });
+
+  test('reports every requested allocation missing from the snapshot', async () => {
+    const ledger = createLedger([
+      activeContract({ contractId: '#sender', kind: 'Completed', viewValue: completedView }),
+    ]);
+
+    await expect(
+      getTokenStandardV2AllocationViewsByContractIds({
+        ledger,
+        parties: ['Buyer::alice'],
+        synchronizerId,
+        allocationCids: ['#sender', '#receiver', '#other'],
+        activeAtOffset: 42,
+      })
+    ).rejects.toMatchObject({
+      code: TokenStandardV2AllocationStateErrorCode.NOT_FOUND,
+      context: {
+        missingAllocationCids: ['#receiver', '#other'],
+        activeAtOffset: 42,
+      },
+    });
+    expect(ledger.getActiveContracts).toHaveBeenCalledTimes(1);
+  });
+
+  test('rejects duplicate or empty allocation CID inputs before querying Canton', async () => {
+    const ledger = createLedger([]);
+    await expect(
+      getTokenStandardV2AllocationViewsByContractIds({
+        ledger,
+        parties: ['Buyer::alice'],
+        synchronizerId,
+        allocationCids: ['#allocation', '#allocation'],
+        activeAtOffset: 42,
+      })
+    ).rejects.toMatchObject({ code: TokenStandardV2AllocationStateErrorCode.INPUT_INVALID });
+    await expect(
+      getTokenStandardV2AllocationViewsByContractIds({
+        ledger,
+        parties: ['Buyer::alice'],
+        synchronizerId,
+        allocationCids: [],
         activeAtOffset: 42,
       })
     ).rejects.toMatchObject({ code: TokenStandardV2AllocationStateErrorCode.INPUT_INVALID });

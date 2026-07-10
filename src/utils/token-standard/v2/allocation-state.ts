@@ -16,6 +16,7 @@ export const TokenStandardV2AllocationStateErrorCode = {
   INTERFACE_VIEW_INVALID: 'TOKEN_STANDARD_V2_ALLOCATION_STATE_INTERFACE_VIEW_INVALID',
   ACS_INCOMPLETE: 'TOKEN_STANDARD_V2_ALLOCATION_STATE_ACS_INCOMPLETE',
   AMBIGUOUS: 'TOKEN_STANDARD_V2_ALLOCATION_STATE_AMBIGUOUS',
+  NOT_FOUND: 'TOKEN_STANDARD_V2_ALLOCATION_STATE_NOT_FOUND',
 } as const;
 
 export type TokenStandardV2AllocationStateErrorCode =
@@ -52,6 +53,15 @@ export interface DiscoverTokenStandardV2AllocationStateParams {
   readonly activeAtOffset: number;
 }
 
+export interface GetTokenStandardV2AllocationViewsByContractIdsParams {
+  readonly ledger: TokenStandardV2AllocationStateClient;
+  readonly parties: readonly string[];
+  readonly synchronizerId: string;
+  readonly allocationCids: readonly string[];
+  /** ACS snapshot offset. Requiring it binds every returned view to one Canton read. */
+  readonly activeAtOffset: number;
+}
+
 export interface TokenStandardV2AllocationView {
   readonly originalAllocationCid: string | null;
   readonly settlement: TokenStandardV2AllocationChoiceArgument['settlement'];
@@ -77,6 +87,11 @@ export interface TokenStandardV2AllocationInstructionView {
 
 export interface TokenStandardV2AllocationStateCompleted {
   readonly type: 'Completed';
+  readonly allocationCid: string;
+  readonly view: TokenStandardV2AllocationView;
+}
+
+export interface TokenStandardV2AllocationContract {
   readonly allocationCid: string;
   readonly view: TokenStandardV2AllocationView;
 }
@@ -124,6 +139,10 @@ function acsIncomplete(message: string, context: ErrorContext): never {
     message,
     context
   );
+}
+
+function notFound(message: string, context: ErrorContext): never {
+  throw new TokenStandardV2AllocationStateError(TokenStandardV2AllocationStateErrorCode.NOT_FOUND, message, context);
 }
 
 function requireTrimmedNonEmpty(value: unknown, field: string, invalid: InvalidValueHandler): string {
@@ -562,6 +581,25 @@ function normalizeActiveAtOffset(value: unknown): number {
   return value;
 }
 
+function normalizeAllocationCids(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    inputInvalid('allocationCids must be a non-empty array.', {
+      field: 'allocationCids',
+      allocationCids: value,
+    });
+  }
+  const allocationCids = value.map((contractId, index) =>
+    requireTrimmedNonEmpty(contractId, `allocationCids[${index}]`, inputInvalid)
+  );
+  if (new Set(allocationCids).size !== allocationCids.length) {
+    inputInvalid('allocationCids must not contain duplicates.', {
+      field: 'allocationCids',
+      allocationCids,
+    });
+  }
+  return allocationCids;
+}
+
 function handleNonActiveContractItem(item: unknown, itemIndex: number, synchronizerId: string): void {
   if (!isRecord(item) || !isRecord(item['contractEntry'])) {
     interfaceViewInvalid('ACS response contains an invalid contract row.', { itemIndex });
@@ -594,6 +632,93 @@ function handleNonActiveContractItem(item: unknown, itemIndex: number, synchroni
   }
 
   interfaceViewInvalid('ACS response contains an unsupported contract row.', { itemIndex });
+}
+
+/**
+ * Reads exact active AllocationV2 contracts from one ACS snapshot.
+ *
+ * Contract IDs and decoded views are returned together so callers cannot validate an off-ledger allocation snapshot and
+ * later submit a different contract ID.
+ */
+export async function getTokenStandardV2AllocationViewsByContractIds(
+  params: GetTokenStandardV2AllocationViewsByContractIdsParams
+): Promise<TokenStandardV2AllocationContract[]> {
+  if (!isRecord(params)) {
+    inputInvalid('params must be an exact allocation-view request.', { field: 'params' });
+  }
+  if (!isRecord(params.ledger) || typeof params.ledger.getActiveContracts !== 'function') {
+    inputInvalid('ledger must provide getActiveContracts.', { field: 'ledger' });
+  }
+  const parties = normalizeParties(params.parties);
+  const synchronizerId = requireTrimmedNonEmpty(params.synchronizerId, 'synchronizerId', inputInvalid);
+  const allocationCids = normalizeAllocationCids(params.allocationCids);
+  const requestedCids = new Set(allocationCids);
+  const activeAtOffset = normalizeActiveAtOffset(params.activeAtOffset);
+
+  const response = await params.ledger.getActiveContracts({
+    parties,
+    interfaceIds: [TOKEN_STANDARD_V2_ALLOCATION_INTERFACE_ID],
+    includeInterfaceView: true,
+    includeCreatedEventBlob: false,
+    activeAtOffset,
+  });
+  const allocations = new Map<string, TokenStandardV2AllocationStateCompleted>();
+
+  for (const [itemIndex, item] of response.entries()) {
+    if (!isJsActiveContractItem(item)) {
+      handleNonActiveContractItem(item, itemIndex, synchronizerId);
+      continue;
+    }
+    const activeContract = item.contractEntry.JsActiveContract;
+    if (activeContract.synchronizerId !== synchronizerId) continue;
+
+    const { createdEvent } = activeContract;
+    if (!isNonEmptyString(createdEvent.contractId) || !requestedCids.has(createdEvent.contractId)) continue;
+
+    for (const [viewIndex, interfaceView] of createdEvent.interfaceViews.entries()) {
+      if (!interfaceIdsMatch(interfaceView.interfaceId, TOKEN_STANDARD_V2_ALLOCATION_INTERFACE_ID)) continue;
+      const context = {
+        itemIndex,
+        viewIndex,
+        contractId: createdEvent.contractId,
+        interfaceId: interfaceView.interfaceId,
+      };
+      if (interfaceView.viewStatus.code !== 0) {
+        interfaceViewInvalid('Token Standard V2 allocation interface view request failed.', {
+          ...context,
+          viewStatusCode: interfaceView.viewStatus.code,
+          viewStatusMessage: interfaceView.viewStatus.message,
+        });
+      }
+      const identity = readAllocationViewIdentity(interfaceView.viewValue, context);
+      setConsistentState(allocations, createdEvent.contractId, {
+        type: 'Completed',
+        allocationCid: createdEvent.contractId,
+        view: readAllocationView(identity, context),
+      });
+    }
+  }
+
+  const missingAllocationCids = allocationCids.filter((contractId) => !allocations.has(contractId));
+  if (missingAllocationCids.length > 0) {
+    notFound('One or more requested Token Standard V2 allocations are not active and visible.', {
+      allocationCids,
+      missingAllocationCids,
+      synchronizerId,
+      activeAtOffset,
+    });
+  }
+
+  return allocationCids.map((allocationCid) => {
+    const allocation = allocations.get(allocationCid);
+    if (!allocation) {
+      notFound('A requested Token Standard V2 allocation disappeared while reading the ACS snapshot.', {
+        allocationCid,
+        activeAtOffset,
+      });
+    }
+    return { allocationCid, view: allocation.view };
+  });
 }
 
 /**
