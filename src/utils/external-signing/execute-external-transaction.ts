@@ -7,6 +7,12 @@ import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
 
 export type PartySignature = InteractiveSubmissionExecuteRequest['partySignatures']['signatures'][number];
 
+export const DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD = {
+  DeduplicationDuration: {
+    value: { duration: '30s' },
+  },
+} as const satisfies NonNullable<InteractiveSubmissionExecuteRequest['deduplicationPeriod']>;
+
 export interface ExecuteExternalTransactionOptions {
   readonly ledgerClient: LedgerJsonApiClient;
   readonly userId: string;
@@ -66,11 +72,7 @@ function buildExecuteExternalTransactionRequest(
     preparedTransaction: options.preparedTransaction,
     hashingSchemeVersion: options.hashingSchemeVersion ?? 'HASHING_SCHEME_VERSION_V2',
     submissionId: options.submissionId,
-    deduplicationPeriod: options.deduplicationPeriod ?? {
-      DeduplicationDuration: {
-        value: { duration: '30s' },
-      },
-    },
+    deduplicationPeriod: options.deduplicationPeriod ?? DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD,
     partySignatures: {
       signatures: [...options.partySignatures],
     },

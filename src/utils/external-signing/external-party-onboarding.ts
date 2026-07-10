@@ -3,6 +3,7 @@ import { ApiError, OperationError, OperationErrorCode, ValidationError } from '.
 import { isRecord } from '../../core/utils';
 import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
 import { allocateExternalParty } from './allocate-external-party';
+import { type CantonEd25519Signature, normalizeCantonEd25519Signature } from './canton-ed25519-signer';
 import {
   assertCantonHashSignature,
   assertCantonPartyMatchesPublicKey,
@@ -82,16 +83,8 @@ export interface ExternalPartyHashSigningRequest {
   readonly signingAlgorithmSpec: typeof CANTON_ED25519_SIGNATURE_ALGORITHM;
 }
 
-export type ExternalPartyHashSignature =
-  | {
-      readonly signatureBase64: string;
-    }
-  | {
-      readonly signatureHex: string;
-    }
-  | {
-      readonly signatureBytes: Buffer | Uint8Array;
-    };
+/** @deprecated Use {@link CantonEd25519Signature}. */
+export type ExternalPartyHashSignature = CantonEd25519Signature;
 
 export type ExternalPartyHashSigner = (
   request: ExternalPartyHashSigningRequest
@@ -299,48 +292,17 @@ export async function submitExternalPartyOnboarding(
 }
 
 function normalizeExternalPartyHashSignature(signature: ExternalPartyHashSignature): string {
-  if ('signatureBase64' in signature) {
-    return encodeSignatureBytes(decodeBase64Signature(signature.signatureBase64));
+  try {
+    return normalizeCantonEd25519Signature(signature);
+  } catch (error) {
+    if (
+      error instanceof ValidationError &&
+      error.message === 'External Canton signer must return a 64-byte Ed25519 signature'
+    ) {
+      throw new ValidationError('External-party signer must return a 64-byte Ed25519 signature', error.context);
+    }
+    throw error;
   }
-  if ('signatureHex' in signature) {
-    return encodeSignatureBytes(decodeHexSignature(signature.signatureHex));
-  }
-  return encodeSignatureBytes(Buffer.from(signature.signatureBytes));
-}
-
-function decodeBase64Signature(value: string): Buffer {
-  const normalized = value.trim().replace(/-/g, '+').replace(/_/g, '/');
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized) || normalized.length % 4 === 1) {
-    throw invalidExternalPartySignature();
-  }
-  const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
-  const decoded = Buffer.from(padded, 'base64');
-  if (decoded.toString('base64').replace(/=+$/, '') !== normalized.replace(/=+$/, '')) {
-    throw invalidExternalPartySignature();
-  }
-  return decoded;
-}
-
-function decodeHexSignature(value: string): Buffer {
-  const normalized = value.trim().replace(/^0x/i, '');
-  if (!/^[0-9a-fA-F]+$/.test(normalized) || normalized.length % 2 !== 0) {
-    throw invalidExternalPartySignature();
-  }
-  return Buffer.from(normalized, 'hex');
-}
-
-function encodeSignatureBytes(signature: Buffer): string {
-  if (signature.length !== 64) {
-    throw invalidExternalPartySignature(signature.length);
-  }
-  return signature.toString('base64');
-}
-
-function invalidExternalPartySignature(actualLength?: number): ValidationError {
-  return new ValidationError('External-party signer must return a 64-byte Ed25519 signature', {
-    ...(actualLength !== undefined ? { actualLength } : {}),
-    expectedLength: 64,
-  });
 }
 
 /** Lists party ids whose suffix matches the supplied Ed25519 public key fingerprint. */
