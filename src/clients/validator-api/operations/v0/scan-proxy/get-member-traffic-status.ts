@@ -60,39 +60,49 @@ export class GetMemberTrafficStatus extends ApiOperation<GetMemberTrafficStatusP
             // traffic-status request remain scoped to that final request.
             ...(operationOptions.retry?.kind === 'none' ? { retry: Object.freeze({ kind: 'none' as const }) } : {}),
           });
-    const buildUrl = async (attemptParams: GetMemberTrafficStatusParams): Promise<string> => {
-      const validatedAttemptParams = this.validateParams(attemptParams, GetMemberTrafficStatusParamsSchema);
-
-      // Auto-determine domainId if not provided
-      let { domainId } = validatedAttemptParams;
-      if (!domainId) {
-        if (!hasMiningRoundMethods(this.client)) {
-          throw new Error('Client does not support getOpenAndIssuingMiningRounds - use ValidatorApiClient');
-        }
-        const miningRoundClient = this.client;
-        domainId = await awaitWithAbort(
-          async (): Promise<string> => getCurrentMiningRoundDomainId(miningRoundClient, discoveryOptions),
-          operationOptions?.signal
-        );
+    // Resolve implicit endpoint components exactly once. Retry hooks should observe the same concrete params used by the
+    // request URL, and derived retries that omit defaults must not repeat discovery or drift to a different endpoint.
+    let initialDomainId = validatedParams.domainId;
+    if (!initialDomainId) {
+      if (!hasMiningRoundMethods(this.client)) {
+        throw new Error('Client does not support getOpenAndIssuingMiningRounds - use ValidatorApiClient');
       }
-
-      // Auto-determine memberId if not provided
-      const memberId = validatedAttemptParams.memberId ?? this.client.getPartyId();
-
-      return `${this.getApiUrl()}/api/validator/v0/scan-proxy/domains/${encodeURIComponent(domainId)}/members/${encodeURIComponent(memberId)}/traffic-status`;
+      const miningRoundClient = this.client;
+      initialDomainId = await awaitWithAbort(
+        async (): Promise<string> => getCurrentMiningRoundDomainId(miningRoundClient, discoveryOptions),
+        operationOptions?.signal
+      );
+    }
+    const initialMemberId = validatedParams.memberId ?? this.client.getPartyId();
+    const apiUrl = this.getApiUrl();
+    const resolvedInitialParams = Object.freeze({ domainId: initialDomainId, memberId: initialMemberId });
+    const normalizeAttemptParams = (
+      attemptParams: GetMemberTrafficStatusParams
+    ): { readonly domainId: string; readonly memberId: string } => {
+      const validatedAttemptParams = this.validateParams(attemptParams, GetMemberTrafficStatusParamsSchema);
+      return Object.freeze({
+        domainId:
+          validatedAttemptParams.domainId === undefined || validatedAttemptParams.domainId.length === 0
+            ? resolvedInitialParams.domainId
+            : validatedAttemptParams.domainId,
+        memberId: validatedAttemptParams.memberId ?? resolvedInitialParams.memberId,
+      });
+    };
+    const buildUrl = (attemptParams: GetMemberTrafficStatusParams): string => {
+      const { domainId, memberId } = normalizeAttemptParams(attemptParams);
+      return `${apiUrl}/api/validator/v0/scan-proxy/domains/${encodeURIComponent(domainId)}/members/${encodeURIComponent(memberId)}/traffic-status`;
     };
 
-    const url = await buildUrl(validatedParams);
+    const url = buildUrl(resolvedInitialParams);
     const httpOptions =
       operationOptions === undefined
         ? undefined
         : createOperationHttpRequestOptions({
-            initialParams: validatedParams,
+            initialParams: resolvedInitialParams,
             options: operationOptions,
             requestSemantics: 'read',
             initialUrl: url,
-            validateParams: (derivedParams): GetMemberTrafficStatusParams =>
-              this.validateParams(derivedParams, GetMemberTrafficStatusParamsSchema),
+            validateParams: normalizeAttemptParams,
             buildUrl,
             buildBody: (): undefined => undefined,
           });

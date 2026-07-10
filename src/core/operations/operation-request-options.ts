@@ -57,7 +57,7 @@ export function createOperationHttpRequestOptions<Params, Body, Semantics extend
     operationRetry?.kind === 'derived-body'
       ? async (context: HttpRequestRetryContext<Body>): Promise<DeepReadonly<Body>> => {
           const readonlyDerivedParams = await operationRetry.deriveParams(toOperationRetryContext(context));
-          const derivedParams = cloneRequestValue(readonlyDerivedParams) as Params;
+          const derivedParams = cloneDerivedParams<Params>(readonlyDerivedParams);
           const validatedDerivedParams = config.validateParams(derivedParams);
           const derivedUrl = await config.buildUrl(validatedDerivedParams);
           if (derivedUrl !== config.initialUrl) {
@@ -140,6 +140,16 @@ function createReadonlyParams<Params>(params: Params): DeepReadonly<Params> {
     return deepFreezeRequestValue(cloneRequestValue(params)) as DeepReadonly<Params>;
   } catch (error) {
     throw new ConfigurationError('Retryable operation parameters must be structured-cloneable', {
+      cause: error instanceof Error ? error.message : 'unknown clone failure',
+    });
+  }
+}
+
+function cloneDerivedParams<Params>(params: DeepReadonly<Params>): Params {
+  try {
+    return cloneRequestValue(params) as Params;
+  } catch (error) {
+    throw new ConfigurationError('Derived retry parameters must be structured-cloneable', {
       cause: error instanceof Error ? error.message : 'unknown clone failure',
     });
   }

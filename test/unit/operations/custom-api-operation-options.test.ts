@@ -125,4 +125,73 @@ describe('custom ApiOperation execution options', () => {
     });
     expect(makeGetRequest).not.toHaveBeenCalled();
   });
+
+  it('resolves member-traffic defaults once and exposes the concrete endpoint params to retry hooks', async () => {
+    const observedParams: unknown[] = [];
+    const getOpenAndIssuingMiningRounds = jest.fn().mockResolvedValue({
+      open_mining_rounds: [
+        {
+          contract: {
+            contract_id: 'round-contract',
+            template_id: 'round-template',
+            created_event_blob: 'round-blob',
+            payload: { opensAt: '2000-01-01T00:00:00Z', round_number: 1 },
+          },
+          domain_id: 'discovered-domain',
+        },
+      ],
+      issuing_mining_rounds: [],
+    });
+    const makeGetRequest = jest.fn(
+      async (_url: string, _config: unknown, httpOptions: NonNullable<Parameters<BaseClient['makeGetRequest']>[2]>) => {
+        const { retry } = httpOptions;
+        if (retry?.kind !== 'derived-body') throw new Error('Expected derived-body retry options');
+        await retry.beforeAttempt?.({ attempt: 1, body: undefined, previousAttempts: [] });
+        await retry.deriveBody({
+          attempt: 1,
+          body: undefined,
+          previousAttempts: [],
+          error: new Error('retry'),
+          errorClassification: 'transient-read-failure',
+          outcomeCertainty: 'definite',
+          retryable: true,
+        });
+        await retry.beforeAttempt?.({ attempt: 2, body: undefined, previousAttempts: [] });
+        return {};
+      }
+    );
+    const getPartyId = jest.fn((): string => 'default-member');
+    const client = {
+      getApiUrl: (): string => 'https://api.example',
+      getPartyId,
+      getOpenAndIssuingMiningRounds,
+      makeGetRequest,
+    } as unknown as BaseClient;
+
+    await new GetMemberTrafficStatus(client).execute(
+      {},
+      {
+        retry: {
+          kind: 'derived-body',
+          maxAttempts: 2,
+          beforeAttempt: ({ params }) => {
+            observedParams.push(params);
+          },
+          deriveParams: () => ({}),
+        },
+      }
+    );
+
+    expect(getOpenAndIssuingMiningRounds).toHaveBeenCalledTimes(1);
+    expect(getPartyId).toHaveBeenCalledTimes(1);
+    expect(makeGetRequest).toHaveBeenCalledWith(
+      'https://api.example/api/validator/v0/scan-proxy/domains/discovered-domain/members/default-member/traffic-status',
+      { includeBearerToken: true },
+      expect.any(Object)
+    );
+    expect(observedParams).toEqual([
+      { domainId: 'discovered-domain', memberId: 'default-member' },
+      { domainId: 'discovered-domain', memberId: 'default-member' },
+    ]);
+  });
 });

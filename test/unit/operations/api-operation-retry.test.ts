@@ -199,6 +199,39 @@ describe('factory-created operation retry plumbing', () => {
     expect(buildCounter.count).toBe(1);
   });
 
+  it('reports non-cloneable derived parameters as a configuration error', async () => {
+    const buildCounter = { count: 0 };
+    const { operation, post } = createOperation(buildCounter);
+    const nonCloneableParams = new Map<string, unknown>([
+      ['callback', () => undefined],
+    ]) as unknown as RetryOperationParams;
+    post.mockRejectedValueOnce(createAxiosError(503));
+
+    await expect(
+      operation.execute(
+        { resourceId: 'resource-1', submissionId: 'submission-1', payload: 'signed-transaction' },
+        {
+          retry: {
+            kind: 'derived-body',
+            maxAttempts: 2,
+            backoffMs: 0,
+            shouldRetry: () => true,
+            deriveParams: () => nonCloneableParams,
+          },
+        }
+      )
+    ).rejects.toMatchObject({
+      name: 'UnknownMutationOutcomeError',
+      cause: expect.objectContaining({
+        name: 'ConfigurationError',
+        message: 'Derived retry parameters must be structured-cloneable',
+      }),
+    });
+
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(buildCounter.count).toBe(1);
+  });
+
   it('cancels a hung initial request-body builder before dispatch', async () => {
     const bodyGate = new Promise<Record<string, unknown>>(() => undefined);
     const Operation = createApiOperation<RetryOperationParams, RetryOperationResponse>({
