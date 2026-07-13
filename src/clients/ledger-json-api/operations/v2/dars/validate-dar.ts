@@ -1,5 +1,5 @@
 import { createApiOperation } from '../../../../../core';
-import { ValidateDarResponseSchema } from '../../../schemas/api';
+import { ValidateDarResponseSchema, type ValidateDarResponse } from '../../../schemas/api';
 import { ValidateDarParamsSchema, type ValidateDarParams } from '../../../schemas/operations';
 
 /**
@@ -8,7 +8,7 @@ import { ValidateDarParamsSchema, type ValidateDarParams } from '../../../schema
  * The validated bytes are not persisted or vetted. When no synchronizer is supplied, Canton selects the target vetting
  * synchronizer according to the participant's package-management configuration.
  */
-export const ValidateDar = createApiOperation<ValidateDarParams, void>({
+export const ValidateDar = createApiOperation<ValidateDarParams, ValidateDarResponse>({
   paramsSchema: ValidateDarParamsSchema,
   method: 'POST',
   requestSemantics: 'read',

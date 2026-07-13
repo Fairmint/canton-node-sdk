@@ -1,5 +1,6 @@
+import { LedgerSynchronizerIdSchema } from '../../../src';
 import { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import { CantonRuntime, type ClientConfig, ValidationError } from '../../../src/core';
+import { CantonRuntime, SynchronizerId, ValidationError, type ClientConfig } from '../../../src/core';
 
 const config: ClientConfig = {
   network: 'localnet',
@@ -27,7 +28,7 @@ describe('LedgerJsonApiClient DAR validation and upload', () => {
     const expectedDarFile = Buffer.from(darFile);
     const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue('');
 
-    const validation = client.validateDar({ darFile, synchronizerId: 'sync::one' });
+    const validation = client.validateDar({ darFile, synchronizerId: SynchronizerId('sync::one') });
     darFile.fill(0);
 
     await expect(validation).resolves.toBeUndefined();
@@ -52,7 +53,9 @@ describe('LedgerJsonApiClient DAR validation and upload', () => {
     const darFile = Buffer.from('valid-dar-fixture');
     const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({});
 
-    await expect(client.uploadDar({ darFile, vetAllPackages, synchronizerId: 'sync::one' })).resolves.toEqual({});
+    await expect(
+      client.uploadDar({ darFile, vetAllPackages, synchronizerId: SynchronizerId('sync::one') })
+    ).resolves.toEqual({});
 
     expect(post).toHaveBeenCalledWith(
       url,
@@ -79,7 +82,11 @@ describe('LedgerJsonApiClient DAR validation and upload', () => {
 
   it.each([
     ['a non-empty validation response', 'unexpected response', 'validate'],
+    ['a null validation response', null, 'validate'],
+    ['an object validation response', {}, 'validate'],
     ['a non-empty upload response', { unexpected: true }, 'upload'],
+    ['an empty-string upload response', '', 'upload'],
+    ['a null upload response', null, 'upload'],
   ] as const)('rejects %s after transport without dispatching again', async (_label, response, operation) => {
     const client = createClient();
     const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue(response);
@@ -94,11 +101,36 @@ describe('LedgerJsonApiClient DAR validation and upload', () => {
     expect(post).toHaveBeenCalledTimes(1);
   });
 
+  it.each(['sync::one', `${'a'.repeat(185)}::${'b'.repeat(68)}`, 'identifier:segment:::namespace:segment'])(
+    'accepts the Canton synchronizer ID %s',
+    (synchronizerId) => {
+      expect(LedgerSynchronizerIdSchema.parse(synchronizerId)).toBe(synchronizerId);
+    }
+  );
+
+  it.each([
+    '',
+    'missing-namespace',
+    '::empty-identifier',
+    'empty-namespace::',
+    'sync::one::extra',
+    'sync::invalid@namespace',
+    `${'a'.repeat(186)}::namespace`,
+    `sync::${'b'.repeat(69)}`,
+  ])('rejects the invalid Canton synchronizer ID %s before dispatch', async (synchronizerId) => {
+    const client = createClient();
+    const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({});
+
+    await expect(client.uploadDar({ darFile: Buffer.from('dar'), synchronizerId } as never)).rejects.toBeInstanceOf(
+      ValidationError
+    );
+    expect(post).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['an empty DAR', { darFile: Buffer.alloc(0) }],
     ['a string body', { darFile: 'not-binary' }],
     ['a Uint8Array body', { darFile: new Uint8Array([1, 2, 3]) }],
-    ['an empty synchronizer ID', { darFile: Buffer.from('dar'), synchronizerId: '' }],
     ['an unknown field', { darFile: Buffer.from('dar'), filePath: '/tmp/file.dar' }],
   ])('rejects %s before dispatch', async (_label, params) => {
     const client = createClient();

@@ -38,6 +38,9 @@ export type InterfaceId = Brand<string, 'InterfaceId'>;
 /** A domain/synchronizer identifier. */
 export type DomainId = Brand<string, 'DomainId'>;
 
+/** A logical Canton synchronizer identifier (e.g., "synchronizer::namespace"). */
+export type SynchronizerId = Brand<string, 'SynchronizerId'>;
+
 /** A command identifier for deduplication. */
 export type CommandId = Brand<string, 'CommandId'>;
 
@@ -88,6 +91,11 @@ export function InterfaceId(value: string): InterfaceId {
 /** Creates a {@link DomainId} from a plain string. */
 export function DomainId(value: string): DomainId {
   return value as DomainId;
+}
+
+/** Creates a {@link SynchronizerId} from a plain string. */
+export function SynchronizerId(value: string): SynchronizerId {
+  return value as SynchronizerId;
 }
 
 /** Creates a {@link CommandId} from a plain string. */

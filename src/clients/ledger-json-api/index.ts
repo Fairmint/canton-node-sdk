@@ -11,6 +11,7 @@ export {
   LedgerPackageIdSchema,
   LedgerPackageNameSchema,
   LedgerPartyIdSchema,
+  LedgerSynchronizerIdSchema,
   LedgerTemplateIdSchema,
   NonEmptyDarFileSchema,
   UploadDarParamsSchema,
@@ -44,4 +45,5 @@ export type {
   UploadDarParams,
   UploadDarResponse,
   ValidateDarParams,
+  ValidateDarResponse,
 } from './schemas';
