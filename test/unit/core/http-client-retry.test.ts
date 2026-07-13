@@ -356,6 +356,34 @@ describe('HttpClient mutation retry safety', () => {
     expect(axiosInstance.post).toHaveBeenCalledTimes(1);
   });
 
+  it('summarizes a binary request body before logging a successful POST', async () => {
+    const loggedRequests: unknown[] = [];
+    const logger: Logger = {
+      logRequestResponse: async (_url, request): Promise<void> => {
+        loggedRequests.push(request);
+      },
+    };
+    const { client, axiosInstance } = createClient(logger);
+    const darFile = Buffer.from('private-dar-contents');
+    axiosInstance.post.mockResolvedValueOnce({ data: { ok: true } });
+
+    await expect(
+      client.makePostRequest('https://ledger.example/v2/dars', darFile, {
+        contentType: 'application/octet-stream',
+      })
+    ).resolves.toEqual({ ok: true });
+
+    expect(axiosInstance.post.mock.calls[0]?.[1]).toEqual(darFile);
+    expect(loggedRequests).toEqual([
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        data: { type: 'Buffer', byteLength: darFile.byteLength },
+      },
+    ]);
+    expect(JSON.stringify(loggedRequests)).not.toContain('private-dar-contents');
+  });
+
   it.each(loggerCases)(
     'keeps ambiguous POST failure independent from a logger %s',
     async (_name, logRequestResponse) => {
@@ -369,6 +397,32 @@ describe('HttpClient mutation retry safety', () => {
       expect(axiosInstance.post).toHaveBeenCalledTimes(1);
     }
   );
+
+  it('summarizes a binary request body before logging a failed POST', async () => {
+    const loggedRequests: unknown[] = [];
+    const logger: Logger = {
+      logRequestResponse: async (_url, request): Promise<void> => {
+        loggedRequests.push(request);
+      },
+    };
+    const { client, axiosInstance } = createClient(logger);
+    const darFile = Buffer.from('private-dar-contents');
+    axiosInstance.post.mockRejectedValueOnce(createAxiosError(400, { code: 'INVALID_ARGUMENT' }));
+
+    await expect(
+      client.makePostRequest('https://ledger.example/v2/dars', darFile, {
+        contentType: 'application/octet-stream',
+      })
+    ).rejects.toBeInstanceOf(ApiError);
+
+    expect(loggedRequests).toEqual([
+      {
+        method: 'POST',
+        data: { type: 'Buffer', byteLength: darFile.byteLength },
+      },
+    ]);
+    expect(JSON.stringify(loggedRequests)).not.toContain('private-dar-contents');
+  });
 
   it('does not let a never-settling logger block an authorized retry', async () => {
     const logger: Logger = {

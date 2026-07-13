@@ -243,7 +243,7 @@ const unvalidatedExternalHash: TransactionExternalHash = 'ab'.repeat(32);
 type CreatedTransactionEvent = Extract<TransactionEvents[number], { CreatedEvent: unknown }>['CreatedEvent'];
 type ExercisedTransactionEvent = Extract<TransactionEvents[number], { ExercisedEvent: unknown }>['ExercisedEvent'];
 type InterfaceView = NonNullable<CreatedTransactionEvent['interfaceViews']>[number];
-// @ts-expect-error Wire null contract keys normalize to an absent property.
+// A non-empty contract-key hash disambiguates a present top-level-null Daml key from an absent key.
 const nullContractKey: CreatedTransactionEvent['contractKey'] = null;
 const nullInterfaceViewValue: InterfaceView['viewValue'] = null;
 const createdEventArgument: CreatedTransactionEvent['createArgument'] = { owner: 'Alice', amount: 1 };

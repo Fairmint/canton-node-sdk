@@ -1,17 +1,8 @@
 import { z } from 'zod';
-import { DarFileSchema } from '../common';
 import { NonEmptyStringSchema } from './base';
 
 /** Schema for list packages parameters. No parameters required for listing packages. */
 export const ListPackagesParamsSchema = z.void();
-
-/** Schema for upload DAR file parameters. */
-export const UploadDarFileParamsSchema = z.object({
-  /** DAR file content as a binary Buffer. */
-  darFile: DarFileSchema,
-  /** Optional submission ID for deduplication. */
-  submissionId: z.string().optional(),
-});
 
 /** Schema for get package status parameters. */
 export const GetPackageStatusParamsSchema = z.object({
@@ -50,7 +41,6 @@ export const GetPreferredPackageVersionParamsSchema = z.object({
 
 // Export types
 export type ListPackagesParams = z.infer<typeof ListPackagesParamsSchema>;
-export type UploadDarFileParams = z.infer<typeof UploadDarFileParamsSchema>;
 export type GetPackageStatusParams = z.infer<typeof GetPackageStatusParamsSchema>;
 export type GetPreferredPackagesParams = z.infer<typeof GetPreferredPackagesParamsSchema>;
 export type GetPreferredPackageVersionParams = z.infer<typeof GetPreferredPackageVersionParamsSchema>;

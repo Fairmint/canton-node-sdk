@@ -32,8 +32,14 @@ export type PartyId = Brand<string, 'PartyId'>;
 /** A template identifier (e.g., "package:module:template"). */
 export type TemplateId = Brand<string, 'TemplateId'>;
 
+/** An interface identifier (e.g., "package:module:interface"). */
+export type InterfaceId = Brand<string, 'InterfaceId'>;
+
 /** A domain/synchronizer identifier. */
 export type DomainId = Brand<string, 'DomainId'>;
+
+/** A logical Canton synchronizer identifier (e.g., "synchronizer::namespace"). */
+export type SynchronizerId = Brand<string, 'SynchronizerId'>;
 
 /** A command identifier for deduplication. */
 export type CommandId = Brand<string, 'CommandId'>;
@@ -49,6 +55,9 @@ export type UserId = Brand<string, 'UserId'>;
 
 /** A package identifier (hash). */
 export type PackageId = Brand<string, 'PackageId'>;
+
+/** A Daml-LF package name. */
+export type PackageName = Brand<string, 'PackageName'>;
 
 /** An identity provider identifier. */
 export type IdentityProviderId = Brand<string, 'IdentityProviderId'>;
@@ -74,9 +83,19 @@ export function TemplateId(value: string): TemplateId {
   return value as TemplateId;
 }
 
+/** Creates an {@link InterfaceId} from a plain string. */
+export function InterfaceId(value: string): InterfaceId {
+  return value as InterfaceId;
+}
+
 /** Creates a {@link DomainId} from a plain string. */
 export function DomainId(value: string): DomainId {
   return value as DomainId;
+}
+
+/** Creates a {@link SynchronizerId} from a plain string. */
+export function SynchronizerId(value: string): SynchronizerId {
+  return value as SynchronizerId;
 }
 
 /** Creates a {@link CommandId} from a plain string. */
@@ -102,6 +121,11 @@ export function UserId(value: string): UserId {
 /** Creates a {@link PackageId} from a plain string. */
 export function PackageId(value: string): PackageId {
   return value as PackageId;
+}
+
+/** Creates a {@link PackageName} from a plain string. */
+export function PackageName(value: string): PackageName {
+  return value as PackageName;
 }
 
 /** Creates an {@link IdentityProviderId} from a plain string. */
