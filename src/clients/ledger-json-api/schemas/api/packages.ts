@@ -7,9 +7,6 @@ export const ListPackagesResponseSchema = z.object({
   packageIds: z.array(z.string()),
 });
 
-/** Upload DAR file response. */
-export const UploadDarFileResponseSchema = z.object({});
-
 /** Get package status response. */
 export const GetPackageStatusResponseSchema = z.object({
   /** The status of the package. */
@@ -74,7 +71,6 @@ export const GetPreferredPackageVersionResponseSchema = z
 
 // Export types
 export type ListPackagesResponse = z.infer<typeof ListPackagesResponseSchema>;
-export type UploadDarFileResponse = z.infer<typeof UploadDarFileResponseSchema>;
 export type GetPackageStatusResponse = z.infer<typeof GetPackageStatusResponseSchema>;
 export type PackageReference = z.infer<typeof PackageReferenceSchema>;
 export type PackageVettingRequirement = z.infer<typeof PackageVettingRequirementSchema>;

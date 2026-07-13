@@ -1,6 +1,7 @@
 export * from './authenticated-user';
 export * from './commands';
 export * from './contracts';
+export * from './dars';
 export * from './events';
 export * from './idps';
 export * from './interactive-submission';

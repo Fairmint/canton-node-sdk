@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { z } from 'zod';
 import { Completions } from '../../../src/clients/ledger-json-api/operations/v2/commands/completions';
+import { UploadDar } from '../../../src/clients/ledger-json-api/operations/v2/dars/upload-dar';
+import { ValidateDar } from '../../../src/clients/ledger-json-api/operations/v2/dars/validate-dar';
 import { InteractiveSubmissionExecute } from '../../../src/clients/ledger-json-api/operations/v2/interactive-submission/execute';
 import { InteractiveSubmissionExecuteAndWait } from '../../../src/clients/ledger-json-api/operations/v2/interactive-submission/execute-and-wait';
 import { InteractiveSubmissionExecuteAndWaitForTransaction } from '../../../src/clients/ledger-json-api/operations/v2/interactive-submission/execute-and-wait-for-transaction';
@@ -556,6 +558,27 @@ describe('semantic POST operation coverage matrix', () => {
         tracking_id: 'tracking-id',
       })
     ).rejects.toBeInstanceOf(UnknownMutationOutcomeError);
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries transient DAR validation because the POST is a semantic read', async () => {
+    const { client, post } = createSemanticPostClient();
+    post.mockRejectedValueOnce(createAxiosError(503)).mockResolvedValueOnce({ data: '' });
+
+    await expect(new ValidateDar(client).execute({ darFile: Buffer.from('dar') })).resolves.toBeUndefined();
+
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post.mock.calls.map((call) => call[1])).toEqual([Buffer.from('dar'), Buffer.from('dar')]);
+  });
+
+  it('does not automatically retry a DAR upload mutation after an ambiguous failure', async () => {
+    const { client, post } = createSemanticPostClient();
+    post.mockRejectedValueOnce(createAxiosError(503)).mockResolvedValueOnce({ data: {} });
+
+    await expect(
+      new UploadDar(client).execute({ darFile: Buffer.from('dar'), vetAllPackages: false })
+    ).rejects.toBeInstanceOf(UnknownMutationOutcomeError);
+
     expect(post).toHaveBeenCalledTimes(1);
   });
 

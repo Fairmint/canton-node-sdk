@@ -4,6 +4,9 @@ export * from './base';
 // Contract lookup parameter schemas
 export * from './contracts';
 
+// DAR validation and upload parameter schemas
+export * from './dars';
+
 // Event parameter schemas
 export * from './events';
 

@@ -12,6 +12,11 @@ export {
   LedgerPackageNameSchema,
   LedgerPartyIdSchema,
   LedgerTemplateIdSchema,
+  NonEmptyDarFileSchema,
+  UploadDarParamsSchema,
+  UploadDarResponseSchema,
+  ValidateDarParamsSchema,
+  ValidateDarResponseSchema,
 } from './schemas';
 export type {
   AssignCommand,
@@ -36,4 +41,7 @@ export type {
   LedgerStatus,
   TraceContext,
   UnassignCommand,
+  UploadDarParams,
+  UploadDarResponse,
+  ValidateDarParams,
 } from './schemas';

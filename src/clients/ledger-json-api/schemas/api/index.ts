@@ -4,6 +4,9 @@ export * from './commands';
 // Contract lookup schemas
 export * from './contracts';
 
+// DAR validation and upload schemas
+export * from './dars';
+
 // Shared strict CreatedEvent schema
 export * from './created-event';
 
