@@ -3,8 +3,13 @@ import {
   PartyId,
   type GetContractByIdCreatedEvent,
   type GetContractByIdParams,
+  type InterfaceId,
+  type LedgerInterfaceView,
   type LedgerJsonApiClient,
   type LedgerJsonValue,
+  type PackageId,
+  type PackageName,
+  type TemplateId,
 } from '../../src';
 
 declare const ledgerClient: LedgerJsonApiClient;
@@ -76,7 +81,16 @@ const { createArgument }: { createArgument: LedgerJsonValue } = createdEvent;
 const { contractKey: optionalContractKey }: { contractKey?: LedgerJsonValue } = createdEvent;
 const responseContractId: ContractId = createdEvent.contractId;
 const responseWitness: PartyId | undefined = createdEvent.witnessParties[0];
+const responseTemplateId: TemplateId = createdEvent.templateId;
+const responsePackageId: PackageId = createdEvent.representativePackageId;
+const responsePackageName: PackageName = createdEvent.packageName;
 const nullContractKey: GetContractByIdCreatedEvent['contractKey'] = null;
+declare const interfaceView: LedgerInterfaceView;
+const responseInterfaceId: InterfaceId = interfaceView.interfaceId;
+const responseImplementationPackageId: PackageId | undefined = interfaceView.implementationPackageId;
+
+// @ts-expect-error Ledger response identifiers are validated and branded.
+const unvalidatedTemplateId: TemplateId = `${'12'.repeat(32)}:Module:Template`;
 
 // @ts-expect-error Daml values must be losslessly representable JSON.
 const invalidCreateArgument: GetContractByIdCreatedEvent['createArgument'] = {
@@ -97,5 +111,11 @@ void createArgument;
 void optionalContractKey;
 void responseContractId;
 void responseWitness;
+void responseTemplateId;
+void responsePackageId;
+void responsePackageName;
+void responseInterfaceId;
+void responseImplementationPackageId;
+void unvalidatedTemplateId;
 void nullContractKey;
 void invalidCreateArgument;

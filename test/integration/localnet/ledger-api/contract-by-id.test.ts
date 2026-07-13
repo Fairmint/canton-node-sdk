@@ -37,6 +37,30 @@ async function getAppProviderContractContext(): Promise<AppProviderContractConte
   return { ...context, contractId: LedgerContractIdSchema.parse(contractId) };
 }
 
+async function hasReadAsAnyParty(client: LedgerJsonApiClient): Promise<boolean> {
+  const authenticated = await client.getAuthenticatedUser({});
+  const rights = await client.listUserRights({ userId: authenticated.user.id });
+  return rights.rights?.some((right) => right.kind !== undefined && 'CanReadAsAnyParty' in right.kind) ?? false;
+}
+
+async function withReadAsAnyParty<T>(client: LedgerJsonApiClient, callback: () => Promise<T>): Promise<T> {
+  const authenticated = await client.getAuthenticatedUser({});
+  const right = { kind: { CanReadAsAnyParty: { value: {} } } } as const;
+  const alreadyGranted = await hasReadAsAnyParty(client);
+  if (!alreadyGranted) {
+    await client.grantUserRights({ userId: authenticated.user.id, rights: [right] });
+  }
+
+  try {
+    expect(await hasReadAsAnyParty(client)).toBe(true);
+    return await callback();
+  } finally {
+    if (!alreadyGranted) {
+      await client.revokeUserRights({ userId: authenticated.user.id, rights: [right] });
+    }
+  }
+}
+
 function mutateContractId(contractId: ContractId): ContractId {
   const finalCharacter = contractId[contractId.length - 1];
   if (finalCharacter === undefined) {
@@ -96,39 +120,44 @@ describe('LedgerJsonApiClient / Contract by ID', () => {
     });
   }, 120_000);
 
-  test('applies ReadAsAnyParty authorization equally to omitted and empty querying parties', async () => {
+  test('applies ReadAsAnyParty success equally to omitted and empty querying parties', async () => {
     const { client, contractId } = await getAppProviderContractContext();
-    const authenticated = await client.getAuthenticatedUser({});
-    const rights = await client.listUserRights({ userId: authenticated.user.id });
-    const canReadAsAnyParty =
-      rights.rights?.some((right) => right.kind !== undefined && 'CanReadAsAnyParty' in right.kind) ?? false;
-    const lookups = [
-      client.getContractById({ contractId }),
-      client.getContractById({ contractId, queryingParties: [] }),
-    ];
+    await withReadAsAnyParty(client, async () => {
+      const responses = await Promise.all([
+        client.getContractById({ contractId }),
+        client.getContractById({ contractId, queryingParties: [] }),
+      ]);
 
-    if (canReadAsAnyParty) {
-      const responses = await Promise.all(lookups);
       expect(responses.map((response) => response.createdEvent.contractId)).toEqual([contractId, contractId]);
-    } else {
-      await Promise.all(
-        lookups.map(async (lookup) => {
-          await expect(lookup).rejects.toMatchObject({ name: 'ApiError', status: 403 });
-        })
-      );
-    }
+    });
   }, 120_000);
 
-  test('does not disclose a known contract to a readable non-stakeholder party', async () => {
-    const { contractId, partyId: stakeholderParty } = await getAppProviderContractContext();
-    const { client: nonStakeholderClient, partyId: nonStakeholderParty } = await getProviderContext('app-user');
+  test('applies ReadAsAnyParty denial equally to omitted and empty querying parties', async () => {
+    const { contractId } = await getAppProviderContractContext();
+    const { client } = await getProviderContext('app-user');
+    expect(await hasReadAsAnyParty(client)).toBe(false);
+
+    await Promise.all(
+      [client.getContractById({ contractId }), client.getContractById({ contractId, queryingParties: [] })].map(
+        async (lookup) => {
+          await expect(lookup).rejects.toMatchObject({ name: 'ApiError', status: 403 });
+        }
+      )
+    );
+  }, 120_000);
+
+  test('does not disclose a known same-participant contract to a readable non-stakeholder party', async () => {
+    const { client, contractId, partyId: stakeholderParty } = await getAppProviderContractContext();
+    const { partyId: nonStakeholderParty } = await getProviderContext('app-user');
     expect(nonStakeholderParty).not.toBe(stakeholderParty);
 
-    await expect(
-      nonStakeholderClient.getContractById({
-        contractId,
-        queryingParties: [nonStakeholderParty],
-      })
-    ).rejects.toMatchObject({ name: 'ApiError', status: 404 });
+    await withReadAsAnyParty(client, async () => {
+      await expect(
+        client.getContractById({
+          contractId,
+          queryingParties: [nonStakeholderParty],
+        })
+      ).rejects.toMatchObject({ name: 'ApiError', status: 404 });
+    });
   }, 120_000);
 });

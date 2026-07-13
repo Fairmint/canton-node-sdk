@@ -34,40 +34,69 @@ export const GetContractByIdRequestSchema = createRequestSchema<GetContractByIdR
   queryingParties: z.array(LedgerPartyIdSchema).optional(),
 });
 
-const GetContractByIdCreatedEventSchema: z.ZodType<GetContractByIdCreatedEvent> = LedgerCreatedEventSchema.superRefine(
-  (event, context) => {
-    const addExactPlaceholderIssue = (condition: boolean, path: PropertyKey[], message: string): void => {
-      if (!condition) {
-        context.addIssue({ code: 'custom', message, path });
-      }
-    };
-
-    addExactPlaceholderIssue(event.offset === 1, ['offset'], 'Expected pinned placeholder offset 1');
-    addExactPlaceholderIssue(event.nodeId === 0, ['nodeId'], 'Expected pinned placeholder nodeId 0');
-    addExactPlaceholderIssue(!event.acsDelta, ['acsDelta'], 'Expected pinned placeholder acsDelta false');
-    addExactPlaceholderIssue(
-      event.interfaceViews?.length === 0,
-      ['interfaceViews'],
-      'Expected pinned empty interfaceViews placeholder'
-    );
-    addExactPlaceholderIssue(
-      (event.createdEventBlob?.length ?? 0) > 0,
-      ['createdEventBlob'],
-      'Expected pinned non-empty createdEventBlob placeholder'
-    );
+const GetContractByIdCreatedEventSchema: z.ZodType<GetContractByIdCreatedEvent> = LedgerCreatedEventSchema.transform(
+  (event): GetContractByIdCreatedEvent => {
+    const {
+      acsDelta: _acsDelta,
+      createdEventBlob: _createdEventBlob,
+      interfaceViews: _interfaceViews,
+      nodeId: _nodeId,
+      offset: _offset,
+      ...createdEvent
+    } = event;
+    return createdEvent;
   }
-).transform((event): GetContractByIdCreatedEvent => {
-  const {
-    acsDelta: _acsDelta,
-    createdEventBlob: _createdEventBlob,
-    interfaceViews: _interfaceViews,
-    nodeId: _nodeId,
-    offset: _offset,
-    ...createdEvent
-  } = event;
-  return createdEvent;
-});
+);
 
-export const GetContractByIdResponseSchema: z.ZodType<GetContractByIdResponse> = z.strictObject({
-  createdEvent: GetContractByIdCreatedEventSchema,
-});
+export const GetContractByIdResponseSchema: z.ZodType<GetContractByIdResponse> = z
+  .strictObject({
+    createdEvent: GetContractByIdCreatedEventSchema,
+  })
+  .superRefine((response, context) => {
+    const { observers, representativePackageId, signatories, templateId, witnessParties } = response.createdEvent;
+    if (representativePackageId !== templateId.slice(0, templateId.indexOf(':'))) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Expected representativePackageId to match the contract template package ID',
+        path: ['createdEvent', 'representativePackageId'],
+      });
+    }
+
+    const stakeholders = new Set<string>([...signatories, ...(observers ?? [])]);
+    const nonStakeholderWitness = witnessParties.find((party) => !stakeholders.has(party));
+    if (nonStakeholderWitness !== undefined) {
+      context.addIssue({
+        code: 'custom',
+        message: `Returned witness ${JSON.stringify(nonStakeholderWitness)} is not a contract stakeholder`,
+        path: ['createdEvent', 'witnessParties'],
+      });
+    }
+  });
+
+/** Bind a contract lookup response to the exact request body used by the successful attempt. */
+export function createGetContractByIdResponseSchema(
+  params: GetContractByIdRequest
+): z.ZodType<GetContractByIdResponse> {
+  return GetContractByIdResponseSchema.superRefine((response, context) => {
+    const { createdEvent } = response;
+    if (createdEvent.contractId !== params.contractId) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Returned contract ID does not match the requested contract ID',
+        path: ['createdEvent', 'contractId'],
+      });
+    }
+
+    if (params.queryingParties !== undefined && params.queryingParties.length > 0) {
+      const queryingParties = new Set<string>(params.queryingParties);
+      const unexpectedWitness = createdEvent.witnessParties.find((party) => !queryingParties.has(party));
+      if (unexpectedWitness !== undefined) {
+        context.addIssue({
+          code: 'custom',
+          message: `Returned witness ${JSON.stringify(unexpectedWitness)} was not a querying party`,
+          path: ['createdEvent', 'witnessParties'],
+        });
+      }
+    }
+  });
+}

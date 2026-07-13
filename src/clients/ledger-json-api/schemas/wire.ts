@@ -1,5 +1,18 @@
 import { z } from 'zod';
-import { ContractId as brandContractId, PartyId as brandPartyId, type ContractId, type PartyId } from '../../../core';
+import {
+  ContractId as brandContractId,
+  InterfaceId as brandInterfaceId,
+  PackageId as brandPackageId,
+  PackageName as brandPackageName,
+  PartyId as brandPartyId,
+  TemplateId as brandTemplateId,
+  type ContractId,
+  type InterfaceId,
+  type PackageId,
+  type PackageName,
+  type PartyId,
+  type TemplateId,
+} from '../../../core';
 
 /** Any losslessly representable JSON value carried by the Ledger JSON API. */
 export type LedgerJsonValue = string | number | boolean | null | LedgerJsonValue[] | { [key: string]: LedgerJsonValue };
@@ -77,6 +90,32 @@ export const LedgerPartyIdSchema = z
   .regex(/^[A-Za-z0-9:_ -]+$/, { message: 'Expected a valid Daml-LF Party' })
   .transform((value): PartyId => brandPartyId(value));
 
+/** Canonical lowercase 32-byte Daml-LF package hash. */
+export const LedgerPackageIdSchema = z
+  .string()
+  .regex(/^[0-9a-f]{64}$/, { message: 'Expected a canonical lowercase Daml-LF PackageId' })
+  .transform((value): PackageId => brandPackageId(value));
+
+/** Non-empty Daml-LF package name (ASCII letters, digits, minus, and underscore; at most 255 characters). */
+export const LedgerPackageNameSchema = z
+  .string()
+  .min(1)
+  .max(255)
+  .regex(/^[A-Za-z0-9_-]+$/, { message: 'Expected a valid Daml-LF PackageName' })
+  .transform((value): PackageName => brandPackageName(value));
+
+/** Package-ID-qualified Daml template identifier. */
+export const LedgerTemplateIdSchema = z
+  .string()
+  .refine(isPackageIdQualifiedIdentifier, { message: 'Expected a package-ID-qualified Daml template identifier' })
+  .transform((value): TemplateId => brandTemplateId(value));
+
+/** Package-ID-qualified Daml interface identifier. */
+export const LedgerInterfaceIdSchema = z
+  .string()
+  .refine(isPackageIdQualifiedIdentifier, { message: 'Expected a package-ID-qualified Daml interface identifier' })
+  .transform((value): InterfaceId => brandInterfaceId(value));
+
 function isCanonicalStandardBase64(value: string): boolean {
   if (value.length === 0) return true;
   if (value.length % 4 !== 0) return false;
@@ -91,6 +130,23 @@ function isCanonicalStandardBase64(value: string): boolean {
 
 function isPinnedCantonContractId(value: string): boolean {
   return /^00[0-9a-f]{64}(?:[0-9a-f]{2}){0,94}$/.test(value) || /^01[0-9a-f]{24}(?:[0-9a-f]{2}){0,33}$/.test(value);
+}
+
+function isPackageIdQualifiedIdentifier(value: string): boolean {
+  const [packageId, moduleName, entityName, extra] = value.split(':');
+  return (
+    extra === undefined &&
+    packageId !== undefined &&
+    moduleName !== undefined &&
+    entityName !== undefined &&
+    /^[0-9a-f]{64}$/.test(packageId) &&
+    isDamlDottedName(moduleName) &&
+    isDamlDottedName(entityName)
+  );
+}
+
+function isDamlDottedName(value: string): boolean {
+  return value.length <= 1_000 && /^[A-Za-z$_][A-Za-z0-9$_]*(?:\.[A-Za-z$_][A-Za-z0-9$_]*)*$/.test(value);
 }
 
 function cloneLedgerJsonValue(value: LedgerJsonValue): LedgerJsonValue {

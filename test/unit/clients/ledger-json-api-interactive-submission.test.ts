@@ -28,6 +28,7 @@ const PROTO_VALUE_BASE64 = Buffer.from('encoded-protobuf').toString('base64');
 const EXTERNAL_TRANSACTION_HASH = 'ab'.repeat(32);
 const TRACEPARENT = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';
 const CREATED_CONTRACT_ID = `00${'ab'.repeat(32)}`;
+const CREATED_PACKAGE_ID = '12'.repeat(32);
 
 function createClient(): LedgerJsonApiClient {
   return new LedgerJsonApiClient(new CantonRuntime(config));
@@ -85,14 +86,14 @@ function createWireTransactionResponse(transactionOffset = 124, eventOffset = 12
             offset: eventOffset,
             nodeId: 0,
             contractId: CREATED_CONTRACT_ID,
-            templateId: 'pkg:Module:Template',
+            templateId: `${CREATED_PACKAGE_ID}:Module:Template`,
             contractKey: null,
             contractKeyHash: '',
             createArgument: { owner: 'party::fingerprint' },
             createdEventBlob: '',
             interfaceViews: [
               {
-                interfaceId: 'pkg:Module:Interface',
+                interfaceId: `${CREATED_PACKAGE_ID}:Module:Interface`,
                 viewStatus: {
                   code: 0,
                   message: '',
@@ -119,7 +120,7 @@ function createWireTransactionResponse(transactionOffset = 124, eventOffset = 12
             signatories: ['party::fingerprint'],
             createdAt: '2026-07-09T12:00:00Z',
             packageName: 'package-name',
-            representativePackageId: 'package-id',
+            representativePackageId: CREATED_PACKAGE_ID,
             acsDelta: true,
           },
         },

@@ -1,12 +1,24 @@
 import { z } from 'zod';
-import { createRequestSchema, type ContractId, type PartyId } from '../../../../core';
+import {
+  createRequestSchema,
+  type ContractId,
+  type InterfaceId,
+  type PackageId,
+  type PackageName,
+  type PartyId,
+  type TemplateId,
+} from '../../../../core';
 import type { components } from '../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 import {
   LedgerBase64BytesSchema,
   LedgerContractIdSchema,
+  LedgerInterfaceIdSchema,
   LedgerJsonValueSchema,
+  LedgerPackageIdSchema,
+  LedgerPackageNameSchema,
   LedgerPartyIdSchema,
   LedgerRfc3339TimestampSchema,
+  LedgerTemplateIdSchema,
   ledgerNullableOptionalResponseField,
   type LedgerJsonValue,
 } from '../wire';
@@ -24,9 +36,14 @@ export type LedgerStatus = Omit<LedgerSchemas['JsStatus'], 'details'> & {
 };
 
 /** Exact Ledger interface view with lossless Daml JSON values. */
-export type LedgerInterfaceView = Omit<LedgerSchemas['JsInterfaceView'], 'viewStatus' | 'viewValue'> & {
+export type LedgerInterfaceView = Omit<
+  LedgerSchemas['JsInterfaceView'],
+  'implementationPackageId' | 'interfaceId' | 'viewStatus' | 'viewValue'
+> & {
+  interfaceId: InterfaceId;
   viewStatus: LedgerStatus;
   viewValue?: LedgerJsonValue;
+  implementationPackageId?: PackageId;
 };
 
 /**
@@ -37,15 +54,27 @@ export type LedgerInterfaceView = Omit<LedgerSchemas['JsInterfaceView'], 'viewSt
  */
 export type LedgerCreatedEvent = Omit<
   LedgerSchemas['CreatedEvent'],
-  'contractId' | 'contractKey' | 'createArgument' | 'interfaceViews' | 'observers' | 'signatories' | 'witnessParties'
+  | 'contractId'
+  | 'contractKey'
+  | 'createArgument'
+  | 'interfaceViews'
+  | 'observers'
+  | 'packageName'
+  | 'representativePackageId'
+  | 'signatories'
+  | 'templateId'
+  | 'witnessParties'
 > & {
   contractId: ContractId;
+  templateId: TemplateId;
   contractKey?: LedgerJsonValue;
   createArgument: LedgerJsonValue;
   interfaceViews?: LedgerInterfaceView[];
   witnessParties: PartyId[];
   signatories: PartyId[];
   observers?: PartyId[];
+  packageName: PackageName;
+  representativePackageId: PackageId;
 };
 
 const INT32_MIN = -2_147_483_648;
@@ -84,19 +113,27 @@ export const LedgerStatusSchema = createRequestSchema<LedgerStatus>()({
 
 /** Exact Ledger interface-view response schema. */
 export const LedgerInterfaceViewSchema = createRequestSchema<LedgerInterfaceView>()({
-  interfaceId: z.string().min(1),
+  interfaceId: LedgerInterfaceIdSchema,
   viewStatus: LedgerStatusSchema,
   viewValue: LedgerJsonValueSchema.optional(),
-  implementationPackageId: ledgerNullableOptionalResponseField(z.string().min(1)),
+  implementationPackageId: ledgerNullableOptionalResponseField(LedgerPackageIdSchema),
 });
+
+/** Empty for contracts without a key; otherwise the canonical Base64 encoding of a 32-byte Daml contract-key hash. */
+export const LedgerContractKeyHashSchema = z.union([
+  z.literal(''),
+  LedgerBase64BytesSchema.refine((value) => Buffer.from(value, 'base64').length === 32, {
+    message: 'Expected a 32-byte contract-key hash',
+  }),
+]);
 
 const StrictLedgerCreatedEventSchema = createRequestSchema<LedgerCreatedEvent>()({
   offset: PositiveInt64Schema,
   nodeId: NonNegativeInt32Schema,
   contractId: LedgerContractIdSchema,
-  templateId: z.string().min(1),
+  templateId: LedgerTemplateIdSchema,
   contractKey: LedgerJsonValueSchema.nullish(),
-  contractKeyHash: LedgerBase64BytesSchema.optional(),
+  contractKeyHash: LedgerContractKeyHashSchema.optional(),
   createArgument: LedgerJsonValueSchema,
   createdEventBlob: LedgerBase64BytesSchema.optional(),
   interfaceViews: z.array(LedgerInterfaceViewSchema).optional(),
@@ -104,8 +141,8 @@ const StrictLedgerCreatedEventSchema = createRequestSchema<LedgerCreatedEvent>()
   signatories: z.array(LedgerPartyIdSchema).min(1),
   observers: z.array(LedgerPartyIdSchema).optional(),
   createdAt: LedgerRfc3339TimestampSchema,
-  packageName: z.string().min(1),
-  representativePackageId: z.string().min(1),
+  packageName: LedgerPackageNameSchema,
+  representativePackageId: LedgerPackageIdSchema,
   acsDelta: z.boolean(),
 });
 

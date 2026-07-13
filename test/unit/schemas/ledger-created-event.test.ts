@@ -1,19 +1,25 @@
 import {
   LedgerContractIdSchema,
   LedgerCreatedEventSchema,
+  LedgerInterfaceIdSchema,
+  LedgerPackageIdSchema,
+  LedgerPackageNameSchema,
   LedgerPartyIdSchema,
+  LedgerTemplateIdSchema,
 } from '../../../src/clients/ledger-json-api';
 
 const CONTRACT_ID = `00${'ab'.repeat(32)}`;
 const PARTY = 'validator::fingerprint';
+const PACKAGE_ID = '12'.repeat(32);
 const PROTO_VALUE_BASE64 = Buffer.from('encoded-protobuf').toString('base64');
+const CONTRACT_KEY_HASH_BASE64 = Buffer.alloc(32, 1).toString('base64');
 
 function createWireEvent(): Record<string, unknown> {
   return {
     offset: 1,
     nodeId: 0,
     contractId: CONTRACT_ID,
-    templateId: 'package-id:Splice.Wallet.Install:WalletAppInstall',
+    templateId: `${PACKAGE_ID}:Splice.Wallet.Install:WalletAppInstall`,
     contractKey: null,
     contractKeyHash: '',
     createArgument: {
@@ -28,7 +34,7 @@ function createWireEvent(): Record<string, unknown> {
     observers: [],
     createdAt: '2026-07-10T12:00:00.123456789Z',
     packageName: 'splice-wallet',
-    representativePackageId: 'package-id',
+    representativePackageId: PACKAGE_ID,
     acsDelta: false,
   };
 }
@@ -39,7 +45,7 @@ describe('strict Ledger CreatedEvent wire schema', () => {
     Object.assign(wireEvent, {
       interfaceViews: [
         {
-          interfaceId: 'package-id:Module:Interface',
+          interfaceId: `${PACKAGE_ID}:Module:Interface`,
           viewStatus: {
             code: 0,
             message: '',
@@ -74,7 +80,7 @@ describe('strict Ledger CreatedEvent wire schema', () => {
     const wireEventWithNullKey = createWireEvent();
     Object.assign(wireEventWithNullKey, {
       contractKey: null,
-      contractKeyHash: Buffer.from('contract-key-hash').toString('base64'),
+      contractKeyHash: CONTRACT_KEY_HASH_BASE64,
     });
     const withNullKey = LedgerCreatedEventSchema.parse(wireEventWithNullKey);
 
@@ -85,7 +91,7 @@ describe('strict Ledger CreatedEvent wire schema', () => {
   it('infers a top-level-null key from a non-empty hash when the wire key field is omitted', () => {
     const wireEvent = createWireEvent();
     delete wireEvent['contractKey'];
-    Object.assign(wireEvent, { contractKeyHash: Buffer.from('contract-key-hash').toString('base64') });
+    Object.assign(wireEvent, { contractKeyHash: CONTRACT_KEY_HASH_BASE64 });
 
     expect(LedgerCreatedEventSchema.parse(wireEvent)).toHaveProperty('contractKey', null);
   });
@@ -95,6 +101,16 @@ describe('strict Ledger CreatedEvent wire schema', () => {
     Object.assign(wireEvent, { contractKey: { owner: PARTY }, contractKeyHash: '' });
 
     expect(() => LedgerCreatedEventSchema.parse(wireEvent)).toThrow('A present contract key requires');
+  });
+
+  it.each([1, 31, 33])('rejects a %i-byte contract-key hash', (byteLength) => {
+    const wireEvent = createWireEvent();
+    Object.assign(wireEvent, {
+      contractKey: { owner: PARTY },
+      contractKeyHash: Buffer.alloc(byteLength, 1).toString('base64'),
+    });
+
+    expect(() => LedgerCreatedEventSchema.parse(wireEvent)).toThrow('Expected a 32-byte contract-key hash');
   });
 });
 
@@ -131,5 +147,26 @@ describe('pinned Ledger identifiers', () => {
 
   it.each(['', 'bad.party', 'bad\nparty', '東京', 'p'.repeat(256)])('rejects invalid party %s', (party) => {
     expect(LedgerPartyIdSchema.safeParse(party).success).toBe(false);
+  });
+
+  it('validates and brands package, template, and interface identifiers', () => {
+    expect(LedgerPackageIdSchema.parse(PACKAGE_ID)).toBe(PACKAGE_ID);
+    expect(LedgerPackageNameSchema.parse('splice-wallet')).toBe('splice-wallet');
+    expect(LedgerTemplateIdSchema.parse(`${PACKAGE_ID}:Splice.Wallet.Install:WalletAppInstall`)).toBe(
+      `${PACKAGE_ID}:Splice.Wallet.Install:WalletAppInstall`
+    );
+    expect(LedgerInterfaceIdSchema.parse(`${PACKAGE_ID}:Splice.Api.Token:Transfer`)).toBe(
+      `${PACKAGE_ID}:Splice.Api.Token:Transfer`
+    );
+  });
+
+  it.each([
+    'package:Module:Template',
+    `${'AB'.repeat(32)}:Module:Template`,
+    `${PACKAGE_ID}:.Module:Template`,
+    `${PACKAGE_ID}:Module:bad-name`,
+    `${PACKAGE_ID}:Module:Template:extra`,
+  ])('rejects invalid package-ID-qualified identifier %s', (identifier) => {
+    expect(LedgerTemplateIdSchema.safeParse(identifier).success).toBe(false);
   });
 });

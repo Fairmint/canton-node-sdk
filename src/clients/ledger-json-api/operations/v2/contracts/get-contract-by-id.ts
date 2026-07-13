@@ -1,7 +1,7 @@
 import { createApiOperation } from '../../../../../core';
 import {
+  createGetContractByIdResponseSchema,
   GetContractByIdRequestSchema,
-  GetContractByIdResponseSchema,
   type GetContractByIdRequest,
   type GetContractByIdResponse,
 } from '../../../schemas/api/contracts';
@@ -16,13 +16,14 @@ export type GetContractByIdParams = GetContractByIdRequest;
  *
  * This POST endpoint is a semantic read: callers may opt into the same read retry strategies as GET operations.
  *
- * The pinned service synthesizes event metadata that has no ledger-event meaning. The SDK validates the exact raw
- * placeholders and removes `offset`, `nodeId`, `createdEventBlob`, `interfaceViews`, and `acsDelta` from the public
- * response. This endpoint must not be used for contracts imported through party replication or repair.
+ * The pinned service synthesizes event metadata that has no ledger-event meaning. The SDK removes `offset`, `nodeId`,
+ * `createdEventBlob`, `interfaceViews`, and `acsDelta` from the public response, then binds the remaining contract and
+ * witness data to the successful request attempt. This endpoint must not be used for contracts imported through party
+ * replication or repair.
  */
 export const GetContractById = createApiOperation<GetContractByIdParams, GetContractByIdResponse>({
   paramsSchema: GetContractByIdRequestSchema,
-  responseSchema: GetContractByIdResponseSchema,
+  responseSchema: createGetContractByIdResponseSchema,
   method: 'POST',
   requestSemantics: 'read',
   buildUrl: (_params, apiUrl) => `${apiUrl}${endpoint}`,

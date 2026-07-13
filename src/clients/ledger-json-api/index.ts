@@ -4,9 +4,14 @@ export {
   GetContractByIdRequestSchema,
   GetContractByIdResponseSchema,
   LedgerContractIdSchema,
+  LedgerContractKeyHashSchema,
   LedgerCreatedEventSchema,
+  LedgerInterfaceIdSchema,
   LedgerJsonValueSchema,
+  LedgerPackageIdSchema,
+  LedgerPackageNameSchema,
   LedgerPartyIdSchema,
+  LedgerTemplateIdSchema,
 } from './schemas';
 export type {
   AssignCommand,
@@ -24,8 +29,11 @@ export type {
   GetContractByIdResponse,
   JsCommands,
   LedgerCreatedEvent,
+  LedgerInterfaceView,
   LedgerJsonValue,
   LedgerNonNullJsonValue,
+  LedgerProtoAny,
+  LedgerStatus,
   TraceContext,
   UnassignCommand,
 } from './schemas';
