@@ -1,6 +1,9 @@
 // Base schemas
 export * from './base';
 
+// Contract lookup parameter schemas
+export * from './contracts';
+
 // Event parameter schemas
 export * from './events';
 

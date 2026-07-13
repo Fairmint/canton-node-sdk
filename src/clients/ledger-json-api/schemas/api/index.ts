@@ -1,6 +1,12 @@
 // Command schemas
 export * from './commands';
 
+// Contract lookup schemas
+export * from './contracts';
+
+// Shared strict CreatedEvent schema
+export * from './created-event';
+
 // Completion schemas
 export * from './completions';
 

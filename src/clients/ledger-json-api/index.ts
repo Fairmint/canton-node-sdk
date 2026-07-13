@@ -1,5 +1,18 @@
 export * from './completion-stream';
 export { LedgerJsonApiClient } from './LedgerJsonApiClient.generated';
+export {
+  GetContractByIdRequestSchema,
+  GetContractByIdResponseSchema,
+  LedgerContractIdSchema,
+  LedgerContractKeyHashSchema,
+  LedgerCreatedEventSchema,
+  LedgerInterfaceIdSchema,
+  LedgerJsonValueSchema,
+  LedgerPackageIdSchema,
+  LedgerPackageNameSchema,
+  LedgerPartyIdSchema,
+  LedgerTemplateIdSchema,
+} from './schemas';
 export type {
   AssignCommand,
   Command,
@@ -10,7 +23,17 @@ export type {
   DisclosedContract,
   ExerciseByKeyCommand,
   ExerciseCommand,
+  GetContractByIdCreatedEvent,
+  GetContractByIdParams,
+  GetContractByIdRequest,
+  GetContractByIdResponse,
   JsCommands,
+  LedgerCreatedEvent,
+  LedgerInterfaceView,
+  LedgerJsonValue,
+  LedgerNonNullJsonValue,
+  LedgerProtoAny,
+  LedgerStatus,
   TraceContext,
   UnassignCommand,
 } from './schemas';

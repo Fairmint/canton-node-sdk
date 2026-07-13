@@ -84,8 +84,11 @@ interface ApiOperationConfigBase<Params, Response> {
   readonly requestConfig?: RequestConfig;
   /** Transform the raw API response before returning it. */
   readonly transformResponse?: (response: Response) => Response;
-  /** Validate the public response after any response transformation and outside the transport retry loop. */
-  readonly responseSchema?: z.ZodSchema<Response>;
+  /**
+   * Validate the public response after any response transformation and outside the transport retry loop. A resolver is
+   * evaluated with the validated parameters used to build the successful request attempt.
+   */
+  readonly responseSchema?: z.ZodSchema<Response> | ((params: Params) => z.ZodSchema<Response>);
 }
 
 /** Configuration for a factory-created API operation. GET is read-only by construction. */
@@ -152,6 +155,7 @@ export function createApiOperation<Params, Response>(
 
       // Validate parameters
       const currentParams = this.validateParams(params, config.paramsSchema);
+      let responseParams = currentParams;
 
       const apiUrl = this.getApiUrl();
       const url = config.buildUrl(currentParams, apiUrl, this.client);
@@ -165,6 +169,7 @@ export function createApiOperation<Params, Response>(
       };
 
       const buildRequestData = async (attemptParams: Params): Promise<OperationRequestData> => {
+        responseParams = attemptParams;
         if (config.method !== 'POST' && config.method !== 'PATCH') return undefined;
         return config.buildRequestData?.(attemptParams, this.client);
       };
@@ -193,7 +198,14 @@ export function createApiOperation<Params, Response>(
         const httpOptions =
           operationOptions === undefined && config.requestSemantics === undefined
             ? undefined
-            : buildHttpRequestOptions<undefined, 'read'>('read', effectiveOperationOptions, (): undefined => undefined);
+            : buildHttpRequestOptions<undefined, 'read'>(
+                'read',
+                effectiveOperationOptions,
+                (attemptParams): undefined => {
+                  responseParams = attemptParams;
+                  return undefined;
+                }
+              );
         response = await this.makeGetRequest<Response>(url, requestConfig, httpOptions);
       } else if (config.method === 'DELETE') {
         const httpOptions =
@@ -202,7 +214,10 @@ export function createApiOperation<Params, Response>(
             : buildHttpRequestOptions<undefined, RequestSemantics>(
                 requestSemantics,
                 effectiveOperationOptions,
-                (): undefined => undefined
+                (attemptParams): undefined => {
+                  responseParams = attemptParams;
+                  return undefined;
+                }
               );
         response = await this.makeDeleteRequest<Response>(url, requestConfig, httpOptions);
       } else {
@@ -231,7 +246,9 @@ export function createApiOperation<Params, Response>(
         response = config.transformResponse(response);
       }
 
-      return config.responseSchema ? this.validateResponse(response, config.responseSchema) : response;
+      const responseSchema =
+        typeof config.responseSchema === 'function' ? config.responseSchema(responseParams) : config.responseSchema;
+      return responseSchema ? this.validateResponse(response, responseSchema) : response;
     }
   };
 }

@@ -403,7 +403,7 @@ export class EnvLoader {
       grantType: 'client_credentials',
       clientId: `${provider}-validator`,
       clientSecret:
-        provider === 'app-provider' ? 'AL8648b9SfdTFImq7FV56Vd0KHifHBuC' : 'k1YVWeC1vjQcqzlqzY98WVxJc6e4IIdZ',
+        provider === 'app-provider' ? 'AL8648b9SfdTFImq7FV56Vd0KHifHBuC' : '6m12QyyGl81d9nABWQXMycZdXho6ejEX',
     };
 
     // Map API types to their port suffixes

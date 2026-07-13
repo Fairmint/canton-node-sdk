@@ -257,6 +257,38 @@ describe('factory-created operation retry plumbing', () => {
     ]);
   });
 
+  it('resolves a response schema from the parameters used by the successful retry attempt', async () => {
+    const Operation = createApiOperation<RetryOperationParams, { readonly submissionId: string }>({
+      paramsSchema: RetryOperationParamsSchema,
+      method: 'POST',
+      requestSemantics: 'read',
+      buildUrl: (params, apiUrl): string => `${apiUrl}/resources/${params.resourceId}`,
+      buildRequestData: (params) => ({ submissionId: params.submissionId, payload: params.payload }),
+      responseSchema: (params) => z.strictObject({ submissionId: z.literal(params.submissionId) }),
+    });
+    const { client, post } = createSemanticPostClient();
+    post.mockRejectedValueOnce(createAxiosError(503)).mockResolvedValueOnce({ data: { submissionId: 'submission-2' } });
+
+    await expect(
+      new Operation(client).execute(
+        { resourceId: 'resource-1', submissionId: 'submission-1', payload: 'query' },
+        {
+          retry: {
+            kind: 'derived-body',
+            maxAttempts: 2,
+            backoffMs: 0,
+            shouldRetry: () => true,
+            deriveParams: ({ params }) => ({
+              resourceId: params.resourceId,
+              submissionId: 'submission-2',
+              payload: params.payload,
+            }),
+          },
+        }
+      )
+    ).resolves.toEqual({ submissionId: 'submission-2' });
+  });
+
   it('rejects derived parameters that would silently change the endpoint', async () => {
     const buildCounter = { count: 0 };
     const { operation, post } = createOperation(buildCounter);
