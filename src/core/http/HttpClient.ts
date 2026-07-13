@@ -53,6 +53,7 @@ export class HttpClient {
   // Error message formatting constants
   private static readonly CAUSE_TRUNCATE_LENGTH = 200;
   private static readonly CONTEXT_VALUE_TRUNCATE_LENGTH = 50;
+  private static readonly RESPONSE_BODY_TRUNCATE_LENGTH = 200;
   private static readonly MAX_CONTEXT_KEYS = 3;
   private static readonly MAX_ATTEMPT_IDENTIFIER_LENGTH = 200;
 
@@ -485,11 +486,49 @@ export class HttpClient {
   /** Isolate logger-owned values so a custom logger cannot mutate request or response control-flow state. */
   private createLogSnapshot(value: unknown, redactRequestHeaders = false): unknown {
     try {
-      const snapshot: unknown = cloneRequestValue(value);
+      const snapshot: unknown = cloneRequestValue(this.summarizeBinaryLogValues(value));
       if (redactRequestHeaders) this.redactSensitiveLogHeaders(snapshot);
       return deepFreezeRequestValue(snapshot);
     } catch {
       return '[log value unavailable]';
+    }
+  }
+
+  /** Keep binary request and response contents out of logs while retaining useful size and representation metadata. */
+  private summarizeBinaryLogValues(value: unknown, ancestors = new WeakSet<object>()): unknown {
+    if (value === null || typeof value !== 'object') return value;
+    if (Buffer.isBuffer(value)) return { type: 'Buffer', byteLength: value.byteLength };
+    if (value instanceof ArrayBuffer) return { type: 'ArrayBuffer', byteLength: value.byteLength };
+    if (ArrayBuffer.isView(value)) {
+      return {
+        type: Object.prototype.toString.call(value).slice(8, -1),
+        byteLength: value.byteLength,
+      };
+    }
+    if (value instanceof Date) return value;
+
+    if (ancestors.has(value)) {
+      throw new TypeError('Cyclic log values are not supported');
+    }
+    ancestors.add(value);
+
+    try {
+      if (Array.isArray(value)) {
+        return value.map((item) => this.summarizeBinaryLogValues(item, ancestors));
+      }
+
+      const prototype: unknown = Object.getPrototypeOf(value);
+      if (prototype === Object.prototype || prototype === null) {
+        const summarized: Record<string, unknown> = {};
+        for (const [key, nested] of Object.entries(value)) {
+          summarized[key] = this.summarizeBinaryLogValues(nested, ancestors);
+        }
+        return summarized;
+      }
+
+      return value;
+    } finally {
+      ancestors.delete(value);
     }
   }
 
@@ -538,7 +577,7 @@ export class HttpClient {
     if (error instanceof CantonError) return error;
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
-      const data = (error.response?.data ?? {}) as Record<string, unknown>;
+      const { data, responseBody } = this.normalizeErrorResponseData(error.response?.data);
       const code = typeof data['code'] === 'string' ? data['code'] : undefined;
       const message = typeof data['message'] === 'string' ? data['message'] : undefined;
       const cause = typeof data['cause'] === 'string' ? data['cause'] : undefined;
@@ -571,6 +610,9 @@ export class HttpClient {
           msg += ` [context: ${contextSummary}]`;
         }
       }
+      if (responseBody) {
+        msg += ` (response body: ${this.formatResponseBodyForMessage(responseBody)})`;
+      }
 
       // Non-standard bodies (e.g. reverse-proxy "404 page not found") rarely include Canton fields; the URL is the best repro hint.
       if (error.config?.url) {
@@ -580,6 +622,44 @@ export class HttpClient {
       return new ApiError(msg, status, error.response?.statusText, data);
     }
     return new NetworkError(`Request failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  /** Preserve structured Canton errors and wrap every other response shape in a type-safe object context. */
+  private normalizeErrorResponseData(data: unknown): {
+    readonly data: Record<string, unknown>;
+    readonly responseBody?: string;
+  } {
+    if (this.isPlainObject(data)) return { data };
+    if (data === undefined || data === null) return { data: {} };
+
+    if (typeof data === 'string') return { data: { body: data }, responseBody: data };
+    if (Buffer.isBuffer(data)) {
+      const responseBody = `[binary response: ${data.byteLength} bytes]`;
+      return { data: { body: responseBody }, responseBody };
+    }
+
+    try {
+      const serialized: unknown = JSON.stringify(data);
+      const responseBody = typeof serialized === 'string' ? serialized : Object.prototype.toString.call(data);
+      return { data: { body: responseBody }, responseBody };
+    } catch {
+      const responseBody = Object.prototype.toString.call(data);
+      return { data: { body: responseBody }, responseBody };
+    }
+  }
+
+  private isPlainObject(value: unknown): value is Record<string, unknown> {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+    const prototype: unknown = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+
+  /** Escape control characters and bound unstructured server diagnostics before adding them to an error message. */
+  private formatResponseBodyForMessage(body: string): string {
+    const escapedBody = JSON.stringify(body).slice(1, -1);
+    return escapedBody.length > HttpClient.RESPONSE_BODY_TRUNCATE_LENGTH
+      ? `${escapedBody.slice(0, HttpClient.RESPONSE_BODY_TRUNCATE_LENGTH)}...`
+      : escapedBody;
   }
 
   /** Formats a context object into a summary string. Shows up to MAX_CONTEXT_KEYS keys with truncated values. */

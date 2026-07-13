@@ -21,7 +21,7 @@ jest.mock('axios', () => {
 // Helper to create a properly structured Axios error
 function createAxiosError(
   status: number,
-  data: Record<string, unknown>,
+  data: unknown,
   statusText = 'Error'
 ): Error & { isAxiosError: boolean; response: { status: number; statusText: string; data: unknown } } {
   const error = new Error('Request failed') as Error & {
@@ -172,6 +172,50 @@ describe('HttpClient error diagnostics', () => {
         const apiError = error as ApiError;
         expect(apiError.message).not.toContain('cause:');
       }
+    });
+  });
+
+  describe('unstructured response bodies', () => {
+    it('normalizes a text response into object context and a bounded escaped diagnostic', async () => {
+      const responseBody = `Invalid value for: body\n${'x'.repeat(250)}`;
+      mockAxiosInstance.get.mockRejectedValueOnce(createAxiosError(400, responseBody, 'Bad Request'));
+
+      let failure: unknown;
+      try {
+        await httpClient.makeGetRequest('http://test.com/v2/dars/validate');
+      } catch (error) {
+        failure = error;
+      }
+
+      expect(failure).toBeInstanceOf(ApiError);
+      const apiError = failure as ApiError;
+      expect(apiError.context).toEqual({ body: responseBody });
+      expect(apiError.message).toContain('(response body: Invalid value for: body\\n');
+      expect(apiError.message).toContain('...');
+      expect(apiError.message).not.toContain('x'.repeat(201));
+    });
+
+    it('preserves a structured Canton response as the ApiError context', async () => {
+      const response = {
+        code: 'INVALID_ARGUMENT',
+        message: 'Invalid request',
+        cause: 'The submitted payload is invalid',
+        context: { field: 'commands' },
+        body: 'structured metadata',
+      };
+      mockAxiosInstance.get.mockRejectedValueOnce(createAxiosError(400, response, 'Bad Request'));
+
+      let failure: unknown;
+      try {
+        await httpClient.makeGetRequest('http://test.com/api');
+      } catch (error) {
+        failure = error;
+      }
+
+      expect(failure).toBeInstanceOf(ApiError);
+      const apiError = failure as ApiError;
+      expect(apiError.context).toBe(response);
+      expect(apiError.message).not.toContain('response body:');
     });
   });
 

@@ -5,12 +5,14 @@ import {
   PackageId as brandPackageId,
   PackageName as brandPackageName,
   PartyId as brandPartyId,
+  SynchronizerId as brandSynchronizerId,
   TemplateId as brandTemplateId,
   type ContractId,
   type InterfaceId,
   type PackageId,
   type PackageName,
   type PartyId,
+  type SynchronizerId,
   type TemplateId,
 } from '../../../core';
 
@@ -90,6 +92,17 @@ export const LedgerPartyIdSchema = z
   .regex(/^[A-Za-z0-9:_ -]+$/, { message: 'Expected a valid Daml-LF Party' })
   .transform((value): PartyId => brandPartyId(value));
 
+/**
+ * Logical Canton synchronizer ID: a Daml-LF Party-compatible identifier and namespace separated by `::`.
+ *
+ * Canton limits the identifier to 185 characters and the namespace fingerprint to 68 characters. Each component may
+ * contain single colons, but not the reserved `::` delimiter.
+ */
+export const LedgerSynchronizerIdSchema = z
+  .string()
+  .refine(isCantonSynchronizerId, { message: 'Expected a valid logical Canton SynchronizerId' })
+  .transform((value): SynchronizerId => brandSynchronizerId(value));
+
 /** Canonical lowercase 32-byte Daml-LF package hash. */
 export const LedgerPackageIdSchema = z
   .string()
@@ -143,6 +156,21 @@ function isPackageIdQualifiedIdentifier(value: string): boolean {
     isDamlDottedName(moduleName) &&
     isDamlDottedName(entityName)
   );
+}
+
+function isCantonSynchronizerId(value: string): boolean {
+  const delimiterIndex = value.indexOf('::');
+  if (delimiterIndex <= 0) return false;
+
+  const identifier = value.slice(0, delimiterIndex);
+  const namespace = value.slice(delimiterIndex + 2);
+  const isDamlPartyComponent = (component: string, maxLength: number): boolean =>
+    component.length > 0 &&
+    component.length <= maxLength &&
+    !component.includes('::') &&
+    /^[A-Za-z0-9:_ -]+$/.test(component);
+
+  return isDamlPartyComponent(identifier, 185) && isDamlPartyComponent(namespace, 68);
 }
 
 function isDamlDottedName(value: string): boolean {

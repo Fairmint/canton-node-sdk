@@ -175,6 +175,8 @@ for (const requiredPath of [
   'build/src/index.js',
   'build/src/index.d.ts',
   'build/src/clients/ledger-json-api/operations/v2/contracts/get-contract-by-id.d.ts',
+  'build/src/clients/ledger-json-api/operations/v2/dars/upload-dar.d.ts',
+  'build/src/clients/ledger-json-api/operations/v2/dars/validate-dar.d.ts',
   'bin/canton-localnet',
   'scripts/localnet-cloud.sh',
 ]) {
