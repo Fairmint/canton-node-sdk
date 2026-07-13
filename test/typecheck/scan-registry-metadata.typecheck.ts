@@ -1,15 +1,15 @@
-import { z } from 'zod';
+import type { z } from 'zod';
 import type { ScanApiClient } from '../../src/clients/scan-api';
-import {
+import type {
+  GetInstrumentParams,
   GetInstrumentParamsSchema,
-  type GetInstrumentParams,
-  type GetInstrumentResponse,
+  GetInstrumentResponse,
 } from '../../src/clients/scan-api/operations/v0/registry/metadata/v1/get-instrument';
-import { type GetRegistryInfoResponse } from '../../src/clients/scan-api/operations/v0/registry/metadata/v1/get-registry-info';
-import {
+import type { GetRegistryInfoResponse } from '../../src/clients/scan-api/operations/v0/registry/metadata/v1/get-registry-info';
+import type {
+  ListInstrumentsParams,
   ListInstrumentsParamsSchema,
-  type ListInstrumentsParams,
-  type ListInstrumentsResponse,
+  ListInstrumentsResponse,
 } from '../../src/clients/scan-api/operations/v0/registry/metadata/v1/list-instruments';
 import type { paths } from '../../src/generated/token-standard/splice-api-token-metadata-v1/openapi/token-metadata-v1';
 

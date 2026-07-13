@@ -13,8 +13,7 @@ describe('LedgerJsonApiClient / Parties', () => {
 
   test('getParticipantId returns participant identifier', async () => {
     const client = getClient();
-    // Cast to handle void parameter type
-    const response = await (client.getParticipantId as () => Promise<{ participantId: string }>)();
+    const response = await client.getParticipantId();
 
     expect(response).toBeDefined();
     expect(typeof response.participantId).toBe('string');
