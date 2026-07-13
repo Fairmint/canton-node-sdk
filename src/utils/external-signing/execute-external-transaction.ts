@@ -1,50 +1,63 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import {
+  type InteractiveSubmissionExecuteAndWaitResponse,
   type InteractiveSubmissionExecuteRequest,
   type InteractiveSubmissionExecuteResponse,
 } from '../../clients/ledger-json-api/schemas/api/interactive-submission';
-import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
+import { ValidationError } from '../../core/errors';
 
-export type PartySignature = InteractiveSubmissionExecuteRequest['partySignatures']['signatures'][number];
+type GeneratedPartySignature = InteractiveSubmissionExecuteRequest['partySignatures']['signatures'][number];
+type GeneratedSignature = GeneratedPartySignature['signatures'][number];
+
+export type NonEmptyReadonlyArray<Value> = readonly [Value, ...Value[]];
+export type PartySignature = Omit<GeneratedPartySignature, 'signatures'> & {
+  readonly signatures: NonEmptyReadonlyArray<GeneratedSignature>;
+};
+export type NonEmptyPartySignatures = NonEmptyReadonlyArray<PartySignature>;
+export type InteractiveSubmissionHashingSchemeVersion = InteractiveSubmissionExecuteRequest['hashingSchemeVersion'];
 
 /** Immutable compatibility value. Use the factory below when building a submission request. */
 export const DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD = Object.freeze({
   DeduplicationDuration: Object.freeze({
-    value: Object.freeze({ duration: '30s' }),
+    value: Object.freeze({ seconds: 30, nanos: 0 }),
   }),
 }) satisfies NonNullable<InteractiveSubmissionExecuteRequest['deduplicationPeriod']>;
 
 /** Returns an isolated default deduplication period for one interactive submission. */
 export function createDefaultInteractiveSubmissionDeduplicationPeriod(): {
-  DeduplicationDuration: { value: { duration: string } };
+  DeduplicationDuration: { value: { seconds: number; nanos: number } };
 } {
   return {
     DeduplicationDuration: {
-      value: { duration: DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD.DeduplicationDuration.value.duration },
+      value: {
+        seconds: DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD.DeduplicationDuration.value.seconds,
+        nanos: DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD.DeduplicationDuration.value.nanos,
+      },
     },
   } satisfies NonNullable<InteractiveSubmissionExecuteRequest['deduplicationPeriod']>;
 }
 
 export interface ExecuteExternalTransactionOptions {
   readonly ledgerClient: LedgerJsonApiClient;
-  readonly userId: string;
+  readonly userId?: string;
   readonly preparedTransaction: string;
   readonly submissionId: string;
-  readonly partySignatures: readonly PartySignature[];
-  readonly hashingSchemeVersion?: string;
+  readonly partySignatures: NonEmptyPartySignatures;
+  readonly hashingSchemeVersion?: InteractiveSubmissionHashingSchemeVersion;
   readonly deduplicationPeriod?: InteractiveSubmissionExecuteRequest['deduplicationPeriod'];
+  readonly minLedgerTime?: InteractiveSubmissionExecuteRequest['minLedgerTime'];
 }
 
-export interface ExecuteExternalTransactionAndWaitResult {
-  readonly updateId: string;
-  readonly raw: Record<string, unknown>;
-}
+export type ExecuteExternalTransactionAndWaitResult = InteractiveSubmissionExecuteAndWaitResponse & {
+  /** Original validated Ledger response retained for existing helper composition. */
+  readonly raw: InteractiveSubmissionExecuteAndWaitResponse;
+};
 
 /**
  * Executes an interactive submission after offline signing (`interactiveSubmissionExecute`).
  *
  * @param options - Prepared blob from {@link prepareExternalTransaction}, submission id, per-party signatures
- * @returns Validator response payload from interactive submission execute
+ * @returns Empty success payload from the Ledger interactive submission execute endpoint
  */
 export async function executeExternalTransaction(
   options: ExecuteExternalTransactionOptions
@@ -61,32 +74,43 @@ export async function executeExternalTransaction(
 export async function executeExternalTransactionAndWait(
   options: ExecuteExternalTransactionOptions
 ): Promise<ExecuteExternalTransactionAndWaitResult> {
-  const raw = await options.ledgerClient.makePostRequest<unknown>(
-    `${options.ledgerClient.getApiUrl()}/v2/interactive-submission/executeAndWait`,
-    buildExecuteExternalTransactionRequest(options),
-    {
-      contentType: 'application/json',
-      includeBearerToken: true,
-    }
+  const response = await options.ledgerClient.interactiveSubmissionExecuteAndWait(
+    buildExecuteExternalTransactionRequest(options)
   );
-  const updateId = readRequiredString(raw, 'updateId', 'interactive submission executeAndWait');
-  return {
-    updateId,
-    raw: objectOrEmpty(raw),
-  };
+  return { ...response, raw: response };
 }
 
 function buildExecuteExternalTransactionRequest(
   options: ExecuteExternalTransactionOptions
 ): InteractiveSubmissionExecuteRequest {
+  const [firstPartySignature, ...remainingPartySignatures] = options.partySignatures;
+  const toRequestPartySignature = ({ party, signatures }: PartySignature): GeneratedPartySignature => ({
+    party,
+    signatures: [...signatures],
+  });
+
   return {
-    userId: options.userId,
     preparedTransaction: options.preparedTransaction,
-    hashingSchemeVersion: options.hashingSchemeVersion ?? 'HASHING_SCHEME_VERSION_V2',
+    hashingSchemeVersion: normalizeHashingSchemeVersion(options.hashingSchemeVersion),
     submissionId: options.submissionId,
     deduplicationPeriod: options.deduplicationPeriod ?? createDefaultInteractiveSubmissionDeduplicationPeriod(),
     partySignatures: {
-      signatures: [...options.partySignatures],
+      signatures: [
+        toRequestPartySignature(firstPartySignature),
+        ...remainingPartySignatures.map(toRequestPartySignature),
+      ],
     },
+    ...(options.userId !== undefined ? { userId: options.userId } : {}),
+    ...(options.minLedgerTime !== undefined ? { minLedgerTime: options.minLedgerTime } : {}),
   };
+}
+
+function normalizeHashingSchemeVersion(
+  value: InteractiveSubmissionHashingSchemeVersion | undefined
+): InteractiveSubmissionHashingSchemeVersion {
+  const resolved: unknown = value ?? 'HASHING_SCHEME_VERSION_V2';
+  if (resolved === 'HASHING_SCHEME_VERSION_V2' || resolved === 'HASHING_SCHEME_VERSION_V3') {
+    return resolved;
+  }
+  throw new ValidationError(`Unsupported interactive-submission hashing scheme: ${String(resolved)}`);
 }

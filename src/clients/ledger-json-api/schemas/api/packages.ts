@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LedgerRfc3339TimestampSchema } from '../wire';
 
 /** List packages response. */
 export const ListPackagesResponseSchema = z.object({
@@ -16,54 +17,60 @@ export const GetPackageStatusResponseSchema = z.object({
 });
 
 /** Package reference details. */
-export const PackageReferenceSchema = z.object({
+export const PackageReferenceSchema = z.strictObject({
   /** Package ID. */
-  packageId: z.string(),
+  packageId: z.string().min(1),
   /** Package name. */
-  packageName: z.string(),
+  packageName: z.string().min(1),
   /** Package version. */
-  packageVersion: z.string(),
+  packageVersion: z.string().min(1),
 });
 
 /** Package vetting requirement. */
-export const PackageVettingRequirementSchema = z.object({
+export const PackageVettingRequirementSchema = z.strictObject({
   /** Parties whose vetting state should be considered. */
-  parties: z.array(z.string()),
+  parties: z.array(z.string().min(1)).min(1),
   /** Package name for which to resolve the preferred package. */
-  packageName: z.string(),
+  packageName: z.string().min(1),
 });
 
 /** Package preference details. */
-export const PackagePreferenceSchema = z.object({
+export const PackagePreferenceSchema = z.strictObject({
   /** Package reference. */
   packageReference: PackageReferenceSchema,
   /** Synchronizer ID. */
-  synchronizerId: z.string(),
+  synchronizerId: z.string().min(1),
 });
 
 /** Get preferred package version request. */
-export const GetPreferredPackagesRequestSchema = z.object({
+export const GetPreferredPackagesRequestSchema = z.strictObject({
   /** Package vetting requirements. */
-  packageVettingRequirements: z.array(PackageVettingRequirementSchema),
+  packageVettingRequirements: z.array(PackageVettingRequirementSchema).min(1),
   /** Synchronizer ID (optional). */
-  synchronizerId: z.string().optional(),
+  synchronizerId: z.string().min(1).optional(),
   /** Vetting valid at timestamp (optional). */
-  vettingValidAt: z.string().optional(),
+  vettingValidAt: LedgerRfc3339TimestampSchema.optional(),
 });
 
 /** Get preferred packages response. */
-export const GetPreferredPackagesResponseSchema = z.object({
+export const GetPreferredPackagesResponseSchema = z.strictObject({
   /** Package references. */
-  packageReferences: z.array(PackageReferenceSchema),
+  packageReferences: z.array(PackageReferenceSchema).min(1),
   /** Synchronizer ID. */
-  synchronizerId: z.string(),
+  synchronizerId: z.string().min(1),
 });
 
 /** Get preferred package version response. */
-export const GetPreferredPackageVersionResponseSchema = z.object({
-  /** Package preference (optional). */
-  packagePreference: PackagePreferenceSchema.optional(),
-});
+export const GetPreferredPackageVersionResponseSchema = z
+  .strictObject({
+    /** Package preference (optional). */
+    packagePreference: PackagePreferenceSchema.nullish(),
+  })
+  .transform((response) =>
+    response.packagePreference === null || response.packagePreference === undefined
+      ? {}
+      : { packagePreference: response.packagePreference }
+  );
 
 // Export types
 export type ListPackagesResponse = z.infer<typeof ListPackagesResponseSchema>;

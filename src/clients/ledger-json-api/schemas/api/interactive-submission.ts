@@ -1,252 +1,792 @@
 import { z } from 'zod';
-import { RecordSchema } from '../base';
-import { DarFileSchema } from '../common';
+import { createRequestSchema, type Brand } from '../../../../core';
+import type {
+  components,
+  paths,
+} from '../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
+import {
+  LedgerBase64BytesSchema,
+  LedgerNameSchema,
+  LedgerNonEmptyBase64BytesSchema,
+  LedgerRfc3339TimestampSchema,
+  LedgerStringSchema,
+} from '../wire';
 
-/** Interactive submission allocate party request. */
-export const InteractiveSubmissionAllocatePartyRequestSchema = z.object({
-  /** Party identifier hint (optional). */
-  partyIdHint: z.string().optional(),
-  /** Display name (optional). */
-  displayName: z.string().optional(),
-  /** Is local party flag (optional). */
-  isLocal: z.boolean().optional(),
-});
+type LedgerSchemas = components['schemas'];
+type PrepareEndpoint = '/v2/interactive-submission/prepare';
+type ExecuteEndpoint = '/v2/interactive-submission/execute';
+type ExecuteAndWaitEndpoint = '/v2/interactive-submission/executeAndWait';
+type ExecuteAndWaitForTransactionEndpoint = '/v2/interactive-submission/executeAndWaitForTransaction';
 
-/** Interactive submission allocate party response. */
-export const InteractiveSubmissionAllocatePartyResponseSchema = z.object({
-  /** Allocated party details. */
-  party: z.object({
-    /** Party identifier. */
-    party: z.string(),
-    /** Display name (optional). */
-    displayName: z.string().optional(),
-    /** Is local party flag. */
-    isLocal: z.boolean(),
-  }),
-});
+type GeneratedInteractiveSubmissionPrepareRequest =
+  paths[PrepareEndpoint]['post']['requestBody']['content']['application/json'];
+type GeneratedInteractiveSubmissionPrepareResponse =
+  paths[PrepareEndpoint]['post']['responses']['200']['content']['application/json'];
+type GeneratedInteractiveSubmissionExecuteRequest =
+  paths[ExecuteEndpoint]['post']['requestBody']['content']['application/json'];
+export type InteractiveSubmissionExecuteResponse =
+  paths[ExecuteEndpoint]['post']['responses']['200']['content']['application/json'];
+type GeneratedInteractiveSubmissionExecuteAndWaitRequest =
+  paths[ExecuteAndWaitEndpoint]['post']['requestBody']['content']['application/json'];
+export type InteractiveSubmissionExecuteAndWaitResponse =
+  paths[ExecuteAndWaitEndpoint]['post']['responses']['200']['content']['application/json'];
+type GeneratedInteractiveSubmissionExecuteAndWaitForTransactionRequest =
+  paths[ExecuteAndWaitForTransactionEndpoint]['post']['requestBody']['content']['application/json'];
+type GeneratedInteractiveSubmissionExecuteAndWaitForTransactionResponse =
+  paths[ExecuteAndWaitForTransactionEndpoint]['post']['responses']['200']['content']['application/json'];
 
-/** Interactive submission create user request. */
-export const InteractiveSubmissionCreateUserRequestSchema = z.object({
-  /** User to create. */
-  user: z.object({
-    /** User identifier. */
-    id: z.string(),
-    /** Primary party for the user (optional). */
-    primaryParty: z.string().optional(),
-    /** Whether the user is deactivated. */
-    isDeactivated: z.boolean(),
-    /** User metadata (optional). */
-    metadata: z
-      .object({
-        /** Resource version for concurrent change detection. */
-        resourceVersion: z.string(),
-        /** Annotations for the resource. */
-        annotations: z.record(z.string(), z.string()),
-      })
-      .optional(),
-    /** Identity provider ID (optional). */
-    identityProviderId: z.string().optional(),
-  }),
-  /** Rights to assign to the user (optional). */
-  rights: z
-    .array(
-      z.object({
-        /** The kind of right. */
-        kind: z.union([
-          z.object({ CanActAs: z.object({ party: z.string() }) }),
-          z.object({ CanReadAs: z.object({ party: z.string() }) }),
-          z.object({ CanReadAsAnyParty: z.object({}) }),
-          z.object({ Empty: z.object({}) }),
-          z.object({ IdentityProviderAdmin: z.object({}) }),
-          z.object({ ParticipantAdmin: z.object({}) }),
-        ]),
-      })
-    )
-    .optional(),
-});
+/** Any losslessly representable JSON value. */
+export type InteractiveSubmissionJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | InteractiveSubmissionJsonValue[]
+  | { [key: string]: InteractiveSubmissionJsonValue };
 
-/** Interactive submission create user response. */
-export const InteractiveSubmissionCreateUserResponseSchema = z.object({
-  /** Created user. */
-  user: z.object({
-    /** User identifier. */
-    id: z.string(),
-    /** Primary party for the user (optional). */
-    primaryParty: z.string().optional(),
-    /** Whether the user is deactivated. */
-    isDeactivated: z.boolean(),
-    /** User metadata (optional). */
-    metadata: z
-      .object({
-        /** Resource version for concurrent change detection. */
-        resourceVersion: z.string(),
-        /** Annotations for the resource. */
-        annotations: z.record(z.string(), z.string()),
-      })
-      .optional(),
-    /** Identity provider ID (optional). */
-    identityProviderId: z.string().optional(),
-  }),
-});
+/** A present Daml JSON value; nested JSON nulls remain valid. */
+export type InteractiveSubmissionNonNullJsonValue = Exclude<InteractiveSubmissionJsonValue, null>;
 
-/** Interactive submission upload DAR request. */
-export const InteractiveSubmissionUploadDarRequestSchema = z.object({
-  /** DAR file content as a binary Buffer. */
-  darFile: DarFileSchema,
-});
+/** A mutable non-empty array matching raw Ledger request shapes. */
+export type InteractiveSubmissionNonEmptyArray<Value> = [Value, ...Value[]];
 
-/** Interactive submission upload DAR response. */
-export const InteractiveSubmissionUploadDarResponseSchema = z.object({});
+type UnionKeys<Union> = Union extends Union ? keyof Union : never;
+type ExactOneOfHelper<Variant, Union> = Variant extends Union
+  ? Variant & Partial<Record<Exclude<UnionKeys<Union>, keyof Variant>, never>>
+  : never;
+type ExactOneOf<Union> = ExactOneOfHelper<Union, Union>;
 
-const CreateCommandSchema = z.object({
-  CreateCommand: z.object({
-    templateId: z.string(),
-    createArguments: RecordSchema,
-  }),
-});
+type InteractiveSubmissionCreateCommand = Omit<LedgerSchemas['CreateCommand'], 'createArguments'> & {
+  createArguments: InteractiveSubmissionJsonValue;
+};
 
-const ExerciseCommandSchema = z.object({
-  ExerciseCommand: z.object({
-    templateId: z.string(),
-    contractId: z.string(),
-    choice: z.string(),
-    choiceArgument: RecordSchema,
-  }),
-});
+type InteractiveSubmissionExerciseCommand = Omit<LedgerSchemas['ExerciseCommand'], 'choiceArgument'> & {
+  choiceArgument: InteractiveSubmissionJsonValue;
+};
 
-const CreateAndExerciseCommandSchema = z.object({
-  CreateAndExerciseCommand: z.object({
-    templateId: z.string(),
-    createArguments: RecordSchema,
-    choice: z.string(),
-    choiceArgument: RecordSchema,
-  }),
-});
+type InteractiveSubmissionCreateAndExerciseCommand = Omit<
+  LedgerSchemas['CreateAndExerciseCommand'],
+  'createArguments' | 'choiceArgument'
+> & {
+  createArguments: InteractiveSubmissionJsonValue;
+  choiceArgument: InteractiveSubmissionJsonValue;
+};
 
-const ExerciseByKeyCommandSchema = z.object({
-  ExerciseByKeyCommand: z.object({
-    templateId: z.string(),
-    contractKey: RecordSchema,
-    choice: z.string(),
-    choiceArgument: RecordSchema,
-  }),
-});
+type InteractiveSubmissionExerciseByKeyCommand = Omit<
+  LedgerSchemas['ExerciseByKeyCommand'],
+  'choiceArgument' | 'contractKey'
+> & {
+  contractKey: InteractiveSubmissionJsonValue;
+  choiceArgument: InteractiveSubmissionJsonValue;
+};
 
-const CommandSchema = z.union([
-  CreateCommandSchema,
-  ExerciseCommandSchema,
-  CreateAndExerciseCommandSchema,
-  ExerciseByKeyCommandSchema,
+type InteractiveSubmissionCommandVariants =
+  | { CreateAndExerciseCommand: InteractiveSubmissionCreateAndExerciseCommand }
+  | { CreateCommand: InteractiveSubmissionCreateCommand }
+  | { ExerciseByKeyCommand: InteractiveSubmissionExerciseByKeyCommand }
+  | { ExerciseCommand: InteractiveSubmissionExerciseCommand };
+export type InteractiveSubmissionCommand = ExactOneOf<InteractiveSubmissionCommandVariants>;
+
+type InteractiveSubmissionDeduplicationPeriodVariants = LedgerSchemas['DeduplicationPeriod2'];
+type InteractiveSubmissionDeduplicationPeriod = ExactOneOf<InteractiveSubmissionDeduplicationPeriodVariants>;
+type InteractiveSubmissionTimeVariants = LedgerSchemas['Time'];
+type InteractiveSubmissionTime = ExactOneOf<InteractiveSubmissionTimeVariants>;
+type InteractiveSubmissionMinLedgerTime = Omit<LedgerSchemas['MinLedgerTime'], 'time'> & {
+  time?: InteractiveSubmissionTime;
+};
+
+type InteractiveSubmissionIdentifierFilterVariants = LedgerSchemas['IdentifierFilter'];
+export type InteractiveSubmissionIdentifierFilter = ExactOneOf<InteractiveSubmissionIdentifierFilterVariants>;
+type InteractiveSubmissionCumulativeFilter = Omit<LedgerSchemas['CumulativeFilter'], 'identifierFilter'> & {
+  identifierFilter?: InteractiveSubmissionIdentifierFilter;
+};
+type InteractiveSubmissionFilters = Omit<LedgerSchemas['Filters'], 'cumulative'> & {
+  cumulative?: InteractiveSubmissionCumulativeFilter[];
+};
+type InteractiveSubmissionEventFormat = Omit<LedgerSchemas['EventFormat'], 'filtersByParty' | 'filtersForAnyParty'> & {
+  filtersByParty?: Record<string, InteractiveSubmissionFilters>;
+  filtersForAnyParty?: InteractiveSubmissionFilters;
+};
+type InteractiveSubmissionTransactionFormat = Omit<
+  LedgerSchemas['TransactionFormat'],
+  'eventFormat' | 'transactionShape'
+> & {
+  eventFormat: InteractiveSubmissionEventFormat;
+  transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA' | 'TRANSACTION_SHAPE_LEDGER_EFFECTS';
+};
+
+export type InteractiveSubmissionPrefetchContractKey = Omit<LedgerSchemas['PrefetchContractKey'], 'contractKey'> & {
+  contractKey: InteractiveSubmissionJsonValue;
+};
+
+export type InteractiveSubmissionPrepareRequest = Omit<
+  GeneratedInteractiveSubmissionPrepareRequest,
+  'actAs' | 'commands' | 'estimateTrafficCost' | 'hashingSchemeVersion' | 'minLedgerTime' | 'prefetchContractKeys'
+> & {
+  /** Pinned Canton 0.6.8 supports exactly one command per interactive preparation. */
+  commands: [InteractiveSubmissionCommand];
+  actAs: InteractiveSubmissionNonEmptyArray<string>;
+  estimateTrafficCost?: InteractiveSubmissionCostEstimationHints;
+  hashingSchemeVersion?: InteractiveSubmissionHashingSchemeVersion;
+  minLedgerTime?: InteractiveSubmissionMinLedgerTime;
+  prefetchContractKeys?: InteractiveSubmissionPrefetchContractKey[];
+};
+
+/** Signature formats defined by the pinned Canton Ledger API crypto protobuf. */
+export type InteractiveSubmissionSignatureFormat =
+  | 'SIGNATURE_FORMAT_RAW'
+  | 'SIGNATURE_FORMAT_DER'
+  | 'SIGNATURE_FORMAT_CONCAT'
+  | 'SIGNATURE_FORMAT_SYMBOLIC';
+
+/** Signing algorithms defined by the pinned Canton Ledger API crypto protobuf. */
+export type InteractiveSubmissionSigningAlgorithmSpec =
+  | 'SIGNING_ALGORITHM_SPEC_ED25519'
+  | 'SIGNING_ALGORITHM_SPEC_EC_DSA_SHA_256'
+  | 'SIGNING_ALGORITHM_SPEC_EC_DSA_SHA_384';
+
+type InteractiveSubmissionCostEstimationHints = Omit<LedgerSchemas['CostEstimationHints'], 'expectedSignatures'> & {
+  expectedSignatures?: InteractiveSubmissionSigningAlgorithmSpec[];
+};
+
+export type InteractiveSubmissionHashingSchemeVersion = Exclude<
+  GeneratedInteractiveSubmissionExecuteRequest['hashingSchemeVersion'],
+  'HASHING_SCHEME_VERSION_UNSPECIFIED'
+>;
+
+export type InteractiveSubmissionPrepareResponse = Omit<
+  GeneratedInteractiveSubmissionPrepareResponse,
+  'hashingSchemeVersion'
+> & {
+  hashingSchemeVersion: InteractiveSubmissionHashingSchemeVersion;
+};
+
+export type InteractiveSubmissionSignature = Omit<LedgerSchemas['Signature'], 'format' | 'signingAlgorithmSpec'> & {
+  format: InteractiveSubmissionSignatureFormat;
+  signingAlgorithmSpec: InteractiveSubmissionSigningAlgorithmSpec;
+};
+
+type InteractiveSubmissionSinglePartySignatures = Omit<LedgerSchemas['SinglePartySignatures'], 'signatures'> & {
+  signatures: InteractiveSubmissionNonEmptyArray<InteractiveSubmissionSignature>;
+};
+
+type InteractiveSubmissionPartySignatures = Omit<LedgerSchemas['PartySignatures'], 'signatures'> & {
+  signatures: InteractiveSubmissionNonEmptyArray<InteractiveSubmissionSinglePartySignatures>;
+};
+
+type WithExactInteractiveSubmissionRequest<Request extends { partySignatures: unknown }> = Omit<
+  Request,
+  'deduplicationPeriod' | 'hashingSchemeVersion' | 'minLedgerTime' | 'partySignatures'
+> & {
+  deduplicationPeriod?: InteractiveSubmissionDeduplicationPeriod;
+  hashingSchemeVersion: InteractiveSubmissionHashingSchemeVersion;
+  minLedgerTime?: InteractiveSubmissionMinLedgerTime;
+  partySignatures: InteractiveSubmissionPartySignatures;
+};
+
+export type InteractiveSubmissionExecuteRequest =
+  WithExactInteractiveSubmissionRequest<GeneratedInteractiveSubmissionExecuteRequest>;
+export type InteractiveSubmissionExecuteAndWaitRequest =
+  WithExactInteractiveSubmissionRequest<GeneratedInteractiveSubmissionExecuteAndWaitRequest>;
+export type InteractiveSubmissionExecuteAndWaitForTransactionRequest = Omit<
+  WithExactInteractiveSubmissionRequest<GeneratedInteractiveSubmissionExecuteAndWaitForTransactionRequest>,
+  'transactionFormat'
+> & {
+  transactionFormat?: InteractiveSubmissionTransactionFormat;
+};
+
+/** Canton protobuf Any details carry decoded JSON, despite the generated OpenAPI declaring a string. */
+export type InteractiveSubmissionProtoAny = Omit<LedgerSchemas['ProtoAny'], 'valueDecoded'> & {
+  valueDecoded?: InteractiveSubmissionJsonValue;
+};
+
+type InteractiveSubmissionStatus = Omit<LedgerSchemas['JsStatus'], 'details'> & {
+  details?: InteractiveSubmissionProtoAny[];
+};
+
+type InteractiveSubmissionInterfaceView = Omit<LedgerSchemas['JsInterfaceView'], 'viewStatus' | 'viewValue'> & {
+  viewStatus: InteractiveSubmissionStatus;
+  viewValue?: InteractiveSubmissionJsonValue;
+};
+
+type InteractiveSubmissionCreatedEvent = Omit<
+  LedgerSchemas['CreatedEvent'],
+  'contractKey' | 'createArgument' | 'interfaceViews'
+> & {
+  contractKey?: InteractiveSubmissionNonNullJsonValue;
+  createArgument: InteractiveSubmissionJsonValue;
+  interfaceViews?: InteractiveSubmissionInterfaceView[];
+};
+
+type InteractiveSubmissionExercisedEvent = Omit<
+  LedgerSchemas['ExercisedEvent'],
+  'choiceArgument' | 'exerciseResult'
+> & {
+  choiceArgument: InteractiveSubmissionJsonValue;
+  exerciseResult?: InteractiveSubmissionJsonValue;
+};
+
+type GeneratedInteractiveSubmissionEvent = LedgerSchemas['Event'];
+type InteractiveSubmissionEventVariants =
+  | Extract<GeneratedInteractiveSubmissionEvent, { ArchivedEvent: unknown }>
+  | { CreatedEvent: InteractiveSubmissionCreatedEvent }
+  | { ExercisedEvent: InteractiveSubmissionExercisedEvent };
+export type InteractiveSubmissionEvent = ExactOneOf<InteractiveSubmissionEventVariants>;
+
+/** Normalized Ledger trace context; protobuf option nulls are exposed as omitted properties. */
+export type InteractiveSubmissionTraceContext = Omit<LedgerSchemas['TraceContext'], 'traceparent' | 'tracestate'> & {
+  traceparent?: string;
+  tracestate?: string;
+};
+
+/** Raw 32-byte Daml-LF SHA-256 transaction hash encoded as 64 lowercase hex characters. */
+export type InteractiveSubmissionExternalTransactionHashHex = Brand<
+  string,
+  'InteractiveSubmissionExternalTransactionHashHex'
+>;
+
+export type InteractiveSubmissionTransaction = Omit<
+  LedgerSchemas['JsTransaction'],
+  'events' | 'externalTransactionHash' | 'traceContext'
+> & {
+  events: InteractiveSubmissionEvent[];
+  traceContext?: InteractiveSubmissionTraceContext;
+  externalTransactionHash?: InteractiveSubmissionExternalTransactionHashHex;
+};
+
+export type InteractiveSubmissionExecuteAndWaitForTransactionResponse = Omit<
+  GeneratedInteractiveSubmissionExecuteAndWaitForTransactionResponse,
+  'transaction'
+> & {
+  transaction: InteractiveSubmissionTransaction;
+};
+
+const INT32_MIN = -2_147_483_648;
+const INT32_MAX = 2_147_483_647;
+const DURATION_SECONDS_MIN = -315_576_000_000;
+const DURATION_SECONDS_MAX = 315_576_000_000;
+const DURATION_NANOS_MIN = -999_999_999;
+const DURATION_NANOS_MAX = 999_999_999;
+
+const Int32Schema = z.number().int().min(INT32_MIN).max(INT32_MAX);
+const NonNegativeInt32Schema = z.number().int().min(0).max(INT32_MAX);
+const PositiveInt32Schema = z.number().int().min(1).max(INT32_MAX);
+const Int64Schema = z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER);
+const NonNegativeInt64Schema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+const PositiveInt64Schema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
+
+function isJsonValue(value: unknown, ancestors: Set<object> = new Set<object>()): boolean {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    return true;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && !Object.is(value, -0);
+  }
+  if (typeof value !== 'object') {
+    return false;
+  }
+
+  if (ancestors.has(value)) {
+    return false;
+  }
+  ancestors.add(value);
+
+  try {
+    if (Array.isArray(value)) {
+      if (Object.keys(value).length !== value.length || Reflect.ownKeys(value).length !== value.length + 1) {
+        return false;
+      }
+      for (let index = 0; index < value.length; index += 1) {
+        if (!(index in value) || !isJsonValue(value[index], ancestors)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    const prototype: unknown = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      return false;
+    }
+
+    const keys = Object.keys(value);
+    if (Reflect.ownKeys(value).length !== keys.length) {
+      return false;
+    }
+    return keys.every((key) => isJsonValue((value as Record<string, unknown>)[key], ancestors));
+  } catch {
+    return false;
+  } finally {
+    ancestors.delete(value);
+  }
+}
+
+const RequiredJsonValueSchema: z.ZodType<InteractiveSubmissionJsonValue> = z
+  .custom<InteractiveSubmissionJsonValue>((value) => isJsonValue(value), {
+    message: 'Expected a JSON-serializable value',
+  })
+  .transform(cloneJsonValue);
+
+function cloneJsonValue(value: InteractiveSubmissionJsonValue): InteractiveSubmissionJsonValue {
+  if (Array.isArray(value)) {
+    return value.map(cloneJsonValue);
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, cloneJsonValue(nested)]));
+  }
+  return value;
+}
+
+const NullableOptionalJsonValueSchema: z.ZodType<InteractiveSubmissionNonNullJsonValue | undefined> =
+  RequiredJsonValueSchema.nullish().transform(
+    (value): InteractiveSubmissionNonNullJsonValue | undefined => value ?? undefined
+  );
+
+/** Accept Scala `Option.None` encoded as JSON null, then expose the generated optional-property shape. */
+const nullableOptionalResponseField = <Schema extends z.ZodType>(
+  schema: Schema
+): z.ZodType<z.output<Schema> | undefined, z.input<Schema> | null | undefined> =>
+  schema.nullish().transform((value): z.output<Schema> | undefined => value ?? undefined);
+
+const EmptyObjectSchema: z.ZodType<Record<string, never>> = z.record(z.string(), z.never());
+
+const HashingSchemeVersionSchema = z.enum(['HASHING_SCHEME_VERSION_V2', 'HASHING_SCHEME_VERSION_V3']);
+
+const SignatureFormatSchema = z.enum([
+  'SIGNATURE_FORMAT_RAW',
+  'SIGNATURE_FORMAT_DER',
+  'SIGNATURE_FORMAT_CONCAT',
+  'SIGNATURE_FORMAT_SYMBOLIC',
 ]);
 
-const DisclosedContractSchema = z.object({
-  contractId: z.string(),
-  templateId: z.string(),
-  createdEventBlob: z.string().optional(),
-  synchronizerId: z.string(),
-  /** Optional metadata for the disclosed contract */
-  metadata: RecordSchema.optional(),
+const SigningAlgorithmSpecSchema = z.enum([
+  'SIGNING_ALGORITHM_SPEC_ED25519',
+  'SIGNING_ALGORITHM_SPEC_EC_DSA_SHA_256',
+  'SIGNING_ALGORITHM_SPEC_EC_DSA_SHA_384',
+]);
+
+const UnknownFieldSchema = createRequestSchema<LedgerSchemas['Field']>()({
+  varint: z.array(Int64Schema).optional(),
+  fixed64: z.array(Int64Schema).optional(),
+  fixed32: z.array(Int32Schema).optional(),
+  lengthDelimited: z.array(LedgerBase64BytesSchema).optional(),
 });
 
-const PackagePreferenceSchema = z.object({
-  packageId: z.string().optional(),
-  packageName: z.string().optional(),
+const UnknownFieldSetSchema = createRequestSchema<LedgerSchemas['UnknownFieldSet']>()({
+  fields: z.record(z.string(), UnknownFieldSchema),
 });
 
-/** Interactive submission prepare request. */
-export const InteractiveSubmissionPrepareRequestSchema = z.object({
-  commands: z.array(CommandSchema),
-  commandId: z.string(),
-  userId: z.string(),
-  actAs: z.array(z.string()),
-  readAs: z.array(z.string()),
+const DurationSchema = createRequestSchema<LedgerSchemas['Duration']>()({
+  seconds: z.number().int().min(DURATION_SECONDS_MIN).max(DURATION_SECONDS_MAX),
+  nanos: z.number().int().min(DURATION_NANOS_MIN).max(DURATION_NANOS_MAX),
+  unknownFields: UnknownFieldSetSchema.optional(),
+}).superRefine((duration, context) => {
+  if ((duration.seconds > 0 && duration.nanos < 0) || (duration.seconds < 0 && duration.nanos > 0)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['nanos'],
+      message: 'Duration seconds and nanos must have the same sign unless seconds is zero',
+    });
+  }
+});
+
+const DeduplicationDurationSchema = createRequestSchema<LedgerSchemas['DeduplicationDuration2']>()({
+  value: DurationSchema.refine((duration) => duration.seconds > 0 || (duration.seconds === 0 && duration.nanos >= 0), {
+    message: 'Deduplication duration must be non-negative',
+  }),
+});
+
+const DeduplicationOffsetSchema = createRequestSchema<LedgerSchemas['DeduplicationOffset2']>()({
+  value: NonNegativeInt64Schema,
+});
+
+const DeduplicationPeriodSchema: z.ZodType<InteractiveSubmissionDeduplicationPeriod> = z.union([
+  createRequestSchema<Extract<InteractiveSubmissionDeduplicationPeriodVariants, { DeduplicationDuration: unknown }>>()({
+    DeduplicationDuration: DeduplicationDurationSchema,
+  }),
+  createRequestSchema<Extract<InteractiveSubmissionDeduplicationPeriodVariants, { DeduplicationOffset: unknown }>>()({
+    DeduplicationOffset: DeduplicationOffsetSchema,
+  }),
+  createRequestSchema<Extract<InteractiveSubmissionDeduplicationPeriodVariants, { Empty: unknown }>>()({
+    Empty: EmptyObjectSchema,
+  }),
+]);
+
+const MinLedgerTimeAbsoluteSchema = createRequestSchema<LedgerSchemas['MinLedgerTimeAbs']>()({
+  value: LedgerRfc3339TimestampSchema,
+});
+
+const MinLedgerTimeRelativeSchema = createRequestSchema<LedgerSchemas['MinLedgerTimeRel']>()({
+  value: DurationSchema,
+});
+
+const LedgerTimeSchema: z.ZodType<InteractiveSubmissionTime> = z.union([
+  createRequestSchema<Extract<InteractiveSubmissionTimeVariants, { Empty: unknown }>>()({
+    Empty: EmptyObjectSchema,
+  }),
+  createRequestSchema<Extract<InteractiveSubmissionTimeVariants, { MinLedgerTimeAbs: unknown }>>()({
+    MinLedgerTimeAbs: MinLedgerTimeAbsoluteSchema,
+  }),
+  createRequestSchema<Extract<InteractiveSubmissionTimeVariants, { MinLedgerTimeRel: unknown }>>()({
+    MinLedgerTimeRel: MinLedgerTimeRelativeSchema,
+  }),
+]);
+
+const MinLedgerTimeSchema = createRequestSchema<InteractiveSubmissionMinLedgerTime>()({
+  time: LedgerTimeSchema.optional(),
+});
+
+const CreateCommandContentSchema = createRequestSchema<InteractiveSubmissionCreateCommand>()({
+  templateId: z.string().min(1),
+  createArguments: RequiredJsonValueSchema,
+});
+
+const ExerciseCommandContentSchema = createRequestSchema<InteractiveSubmissionExerciseCommand>()({
+  templateId: z.string().min(1),
+  contractId: z.string().min(1),
+  choice: LedgerNameSchema,
+  choiceArgument: RequiredJsonValueSchema,
+});
+
+const CreateAndExerciseCommandContentSchema = createRequestSchema<InteractiveSubmissionCreateAndExerciseCommand>()({
+  templateId: z.string().min(1),
+  createArguments: RequiredJsonValueSchema,
+  choice: LedgerNameSchema,
+  choiceArgument: RequiredJsonValueSchema,
+});
+
+const ExerciseByKeyCommandContentSchema = createRequestSchema<InteractiveSubmissionExerciseByKeyCommand>()({
+  templateId: z.string().min(1),
+  contractKey: RequiredJsonValueSchema,
+  choice: LedgerNameSchema,
+  choiceArgument: RequiredJsonValueSchema,
+});
+
+const CommandSchema: z.ZodType<InteractiveSubmissionCommand> = z.union([
+  createRequestSchema<Extract<InteractiveSubmissionCommandVariants, { CreateAndExerciseCommand: unknown }>>()({
+    CreateAndExerciseCommand: CreateAndExerciseCommandContentSchema,
+  }),
+  createRequestSchema<Extract<InteractiveSubmissionCommandVariants, { CreateCommand: unknown }>>()({
+    CreateCommand: CreateCommandContentSchema,
+  }),
+  createRequestSchema<Extract<InteractiveSubmissionCommandVariants, { ExerciseByKeyCommand: unknown }>>()({
+    ExerciseByKeyCommand: ExerciseByKeyCommandContentSchema,
+  }),
+  createRequestSchema<Extract<InteractiveSubmissionCommandVariants, { ExerciseCommand: unknown }>>()({
+    ExerciseCommand: ExerciseCommandContentSchema,
+  }),
+]);
+
+const SingleCommandSchema = z
+  .array(CommandSchema)
+  .length(1)
+  .transform((commands): [InteractiveSubmissionCommand] => commands as [InteractiveSubmissionCommand]);
+
+const NonEmptyActAsSchema = z
+  .array(z.string().min(1))
+  .min(1)
+  .transform(
+    (parties): InteractiveSubmissionNonEmptyArray<string> => parties as InteractiveSubmissionNonEmptyArray<string>
+  );
+
+const DisclosedContractSchema = createRequestSchema<LedgerSchemas['DisclosedContract']>()({
+  templateId: z.string().min(1).optional(),
+  contractId: z.string().min(1).optional(),
+  createdEventBlob: LedgerNonEmptyBase64BytesSchema,
+  synchronizerId: z.string().min(1).optional(),
+});
+
+const PrefetchContractKeySchema = createRequestSchema<InteractiveSubmissionPrefetchContractKey>()({
+  templateId: z.string().min(1),
+  contractKey: RequiredJsonValueSchema,
+  limit: PositiveInt32Schema.optional(),
+});
+
+const CostEstimationHintsSchema = createRequestSchema<InteractiveSubmissionCostEstimationHints>()({
+  disabled: z.boolean().optional(),
+  expectedSignatures: z.array(SigningAlgorithmSpecSchema).optional(),
+});
+
+/** Exact interactive-submission prepare request from the pinned Ledger OpenAPI. */
+export const InteractiveSubmissionPrepareRequestSchema = createRequestSchema<InteractiveSubmissionPrepareRequest>()({
+  userId: z.string().optional(),
+  commandId: LedgerStringSchema,
+  commands: SingleCommandSchema,
+  minLedgerTime: MinLedgerTimeSchema.optional(),
+  actAs: NonEmptyActAsSchema,
+  readAs: z.array(z.string().min(1)).optional(),
   disclosedContracts: z.array(DisclosedContractSchema).optional(),
-  synchronizerId: z.string(),
+  synchronizerId: z.string().min(1).optional(),
+  packageIdSelectionPreference: z.array(z.string().min(1)).optional(),
   verboseHashing: z.boolean().optional(),
-  packageIdSelectionPreference: z.array(PackagePreferenceSchema).optional(),
+  prefetchContractKeys: z.array(PrefetchContractKeySchema).optional(),
+  maxRecordTime: LedgerRfc3339TimestampSchema.optional(),
+  estimateTrafficCost: CostEstimationHintsSchema.optional(),
+  tapsMaxPasses: PositiveInt32Schema.optional(),
+  hashingSchemeVersion: HashingSchemeVersionSchema.optional(),
 });
 
 /** Traffic cost estimation for a prepared transaction. */
-export const CostEstimationSchema = z.object({
-  /** Timestamp at which the estimation was made (ISO 8601). */
-  estimationTimestamp: z.string().optional(),
-  /** Estimated traffic cost of the confirmation request associated with the transaction. */
-  confirmationRequestTrafficCostEstimation: z.number(),
-  /**
-   * Estimated traffic cost of the confirmation response associated with the transaction. This can also indicate the
-   * cost that other confirming nodes will incur.
-   */
-  confirmationResponseTrafficCostEstimation: z.number(),
-  /** Total estimated traffic cost (sum of request and response). */
-  totalTrafficCostEstimation: z.number(),
+export const CostEstimationSchema = createRequestSchema<LedgerSchemas['CostEstimation']>()({
+  estimationTimestamp: LedgerRfc3339TimestampSchema,
+  confirmationRequestTrafficCostEstimation: NonNegativeInt64Schema,
+  confirmationResponseTrafficCostEstimation: NonNegativeInt64Schema,
+  totalTrafficCostEstimation: NonNegativeInt64Schema,
 });
 
-/** Interactive submission prepare response. */
-export const InteractiveSubmissionPrepareResponseSchema = z.object({
-  preparedTransactionHash: z.string(),
-  preparedTransaction: z.string().optional(),
-  hashingSchemeVersion: z.enum(['HASHING_SCHEME_VERSION_UNSPECIFIED', 'HASHING_SCHEME_VERSION_V2']).optional(),
-  hashingDetails: z.string().optional(),
-  /** Traffic cost estimation of the prepared transaction. */
-  costEstimation: CostEstimationSchema.optional(),
+/** Exact interactive-submission prepare response from the pinned Ledger OpenAPI. */
+export const InteractiveSubmissionPrepareResponseSchema = createRequestSchema<InteractiveSubmissionPrepareResponse>()({
+  preparedTransaction: LedgerNonEmptyBase64BytesSchema,
+  preparedTransactionHash: LedgerNonEmptyBase64BytesSchema,
+  hashingSchemeVersion: HashingSchemeVersionSchema,
+  hashingDetails: nullableOptionalResponseField(z.string()),
+  costEstimation: nullableOptionalResponseField(CostEstimationSchema),
 });
 
-const DeduplicationPeriodSchema = z.union([
-  z.object({ Empty: z.object({}) }),
-  z.object({
-    DeduplicationDuration: z.object({
-      value: z.object({
-        duration: z.string(),
-      }),
-    }),
+const SignatureSchema = createRequestSchema<InteractiveSubmissionSignature>()({
+  format: SignatureFormatSchema,
+  signature: LedgerNonEmptyBase64BytesSchema,
+  signedBy: z.string().min(1),
+  signingAlgorithmSpec: SigningAlgorithmSpecSchema,
+});
+
+const NonEmptySignaturesSchema = z
+  .array(SignatureSchema)
+  .min(1)
+  .transform(
+    (signatures): InteractiveSubmissionNonEmptyArray<InteractiveSubmissionSignature> =>
+      signatures as InteractiveSubmissionNonEmptyArray<InteractiveSubmissionSignature>
+  );
+
+const SinglePartySignaturesSchema = createRequestSchema<InteractiveSubmissionSinglePartySignatures>()({
+  party: z.string().min(1),
+  signatures: NonEmptySignaturesSchema,
+});
+
+const NonEmptySinglePartySignaturesSchema = z
+  .array(SinglePartySignaturesSchema)
+  .min(1)
+  .transform(
+    (signatures): InteractiveSubmissionNonEmptyArray<InteractiveSubmissionSinglePartySignatures> =>
+      signatures as InteractiveSubmissionNonEmptyArray<InteractiveSubmissionSinglePartySignatures>
+  );
+
+const PartySignaturesSchema = createRequestSchema<InteractiveSubmissionPartySignatures>()({
+  signatures: NonEmptySinglePartySignaturesSchema,
+});
+
+const InterfaceFilterContentSchema = createRequestSchema<LedgerSchemas['InterfaceFilter1']>()({
+  interfaceId: z.string(),
+  includeInterfaceView: z.boolean().optional(),
+  includeCreatedEventBlob: z.boolean().optional(),
+});
+
+const InterfaceFilterSchema = createRequestSchema<LedgerSchemas['InterfaceFilter']>()({
+  value: InterfaceFilterContentSchema,
+});
+
+const TemplateFilterContentSchema = createRequestSchema<LedgerSchemas['TemplateFilter1']>()({
+  templateId: z.string(),
+  includeCreatedEventBlob: z.boolean().optional(),
+});
+
+const TemplateFilterSchema = createRequestSchema<LedgerSchemas['TemplateFilter']>()({
+  value: TemplateFilterContentSchema,
+});
+
+const WildcardFilterContentSchema = createRequestSchema<LedgerSchemas['WildcardFilter1']>()({
+  includeCreatedEventBlob: z.boolean().optional(),
+});
+
+const WildcardFilterSchema = createRequestSchema<LedgerSchemas['WildcardFilter']>()({
+  value: WildcardFilterContentSchema,
+});
+
+const IdentifierFilterSchema: z.ZodType<InteractiveSubmissionIdentifierFilter> = z.union([
+  createRequestSchema<Extract<InteractiveSubmissionIdentifierFilterVariants, { Empty: unknown }>>()({
+    Empty: EmptyObjectSchema,
   }),
-  z.object({
-    DeduplicationOffset: z.object({
-      value: z.object({
-        offset: z.string(),
-      }),
-    }),
+  createRequestSchema<Extract<InteractiveSubmissionIdentifierFilterVariants, { InterfaceFilter: unknown }>>()({
+    InterfaceFilter: InterfaceFilterSchema,
+  }),
+  createRequestSchema<Extract<InteractiveSubmissionIdentifierFilterVariants, { TemplateFilter: unknown }>>()({
+    TemplateFilter: TemplateFilterSchema,
+  }),
+  createRequestSchema<Extract<InteractiveSubmissionIdentifierFilterVariants, { WildcardFilter: unknown }>>()({
+    WildcardFilter: WildcardFilterSchema,
   }),
 ]);
 
-const PartySignatureSchema = z.object({
-  party: z.string(),
-  signatures: z.array(
-    z.object({
-      signature: z.string(),
-      signedBy: z.string(),
-      format: z.string(),
-      signingAlgorithmSpec: z.string(),
-    })
-  ),
+const CumulativeFilterSchema = createRequestSchema<InteractiveSubmissionCumulativeFilter>()({
+  identifierFilter: IdentifierFilterSchema.optional(),
 });
 
-/** Interactive submission execute request. */
-export const InteractiveSubmissionExecuteRequestSchema = z.object({
-  userId: z.string(),
-  preparedTransaction: z.string(),
-  hashingSchemeVersion: z.string(),
-  submissionId: z.string(),
+const FiltersSchema = createRequestSchema<InteractiveSubmissionFilters>()({
+  cumulative: z.array(CumulativeFilterSchema).optional(),
+});
+
+const EventFormatSchema = createRequestSchema<InteractiveSubmissionEventFormat>()({
+  filtersByParty: z.record(z.string(), FiltersSchema).optional(),
+  filtersForAnyParty: FiltersSchema.optional(),
+  verbose: z.boolean().optional(),
+});
+
+const TransactionFormatSchema = createRequestSchema<InteractiveSubmissionTransactionFormat>()({
+  eventFormat: EventFormatSchema,
+  transactionShape: z.enum(['TRANSACTION_SHAPE_ACS_DELTA', 'TRANSACTION_SHAPE_LEDGER_EFFECTS']),
+});
+
+const ExecuteRequestShape = {
+  preparedTransaction: LedgerNonEmptyBase64BytesSchema,
+  partySignatures: PartySignaturesSchema,
   deduplicationPeriod: DeduplicationPeriodSchema.optional(),
-  partySignatures: z.object({
-    signatures: z.array(PartySignatureSchema),
-  }),
+  submissionId: LedgerStringSchema,
+  userId: z.string().optional(),
+  hashingSchemeVersion: HashingSchemeVersionSchema,
+  minLedgerTime: MinLedgerTimeSchema.optional(),
+} satisfies z.ZodRawShape;
+
+/** Execute a prepared and signed interactive submission. */
+export const InteractiveSubmissionExecuteRequestSchema = createRequestSchema<InteractiveSubmissionExecuteRequest>()({
+  ...ExecuteRequestShape,
 });
 
-/** Interactive submission execute response. */
-export const InteractiveSubmissionExecuteResponseSchema = z.object({});
+/** Execute a prepared submission and wait for its completion. */
+export const InteractiveSubmissionExecuteAndWaitRequestSchema =
+  createRequestSchema<InteractiveSubmissionExecuteAndWaitRequest>()({
+    ...ExecuteRequestShape,
+  });
 
-// Export types
-export type InteractiveSubmissionAllocatePartyRequest = z.infer<typeof InteractiveSubmissionAllocatePartyRequestSchema>;
-export type InteractiveSubmissionAllocatePartyResponse = z.infer<
-  typeof InteractiveSubmissionAllocatePartyResponseSchema
->;
-export type InteractiveSubmissionCreateUserRequest = z.infer<typeof InteractiveSubmissionCreateUserRequestSchema>;
-export type InteractiveSubmissionCreateUserResponse = z.infer<typeof InteractiveSubmissionCreateUserResponseSchema>;
-export type InteractiveSubmissionUploadDarRequest = z.infer<typeof InteractiveSubmissionUploadDarRequestSchema>;
-export type InteractiveSubmissionUploadDarResponse = z.infer<typeof InteractiveSubmissionUploadDarResponseSchema>;
-export type InteractiveSubmissionPrepareRequest = z.infer<typeof InteractiveSubmissionPrepareRequestSchema>;
-export type InteractiveSubmissionPrepareResponse = z.infer<typeof InteractiveSubmissionPrepareResponseSchema>;
-export type InteractiveSubmissionExecuteRequest = z.infer<typeof InteractiveSubmissionExecuteRequestSchema>;
-export type InteractiveSubmissionExecuteResponse = z.infer<typeof InteractiveSubmissionExecuteResponseSchema>;
-export type CostEstimation = z.infer<typeof CostEstimationSchema>;
+/** Execute a prepared submission and wait for the resulting transaction. */
+export const InteractiveSubmissionExecuteAndWaitForTransactionRequestSchema =
+  createRequestSchema<InteractiveSubmissionExecuteAndWaitForTransactionRequest>()({
+    ...ExecuteRequestShape,
+    transactionFormat: TransactionFormatSchema.optional(),
+  });
+
+const ProtoAnySchema = createRequestSchema<InteractiveSubmissionProtoAny>()({
+  typeUrl: z.string(),
+  value: LedgerBase64BytesSchema,
+  unknownFields: UnknownFieldSetSchema,
+  valueDecoded: RequiredJsonValueSchema.optional(),
+});
+
+const StatusSchema = createRequestSchema<InteractiveSubmissionStatus>()({
+  code: Int32Schema,
+  message: z.string(),
+  details: z.array(ProtoAnySchema).optional(),
+});
+
+const InterfaceViewSchema = createRequestSchema<InteractiveSubmissionInterfaceView>()({
+  interfaceId: z.string(),
+  viewStatus: StatusSchema,
+  viewValue: RequiredJsonValueSchema.optional(),
+  implementationPackageId: nullableOptionalResponseField(z.string()),
+});
+
+const ArchivedEventSchema = createRequestSchema<LedgerSchemas['ArchivedEvent']>()({
+  offset: PositiveInt64Schema,
+  nodeId: NonNegativeInt32Schema,
+  contractId: z.string(),
+  templateId: z.string(),
+  witnessParties: z.array(z.string()).min(1),
+  packageName: z.string(),
+  implementedInterfaces: z.array(z.string()).optional(),
+});
+
+const CreatedEventSchema = createRequestSchema<InteractiveSubmissionCreatedEvent>()({
+  offset: PositiveInt64Schema,
+  nodeId: NonNegativeInt32Schema,
+  contractId: z.string(),
+  templateId: z.string(),
+  contractKey: NullableOptionalJsonValueSchema,
+  contractKeyHash: LedgerBase64BytesSchema.optional(),
+  createArgument: RequiredJsonValueSchema,
+  createdEventBlob: LedgerBase64BytesSchema.optional(),
+  interfaceViews: z.array(InterfaceViewSchema).optional(),
+  witnessParties: z.array(z.string()).min(1),
+  signatories: z.array(z.string()).min(1),
+  observers: z.array(z.string()).optional(),
+  createdAt: LedgerRfc3339TimestampSchema,
+  packageName: z.string().min(1),
+  representativePackageId: z.string().min(1),
+  acsDelta: z.boolean(),
+});
+
+const ExercisedEventSchema = createRequestSchema<InteractiveSubmissionExercisedEvent>()({
+  offset: PositiveInt64Schema,
+  nodeId: NonNegativeInt32Schema,
+  contractId: z.string(),
+  templateId: z.string(),
+  interfaceId: nullableOptionalResponseField(z.string()),
+  choice: z.string(),
+  choiceArgument: RequiredJsonValueSchema,
+  actingParties: z.array(z.string()).min(1),
+  consuming: z.boolean(),
+  witnessParties: z.array(z.string()).min(1),
+  lastDescendantNodeId: NonNegativeInt32Schema,
+  exerciseResult: RequiredJsonValueSchema.optional(),
+  packageName: z.string(),
+  implementedInterfaces: z.array(z.string()).optional(),
+  acsDelta: z.boolean(),
+});
+
+const EventSchema: z.ZodType<InteractiveSubmissionEvent> = z.union([
+  createRequestSchema<Extract<InteractiveSubmissionEventVariants, { ArchivedEvent: unknown }>>()({
+    ArchivedEvent: ArchivedEventSchema,
+  }),
+  createRequestSchema<Extract<InteractiveSubmissionEventVariants, { CreatedEvent: unknown }>>()({
+    CreatedEvent: CreatedEventSchema,
+  }),
+  createRequestSchema<Extract<InteractiveSubmissionEventVariants, { ExercisedEvent: unknown }>>()({
+    ExercisedEvent: ExercisedEventSchema,
+  }),
+]);
+
+const TraceContextSchema = createRequestSchema<InteractiveSubmissionTraceContext>()({
+  traceparent: nullableOptionalResponseField(z.string()),
+  tracestate: nullableOptionalResponseField(z.string()),
+});
+
+const ExternalTransactionHashHexSchema: z.ZodType<InteractiveSubmissionExternalTransactionHashHex> = z
+  .string()
+  .regex(/^[0-9a-f]{64}$/, {
+    message: 'Expected a canonical lowercase 32-byte Daml-LF transaction hash',
+  })
+  .transform(
+    (value): InteractiveSubmissionExternalTransactionHashHex => value as InteractiveSubmissionExternalTransactionHashHex
+  );
+
+const TransactionSchema = createRequestSchema<InteractiveSubmissionTransaction>()({
+  updateId: z.string(),
+  commandId: z.string().optional(),
+  workflowId: z.string().optional(),
+  effectiveAt: LedgerRfc3339TimestampSchema,
+  events: z.array(EventSchema),
+  offset: PositiveInt64Schema,
+  synchronizerId: z.string().min(1),
+  traceContext: nullableOptionalResponseField(TraceContextSchema),
+  recordTime: LedgerRfc3339TimestampSchema,
+  externalTransactionHash: nullableOptionalResponseField(ExternalTransactionHashHexSchema),
+  paidTrafficCost: nullableOptionalResponseField(NonNegativeInt64Schema),
+});
+
+/** Exact response for asynchronous execute. */
+export const InteractiveSubmissionExecuteResponseSchema = createRequestSchema<InteractiveSubmissionExecuteResponse>()(
+  {}
+);
+
+/** Exact response for execute-and-wait. */
+export const InteractiveSubmissionExecuteAndWaitResponseSchema =
+  createRequestSchema<InteractiveSubmissionExecuteAndWaitResponse>()({
+    updateId: z.string(),
+    completionOffset: PositiveInt64Schema,
+  });
+
+/** Exact response for execute-and-wait-for-transaction. */
+export const InteractiveSubmissionExecuteAndWaitForTransactionResponseSchema =
+  createRequestSchema<InteractiveSubmissionExecuteAndWaitForTransactionResponse>()({
+    transaction: TransactionSchema,
+  });
+
+export type CostEstimation = LedgerSchemas['CostEstimation'];

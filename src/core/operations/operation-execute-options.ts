@@ -76,6 +76,11 @@ export interface OperationExecuteOptions<Params> {
   readonly retry?: RequestRetryStrategy<Params>;
 }
 
+/** Execute options for mutation endpoints whose request identifier must change on every retry attempt. */
+export type OperationExecuteOptionsWithoutExactBody<Params> = Omit<OperationExecuteOptions<Params>, 'retry'> & {
+  readonly retry?: NoRequestRetryStrategy | DerivedBodyRequestRetryStrategy<Params>;
+};
+
 /**
  * Capture caller-owned execution options before an operation crosses an asynchronous boundary.
  *

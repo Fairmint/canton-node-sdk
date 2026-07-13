@@ -33,6 +33,7 @@ import {
   extractRawEd25519PublicKey,
   hashPreparedTransaction,
 } from './canton-protocol';
+import { type InteractiveSubmissionHashingSchemeVersion } from './execute-external-transaction';
 import {
   getExternalPartyIdForHintAndPublicKey,
   listExternalPartyIdsForPublicKey,
@@ -183,7 +184,7 @@ export interface PreparedExternalPartyWalletProviderTransfer {
   readonly synchronizerId: string;
   readonly preparedTransaction: string;
   readonly preparedTransactionHashHex: string;
-  readonly hashingSchemeVersion: string;
+  readonly hashingSchemeVersion: InteractiveSubmissionHashingSchemeVersion;
   readonly prepareToken: string;
   readonly sourceBalanceBefore: unknown;
   readonly sourceBalanceAfter: unknown | null;
@@ -202,7 +203,7 @@ export interface SubmitExternalPartyWalletProviderTransferInput {
   readonly synchronizerId: string;
   readonly preparedTransaction: string;
   readonly preparedTransactionHashHex: string;
-  readonly hashingSchemeVersion?: string;
+  readonly hashingSchemeVersion?: InteractiveSubmissionHashingSchemeVersion;
   readonly prepareToken: string;
   readonly signatureBase64: string;
   readonly tokenContext?: ExternalPartyWalletTokenContext;
@@ -916,7 +917,7 @@ export function buildProviderTransferAcceptPrepareTokenPayload(input: {
   readonly synchronizerId: string;
   readonly preparedTransaction: string;
   readonly preparedTransactionHashHex: string;
-  readonly hashingSchemeVersion: string;
+  readonly hashingSchemeVersion: InteractiveSubmissionHashingSchemeVersion;
 }): Record<string, unknown> {
   return {
     kind: 'provider-transfer-accept',

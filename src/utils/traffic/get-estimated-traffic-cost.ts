@@ -58,6 +58,6 @@ export function getEstimatedTrafficCost(
     totalCostWithOverhead,
     costInCents: calculateTrafficCostInCents(totalCostWithOverhead),
     costInDollars: calculateTrafficCostInDollars(totalCostWithOverhead),
-    ...(costEstimation.estimationTimestamp !== undefined && { estimatedAt: costEstimation.estimationTimestamp }),
+    estimatedAt: costEstimation.estimationTimestamp,
   };
 }

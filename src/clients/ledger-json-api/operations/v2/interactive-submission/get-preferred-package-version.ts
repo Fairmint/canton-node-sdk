@@ -1,5 +1,8 @@
 import { createApiOperation } from '../../../../../core';
-import { type GetPreferredPackageVersionResponse } from '../../../schemas/api';
+import {
+  GetPreferredPackageVersionResponseSchema,
+  type GetPreferredPackageVersionResponse,
+} from '../../../schemas/api';
 import {
   InteractiveSubmissionGetPreferredPackageVersionParamsSchema,
   type InteractiveSubmissionGetPreferredPackageVersionParams,
@@ -23,6 +26,7 @@ export const InteractiveSubmissionGetPreferredPackageVersion = createApiOperatio
   GetPreferredPackageVersionResponse
 >({
   paramsSchema: InteractiveSubmissionGetPreferredPackageVersionParamsSchema,
+  responseSchema: GetPreferredPackageVersionResponseSchema,
   method: 'GET',
   buildUrl: (params: InteractiveSubmissionGetPreferredPackageVersionParams, apiUrl: string) => {
     const url = new URL(`${apiUrl}/v2/interactive-submission/preferred-package-version`);

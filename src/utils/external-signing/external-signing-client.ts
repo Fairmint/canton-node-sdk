@@ -24,6 +24,7 @@ import {
   executeExternalTransactionAndWait,
   type ExecuteExternalTransactionAndWaitResult,
   type ExecuteExternalTransactionOptions,
+  type InteractiveSubmissionHashingSchemeVersion,
 } from './execute-external-transaction';
 import {
   reconcileExternalPartyAllocationFailure,
@@ -262,7 +263,7 @@ export type ExternalTransactionResubmission = Omit<
   ExecuteExternalTransactionOptions,
   'ledgerClient' | 'hashingSchemeVersion' | 'deduplicationPeriod'
 > & {
-  readonly hashingSchemeVersion: string;
+  readonly hashingSchemeVersion: InteractiveSubmissionHashingSchemeVersion;
   readonly deduplicationPeriod: NonNullable<ExecuteExternalTransactionOptions['deduplicationPeriod']>;
 };
 
@@ -274,7 +275,7 @@ export class ExternalTransactionSubmissionError extends Error {
   readonly submissionId: string;
   readonly preparedTransaction: string;
   readonly preparedTransactionHashHex: string;
-  readonly hashingSchemeVersion: string;
+  readonly hashingSchemeVersion: InteractiveSubmissionHashingSchemeVersion;
   readonly prepared: PrepareExternalTransactionResult;
   readonly resubmission: ExternalTransactionResubmission;
   readonly signingRequest: CantonEd25519SigningRequest;
@@ -356,7 +357,7 @@ export async function executeExternalTransactionWithEd25519Signer(
     prepared.preparedTransactionHash,
     'interactive submission prepare'
   );
-  const hashingSchemeVersion = prepared.hashingSchemeVersion ?? 'HASHING_SCHEME_VERSION_V2';
+  const { hashingSchemeVersion } = prepared;
   const signed = await signAndVerifyCantonEd25519Payload({
     signer: options.signer,
     purpose: CantonEd25519SigningPurpose.INTERACTIVE_SUBMISSION,

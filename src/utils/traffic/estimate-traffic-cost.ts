@@ -16,6 +16,8 @@ export interface EstimateTrafficCostOptions {
   readonly commands: InteractiveSubmissionPrepareRequest['commands'];
   /** Synchronizer/domain ID where the transaction will be submitted. */
   readonly synchronizerId: string;
+  /** Hashing scheme used to prepare the bytes whose traffic cost is estimated. */
+  readonly hashingSchemeVersion: NonNullable<InteractiveSubmissionPrepareRequest['hashingSchemeVersion']>;
   /** Parties to act as. Defaults to the ledger client's configured party. */
   readonly actAs?: readonly string[];
   /** Parties to read as. */
@@ -52,6 +54,7 @@ export interface EstimateTrafficCostOptions {
  *   },
  *   ],
  *   synchronizerId: 'global-domain::1234...',
+ *   hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V3',
  *   });
  *
  *   if (estimate) {
@@ -71,6 +74,7 @@ export async function estimateTrafficCost(
     ledgerClient,
     commands,
     synchronizerId,
+    hashingSchemeVersion,
     actAs,
     readAs = [],
     userId,
@@ -85,10 +89,12 @@ export async function estimateTrafficCost(
   }
 
   const resolvedPartyId = ledgerClient.getPartyId();
-  const resolvedActAs = actAs ? [...actAs] : resolvedPartyId ? [resolvedPartyId] : undefined;
-  if (!resolvedActAs || resolvedActAs.length === 0) {
+  const resolvedActAsValues = actAs ? [...actAs] : resolvedPartyId ? [resolvedPartyId] : [];
+  const firstActAs = resolvedActAsValues[0];
+  if (!firstActAs) {
     throw new Error('actAs is required: provide it in options or configure partyId on the ledger client');
   }
+  const resolvedActAs: InteractiveSubmissionPrepareRequest['actAs'] = [firstActAs, ...resolvedActAsValues.slice(1)];
 
   // Generate a temporary command ID for the prepare call
   const commandId = randomUUID();
@@ -100,10 +106,11 @@ export async function estimateTrafficCost(
     userId: resolvedUserId,
     actAs: resolvedActAs,
     readAs: [...readAs],
-    disclosedContracts,
     synchronizerId,
+    hashingSchemeVersion,
     verboseHashing: false,
     packageIdSelectionPreference,
+    ...(disclosedContracts !== undefined ? { disclosedContracts } : {}),
   });
 
   // Extract and return the cost estimation

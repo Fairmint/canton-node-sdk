@@ -24,7 +24,7 @@ export interface TrafficCostEstimate {
   /** Estimated cost in dollars (based on $60/MB pricing). */
   readonly costInDollars: number;
   /** Timestamp when estimation was made (ISO 8601). */
-  readonly estimatedAt?: string;
+  readonly estimatedAt: string;
 }
 
 /** Current traffic status for a participant/member. */

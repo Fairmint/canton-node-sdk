@@ -7,10 +7,14 @@ import { type RequestConfig } from '../types';
 import { type OperationExecuteOptions } from './operation-execute-options';
 
 /** Abstract base class for API operations with parameter validation and request handling. */
-export abstract class ApiOperation<Params, Response> {
+export abstract class ApiOperation<
+  Params,
+  Response,
+  Options extends OperationExecuteOptions<Params> = OperationExecuteOptions<Params>,
+> {
   constructor(public readonly client: BaseClient) {}
 
-  abstract execute(params: Params, options?: OperationExecuteOptions<Params>): Promise<Response>;
+  abstract execute(params: Params, options?: Options): Promise<Response>;
 
   public validateParams<T>(params: T, schema: z.ZodSchema<T>): T {
     try {
@@ -19,6 +23,19 @@ export abstract class ApiOperation<Params, Response> {
       if (error instanceof z.ZodError) {
         throw new ValidationError(
           `Parameter validation failed: ${error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ')}`
+        );
+      }
+      throw error;
+    }
+  }
+
+  public validateResponse<T>(response: T, schema: z.ZodSchema<T>): T {
+    try {
+      return schema.parse(response);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(
+          `Response validation failed: ${error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(', ')}`
         );
       }
       throw error;

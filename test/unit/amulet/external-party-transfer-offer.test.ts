@@ -54,8 +54,10 @@ const createMockLedgerClient = (): jest.Mocked<LedgerJsonApiClient> =>
       preparedTransactionHash: Buffer.from(PREPARED_TRANSACTION_HASH_HEX, 'hex').toString('base64'),
       hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
     }),
-    getApiUrl: jest.fn().mockReturnValue('https://ledger.example.test'),
-    makePostRequest: jest.fn().mockResolvedValue({ updateId: 'update-123' }),
+    interactiveSubmissionExecuteAndWait: jest.fn().mockResolvedValue({
+      updateId: 'update-123',
+      completionOffset: 456,
+    }),
   }) as unknown as jest.Mocked<LedgerJsonApiClient>;
 
 const createMockValidatorClient = (): jest.Mocked<ValidatorApiClient> =>
@@ -289,6 +291,7 @@ describe('external-party transfer-offer helpers', () => {
       readAs: [fixture.partyId],
       disclosedContracts: [offerContract],
       synchronizerId: offerContract.synchronizerId,
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
       verboseHashing: false,
       packageIdSelectionPreference: [],
     });
@@ -410,45 +413,37 @@ describe('external-party transfer-offer helpers', () => {
       submissionId: 'submission-123',
     });
 
-    expect(ledgerClient.makePostRequest.mock.calls).toEqual([
-      [
-        'https://ledger.example.test/v2/interactive-submission/executeAndWait',
-        {
-          userId: 'user-5n',
-          preparedTransaction: 'prepared-transaction-base64',
-          hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
-          submissionId: 'submission-123',
-          deduplicationPeriod: {
-            DeduplicationDuration: {
-              value: { duration: '30s' },
-            },
-          },
-          partySignatures: {
+    expect(ledgerClient.interactiveSubmissionExecuteAndWait).toHaveBeenCalledWith({
+      userId: 'user-5n',
+      preparedTransaction: 'prepared-transaction-base64',
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
+      submissionId: 'submission-123',
+      deduplicationPeriod: {
+        DeduplicationDuration: {
+          value: { seconds: 30, nanos: 0 },
+        },
+      },
+      partySignatures: {
+        signatures: [
+          {
+            party: fixture.partyId,
             signatures: [
               {
-                party: fixture.partyId,
-                signatures: [
-                  {
-                    signature: expect.any(String) as string,
-                    signedBy: fixture.publicKeyFingerprint,
-                    format: 'SIGNATURE_FORMAT_RAW',
-                    signingAlgorithmSpec: 'SIGNING_ALGORITHM_SPEC_ED25519',
-                  },
-                ],
+                signature: expect.any(String) as string,
+                signedBy: fixture.publicKeyFingerprint,
+                format: 'SIGNATURE_FORMAT_RAW',
+                signingAlgorithmSpec: 'SIGNING_ALGORITHM_SPEC_ED25519',
               },
             ],
           },
-        },
-        {
-          contentType: 'application/json',
-          includeBearerToken: true,
-        },
-      ],
-    ]);
+        ],
+      },
+    });
     expect(submitted).toEqual({
       acceptingPartyId: fixture.partyId,
       updateId: 'update-123',
-      raw: { updateId: 'update-123' },
+      completionOffset: 456,
+      raw: { updateId: 'update-123', completionOffset: 456 },
     });
   });
 
@@ -469,6 +464,6 @@ describe('external-party transfer-offer helpers', () => {
       })
     ).rejects.toThrow('Invalid Canton hash signature');
 
-    expect(ledgerClient.makePostRequest.mock.calls).toHaveLength(0);
+    expect(ledgerClient.interactiveSubmissionExecuteAndWait).not.toHaveBeenCalled();
   });
 });

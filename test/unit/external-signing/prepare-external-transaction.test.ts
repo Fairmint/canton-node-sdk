@@ -1,11 +1,20 @@
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import { prepareExternalTransaction } from '../../../src/utils/external-signing/prepare-external-transaction';
+import {
+  type NonEmptyPrepareExternalTransactionCommands,
+  prepareExternalTransaction,
+} from '../../../src/utils/external-signing/prepare-external-transaction';
+
+const COMMANDS = [
+  { CreateCommand: { templateId: 'pkg:Module:Template', createArguments: {} } },
+] satisfies NonEmptyPrepareExternalTransactionCommands;
+const HASHING_SCHEME_VERSION = 'HASHING_SCHEME_VERSION_V2' as const;
 
 const createMockLedgerClient = (): jest.Mocked<LedgerJsonApiClient> =>
   ({
     interactiveSubmissionPrepare: jest.fn().mockResolvedValue({
       preparedTransaction: 'prepared-tx-base64',
       preparedTransactionHash: 'hash-abc123',
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
     }),
   }) as unknown as jest.Mocked<LedgerJsonApiClient>;
 
@@ -19,10 +28,11 @@ describe('prepareExternalTransaction', () => {
   it('prepares external transaction and returns result with commandId', async () => {
     const result = await prepareExternalTransaction({
       ledgerClient: mockClient,
-      commands: [{ CreateCommand: { templateId: 'pkg:Module:Template', createArguments: {} } }],
+      commands: COMMANDS,
       userId: 'user-123',
       actAs: ['party::fingerprint'],
       synchronizerId: 'sync-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
     });
 
     expect(result.preparedTransaction).toBe('prepared-tx-base64');
@@ -34,10 +44,11 @@ describe('prepareExternalTransaction', () => {
   it('uses provided commandId', async () => {
     const result = await prepareExternalTransaction({
       ledgerClient: mockClient,
-      commands: [],
+      commands: COMMANDS,
       userId: 'user-123',
       actAs: ['party::fingerprint'],
       synchronizerId: 'sync-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
       commandId: 'custom-command-id',
     });
 
@@ -52,10 +63,11 @@ describe('prepareExternalTransaction', () => {
   it('generates UUID commandId when not provided', async () => {
     const result = await prepareExternalTransaction({
       ledgerClient: mockClient,
-      commands: [],
+      commands: COMMANDS,
       userId: 'user-123',
       actAs: ['party::fingerprint'],
       synchronizerId: 'sync-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
     });
 
     // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -69,6 +81,7 @@ describe('prepareExternalTransaction', () => {
       userId: 'user-123',
       actAs: ['party1::fp', 'party2::fp'],
       synchronizerId: 'sync-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
     });
 
     expect(mockClient.interactiveSubmissionPrepare).toHaveBeenCalledWith({
@@ -77,8 +90,8 @@ describe('prepareExternalTransaction', () => {
       userId: 'user-123',
       actAs: ['party1::fp', 'party2::fp'],
       readAs: [],
-      disclosedContracts: undefined,
       synchronizerId: 'sync-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
       verboseHashing: false,
       packageIdSelectionPreference: [],
     });
@@ -87,10 +100,11 @@ describe('prepareExternalTransaction', () => {
   it('passes optional readAs parameter', async () => {
     await prepareExternalTransaction({
       ledgerClient: mockClient,
-      commands: [],
+      commands: COMMANDS,
       userId: 'user-123',
       actAs: ['party::fingerprint'],
       synchronizerId: 'sync-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
       readAs: ['read-party1::fp', 'read-party2::fp'],
     });
 
@@ -113,10 +127,11 @@ describe('prepareExternalTransaction', () => {
 
     await prepareExternalTransaction({
       ledgerClient: mockClient,
-      commands: [],
+      commands: COMMANDS,
       userId: 'user-123',
       actAs: ['party::fingerprint'],
       synchronizerId: 'sync-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
       disclosedContracts,
     });
 
@@ -130,10 +145,11 @@ describe('prepareExternalTransaction', () => {
   it('passes optional verboseHashing parameter', async () => {
     await prepareExternalTransaction({
       ledgerClient: mockClient,
-      commands: [],
+      commands: COMMANDS,
       userId: 'user-123',
       actAs: ['party::fingerprint'],
       synchronizerId: 'sync-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
       verboseHashing: true,
     });
 
@@ -147,16 +163,17 @@ describe('prepareExternalTransaction', () => {
   it('passes optional packageIdSelectionPreference parameter', async () => {
     await prepareExternalTransaction({
       ledgerClient: mockClient,
-      commands: [],
+      commands: COMMANDS,
       userId: 'user-123',
       actAs: ['party::fingerprint'],
       synchronizerId: 'sync-123',
-      packageIdSelectionPreference: [{ packageId: 'package-1' }, { packageId: 'package-2' }],
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
+      packageIdSelectionPreference: ['package-1', 'package-2'],
     });
 
     expect(mockClient.interactiveSubmissionPrepare).toHaveBeenCalledWith(
       expect.objectContaining({
-        packageIdSelectionPreference: [{ packageId: 'package-1' }, { packageId: 'package-2' }],
+        packageIdSelectionPreference: ['package-1', 'package-2'],
       })
     );
   });
@@ -164,10 +181,11 @@ describe('prepareExternalTransaction', () => {
   it('defaults verboseHashing to false', async () => {
     await prepareExternalTransaction({
       ledgerClient: mockClient,
-      commands: [],
+      commands: COMMANDS,
       userId: 'user-123',
       actAs: ['party::fingerprint'],
       synchronizerId: 'sync-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
     });
 
     expect(mockClient.interactiveSubmissionPrepare).toHaveBeenCalledWith(
@@ -180,10 +198,11 @@ describe('prepareExternalTransaction', () => {
   it('defaults packageIdSelectionPreference to empty array', async () => {
     await prepareExternalTransaction({
       ledgerClient: mockClient,
-      commands: [],
+      commands: COMMANDS,
       userId: 'user-123',
       actAs: ['party::fingerprint'],
       synchronizerId: 'sync-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
     });
 
     expect(mockClient.interactiveSubmissionPrepare).toHaveBeenCalledWith(
@@ -196,10 +215,11 @@ describe('prepareExternalTransaction', () => {
   it('defaults readAs to empty array', async () => {
     await prepareExternalTransaction({
       ledgerClient: mockClient,
-      commands: [],
+      commands: COMMANDS,
       userId: 'user-123',
       actAs: ['party::fingerprint'],
       synchronizerId: 'sync-123',
+      hashingSchemeVersion: HASHING_SCHEME_VERSION,
     });
 
     expect(mockClient.interactiveSubmissionPrepare).toHaveBeenCalledWith(

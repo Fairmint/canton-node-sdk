@@ -1,11 +1,16 @@
 import { z } from 'zod';
 import { type BaseClient } from '../BaseClient';
-import { ConfigurationError } from '../errors';
+import { ConfigurationError, ValidationError } from '../errors';
 import { awaitWithAbort } from '../http/abort';
-import { type HttpRequestOptionsForSemantics, type RequestSemantics } from '../http/request-retry';
+import { type DeepReadonly, type HttpRequestOptionsForSemantics, type RequestSemantics } from '../http/request-retry';
 import { type RequestConfig } from '../types';
 import { ApiOperation } from './ApiOperation';
-import { type OperationExecuteOptions, snapshotOperationExecuteOptions } from './operation-execute-options';
+import {
+  type OperationAttemptContext,
+  type OperationExecuteOptions,
+  type OperationExecuteOptionsWithoutExactBody,
+  snapshotOperationExecuteOptions,
+} from './operation-execute-options';
 import { createOperationHttpRequestOptions } from './operation-request-options';
 
 /**
@@ -79,6 +84,8 @@ interface ApiOperationConfigBase<Params, Response> {
   readonly requestConfig?: RequestConfig;
   /** Transform the raw API response before returning it. */
   readonly transformResponse?: (response: Response) => Response;
+  /** Validate the public response after any response transformation and outside the transport retry loop. */
+  readonly responseSchema?: z.ZodSchema<Response>;
 }
 
 /** Configuration for a factory-created API operation. GET is read-only by construction. */
@@ -103,6 +110,16 @@ export type ApiOperationConfig<Params, Response> = ApiOperationConfigBase<Params
       }
   );
 
+type MutationApiOperationConfig<Params, Response> = ApiOperationConfigBase<Params, Response> & {
+  readonly method: 'POST' | 'DELETE' | 'PATCH';
+  readonly requestSemantics?: 'mutation';
+};
+
+/** Factory configuration for a mutation whose retry identifier must be unique across every request attempt. */
+export type FreshRetryApiOperationConfig<Params, Response> = MutationApiOperationConfig<Params, Response> & {
+  readonly getFreshRetryIdentifier: (params: DeepReadonly<Params>) => string;
+};
+
 /**
  * Creates an {@link ApiOperation} class from a declarative configuration object.
  *
@@ -116,11 +133,21 @@ export type ApiOperationConfig<Params, Response> = ApiOperationConfigBase<Params
  *   });
  */
 export function createApiOperation<Params, Response>(
+  config: FreshRetryApiOperationConfig<Params, Response>
+): new (client: BaseClient) => ApiOperation<Params, Response, OperationExecuteOptionsWithoutExactBody<Params>>;
+export function createApiOperation<Params, Response>(
   config: ApiOperationConfig<Params, Response>
+): new (client: BaseClient) => ApiOperation<Params, Response>;
+export function createApiOperation<Params, Response>(
+  config: ApiOperationConfig<Params, Response> | FreshRetryApiOperationConfig<Params, Response>
 ): new (client: BaseClient) => ApiOperation<Params, Response> {
   return class extends ApiOperation<Params, Response> {
     async execute(params: Params, options?: OperationExecuteOptions<Params>): Promise<Response> {
-      const operationOptions = snapshotOperationExecuteOptions(options);
+      const capturedOptions = snapshotOperationExecuteOptions(options);
+      const operationOptions =
+        'getFreshRetryIdentifier' in config
+          ? guardFreshRetryIdentifiers(config.getFreshRetryIdentifier, capturedOptions)
+          : capturedOptions;
       const effectiveOperationOptions: OperationExecuteOptions<Params> = operationOptions ?? Object.freeze({});
 
       // Validate parameters
@@ -201,10 +228,45 @@ export function createApiOperation<Params, Response>(
 
       // Transform response if needed
       if (config.transformResponse) {
-        return config.transformResponse(response);
+        response = config.transformResponse(response);
       }
 
-      return response;
+      return config.responseSchema ? this.validateResponse(response, config.responseSchema) : response;
     }
   };
+}
+
+function guardFreshRetryIdentifiers<Params>(
+  getFreshRetryIdentifier: (params: DeepReadonly<Params>) => string,
+  options: Readonly<OperationExecuteOptions<Params>> | undefined
+): Readonly<OperationExecuteOptions<Params>> | undefined {
+  const retry = options?.retry;
+  if (retry === undefined || retry.kind === 'none') return options;
+  if (retry.kind === 'exact-body') {
+    throw new ConfigurationError(
+      'Operations with fresh retry identifiers cannot use exact-body retry; derive fresh request parameters instead'
+    );
+  }
+
+  const usedIdentifiers = new Set<string>();
+  const callerBeforeAttempt = retry.beforeAttempt;
+  const guardedRetry = Object.freeze({
+    ...retry,
+    beforeAttempt: async (context: OperationAttemptContext<Params>): Promise<void> => {
+      const identifier: unknown = getFreshRetryIdentifier(context.params);
+      if (typeof identifier !== 'string' || identifier.length === 0) {
+        throw new ConfigurationError('A fresh retry identifier resolver must return a non-empty string');
+      }
+      if (usedIdentifiers.has(identifier)) {
+        throw new ValidationError('Retry attempt reused a fresh retry identifier; every attempt requires a new value');
+      }
+      usedIdentifiers.add(identifier);
+      await callerBeforeAttempt?.(context);
+    },
+  });
+
+  return Object.freeze({
+    ...(options?.signal !== undefined ? { signal: options.signal } : {}),
+    retry: guardedRetry,
+  });
 }

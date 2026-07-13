@@ -12,6 +12,7 @@ import {
 import {
   executeExternalTransactionAndWait,
   type ExecuteExternalTransactionAndWaitResult,
+  type InteractiveSubmissionHashingSchemeVersion,
 } from '../external-signing/execute-external-transaction';
 import {
   CANTON_ED25519_SIGNATURE_ALGORITHM,
@@ -55,7 +56,7 @@ export interface PreparedExternalPartyTransferOfferAcceptance {
   readonly synchronizerId: string;
   readonly preparedTransaction: string;
   readonly preparedTransactionHashHex: string;
-  readonly hashingSchemeVersion: string;
+  readonly hashingSchemeVersion: InteractiveSubmissionHashingSchemeVersion;
   readonly offerDisclosure: TransferOfferDisclosure;
   readonly raw: Record<string, unknown>;
 }
@@ -69,7 +70,7 @@ export interface SubmitExternalPartyTransferOfferAcceptanceOptions {
   readonly preparedTransaction: string;
   readonly preparedTransactionHashHex: string;
   readonly signatureBase64: string;
-  readonly hashingSchemeVersion?: string;
+  readonly hashingSchemeVersion?: InteractiveSubmissionHashingSchemeVersion;
   readonly submissionId?: string;
 }
 
@@ -145,7 +146,7 @@ export async function prepareExternalPartyTransferOfferAcceptance(
       readRequiredString(prepared, 'preparedTransactionHash', 'transfer-offer accept prepare'),
       'transfer-offer accept prepare'
     ),
-    hashingSchemeVersion: readOptionalString(prepared, 'hashingSchemeVersion') ?? 'HASHING_SCHEME_VERSION_V2',
+    hashingSchemeVersion: prepared.hashingSchemeVersion,
     offerDisclosure,
     raw: objectOrEmpty(prepared),
   };
@@ -387,12 +388,6 @@ function validateRequiredString(name: string, value: string): void {
   if (!value.trim()) {
     throw new ValidationError(`${name} is required`, { [name]: value });
   }
-}
-
-function readOptionalString(source: unknown, key: string): string | null {
-  if (!isRecord(source) || !(key in source)) return null;
-  const value = source[key];
-  return typeof value === 'string' && value.trim() ? value : null;
 }
 
 function readFirstString(
