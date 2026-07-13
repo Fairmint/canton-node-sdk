@@ -1,4 +1,9 @@
 export { GetDecentralizedSynchronizerConnectionConfig } from './operations/v0/admin';
+export type {
+  ListTransactionsParams,
+  ListTransactionsResponse,
+  ValidatorWalletTransaction,
+} from './operations/v0/wallet/list-transactions';
 export {
   GetDecentralizedSynchronizerConnectionConfigResponseSchema,
   SequencerAliasToConnectionsSchema,

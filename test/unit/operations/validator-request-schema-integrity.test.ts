@@ -1,6 +1,12 @@
 import { CreateUser, CreateUserParamsSchema } from '../../../src/clients/validator-api/operations/v0/admin/create-user';
 import { SubmitTransferPreapprovalSendParamsSchema } from '../../../src/clients/validator-api/operations/v0/admin/submit-transfer-preapproval-send';
 import {
+  ListTransactions,
+  type ListTransactionsParams,
+  ListTransactionsParamsSchema,
+  type ListTransactionsResponse,
+} from '../../../src/clients/validator-api/operations/v0/wallet/list-transactions';
+import {
   Tap,
   type TapParams,
   TapParamsSchema,
@@ -136,5 +142,148 @@ describe('validator request schema integrity', () => {
         /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
       ) as string,
     });
+  });
+  it('posts the exact wallet transaction-history request and returns every discriminated response branch', async (): Promise<void> => {
+    const request = {
+      begin_after_id: 'event-cursor-123',
+      page_size: 25,
+    } satisfies ListTransactionsParams;
+    const response = {
+      items: [
+        {
+          transaction_type: 'transfer',
+          transaction_subtype: {
+            template_id: 'package:Module:Transfer',
+            choice: 'Transfer',
+            amulet_operation: 'transfer',
+            interface_id: 'package:Module:TransferInterface',
+          },
+          event_id: 'transfer-event',
+          date: '2026-07-10T02:00:00Z',
+          sender: { party: 'alice::namespace', amount: '-10' },
+          receivers: [{ party: 'bob::namespace', amount: '10' }],
+          holding_fees: '0',
+          app_rewards_used: '0',
+          validator_rewards_used: '0',
+          sv_rewards_used: '0',
+          development_fund_coupons_used: '0',
+        },
+        {
+          transaction_type: 'balance_change',
+          transaction_subtype: {
+            template_id: 'package:Module:AmuletRules',
+            choice: 'AmuletRules_DevNet_Tap',
+          },
+          event_id: 'balance-event',
+          date: '2026-07-10T02:00:01Z',
+          receivers: [{ party: 'alice::namespace', amount: '10' }],
+        },
+        {
+          transaction_type: 'notification',
+          transaction_subtype: {
+            template_id: 'package:Module:Subscription',
+            choice: 'ExpireSubscription',
+          },
+          event_id: 'notification-event',
+          date: '2026-07-10T02:00:02Z',
+          details: 'Subscription expired',
+        },
+        {
+          transaction_type: 'unknown',
+          transaction_subtype: { template_id: 'unknown', choice: 'unknown' },
+          event_id: 'unknown-event',
+          date: '2026-07-10T02:00:03Z',
+        },
+      ],
+    } satisfies ListTransactionsResponse;
+    const rawResponse = {
+      ...response,
+      items: response.items.map((item) => {
+        if (item.event_id === 'transfer-event') {
+          return {
+            ...item,
+            transfer_instruction_receiver: null,
+            transfer_instruction_amount: null,
+            transfer_instruction_cid: null,
+            description: null,
+          };
+        }
+        if (item.event_id === 'balance-event') {
+          return {
+            ...item,
+            transaction_subtype: {
+              ...item.transaction_subtype,
+              amulet_operation: null,
+              interface_id: null,
+            },
+            transfer_instruction_cid: null,
+          };
+        }
+        return item;
+      }),
+    } as unknown as ListTransactionsResponse;
+
+    expect(ListTransactionsParamsSchema.parse(request)).toEqual(request);
+
+    const makePostRequest = jest.fn().mockResolvedValue(rawResponse);
+    const result = await new ListTransactions(createClient(makePostRequest)).execute(request);
+    expect(result).toStrictEqual(response);
+
+    const transfer = result.items[0];
+    expect(transfer).toMatchObject({ transaction_type: 'transfer' });
+    expect(transfer?.transaction_subtype.amulet_operation).toBe('transfer');
+    expect(transfer?.transaction_subtype.interface_id).toBe('package:Module:TransferInterface');
+    expect(transfer).not.toHaveProperty('transfer_instruction_receiver');
+    expect(transfer).not.toHaveProperty('transfer_instruction_amount');
+    expect(transfer).not.toHaveProperty('transfer_instruction_cid');
+    expect(transfer).not.toHaveProperty('description');
+
+    const balanceChange = result.items[1];
+    expect(balanceChange).toMatchObject({ transaction_type: 'balance_change' });
+    expect(balanceChange?.transaction_subtype).not.toHaveProperty('amulet_operation');
+    expect(balanceChange?.transaction_subtype).not.toHaveProperty('interface_id');
+    expect(balanceChange).not.toHaveProperty('transfer_instruction_cid');
+
+    expect(makePostRequest).toHaveBeenCalledWith(
+      'https://validator.example/api/validator/v0/wallet/transactions',
+      request,
+      {
+        contentType: 'application/json',
+        includeBearerToken: true,
+      }
+    );
+  });
+
+  it('rejects an unexpected wallet transaction discriminator at the response boundary', async (): Promise<void> => {
+    const makePostRequest = jest.fn().mockResolvedValue({
+      items: [
+        {
+          transaction_type: 'future_transaction_type',
+          transaction_subtype: { template_id: 'future', choice: 'FutureChoice' },
+          event_id: 'future-event',
+          date: '2026-07-10T02:00:04Z',
+        },
+      ],
+    });
+
+    await expect(new ListTransactions(createClient(makePostRequest)).execute({ page_size: 25 })).rejects.toThrow(
+      'Unsupported wallet transaction discriminator: future_transaction_type'
+    );
+  });
+
+  it('validates the transaction-history cursor and handler page limits exactly', () => {
+    expect(ListTransactionsParamsSchema.parse({ page_size: 1, begin_after_id: undefined })).toEqual({
+      page_size: 1,
+    });
+    expect(ListTransactionsParamsSchema.parse({ page_size: 1_000, begin_after_id: '' })).toEqual({
+      page_size: 1_000,
+      begin_after_id: '',
+    });
+
+    for (const page_size of [0, -1, 1.5, 1_001, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => ListTransactionsParamsSchema.parse({ page_size })).toThrow();
+    }
+    expect(() => ListTransactionsParamsSchema.parse({ page_size: 1, begin_after_id: 123 })).toThrow();
+    expect(() => ListTransactionsParamsSchema.parse({ page_size: 1, beginAfterId: 'typo' })).toThrow();
   });
 });

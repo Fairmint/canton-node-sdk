@@ -8,14 +8,10 @@ const publicRequestConfig = {
   includeBearerToken: false,
 } as const;
 
-const RegistryUrlSchema = z.url().refine((value) => {
-  try {
-    const { protocol } = new URL(value);
-    return protocol === 'http:' || protocol === 'https:';
-  } catch {
-    return false;
-  }
-}, 'registryUrl must use http or https');
+const RegistryUrlSchema = z.url({
+  protocol: /^https?$/,
+  error: 'registryUrl must use http or https',
+});
 
 export const GetAllocationFactoryV2FromRegistryParamsSchema = z.object({
   /** Base URL advertised for the instrument admin's Token Standard registry. */

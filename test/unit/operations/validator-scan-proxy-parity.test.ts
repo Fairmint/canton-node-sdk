@@ -109,7 +109,7 @@ describe('validator scan-proxy parity', (): void => {
     );
   });
 
-  it('preserves nonce zero and rejects fractional transfer-command nonces', async (): Promise<void> => {
+  it('preserves nonce zero and rejects invalid transfer-command nonces', async (): Promise<void> => {
     const makeGetRequest = jest.fn().mockResolvedValue({
       transfer_commands_by_contract_id: {},
     } satisfies LookupTransferCommandStatusResponse);
@@ -123,9 +123,11 @@ describe('validator scan-proxy parity', (): void => {
     );
 
     makeGetRequest.mockClear();
-    await expect(operation.execute({ sender: 'alice::namespace', nonce: 0.5 })).rejects.toThrow(
-      'Parameter validation failed'
-    );
+    for (const nonce of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1]) {
+      await expect(operation.execute({ sender: 'alice::namespace', nonce })).rejects.toThrow(
+        'Parameter validation failed'
+      );
+    }
     expect(makeGetRequest).not.toHaveBeenCalled();
   });
 
