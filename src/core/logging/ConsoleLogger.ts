@@ -51,7 +51,7 @@ export class ConsoleLogger implements Logger {
 
     console.log(`${prefix} ${methodLabel} ${urlLabel}`);
 
-    if (sanitizedRequest && Object.keys(sanitizedRequest).length > 0) {
+    if (sanitizedRequest !== null && typeof sanitizedRequest === 'object' && Object.keys(sanitizedRequest).length > 0) {
       console.log(`${this.colorize('  Request:', 'gray')} ${this.formatJson(sanitizedRequest)}`);
     }
 
