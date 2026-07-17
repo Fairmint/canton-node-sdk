@@ -5,9 +5,12 @@ Low-level TypeScript SDK for Canton Network nodes (Ledger JSON API, Validator AP
 ## Developer documentation
 
 The public [GitHub wiki](https://github.com/Fairmint/canton-node-sdk/wiki) is the canonical guide for
-configuration, API boundaries, external signing, LocalNet, examples, and contribution. The
-supported package surface is [`src/index.ts`](src/index.ts); use the installed declarations,
-[`examples/`](examples/), and tests for exact methods, request shapes, and error behavior.
+configuration, API boundaries, external signing, LocalNet, examples, and contribution. The public
+[`src/index.ts`](https://github.com/Fairmint/canton-node-sdk/blob/main/src/index.ts) defines the
+supported package surface; use the installed declarations and public
+[`examples/`](https://github.com/Fairmint/canton-node-sdk/tree/main/examples), and
+[`test/`](https://github.com/Fairmint/canton-node-sdk/tree/main/test) for exact methods, request
+shapes, and error behavior.
 
 ## Install
 
