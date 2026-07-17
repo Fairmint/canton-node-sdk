@@ -1,16 +1,13 @@
 # canton-node-sdk
 
-Low-level TypeScript SDK for Canton Ledger JSON, Validator, and Scan APIs.
+Low-level TypeScript SDK for Canton Network nodes (Ledger JSON API, Validator API, Scan API).
 
 ## Developer documentation
 
-- [Getting started and configuration](docs/getting-started.md)
-- [API map and runnable examples](docs/api-and-examples.md)
-- [External-party signing](docs/external-signing.md)
-- [LocalNet development](docs/localnet.md)
-
-The supported package surface is defined by [`src/index.ts`](src/index.ts). Use the runnable
-[`examples/`](examples/) and current source for exact methods, request shapes, and error behavior.
+The public [GitHub wiki](https://github.com/Fairmint/canton-node-sdk/wiki) is the canonical guide for
+configuration, API boundaries, external signing, LocalNet, examples, and contribution. The
+supported package surface is [`src/index.ts`](src/index.ts); use the installed declarations,
+[`examples/`](examples/), and tests for exact methods, request shapes, and error behavior.
 
 ## Install
 
@@ -19,9 +16,9 @@ npm install @fairmint/canton-node-sdk
 ```
 
 ```ts
-import { Canton } from '@fairmint/canton-node-sdk';
+import { Canton } from "@fairmint/canton-node-sdk";
 
-const canton = new Canton({ network: 'localnet' });
+const canton = new Canton({ network: "localnet" });
 const version = await canton.ledger.getVersion();
 ```
 
