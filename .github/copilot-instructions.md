@@ -1,5 +1,12 @@
 # GitHub Copilot Instructions
 
+## Documentation
+
+Start with the public [wiki Home](https://github.com/Fairmint/canton-node-sdk/wiki) and
+[Contributing](https://github.com/Fairmint/canton-node-sdk/wiki/Contributing). Follow
+[`CLAUDE.md`](../CLAUDE.md) before substantive work. The public entrypoint, generated-client
+source, runnable examples, and tests are the source of truth for exact behavior.
+
 ## Coding Style
 
 **Strict types are mandatory.** Always use explicit return types. Never use `any`. The project has
