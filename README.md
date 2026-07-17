@@ -18,8 +18,13 @@ npm install @fairmint/canton-node-sdk
 ```ts
 import { Canton } from "@fairmint/canton-node-sdk";
 
-const canton = new Canton({ network: "localnet" });
-const version = await canton.ledger.getVersion();
+async function main(): Promise<void> {
+  const canton = new Canton({ network: "localnet" });
+  const version = await canton.ledger.getVersion();
+  console.log(version);
+}
+
+void main();
 ```
 
 ## Repository setup and checks
