@@ -8,7 +8,7 @@ The public [GitHub wiki](https://github.com/Fairmint/canton-node-sdk/wiki) is th
 configuration, API boundaries, external signing, LocalNet, examples, and contribution. The public
 [`src/index.ts`](https://github.com/Fairmint/canton-node-sdk/blob/main/src/index.ts) defines the
 supported package surface; use the installed declarations and public
-[`examples/`](https://github.com/Fairmint/canton-node-sdk/tree/main/examples), and
+[`examples/`](https://github.com/Fairmint/canton-node-sdk/tree/main/examples) and
 [`test/`](https://github.com/Fairmint/canton-node-sdk/tree/main/test) for exact methods, request
 shapes, and error behavior.
 
@@ -27,7 +27,10 @@ async function main(): Promise<void> {
   console.log(version);
 }
 
-void main();
+main().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});
 ```
 
 ## Repository setup and checks
