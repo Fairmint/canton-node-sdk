@@ -1,5 +1,5 @@
 # LocalNet testing
 
-Canonical procedures: **[GitHub wiki](https://github.com/Fairmint/canton-node-sdk/wiki)** (clone per
-CLAUDE.md). npm scripts (`localnet:start`, `localnet:stop`, `test:integration`, and related
-commands) are documented there.
+Read [`docs/localnet.md`](../../../docs/localnet.md) first. This repository's current
+`package.json`, `bin/canton-localnet`, and integration tests are the source of truth for
+`localnet:start`, `localnet:stop`, `test:integration`, and related commands.
