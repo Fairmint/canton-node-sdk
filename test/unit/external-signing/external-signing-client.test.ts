@@ -311,7 +311,7 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
     expect(Object.getOwnPropertyDescriptor(normalizedContext ?? {}, '__proto__')).toMatchObject({ value: null });
   });
 
-  it('returns structured reconciliation after an ambiguous allocation outcome', async (): Promise<void> => {
+  it('returns a bounded unknown reconciliation after an ambiguous allocation abort', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient(fixture);
     const controller = new AbortController();
@@ -334,12 +334,171 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
       expect(error).toMatchObject({
         reconciliation: {
           failure: { kind: 'ambiguous', shouldReconcile: true },
-          status: { state: 'ready', exists: true, ready: true },
+          status: {
+            state: 'unknown',
+            exists: null,
+            ready: false,
+            failedAt: 'party-details',
+            failure: { message: 'Canton external-party reconciliation was aborted' },
+          },
         },
         signingRequest: { partyId: fixture.partyId },
         signatureBase64: expect.any(String) as string,
       });
     }
+    expect(ledgerClient.allocateExternalParty).toHaveBeenCalledWith(
+      expect.objectContaining({ synchronizer: SYNCHRONIZER_ID }),
+      { signal: controller.signal }
+    );
+    expect(ledgerClient.getPartyDetails).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a pre-dispatch allocation cancellation without reconciliation', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    const controller = new AbortController();
+    const abortError = new Error('allocation canceled before dispatch');
+    abortError.name = 'AbortError';
+    ledgerClient.allocateExternalParty.mockImplementationOnce(async () => {
+      controller.abort();
+      throw abortError;
+    });
+
+    await expect(
+      createExternalPartyWithEd25519Signer({
+        ledgerClient,
+        synchronizerId: SYNCHRONIZER_ID,
+        partyHint: 'external-test',
+        signer: fixture.signer,
+        signal: controller.signal,
+      })
+    ).rejects.toBe(abortError);
+    expect(ledgerClient.getPartyDetails).not.toHaveBeenCalled();
+  });
+
+  it('aborts a pending reconciliation read after an ambiguous allocation failure', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    const controller = new AbortController();
+    let markReconciliationStarted: (() => void) | undefined;
+    const reconciliationStarted = new Promise<void>((resolve) => {
+      markReconciliationStarted = resolve;
+    });
+    ledgerClient.allocateExternalParty.mockRejectedValueOnce(new NetworkError('connection reset after upload'));
+    ledgerClient.getPartyDetails.mockImplementationOnce(
+      async () =>
+        new Promise<never>(() => {
+          markReconciliationStarted?.();
+        })
+    );
+
+    const onboarding = createExternalPartyWithEd25519Signer({
+      ledgerClient,
+      synchronizerId: SYNCHRONIZER_ID,
+      partyHint: 'external-test',
+      signer: fixture.signer,
+      signal: controller.signal,
+    });
+
+    await reconciliationStarted;
+    controller.abort();
+
+    await expect(onboarding).rejects.toMatchObject({
+      name: 'ExternalPartyOnboardingError',
+      reconciliation: {
+        failure: { kind: 'ambiguous', shouldReconcile: true },
+        status: {
+          state: 'unknown',
+          exists: null,
+          ready: false,
+          failedAt: 'party-details',
+          failure: { message: 'Canton external-party reconciliation was aborted' },
+        },
+      },
+      signingRequest: { partyId: fixture.partyId },
+    });
+  });
+
+  it('preserves an allocation conflict when its existence confirmation is aborted', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    const controller = new AbortController();
+    let markConfirmationStarted: (() => void) | undefined;
+    const confirmationStarted = new Promise<void>((resolve) => {
+      markConfirmationStarted = resolve;
+    });
+    ledgerClient.allocateExternalParty.mockRejectedValueOnce(
+      new ApiError('already exists', 409, 'Conflict', { code: 'ALREADY_EXISTS' })
+    );
+    ledgerClient.getPartyDetails.mockImplementationOnce(
+      async () =>
+        new Promise<never>(() => {
+          markConfirmationStarted?.();
+        })
+    );
+
+    const onboarding = createExternalPartyWithEd25519Signer({
+      ledgerClient,
+      synchronizerId: SYNCHRONIZER_ID,
+      partyHint: 'external-test',
+      signer: fixture.signer,
+      signal: controller.signal,
+    });
+
+    await confirmationStarted;
+    controller.abort();
+
+    await expect(onboarding).rejects.toMatchObject({
+      name: 'ExternalPartyOnboardingError',
+      reconciliation: {
+        failure: { kind: 'already-exists', definite: true, shouldReconcile: true, status: 409 },
+        status: { state: 'unknown', exists: null, ready: false, failedAt: 'party-details' },
+      },
+      signingRequest: { partyId: fixture.partyId },
+    });
+  });
+
+  it('retains known party existence when allocation reconciliation aborts during readiness', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    const controller = new AbortController();
+    let markReadinessStarted: (() => void) | undefined;
+    const readinessStarted = new Promise<void>((resolve) => {
+      markReadinessStarted = resolve;
+    });
+    ledgerClient.allocateExternalParty.mockRejectedValueOnce(new NetworkError('connection reset after upload'));
+    ledgerClient.getConnectedSynchronizers.mockImplementationOnce(
+      async () =>
+        new Promise<never>(() => {
+          markReadinessStarted?.();
+        })
+    );
+
+    const onboarding = createExternalPartyWithEd25519Signer({
+      ledgerClient,
+      synchronizerId: SYNCHRONIZER_ID,
+      partyHint: 'external-test',
+      signer: fixture.signer,
+      signal: controller.signal,
+    });
+
+    await readinessStarted;
+    controller.abort();
+
+    await expect(onboarding).rejects.toMatchObject({
+      name: 'ExternalPartyOnboardingError',
+      reconciliation: {
+        failure: { kind: 'ambiguous', shouldReconcile: true },
+        status: {
+          state: 'unknown',
+          exists: true,
+          ready: false,
+          failedAt: 'readiness',
+          failure: { message: 'Canton external-party reconciliation was aborted' },
+        },
+      },
+      signingRequest: { partyId: fixture.partyId },
+    });
   });
 
   it('aborts readiness after allocation without returning a successful onboarding result', async (): Promise<void> => {

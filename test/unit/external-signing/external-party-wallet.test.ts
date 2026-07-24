@@ -16,6 +16,7 @@ import {
 
 const PREPARED_TRANSACTION_HASH_HEX = `1220${'22'.repeat(32)}`;
 const PREPARED_TRANSACTION_HASH_BASE64 = Buffer.from(PREPARED_TRANSACTION_HASH_HEX, 'hex').toString('base64');
+const MULTI_HASH_HEX = `1220${'11'.repeat(32)}`;
 const OFFER_CONTRACT_ID = '00offer-contract-id';
 const SYNCHRONIZER_ID = 'global-domain::sync';
 
@@ -45,6 +46,7 @@ const createSigningFixture = (): {
   readonly publicKeyFingerprint: string;
   readonly partyId: string;
   readonly signPreparedHash: () => string;
+  readonly signMultiHash: () => string;
 } => {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
   const publicKeyBase64 = Buffer.from(publicKey.export({ format: 'der', type: 'spki' }))
@@ -57,6 +59,7 @@ const createSigningFixture = (): {
     partyId: buildExternalPartyId('privy-test', publicKeyFingerprint),
     signPreparedHash: (): string =>
       sign(null, Buffer.from(PREPARED_TRANSACTION_HASH_HEX, 'hex'), privateKey).toString('base64'),
+    signMultiHash: (): string => sign(null, Buffer.from(MULTI_HASH_HEX, 'hex'), privateKey).toString('base64'),
   };
 };
 
@@ -77,6 +80,7 @@ const createMockLedgerClient = (): jest.Mocked<LedgerJsonApiClient> =>
     }),
     listParties: jest.fn().mockResolvedValue({ partyDetails: [] }),
     getPartyDetails: jest.fn().mockResolvedValue({ partyDetails: [] }),
+    allocateExternalParty: jest.fn(),
   }) as unknown as jest.Mocked<LedgerJsonApiClient>;
 
 const createMockValidatorClient = (): jest.Mocked<ValidatorApiClient> =>
@@ -156,6 +160,44 @@ const createBridge = (
 describe('external-party wallet bridge', (): void => {
   beforeEach((): void => {
     jest.clearAllMocks();
+  });
+
+  it('uses one cancellation signal for synchronizer lookup and external-party allocation', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient();
+    ledgerClient.allocateExternalParty.mockResolvedValueOnce({ partyId: fixture.partyId });
+    const bridge = createBridge({ ledgerClient });
+    const controller = new AbortController();
+
+    const submitted = await bridge.submitExternalPartySignature(
+      {
+        partyId: fixture.partyId,
+        publicKeyBase64: fixture.publicKeyBase64,
+        publicKeyFingerprint: fixture.publicKeyFingerprint,
+        multiHashHex: MULTI_HASH_HEX,
+        synchronizerId: SYNCHRONIZER_ID,
+        topologyTransactions: ['topology-tx'],
+        multiHashSignatureBase64: fixture.signMultiHash(),
+      },
+      { signal: controller.signal }
+    );
+
+    expect(ledgerClient.getConnectedSynchronizers).toHaveBeenCalledWith(
+      { party: 'provider::fingerprint' },
+      { signal: controller.signal }
+    );
+    expect(ledgerClient.allocateExternalParty).toHaveBeenCalledWith(
+      expect.objectContaining({
+        synchronizer: SYNCHRONIZER_ID,
+        onboardingTransactions: [{ transaction: 'topology-tx' }],
+      }),
+      { signal: controller.signal }
+    );
+    expect(submitted).toEqual({
+      partyId: fixture.partyId,
+      raw: { partyId: fixture.partyId },
+      alreadyExisted: false,
+    });
   });
 
   it('prepares and submits an externally signed CC transfer with a token-bound payload', async (): Promise<void> => {

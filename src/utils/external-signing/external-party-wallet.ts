@@ -287,15 +287,18 @@ export interface ExternalPartyWalletBridge {
     readonly partyName: string;
     readonly publicKeyBase64: string;
   }) => Promise<PreparedExternalPartyWalletOnboarding>;
-  readonly submitExternalPartySignature: (input: {
-    readonly partyId: string;
-    readonly publicKeyBase64: string;
-    readonly multiHashHex: string;
-    readonly synchronizerId: string;
-    readonly topologyTransactions: readonly string[];
-    readonly multiHashSignatureBase64: string;
-    readonly publicKeyFingerprint?: string | null;
-  }) => Promise<SubmittedExternalPartyWalletOnboarding>;
+  readonly submitExternalPartySignature: (
+    input: {
+      readonly partyId: string;
+      readonly publicKeyBase64: string;
+      readonly multiHashHex: string;
+      readonly synchronizerId: string;
+      readonly topologyTransactions: readonly string[];
+      readonly multiHashSignatureBase64: string;
+      readonly publicKeyFingerprint?: string | null;
+    },
+    options?: ExternalPartyWalletSubmissionOptions
+  ) => Promise<SubmittedExternalPartyWalletOnboarding>;
   readonly prepareCcTransfer: (
     input: PrepareExternalPartyWalletCcTransferInput
   ) => Promise<PreparedExternalPartyWalletCcTransfer>;
@@ -322,6 +325,14 @@ export interface ExternalPartyWalletBridge {
     input: ListExternalPartyWalletActiveContractsInput
   ) => Promise<ExternalPartyWalletActiveContracts>;
   readonly getExternalPartyBalance: (input: { readonly partyId: string }) => Promise<ExternalPartyWalletBalance>;
+}
+
+export interface ExternalPartyWalletSubmissionOptions {
+  /**
+   * Cancels the request. Cancellation after allocation dispatch has an ambiguous outcome; reconcile the exact party ID
+   * before deciding whether to submit another allocation.
+   */
+  readonly signal?: AbortSignal;
 }
 
 interface ProviderTransferOfferForAcceptance {
@@ -398,17 +409,24 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
       };
     },
 
-    async submitExternalPartySignature(input: {
-      readonly partyId: string;
-      readonly publicKeyBase64: string;
-      readonly multiHashHex: string;
-      readonly synchronizerId: string;
-      readonly topologyTransactions: readonly string[];
-      readonly multiHashSignatureBase64: string;
-      readonly publicKeyFingerprint?: string | null;
-    }): Promise<SubmittedExternalPartyWalletOnboarding> {
+    async submitExternalPartySignature(
+      input: {
+        readonly partyId: string;
+        readonly publicKeyBase64: string;
+        readonly multiHashHex: string;
+        readonly synchronizerId: string;
+        readonly topologyTransactions: readonly string[];
+        readonly multiHashSignatureBase64: string;
+        readonly publicKeyFingerprint?: string | null;
+      },
+      submissionOptions: ExternalPartyWalletSubmissionOptions = {}
+    ): Promise<SubmittedExternalPartyWalletOnboarding> {
       assertCantonSha256MultihashHex(input.multiHashHex);
-      const synchronizerId = await readRequiredConnectedSynchronizerId(options.ledgerClient, options.providerPartyId);
+      const synchronizerId = await readRequiredConnectedSynchronizerId(
+        options.ledgerClient,
+        options.providerPartyId,
+        submissionOptions.signal
+      );
       if (synchronizerId !== input.synchronizerId) {
         throw new ValidationError(
           "Prepared Canton synchronizer no longer matches the provider's connected synchronizer",
@@ -428,6 +446,7 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
         multiHashSignatureBase64: input.multiHashSignatureBase64,
         ...(input.publicKeyFingerprint !== undefined ? { publicKeyFingerprint: input.publicKeyFingerprint } : {}),
         allowAlreadyExists: true,
+        ...(submissionOptions.signal !== undefined ? { signal: submissionOptions.signal } : {}),
       });
       return {
         partyId: submitted.partyId,
@@ -1052,9 +1071,13 @@ function validateExistingOfferContractId(offerContractId: string): string {
 
 async function readConnectedSynchronizers(
   ledgerClient: LedgerJsonApiClient,
-  providerPartyId: string
+  providerPartyId: string,
+  signal?: AbortSignal
 ): Promise<ExternalPartyWalletConnectedSynchronizers> {
-  const raw = await ledgerClient.getConnectedSynchronizers({ party: providerPartyId });
+  const raw =
+    signal === undefined
+      ? await ledgerClient.getConnectedSynchronizers({ party: providerPartyId })
+      : await ledgerClient.getConnectedSynchronizers({ party: providerPartyId }, { signal });
   return {
     synchronizerId: parseExternalPartyWalletConnectedSynchronizerId(raw),
     raw,
@@ -1063,9 +1086,10 @@ async function readConnectedSynchronizers(
 
 async function readRequiredConnectedSynchronizerId(
   ledgerClient: LedgerJsonApiClient,
-  providerPartyId: string
+  providerPartyId: string,
+  signal?: AbortSignal
 ): Promise<string> {
-  const { synchronizerId } = await readConnectedSynchronizers(ledgerClient, providerPartyId);
+  const { synchronizerId } = await readConnectedSynchronizers(ledgerClient, providerPartyId, signal);
   if (synchronizerId) return synchronizerId;
   throw new OperationError(
     'Canton provider did not report a connected synchronizer',

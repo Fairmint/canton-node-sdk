@@ -1,6 +1,7 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { ApiError, OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
 import { isRecord } from '../../core/utils';
+import { runWithAbortSignal } from '../../core/utils/abort';
 import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
 import { allocateExternalParty } from './allocate-external-party';
 import { type CantonEd25519Signature, normalizeCantonEd25519Signature } from './canton-ed25519-signer';
@@ -60,6 +61,11 @@ export interface SubmitExternalPartyOnboardingOptions {
   readonly publicKeyFingerprint?: string | null;
   readonly identityProviderId?: string;
   /**
+   * Cancels the allocation request. Cancellation after dispatch has an ambiguous outcome; reconcile `partyId` before
+   * deciding whether to submit another allocation.
+   */
+  readonly signal?: AbortSignal;
+  /**
    * Treat a 409 allocation conflict as success when the party already exists and the party details endpoint confirms
    * it.
    */
@@ -70,6 +76,21 @@ export interface SubmittedExternalPartyOnboarding {
   readonly partyId: string;
   readonly raw: Record<string, unknown>;
   readonly alreadyExisted: boolean;
+}
+
+/** Preserves an allocation conflict when its bounded existence confirmation is canceled. */
+export class ExternalPartyConflictReconciliationError extends Error {
+  readonly partyId: string;
+  readonly allocationError: unknown;
+  declare readonly cause: unknown;
+
+  constructor(options: { readonly partyId: string; readonly allocationError: unknown; readonly cause: unknown }) {
+    super('Canton external-party conflict reconciliation was aborted');
+    this.name = 'ExternalPartyConflictReconciliationError';
+    this.partyId = options.partyId;
+    this.allocationError = options.allocationError;
+    this.cause = options.cause;
+  }
 }
 
 export interface ExternalPartyHashSigningRequest {
@@ -94,6 +115,11 @@ export type ExternalPartyHashSigner = (
 export interface CreateExternalPartyWithSignerOptions extends PrepareExternalPartyOnboardingOptions {
   readonly signMultiHash: ExternalPartyHashSigner;
   readonly identityProviderId?: string;
+  /**
+   * Cancels allocation transport. It does not cancel topology preparation or the caller-provided signer callback, and
+   * it cannot undo an allocation already accepted by Canton.
+   */
+  readonly signal?: AbortSignal;
   /**
    * Treat a 409 allocation conflict as success when the party already exists and the party details endpoint confirms
    * it.
@@ -213,6 +239,7 @@ export async function createExternalPartyWithSigner(
     multiHashSignatureBase64: normalizeExternalPartyHashSignature(signature),
     ...(options.identityProviderId !== undefined ? { identityProviderId: options.identityProviderId } : {}),
     ...(options.allowAlreadyExists !== undefined ? { allowAlreadyExists: options.allowAlreadyExists } : {}),
+    ...(options.signal !== undefined ? { signal: options.signal } : {}),
   });
 
   return {
@@ -257,6 +284,7 @@ export async function submitExternalPartyOnboarding(
           signingAlgorithmSpec: CANTON_ED25519_SIGNATURE_ALGORITHM,
         },
       ],
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
     const partyId = readAllocatedExternalPartyId(raw);
     if (partyId !== options.partyId) {
@@ -279,7 +307,8 @@ export async function submitExternalPartyOnboarding(
       options.ledgerClient,
       options.partyId,
       options.identityProviderId ?? DEFAULT_CANTON_IDENTITY_PROVIDER_ID,
-      error
+      error,
+      options.signal
     );
     if (!existing) {
       throw error;
@@ -381,14 +410,27 @@ async function readExistingExternalPartyAfterAllocationConflict(
   ledgerClient: LedgerJsonApiClient,
   partyId: string,
   identityProviderId: string,
-  error: unknown
+  error: unknown,
+  signal?: AbortSignal
 ): Promise<Record<string, unknown> | null> {
   if (!isConflict(error)) return null;
+  const abortError = new ValidationError('Canton external-party conflict reconciliation was aborted', { partyId });
+  const createAbortError = (): ValidationError => abortError;
   try {
-    const partyDetailsResponse = await ledgerClient.getPartyDetails({
-      party: partyId,
-      identityProviderId,
-    });
+    const partyDetailsResponse = await runWithAbortSignal(signal, createAbortError, () =>
+      signal === undefined
+        ? ledgerClient.getPartyDetails({
+            party: partyId,
+            identityProviderId,
+          })
+        : ledgerClient.getPartyDetails(
+            {
+              party: partyId,
+              identityProviderId,
+            },
+            { signal }
+          )
+    );
     const partyDetails = readMatchingExternalPartyDetails(partyDetailsResponse, partyId);
     if (!partyDetails) return null;
     return {
@@ -396,7 +438,14 @@ async function readExistingExternalPartyAfterAllocationConflict(
       partyDetails,
       allocationError: readErrorDetails(error),
     };
-  } catch {
+  } catch (cause) {
+    if (cause === abortError) {
+      throw new ExternalPartyConflictReconciliationError({
+        partyId,
+        allocationError: error,
+        cause,
+      });
+    }
     return null;
   }
 }

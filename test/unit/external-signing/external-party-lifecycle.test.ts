@@ -1,6 +1,13 @@
 import { generateKeyPairSync } from 'node:crypto';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import { ApiError, NetworkError, OperationError, OperationErrorCode, ValidationError } from '../../../src/core/errors';
+import {
+  ApiError,
+  NetworkError,
+  OperationError,
+  OperationErrorCode,
+  UnknownMutationOutcomeError,
+  ValidationError,
+} from '../../../src/core/errors';
 import {
   buildExternalPartyId,
   deriveCantonEd25519PublicKeyFingerprint,
@@ -175,6 +182,44 @@ describe('external-party lifecycle reconciliation', (): void => {
     expect(ledgerClient.getConnectedSynchronizers).not.toHaveBeenCalled();
   });
 
+  it('preserves a party-details failure that settles before a later abort', async (): Promise<void> => {
+    const fixture = createPartyFixture();
+    const ledgerClient = createMockLedgerClient(fixture.partyId);
+    const controller = new AbortController();
+    const partyDetailsError = new NetworkError('ledger unavailable');
+    let rejectPartyDetails: ((reason: unknown) => void) | undefined;
+    let markPartyDetailsStarted: (() => void) | undefined;
+    const partyDetailsStarted = new Promise<void>((resolve) => {
+      markPartyDetailsStarted = resolve;
+    });
+    ledgerClient.getPartyDetails.mockImplementationOnce(
+      () =>
+        new Promise<never>((_resolve, reject) => {
+          rejectPartyDetails = reject;
+          markPartyDetailsStarted?.();
+        })
+    );
+    const reconciliation = reconcileExternalPartyOnboarding({
+      ledgerClient,
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+      synchronizerId: SYNCHRONIZER_ID,
+      signal: controller.signal,
+    });
+
+    await partyDetailsStarted;
+    rejectPartyDetails?.(partyDetailsError);
+    controller.abort();
+
+    await expect(reconciliation).resolves.toMatchObject({
+      state: 'unknown',
+      exists: null,
+      ready: false,
+      failedAt: 'party-details',
+      failure: { name: 'NetworkError', message: 'ledger unavailable' },
+    });
+  });
+
   it('cancels an unresolved readiness read during reconciliation', async (): Promise<void> => {
     const fixture = createPartyFixture();
     const ledgerClient = createMockLedgerClient(fixture.partyId);
@@ -221,6 +266,25 @@ describe('external-party allocation failure classification', (): void => {
   });
 
   it('separates definite local/API rejection from ambiguous transport outcomes', (): void => {
+    const preDispatchAbort = new Error('allocation canceled before dispatch');
+    preDispatchAbort.name = 'AbortError';
+    expect(classifyExternalPartyAllocationFailure(preDispatchAbort)).toMatchObject({
+      kind: 'definite-rejection',
+      definite: true,
+      shouldReconcile: false,
+    });
+    expect(
+      classifyExternalPartyAllocationFailure(
+        new UnknownMutationOutcomeError(
+          { method: 'POST', endpoint: 'https://ledger.example.test/v2/parties/external', attempts: 1 },
+          preDispatchAbort
+        )
+      )
+    ).toMatchObject({
+      kind: 'ambiguous',
+      definite: false,
+      shouldReconcile: true,
+    });
     expect(classifyExternalPartyAllocationFailure(new ValidationError('invalid signature'))).toMatchObject({
       kind: 'definite-rejection',
       definite: true,

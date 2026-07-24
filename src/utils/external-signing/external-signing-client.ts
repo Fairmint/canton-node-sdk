@@ -4,7 +4,9 @@ import {
   OperationError,
   OperationErrorCode,
   readCantonDefiniteAnswer,
+  ValidationError,
 } from '../../core/errors';
+import { isAbortError } from '../../core/http/abort';
 import { readRequiredString } from '../canton-response-utils';
 import { waitForPartyCanSubmit, type WaitForPartyCanSubmitOptions } from '../party-readiness';
 import {
@@ -27,6 +29,7 @@ import {
   type InteractiveSubmissionHashingSchemeVersion,
 } from './execute-external-transaction';
 import {
+  classifyExternalPartyAllocationFailure,
   reconcileExternalPartyAllocationFailure,
   reconcileExternalPartyOnboarding,
   type ExternalPartyAllocationReconciliation,
@@ -36,6 +39,7 @@ import {
   CANTON_ED25519_SIGNATURE_ALGORITHM,
   CANTON_RAW_SIGNATURE_FORMAT,
   createExternalPartyWithSigner,
+  ExternalPartyConflictReconciliationError,
   type CreatedExternalPartyWithSigner,
   type PrepareExternalPartyOnboardingOptions,
 } from './external-party-onboarding';
@@ -61,7 +65,10 @@ export interface CreateExternalPartyWithEd25519SignerOptions extends Omit<
   readonly signingContext?: CantonEd25519SigningContext;
   readonly requestTtlMs?: number;
   readonly now?: () => number;
-  /** Cancels signing and post-allocation readiness reads; it cannot undo an allocation already submitted to Canton. */
+  /**
+   * Cancels signing, allocation transport, and post-allocation readiness reads. It cannot undo an allocation already
+   * accepted by Canton.
+   */
   readonly signal?: AbortSignal;
 }
 
@@ -142,6 +149,7 @@ export async function createExternalPartyWithEd25519Signer(
       ...(options.observingParticipantUids !== undefined
         ? { observingParticipantUids: options.observingParticipantUids }
         : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
       async signMultiHash(request) {
         const signed = await signAndVerifyCantonEd25519Payload({
           signer: options.signer,
@@ -162,16 +170,52 @@ export async function createExternalPartyWithEd25519Signer(
   } catch (cause) {
     const signed = signedPayloads[0];
     if (!signed) throw cause;
-    const reconciliation = await reconcileExternalPartyAllocationFailure({
+    // A plain AbortError is emitted only before mutation dispatch. Post-dispatch cancellation is wrapped as
+    // UnknownMutationOutcomeError and must continue through exact-party reconciliation.
+    if (isAbortError(cause)) throw cause;
+    const allocationCause = cause instanceof ExternalPartyConflictReconciliationError ? cause.allocationError : cause;
+    const reconcileOptions = {
       ledgerClient: options.ledgerClient,
       partyId: signed.request.partyId,
       publicKeyBase64,
       synchronizerId: signed.request.synchronizerId,
-      error: cause,
+      error: allocationCause,
       expectSubmitReady: options.localParticipantObservationOnly !== true,
       ...(options.identityProviderId !== undefined ? { identityProviderId: options.identityProviderId } : {}),
       ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
-    });
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
+    };
+    let reconciliation: ExternalPartyAllocationReconciliation;
+    try {
+      reconciliation = await reconcileExternalPartyAllocationFailure(reconcileOptions);
+    } catch (reconciliationCause) {
+      const failedAt =
+        reconciliationCause instanceof ValidationError &&
+        (reconciliationCause.context?.['step'] === 'party-details' ||
+          reconciliationCause.context?.['step'] === 'readiness')
+          ? reconciliationCause.context['step']
+          : undefined;
+      if (failedAt === undefined) throw reconciliationCause;
+      reconciliation = {
+        failure: classifyExternalPartyAllocationFailure(allocationCause),
+        status: {
+          state: 'unknown',
+          partyId: signed.request.partyId,
+          publicKeyFingerprint: signed.request.publicKeyFingerprint,
+          synchronizerId: signed.request.synchronizerId,
+          exists: failedAt === 'readiness' ? true : null,
+          ready: false,
+          failedAt,
+          failure: {
+            name: reconciliationCause instanceof Error ? reconciliationCause.name : 'AbortError',
+            message:
+              reconciliationCause instanceof Error
+                ? reconciliationCause.message
+                : 'Canton external-party reconciliation was aborted',
+          },
+        },
+      };
+    }
     throw new ExternalPartyOnboardingError({
       cause,
       reconciliation,
