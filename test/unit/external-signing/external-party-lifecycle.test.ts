@@ -1,6 +1,13 @@
 import { generateKeyPairSync } from 'node:crypto';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import { ApiError, NetworkError, OperationError, OperationErrorCode, ValidationError } from '../../../src/core/errors';
+import {
+  ApiError,
+  NetworkError,
+  OperationError,
+  OperationErrorCode,
+  UnknownMutationOutcomeError,
+  ValidationError,
+} from '../../../src/core/errors';
 import {
   buildExternalPartyId,
   deriveCantonEd25519PublicKeyFingerprint,
@@ -227,6 +234,18 @@ describe('external-party allocation failure classification', (): void => {
       kind: 'definite-rejection',
       definite: true,
       shouldReconcile: false,
+    });
+    expect(
+      classifyExternalPartyAllocationFailure(
+        new UnknownMutationOutcomeError(
+          { method: 'POST', endpoint: 'https://ledger.example.test/v2/parties/external', attempts: 1 },
+          preDispatchAbort
+        )
+      )
+    ).toMatchObject({
+      kind: 'ambiguous',
+      definite: false,
+      shouldReconcile: true,
     });
     expect(classifyExternalPartyAllocationFailure(new ValidationError('invalid signature'))).toMatchObject({
       kind: 'definite-rejection',
