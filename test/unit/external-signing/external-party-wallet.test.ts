@@ -200,6 +200,29 @@ describe('external-party wallet bridge', (): void => {
     });
   });
 
+  it('forwards cancellation to exact external-party recovery lookups', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient();
+    const bridge = createBridge({ ledgerClient });
+    const controller = new AbortController();
+
+    await bridge.listExternalPartiesForPublicKey(
+      {
+        partyName: 'privy-test',
+        publicKeyBase64: fixture.publicKeyBase64,
+      },
+      { signal: controller.signal }
+    );
+
+    expect(ledgerClient.getPartyDetails).toHaveBeenCalledWith(
+      {
+        party: fixture.partyId,
+        identityProviderId: '',
+      },
+      { signal: controller.signal }
+    );
+  });
+
   it('prepares and submits an externally signed CC transfer with a token-bound payload', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const validatorClient = createMockValidatorClient();
