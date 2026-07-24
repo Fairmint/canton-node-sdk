@@ -279,10 +279,13 @@ export interface ExternalPartyWalletBalance {
 export interface ExternalPartyWalletBridge {
   readonly getConnectedSynchronizers: () => Promise<ExternalPartyWalletConnectedSynchronizers>;
   readonly getProviderSourceBalance: () => Promise<ExternalPartyWalletProviderBalance>;
-  readonly listExternalPartiesForPublicKey: (input: {
-    readonly publicKeyBase64: string;
-    readonly partyName?: string;
-  }) => Promise<ExternalPartyWalletParties>;
+  readonly listExternalPartiesForPublicKey: (
+    input: {
+      readonly publicKeyBase64: string;
+      readonly partyName?: string;
+    },
+    options?: ExternalPartyWalletLookupOptions
+  ) => Promise<ExternalPartyWalletParties>;
   readonly prepareExternalParty: (input: {
     readonly partyName: string;
     readonly publicKeyBase64: string;
@@ -335,6 +338,11 @@ export interface ExternalPartyWalletSubmissionOptions {
   readonly signal?: AbortSignal;
 }
 
+export interface ExternalPartyWalletLookupOptions {
+  /** Cancels the exact-party or public-key lookup request. */
+  readonly signal?: AbortSignal;
+}
+
 interface ProviderTransferOfferForAcceptance {
   readonly offer: unknown;
   readonly offerContractId: string;
@@ -368,15 +376,20 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
       };
     },
 
-    async listExternalPartiesForPublicKey(input: {
-      readonly publicKeyBase64: string;
-      readonly partyName?: string;
-    }): Promise<ExternalPartyWalletParties> {
+    async listExternalPartiesForPublicKey(
+      input: {
+        readonly publicKeyBase64: string;
+        readonly partyName?: string;
+      },
+      lookupOptions: ExternalPartyWalletLookupOptions = {}
+    ): Promise<ExternalPartyWalletParties> {
       if (input.partyName) {
         const result = await getExternalPartyIdForHintAndPublicKey(
           options.ledgerClient,
           input.partyName,
-          input.publicKeyBase64
+          input.publicKeyBase64,
+          undefined,
+          lookupOptions.signal
         );
         return {
           publicKeyFingerprint: result.publicKeyFingerprint,
@@ -384,7 +397,7 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
           raw: result.raw,
         };
       }
-      return listExternalPartyIdsForPublicKey(options.ledgerClient, input.publicKeyBase64);
+      return listExternalPartyIdsForPublicKey(options.ledgerClient, input.publicKeyBase64, lookupOptions.signal);
     },
 
     async prepareExternalParty(input: {

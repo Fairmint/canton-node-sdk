@@ -335,14 +335,16 @@ function normalizeExternalPartyHashSignature(signature: ExternalPartyHashSignatu
 /** Lists party ids whose suffix matches the supplied Ed25519 public key fingerprint. */
 export async function listExternalPartyIdsForPublicKey(
   ledgerClient: LedgerJsonApiClient,
-  publicKeyBase64: string
+  publicKeyBase64: string,
+  signal?: AbortSignal
 ): Promise<{
   readonly publicKeyFingerprint: string;
   readonly parties: readonly string[];
   readonly raw: unknown;
 }> {
   const publicKeyFingerprint = deriveCantonEd25519PublicKeyFingerprint(publicKeyBase64);
-  const raw = await ledgerClient.listParties({});
+  const raw =
+    signal === undefined ? await ledgerClient.listParties({}) : await ledgerClient.listParties({}, { signal });
   return {
     publicKeyFingerprint,
     parties: readPartyIdsByFingerprint(raw, publicKeyFingerprint),
@@ -355,7 +357,8 @@ export async function getExternalPartyIdForHintAndPublicKey(
   ledgerClient: LedgerJsonApiClient,
   partyHint: string,
   publicKeyBase64: string,
-  identityProviderId = DEFAULT_CANTON_IDENTITY_PROVIDER_ID
+  identityProviderId = DEFAULT_CANTON_IDENTITY_PROVIDER_ID,
+  signal?: AbortSignal
 ): Promise<{
   readonly publicKeyFingerprint: string;
   readonly partyId: string;
@@ -365,7 +368,11 @@ export async function getExternalPartyIdForHintAndPublicKey(
   const publicKeyFingerprint = deriveCantonEd25519PublicKeyFingerprint(publicKeyBase64);
   const partyId = buildExternalPartyId(partyHint, publicKeyFingerprint);
   try {
-    const raw = await ledgerClient.getPartyDetails({ party: partyId, identityProviderId });
+    const params = { party: partyId, identityProviderId };
+    const raw =
+      signal === undefined
+        ? await ledgerClient.getPartyDetails(params)
+        : await ledgerClient.getPartyDetails(params, { signal });
     return {
       publicKeyFingerprint,
       partyId,
