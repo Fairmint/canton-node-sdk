@@ -60,6 +60,11 @@ export interface SubmitExternalPartyOnboardingOptions {
   readonly publicKeyFingerprint?: string | null;
   readonly identityProviderId?: string;
   /**
+   * Cancels the allocation request. Cancellation after dispatch has an ambiguous outcome; reconcile `partyId` before
+   * deciding whether to submit another allocation.
+   */
+  readonly signal?: AbortSignal;
+  /**
    * Treat a 409 allocation conflict as success when the party already exists and the party details endpoint confirms
    * it.
    */
@@ -94,6 +99,8 @@ export type ExternalPartyHashSigner = (
 export interface CreateExternalPartyWithSignerOptions extends PrepareExternalPartyOnboardingOptions {
   readonly signMultiHash: ExternalPartyHashSigner;
   readonly identityProviderId?: string;
+  /** Cancels signing and allocation. It cannot undo an allocation already accepted by Canton. */
+  readonly signal?: AbortSignal;
   /**
    * Treat a 409 allocation conflict as success when the party already exists and the party details endpoint confirms
    * it.
@@ -213,6 +220,7 @@ export async function createExternalPartyWithSigner(
     multiHashSignatureBase64: normalizeExternalPartyHashSignature(signature),
     ...(options.identityProviderId !== undefined ? { identityProviderId: options.identityProviderId } : {}),
     ...(options.allowAlreadyExists !== undefined ? { allowAlreadyExists: options.allowAlreadyExists } : {}),
+    ...(options.signal !== undefined ? { signal: options.signal } : {}),
   });
 
   return {
@@ -257,6 +265,7 @@ export async function submitExternalPartyOnboarding(
           signingAlgorithmSpec: CANTON_ED25519_SIGNATURE_ALGORITHM,
         },
       ],
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
     const partyId = readAllocatedExternalPartyId(raw);
     if (partyId !== options.partyId) {

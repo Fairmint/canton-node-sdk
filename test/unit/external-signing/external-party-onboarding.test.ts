@@ -159,6 +159,32 @@ describe('external-party onboarding helpers', () => {
     });
   });
 
+  it('forwards allocation cancellation without changing the submitted topology', async () => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    const controller = new AbortController();
+
+    await submitExternalPartyOnboarding({
+      ledgerClient,
+      synchronizerId: 'global-domain::sync',
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+      publicKeyFingerprint: fixture.publicKeyFingerprint,
+      multiHashHex: MULTI_HASH_HEX,
+      topologyTransactions: ['topology-tx-1'],
+      multiHashSignatureBase64: fixture.signMultiHash(),
+      signal: controller.signal,
+    });
+
+    expect(ledgerClient.allocateExternalParty).toHaveBeenCalledWith(
+      expect.objectContaining({
+        synchronizer: 'global-domain::sync',
+        onboardingTransactions: [{ transaction: 'topology-tx-1' }],
+      }),
+      { signal: controller.signal }
+    );
+  });
+
   it('creates an external party with an external signer callback returning hex', async () => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient(fixture);
