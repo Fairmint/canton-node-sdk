@@ -4,6 +4,7 @@ import {
   OperationError,
   OperationErrorCode,
   readCantonDefiniteAnswer,
+  ValidationError,
 } from '../../core/errors';
 import { readRequiredString } from '../canton-response-utils';
 import { waitForPartyCanSubmit, type WaitForPartyCanSubmitOptions } from '../party-readiness';
@@ -37,6 +38,7 @@ import {
   CANTON_ED25519_SIGNATURE_ALGORITHM,
   CANTON_RAW_SIGNATURE_FORMAT,
   createExternalPartyWithSigner,
+  ExternalPartyConflictReconciliationError,
   type CreatedExternalPartyWithSigner,
   type PrepareExternalPartyOnboardingOptions,
 } from './external-party-onboarding';
@@ -167,12 +169,13 @@ export async function createExternalPartyWithEd25519Signer(
   } catch (cause) {
     const signed = signedPayloads[0];
     if (!signed) throw cause;
+    const allocationCause = cause instanceof ExternalPartyConflictReconciliationError ? cause.allocationError : cause;
     const reconcileOptions = {
       ledgerClient: options.ledgerClient,
       partyId: signed.request.partyId,
       publicKeyBase64,
       synchronizerId: signed.request.synchronizerId,
-      error: cause,
+      error: allocationCause,
       expectSubmitReady: options.localParticipantObservationOnly !== true,
       ...(options.identityProviderId !== undefined ? { identityProviderId: options.identityProviderId } : {}),
       ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
@@ -183,16 +186,20 @@ export async function createExternalPartyWithEd25519Signer(
       reconciliation = await reconcileExternalPartyAllocationFailure(reconcileOptions);
     } catch (reconciliationCause) {
       if (!options.signal?.aborted) throw reconciliationCause;
+      const failedAt =
+        reconciliationCause instanceof ValidationError && reconciliationCause.context?.['step'] === 'readiness'
+          ? 'readiness'
+          : 'party-details';
       reconciliation = {
-        failure: classifyExternalPartyAllocationFailure(cause),
+        failure: classifyExternalPartyAllocationFailure(allocationCause),
         status: {
           state: 'unknown',
           partyId: signed.request.partyId,
           publicKeyFingerprint: signed.request.publicKeyFingerprint,
           synchronizerId: signed.request.synchronizerId,
-          exists: null,
+          exists: failedAt === 'readiness' ? true : null,
           ready: false,
-          failedAt: 'party-details',
+          failedAt,
           failure: {
             name: reconciliationCause instanceof Error ? reconciliationCause.name : 'AbortError',
             message:

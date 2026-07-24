@@ -78,6 +78,21 @@ export interface SubmittedExternalPartyOnboarding {
   readonly alreadyExisted: boolean;
 }
 
+/** Preserves an allocation conflict when its bounded existence confirmation is canceled. */
+export class ExternalPartyConflictReconciliationError extends Error {
+  readonly partyId: string;
+  readonly allocationError: unknown;
+  declare readonly cause: unknown;
+
+  constructor(options: { readonly partyId: string; readonly allocationError: unknown; readonly cause: unknown }) {
+    super('Canton external-party conflict reconciliation was aborted');
+    this.name = 'ExternalPartyConflictReconciliationError';
+    this.partyId = options.partyId;
+    this.allocationError = options.allocationError;
+    this.cause = options.cause;
+  }
+}
+
 export interface ExternalPartyHashSigningRequest {
   readonly partyHint: string;
   readonly partyId: string;
@@ -424,7 +439,13 @@ async function readExistingExternalPartyAfterAllocationConflict(
       allocationError: readErrorDetails(error),
     };
   } catch (cause) {
-    if (signal?.aborted) throw createAbortError();
+    if (signal?.aborted) {
+      throw new ExternalPartyConflictReconciliationError({
+        partyId,
+        allocationError: error,
+        cause,
+      });
+    }
     return null;
   }
 }

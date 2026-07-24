@@ -12,6 +12,7 @@ import {
   CANTON_ED25519_SIGNATURE_ALGORITHM,
   CANTON_RAW_SIGNATURE_FORMAT,
   createExternalPartyWithSigner,
+  ExternalPartyConflictReconciliationError,
   getExternalPartyIdForHintAndPublicKey,
   listExternalPartyIdsForPublicKey,
   prepareExternalPartyOnboarding,
@@ -359,7 +360,12 @@ describe('external-party onboarding helpers', () => {
     await confirmationStarted;
     controller.abort();
 
-    await expect(submitted).rejects.toThrow('Canton external-party conflict reconciliation was aborted');
+    await expect(submitted).rejects.toMatchObject({
+      name: 'ExternalPartyConflictReconciliationError',
+      partyId: fixture.partyId,
+      allocationError: { status: 409 },
+      cause: { message: 'Canton external-party conflict reconciliation was aborted' },
+    } satisfies Partial<ExternalPartyConflictReconciliationError>);
   });
 
   it('lists and checks existing external parties by public-key fingerprint', async () => {
