@@ -27,6 +27,7 @@ import {
   type InteractiveSubmissionHashingSchemeVersion,
 } from './execute-external-transaction';
 import {
+  classifyExternalPartyAllocationFailure,
   reconcileExternalPartyAllocationFailure,
   reconcileExternalPartyOnboarding,
   type ExternalPartyAllocationReconciliation,
@@ -166,7 +167,7 @@ export async function createExternalPartyWithEd25519Signer(
   } catch (cause) {
     const signed = signedPayloads[0];
     if (!signed) throw cause;
-    const reconciliation = await reconcileExternalPartyAllocationFailure({
+    const reconcileOptions = {
       ledgerClient: options.ledgerClient,
       partyId: signed.request.partyId,
       publicKeyBase64,
@@ -175,7 +176,33 @@ export async function createExternalPartyWithEd25519Signer(
       expectSubmitReady: options.localParticipantObservationOnly !== true,
       ...(options.identityProviderId !== undefined ? { identityProviderId: options.identityProviderId } : {}),
       ...(options.participantId !== undefined ? { participantId: options.participantId } : {}),
-    });
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
+    };
+    let reconciliation: ExternalPartyAllocationReconciliation;
+    try {
+      reconciliation = await reconcileExternalPartyAllocationFailure(reconcileOptions);
+    } catch (reconciliationCause) {
+      if (!options.signal?.aborted) throw reconciliationCause;
+      reconciliation = {
+        failure: classifyExternalPartyAllocationFailure(cause),
+        status: {
+          state: 'unknown',
+          partyId: signed.request.partyId,
+          publicKeyFingerprint: signed.request.publicKeyFingerprint,
+          synchronizerId: signed.request.synchronizerId,
+          exists: null,
+          ready: false,
+          failedAt: 'party-details',
+          failure: {
+            name: reconciliationCause instanceof Error ? reconciliationCause.name : 'AbortError',
+            message:
+              reconciliationCause instanceof Error
+                ? reconciliationCause.message
+                : 'Canton external-party reconciliation was aborted',
+          },
+        },
+      };
+    }
     throw new ExternalPartyOnboardingError({
       cause,
       reconciliation,

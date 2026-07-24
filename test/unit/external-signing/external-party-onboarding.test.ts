@@ -301,6 +301,7 @@ describe('external-party onboarding helpers', () => {
   it('can treat allocation conflict as success after confirming the party exists', async () => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient(fixture);
+    const controller = new AbortController();
     ledgerClient.allocateExternalParty.mockRejectedValueOnce(new ApiError('already exists', 409));
 
     const submitted = await submitExternalPartyOnboarding({
@@ -313,14 +314,52 @@ describe('external-party onboarding helpers', () => {
       multiHashSignatureBase64: fixture.signMultiHash(),
       identityProviderId: 'custom-idp',
       allowAlreadyExists: true,
+      signal: controller.signal,
     });
 
-    expect(ledgerClient.getPartyDetails).toHaveBeenCalledWith({
-      party: fixture.partyId,
-      identityProviderId: 'custom-idp',
-    });
+    expect(ledgerClient.getPartyDetails).toHaveBeenCalledWith(
+      {
+        party: fixture.partyId,
+        identityProviderId: 'custom-idp',
+      },
+      { signal: controller.signal }
+    );
     expect(submitted.alreadyExisted).toBe(true);
     expect(submitted.partyId).toBe(fixture.partyId);
+  });
+
+  it('aborts a pending allocation-conflict confirmation read', async () => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    const controller = new AbortController();
+    let markConfirmationStarted: (() => void) | undefined;
+    const confirmationStarted = new Promise<void>((resolve) => {
+      markConfirmationStarted = resolve;
+    });
+    ledgerClient.allocateExternalParty.mockRejectedValueOnce(new ApiError('already exists', 409));
+    ledgerClient.getPartyDetails.mockImplementationOnce(
+      async () =>
+        new Promise<never>(() => {
+          markConfirmationStarted?.();
+        })
+    );
+
+    const submitted = submitExternalPartyOnboarding({
+      ledgerClient,
+      synchronizerId: 'global-domain::sync',
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+      multiHashHex: MULTI_HASH_HEX,
+      topologyTransactions: ['topology-tx-1'],
+      multiHashSignatureBase64: fixture.signMultiHash(),
+      allowAlreadyExists: true,
+      signal: controller.signal,
+    });
+
+    await confirmationStarted;
+    controller.abort();
+
+    await expect(submitted).rejects.toThrow('Canton external-party conflict reconciliation was aborted');
   });
 
   it('lists and checks existing external parties by public-key fingerprint', async () => {

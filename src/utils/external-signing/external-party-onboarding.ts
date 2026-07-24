@@ -1,6 +1,7 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { ApiError, OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
 import { isRecord } from '../../core/utils';
+import { runWithAbortSignal } from '../../core/utils/abort';
 import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
 import { allocateExternalParty } from './allocate-external-party';
 import { type CantonEd25519Signature, normalizeCantonEd25519Signature } from './canton-ed25519-signer';
@@ -291,7 +292,8 @@ export async function submitExternalPartyOnboarding(
       options.ledgerClient,
       options.partyId,
       options.identityProviderId ?? DEFAULT_CANTON_IDENTITY_PROVIDER_ID,
-      error
+      error,
+      options.signal
     );
     if (!existing) {
       throw error;
@@ -393,14 +395,27 @@ async function readExistingExternalPartyAfterAllocationConflict(
   ledgerClient: LedgerJsonApiClient,
   partyId: string,
   identityProviderId: string,
-  error: unknown
+  error: unknown,
+  signal?: AbortSignal
 ): Promise<Record<string, unknown> | null> {
   if (!isConflict(error)) return null;
+  const createAbortError = (): ValidationError =>
+    new ValidationError('Canton external-party conflict reconciliation was aborted', { partyId });
   try {
-    const partyDetailsResponse = await ledgerClient.getPartyDetails({
-      party: partyId,
-      identityProviderId,
-    });
+    const partyDetailsResponse = await runWithAbortSignal(signal, createAbortError, () =>
+      signal === undefined
+        ? ledgerClient.getPartyDetails({
+            party: partyId,
+            identityProviderId,
+          })
+        : ledgerClient.getPartyDetails(
+            {
+              party: partyId,
+              identityProviderId,
+            },
+            { signal }
+          )
+    );
     const partyDetails = readMatchingExternalPartyDetails(partyDetailsResponse, partyId);
     if (!partyDetails) return null;
     return {
@@ -408,7 +423,8 @@ async function readExistingExternalPartyAfterAllocationConflict(
       partyDetails,
       allocationError: readErrorDetails(error),
     };
-  } catch {
+  } catch (cause) {
+    if (signal?.aborted) throw createAbortError();
     return null;
   }
 }
