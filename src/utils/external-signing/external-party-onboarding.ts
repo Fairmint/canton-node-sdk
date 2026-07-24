@@ -99,7 +99,10 @@ export type ExternalPartyHashSigner = (
 export interface CreateExternalPartyWithSignerOptions extends PrepareExternalPartyOnboardingOptions {
   readonly signMultiHash: ExternalPartyHashSigner;
   readonly identityProviderId?: string;
-  /** Cancels signing and allocation. It cannot undo an allocation already accepted by Canton. */
+  /**
+   * Cancels allocation transport. It does not cancel topology preparation or the caller-provided signer callback, and
+   * it cannot undo an allocation already accepted by Canton.
+   */
   readonly signal?: AbortSignal;
   /**
    * Treat a 409 allocation conflict as success when the party already exists and the party details endpoint confirms

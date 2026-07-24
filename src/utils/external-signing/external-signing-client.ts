@@ -61,7 +61,10 @@ export interface CreateExternalPartyWithEd25519SignerOptions extends Omit<
   readonly signingContext?: CantonEd25519SigningContext;
   readonly requestTtlMs?: number;
   readonly now?: () => number;
-  /** Cancels signing and post-allocation readiness reads; it cannot undo an allocation already submitted to Canton. */
+  /**
+   * Cancels signing, allocation transport, and post-allocation readiness reads. It cannot undo an allocation already
+   * accepted by Canton.
+   */
   readonly signal?: AbortSignal;
 }
 
@@ -142,6 +145,7 @@ export async function createExternalPartyWithEd25519Signer(
       ...(options.observingParticipantUids !== undefined
         ? { observingParticipantUids: options.observingParticipantUids }
         : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
       async signMultiHash(request) {
         const signed = await signAndVerifyCantonEd25519Payload({
           signer: options.signer,

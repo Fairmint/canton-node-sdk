@@ -340,6 +340,10 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
         signatureBase64: expect.any(String) as string,
       });
     }
+    expect(ledgerClient.allocateExternalParty).toHaveBeenCalledWith(
+      expect.objectContaining({ synchronizer: SYNCHRONIZER_ID }),
+      { signal: controller.signal }
+    );
   });
 
   it('aborts readiness after allocation without returning a successful onboarding result', async (): Promise<void> => {
