@@ -221,6 +221,13 @@ describe('external-party allocation failure classification', (): void => {
   });
 
   it('separates definite local/API rejection from ambiguous transport outcomes', (): void => {
+    const preDispatchAbort = new Error('allocation canceled before dispatch');
+    preDispatchAbort.name = 'AbortError';
+    expect(classifyExternalPartyAllocationFailure(preDispatchAbort)).toMatchObject({
+      kind: 'definite-rejection',
+      definite: true,
+      shouldReconcile: false,
+    });
     expect(classifyExternalPartyAllocationFailure(new ValidationError('invalid signature'))).toMatchObject({
       kind: 'definite-rejection',
       definite: true,

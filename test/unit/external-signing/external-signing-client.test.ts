@@ -353,6 +353,29 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
     expect(ledgerClient.getPartyDetails).not.toHaveBeenCalled();
   });
 
+  it('surfaces a pre-dispatch allocation cancellation without reconciliation', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    const controller = new AbortController();
+    const abortError = new Error('allocation canceled before dispatch');
+    abortError.name = 'AbortError';
+    ledgerClient.allocateExternalParty.mockImplementationOnce(async () => {
+      controller.abort();
+      throw abortError;
+    });
+
+    await expect(
+      createExternalPartyWithEd25519Signer({
+        ledgerClient,
+        synchronizerId: SYNCHRONIZER_ID,
+        partyHint: 'external-test',
+        signer: fixture.signer,
+        signal: controller.signal,
+      })
+    ).rejects.toBe(abortError);
+    expect(ledgerClient.getPartyDetails).not.toHaveBeenCalled();
+  });
+
   it('aborts a pending reconciliation read after an ambiguous allocation failure', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient(fixture);

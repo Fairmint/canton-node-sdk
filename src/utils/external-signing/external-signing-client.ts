@@ -6,6 +6,7 @@ import {
   readCantonDefiniteAnswer,
   ValidationError,
 } from '../../core/errors';
+import { isAbortError } from '../../core/http/abort';
 import { readRequiredString } from '../canton-response-utils';
 import { waitForPartyCanSubmit, type WaitForPartyCanSubmitOptions } from '../party-readiness';
 import {
@@ -169,6 +170,9 @@ export async function createExternalPartyWithEd25519Signer(
   } catch (cause) {
     const signed = signedPayloads[0];
     if (!signed) throw cause;
+    // A plain AbortError is emitted only before mutation dispatch. Post-dispatch cancellation is wrapped as
+    // UnknownMutationOutcomeError and must continue through exact-party reconciliation.
+    if (isAbortError(cause)) throw cause;
     const allocationCause = cause instanceof ExternalPartyConflictReconciliationError ? cause.allocationError : cause;
     const reconcileOptions = {
       ledgerClient: options.ledgerClient,

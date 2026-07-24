@@ -7,6 +7,7 @@ import {
   ValidationError,
   type NormalizedCantonErrorDetails,
 } from '../../core/errors';
+import { isAbortError } from '../../core/http/abort';
 import { runWithAbortSignal } from '../../core/utils/abort';
 import { checkPartySynchronizerReadiness, type PartySynchronizerReadiness } from '../party-readiness';
 import { assertCantonPartyMatchesPublicKey } from './canton-protocol';
@@ -243,6 +244,14 @@ export interface ExternalPartyAllocationFailure {
 /** Classifies allocation failures from structured SDK/Canton fields, never from localized error messages. */
 export function classifyExternalPartyAllocationFailure(error: unknown): ExternalPartyAllocationFailure {
   const details = normalizeStatusFailure(error);
+  if (isAbortError(error)) {
+    return {
+      kind: 'definite-rejection',
+      definite: true,
+      shouldReconcile: false,
+      details,
+    };
+  }
   const alreadyExists = details.status === 409 && details.code === 'ALREADY_EXISTS';
   if (alreadyExists) {
     return {
