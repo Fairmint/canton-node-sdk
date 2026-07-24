@@ -182,6 +182,44 @@ describe('external-party lifecycle reconciliation', (): void => {
     expect(ledgerClient.getConnectedSynchronizers).not.toHaveBeenCalled();
   });
 
+  it('preserves a party-details failure that settles before a later abort', async (): Promise<void> => {
+    const fixture = createPartyFixture();
+    const ledgerClient = createMockLedgerClient(fixture.partyId);
+    const controller = new AbortController();
+    const partyDetailsError = new NetworkError('ledger unavailable');
+    let rejectPartyDetails: ((reason: unknown) => void) | undefined;
+    let markPartyDetailsStarted: (() => void) | undefined;
+    const partyDetailsStarted = new Promise<void>((resolve) => {
+      markPartyDetailsStarted = resolve;
+    });
+    ledgerClient.getPartyDetails.mockImplementationOnce(
+      () =>
+        new Promise<never>((_resolve, reject) => {
+          rejectPartyDetails = reject;
+          markPartyDetailsStarted?.();
+        })
+    );
+    const reconciliation = reconcileExternalPartyOnboarding({
+      ledgerClient,
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+      synchronizerId: SYNCHRONIZER_ID,
+      signal: controller.signal,
+    });
+
+    await partyDetailsStarted;
+    rejectPartyDetails?.(partyDetailsError);
+    controller.abort();
+
+    await expect(reconciliation).resolves.toMatchObject({
+      state: 'unknown',
+      exists: null,
+      ready: false,
+      failedAt: 'party-details',
+      failure: { name: 'NetworkError', message: 'ledger unavailable' },
+    });
+  });
+
   it('cancels an unresolved readiness read during reconciliation', async (): Promise<void> => {
     const fixture = createPartyFixture();
     const ledgerClient = createMockLedgerClient(fixture.partyId);

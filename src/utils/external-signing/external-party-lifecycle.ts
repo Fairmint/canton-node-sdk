@@ -113,7 +113,8 @@ export async function reconcileExternalPartyOnboarding(
   };
 
   let partyDetails: Record<string, unknown>;
-  const createPartyDetailsAbortError = (): ValidationError => reconciliationAborted(options, 'party-details');
+  const partyDetailsAbortError = reconciliationAborted(options, 'party-details');
+  const createPartyDetailsAbortError = (): ValidationError => partyDetailsAbortError;
   try {
     const raw = await runWithAbortSignal(
       options.signal,
@@ -142,7 +143,7 @@ export async function reconcileExternalPartyOnboarding(
     }
     partyDetails = matched;
   } catch (error) {
-    if (options.signal?.aborted) throw createPartyDetailsAbortError();
+    if (error === partyDetailsAbortError) throw error;
     if (readErrorStatus(error) === 404) {
       return {
         ...base,
@@ -162,7 +163,8 @@ export async function reconcileExternalPartyOnboarding(
     };
   }
 
-  const createReadinessAbortError = (): ValidationError => reconciliationAborted(options, 'readiness');
+  const readinessAbortError = reconciliationAborted(options, 'readiness');
+  const createReadinessAbortError = (): ValidationError => readinessAbortError;
   try {
     const readiness = await runWithAbortSignal(
       options.signal,
@@ -206,7 +208,7 @@ export async function reconcileExternalPartyOnboarding(
       readiness,
     };
   } catch (error) {
-    if (options.signal?.aborted) throw createReadinessAbortError();
+    if (error === readinessAbortError) throw error;
     return {
       ...base,
       state: 'unknown',

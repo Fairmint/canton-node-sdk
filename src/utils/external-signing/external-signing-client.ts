@@ -189,11 +189,13 @@ export async function createExternalPartyWithEd25519Signer(
     try {
       reconciliation = await reconcileExternalPartyAllocationFailure(reconcileOptions);
     } catch (reconciliationCause) {
-      if (!options.signal?.aborted) throw reconciliationCause;
       const failedAt =
-        reconciliationCause instanceof ValidationError && reconciliationCause.context?.['step'] === 'readiness'
-          ? 'readiness'
-          : 'party-details';
+        reconciliationCause instanceof ValidationError &&
+        (reconciliationCause.context?.['step'] === 'party-details' ||
+          reconciliationCause.context?.['step'] === 'readiness')
+          ? reconciliationCause.context['step']
+          : undefined;
+      if (failedAt === undefined) throw reconciliationCause;
       reconciliation = {
         failure: classifyExternalPartyAllocationFailure(allocationCause),
         status: {
