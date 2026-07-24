@@ -414,8 +414,8 @@ async function readExistingExternalPartyAfterAllocationConflict(
   signal?: AbortSignal
 ): Promise<Record<string, unknown> | null> {
   if (!isConflict(error)) return null;
-  const createAbortError = (): ValidationError =>
-    new ValidationError('Canton external-party conflict reconciliation was aborted', { partyId });
+  const abortError = new ValidationError('Canton external-party conflict reconciliation was aborted', { partyId });
+  const createAbortError = (): ValidationError => abortError;
   try {
     const partyDetailsResponse = await runWithAbortSignal(signal, createAbortError, () =>
       signal === undefined
@@ -439,7 +439,7 @@ async function readExistingExternalPartyAfterAllocationConflict(
       allocationError: readErrorDetails(error),
     };
   } catch (cause) {
-    if (signal?.aborted) {
+    if (cause === abortError) {
       throw new ExternalPartyConflictReconciliationError({
         partyId,
         allocationError: error,

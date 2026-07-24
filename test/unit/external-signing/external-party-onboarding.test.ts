@@ -368,6 +368,45 @@ describe('external-party onboarding helpers', () => {
     } satisfies Partial<ExternalPartyConflictReconciliationError>);
   });
 
+  it('preserves a confirmation failure that settles before a later abort', async () => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    const controller = new AbortController();
+    const allocationError = new ApiError('already exists', 409);
+    const confirmationError = new ApiError('party details unavailable', 503);
+    let rejectConfirmation: ((reason: unknown) => void) | undefined;
+    let markConfirmationStarted: (() => void) | undefined;
+    const confirmationStarted = new Promise<void>((resolve) => {
+      markConfirmationStarted = resolve;
+    });
+    ledgerClient.allocateExternalParty.mockRejectedValueOnce(allocationError);
+    ledgerClient.getPartyDetails.mockImplementationOnce(
+      () =>
+        new Promise<never>((_resolve, reject) => {
+          rejectConfirmation = reject;
+          markConfirmationStarted?.();
+        })
+    );
+
+    const submitted = submitExternalPartyOnboarding({
+      ledgerClient,
+      synchronizerId: 'global-domain::sync',
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+      multiHashHex: MULTI_HASH_HEX,
+      topologyTransactions: ['topology-tx-1'],
+      multiHashSignatureBase64: fixture.signMultiHash(),
+      allowAlreadyExists: true,
+      signal: controller.signal,
+    });
+
+    await confirmationStarted;
+    rejectConfirmation?.(confirmationError);
+    controller.abort();
+
+    await expect(submitted).rejects.toBe(allocationError);
+  });
+
   it('lists and checks existing external parties by public-key fingerprint', async () => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient(fixture);
