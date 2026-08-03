@@ -16,7 +16,7 @@ jest.mock('axios', () => {
 });
 
 import { ValidatorApiClient } from '../../../src';
-import { CantonRuntime, type ClientConfig } from '../../../src/core';
+import { CantonRuntime, DEFAULT_HTTP_TIMEOUT_MS, type ClientConfig } from '../../../src/core';
 
 interface MockAxiosInstance {
   get: jest.Mock<Promise<{ data: undefined }>, [string, Record<string, unknown>]>;
@@ -65,6 +65,7 @@ describe('ValidatorApiClient health checks', () => {
 
     expect(mockAxiosInstance.get).toHaveBeenCalledWith('http://localhost:3903/api/validator/readyz', {
       headers: { 'Content-Type': 'application/json' },
+      timeout: DEFAULT_HTTP_TIMEOUT_MS,
     });
   });
 
@@ -76,6 +77,21 @@ describe('ValidatorApiClient health checks', () => {
 
     expect(mockAxiosInstance.get).toHaveBeenCalledWith('http://localhost:3903/api/validator/livez', {
       headers: { 'Content-Type': 'application/json' },
+      timeout: DEFAULT_HTTP_TIMEOUT_MS,
+    });
+  });
+
+  it('forwards a caller AbortSignal from the generated wrapper to the transport', async () => {
+    const { client, mockAxiosInstance } = createClient();
+    mockAxiosInstance.get.mockResolvedValueOnce({ data: undefined });
+    const controller = new AbortController();
+
+    await expect(client.isReady({ signal: controller.signal })).resolves.toBeUndefined();
+
+    expect(mockAxiosInstance.get).toHaveBeenCalledWith('http://localhost:3903/api/validator/readyz', {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: DEFAULT_HTTP_TIMEOUT_MS,
+      signal: controller.signal,
     });
   });
 

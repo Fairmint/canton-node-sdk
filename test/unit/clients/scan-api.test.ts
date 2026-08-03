@@ -23,6 +23,7 @@ import {
 import {
   ApiError,
   CantonRuntime,
+  DEFAULT_HTTP_TIMEOUT_MS,
   NetworkError,
   UnknownMutationOutcomeError,
   type ClientConfig,
@@ -833,6 +834,7 @@ describe('ScanApiClient', () => {
         headers: {
           'Content-Type': 'application/json',
         },
+        timeout: DEFAULT_HTTP_TIMEOUT_MS,
       }
     );
     const requestHeaders = mockAxiosInstance.post.mock.calls[0]?.[2]?.headers;
@@ -876,6 +878,7 @@ describe('ScanApiClient', () => {
         headers: {
           'Content-Type': 'application/json',
         },
+        timeout: DEFAULT_HTTP_TIMEOUT_MS,
       }
     );
     const requestHeaders = mockAxiosInstance.post.mock.calls[0]?.[2]?.headers;
@@ -927,6 +930,7 @@ describe('ScanApiClient', () => {
         headers: {
           'Content-Type': 'application/json',
         },
+        timeout: DEFAULT_HTTP_TIMEOUT_MS,
       }
     );
     const requestHeaders = mockAxiosInstance.post.mock.calls[0]?.[2]?.headers;
