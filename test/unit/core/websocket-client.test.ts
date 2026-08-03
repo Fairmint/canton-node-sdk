@@ -422,6 +422,114 @@ describe('WebSocketClient', () => {
     expect(socket.close).toHaveBeenCalledWith(4000, 'Token refresh required');
   });
 
+  it('closes a socket that goes silent after the handshake when an idle timeout is set', async () => {
+    jest.useFakeTimers();
+    const logRequestResponse = jest.fn().mockResolvedValue(undefined);
+    const client = {
+      getApiUrl: () => 'https://ledger.example',
+      authenticate: jest.fn().mockResolvedValue('token'),
+      getTokenIssuedAt: () => null,
+      getTokenExpiryTime: () => null,
+      getLogger: () => ({ logRequestResponse }),
+    } as unknown as BaseClient;
+    const onError = jest.fn();
+
+    await new WebSocketClient(client).connect(
+      '/v2/state/active-contracts',
+      { activeAtOffset: 42 },
+      { onMessage: jest.fn(), onError },
+      { idleTimeoutMs: 30_000 }
+    );
+    const socket = mockSockets[0];
+    if (!socket) throw new Error('Expected WebSocketClient to construct one socket.');
+
+    socket.emit('open');
+    await jest.advanceTimersByTimeAsync(29_000);
+    expect(socket.close).not.toHaveBeenCalled();
+
+    await jest.advanceTimersByTimeAsync(2_000);
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'WebSocket idle timeout: no message received for 30000ms' })
+    );
+    expect(socket.close).toHaveBeenCalledWith(4008, 'WebSocket idle timeout');
+  });
+
+  it('restarts the idle timeout on every inbound message', async () => {
+    jest.useFakeTimers();
+    const client = {
+      getApiUrl: () => 'https://ledger.example',
+      authenticate: jest.fn().mockResolvedValue('token'),
+      getTokenIssuedAt: () => null,
+      getTokenExpiryTime: () => null,
+      getLogger: () => undefined,
+    } as unknown as BaseClient;
+    const onError = jest.fn();
+
+    await new WebSocketClient(client).connect(
+      '/v2/state/active-contracts',
+      { activeAtOffset: 42 },
+      { onMessage: jest.fn(), onError },
+      { idleTimeoutMs: 30_000 }
+    );
+    const socket = mockSockets[0];
+    if (!socket) throw new Error('Expected WebSocketClient to construct one socket.');
+
+    socket.emit('open');
+    for (let tick = 0; tick < 5; tick += 1) {
+      await jest.advanceTimersByTimeAsync(20_000);
+      socket.emit('message', Buffer.from(JSON.stringify({ contractEntry: { JsActiveContract: {} } })));
+    }
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(socket.close).not.toHaveBeenCalled();
+  });
+
+  it('waits indefinitely when no idle timeout is configured', async () => {
+    jest.useFakeTimers();
+    const client = {
+      getApiUrl: () => 'https://ledger.example',
+      authenticate: jest.fn().mockResolvedValue('token'),
+      getTokenIssuedAt: () => null,
+      getTokenExpiryTime: () => null,
+      getLogger: () => undefined,
+    } as unknown as BaseClient;
+    const onError = jest.fn();
+
+    await new WebSocketClient(client).connect(
+      '/v2/state/active-contracts',
+      { activeAtOffset: 42 },
+      { onMessage: jest.fn(), onError }
+    );
+    const socket = mockSockets[0];
+    if (!socket) throw new Error('Expected WebSocketClient to construct one socket.');
+
+    socket.emit('open');
+    await jest.advanceTimersByTimeAsync(60 * 60 * 1000);
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(socket.close).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid idle timeout', async () => {
+    const client = {
+      getApiUrl: () => 'https://ledger.example',
+      authenticate: jest.fn().mockResolvedValue('token'),
+      getTokenIssuedAt: () => null,
+      getTokenExpiryTime: () => null,
+      getLogger: () => undefined,
+    } as unknown as BaseClient;
+
+    await expect(
+      new WebSocketClient(client).connect(
+        '/v2/state/active-contracts',
+        { activeAtOffset: 42 },
+        { onMessage: jest.fn() },
+        { idleTimeoutMs: -1 }
+      )
+    ).rejects.toThrow('WebSocket idleTimeoutMs must be a non-negative finite number');
+  });
+
   it('isolates a rejected close callback after delivering the close event', async () => {
     const loggerError = jest.fn();
     const logRequestResponse = jest.fn().mockResolvedValue(undefined);

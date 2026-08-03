@@ -18,6 +18,14 @@ import { buildEventFormat } from '../utils/event-format-builder';
 const path = '/v2/state/active-contracts' as const;
 
 /**
+ * Idle timeout for the active-contracts snapshot stream.
+ *
+ * The snapshot is a bounded stream that the server closes on its own, so silence this long means the connection is hung
+ * rather than slow. Callers that expect longer gaps can raise it or pass `0` to wait indefinitely.
+ */
+const DEFAULT_IDLE_TIMEOUT_MS = 600_000;
+
+/**
  * We intentionally do not expose the JSON/REST version of this endpoint. The REST variant is too limited, while the
  * WebSocket variant returns the same snapshot and automatically closes the connection once the current state is sent.
  * Wrapping the WebSocket call behind a simple awaitable method gives a better DX and keeps the door open for optional
@@ -37,6 +45,8 @@ const ActiveContractsParamsSchema = z.object({
   includeCreatedEventBlob: z.boolean().optional(),
   /** Allow caller to omit activeAtOffset; we'll default to ledger end */
   activeAtOffset: z.number().optional(),
+  /** Fail the snapshot when no message arrives for this many milliseconds. `0` waits indefinitely. */
+  idleTimeoutMs: z.number().min(0).optional(),
 });
 
 export type GetActiveContractsParams = z.infer<typeof ActiveContractsParamsSchema> & {
@@ -119,41 +129,46 @@ export class GetActiveContracts {
       };
 
       void wsClient
-        .connect<ActiveContractsRequestMessage, unknown>(path, requestMessage, {
-          onMessage: async (parsed): Promise<void> => {
-            const decoded = ActiveContractsResponseMessageSchema.safeParse(parsed);
-            if (!decoded.success) {
-              throw new ApiError('Unexpected active-contracts WebSocket message');
-            }
-            const message = decoded.data;
-
-            // Distinguish item vs error union members
-            if ('contractEntry' in message) {
-              results.push(message);
-              if (typeof params.onItem === 'function') {
-                await params.onItem(message);
+        .connect<ActiveContractsRequestMessage, unknown>(
+          path,
+          requestMessage,
+          {
+            onMessage: async (parsed): Promise<void> => {
+              const decoded = ActiveContractsResponseMessageSchema.safeParse(parsed);
+              if (!decoded.success) {
+                throw new ApiError('Unexpected active-contracts WebSocket message');
               }
-            } else if (!settled) {
-              // Treat any non-item as an error message
-              const error = toError(message);
-              settled = true;
-              reject(error);
-              throw error;
-            }
+              const message = decoded.data;
+
+              // Distinguish item vs error union members
+              if ('contractEntry' in message) {
+                results.push(message);
+                if (typeof params.onItem === 'function') {
+                  await params.onItem(message);
+                }
+              } else if (!settled) {
+                // Treat any non-item as an error message
+                const error = toError(message);
+                settled = true;
+                reject(error);
+                throw error;
+              }
+            },
+            onError: (err) => {
+              if (!settled) {
+                settled = true;
+                reject(err instanceof Error ? err : new Error(String(err)));
+              }
+            },
+            onClose: () => {
+              if (!settled) {
+                settled = true;
+                resolve(results);
+              }
+            },
           },
-          onError: (err) => {
-            if (!settled) {
-              settled = true;
-              reject(err instanceof Error ? err : new Error(String(err)));
-            }
-          },
-          onClose: () => {
-            if (!settled) {
-              settled = true;
-              resolve(results);
-            }
-          },
-        })
+          { idleTimeoutMs: validated.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS }
+        )
         .catch((err: unknown) => {
           if (!settled) {
             settled = true;
