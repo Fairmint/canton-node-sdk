@@ -241,7 +241,7 @@ export class HttpClient {
       let dispatched = false;
       try {
         const headers = await awaitWithAbort(async (): Promise<Record<string, string>> => {
-          const builtHeaders = await this.buildHeaders(requestConfig, timeoutMs);
+          const builtHeaders = await this.buildHeaders(requestConfig, timeoutMs, signal);
           return builtHeaders;
         }, signal);
         throwIfAborted(signal);
@@ -491,7 +491,11 @@ export class HttpClient {
     }
   }
 
-  private async buildHeaders(config: RequestConfig, timeoutMs: number): Promise<Record<string, string>> {
+  private async buildHeaders(
+    config: RequestConfig,
+    timeoutMs: number,
+    signal: AbortSignal | undefined
+  ): Promise<Record<string, string>> {
     const headers: Record<string, string> = {};
 
     if (config.contentType) {
@@ -505,7 +509,7 @@ export class HttpClient {
         throw new AuthenticationError('Bearer token requested but no token provider is configured');
       }
 
-      const token = await this.fetchBearerToken(this.bearerTokenProvider, timeoutMs);
+      const token = await this.fetchBearerToken(this.bearerTokenProvider, timeoutMs, signal);
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
@@ -514,16 +518,31 @@ export class HttpClient {
     return headers;
   }
 
-  /** Bound the token fetch too: a silent auth endpoint would otherwise suspend the request before it is dispatched. */
-  private async fetchBearerToken(provider: () => Promise<string>, timeoutMs: number): Promise<string> {
+  /**
+   * Bound the token fetch too: a silent auth endpoint would otherwise suspend the request before it is dispatched.
+   * Clears its own timer as soon as `signal` aborts so a caller-driven cancellation never leaves a live timer handle
+   * behind for the remainder of `timeoutMs`, mirroring {@link abortableSleep}.
+   */
+  private async fetchBearerToken(
+    provider: () => Promise<string>,
+    timeoutMs: number,
+    signal: AbortSignal | undefined
+  ): Promise<string> {
     const tokenPromise = provider();
     if (timeoutMs === 0) return tokenPromise;
 
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      const onAbort = (): void => {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', onAbort);
+        reject(createAbortError(signal));
+      };
       timer = setTimeout(() => {
+        signal?.removeEventListener('abort', onAbort);
         reject(new NetworkError(`Bearer token request timed out after ${timeoutMs}ms`));
       }, timeoutMs);
+      signal?.addEventListener('abort', onAbort, { once: true });
     });
 
     try {

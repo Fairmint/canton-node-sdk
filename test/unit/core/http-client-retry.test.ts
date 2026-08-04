@@ -569,6 +569,35 @@ describe('HttpClient mutation retry safety', () => {
     expect(axiosInstance.post).not.toHaveBeenCalled();
   });
 
+  it('clears the internal bearer-token timeout timer as soon as the caller aborts, instead of leaking it for the full timeout', async () => {
+    jest.useFakeTimers();
+    try {
+      const tokenGate = new Promise<string>(() => undefined);
+      const { client, axiosInstance } = createClient(undefined, async () => tokenGate);
+      const controller = new AbortController();
+
+      const request = client.makePostRequest(
+        'https://validator.example/api/mutate',
+        {},
+        { includeBearerToken: true },
+        { signal: controller.signal }
+      );
+      await Promise.resolve();
+      // The internal `setTimeout` guarding the bearer-token fetch (default 600_000ms) is now armed.
+      expect(jest.getTimerCount()).toBeGreaterThan(0);
+
+      controller.abort(new Error('stop waiting for token'));
+      await expect(request).rejects.toMatchObject({ name: 'AbortError', message: 'stop waiting for token' });
+
+      // Regression guard: aborting must clear that timer immediately rather than leaving a live handle alive for
+      // up to the full timeoutMs (600_000ms by default), which previously kept the Node process alive after abort.
+      expect(jest.getTimerCount()).toBe(0);
+      expect(axiosInstance.post).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('keeps the entry-time signal when the caller replaces options during token acquisition', async () => {
     let releaseToken: ((token: string) => void) | undefined;
     const tokenGate = new Promise<string>((resolve) => {
