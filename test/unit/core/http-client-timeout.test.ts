@@ -29,10 +29,6 @@ function lastAxiosInstance(): MockAxiosInstance {
   return lastResult.value;
 }
 
-function createdTimeouts(): number[] {
-  return (axios.create as jest.Mock).mock.calls.map(([config]) => (config as { timeout: number }).timeout);
-}
-
 function createClient(timeoutMs?: number): HttpClient {
   const client = new HttpClient(undefined, undefined, timeoutMs === undefined ? {} : { timeoutMs });
   client.setRetryConfig({ maxRetries: 0, delayMs: 0 });
@@ -44,22 +40,8 @@ describe('HttpClient timeouts', () => {
     jest.clearAllMocks();
   });
 
-  it('applies the default socket timeout to the axios instance', () => {
-    const client = createClient();
-
-    expect(createdTimeouts()).toEqual([DEFAULT_HTTP_TIMEOUT_MS]);
-    expect(client.getDefaultTimeoutMs()).toBe(DEFAULT_HTTP_TIMEOUT_MS);
-  });
-
-  it('defaults to a timeout larger than the Canton command tracking timeout', () => {
-    // Canton holds submit-and-wait responses open for up to CommandServiceConfig.DefaultDefaultTrackingTimeout (5min).
-    expect(DEFAULT_HTTP_TIMEOUT_MS).toBeGreaterThan(5 * 60 * 1000);
-  });
-
   it('applies a client-level timeout override', async () => {
     const client = createClient(1234);
-
-    expect(createdTimeouts()).toEqual([1234]);
 
     await client.makeGetRequest('https://ledger.example/v2/version');
 

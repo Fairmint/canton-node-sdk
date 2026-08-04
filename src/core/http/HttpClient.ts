@@ -88,14 +88,11 @@ export class HttpClient {
 
   constructor(logger?: Logger, bearerTokenProvider?: () => Promise<string>, options: HttpClientOptions = {}) {
     this.defaultTimeoutMs = HttpClient.validateTimeoutMs(options.timeoutMs, 'HTTP client') ?? DEFAULT_HTTP_TIMEOUT_MS;
-    this.axiosInstance = axios.create({ timeout: this.defaultTimeoutMs });
+    // Every dispatched request always passes an explicit resolved `timeout` (see `makeRequest`/`dispatchRequest`), so
+    // an instance-level default here would never be read; the per-request value is the single source of truth.
+    this.axiosInstance = axios.create();
     this.bearerTokenProvider = bearerTokenProvider;
     this.logger = logger;
-  }
-
-  /** Socket-inactivity timeout in milliseconds applied to requests that do not override it. */
-  public getDefaultTimeoutMs(): number {
-    return this.defaultTimeoutMs;
   }
 
   /** Configure the default retry policy used only by requests classified as semantic reads. */
