@@ -1,3 +1,4 @@
+import { getEventListeners } from 'node:events';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { NetworkError } from '../../../src/core/errors';
@@ -74,6 +75,24 @@ describe('HttpClient against a silent server', () => {
     expect(Date.now() - startedAt).toBeLessThan(5000);
 
     for (const timer of timers) clearInterval(timer);
+    await server.close();
+  });
+
+  it('does not leak abort listeners on repeated successful bearer-token fetches', async () => {
+    const server = await startServer((_request, response) => {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end('{}');
+    });
+    const client = new HttpClient(undefined, async () => 'token', { timeoutMs: 5000 });
+    client.setRetryConfig({ maxRetries: 0, delayMs: 0 });
+    const { signal } = new AbortController();
+
+    for (let i = 0; i < 5; i += 1) {
+      await client.makeGetRequest(`${server.url}/v2/version`, { includeBearerToken: true }, { signal });
+    }
+
+    expect(getEventListeners(signal, 'abort')).toHaveLength(0);
+
     await server.close();
   });
 });

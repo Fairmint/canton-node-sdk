@@ -518,7 +518,9 @@ export class HttpClient {
   /**
    * Bound the token fetch too: a silent auth endpoint would otherwise suspend the request before it is dispatched.
    * Clears its own timer as soon as `signal` aborts so a caller-driven cancellation never leaves a live timer handle
-   * behind for the remainder of `timeoutMs`, mirroring {@link abortableSleep}.
+   * behind for the remainder of `timeoutMs`, mirroring {@link abortableSleep}. The `finally` removes the abort
+   * listener on every outcome (success, timeout, or abort) so a long-lived, reused `signal` never accumulates
+   * listeners across repeated calls.
    */
   private async fetchBearerToken(
     provider: () => Promise<string>,
@@ -529,14 +531,13 @@ export class HttpClient {
     if (timeoutMs === 0) return tokenPromise;
 
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
     const timeoutPromise = new Promise<never>((_resolve, reject) => {
-      const onAbort = (): void => {
+      onAbort = (): void => {
         clearTimeout(timer);
-        signal?.removeEventListener('abort', onAbort);
         reject(createAbortError(signal));
       };
       timer = setTimeout(() => {
-        signal?.removeEventListener('abort', onAbort);
         reject(new NetworkError(`Bearer token request timed out after ${timeoutMs}ms`));
       }, timeoutMs);
       signal?.addEventListener('abort', onAbort, { once: true });
@@ -546,6 +547,7 @@ export class HttpClient {
       return await Promise.race([tokenPromise, timeoutPromise]);
     } finally {
       clearTimeout(timer);
+      if (onAbort) signal?.removeEventListener('abort', onAbort);
     }
   }
 
