@@ -50,17 +50,20 @@ export abstract class BaseClient {
     const { timeoutMs } = this.clientConfig;
     this.httpClient = new HttpClient(
       this.clientConfig.logger,
-      async () => this.runtime.getAuthenticationManager(this.config.authUrl, apiConfig.auth).authenticate(),
+      async () => this.runtime.getAuthenticationManager(this.config.authUrl, apiConfig.auth).authenticate(timeoutMs),
       timeoutMs === undefined ? {} : { timeoutMs }
     );
   }
 
+  /** Bounded by the client's configured `timeoutMs`, same as every other request this client makes. */
   public async authenticate(): Promise<string> {
     const apiConfig = this.config.apis[this.apiType];
     if (!apiConfig) {
       throw new ConfigurationError(`API configuration not found for ${this.apiType}`);
     }
-    return this.runtime.getAuthenticationManager(this.config.authUrl, apiConfig.auth).authenticate();
+    return this.runtime
+      .getAuthenticationManager(this.config.authUrl, apiConfig.auth)
+      .authenticate(this.clientConfig.timeoutMs);
   }
 
   /**

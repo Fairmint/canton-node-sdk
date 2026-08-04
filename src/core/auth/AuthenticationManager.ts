@@ -3,6 +3,8 @@ import {
   type AuthConfig as RestClientAuthConfig,
   type RestClientLogger,
 } from '@hardlydifficult/rest-client';
+import { NetworkError } from '../errors';
+import { DEFAULT_HTTP_TIMEOUT_MS } from '../http/HttpClient';
 import { type Logger } from '../logging';
 import { type AuthConfig } from '../types';
 
@@ -59,19 +61,25 @@ export class AuthenticationManager {
     this.delegate = new RestClientAuthManager(restAuthConfig, toRestLogger(logger));
   }
 
-  public async authenticate(): Promise<string> {
+  /**
+   * `@hardlydifficult/rest-client`'s delegate makes its own `axios` calls with no timeout at all, independent of
+   * {@link HttpClient}'s per-request timeout. `timeoutMs` bounds how long a caller waits for this call the same way
+   * {@link HttpClient.fetchBearerToken} bounds its own token fetch; it does not cancel the underlying request, so a
+   * still-pending delegate call keeps running and updates cached token state once it eventually settles.
+   */
+  public async authenticate(timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS): Promise<string> {
     const beforeSnapshot = this.captureTokenSnapshot();
     const requestReason = this.getTokenRequestReason(beforeSnapshot);
 
     if (requestReason === null) {
-      const token = await this.delegate.authenticate();
+      const token = await this.withAuthTimeout(this.delegate.authenticate(), timeoutMs);
       const afterSnapshot = this.captureTokenSnapshot();
       this.logAuthDebug('token_cache_hit', afterSnapshot);
       return token;
     }
 
     if (this.pendingAuthentication) {
-      return this.pendingAuthentication;
+      return this.withAuthTimeout(this.pendingAuthentication, timeoutMs);
     }
 
     this.logAuthDebug('token_request', beforeSnapshot, { requestReason });
@@ -104,11 +112,11 @@ export class AuthenticationManager {
       });
 
     this.pendingAuthentication = authenticationPromise;
-    return authenticationPromise;
+    return this.withAuthTimeout(authenticationPromise, timeoutMs);
   }
 
-  public async getBearerToken(): Promise<string> {
-    return this.authenticate();
+  public async getBearerToken(timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS): Promise<string> {
+    return this.authenticate(timeoutMs);
   }
 
   public clearToken(): void {
@@ -129,6 +137,28 @@ export class AuthenticationManager {
 
   public getTokenLifetimeMs(): number | null {
     return this.delegate.getTokenLifetimeMs();
+  }
+
+  /**
+   * Bounds how long a caller waits for `promise` without canceling the underlying delegate call, mirroring
+   * {@link HttpClient.fetchBearerToken}'s race-and-clear pattern since the vendored delegate accepts no timeout of
+   * its own. `0` disables the timer and restores the unbounded-wait behavior.
+   */
+  private async withAuthTimeout(promise: Promise<string>, timeoutMs: number): Promise<string> {
+    if (timeoutMs === 0) return promise;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        reject(new NetworkError(`Authentication request timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    });
+
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   private captureTokenSnapshot(): TokenStateSnapshot {
