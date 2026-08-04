@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ApiError } from '../../../../../core/errors';
+import { DEFAULT_HTTP_TIMEOUT_MS } from '../../../../../core/http/HttpClient';
 import { WebSocketClient } from '../../../../../core/ws/WebSocketClient';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
 import {
@@ -22,8 +23,12 @@ const path = '/v2/state/active-contracts' as const;
  *
  * The snapshot is a bounded stream that the server closes on its own, so silence this long means the connection is hung
  * rather than slow. Callers that expect longer gaps can raise it or pass `0` to wait indefinitely.
+ *
+ * Intentionally reuses {@link DEFAULT_HTTP_TIMEOUT_MS} rather than an independent literal: both exist to detect a hung
+ * connection at the same "this is clearly stuck" horizon. They may diverge in the future if either bound needs
+ * service-specific tuning.
  */
-const DEFAULT_IDLE_TIMEOUT_MS = 600_000;
+const DEFAULT_IDLE_TIMEOUT_MS = DEFAULT_HTTP_TIMEOUT_MS;
 
 /**
  * We intentionally do not expose the JSON/REST version of this endpoint. The REST variant is too limited, while the
