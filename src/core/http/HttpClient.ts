@@ -806,6 +806,12 @@ export class HttpClient {
 
   /** Return true for transport failures that the SDK has historically classified as transient. */
   private isRetryableError(error: unknown): boolean {
+    // A socket-inactivity timeout means the endpoint was already silent for the full configured `timeoutMs`.
+    // Retrying wouldn't plausibly get a response inside the same short window, and doing so up to `maxAttempts`
+    // times would let a consistently silent endpoint hang the caller for `maxAttempts * timeoutMs` instead of
+    // roughly `timeoutMs`. Fail fast instead: the caller already gets a clear timeout error and can decide to
+    // retry themselves with full visibility into total elapsed time.
+    if (this.isTimeoutError(error)) return false;
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
       const data = (error.response?.data ?? {}) as Record<string, unknown>;

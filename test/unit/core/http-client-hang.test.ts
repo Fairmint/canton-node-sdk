@@ -78,6 +78,29 @@ describe('HttpClient against a silent server', () => {
     await server.close();
   });
 
+  it('does not retry a socket-timeout read across the full retry budget, bounding the total wait to roughly one timeoutMs', async () => {
+    let requestCount = 0;
+    const server = await startServer(() => {
+      requestCount += 1;
+      // Accept every connection and never write a response, like a consistently silent endpoint.
+    });
+    const timeoutMs = 250;
+    const client = new HttpClient(undefined, undefined, { timeoutMs });
+    // A generous retry budget: if timeouts were retried like other transient failures, this would multiply the
+    // wait to roughly (maxRetries + 1) * timeoutMs instead of bounding it to roughly one timeoutMs.
+    client.setRetryConfig({ maxRetries: 3, delayMs: 0 });
+
+    const startedAt = Date.now();
+    await expect(client.makeGetRequest(`${server.url}/v2/version`)).rejects.toThrow(NetworkError);
+    const elapsedMs = Date.now() - startedAt;
+
+    // A modest multiplier over the configured timeout is fine, but 4x (one attempt per retry budget slot) is not.
+    expect(elapsedMs).toBeLessThan(timeoutMs * 2);
+    expect(requestCount).toBe(1);
+
+    await server.close();
+  });
+
   it('does not leak abort listeners on repeated successful bearer-token fetches', async () => {
     const server = await startServer((_request, response) => {
       response.writeHead(200, { 'Content-Type': 'application/json' });

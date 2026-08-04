@@ -45,6 +45,17 @@ function createAxiosError(status?: number, data: Record<string, unknown> = {}): 
   return error;
 }
 
+/** Simulates the `axios` timeout error our socket-inactivity timer produces: no response, `ECONNABORTED`/`ETIMEDOUT`. */
+function createTimeoutAxiosError(timeoutMs: number): Error {
+  const error = new Error(`timeout of ${timeoutMs}ms exceeded`);
+  Object.assign(error, {
+    isAxiosError: true,
+    code: 'ECONNABORTED',
+    config: { timeout: timeoutMs, method: 'get', url: 'https://ledger.example/v2/version' },
+  });
+  return error;
+}
+
 function createClient(
   logger?: Logger,
   bearerTokenProvider?: () => Promise<string>
@@ -210,6 +221,16 @@ describe('HttpClient mutation retry safety', () => {
       )
     ).resolves.toEqual({ page: [] });
     expect(axiosInstance.post).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a socket-timeout-classified read, unlike a genuinely transient connection reset', async () => {
+    const { client, axiosInstance } = createClient();
+    client.setRetryConfig({ maxRetries: 3, delayMs: 0 });
+    axiosInstance.get.mockRejectedValueOnce(createTimeoutAxiosError(250));
+
+    await expect(client.makeGetRequest('https://ledger.example/v2/version')).rejects.toThrow(NetworkError);
+    // A single attempt: retrying wouldn't help a consistently silent endpoint and would multiply the wait.
+    expect(axiosInstance.get).toHaveBeenCalledTimes(1);
   });
 
   it('replays the exact immutable prepare body when explicitly authorized', async () => {
