@@ -25,8 +25,7 @@ const path = '/v2/state/active-contracts' as const;
  * rather than slow. Callers that expect longer gaps can raise it or pass `0` to wait indefinitely.
  *
  * Intentionally reuses {@link DEFAULT_HTTP_TIMEOUT_MS} rather than an independent literal: both exist to detect a hung
- * connection at the same "this is clearly stuck" horizon. They may diverge in the future if either bound needs
- * service-specific tuning.
+ * connection at the same "this is clearly stuck" horizon.
  */
 const DEFAULT_IDLE_TIMEOUT_MS = DEFAULT_HTTP_TIMEOUT_MS;
 

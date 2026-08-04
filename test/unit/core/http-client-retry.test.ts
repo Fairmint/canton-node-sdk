@@ -589,8 +589,7 @@ describe('HttpClient mutation retry safety', () => {
       controller.abort(new Error('stop waiting for token'));
       await expect(request).rejects.toMatchObject({ name: 'AbortError', message: 'stop waiting for token' });
 
-      // Regression guard: aborting must clear that timer immediately rather than leaving a live handle alive for
-      // up to the full timeoutMs (600_000ms by default), which previously kept the Node process alive after abort.
+      // Regression guard: aborting must clear that timer immediately rather than leaving it armed for the full timeoutMs.
       expect(jest.getTimerCount()).toBe(0);
       expect(axiosInstance.post).not.toHaveBeenCalled();
     } finally {
