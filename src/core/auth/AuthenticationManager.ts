@@ -4,6 +4,7 @@ import {
   type RestClientLogger,
 } from '@hardlydifficult/rest-client';
 import { NetworkError } from '../errors';
+import { createAbortError } from '../http/abort';
 import { DEFAULT_HTTP_TIMEOUT_MS } from '../http/HttpClient';
 import { type Logger } from '../logging';
 import { type AuthConfig } from '../types';
@@ -66,20 +67,23 @@ export class AuthenticationManager {
    * {@link HttpClient}'s per-request timeout. `timeoutMs` bounds how long a caller waits for this call the same way
    * {@link HttpClient.fetchBearerToken} bounds its own token fetch; it does not cancel the underlying request, so a
    * still-pending delegate call keeps running and updates cached token state once it eventually settles.
+   *
+   * `signal`, when supplied, lets `withAuthTimeout` stop waiting immediately on abort instead of holding its timer
+   * for the full `timeoutMs`; it does not cancel the underlying delegate call either, mirroring `timeoutMs` itself.
    */
-  public async authenticate(timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS): Promise<string> {
+  public async authenticate(timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS, signal?: AbortSignal): Promise<string> {
     const beforeSnapshot = this.captureTokenSnapshot();
     const requestReason = this.getTokenRequestReason(beforeSnapshot);
 
     if (requestReason === null) {
-      const token = await this.withAuthTimeout(this.delegate.authenticate(), timeoutMs);
+      const token = await this.withAuthTimeout(this.delegate.authenticate(), timeoutMs, signal);
       const afterSnapshot = this.captureTokenSnapshot();
       this.logAuthDebug('token_cache_hit', afterSnapshot);
       return token;
     }
 
     if (this.pendingAuthentication) {
-      return this.withAuthTimeout(this.pendingAuthentication, timeoutMs);
+      return this.withAuthTimeout(this.pendingAuthentication, timeoutMs, signal);
     }
 
     this.logAuthDebug('token_request', beforeSnapshot, { requestReason });
@@ -112,11 +116,11 @@ export class AuthenticationManager {
       });
 
     this.pendingAuthentication = authenticationPromise;
-    return this.withAuthTimeout(authenticationPromise, timeoutMs);
+    return this.withAuthTimeout(authenticationPromise, timeoutMs, signal);
   }
 
-  public async getBearerToken(timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS): Promise<string> {
-    return this.authenticate(timeoutMs);
+  public async getBearerToken(timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS, signal?: AbortSignal): Promise<string> {
+    return this.authenticate(timeoutMs, signal);
   }
 
   public clearToken(): void {
@@ -143,21 +147,36 @@ export class AuthenticationManager {
    * Bounds how long a caller waits for `promise` without canceling the underlying delegate call, mirroring
    * {@link HttpClient.fetchBearerToken}'s race-and-clear pattern since the vendored delegate accepts no timeout of
    * its own. `0` disables the timer and restores the unbounded-wait behavior.
+   *
+   * Clears its own timer as soon as `signal` aborts so a caller-driven cancellation never leaves a live timer handle
+   * behind for the remainder of `timeoutMs`. The `finally` removes the abort listener on every outcome (success,
+   * timeout, or abort) so a long-lived, reused `signal` never accumulates listeners across repeated calls.
    */
-  private async withAuthTimeout(promise: Promise<string>, timeoutMs: number): Promise<string> {
+  private async withAuthTimeout(
+    promise: Promise<string>,
+    timeoutMs: number,
+    signal?: AbortSignal
+  ): Promise<string> {
     if (timeoutMs === 0) return promise;
 
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
     const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      onAbort = (): void => {
+        clearTimeout(timer);
+        reject(createAbortError(signal));
+      };
       timer = setTimeout(() => {
         reject(new NetworkError(`Authentication request timed out after ${timeoutMs}ms`));
       }, timeoutMs);
+      signal?.addEventListener('abort', onAbort, { once: true });
     });
 
     try {
       return await Promise.race([promise, timeoutPromise]);
     } finally {
       clearTimeout(timer);
+      if (onAbort) signal?.removeEventListener('abort', onAbort);
     }
   }
 

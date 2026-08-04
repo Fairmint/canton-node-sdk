@@ -74,7 +74,7 @@ interface AttemptFailure<Body> {
 /** Handles HTTP requests with authentication, logging, cancellation, and explicit retry safety. */
 export class HttpClient {
   private readonly axiosInstance: AxiosInstance;
-  private readonly bearerTokenProvider: (() => Promise<string>) | undefined;
+  private readonly bearerTokenProvider: ((signal?: AbortSignal) => Promise<string>) | undefined;
   private readonly logger: Logger | undefined;
   private readonly defaultTimeoutMs: number;
   private retryConfig: HttpClientRetryConfig = { maxRetries: 3, delayMs: 6000 };
@@ -86,7 +86,11 @@ export class HttpClient {
   private static readonly MAX_CONTEXT_KEYS = 3;
   private static readonly MAX_ATTEMPT_IDENTIFIER_LENGTH = 200;
 
-  constructor(logger?: Logger, bearerTokenProvider?: () => Promise<string>, options: HttpClientOptions = {}) {
+  constructor(
+    logger?: Logger,
+    bearerTokenProvider?: (signal?: AbortSignal) => Promise<string>,
+    options: HttpClientOptions = {}
+  ) {
     this.defaultTimeoutMs = HttpClient.validateTimeoutMs(options.timeoutMs, 'HTTP client') ?? DEFAULT_HTTP_TIMEOUT_MS;
     // Every dispatched request always passes an explicit resolved `timeout` (see `makeRequest`/`dispatchRequest`), so
     // an instance-level default here would never be read; the per-request value is the single source of truth.
@@ -523,11 +527,11 @@ export class HttpClient {
    * listeners across repeated calls.
    */
   private async fetchBearerToken(
-    provider: () => Promise<string>,
+    provider: (signal?: AbortSignal) => Promise<string>,
     timeoutMs: number,
     signal: AbortSignal | undefined
   ): Promise<string> {
-    const tokenPromise = provider();
+    const tokenPromise = provider(signal);
     if (timeoutMs === 0) return tokenPromise;
 
     let timer: ReturnType<typeof setTimeout> | undefined;
