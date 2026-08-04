@@ -109,6 +109,24 @@ export class NetworkError extends CantonError {
   }
 }
 
+/**
+ * Error thrown when the SDK's own timeout enforcement — not the transport — gives up waiting for an operation, for
+ * example `HttpClient.fetchBearerToken`'s token-fetch timer or `AuthenticationManager`'s auth-request timer.
+ *
+ * Extends {@link NetworkError} so existing `instanceof NetworkError` checks (e.g. endpoint rotation) keep matching.
+ * The dedicated subclass lets retry logic (`HttpClient.isRetryableError`) recognize a confirmed timeout from our own
+ * timers the same way it already recognizes an axios-level socket timeout: retrying it doesn't plausibly help,
+ * since the operation was already given the full configured window and produced no result.
+ */
+export class TimeoutError extends NetworkError {
+  public override readonly name: string;
+
+  constructor(message: string, context?: ErrorContext) {
+    super(message, context);
+    this.name = 'TimeoutError';
+  }
+}
+
 /** HTTP methods whose requests may have changed server state before the response was lost. */
 export type MutationHttpMethod = 'POST' | 'PATCH' | 'DELETE';
 
@@ -189,6 +207,7 @@ const CANTON_SDK_ERROR_NAMES = new Set([
   'ConfigurationError',
   'NetworkError',
   'OperationError',
+  'TimeoutError',
   'UnknownMutationOutcomeError',
   'ValidationError',
 ]);

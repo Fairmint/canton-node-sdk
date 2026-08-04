@@ -5,6 +5,7 @@ import {
   CantonError,
   ConfigurationError,
   NetworkError,
+  TimeoutError,
   UnknownMutationOutcomeError,
   isDefiniteCantonMutationRejection,
   type MutationHttpMethod,
@@ -521,18 +522,21 @@ export class HttpClient {
 
   /**
    * Bound the token fetch too: a silent auth endpoint would otherwise suspend the request before it is dispatched.
-   * Clears its own timer as soon as `signal` aborts so a caller-driven cancellation never leaves a live timer handle
-   * behind for the remainder of `timeoutMs`, mirroring {@link abortableSleep}. The `finally` removes the abort
-   * listener on every outcome (success, timeout, or abort) so a long-lived, reused `signal` never accumulates
-   * listeners across repeated calls.
+   * Rejects immediately, before ever invoking `provider`, when `signal` is already aborted. Clears its own timer as
+   * soon as `signal` aborts so a caller-driven cancellation never leaves a live timer handle behind for the
+   * remainder of `timeoutMs`, mirroring {@link abortableSleep}. `timeoutMs === 0` only skips the timer — a `signal`
+   * is still wired up and honored, since cancellation and the timeout budget are independent concerns. The `finally`
+   * removes the abort listener on every outcome (success, timeout, or abort) so a long-lived, reused `signal` never
+   * accumulates listeners across repeated calls.
    */
   private async fetchBearerToken(
     provider: (signal?: AbortSignal) => Promise<string>,
     timeoutMs: number,
     signal: AbortSignal | undefined
   ): Promise<string> {
+    throwIfAborted(signal);
     const tokenPromise = provider(signal);
-    if (timeoutMs === 0) return tokenPromise;
+    if (timeoutMs === 0 && signal === undefined) return tokenPromise;
 
     let timer: ReturnType<typeof setTimeout> | undefined;
     let onAbort: (() => void) | undefined;
@@ -541,9 +545,11 @@ export class HttpClient {
         clearTimeout(timer);
         reject(createAbortError(signal));
       };
-      timer = setTimeout(() => {
-        reject(new NetworkError(`Bearer token request timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
+      if (timeoutMs !== 0) {
+        timer = setTimeout(() => {
+          reject(new TimeoutError(`Bearer token request timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      }
       signal?.addEventListener('abort', onAbort, { once: true });
     });
 
@@ -812,6 +818,10 @@ export class HttpClient {
     // roughly `timeoutMs`. Fail fast instead: the caller already gets a clear timeout error and can decide to
     // retry themselves with full visibility into total elapsed time.
     if (this.isTimeoutError(error)) return false;
+    // Our own timeout enforcement (fetchBearerToken's token-fetch timer, AuthenticationManager's auth-request
+    // timer) never goes through axios, so isTimeoutError() above doesn't see it; it rejects with a TimeoutError
+    // instead. The same "already waited the full window" reasoning applies, so treat it identically.
+    if (error instanceof TimeoutError) return false;
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
       const data = (error.response?.data ?? {}) as Record<string, unknown>;

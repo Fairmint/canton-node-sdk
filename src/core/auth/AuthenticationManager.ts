@@ -3,8 +3,8 @@ import {
   type AuthConfig as RestClientAuthConfig,
   type RestClientLogger,
 } from '@hardlydifficult/rest-client';
-import { NetworkError } from '../errors';
-import { createAbortError } from '../http/abort';
+import { TimeoutError } from '../errors';
+import { createAbortError, throwIfAborted } from '../http/abort';
 import { DEFAULT_HTTP_TIMEOUT_MS } from '../http/HttpClient';
 import { type Logger } from '../logging';
 import { type AuthConfig } from '../types';
@@ -70,8 +70,12 @@ export class AuthenticationManager {
    *
    * `signal`, when supplied, lets `withAuthTimeout` stop waiting immediately on abort instead of holding its timer
    * for the full `timeoutMs`; it does not cancel the underlying delegate call either, mirroring `timeoutMs` itself.
+   * An already-aborted `signal` short-circuits before the delegate is ever invoked, independent of `timeoutMs`.
    */
   public async authenticate(timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS, signal?: AbortSignal): Promise<string> {
+    // Check before touching the delegate or any shared in-flight state: an already-aborted caller must never
+    // trigger (or join) a token request, independent of `timeoutMs`.
+    throwIfAborted(signal);
     const beforeSnapshot = this.captureTokenSnapshot();
     const requestReason = this.getTokenRequestReason(beforeSnapshot);
 
@@ -146,7 +150,9 @@ export class AuthenticationManager {
   /**
    * Bounds how long a caller waits for `promise` without canceling the underlying delegate call, mirroring
    * {@link HttpClient.fetchBearerToken}'s race-and-clear pattern since the vendored delegate accepts no timeout of
-   * its own. `0` disables the timer and restores the unbounded-wait behavior.
+   * its own. `timeoutMs === 0` only disables the timer, restoring the unbounded-wait budget; it does not skip abort
+   * handling, since cancellation and the timeout budget are independent concerns. A `signal` that is already
+   * aborted before this call begins rejects immediately instead of waiting on `promise`.
    *
    * Clears its own timer as soon as `signal` aborts so a caller-driven cancellation never leaves a live timer handle
    * behind for the remainder of `timeoutMs`. The `finally` removes the abort listener on every outcome (success,
@@ -157,7 +163,8 @@ export class AuthenticationManager {
     timeoutMs: number,
     signal?: AbortSignal
   ): Promise<string> {
-    if (timeoutMs === 0) return promise;
+    if (timeoutMs === 0 && signal === undefined) return promise;
+    throwIfAborted(signal);
 
     let timer: ReturnType<typeof setTimeout> | undefined;
     let onAbort: (() => void) | undefined;
@@ -166,9 +173,11 @@ export class AuthenticationManager {
         clearTimeout(timer);
         reject(createAbortError(signal));
       };
-      timer = setTimeout(() => {
-        reject(new NetworkError(`Authentication request timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
+      if (timeoutMs !== 0) {
+        timer = setTimeout(() => {
+          reject(new TimeoutError(`Authentication request timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      }
       signal?.addEventListener('abort', onAbort, { once: true });
     });
 
