@@ -47,7 +47,7 @@ export abstract class BaseClient {
       throw new ConfigurationError(`API configuration not found for ${this.apiType}`);
     }
 
-    const timeoutMs = apiConfig.timeoutMs ?? this.clientConfig.timeoutMs;
+    const { timeoutMs } = this.clientConfig;
     this.httpClient = new HttpClient(
       this.clientConfig.logger,
       async () => this.runtime.getAuthenticationManager(this.config.authUrl, apiConfig.auth).authenticate(),

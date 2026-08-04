@@ -68,11 +68,6 @@ export interface ApiConfig {
   readonly auth: AuthConfig;
   partyId?: string;
   userId?: string;
-  /**
-   * Socket-inactivity timeout in milliseconds for every request to this API. Overrides {@link ClientConfig.timeoutMs}
-   * and defaults to `DEFAULT_HTTP_TIMEOUT_MS`.
-   */
-  timeoutMs?: number;
 }
 
 /** Full provider configuration with all API types required. */
@@ -121,7 +116,7 @@ export interface ClientConfig {
   authUrl?: string;
   /**
    * Socket-inactivity timeout in milliseconds applied to every HTTP request made by clients created from this config.
-   * Defaults to `DEFAULT_HTTP_TIMEOUT_MS`; a per-API {@link ApiConfig.timeoutMs} takes precedence.
+   * Defaults to `DEFAULT_HTTP_TIMEOUT_MS`. Use {@link RequestConfig.timeoutMs} to override it for a single request.
    */
   timeoutMs?: number;
   /** Party ID. Mutable so it can be set at runtime after client initialization (e.g., LocalNet discovery). */

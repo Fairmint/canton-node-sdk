@@ -65,12 +65,9 @@ export interface CantonConfig {
   readonly managedParties?: readonly string[];
   /** OAuth2 auth URL (if different from default). */
   readonly authUrl?: string;
-  /**
-   * Socket-inactivity timeout in milliseconds for every HTTP request. Defaults to `DEFAULT_HTTP_TIMEOUT_MS`; a
-   * per-service `apis[...].timeoutMs` takes precedence.
-   */
+  /** Socket-inactivity timeout in milliseconds for every HTTP request. Defaults to `DEFAULT_HTTP_TIMEOUT_MS`. */
   readonly timeoutMs?: number;
-  /** Override API endpoints or timeouts per service (`ledgerJsonApi`, `validatorApi`, `scanApi`). */
+  /** Override API endpoints per service (`ledgerJsonApi`, `validatorApi`, `scanApi`). */
   readonly apis?: ClientConfig['apis'];
 }
 
