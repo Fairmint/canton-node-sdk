@@ -105,4 +105,41 @@ describe('HttpClient timeouts', () => {
     ).rejects.toThrow(new NetworkError('Bearer token request timed out after 50ms'));
     expect(lastAxiosInstance().get).not.toHaveBeenCalled();
   });
+
+  it('rejects a pre-aborted bearer-token request immediately even with timeoutMs: 0, without invoking the provider', async () => {
+    const bearerTokenProvider = jest.fn(async (): Promise<string> => 'unused-token');
+    const client = new HttpClient(undefined, bearerTokenProvider, { timeoutMs: 0 });
+    client.setRetryConfig({ maxRetries: 0, delayMs: 0 });
+    const controller = new AbortController();
+    controller.abort(new Error('already stopped'));
+
+    await expect(
+      client.makeGetRequest(
+        'https://ledger.example/v2/version',
+        { includeBearerToken: true },
+        { signal: controller.signal }
+      )
+    ).rejects.toMatchObject({ name: 'AbortError', message: 'already stopped' });
+    expect(bearerTokenProvider).not.toHaveBeenCalled();
+    expect(lastAxiosInstance().get).not.toHaveBeenCalled();
+  });
+
+  it('still cancels a hung bearer-token fetch when the signal aborts mid-call, even with timeoutMs: 0', async () => {
+    const tokenGate = new Promise<string>(() => undefined);
+    const client = new HttpClient(undefined, async () => tokenGate, { timeoutMs: 0 });
+    client.setRetryConfig({ maxRetries: 0, delayMs: 0 });
+    const controller = new AbortController();
+
+    const request = client.makeGetRequest(
+      'https://ledger.example/v2/version',
+      { includeBearerToken: true },
+      { signal: controller.signal }
+    );
+    await Promise.resolve();
+    controller.abort(new Error('stop waiting for token'));
+
+    // With timeoutMs: 0, only the abort listener bounds the wait; without the fix this would hang forever.
+    await expect(request).rejects.toMatchObject({ name: 'AbortError', message: 'stop waiting for token' });
+    expect(lastAxiosInstance().get).not.toHaveBeenCalled();
+  });
 });

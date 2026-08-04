@@ -101,6 +101,32 @@ describe('HttpClient against a silent server', () => {
     await server.close();
   });
 
+  it('does not retry a bearer-token timeout across the full retry budget, bounding the total wait to roughly one timeoutMs', async () => {
+    let tokenAttempts = 0;
+    const timeoutMs = 250;
+    const client = new HttpClient(
+      undefined,
+      async () => {
+        tokenAttempts += 1;
+        // A silent auth endpoint: never resolves, so fetchBearerToken's own timer is what fires.
+        return new Promise<string>(() => undefined);
+      },
+      { timeoutMs }
+    );
+    // A generous retry budget: if the auth timeout were retried like other transient failures, this would
+    // multiply the wait to roughly (maxRetries + 1) * timeoutMs instead of bounding it to roughly one timeoutMs.
+    client.setRetryConfig({ maxRetries: 3, delayMs: 0 });
+
+    const startedAt = Date.now();
+    await expect(
+      client.makeGetRequest('https://ledger.example/v2/version', { includeBearerToken: true })
+    ).rejects.toThrow(NetworkError);
+    const elapsedMs = Date.now() - startedAt;
+
+    expect(elapsedMs).toBeLessThan(timeoutMs * 2);
+    expect(tokenAttempts).toBe(1);
+  });
+
   it('does not leak abort listeners on repeated successful bearer-token fetches', async () => {
     const server = await startServer((_request, response) => {
       response.writeHead(200, { 'Content-Type': 'application/json' });

@@ -1,5 +1,11 @@
 import axios from 'axios';
-import { ApiError, ConfigurationError, NetworkError, UnknownMutationOutcomeError } from '../../../src/core/errors';
+import {
+  ApiError,
+  ConfigurationError,
+  NetworkError,
+  TimeoutError,
+  UnknownMutationOutcomeError,
+} from '../../../src/core/errors';
 import { HttpClient } from '../../../src/core/http/HttpClient';
 import { type HttpRequestOptions } from '../../../src/core/http/request-retry';
 import { type Logger } from '../../../src/core/logging';
@@ -231,6 +237,24 @@ describe('HttpClient mutation retry safety', () => {
     await expect(client.makeGetRequest('https://ledger.example/v2/version')).rejects.toThrow(NetworkError);
     // A single attempt: retrying wouldn't help a consistently silent endpoint and would multiply the wait.
     expect(axiosInstance.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry a bearer-token/auth-timeout-induced TimeoutError, mirroring how an axios socket timeout is treated', async () => {
+    // Simulates the rejection shape produced by HttpClient.fetchBearerToken's own timer or
+    // AuthenticationManager.withAuthTimeout's timer, neither of which is an axios error.
+    const bearerTokenProvider = jest.fn(async (): Promise<string> => {
+      throw new TimeoutError('Authentication request timed out after 250ms');
+    });
+    const { client, axiosInstance } = createClient(undefined, bearerTokenProvider);
+    client.setRetryConfig({ maxRetries: 3, delayMs: 0 });
+
+    await expect(
+      client.makeGetRequest('https://ledger.example/v2/version', { includeBearerToken: true })
+    ).rejects.toThrow(TimeoutError);
+    // A single attempt: retrying an already-confirmed timeout wouldn't plausibly help, the same reasoning that
+    // already applies to axios-level socket timeouts.
+    expect(bearerTokenProvider).toHaveBeenCalledTimes(1);
+    expect(axiosInstance.get).not.toHaveBeenCalled();
   });
 
   it('replays the exact immutable prepare body when explicitly authorized', async () => {

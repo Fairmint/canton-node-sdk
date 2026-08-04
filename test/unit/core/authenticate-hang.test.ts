@@ -119,4 +119,49 @@ describe('BaseClient.authenticate() against a silent auth server', () => {
       await server.close();
     }
   });
+
+  it('rejects immediately on a pre-aborted signal even with timeoutMs: 0, without ever contacting the auth server', async () => {
+    let requestCount = 0;
+    const server = await startServer(() => {
+      requestCount += 1;
+      // Accept the request and never write a response, like a hung auth server.
+    });
+    try {
+      // timeoutMs: 0 disables the timeout timer but must not disable abort handling.
+      const client = new LedgerJsonApiClient(new CantonRuntime(createClientConfig(server.url, 0)));
+      const controller = new AbortController();
+      controller.abort(new Error('already stopped before the call'));
+
+      const startedAt = Date.now();
+      await expect(client.authenticate(controller.signal)).rejects.toMatchObject({
+        name: 'AbortError',
+        message: 'already stopped before the call',
+      });
+      expect(Date.now() - startedAt).toBeLessThan(1000);
+      expect(requestCount).toBe(0);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('still cancels the wait when the signal aborts mid-call, even with timeoutMs: 0 (no timeout enforcement)', async () => {
+    const server = await startServer(() => {
+      // Accept the request and never write a response, like a hung auth server.
+    });
+    try {
+      const client = new LedgerJsonApiClient(new CantonRuntime(createClientConfig(server.url, 0)));
+      const controller = new AbortController();
+
+      const request = client.authenticate(controller.signal);
+      await Promise.resolve();
+      controller.abort(new Error('stop waiting mid-call'));
+
+      const startedAt = Date.now();
+      await expect(request).rejects.toMatchObject({ name: 'AbortError', message: 'stop waiting mid-call' });
+      // With timeoutMs: 0, only the abort listener bounds the wait; without the fix this would hang forever.
+      expect(Date.now() - startedAt).toBeLessThan(1000);
+    } finally {
+      await server.close();
+    }
+  });
 });

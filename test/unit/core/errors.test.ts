@@ -6,6 +6,7 @@ import {
   NetworkError,
   OperationError,
   OperationErrorCode,
+  TimeoutError,
   UnknownMutationOutcomeError,
   ValidationError,
   isDefiniteCantonMutationRejection,
@@ -119,6 +120,28 @@ describe('CantonError hierarchy', () => {
     it('inherits from CantonError', () => {
       const error = new NetworkError('Test');
       expect(error).toBeInstanceOf(CantonError);
+    });
+  });
+
+  describe('TimeoutError', () => {
+    it('creates error with NETWORK_ERROR code and TimeoutError name', () => {
+      const error = new TimeoutError('Authentication request timed out after 250ms');
+      expect(error.message).toBe('Authentication request timed out after 250ms');
+      expect(error.code).toBe('NETWORK_ERROR');
+      expect(error.name).toBe('TimeoutError');
+    });
+
+    it('inherits from NetworkError so existing instanceof NetworkError checks still match', () => {
+      const error = new TimeoutError('Test');
+      expect(error).toBeInstanceOf(NetworkError);
+      expect(error).toBeInstanceOf(CantonError);
+    });
+
+    it('is distinguishable from a generic NetworkError via instanceof', () => {
+      const timeoutError = new TimeoutError('timed out');
+      const genericNetworkError = new NetworkError('connection reset');
+      expect(timeoutError).toBeInstanceOf(TimeoutError);
+      expect(genericNetworkError).not.toBeInstanceOf(TimeoutError);
     });
   });
 
