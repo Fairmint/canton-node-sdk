@@ -138,8 +138,32 @@ describe('HttpClient timeouts', () => {
     await Promise.resolve();
     controller.abort(new Error('stop waiting for token'));
 
-    // With timeoutMs: 0, only the abort listener bounds the wait; without the fix this would hang forever.
+    // With timeoutMs: 0, only the abort listener bounds the wait.
     await expect(request).rejects.toMatchObject({ name: 'AbortError', message: 'stop waiting for token' });
+    expect(lastAxiosInstance().get).not.toHaveBeenCalled();
+  });
+
+  it('rejects promptly when the provider synchronously aborts the signal before returning a still-pending promise', async () => {
+    const controller = new AbortController();
+    const client = new HttpClient(
+      undefined,
+      async () => {
+        controller.abort(new Error('synchronous abort from provider'));
+        return new Promise<string>(() => undefined);
+      },
+      { timeoutMs: 0 }
+    );
+    client.setRetryConfig({ maxRetries: 0, delayMs: 0 });
+
+    const startedAt = Date.now();
+    await expect(
+      client.makeGetRequest(
+        'https://ledger.example/v2/version',
+        { includeBearerToken: true },
+        { signal: controller.signal }
+      )
+    ).rejects.toMatchObject({ name: 'AbortError', message: 'synchronous abort from provider' });
+    expect(Date.now() - startedAt).toBeLessThan(1000);
     expect(lastAxiosInstance().get).not.toHaveBeenCalled();
   });
 });

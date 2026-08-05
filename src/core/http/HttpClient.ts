@@ -535,11 +535,12 @@ export class HttpClient {
     signal: AbortSignal | undefined
   ): Promise<string> {
     throwIfAborted(signal);
-    const tokenPromise = provider(signal);
-    if (timeoutMs === 0 && signal === undefined) return tokenPromise;
+    if (timeoutMs === 0 && signal === undefined) return provider(signal);
 
     let timer: ReturnType<typeof setTimeout> | undefined;
     let onAbort: (() => void) | undefined;
+    // The abort listener must be attached before `provider` is invoked: a provider that synchronously aborts
+    // `signal` before returning its (still-pending) promise must not be missed.
     const timeoutPromise = new Promise<never>((_resolve, reject) => {
       onAbort = (): void => {
         clearTimeout(timer);
@@ -552,6 +553,7 @@ export class HttpClient {
       }
       signal?.addEventListener('abort', onAbort, { once: true });
     });
+    const tokenPromise = provider(signal);
 
     try {
       return await Promise.race([tokenPromise, timeoutPromise]);
