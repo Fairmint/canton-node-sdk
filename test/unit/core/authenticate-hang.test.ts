@@ -158,7 +158,7 @@ describe('BaseClient.authenticate() against a silent auth server', () => {
 
       const startedAt = Date.now();
       await expect(request).rejects.toMatchObject({ name: 'AbortError', message: 'stop waiting mid-call' });
-      // With timeoutMs: 0, only the abort listener bounds the wait; without the fix this would hang forever.
+      // With timeoutMs: 0, only the abort listener bounds the wait.
       expect(Date.now() - startedAt).toBeLessThan(1000);
     } finally {
       await server.close();

@@ -63,14 +63,12 @@ export class AuthenticationManager {
   }
 
   /**
-   * `@hardlydifficult/rest-client`'s delegate makes its own `axios` calls with no timeout at all, independent of
-   * {@link HttpClient}'s per-request timeout. `timeoutMs` bounds how long a caller waits for this call the same way
-   * {@link HttpClient.fetchBearerToken} bounds its own token fetch; it does not cancel the underlying request, so a
+   * `timeoutMs` bounds how long a caller waits for the delegate's authentication call without canceling it, so a
    * still-pending delegate call keeps running and updates cached token state once it eventually settles.
    *
-   * `signal`, when supplied, lets `withAuthTimeout` stop waiting immediately on abort instead of holding its timer
-   * for the full `timeoutMs`; it does not cancel the underlying delegate call either, mirroring `timeoutMs` itself.
-   * An already-aborted `signal` short-circuits before the delegate is ever invoked, independent of `timeoutMs`.
+   * `signal`, when supplied, stops waiting immediately on abort instead of holding the timer for the full
+   * `timeoutMs`; it does not cancel the underlying delegate call either. An already-aborted `signal`
+   * short-circuits before the delegate is ever invoked, independent of `timeoutMs`.
    */
   public async authenticate(timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS, signal?: AbortSignal): Promise<string> {
     // Check before touching the delegate or any shared in-flight state: an already-aborted caller must never
@@ -148,11 +146,10 @@ export class AuthenticationManager {
   }
 
   /**
-   * Bounds how long a caller waits for `promise` without canceling the underlying delegate call, mirroring
-   * {@link HttpClient.fetchBearerToken}'s race-and-clear pattern since the vendored delegate accepts no timeout of
-   * its own. `timeoutMs === 0` only disables the timer, restoring the unbounded-wait budget; it does not skip abort
-   * handling, since cancellation and the timeout budget are independent concerns. A `signal` that is already
-   * aborted before this call begins rejects immediately instead of waiting on `promise`.
+   * Bounds how long a caller waits for `promise` without canceling the underlying delegate call. `timeoutMs === 0`
+   * only disables the timer, restoring the unbounded-wait budget; it does not skip abort handling, since
+   * cancellation and the timeout budget are independent concerns. A `signal` that is already aborted before this
+   * call begins rejects immediately instead of waiting on `promise`.
    *
    * Clears its own timer as soon as `signal` aborts so a caller-driven cancellation never leaves a live timer handle
    * behind for the remainder of `timeoutMs`. The `finally` removes the abort listener on every outcome (success,
