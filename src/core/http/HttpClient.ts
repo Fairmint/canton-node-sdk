@@ -923,10 +923,16 @@ export class HttpClient {
     return axios.isCancel(error) || (axios.isAxiosError(error) && error.code === 'ERR_CANCELED');
   }
 
-  /** A socket-inactivity timeout never reaches the server response, so it must not be reported as an API error. */
+  /**
+   * A socket-inactivity timeout never reaches the server response, so it must not be reported as an API error.
+   * Axios's own configured `timeout` always surfaces as `ECONNABORTED` (its Node adapter never sets
+   * `transitional.clarifyTimeoutError`, so it never uses `ETIMEDOUT` for this). A raw `ETIMEDOUT` is Node's
+   * connect-phase failure code for a different, genuinely transient condition, so it is excluded here and stays
+   * retryable.
+   */
   private isTimeoutError(error: unknown): error is AxiosError {
     if (!axios.isAxiosError(error) || error.response !== undefined) return false;
-    return error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT';
+    return error.code === 'ECONNABORTED';
   }
 
   private async abortableSleep(ms: number, signal: AbortSignal | undefined): Promise<void> {

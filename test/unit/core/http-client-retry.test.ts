@@ -51,13 +51,25 @@ function createAxiosError(status?: number, data: Record<string, unknown> = {}): 
   return error;
 }
 
-/** Simulates the `axios` timeout error our socket-inactivity timer produces: no response, `ECONNABORTED`/`ETIMEDOUT`. */
+/** Simulates the `axios` timeout error our socket-inactivity timer produces: no response, `ECONNABORTED`. */
 function createTimeoutAxiosError(timeoutMs: number): Error {
   const error = new Error(`timeout of ${timeoutMs}ms exceeded`);
   Object.assign(error, {
     isAxiosError: true,
     code: 'ECONNABORTED',
     config: { timeout: timeoutMs, method: 'get', url: 'https://ledger.example/v2/version' },
+  });
+  return error;
+}
+
+/** Simulates a raw Node connect-phase failure: no response, `ETIMEDOUT` with `syscall: 'connect'`. */
+function createConnectTimeoutAxiosError(): Error {
+  const error = new Error('connect ETIMEDOUT 10.255.255.1:443');
+  Object.assign(error, {
+    isAxiosError: true,
+    code: 'ETIMEDOUT',
+    syscall: 'connect',
+    config: { method: 'get', url: 'https://ledger.example/v2/version' },
   });
   return error;
 }
@@ -237,6 +249,18 @@ describe('HttpClient mutation retry safety', () => {
     await expect(client.makeGetRequest('https://ledger.example/v2/version')).rejects.toThrow(NetworkError);
     // A single attempt: retrying wouldn't help a consistently silent endpoint and would multiply the wait.
     expect(axiosInstance.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a connect-phase ETIMEDOUT read like other transient network failures, unlike our own socket timeout', async () => {
+    const { client, axiosInstance } = createClient();
+    client.setRetryConfig({ maxRetries: 1, delayMs: 0 });
+    axiosInstance.get
+      .mockRejectedValueOnce(createConnectTimeoutAxiosError())
+      .mockResolvedValueOnce({ data: { version: '1' } });
+
+    await expect(client.makeGetRequest('https://ledger.example/v2/version')).resolves.toEqual({ version: '1' });
+    // A connect-phase ETIMEDOUT is a transient network condition, not our own configured timeout firing.
+    expect(axiosInstance.get).toHaveBeenCalledTimes(2);
   });
 
   it('does not retry a bearer-token/auth-timeout-induced TimeoutError, mirroring how an axios socket timeout is treated', async () => {
