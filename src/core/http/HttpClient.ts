@@ -682,7 +682,7 @@ export class HttpClient {
       const method = error.config?.method?.toUpperCase() ?? 'GET';
       return new NetworkError(
         `Request timed out after ${error.config?.timeout ?? 'unknown'}ms without response data ` +
-          `[request: ${method} ${error.config?.url ?? 'unknown'}]`
+          `[request: ${method} ${this.redactEndpoint(error.config?.url ?? 'unknown')}]`
       );
     }
     if (axios.isAxiosError(error)) {
