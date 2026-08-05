@@ -67,6 +67,9 @@ export { calculateTokenRefreshTime } from '@hardlydifficult/websocket';
  * - Sends an initial request message
  * - Dispatches parsed messages to user handlers
  */
+// Node's setTimeout silently clamps larger delays to 1ms, which would fire the idle timer almost immediately.
+const MAX_IDLE_TIMEOUT_MS = 2_147_483_647;
+
 export class WebSocketClient {
   constructor(private readonly client: BaseClient) {}
 
@@ -79,6 +82,9 @@ export class WebSocketClient {
     const idleTimeoutMs = options?.idleTimeoutMs ?? 0;
     if (!Number.isFinite(idleTimeoutMs) || idleTimeoutMs < 0) {
       throw new ConfigurationError('WebSocket idleTimeoutMs must be a non-negative finite number');
+    }
+    if (idleTimeoutMs > MAX_IDLE_TIMEOUT_MS) {
+      throw new ConfigurationError(`WebSocket idleTimeoutMs must not exceed ${MAX_IDLE_TIMEOUT_MS}`);
     }
     const baseUrl = this.client.getApiUrl();
     const wsUrl = this.buildWsUrl(baseUrl, path);

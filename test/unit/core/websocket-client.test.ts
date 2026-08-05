@@ -530,6 +530,25 @@ describe('WebSocketClient', () => {
     ).rejects.toThrow('WebSocket idleTimeoutMs must be a non-negative finite number');
   });
 
+  it('rejects an idle timeout above Node setTimeout maximum delay', async () => {
+    const client = {
+      getApiUrl: () => 'https://ledger.example',
+      authenticate: jest.fn().mockResolvedValue('token'),
+      getTokenIssuedAt: () => null,
+      getTokenExpiryTime: () => null,
+      getLogger: () => undefined,
+    } as unknown as BaseClient;
+
+    await expect(
+      new WebSocketClient(client).connect(
+        '/v2/state/active-contracts',
+        { activeAtOffset: 42 },
+        { onMessage: jest.fn() },
+        { idleTimeoutMs: 2 ** 31 }
+      )
+    ).rejects.toThrow('WebSocket idleTimeoutMs must not exceed 2147483647');
+  });
+
   it('isolates a rejected close callback after delivering the close event', async () => {
     const loggerError = jest.fn();
     const logRequestResponse = jest.fn().mockResolvedValue(undefined);

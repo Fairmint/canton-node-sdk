@@ -81,10 +81,23 @@ describe('HttpClient timeouts', () => {
     expect(() => new HttpClient(undefined, undefined, { timeoutMs: Number.NaN })).toThrow(ConfigurationError);
   });
 
+  it('rejects a client timeout above Node setTimeout maximum delay', () => {
+    // Node's setTimeout silently clamps larger delays to 1ms, which would fire the timer almost immediately.
+    expect(() => new HttpClient(undefined, undefined, { timeoutMs: 2 ** 31 })).toThrow(ConfigurationError);
+  });
+
   it('rejects invalid per-request timeouts', async () => {
     const client = createClient();
 
     await expect(client.makeGetRequest('https://ledger.example/v2/version', { timeoutMs: -1 })).rejects.toThrow(
+      ConfigurationError
+    );
+  });
+
+  it('rejects a per-request timeout above Node setTimeout maximum delay', async () => {
+    const client = createClient();
+
+    await expect(client.makeGetRequest('https://ledger.example/v2/version', { timeoutMs: 2 ** 31 })).rejects.toThrow(
       ConfigurationError
     );
   });

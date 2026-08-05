@@ -86,6 +86,8 @@ export class HttpClient {
   private static readonly RESPONSE_BODY_TRUNCATE_LENGTH = 200;
   private static readonly MAX_CONTEXT_KEYS = 3;
   private static readonly MAX_ATTEMPT_IDENTIFIER_LENGTH = 200;
+  // Node's setTimeout silently clamps larger delays to 1ms, which would fire our timers almost immediately.
+  private static readonly MAX_TIMEOUT_MS = 2_147_483_647;
 
   constructor(
     logger?: Logger,
@@ -672,6 +674,9 @@ export class HttpClient {
     if (timeoutMs === undefined) return undefined;
     if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
       throw new ConfigurationError(`${label} timeoutMs must be a non-negative finite number`);
+    }
+    if (timeoutMs > HttpClient.MAX_TIMEOUT_MS) {
+      throw new ConfigurationError(`${label} timeoutMs must not exceed ${HttpClient.MAX_TIMEOUT_MS}`);
     }
     return timeoutMs;
   }
