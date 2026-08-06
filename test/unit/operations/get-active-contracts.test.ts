@@ -64,8 +64,25 @@ describe('GetActiveContracts', () => {
           },
         },
       },
+      expect.any(Object),
       expect.any(Object)
     );
+  });
+
+  it('applies a default idle timeout so a silent snapshot stream cannot hang', async () => {
+    await new GetActiveContracts({} as never).execute({ parties: ['Alice'], activeAtOffset: 42 });
+
+    expect(mockConnect).toHaveBeenCalledWith(expect.any(String), expect.any(Object), expect.any(Object), {
+      idleTimeoutMs: 600_000,
+    });
+  });
+
+  it('forwards a caller-supplied idle timeout', async () => {
+    await new GetActiveContracts({} as never).execute({ parties: ['Alice'], activeAtOffset: 42, idleTimeoutMs: 0 });
+
+    expect(mockConnect).toHaveBeenCalledWith(expect.any(String), expect.any(Object), expect.any(Object), {
+      idleTimeoutMs: 0,
+    });
   });
 
   it('rejects a null frame without treating it as a contract or Canton error', async () => {

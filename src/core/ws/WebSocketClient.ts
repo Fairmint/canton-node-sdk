@@ -1,6 +1,7 @@
 import { calculateTokenRefreshTime } from '@hardlydifficult/websocket';
 import WebSocket, { type RawData } from 'ws';
 import { type BaseClient } from '../BaseClient';
+import { ConfigurationError } from '../errors';
 import { WebSocketErrorUtils } from './WebSocketErrorUtils';
 
 /** Handle returned from a WebSocket connection, used to check status and disconnect. */
@@ -32,6 +33,13 @@ function toError(value: unknown): Error {
 /** Options for WebSocket token refresh lifecycle. */
 export interface WebSocketOptions {
   /**
+   * Close the socket when no message arrives for this many milliseconds. The timer starts when the socket opens and
+   * resets on every inbound message, so it detects a peer that completed the handshake and then went silent. Omit it,
+   * or pass `0`, to wait indefinitely (the default for long-lived subscriptions).
+   */
+  readonly idleTimeoutMs?: number;
+
+  /**
    * Called when the token is about to expire and refresh is scheduled. Use this to prepare for reconnection (e.g.,
    * track current offset for resumption).
    */
@@ -59,6 +67,9 @@ export { calculateTokenRefreshTime } from '@hardlydifficult/websocket';
  * - Sends an initial request message
  * - Dispatches parsed messages to user handlers
  */
+// Node's setTimeout silently clamps larger delays to 1ms, which would fire the idle timer almost immediately.
+const MAX_IDLE_TIMEOUT_MS = 2_147_483_647;
+
 export class WebSocketClient {
   constructor(private readonly client: BaseClient) {}
 
@@ -68,6 +79,13 @@ export class WebSocketClient {
     handlers: WebSocketHandlers<InboundMessage>,
     options?: WebSocketOptions
   ): Promise<WebSocketSubscription> {
+    const idleTimeoutMs = options?.idleTimeoutMs ?? 0;
+    if (!Number.isFinite(idleTimeoutMs) || idleTimeoutMs < 0) {
+      throw new ConfigurationError('WebSocket idleTimeoutMs must be a non-negative finite number');
+    }
+    if (idleTimeoutMs > MAX_IDLE_TIMEOUT_MS) {
+      throw new ConfigurationError(`WebSocket idleTimeoutMs must not exceed ${MAX_IDLE_TIMEOUT_MS}`);
+    }
     const baseUrl = this.client.getApiUrl();
     const wsUrl = this.buildWsUrl(baseUrl, path);
 
@@ -170,6 +188,31 @@ export class WebSocketClient {
       }
     };
 
+    // Idle watchdog for a peer that completes the handshake and then stops sending. Without it, a caller awaiting a
+    // terminal message (such as the active-contracts snapshot) waits forever.
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearIdleTimer = (): void => {
+      if (idleTimer !== null) {
+        clearTimeout(idleTimer);
+        idleTimer = null;
+      }
+    };
+    const restartIdleTimer = (): void => {
+      if (idleTimeoutMs === 0) return;
+      clearIdleTimer();
+      idleTimer = setTimeout(() => {
+        idleTimer = null;
+        const error = new Error(`WebSocket idle timeout: no message received for ${idleTimeoutMs}ms`);
+        log('idle_timeout', { idleTimeoutMs });
+        notifyError(error);
+        try {
+          socket.close(4008, 'WebSocket idle timeout');
+        } catch (err) {
+          reportAuxiliaryFailure('WebSocket idle timeout close failed', { error: toError(err).message });
+        }
+      }, idleTimeoutMs);
+    };
+
     log('connect', { headers: token ? { Authorization: '[REDACTED]' } : undefined, protocols });
 
     // Schedule proactive token refresh if we have token timing and callbacks
@@ -229,6 +272,7 @@ export class WebSocketClient {
     }
 
     socket.on('open', () => {
+      restartIdleTimer();
       try {
         socket.send(JSON.stringify(requestMessage));
         log('send', requestMessage);
@@ -250,6 +294,7 @@ export class WebSocketClient {
     });
 
     socket.on('message', (rawData: RawData) => {
+      restartIdleTimer();
       // Convert RawData to string safely
       let dataString: string;
       if (Buffer.isBuffer(rawData)) {
@@ -295,6 +340,7 @@ export class WebSocketClient {
     });
 
     socket.on('close', (code: number, reason: Buffer) => {
+      clearIdleTimer();
       // Clear token refresh timer on close
       if (tokenRefreshTimer !== null) {
         clearTimeout(tokenRefreshTimer);
@@ -317,6 +363,7 @@ export class WebSocketClient {
 
     return {
       close: () => {
+        clearIdleTimer();
         // Clear token refresh timer
         if (tokenRefreshTimer !== null) {
           clearTimeout(tokenRefreshTimer);

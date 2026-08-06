@@ -3,6 +3,9 @@ import {
   type AuthConfig as RestClientAuthConfig,
   type RestClientLogger,
 } from '@hardlydifficult/rest-client';
+import { TimeoutError } from '../errors';
+import { createAbortError, throwIfAborted } from '../http/abort';
+import { DEFAULT_HTTP_TIMEOUT_MS } from '../http/HttpClient';
 import { type Logger } from '../logging';
 import { type AuthConfig } from '../types';
 
@@ -59,19 +62,30 @@ export class AuthenticationManager {
     this.delegate = new RestClientAuthManager(restAuthConfig, toRestLogger(logger));
   }
 
-  public async authenticate(): Promise<string> {
+  /**
+   * `timeoutMs` bounds how long a caller waits for the delegate's authentication call without canceling it, so a
+   * still-pending delegate call keeps running and updates cached token state once it eventually settles.
+   *
+   * `signal`, when supplied, stops waiting immediately on abort instead of holding the timer for the full
+   * `timeoutMs`; it does not cancel the underlying delegate call either. An already-aborted `signal`
+   * short-circuits before the delegate is ever invoked, independent of `timeoutMs`.
+   */
+  public async authenticate(timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS, signal?: AbortSignal): Promise<string> {
+    // Check before touching the delegate or any shared in-flight state: an already-aborted caller must never
+    // trigger (or join) a token request, independent of `timeoutMs`.
+    throwIfAborted(signal);
     const beforeSnapshot = this.captureTokenSnapshot();
     const requestReason = this.getTokenRequestReason(beforeSnapshot);
 
     if (requestReason === null) {
-      const token = await this.delegate.authenticate();
+      const token = await this.withAuthTimeout(this.delegate.authenticate(), timeoutMs, signal);
       const afterSnapshot = this.captureTokenSnapshot();
       this.logAuthDebug('token_cache_hit', afterSnapshot);
       return token;
     }
 
     if (this.pendingAuthentication) {
-      return this.pendingAuthentication;
+      return this.withAuthTimeout(this.pendingAuthentication, timeoutMs, signal);
     }
 
     this.logAuthDebug('token_request', beforeSnapshot, { requestReason });
@@ -104,11 +118,11 @@ export class AuthenticationManager {
       });
 
     this.pendingAuthentication = authenticationPromise;
-    return authenticationPromise;
+    return this.withAuthTimeout(authenticationPromise, timeoutMs, signal);
   }
 
-  public async getBearerToken(): Promise<string> {
-    return this.authenticate();
+  public async getBearerToken(timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS, signal?: AbortSignal): Promise<string> {
+    return this.authenticate(timeoutMs, signal);
   }
 
   public clearToken(): void {
@@ -129,6 +143,47 @@ export class AuthenticationManager {
 
   public getTokenLifetimeMs(): number | null {
     return this.delegate.getTokenLifetimeMs();
+  }
+
+  /**
+   * Bounds how long a caller waits for `promise` without canceling the underlying delegate call. `timeoutMs === 0`
+   * only disables the timer, restoring the unbounded-wait budget; it does not skip abort handling, since
+   * cancellation and the timeout budget are independent concerns. A `signal` that is already aborted before this
+   * call begins rejects immediately instead of waiting on `promise`.
+   *
+   * Clears its own timer as soon as `signal` aborts so a caller-driven cancellation never leaves a live timer handle
+   * behind for the remainder of `timeoutMs`. The `finally` removes the abort listener on every outcome (success,
+   * timeout, or abort) so a long-lived, reused `signal` never accumulates listeners across repeated calls.
+   */
+  private async withAuthTimeout(
+    promise: Promise<string>,
+    timeoutMs: number,
+    signal?: AbortSignal
+  ): Promise<string> {
+    if (timeoutMs === 0 && signal === undefined) return promise;
+    throwIfAborted(signal);
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      onAbort = (): void => {
+        clearTimeout(timer);
+        reject(createAbortError(signal));
+      };
+      if (timeoutMs !== 0) {
+        timer = setTimeout(() => {
+          reject(new TimeoutError(`Authentication request timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      }
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
+
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      clearTimeout(timer);
+      if (onAbort) signal?.removeEventListener('abort', onAbort);
+    }
   }
 
   private captureTokenSnapshot(): TokenStateSnapshot {

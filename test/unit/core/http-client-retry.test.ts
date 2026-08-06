@@ -1,5 +1,11 @@
 import axios from 'axios';
-import { ApiError, ConfigurationError, NetworkError, UnknownMutationOutcomeError } from '../../../src/core/errors';
+import {
+  ApiError,
+  ConfigurationError,
+  NetworkError,
+  TimeoutError,
+  UnknownMutationOutcomeError,
+} from '../../../src/core/errors';
 import { HttpClient } from '../../../src/core/http/HttpClient';
 import { type HttpRequestOptions } from '../../../src/core/http/request-retry';
 import { type Logger } from '../../../src/core/logging';
@@ -41,6 +47,29 @@ function createAxiosError(status?: number, data: Record<string, unknown> = {}): 
             data,
           },
         }),
+  });
+  return error;
+}
+
+/** Simulates the `axios` timeout error our socket-inactivity timer produces: no response, `ECONNABORTED`. */
+function createTimeoutAxiosError(timeoutMs: number): Error {
+  const error = new Error(`timeout of ${timeoutMs}ms exceeded`);
+  Object.assign(error, {
+    isAxiosError: true,
+    code: 'ECONNABORTED',
+    config: { timeout: timeoutMs, method: 'get', url: 'https://ledger.example/v2/version' },
+  });
+  return error;
+}
+
+/** Simulates a raw Node connect-phase failure: no response, `ETIMEDOUT` with `syscall: 'connect'`. */
+function createConnectTimeoutAxiosError(): Error {
+  const error = new Error('connect ETIMEDOUT 10.255.255.1:443');
+  Object.assign(error, {
+    isAxiosError: true,
+    code: 'ETIMEDOUT',
+    syscall: 'connect',
+    config: { method: 'get', url: 'https://ledger.example/v2/version' },
   });
   return error;
 }
@@ -210,6 +239,46 @@ describe('HttpClient mutation retry safety', () => {
       )
     ).resolves.toEqual({ page: [] });
     expect(axiosInstance.post).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a socket-timeout-classified read, unlike a genuinely transient connection reset', async () => {
+    const { client, axiosInstance } = createClient();
+    client.setRetryConfig({ maxRetries: 3, delayMs: 0 });
+    axiosInstance.get.mockRejectedValueOnce(createTimeoutAxiosError(250));
+
+    await expect(client.makeGetRequest('https://ledger.example/v2/version')).rejects.toThrow(NetworkError);
+    // A single attempt: retrying wouldn't help a consistently silent endpoint and would multiply the wait.
+    expect(axiosInstance.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a connect-phase ETIMEDOUT read like other transient network failures, unlike our own socket timeout', async () => {
+    const { client, axiosInstance } = createClient();
+    client.setRetryConfig({ maxRetries: 1, delayMs: 0 });
+    axiosInstance.get
+      .mockRejectedValueOnce(createConnectTimeoutAxiosError())
+      .mockResolvedValueOnce({ data: { version: '1' } });
+
+    await expect(client.makeGetRequest('https://ledger.example/v2/version')).resolves.toEqual({ version: '1' });
+    // A connect-phase ETIMEDOUT is a transient network condition, not our own configured timeout firing.
+    expect(axiosInstance.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a bearer-token/auth-timeout-induced TimeoutError, mirroring how an axios socket timeout is treated', async () => {
+    // Simulates the rejection shape produced by HttpClient.fetchBearerToken's own timer or
+    // AuthenticationManager.withAuthTimeout's timer, neither of which is an axios error.
+    const bearerTokenProvider = jest.fn(async (): Promise<string> => {
+      throw new TimeoutError('Authentication request timed out after 250ms');
+    });
+    const { client, axiosInstance } = createClient(undefined, bearerTokenProvider);
+    client.setRetryConfig({ maxRetries: 3, delayMs: 0 });
+
+    await expect(
+      client.makeGetRequest('https://ledger.example/v2/version', { includeBearerToken: true })
+    ).rejects.toThrow(TimeoutError);
+    // A single attempt: retrying an already-confirmed timeout wouldn't plausibly help, the same reasoning that
+    // already applies to axios-level socket timeouts.
+    expect(bearerTokenProvider).toHaveBeenCalledTimes(1);
+    expect(axiosInstance.get).not.toHaveBeenCalled();
   });
 
   it('replays the exact immutable prepare body when explicitly authorized', async () => {
@@ -567,6 +636,34 @@ describe('HttpClient mutation retry safety', () => {
 
     await expect(request).rejects.toMatchObject({ name: 'AbortError', message: 'stop waiting for token' });
     expect(axiosInstance.post).not.toHaveBeenCalled();
+  });
+
+  it('clears the internal bearer-token timeout timer as soon as the caller aborts, instead of leaking it for the full timeout', async () => {
+    jest.useFakeTimers();
+    try {
+      const tokenGate = new Promise<string>(() => undefined);
+      const { client, axiosInstance } = createClient(undefined, async () => tokenGate);
+      const controller = new AbortController();
+
+      const request = client.makePostRequest(
+        'https://validator.example/api/mutate',
+        {},
+        { includeBearerToken: true },
+        { signal: controller.signal }
+      );
+      await Promise.resolve();
+      // The internal `setTimeout` guarding the bearer-token fetch (default 600_000ms) is now armed.
+      expect(jest.getTimerCount()).toBeGreaterThan(0);
+
+      controller.abort(new Error('stop waiting for token'));
+      await expect(request).rejects.toMatchObject({ name: 'AbortError', message: 'stop waiting for token' });
+
+      // Regression guard: aborting must clear that timer immediately rather than leaving it armed for the full timeoutMs.
+      expect(jest.getTimerCount()).toBe(0);
+      expect(axiosInstance.post).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('keeps the entry-time signal when the caller replaces options during token acquisition', async () => {

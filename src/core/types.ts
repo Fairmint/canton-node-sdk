@@ -88,6 +88,12 @@ export interface PartialProviderConfig {
 export interface RequestConfig {
   readonly contentType?: 'application/json' | 'application/octet-stream';
   readonly includeBearerToken?: boolean;
+  /**
+   * Socket-inactivity timeout in milliseconds for this request, overriding the client default. The timer resets on
+   * every received byte, so it bounds silence rather than total duration; pass an `AbortSignal` (for example
+   * `AbortSignal.timeout(ms)`) for a hard deadline. `0` disables the timer.
+   */
+  readonly timeoutMs?: number;
 }
 
 /**
@@ -108,6 +114,11 @@ export interface ClientConfig {
   debug?: boolean;
 
   authUrl?: string;
+  /**
+   * Socket-inactivity timeout in milliseconds applied to every HTTP request made by clients created from this config.
+   * Defaults to `DEFAULT_HTTP_TIMEOUT_MS`. Use {@link RequestConfig.timeoutMs} to override it for a single request.
+   */
+  timeoutMs?: number;
   /** Party ID. Mutable so it can be set at runtime after client initialization (e.g., LocalNet discovery). */
   partyId?: string;
   userId?: string;

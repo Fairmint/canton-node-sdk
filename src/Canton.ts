@@ -65,7 +65,9 @@ export interface CantonConfig {
   readonly managedParties?: readonly string[];
   /** OAuth2 auth URL (if different from default). */
   readonly authUrl?: string;
-  /** Override API endpoints or timeouts per service (`ledgerJsonApi`, `validatorApi`, `scanApi`). */
+  /** Socket-inactivity timeout in milliseconds for every HTTP request. Defaults to `DEFAULT_HTTP_TIMEOUT_MS`. */
+  readonly timeoutMs?: number;
+  /** Override API endpoints per service (`ledgerJsonApi`, `validatorApi`, `scanApi`). */
   readonly apis?: ClientConfig['apis'];
 }
 
@@ -246,6 +248,7 @@ function buildClientConfig(config: CantonConfig): ClientConfig {
   if (config.userId !== undefined) clientConfig.userId = config.userId;
   if (config.managedParties !== undefined) clientConfig.managedParties = [...config.managedParties];
   if (config.authUrl !== undefined) clientConfig.authUrl = config.authUrl;
+  if (config.timeoutMs !== undefined) clientConfig.timeoutMs = config.timeoutMs;
   if (config.apis !== undefined) clientConfig.apis = { ...config.apis };
 
   return clientConfig;

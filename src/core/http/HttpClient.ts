@@ -1,10 +1,11 @@
-import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
+import axios, { type AxiosError, type AxiosInstance, type AxiosRequestConfig } from 'axios';
 import {
   ApiError,
   AuthenticationError,
   CantonError,
   ConfigurationError,
   NetworkError,
+  TimeoutError,
   UnknownMutationOutcomeError,
   isDefiniteCantonMutationRejection,
   type MutationHttpMethod,
@@ -35,6 +36,34 @@ export interface HttpClientRetryConfig {
   readonly delayMs: number;
 }
 
+/**
+ * Socket-inactivity timeout applied to every request unless a caller overrides it.
+ *
+ * Axios disables the socket timer entirely when no timeout is set, so a Canton endpoint that accepts the TCP connection
+ * and then stops responding suspends the awaiting caller forever. This value is a hang detector, not a latency budget:
+ * the timer resets on every received byte, and it is deliberately larger than any documented Canton blocking wait.
+ *
+ * The longest legitimate silence comes from the Ledger API command service, which holds a `submit-and-wait` response
+ * open until the command completes or its tracking timeout fires (`CommandServiceConfig.DefaultDefaultTrackingTimeout`,
+ * 5 minutes). Every other observed Canton/Splice server bound is shorter: the JSON API's own request timeout defaults
+ * to 20 seconds, Splice apps run a 38-second pekko request timeout, and Canton's console request timeout is 40 seconds.
+ * Ten minutes therefore leaves 2x headroom over the slowest legitimate operation.
+ *
+ * Use {@link RequestConfig.timeoutMs} for a different per-request floor, or an `AbortSignal` (for example
+ * `AbortSignal.timeout(ms)`) when a total deadline rather than an inactivity timer is needed.
+ */
+export const DEFAULT_HTTP_TIMEOUT_MS = 600_000;
+
+/** Construction-time transport options for {@link HttpClient}. */
+export interface HttpClientOptions {
+  /**
+   * Socket-inactivity timeout in milliseconds applied to every request from this client. Defaults to
+   * {@link DEFAULT_HTTP_TIMEOUT_MS}. `0` disables the timer and restores the unbounded-wait behavior; never use it for
+   * production workloads.
+   */
+  readonly timeoutMs?: number;
+}
+
 type HttpMethod = 'GET' | MutationHttpMethod;
 
 interface AttemptFailure<Body> {
@@ -46,8 +75,9 @@ interface AttemptFailure<Body> {
 /** Handles HTTP requests with authentication, logging, cancellation, and explicit retry safety. */
 export class HttpClient {
   private readonly axiosInstance: AxiosInstance;
-  private readonly bearerTokenProvider: (() => Promise<string>) | undefined;
+  private readonly bearerTokenProvider: ((signal?: AbortSignal) => Promise<string>) | undefined;
   private readonly logger: Logger | undefined;
+  private readonly defaultTimeoutMs: number;
   private retryConfig: HttpClientRetryConfig = { maxRetries: 3, delayMs: 6000 };
 
   // Error message formatting constants
@@ -56,8 +86,17 @@ export class HttpClient {
   private static readonly RESPONSE_BODY_TRUNCATE_LENGTH = 200;
   private static readonly MAX_CONTEXT_KEYS = 3;
   private static readonly MAX_ATTEMPT_IDENTIFIER_LENGTH = 200;
+  // Node's setTimeout silently clamps larger delays to 1ms, which would fire our timers almost immediately.
+  private static readonly MAX_TIMEOUT_MS = 2_147_483_647;
 
-  constructor(logger?: Logger, bearerTokenProvider?: () => Promise<string>) {
+  constructor(
+    logger?: Logger,
+    bearerTokenProvider?: (signal?: AbortSignal) => Promise<string>,
+    options: HttpClientOptions = {}
+  ) {
+    this.defaultTimeoutMs = HttpClient.validateTimeoutMs(options.timeoutMs, 'HTTP client') ?? DEFAULT_HTTP_TIMEOUT_MS;
+    // Every dispatched request always passes an explicit resolved `timeout` (see `makeRequest`/`dispatchRequest`), so
+    // an instance-level default here would never be read; the per-request value is the single source of truth.
     this.axiosInstance = axios.create();
     this.bearerTokenProvider = bearerTokenProvider;
     this.logger = logger;
@@ -119,6 +158,7 @@ export class HttpClient {
     // options signal or retry object while a token/hook is pending change the in-flight request contract.
     const requestOptions = snapshotHttpRequestOptions(options);
     const requestConfig: RequestConfig = Object.freeze({ ...config });
+    const timeoutMs = HttpClient.validateTimeoutMs(requestConfig.timeoutMs, 'HTTP request') ?? this.defaultTimeoutMs;
     const {
       signal,
       retry: requestedRetry,
@@ -205,13 +245,20 @@ export class HttpClient {
       let dispatched = false;
       try {
         const headers = await awaitWithAbort(async (): Promise<Record<string, string>> => {
-          const builtHeaders = await this.buildHeaders(requestConfig);
+          const builtHeaders = await this.buildHeaders(requestConfig, timeoutMs, signal);
           return builtHeaders;
         }, signal);
         throwIfAborted(signal);
         const requestBody = this.cloneBody(currentBody);
         dispatched = true;
-        const response = await this.dispatchRequest<T, Body>(method, attemptUrl, requestBody, headers, signal);
+        const response = await this.dispatchRequest<T, Body>(
+          method,
+          attemptUrl,
+          requestBody,
+          headers,
+          signal,
+          timeoutMs
+        );
 
         this.observeLog(
           attemptUrl,
@@ -427,10 +474,12 @@ export class HttpClient {
     url: string,
     body: Body,
     headers: Record<string, string>,
-    signal: AbortSignal | undefined
+    signal: AbortSignal | undefined,
+    timeoutMs: number
   ): Promise<T> {
     const axiosConfig: AxiosRequestConfig = {
       headers,
+      timeout: timeoutMs,
       ...(signal !== undefined ? { signal } : {}),
     };
 
@@ -446,7 +495,11 @@ export class HttpClient {
     }
   }
 
-  private async buildHeaders(config: RequestConfig): Promise<Record<string, string>> {
+  private async buildHeaders(
+    config: RequestConfig,
+    timeoutMs: number,
+    signal: AbortSignal | undefined
+  ): Promise<Record<string, string>> {
     const headers: Record<string, string> = {};
 
     if (config.contentType) {
@@ -460,13 +513,56 @@ export class HttpClient {
         throw new AuthenticationError('Bearer token requested but no token provider is configured');
       }
 
-      const token = await this.bearerTokenProvider();
+      const token = await this.fetchBearerToken(this.bearerTokenProvider, timeoutMs, signal);
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
     }
 
     return headers;
+  }
+
+  /**
+   * Bound the token fetch too: a silent auth endpoint would otherwise suspend the request before it is dispatched.
+   * Rejects immediately, before ever invoking `provider`, when `signal` is already aborted. Clears its own timer as
+   * soon as `signal` aborts so a caller-driven cancellation never leaves a live timer handle behind for the
+   * remainder of `timeoutMs`, mirroring {@link abortableSleep}. `timeoutMs === 0` only skips the timer — a `signal`
+   * is still wired up and honored, since cancellation and the timeout budget are independent concerns. The `finally`
+   * removes the abort listener on every outcome (success, timeout, or abort) so a long-lived, reused `signal` never
+   * accumulates listeners across repeated calls.
+   */
+  private async fetchBearerToken(
+    provider: (signal?: AbortSignal) => Promise<string>,
+    timeoutMs: number,
+    signal: AbortSignal | undefined
+  ): Promise<string> {
+    throwIfAborted(signal);
+    if (timeoutMs === 0 && signal === undefined) return provider(signal);
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
+    // The abort listener must be attached before `provider` is invoked: a provider that synchronously aborts
+    // `signal` before returning its (still-pending) promise must not be missed.
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      onAbort = (): void => {
+        clearTimeout(timer);
+        reject(createAbortError(signal));
+      };
+      if (timeoutMs !== 0) {
+        timer = setTimeout(() => {
+          reject(new TimeoutError(`Bearer token request timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      }
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
+    const tokenPromise = provider(signal);
+
+    try {
+      return await Promise.race([tokenPromise, timeoutPromise]);
+    } finally {
+      clearTimeout(timer);
+      if (onAbort) signal?.removeEventListener('abort', onAbort);
+    }
   }
 
   /** Invoke logging as a detached observer. Logger behavior can never affect request control flow. */
@@ -573,8 +669,27 @@ export class HttpClient {
     );
   }
 
+  /** Reject non-numeric or negative timeouts up front rather than letting axios silently disable the socket timer. */
+  private static validateTimeoutMs(timeoutMs: number | undefined, label: string): number | undefined {
+    if (timeoutMs === undefined) return undefined;
+    if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
+      throw new ConfigurationError(`${label} timeoutMs must be a non-negative finite number`);
+    }
+    if (timeoutMs > HttpClient.MAX_TIMEOUT_MS) {
+      throw new ConfigurationError(`${label} timeoutMs must not exceed ${HttpClient.MAX_TIMEOUT_MS}`);
+    }
+    return timeoutMs;
+  }
+
   private handleRequestError(error: unknown): Error {
     if (error instanceof CantonError) return error;
+    if (this.isTimeoutError(error)) {
+      const method = error.config?.method?.toUpperCase() ?? 'GET';
+      return new NetworkError(
+        `Request timed out after ${error.config?.timeout ?? 'unknown'}ms without response data ` +
+          `[request: ${method} ${this.redactEndpoint(error.config?.url ?? 'unknown')}]`
+      );
+    }
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
       const { data, responseBody } = this.normalizeErrorResponseData(error.response?.data);
@@ -704,6 +819,16 @@ export class HttpClient {
 
   /** Return true for transport failures that the SDK has historically classified as transient. */
   private isRetryableError(error: unknown): boolean {
+    // A socket-inactivity timeout means the endpoint was already silent for the full configured `timeoutMs`.
+    // Retrying wouldn't plausibly get a response inside the same short window, and doing so up to `maxAttempts`
+    // times would let a consistently silent endpoint hang the caller for `maxAttempts * timeoutMs` instead of
+    // roughly `timeoutMs`. Fail fast instead: the caller already gets a clear timeout error and can decide to
+    // retry themselves with full visibility into total elapsed time.
+    if (this.isTimeoutError(error)) return false;
+    // Our own timeout enforcement (fetchBearerToken's token-fetch timer, AuthenticationManager's auth-request
+    // timer) never goes through axios, so isTimeoutError() above doesn't see it; it rejects with a TimeoutError
+    // instead. The same "already waited the full window" reasoning applies, so treat it identically.
+    if (error instanceof TimeoutError) return false;
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
       const data = (error.response?.data ?? {}) as Record<string, unknown>;
@@ -801,6 +926,18 @@ export class HttpClient {
 
   private isCanceledError(error: unknown): boolean {
     return axios.isCancel(error) || (axios.isAxiosError(error) && error.code === 'ERR_CANCELED');
+  }
+
+  /**
+   * A socket-inactivity timeout never reaches the server response, so it must not be reported as an API error.
+   * Axios's own configured `timeout` always surfaces as `ECONNABORTED` (its Node adapter never sets
+   * `transitional.clarifyTimeoutError`, so it never uses `ETIMEDOUT` for this). A raw `ETIMEDOUT` is Node's
+   * connect-phase failure code for a different, genuinely transient condition, so it is excluded here and stays
+   * retryable.
+   */
+  private isTimeoutError(error: unknown): error is AxiosError {
+    if (!axios.isAxiosError(error) || error.response !== undefined) return false;
+    return error.code === 'ECONNABORTED';
   }
 
   private async abortableSleep(ms: number, signal: AbortSignal | undefined): Promise<void> {

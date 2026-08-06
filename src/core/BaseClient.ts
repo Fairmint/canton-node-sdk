@@ -47,17 +47,28 @@ export abstract class BaseClient {
       throw new ConfigurationError(`API configuration not found for ${this.apiType}`);
     }
 
-    this.httpClient = new HttpClient(this.clientConfig.logger, async () =>
-      this.runtime.getAuthenticationManager(this.config.authUrl, apiConfig.auth).authenticate()
+    const { timeoutMs } = this.clientConfig;
+    this.httpClient = new HttpClient(
+      this.clientConfig.logger,
+      async (signal?: AbortSignal) =>
+        this.runtime.getAuthenticationManager(this.config.authUrl, apiConfig.auth).authenticate(timeoutMs, signal),
+      timeoutMs === undefined ? {} : { timeoutMs }
     );
   }
 
-  public async authenticate(): Promise<string> {
+  /**
+   * Bounded by the client's configured `timeoutMs`, same as every other request this client makes. `signal` is
+   * optional since this is a standalone public method with no caller-supplied signal today; future callers that do
+   * have one can pass it through to stop waiting immediately on abort instead of the full `timeoutMs`.
+   */
+  public async authenticate(signal?: AbortSignal): Promise<string> {
     const apiConfig = this.config.apis[this.apiType];
     if (!apiConfig) {
       throw new ConfigurationError(`API configuration not found for ${this.apiType}`);
     }
-    return this.runtime.getAuthenticationManager(this.config.authUrl, apiConfig.auth).authenticate();
+    return this.runtime
+      .getAuthenticationManager(this.config.authUrl, apiConfig.auth)
+      .authenticate(this.clientConfig.timeoutMs, signal);
   }
 
   /**
