@@ -1,7 +1,6 @@
 # canton-node-sdk
 
-See [CLAUDE.md](CLAUDE.md), [README.md](README.md), and
-`.cursor/skills/localnet-testing/SKILL.md`.
+See [CLAUDE.md](CLAUDE.md), [README.md](README.md), and `.cursor/skills/localnet-testing/SKILL.md`.
 
 ## LocalNet ownership (ENG-1635)
 
@@ -29,8 +28,8 @@ Repo checks (`npm install`, `npm run fix`, `npm test`, `npm run build`) need no 
 
 LocalNet runs Canton Network Quickstart in Docker. `npm run localnet:start` (=
 `bin/canton-localnet start`, which prefers `@fairmint/canton-dev-tools`, infra-only + OAuth2 by
-default) is self-provisioning on the cloud image: it `apt`-installs Docker, starts a `dockerd`
-(vfs storage driver, iptables-legacy) via passwordless `sudo`, adds
+default) is self-provisioning on the cloud image: it `apt`-installs Docker, starts a `dockerd` (vfs
+storage driver, iptables-legacy) via passwordless `sudo`, adds
 `scan.localhost`/`sv.localhost`/`wallet.localhost` to `/etc/hosts`, runs cn-quickstart `make setup`,
 brings up the compose stack, and waits for the Validator, Scan, and Ledger JSON APIs.
 

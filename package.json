@@ -47,6 +47,7 @@
     "lint:fix": "eslint . --fix",
     "lint:npm": "npmPkgJsonLint . --fix",
     "lint:npm:check": "npmPkgJsonLint .",
+    "localnet:dev-tools": "canton-dev-tools",
     "localnet:logs": "bash ./bin/canton-localnet logs",
     "localnet:quickstart": "bash ./bin/canton-localnet setup",
     "localnet:setup": "bash ./bin/canton-localnet setup",
@@ -55,7 +56,6 @@
     "localnet:status": "bash ./bin/canton-localnet status",
     "localnet:stop": "bash ./bin/canton-localnet stop",
     "localnet:verify": "bash ./bin/canton-localnet verify",
-    "localnet:dev-tools": "canton-dev-tools",
     "prepack": "npm run clean && npm run build:core",
     "prepare-release": "tsx scripts/prepare-release.ts",
     "prepublishOnly": "npm run prepack",
@@ -81,17 +81,6 @@
     "ws": "8.21.0",
     "zod": "4.4.3"
   },
-  "optionalDependencies": {
-    "@fairmint/canton-dev-tools": "github:Fairmint/canton-dev-tools#c2efb4b"
-  },
-  "peerDependencies": {
-    "@fairmint/canton-dev-tools": ">=0.1.0"
-  },
-  "peerDependenciesMeta": {
-    "@fairmint/canton-dev-tools": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "@types/jest": "30.0.0",
     "@types/node": "26.1.0",
@@ -115,6 +104,17 @@
     "tsx": "4.23.0",
     "typescript": "5.9.3",
     "typescript-7": "npm:typescript@7.0.2"
+  },
+  "peerDependencies": {
+    "@fairmint/canton-dev-tools": ">=0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@fairmint/canton-dev-tools": {
+      "optional": true
+    }
+  },
+  "optionalDependencies": {
+    "@fairmint/canton-dev-tools": "github:Fairmint/canton-dev-tools#c2efb4b"
   },
   "engines": {
     "node": ">=22.0.0"

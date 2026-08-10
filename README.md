@@ -4,10 +4,10 @@ Low-level TypeScript SDK for Canton Network nodes (Ledger JSON API, Validator AP
 
 ## Developer documentation
 
-The public [GitHub wiki](https://github.com/Fairmint/canton-node-sdk/wiki) is the canonical guide for
-configuration, API boundaries, external signing, LocalNet, examples, and contribution. The public
-[`src/index.ts`](https://github.com/Fairmint/canton-node-sdk/blob/main/src/index.ts) defines the
-supported package surface; use the installed declarations and public
+The public [GitHub wiki](https://github.com/Fairmint/canton-node-sdk/wiki) is the canonical guide
+for configuration, API boundaries, external signing, LocalNet, examples, and contribution. The
+public [`src/index.ts`](https://github.com/Fairmint/canton-node-sdk/blob/main/src/index.ts) defines
+the supported package surface; use the installed declarations and public
 [`examples/`](https://github.com/Fairmint/canton-node-sdk/tree/main/examples) and
 [`test/`](https://github.com/Fairmint/canton-node-sdk/tree/main/test) for exact methods, request
 shapes, and error behavior.
@@ -19,10 +19,10 @@ npm install @fairmint/canton-node-sdk
 ```
 
 ```ts
-import { Canton } from "@fairmint/canton-node-sdk";
+import { Canton } from '@fairmint/canton-node-sdk';
 
 async function main(): Promise<void> {
-  const canton = new Canton({ network: "localnet" });
+  const canton = new Canton({ network: 'localnet' });
   const version = await canton.ledger.getVersion();
   console.log(version);
 }
@@ -60,6 +60,6 @@ npm run localnet:dev-tools -- readiness
 npm run localnet:verify
 ```
 
-Until `@fairmint/canton-dev-tools` is published to npm, this repo pins the optional dependency to the
-ENG-1635 git SHA. After publish, swap that pin to a semver range. Do not delete
+Until `@fairmint/canton-dev-tools` is published to npm, this repo pins the optional dependency to
+the ENG-1635 git SHA. After publish, swap that pin to a semver range. Do not delete
 `scripts/localnet-cloud.sh` until the hard-cutover follow-up.
