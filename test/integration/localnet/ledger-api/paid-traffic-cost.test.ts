@@ -8,7 +8,7 @@ import { CantonRuntime, ValidatorApiClient } from '../../../../src';
 import { waitForCompletionWithMetadata } from '../../../../src/clients/ledger-json-api';
 import { CompletionStreamResponseSchema } from '../../../../src/clients/ledger-json-api/schemas/api/completions';
 import { EnvLoader } from '../../../../src/core/config/EnvLoader';
-import { ConfigurationError } from '../../../../src/core/errors';
+import { ApiError, ConfigurationError } from '../../../../src/core/errors';
 import { getPaidTrafficCostFromCompletion } from '../../../../src/utils/traffic/paid-traffic-cost';
 import { buildIntegrationTestClientConfig } from '@fairmint/canton-dev-tools/testing';
 import { getClient } from './setup';
@@ -162,30 +162,44 @@ describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
 
     // REST completions are a cursor batch; under parallel LocalNet load a single
     // limit=50 poll can miss the row even after WS already observed it. Poll with
-    // a higher limit + idle timeout until the submission appears.
+    // a higher limit until the submission appears. Retry STALE_STREAM_AUTHORIZATION
+    // quickly (Canton 409) instead of holding the stream with idle timeout.
     const restLimit = 200;
-    const restIdleTimeoutMs = 5_000;
     const restDeadline = Date.now() + 60_000;
     let row: ReturnType<typeof findCompletionForSubmission>;
     let lastBatchSize = 0;
+    let lastError: unknown;
     for (;;) {
-      const blocking = await client.completions({
-        userId,
-        parties: [partyId],
-        beginExclusive,
-        limit: restLimit,
-        streamIdleTimeoutMs: restIdleTimeoutMs,
-      });
-      lastBatchSize = blocking.length;
-      row = findCompletionForSubmission(blocking, submissionId);
-      if (row || Date.now() >= restDeadline) {
-        break;
+      try {
+        const blocking = await client.completions({
+          userId,
+          parties: [partyId],
+          beginExclusive,
+          limit: restLimit,
+        });
+        lastBatchSize = blocking.length;
+        lastError = undefined;
+        row = findCompletionForSubmission(blocking, submissionId);
+        if (row || Date.now() >= restDeadline) {
+          break;
+        }
+      } catch (error) {
+        lastError = error;
+        const staleAuth =
+          error instanceof ApiError &&
+          error.status === 409 &&
+          /STALE_STREAM_AUTHORIZATION/i.test(error.message);
+        if (!staleAuth || Date.now() >= restDeadline) {
+          throw error;
+        }
       }
-      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      await new Promise((resolve) => setTimeout(resolve, 250));
     }
     if (!row) {
+      const detail =
+        lastError instanceof Error ? `; lastError=${lastError.message}` : lastError ? `; lastError=${String(lastError)}` : '';
       throw new Error(
-        `Blocking completions did not include submissionId=${submissionId} (limit=${restLimit}, lastBatchSize=${lastBatchSize}, idleTimeoutMs=${restIdleTimeoutMs})`
+        `Blocking completions did not include submissionId=${submissionId} (limit=${restLimit}, lastBatchSize=${lastBatchSize}${detail})`
       );
     }
 
