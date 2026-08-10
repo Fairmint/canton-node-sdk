@@ -111,6 +111,8 @@ function verifyPackagedLocalnetBinary(): void {
       env: {
         ...process.env,
         CANTON_LOCALNET_CACHE_DIR: join(tempDir, 'cache'),
+        // Soft-migration: packaged SDK fallback must still work without Dev Tools.
+        CANTON_LOCALNET_FORCE_LEGACY: '1',
         HOME: join(tempDir, 'home'),
       },
     });
@@ -121,6 +123,8 @@ function verifyPackagedLocalnetBinary(): void {
 }
 
 function verifyPackagedLocalnetPins(): void {
+  // Fallback pin defaults remain required until the ENG-1635 hard cutover removes SDK LocalNet scripts.
+  // @fairmint/canton-dev-tools owns the shared pin set going forward.
   const localnetBin = readFileSync(join(process.cwd(), 'bin', 'canton-localnet'), 'utf8');
   const spliceVersion = readFileSync(join(process.cwd(), 'libs', 'splice', 'VERSION'), 'utf8').trim();
   const quickstartRef = spawnSync('git', ['rev-parse', 'HEAD:libs/cn-quickstart'], { encoding: 'utf8' });

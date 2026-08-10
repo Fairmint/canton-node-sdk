@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Soft migration (ENG-1635): prefer @fairmint/canton-dev-tools when installed.
+# Fallback to the deprecated SDK-owned LocalNet scripts until the hard cutover.
 set -euo pipefail
 
 resolve_script_dir() {
@@ -23,12 +25,19 @@ DEFAULT_QUICKSTART_REF="2f4edfc17621a7dfb6d44357050c22f4b3914c89"
 DEFAULT_SPLICE_VERSION="0.6.8"
 
 log() {
-  printf '[canton-localnet] %s\n' "$*"
+  printf '[canton-localnet] %s\n' "$*" >&2
 }
 
 usage() {
   cat <<'USAGE'
 Usage: canton-localnet <command>
+
+DEPRECATED (ENG-1635): LocalNet pin ownership is moving to @fairmint/canton-dev-tools.
+This binary soft-delegates to that package when available; otherwise it falls back to the
+SDK-owned scripts/localnet-cloud.sh (kept temporarily). Prefer:
+
+  npx @fairmint/canton-dev-tools start
+  npm install -D @fairmint/canton-dev-tools
 
 Commands:
   setup    Prepare LocalNet prerequisites
@@ -50,6 +59,7 @@ Environment:
   CANTON_LOCALNET_QUICKSTART_REF   cn-quickstart git ref to fetch
   CANTON_LOCALNET_SPLICE_VERSION   Splice image tag (defaults to the SDK's pinned API version)
   CANTON_LOCALNET_INFRA_ONLY       Defaults to true for this package binary
+  CANTON_LOCALNET_FORCE_LEGACY     Set to 1 to skip soft-delegation to canton-dev-tools
 USAGE
 }
 
@@ -59,6 +69,50 @@ require_command() {
     log "Missing required command: ${cmd}"
     exit 1
   fi
+}
+
+# Resolve @fairmint/canton-dev-tools CLI without following a PATH entry that points
+# back at this same SDK binary (both packages historically expose canton-localnet).
+find_dev_tools_bin() {
+  local dir="${PACKAGE_ROOT}"
+  local candidate=""
+
+  while true; do
+    candidate="${dir}/node_modules/@fairmint/canton-dev-tools/bin/canton-dev-tools"
+    if [[ -x "${candidate}" ]]; then
+      printf '%s' "${candidate}"
+      return 0
+    fi
+    if [[ "${dir}" == "/" ]]; then
+      break
+    fi
+    dir="$(dirname "${dir}")"
+  done
+
+  if [[ -n "${npm_config_local_prefix:-}" ]]; then
+    candidate="${npm_config_local_prefix}/node_modules/@fairmint/canton-dev-tools/bin/canton-dev-tools"
+    if [[ -x "${candidate}" ]]; then
+      printf '%s' "${candidate}"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+maybe_delegate_to_dev_tools() {
+  local dev_tools_bin=""
+
+  if [[ "${CANTON_LOCALNET_FORCE_LEGACY:-}" == "1" ]]; then
+    return 1
+  fi
+
+  if ! dev_tools_bin="$(find_dev_tools_bin)"; then
+    return 1
+  fi
+
+  log "Delegating to @fairmint/canton-dev-tools (ENG-1635). Set CANTON_LOCALNET_FORCE_LEGACY=1 to use deprecated SDK LocalNet scripts."
+  exec "${dev_tools_bin}" "$@"
 }
 
 cache_root() {
@@ -177,9 +231,11 @@ ensure_quickstart_checkout() {
   log "Cached cn-quickstart at ${root}."
 }
 
-main() {
+run_legacy_localnet() {
   local command="${1:-}"
   local dir=""
+
+  log "Using deprecated SDK LocalNet scripts. Install @fairmint/canton-dev-tools for the shared pin owner (ENG-1635)."
 
   case "${command}" in
     "" | -h | --help | help)
@@ -208,6 +264,27 @@ main() {
   export CANTON_LOCALNET_INFRA_ONLY="${CANTON_LOCALNET_INFRA_ONLY:-true}"
 
   exec bash "${LOCALNET_SCRIPT}" "$@"
+}
+
+main() {
+  local command="${1:-}"
+
+  case "${command}" in
+    "" | -h | --help | help)
+      # Help should describe both paths; do not require soft-delegation.
+      usage
+      if [[ -z "${command}" ]]; then
+        exit 1
+      fi
+      exit 0
+      ;;
+  esac
+
+  if maybe_delegate_to_dev_tools "$@"; then
+    return
+  fi
+
+  run_legacy_localnet "$@"
 }
 
 main "$@"

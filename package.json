@@ -55,6 +55,7 @@
     "localnet:status": "bash ./bin/canton-localnet status",
     "localnet:stop": "bash ./bin/canton-localnet stop",
     "localnet:verify": "bash ./bin/canton-localnet verify",
+    "localnet:dev-tools": "canton-dev-tools",
     "prepack": "npm run clean && npm run build:core",
     "prepare-release": "tsx scripts/prepare-release.ts",
     "prepublishOnly": "npm run prepack",
@@ -79,6 +80,17 @@
     "pino": "10.3.1",
     "ws": "8.21.0",
     "zod": "4.4.3"
+  },
+  "optionalDependencies": {
+    "@fairmint/canton-dev-tools": "github:Fairmint/canton-dev-tools#c2efb4b"
+  },
+  "peerDependencies": {
+    "@fairmint/canton-dev-tools": ">=0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@fairmint/canton-dev-tools": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/jest": "30.0.0",

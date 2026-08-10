@@ -1,21 +1,38 @@
 # canton-node-sdk
 
 See [CLAUDE.md](CLAUDE.md), [README.md](README.md), and
-`.cursor/skills/localnet-testing/SKILL.md`. `package.json` (`localnet:*` scripts) and
-`bin/canton-localnet` are the source of truth for LocalNet commands.
+`.cursor/skills/localnet-testing/SKILL.md`.
+
+## LocalNet ownership (ENG-1635)
+
+**`@fairmint/canton-dev-tools` owns LocalNet pins going forward** (cn-quickstart ref, Splice,
+Scribe, protocol version). See that package's `COMPATIBILITY.md`.
+
+This repository still ships `bin/canton-localnet` and `scripts/localnet-cloud.sh` as a **soft
+migration** fallback:
+
+- `bin/canton-localnet` soft-delegates to `@fairmint/canton-dev-tools` when that package is
+  installed (optionalDependency / optional peer).
+- Set `CANTON_LOCALNET_FORCE_LEGACY=1` to force the deprecated SDK scripts.
+- `package.json` `localnet:*` scripts still call `bin/canton-localnet` (which prefers Dev Tools).
+- Prefer `npx @fairmint/canton-dev-tools <command>` or `npm run localnet:dev-tools -- <command>`
+  when the optional dependency is present.
+- Do **not** treat SDK-local pins in `bin/canton-localnet` as the long-term source of truth.
 
 ## Cursor Cloud specific instructions
 
 Repo checks (`npm install`, `npm run fix`, `npm test`, `npm run build`) need no dashboard secrets.
-`npm install` does not require `NPM_TOKEN` here (dependencies are public).
+`npm install` does not require `NPM_TOKEN` here (dependencies are public). The optional
+`@fairmint/canton-dev-tools` git dependency needs GitHub network access (public repo).
 
 ### Canton LocalNet on a cloud VM
 
 LocalNet runs Canton Network Quickstart in Docker. `npm run localnet:start` (=
-`bin/canton-localnet start`, infra-only + OAuth2 by default) is self-provisioning on the cloud image:
-it `apt`-installs Docker, starts a `dockerd` (vfs storage driver, iptables-legacy) via passwordless
-`sudo`, adds `scan.localhost`/`sv.localhost`/`wallet.localhost` to `/etc/hosts`, runs cn-quickstart
-`make setup`, brings up the compose stack, and waits for the Validator, Scan, and Ledger JSON APIs.
+`bin/canton-localnet start`, which prefers `@fairmint/canton-dev-tools`, infra-only + OAuth2 by
+default) is self-provisioning on the cloud image: it `apt`-installs Docker, starts a `dockerd`
+(vfs storage driver, iptables-legacy) via passwordless `sudo`, adds
+`scan.localhost`/`sv.localhost`/`wallet.localhost` to `/etc/hosts`, runs cn-quickstart `make setup`,
+brings up the compose stack, and waits for the Validator, Scan, and Ledger JSON APIs.
 
 Prerequisites (on demand — heavy, not in the dashboard update script):
 

@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# DEPRECATED (ENG-1635): LocalNet pin ownership is moving to @fairmint/canton-dev-tools.
+# This script remains as a temporary fallback for bin/canton-localnet until a later hard cutover.
+# Prefer: npx @fairmint/canton-dev-tools <command>
+# Do not delete this file in the soft-migration PR.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
