@@ -83,8 +83,8 @@ export const JsReassignmentSchema = z.object({
   offset: z.number(),
   /** Collection of reassignment events. */
   events: z.array(JsReassignmentEventSchema),
-  /** Trace context (optional). */
-  traceContext: TraceContextSchema.optional(),
+  /** Trace context (optional; wire may be null). */
+  traceContext: TraceContextSchema.nullable().optional(),
   /** Record time of the reassignment. */
   recordTime: z.string(),
   /** Synchronizer that synchronized this reassignment. */

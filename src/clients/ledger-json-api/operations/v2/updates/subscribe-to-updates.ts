@@ -109,8 +109,8 @@ export type UpdatesWsMessage = z.infer<typeof UpdatesWsMessageSchema>;
 function formatZodIssues(error: z.ZodError): string {
   return error.issues
     .map((issue) => {
-      const path = issue.path.length > 0 ? issue.path.join('.') : '(root)';
-      return `${path}: ${issue.message}`;
+      const issuePath = issue.path.length > 0 ? issue.path.join('.') : '(root)';
+      return `${issuePath}: ${issue.message}`;
     })
     .join('; ');
 }

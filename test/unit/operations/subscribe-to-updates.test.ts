@@ -24,15 +24,19 @@ const SYNCHRONIZER_ID = 'global-domain::fingerprint';
 export function createWireTransactionUpdateMessage(overrides?: {
   offset?: number;
   includeExercised?: boolean;
+  /** When true, mirror Splice wire: `traceContext`/`externalTransactionHash`/`contractKey` as null. */
+  nullOptionalFields?: boolean;
 }): Record<string, unknown> {
   const offset = overrides?.offset ?? 6_619_776;
-  const events: Record<string, unknown>[] = [
+  const nullOptional = overrides?.nullOptionalFields === true;
+  const events: Array<Record<string, unknown>> = [
     {
       CreatedEvent: {
         offset,
         nodeId: 0,
         contractId: CONTRACT_ID,
         templateId: `${PACKAGE_ID}:Splice.Amulet:AppRewardCoupon`,
+        ...(nullOptional ? { contractKey: null } : {}),
         createArgument: { dso: 'DSO', provider: PARTY, amount: '1.0' },
         createdEventBlob: Buffer.from('blob').toString('base64'),
         witnessParties: [PARTY],
@@ -53,6 +57,7 @@ export function createWireTransactionUpdateMessage(overrides?: {
         nodeId: 1,
         contractId: CONTRACT_ID,
         templateId: `${PACKAGE_ID}:Splice.Amulet:AppRewardCoupon`,
+        ...(nullOptional ? { interfaceId: null } : {}),
         choice: 'Expire',
         choiceArgument: {},
         actingParties: [PARTY],
@@ -78,9 +83,13 @@ export function createWireTransactionUpdateMessage(overrides?: {
           synchronizerId: SYNCHRONIZER_ID,
           recordTime: '2026-08-10T12:00:00.123456Z',
           events,
-          traceContext: {
-            traceparent: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-          },
+          ...(nullOptional
+            ? { traceContext: null, externalTransactionHash: null }
+            : {
+                traceContext: {
+                  traceparent: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
+                },
+              }),
           paidTrafficCost: 0,
         },
       },
@@ -103,7 +112,10 @@ export function createWireOffsetCheckpointMessage(offset = 6_619_775): Record<st
 }
 
 /** Representative Reassignment frame (value-wrapped). */
-export function createWireReassignmentUpdateMessage(offset = 6_619_780): Record<string, unknown> {
+export function createWireReassignmentUpdateMessage(
+  offset = 6_619_780,
+  overrides?: { nullTraceContext?: boolean }
+): Record<string, unknown> {
   return {
     update: {
       Reassignment: {
@@ -112,6 +124,7 @@ export function createWireReassignmentUpdateMessage(offset = 6_619_780): Record<
           offset,
           recordTime: '2026-08-10T12:00:00.123456Z',
           synchronizerId: SYNCHRONIZER_ID,
+          ...(overrides?.nullTraceContext ? { traceContext: null } : {}),
           events: [
             {
               JsUnassignedEvent: {
@@ -144,12 +157,24 @@ describe('WsUpdateSchema / UpdatesWsMessageSchema wire fixtures', (): void => {
     expect(WsUpdateSchema.safeParse(message['update']).success).toBe(true);
   });
 
+  it('accepts Splice-style null optional fields (traceContext, externalTransactionHash, contractKey)', (): void => {
+    const message = createWireTransactionUpdateMessage({ nullOptionalFields: true });
+    const result = UpdatesWsMessageSchema.safeParse(message);
+    expect(result.success).toBe(true);
+  });
+
   it('accepts OffsetCheckpoint frames', (): void => {
     expect(UpdatesWsMessageSchema.safeParse(createWireOffsetCheckpointMessage()).success).toBe(true);
   });
 
   it('accepts value-wrapped Reassignment frames', (): void => {
     expect(UpdatesWsMessageSchema.safeParse(createWireReassignmentUpdateMessage()).success).toBe(true);
+  });
+
+  it('accepts value-wrapped Reassignment frames with null traceContext', (): void => {
+    expect(UpdatesWsMessageSchema.safeParse(createWireReassignmentUpdateMessage(6_619_780, { nullTraceContext: true })).success).toBe(
+      true
+    );
   });
 
   it('rejects the pre-#379 mistaken flat Transaction shape (no value wrapper)', (): void => {

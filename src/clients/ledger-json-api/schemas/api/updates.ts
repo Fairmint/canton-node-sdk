@@ -67,12 +67,18 @@ export const JsTransactionSchema = z.object({
   events: z.array(TransactionEventSchema),
   /** Synchronizer that synchronized the transaction. */
   synchronizerId: z.string(),
-  /** Trace context (optional). */
-  traceContext: TraceContextSchema.optional(),
+  /**
+   * Trace context (optional). Splice/Canton wire often sends `null` when absent (see txs.json fixtures), not merely
+   * omitted.
+   */
+  traceContext: TraceContextSchema.nullable().optional(),
   /** Record time of the transaction. */
   recordTime: z.string(),
-  /** External transaction hash for externally signed submissions (optional). */
-  externalTransactionHash: z.string().optional(),
+  /**
+   * External transaction hash for externally signed submissions (optional). Wire may send `null` when not an external
+   * submission.
+   */
+  externalTransactionHash: z.string().nullable().optional(),
   /** Traffic cost paid by this participant for the confirmation request (optional). */
   paidTrafficCost: z.union([z.number().int(), z.string().regex(/^\d+$/)]).optional(),
 });
@@ -93,8 +99,8 @@ export const JsTransactionTreeSchema = z.object({
   eventsById: z.record(z.string(), TreeEventSchema),
   /** Synchronizer that synchronized the transaction. */
   synchronizerId: z.string(),
-  /** Trace context (optional). */
-  traceContext: TraceContextSchema.optional(),
+  /** Trace context (optional; wire may be null). */
+  traceContext: TraceContextSchema.nullable().optional(),
   /** Record time of the transaction. */
   recordTime: z.string(),
 });
@@ -144,8 +150,8 @@ export const WsTopologyTransactionSchema = z.object({
   synchronizerId: z.string(),
   /** Events in the topology transaction. */
   events: z.array(WsTopologyEventSchema),
-  /** Trace context (optional). */
-  traceContext: TraceContextSchema.optional(),
+  /** Trace context (optional; wire may be null). */
+  traceContext: TraceContextSchema.nullable().optional(),
 });
 
 /**
@@ -265,8 +271,8 @@ export const GetTransactionResponseActualSchema = z.object({
     recordTime: z.string(),
     /** Synchronizer ID for the transaction. */
     synchronizerId: z.string(),
-    /** Trace context for distributed tracing (optional). */
-    traceContext: TraceContextSchema.optional(),
+    /** Trace context for distributed tracing (optional; wire may be null). */
+    traceContext: TraceContextSchema.nullable().optional(),
   }),
 });
 
