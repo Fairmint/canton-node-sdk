@@ -73,10 +73,23 @@ async function resolveLedgerUserId(client: ReturnType<typeof getClient>, validat
 function findCompletionForSubmission(
   rows: unknown[],
   submissionId: string
-): ReturnType<typeof CompletionStreamResponseSchema.safeParse>['data'] | undefined {
+): {
+  row: ReturnType<typeof CompletionStreamResponseSchema.safeParse>['data'] | undefined;
+  parseFailures: string[];
+  rawSubmissionIds: string[];
+} {
+  const parseFailures: string[] = [];
+  const rawSubmissionIds: string[] = [];
   for (const row of rows) {
+    const rawId = extractRawSubmissionId(row);
+    if (rawId) {
+      rawSubmissionIds.push(rawId);
+    }
     const parsed = CompletionStreamResponseSchema.safeParse(row);
     if (!parsed.success) {
+      if (rawId === submissionId) {
+        parseFailures.push(parsed.error.message);
+      }
       continue;
     }
     const cr = parsed.data.completionResponse;
@@ -84,11 +97,25 @@ function findCompletionForSubmission(
       continue;
     }
     if (cr.Completion.value.submissionId === submissionId) {
-      return parsed.data;
+      return { row: parsed.data, parseFailures, rawSubmissionIds };
     }
   }
-  return undefined;
+  return { row: undefined, parseFailures, rawSubmissionIds };
 }
+
+function extractRawSubmissionId(row: unknown): string | undefined {
+  if (!row || typeof row !== 'object') {
+    return undefined;
+  }
+  const completionResponse = (row as { completionResponse?: unknown }).completionResponse;
+  if (!completionResponse || typeof completionResponse !== 'object') {
+    return undefined;
+  }
+  const completion = (completionResponse as { Completion?: { value?: { submissionId?: unknown } } }).Completion;
+  const submissionId = completion?.value?.submissionId;
+  return typeof submissionId === 'string' ? submissionId : undefined;
+}
+
 
 describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
   test('async submit then completions include paidTrafficCost (WS + REST)', async () => {
@@ -166,9 +193,11 @@ describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
     // quickly (Canton 409) instead of holding the stream with idle timeout.
     const restLimit = 200;
     const restDeadline = Date.now() + 60_000;
-    let row: ReturnType<typeof findCompletionForSubmission>;
+    let matched: ReturnType<typeof findCompletionForSubmission>['row'];
     let lastBatchSize = 0;
     let lastError: unknown;
+    let lastParseFailures: string[] = [];
+    let lastRawSubmissionIds: string[] = [];
     for (;;) {
       try {
         const blocking = await client.completions({
@@ -179,8 +208,11 @@ describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
         });
         lastBatchSize = blocking.length;
         lastError = undefined;
-        row = findCompletionForSubmission(blocking, submissionId);
-        if (row || Date.now() >= restDeadline) {
+        const found = findCompletionForSubmission(blocking, submissionId);
+        matched = found.row;
+        lastParseFailures = found.parseFailures;
+        lastRawSubmissionIds = found.rawSubmissionIds;
+        if (matched || Date.now() >= restDeadline) {
           break;
         }
       } catch (error) {
@@ -195,15 +227,25 @@ describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
       }
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
-    if (!row) {
+    if (!matched) {
       const detail =
-        lastError instanceof Error ? `; lastError=${lastError.message}` : lastError ? `; lastError=${String(lastError)}` : '';
+        lastError instanceof Error
+          ? `; lastError=${lastError.message}`
+          : lastError
+            ? `; lastError=${String(lastError)}`
+            : '';
+      const parseDetail =
+        lastParseFailures.length > 0 ? `; zodFailures=${lastParseFailures.join(' | ')}` : '';
+      const idsDetail =
+        lastRawSubmissionIds.length > 0
+          ? `; rawSubmissionIds=${lastRawSubmissionIds.join(',')}`
+          : '';
       throw new Error(
-        `Blocking completions did not include submissionId=${submissionId} (limit=${restLimit}, lastBatchSize=${lastBatchSize}${detail})`
+        `Blocking completions did not include submissionId=${submissionId} (limit=${restLimit}, lastBatchSize=${lastBatchSize}${detail}${parseDetail}${idsDetail})`
       );
     }
 
-    const { completionResponse } = row;
+    const { completionResponse } = matched;
     if (!('Completion' in completionResponse)) {
       throw new Error('Expected Completion in blocking completions response');
     }

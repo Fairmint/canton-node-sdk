@@ -1,16 +1,20 @@
 import { z } from 'zod';
 import { TraceContextSchema } from '../common';
 import { DeduplicationPeriodSchema } from './commands';
-import { StatusDetailsSchema } from './event-details';
 
-/** Status information for completions. */
+/**
+ * Status information for completions.
+ *
+ * OpenAPI `JsStatus.details` is `ProtoAny[]`. Accept opaque objects so wire variants
+ * (`typeUrl`/`value` or `@type` unpacked JSON) do not reject valid completions.
+ */
 export const JsStatusSchema = z.object({
   /** Status code. */
   code: z.number(),
   /** Status message. */
   message: z.string(),
-  /** Additional details (optional). */
-  details: z.array(StatusDetailsSchema).optional(),
+  /** Additional details (optional protobuf Any / unpacked error info). */
+  details: z.array(z.unknown()).optional(),
 });
 
 /** Synchronizer time information. */
