@@ -160,17 +160,32 @@ describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
 
     expect(wsResult.updateId).toMatch(/\S+/);
 
-    const blocking = await client.completions({
-      userId,
-      parties: [partyId],
-      beginExclusive,
-      limit: 50,
-    });
-
-    const row = findCompletionForSubmission(blocking, submissionId);
+    // REST completions are a cursor batch; under parallel LocalNet load a single
+    // limit=50 poll can miss the row even after WS already observed it. Poll with
+    // a higher limit + idle timeout until the submission appears.
+    const restLimit = 200;
+    const restIdleTimeoutMs = 5_000;
+    const restDeadline = Date.now() + 60_000;
+    let row: ReturnType<typeof findCompletionForSubmission>;
+    let lastBatchSize = 0;
+    for (;;) {
+      const blocking = await client.completions({
+        userId,
+        parties: [partyId],
+        beginExclusive,
+        limit: restLimit,
+        streamIdleTimeoutMs: restIdleTimeoutMs,
+      });
+      lastBatchSize = blocking.length;
+      row = findCompletionForSubmission(blocking, submissionId);
+      if (row || Date.now() >= restDeadline) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+    }
     if (!row) {
       throw new Error(
-        `Blocking completions did not include submissionId=${submissionId} (check limit=${50} or timing)`
+        `Blocking completions did not include submissionId=${submissionId} (limit=${restLimit}, lastBatchSize=${lastBatchSize}, idleTimeoutMs=${restIdleTimeoutMs})`
       );
     }
 
