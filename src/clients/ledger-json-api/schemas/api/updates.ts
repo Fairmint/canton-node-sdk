@@ -6,6 +6,7 @@ import {
   ArchivedEventDetailsSchema,
   AssignedEventDetailsSchema,
   CreatedEventDetailsSchema,
+  ExercisedEventDetailsSchema,
   UnassignedEventDetailsSchema,
 } from './event-details';
 import {
@@ -17,7 +18,10 @@ import {
 } from './events';
 import { JsReassignmentSchema } from './reassignment';
 
-/** Update event kind (oneOf all update event types). */
+/**
+ * Legacy ACS-style update event wrapper. Retained for older typed consumers; `/v2/updates` transaction frames use
+ * {@link TransactionEventSchema} instead (CreatedEvent | ArchivedEvent | ExercisedEvent).
+ */
 export const JsUpdateEventKindSchema = z.union([
   z.object({ JsCreated: CreatedEventDetailsSchema }),
   z.object({ JsArchived: ArchivedEventDetailsSchema }),
@@ -25,7 +29,7 @@ export const JsUpdateEventKindSchema = z.union([
   z.object({ JsUnassigned: UnassignedEventDetailsSchema }),
 ]);
 
-/** Update event details. */
+/** Legacy update event details. Prefer {@link TransactionEventSchema} for ledger update streams. */
 export const JsUpdateEventSchema = z.object({
   /** The kind of update event. */
   kind: JsUpdateEventKindSchema,
@@ -35,7 +39,19 @@ export const JsUpdateEventSchema = z.object({
   reassignmentCounter: z.number(),
 });
 
-/** Transaction details. */
+/**
+ * Events inside a JsTransaction (AsyncAPI `Event`).
+ *
+ * - ACS_DELTA: CreatedEvent | ArchivedEvent
+ * - LEDGER_EFFECTS: CreatedEvent | ExercisedEvent
+ */
+export const TransactionEventSchema = z.union([
+  z.object({ CreatedEvent: CreatedEventDetailsSchema }),
+  z.object({ ArchivedEvent: ArchivedEventDetailsSchema }),
+  z.object({ ExercisedEvent: ExercisedEventDetailsSchema }),
+]);
+
+/** Transaction details (AsyncAPI `JsTransaction`). */
 export const JsTransactionSchema = z.object({
   /** Unique update ID for the transaction. */
   updateId: z.string(),
@@ -47,12 +63,18 @@ export const JsTransactionSchema = z.object({
   effectiveAt: z.string(),
   /** Offset of the transaction in the ledger stream. */
   offset: z.number(),
-  /** Collection of update events. */
-  events: z.array(JsUpdateEventSchema),
+  /** Collection of transaction events (Created/Archived/Exercised). */
+  events: z.array(TransactionEventSchema),
+  /** Synchronizer that synchronized the transaction. */
+  synchronizerId: z.string(),
   /** Trace context (optional). */
   traceContext: TraceContextSchema.optional(),
   /** Record time of the transaction. */
   recordTime: z.string(),
+  /** External transaction hash for externally signed submissions (optional). */
+  externalTransactionHash: z.string().optional(),
+  /** Traffic cost paid by this participant for the confirmation request (optional). */
+  paidTrafficCost: z.union([z.number().int(), z.string().regex(/^\d+$/)]).optional(),
 });
 
 /** Transaction tree details. */
@@ -69,18 +91,48 @@ export const JsTransactionTreeSchema = z.object({
   offset: z.number(),
   /** Map of event node IDs to tree events. */
   eventsById: z.record(z.string(), TreeEventSchema),
+  /** Synchronizer that synchronized the transaction. */
+  synchronizerId: z.string(),
+  /** Trace context (optional). */
+  traceContext: TraceContextSchema.optional(),
   /** Record time of the transaction. */
   recordTime: z.string(),
 });
 
-/** Update (oneOf transaction or transaction tree). */
+/** Update (oneOf transaction or transaction tree) — REST/JS naming variants. */
 export const JsUpdateSchema = z.union([
   z.object({ JsTransaction: JsTransactionSchema }),
   z.object({ JsTransactionTree: JsTransactionTreeSchema }),
   z.object({ OffsetCheckpoint: OffsetCheckpointSchema }),
 ]);
 
-/** Topology transaction event schema for WebSocket streams. */
+/** Topology authorization event payloads (AsyncAPI `TopologyEventEvent`). */
+const TopologyAuthorizationValueSchema = z.object({
+  partyId: z.string(),
+  participantId: z.string(),
+  participantPermission: z.string().optional(),
+});
+
+const TopologyEventEventSchema = z.union([
+  z.object({ Empty: z.object({}) }),
+  z.object({ ParticipantAuthorizationAdded: z.object({ value: TopologyAuthorizationValueSchema }) }),
+  z.object({ ParticipantAuthorizationChanged: z.object({ value: TopologyAuthorizationValueSchema }) }),
+  z.object({
+    ParticipantAuthorizationRevoked: z.object({
+      value: z.object({
+        partyId: z.string(),
+        participantId: z.string(),
+      }),
+    }),
+  }),
+]);
+
+/** Topology transaction event schema for WebSocket streams (AsyncAPI `TopologyEvent`). */
+export const WsTopologyEventSchema = z.object({
+  event: TopologyEventEventSchema.optional(),
+});
+
+/** Topology transaction body (AsyncAPI `JsTopologyTransaction`). */
 export const WsTopologyTransactionSchema = z.object({
   /** Unique update ID for the topology transaction. */
   updateId: z.string(),
@@ -91,30 +143,32 @@ export const WsTopologyTransactionSchema = z.object({
   /** Synchronizer ID for the topology transaction. */
   synchronizerId: z.string(),
   /** Events in the topology transaction. */
-  events: z.array(
-    z.object({
-      /** Participant ID affected by the topology change. */
-      participantId: z.string().optional(),
-      /** Party ID affected by the topology change. */
-      partyId: z.string().optional(),
-      /** Permission level granted. */
-      permission: z.string().optional(),
-    })
-  ),
+  events: z.array(WsTopologyEventSchema),
+  /** Trace context (optional). */
+  traceContext: TraceContextSchema.optional(),
 });
 
-/** WebSocket update wrappers (per AsyncAPI) - strictly typed server payloads. */
+/**
+ * WebSocket `/v2/updates` update wrappers (AsyncAPI `Update`).
+ *
+ * Transaction, Reassignment, and TopologyTransaction are value-wrapped on the wire (`{ Transaction: { value:
+ * JsTransaction } }`), matching OffsetCheckpoint / Completion.
+ *
+ * Hard-fail (not fail-soft) on unknown frames: discovery/save workers must not skip Transaction updates or they will
+ * silently lose ledger data while appearing stuck.
+ */
 export const WsUpdateSchema = z.union([
   z.object({ OffsetCheckpoint: OffsetCheckpointSchema }),
-  z.object({ Reassignment: JsReassignmentSchema }),
-  z.object({ TopologyTransaction: WsTopologyTransactionSchema }),
-  z.object({ Transaction: JsTransactionSchema }),
+  z.object({ Reassignment: z.object({ value: JsReassignmentSchema }) }),
+  z.object({ TopologyTransaction: z.object({ value: WsTopologyTransactionSchema }) }),
+  z.object({ Transaction: z.object({ value: JsTransactionSchema }) }),
 ]);
 
+/** WebSocket `/v2/updates/trees` update wrappers (deprecated trees endpoint). */
 export const WsUpdateTreesSchema = z.union([
   z.object({ OffsetCheckpoint: OffsetCheckpointSchema }),
-  z.object({ Reassignment: JsReassignmentSchema }),
-  z.object({ TransactionTree: JsTransactionTreeSchema }),
+  z.object({ Reassignment: z.object({ value: JsReassignmentSchema }) }),
+  z.object({ TransactionTree: z.object({ value: JsTransactionTreeSchema }) }),
 ]);
 
 /** Update stream request. */
@@ -231,9 +285,11 @@ export const GetTransactionTreeResponseSchema = z.object({
 // Export types
 export type JsUpdateEventKind = z.infer<typeof JsUpdateEventKindSchema>;
 export type JsUpdateEvent = z.infer<typeof JsUpdateEventSchema>;
+export type TransactionEvent = z.infer<typeof TransactionEventSchema>;
 export type JsTransaction = z.infer<typeof JsTransactionSchema>;
 export type JsTransactionTree = z.infer<typeof JsTransactionTreeSchema>;
 export type JsUpdate = z.infer<typeof JsUpdateSchema>;
+export type WsTopologyEvent = z.infer<typeof WsTopologyEventSchema>;
 export type WsTopologyTransaction = z.infer<typeof WsTopologyTransactionSchema>;
 export type WsUpdate = z.infer<typeof WsUpdateSchema>;
 export type WsUpdateTrees = z.infer<typeof WsUpdateTreesSchema>;

@@ -90,14 +90,30 @@ export type SubscribeToUpdatesParams = z.infer<typeof SubscribeToUpdatesParamsSc
   onTokenRefreshNeeded?: WebSocketOptions['onTokenRefreshNeeded'];
 };
 
-const UpdatesWsMessageSchema = z.union([
-  z.object({ update: JsUpdateSchema }),
+/**
+ * Runtime wire union for `/v2/updates` frames.
+ *
+ * Prefer {@link WsUpdateSchema} (AsyncAPI `Update` with value-wrapped Transaction/Reassignment/TopologyTransaction).
+ * {@link JsUpdateSchema} remains for legacy JS-named variants seen in some REST-shaped payloads.
+ */
+export const UpdatesWsMessageSchema = z.union([
   z.object({ update: WsUpdateSchema }),
+  z.object({ update: JsUpdateSchema }),
   JsCantonErrorSchema,
   WsCantonErrorSchema,
 ]);
 
 export type UpdatesWsMessage = z.infer<typeof UpdatesWsMessageSchema>;
+
+/** Format Zod issues for ApiError messages / Slack logs. */
+function formatZodIssues(error: z.ZodError): string {
+  return error.issues
+    .map((issue) => {
+      const path = issue.path.length > 0 ? issue.path.join('.') : '(root)';
+      return `${path}: ${issue.message}`;
+    })
+    .join('; ');
+}
 
 /**
  * Subscribes to ledger updates via WebSocket connection.
@@ -248,9 +264,19 @@ export class SubscribeToUpdates {
             onMessage: async (parsed): Promise<void> => {
               const decoded = UpdatesWsMessageSchema.safeParse(parsed);
               if (!decoded.success) {
-                throw new ApiError('Unexpected ledger updates WebSocket message');
+                // Include Zod issue details so Slack/logs can diagnose the next wire-shape mismatch.
+                throw new ApiError(
+                  `Unexpected ledger updates WebSocket message: ${formatZodIssues(decoded.error)}`,
+                  undefined,
+                  undefined,
+                  {
+                    zodIssues: decoded.error.issues,
+                  }
+                );
               }
-              const message = decoded.data;
+              // Deliver the original frame after validation so Zod does not strip unknown wire fields
+              // (e.g. representativePackageId, acsDelta, AsyncAPI TraceContext.traceparent).
+              const message = parsed as UpdatesWsMessage;
 
               // Surface Canton error frames immediately; a slow consumer callback must not delay stream failure.
               if (isErrorMessage(message)) {

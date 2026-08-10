@@ -14,12 +14,17 @@ export const CreatedEventDetailsSchema = z.object({
   contractId: z.string(),
   /** Template ID of the created contract. */
   templateId: z.string(),
-  /** Contract key, if present. */
-  contractKey: z.string().nullable(),
+  /**
+   * Contract key, if present. Wire JSON may be any Daml value (record/text/…) or null when absent /
+   * Optional.None.
+   */
+  contractKey: z.unknown().nullable().optional(),
+  /** Canonical Base64 encoding of a 32-byte contract-key hash when a key is present. */
+  contractKeyHash: z.string().optional(),
   /** Arguments used to create the contract. */
-  createArgument: RecordSchema,
-  /** Serialized event blob for the created contract. */
-  createdEventBlob: z.string(),
+  createArgument: z.unknown(),
+  /** Serialized event blob for the created contract (optional when includeCreatedEventBlob is false). */
+  createdEventBlob: z.string().optional(),
   /** Interface views requested by matching interface filters. */
   interfaceViews: z.array(JsInterfaceViewSchema).optional().default([]),
   /** Parties that witnessed the creation. */
@@ -27,11 +32,15 @@ export const CreatedEventDetailsSchema = z.object({
   /** Parties that must sign the contract. */
   signatories: z.array(z.string()),
   /** Parties that observe the contract. */
-  observers: z.array(z.string()),
+  observers: z.array(z.string()).optional(),
   /** ISO 8601 timestamp when the contract was created. */
   createdAt: z.string(),
   /** Name of the Daml package containing the template. */
   packageName: z.string(),
+  /** Package-id used to render create arguments / interface views. */
+  representativePackageId: z.string().optional(),
+  /** Whether this create contributes to an ACS delta projection. */
+  acsDelta: z.boolean().optional(),
   /** List of interface IDs implemented by the contract. */
   implementedInterfaces: z.array(z.string()).optional(),
 });
@@ -52,6 +61,40 @@ export const ArchivedEventDetailsSchema = z.object({
   packageName: z.string(),
   /** List of interface IDs implemented by the contract. */
   implementedInterfaces: z.array(z.string()).optional(),
+});
+
+/** Exercised event details (LEDGER_EFFECTS transaction shape). */
+export const ExercisedEventDetailsSchema = z.object({
+  /** Offset of the event in the ledger stream. */
+  offset: z.number(),
+  /** Node ID of the event in the transaction tree. */
+  nodeId: z.number(),
+  /** Contract ID of the exercised contract. */
+  contractId: z.string(),
+  /** Template ID of the exercised contract. */
+  templateId: z.string(),
+  /** Interface ID if the choice was exercised via an interface. */
+  interfaceId: z.string().nullable().optional(),
+  /** Name of the exercised choice. */
+  choice: z.string(),
+  /** Arguments passed to the exercised choice. */
+  choiceArgument: z.unknown(),
+  /** Parties acting in the exercise. */
+  actingParties: z.array(z.string()),
+  /** Whether the exercise archived the contract. */
+  consuming: z.boolean(),
+  /** Parties that witnessed the exercise. */
+  witnessParties: z.array(z.string()),
+  /** Upper bound of descendant node IDs in the transaction tree. */
+  lastDescendantNodeId: z.number(),
+  /** Result returned by the exercised choice. */
+  exerciseResult: z.unknown().optional(),
+  /** Name of the Daml package containing the template. */
+  packageName: z.string(),
+  /** List of interface IDs implemented by the contract. */
+  implementedInterfaces: z.array(z.string()).optional(),
+  /** Whether this exercise contributes to an ACS delta projection. */
+  acsDelta: z.boolean().optional(),
 });
 
 /** Assigned event details. */
@@ -118,6 +161,7 @@ export const StatusDetailsSchema = z.object({
 // Export types
 export type CreatedEventDetails = z.infer<typeof CreatedEventDetailsSchema>;
 export type ArchivedEventDetails = z.infer<typeof ArchivedEventDetailsSchema>;
+export type ExercisedEventDetails = z.infer<typeof ExercisedEventDetailsSchema>;
 export type AssignedEventDetails = z.infer<typeof AssignedEventDetailsSchema>;
 export type UnassignedEventDetails = z.infer<typeof UnassignedEventDetailsSchema>;
 export type EmptyCommand = z.infer<typeof EmptyCommandSchema>;

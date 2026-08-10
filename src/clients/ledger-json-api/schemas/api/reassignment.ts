@@ -87,6 +87,10 @@ export const JsReassignmentSchema = z.object({
   traceContext: TraceContextSchema.optional(),
   /** Record time of the reassignment. */
   recordTime: z.string(),
+  /** Synchronizer that synchronized this reassignment. */
+  synchronizerId: z.string(),
+  /** Traffic cost paid by this participant for the (un)assignment request (optional). */
+  paidTrafficCost: z.union([z.number().int(), z.string().regex(/^\d+$/)]).optional(),
 });
 
 /** Submit and wait for reassignment response. */
