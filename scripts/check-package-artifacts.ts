@@ -1,5 +1,15 @@
 #!/usr/bin/env tsx
 
+/**
+ * Repeatable npm package boundary check for @fairmint/canton-node-sdk.
+ *
+ * Production surface: build/src/** (+ package metadata).
+ *
+ * Soft-migration exception (ENG-1635): bin/canton-localnet + scripts/localnet-cloud.sh are still
+ * published on purpose. TODO(ENG-1635 hard cutover): drop those from package.json files/bin and
+ * from REQUIRED_SOFT_MIGRATION_LOCALNET_PATHS below once Dev Tools owns LocalNet for all consumers.
+ */
+
 import { spawnSync, type SpawnSyncReturns } from 'child_process';
 import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'fs';
 import { tmpdir } from 'os';
@@ -25,6 +35,18 @@ const DEFAULT_MAX_UNPACKED_BYTES = 15 * 1024 * 1024;
 const configuredMaxUnpackedBytes = process.env['MAX_PACKAGE_UNPACKED_BYTES'];
 const maxUnpackedBytes = parseMaxUnpackedBytes(configuredMaxUnpackedBytes);
 
+/** Temporary publish allowlist until ENG-1635 hard cutover removes SDK LocalNet scripts. */
+const REQUIRED_SOFT_MIGRATION_LOCALNET_PATHS = ['bin/canton-localnet', 'scripts/localnet-cloud.sh'] as const;
+
+const REQUIRED_RUNTIME_PATHS = [
+  'build/src/index.js',
+  'build/src/index.d.ts',
+  'build/src/clients/ledger-json-api/operations/v2/contracts/get-contract-by-id.d.ts',
+  'build/src/clients/ledger-json-api/operations/v2/dars/upload-dar.d.ts',
+  'build/src/clients/ledger-json-api/operations/v2/dars/validate-dar.d.ts',
+  ...REQUIRED_SOFT_MIGRATION_LOCALNET_PATHS,
+] as const;
+
 function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 }
@@ -43,6 +65,21 @@ function forbiddenPackagePathReason(packagePath: string): string | null {
   if (packagePath.endsWith('.dar')) return 'DAML DAR files are not runtime SDK artifacts';
   if (packagePath === 'libs' || packagePath.startsWith('libs/')) {
     return 'submodules under libs/ must not be published';
+  }
+  if (packagePath === 'fixtures' || packagePath.startsWith('fixtures/')) {
+    return 'test fixtures must not be published';
+  }
+  if (packagePath === 'test' || packagePath.startsWith('test/')) {
+    return 'source tests must not be published';
+  }
+  if (packagePath === 'build/test' || packagePath.startsWith('build/test/')) {
+    return 'compiled tests are CI-only and must not be published';
+  }
+  if (packagePath === 'build/scripts' || packagePath.startsWith('build/scripts/')) {
+    return 'compiled repo scripts are CI-only and must not be published';
+  }
+  if (packagePath === 'build/examples' || packagePath.startsWith('build/examples/')) {
+    return 'compiled examples are CI-only and must not be published';
   }
   if (packagePath === 'node_modules' || packagePath.startsWith('node_modules/')) {
     return 'node_modules must not be published';
@@ -175,15 +212,7 @@ if (result.unpackedSize > maxUnpackedBytes) {
 }
 
 const packagePaths = new Set(result.files.map((file) => file.path));
-for (const requiredPath of [
-  'build/src/index.js',
-  'build/src/index.d.ts',
-  'build/src/clients/ledger-json-api/operations/v2/contracts/get-contract-by-id.d.ts',
-  'build/src/clients/ledger-json-api/operations/v2/dars/upload-dar.d.ts',
-  'build/src/clients/ledger-json-api/operations/v2/dars/validate-dar.d.ts',
-  'bin/canton-localnet',
-  'scripts/localnet-cloud.sh',
-]) {
+for (const requiredPath of REQUIRED_RUNTIME_PATHS) {
   if (!packagePaths.has(requiredPath)) {
     errors.push(`package is missing required runtime entry ${requiredPath}`);
   }
@@ -208,4 +237,7 @@ verifyPackagedLocalnetBinary();
 
 console.log(
   `✓ ${result.name}@${result.version} package artifact is ${formatBytes(result.unpackedSize)} unpacked across ${result.files.length} files`
+);
+console.log(
+  `⚠ ENG-1635 soft migration: still publishing ${REQUIRED_SOFT_MIGRATION_LOCALNET_PATHS.join(', ')} (TODO: remove after hard cutover to @fairmint/canton-dev-tools)`
 );

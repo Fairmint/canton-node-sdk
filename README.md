@@ -63,3 +63,6 @@ npm run localnet:verify
 Until `@fairmint/canton-dev-tools` is published to npm, this repo pins the optional dependency to
 the ENG-1635 git SHA. After publish, swap that pin to a semver range. Do not delete
 `scripts/localnet-cloud.sh` until the hard-cutover follow-up.
+
+See [docs/package-boundary.md](docs/package-boundary.md) for what the npm package publishes versus
+CI-only surfaces (`npm run check:package-artifacts`).
