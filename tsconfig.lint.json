@@ -3,7 +3,14 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "./build",
-    "types": ["node", "jest"]
+    "types": ["node", "jest"],
+    "paths": {
+      "@fairmint/canton-node-sdk": ["./src/index.ts"],
+      "@fairmint/canton-node-sdk/*": ["./src/*"],
+      "@fairmint/canton-dev-tools/testing": [
+        "./node_modules/@fairmint/canton-dev-tools/dist/testing/index.d.ts"
+      ]
+    }
   },
   "include": ["src/**/*", "test/**/*", "scripts/**/*", "examples/**/*"],
   "exclude": ["**/*.example.ts"]

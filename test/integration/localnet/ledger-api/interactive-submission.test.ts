@@ -14,7 +14,7 @@ import {
   waitForCompletionWithMetadata,
 } from '../../../../src';
 import type { InteractiveSubmissionExecuteRequest } from '../../../../src/clients/ledger-json-api/schemas/api/interactive-submission';
-import { buildIntegrationTestClientConfig, retry } from '../../../utils/testConfig';
+import { buildIntegrationTestClientConfig, retry } from '@fairmint/canton-dev-tools/testing';
 import { getClient } from './setup';
 
 const WALLET_APP_INSTALL_TEMPLATE = '#splice-wallet:Splice.Wallet.Install:WalletAppInstall';

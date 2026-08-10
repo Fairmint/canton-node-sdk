@@ -1,6 +1,6 @@
 {
   "name": "@fairmint/canton-node-sdk",
-  "version": "0.0.196",
+  "version": "0.0.251",
   "description": "Canton Node SDK",
   "keywords": [
     "canton",
@@ -21,13 +21,8 @@
   "author": "Fairmint",
   "main": "build/src/index.js",
   "types": "build/src/index.d.ts",
-  "bin": {
-    "canton-localnet": "bin/canton-localnet"
-  },
   "files": [
-    "bin/canton-localnet",
-    "scripts/localnet-cloud.sh",
-    "build/**"
+    "build/src/**"
   ],
   "scripts": {
     "artifacts:manifest": "mkdir -p artifacts && npm pack --dry-run --json --ignore-scripts > /tmp/npm-pack.json 2>/dev/null && jq -r '.[0].files[].path' /tmp/npm-pack.json | sort | tsx scripts/collapse-manifest.ts > artifacts/npm-manifest.txt",
@@ -47,14 +42,17 @@
     "lint:fix": "eslint . --fix",
     "lint:npm": "npmPkgJsonLint . --fix",
     "lint:npm:check": "npmPkgJsonLint .",
-    "localnet:logs": "bash ./bin/canton-localnet logs",
-    "localnet:quickstart": "bash ./bin/canton-localnet setup",
-    "localnet:setup": "bash ./bin/canton-localnet setup",
-    "localnet:smoke": "bash ./bin/canton-localnet smoke",
-    "localnet:start": "bash ./bin/canton-localnet start",
-    "localnet:status": "bash ./bin/canton-localnet status",
-    "localnet:stop": "bash ./bin/canton-localnet stop",
-    "localnet:verify": "bash ./bin/canton-localnet verify",
+    "localnet:diagnostics": "canton-dev-tools diagnostics",
+    "localnet:logs": "canton-dev-tools logs",
+    "localnet:quickstart": "canton-dev-tools setup",
+    "localnet:readiness": "canton-dev-tools readiness",
+    "localnet:setup": "canton-dev-tools setup",
+    "localnet:smoke": "canton-dev-tools smoke",
+    "localnet:start": "canton-dev-tools start",
+    "localnet:status": "canton-dev-tools status",
+    "localnet:stop": "canton-dev-tools stop",
+    "localnet:teardown": "canton-dev-tools teardown",
+    "localnet:verify": "canton-dev-tools verify",
     "prepack": "npm run clean && npm run build:core",
     "prepare-release": "tsx scripts/prepare-release.ts",
     "prepublishOnly": "npm run prepack",
@@ -81,6 +79,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@fairmint/canton-dev-tools": "0.1.1",
     "@types/jest": "30.0.0",
     "@types/node": "26.1.0",
     "@types/ws": "8.18.1",

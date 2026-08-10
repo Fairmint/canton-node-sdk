@@ -2,7 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { retry } from '../../../utils/testConfig';
+import { retry } from '@fairmint/canton-dev-tools/testing';
 import {
   ensureValidatorUserOnboarded,
   getClient as getValidatorClient,

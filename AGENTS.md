@@ -1,8 +1,23 @@
 # canton-node-sdk
 
 See [CLAUDE.md](CLAUDE.md), [README.md](README.md), and
-`.cursor/skills/localnet-testing/SKILL.md`. `package.json` (`localnet:*` scripts) and
-`bin/canton-localnet` are the source of truth for LocalNet commands.
+`.cursor/skills/localnet-testing/SKILL.md`. `package.json` (`localnet:*` scripts) is the source of
+truth for LocalNet commands in this repo; lifecycle is owned by
+`@fairmint/canton-dev-tools@0.1.1+`.
+
+## LocalNet ownership (ENG-1635)
+
+**`@fairmint/canton-dev-tools` owns LocalNet** (CLI, pins, and shared test helpers). This SDK does
+not ship a LocalNet engine or `canton-localnet` binary.
+
+- Install pin: `devDependency` `@fairmint/canton-dev-tools@0.1.1` (exact).
+- Repo scripts: `npm run localnet:*` → `canton-dev-tools <command>`.
+- Integration helpers: import from `@fairmint/canton-dev-tools/testing`.
+- Pins / auth defaults: see Dev Tools
+  [COMPATIBILITY.md](https://github.com/Fairmint/canton-dev-tools/blob/main/COMPATIBILITY.md).
+- Workspace TypeScript/Jest map `@fairmint/canton-node-sdk` to local `src/` so Dev Tools
+  peer types match this checkout (`tsconfig.lint.json` paths, `jest.config.js`
+  `moduleNameMapper`).
 
 ## Cursor Cloud specific instructions
 
@@ -11,11 +26,12 @@ Repo checks (`npm install`, `npm run fix`, `npm test`, `npm run build`) need no 
 
 ### Canton LocalNet on a cloud VM
 
-LocalNet runs Canton Network Quickstart in Docker. `npm run localnet:start` (=
-`bin/canton-localnet start`, infra-only + OAuth2 by default) is self-provisioning on the cloud image:
-it `apt`-installs Docker, starts a `dockerd` (vfs storage driver, iptables-legacy) via passwordless
-`sudo`, adds `scan.localhost`/`sv.localhost`/`wallet.localhost` to `/etc/hosts`, runs cn-quickstart
-`make setup`, brings up the compose stack, and waits for the Validator, Scan, and Ledger JSON APIs.
+LocalNet runs Canton Network Quickstart in Docker via `@fairmint/canton-dev-tools`.
+`npm run localnet:start` (= `canton-dev-tools start`, infra-only + OAuth2 by default) is
+self-provisioning on the cloud image: it `apt`-installs Docker, starts a `dockerd` (vfs storage
+driver, iptables-legacy) via passwordless `sudo`, adds
+`scan.localhost`/`sv.localhost`/`wallet.localhost` to `/etc/hosts`, runs cn-quickstart `make setup`,
+brings up the compose stack, and waits for the Validator, Scan, and Ledger JSON APIs.
 
 Prerequisites (on demand — heavy, not in the dashboard update script):
 

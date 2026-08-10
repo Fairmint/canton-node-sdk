@@ -3,7 +3,7 @@
 import { CantonRuntime, LedgerJsonApiClient } from '../../../../src';
 import { EnvLoader } from '../../../../src/core/config/EnvLoader';
 import { ConfigurationError } from '../../../../src/core/errors';
-import { buildIntegrationTestClientConfig } from '../../../utils/testConfig';
+import { buildIntegrationTestClientConfig } from '@fairmint/canton-dev-tools/testing';
 
 let client: LedgerJsonApiClient | null = null;
 const WALLET_APP_INSTALL_TEMPLATE_SUFFIX = 'Splice.Wallet.Install:WalletAppInstall';

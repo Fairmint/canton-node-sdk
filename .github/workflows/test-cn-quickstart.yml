@@ -29,7 +29,8 @@ jobs:
           node-version: '22.14'
 
       - name: Upgrade npm
-        run: npm install --global npm@^11.10.0
+        # npm >=11.17 required for .npmrc min-release-age-exclude (@fairmint/*).
+        run: npm install --global npm@^11.17.0
 
       - name: Initialize Submodules
         run: |
@@ -63,7 +64,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/libs/cn-quickstart/quickstart/.env.local
-          key: quickstart-env-${{ runner.os }}-${{ hashFiles('.github/workflows/test-cn-quickstart.yml', 'package.json', 'package-lock.json', 'scripts/localnet-cloud.sh') }}-${{ steps.quickstart-env-cache-key.outputs.submodules }}
+          key: quickstart-env-${{ runner.os }}-${{ hashFiles('.github/workflows/test-cn-quickstart.yml', 'package.json', 'package-lock.json') }}-${{ steps.quickstart-env-cache-key.outputs.submodules }}
 
       - name: Restore Node Dependencies Cache
         id: node-cache-restore

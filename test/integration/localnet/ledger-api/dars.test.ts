@@ -1,12 +1,12 @@
 /** End-to-end validation for the canonical Ledger JSON API DAR endpoints and wire formats. */
 
-import { readFile, readdir } from 'node:fs/promises';
-import path from 'node:path';
-import { ApiError, SynchronizerId } from '../../../../src';
 import {
   getLocalnetNonAdminLedgerClient,
   getLocalnetParticipantAdminLedgerClient,
-} from '../../../utils/localnetLedgerClients';
+} from '@fairmint/canton-dev-tools/testing';
+import { readFile, readdir } from 'node:fs/promises';
+import path from 'node:path';
+import { ApiError, SynchronizerId } from '../../../../src';
 
 const QUICKSTART_DARS_DIRECTORY = path.resolve(__dirname, '../../../..', 'libs/cn-quickstart/quickstart/daml/dars');
 const ABSENT_VALID_DAR_PATH = path.resolve(

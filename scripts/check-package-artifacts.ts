@@ -1,9 +1,13 @@
 #!/usr/bin/env tsx
 
+/**
+ * Repeatable npm package boundary check for @fairmint/canton-node-sdk.
+ *
+ * Production surface: build/src/** (+ package metadata). LocalNet CLI/helpers live in
+ * @fairmint/canton-dev-tools and must not ship in this package.
+ */
+
 import { spawnSync, type SpawnSyncReturns } from 'child_process';
-import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
 
 interface NpmPackFile {
   path: string;
@@ -25,6 +29,19 @@ const DEFAULT_MAX_UNPACKED_BYTES = 15 * 1024 * 1024;
 const configuredMaxUnpackedBytes = process.env['MAX_PACKAGE_UNPACKED_BYTES'];
 const maxUnpackedBytes = parseMaxUnpackedBytes(configuredMaxUnpackedBytes);
 
+const REQUIRED_RUNTIME_PATHS = [
+  'build/src/index.js',
+  'build/src/index.d.ts',
+  'build/src/clients/ledger-json-api/operations/v2/contracts/get-contract-by-id.d.ts',
+  'build/src/clients/ledger-json-api/operations/v2/dars/upload-dar.d.ts',
+  'build/src/clients/ledger-json-api/operations/v2/dars/validate-dar.d.ts',
+] as const;
+
+const FORBIDDEN_LOCALNET_ENGINE_PATHS = [
+  'bin/canton-localnet',
+  'scripts/localnet-cloud.sh',
+] as const;
+
 function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 }
@@ -43,6 +60,27 @@ function forbiddenPackagePathReason(packagePath: string): string | null {
   if (packagePath.endsWith('.dar')) return 'DAML DAR files are not runtime SDK artifacts';
   if (packagePath === 'libs' || packagePath.startsWith('libs/')) {
     return 'submodules under libs/ must not be published';
+  }
+  if (packagePath === 'fixtures' || packagePath.startsWith('fixtures/')) {
+    return 'test fixtures must not be published';
+  }
+  if (packagePath === 'test' || packagePath.startsWith('test/')) {
+    return 'source tests must not be published';
+  }
+  if (packagePath === 'build/test' || packagePath.startsWith('build/test/')) {
+    return 'compiled tests are CI-only and must not be published';
+  }
+  if (packagePath === 'build/scripts' || packagePath.startsWith('build/scripts/')) {
+    return 'compiled repo scripts are CI-only and must not be published';
+  }
+  if (packagePath === 'build/examples' || packagePath.startsWith('build/examples/')) {
+    return 'compiled examples are CI-only and must not be published';
+  }
+  if (packagePath === 'bin' || packagePath.startsWith('bin/')) {
+    return 'LocalNet CLI belongs in @fairmint/canton-dev-tools, not this SDK';
+  }
+  if (packagePath === 'scripts' || packagePath.startsWith('scripts/')) {
+    return 'repo scripts (including LocalNet) must not be published';
   }
   if (packagePath === 'node_modules' || packagePath.startsWith('node_modules/')) {
     return 'node_modules must not be published';
@@ -89,56 +127,6 @@ function throwIfSpawnFailed(command: string, result: SpawnSyncReturns<string>): 
   throw new Error(spawnFailureDetails(command, result));
 }
 
-function verifyPackagedLocalnetBinary(): void {
-  const tempDir = mkdtempSync(join(tmpdir(), 'canton-node-sdk-package-'));
-
-  try {
-    const packageRoot = join(tempDir, 'node_modules', '@fairmint', 'canton-node-sdk');
-    const binDir = join(tempDir, 'node_modules', '.bin');
-    const localnetBin = join(packageRoot, 'bin', 'canton-localnet');
-    const localnetSymlink = join(binDir, 'canton-localnet');
-
-    mkdirSync(packageRoot, { recursive: true });
-    mkdirSync(binDir, { recursive: true });
-    cpSync(join(process.cwd(), 'bin'), join(packageRoot, 'bin'), { recursive: true });
-    cpSync(join(process.cwd(), 'scripts'), join(packageRoot, 'scripts'), { recursive: true });
-    chmodSync(localnetBin, 0o755);
-    symlinkSync('../@fairmint/canton-node-sdk/bin/canton-localnet', localnetSymlink);
-
-    const logs = spawnSync(localnetSymlink, ['logs'], {
-      cwd: tempDir,
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        CANTON_LOCALNET_CACHE_DIR: join(tempDir, 'cache'),
-        HOME: join(tempDir, 'home'),
-      },
-    });
-    throwIfSpawnFailed('packaged canton-localnet logs', logs);
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
-}
-
-function verifyPackagedLocalnetPins(): void {
-  const localnetBin = readFileSync(join(process.cwd(), 'bin', 'canton-localnet'), 'utf8');
-  const spliceVersion = readFileSync(join(process.cwd(), 'libs', 'splice', 'VERSION'), 'utf8').trim();
-  const quickstartRef = spawnSync('git', ['rev-parse', 'HEAD:libs/cn-quickstart'], { encoding: 'utf8' });
-
-  throwIfSpawnFailed('resolve pinned cn-quickstart revision', quickstartRef);
-
-  if (!localnetBin.includes(`DEFAULT_SPLICE_VERSION="${spliceVersion}"`)) {
-    throw new Error(`bin/canton-localnet must default to the pinned Splice version ${spliceVersion}`);
-  }
-
-  const expectedQuickstartRef = quickstartRef.stdout.trim();
-  if (!localnetBin.includes(`DEFAULT_QUICKSTART_REF="${expectedQuickstartRef}"`)) {
-    throw new Error(`bin/canton-localnet must default to the pinned cn-quickstart revision ${expectedQuickstartRef}`);
-  }
-}
-
-verifyPackagedLocalnetPins();
-
 const prepack = spawnSync('npm', ['run', 'prepack'], {
   encoding: 'utf8',
 });
@@ -171,17 +159,15 @@ if (result.unpackedSize > maxUnpackedBytes) {
 }
 
 const packagePaths = new Set(result.files.map((file) => file.path));
-for (const requiredPath of [
-  'build/src/index.js',
-  'build/src/index.d.ts',
-  'build/src/clients/ledger-json-api/operations/v2/contracts/get-contract-by-id.d.ts',
-  'build/src/clients/ledger-json-api/operations/v2/dars/upload-dar.d.ts',
-  'build/src/clients/ledger-json-api/operations/v2/dars/validate-dar.d.ts',
-  'bin/canton-localnet',
-  'scripts/localnet-cloud.sh',
-]) {
+for (const requiredPath of REQUIRED_RUNTIME_PATHS) {
   if (!packagePaths.has(requiredPath)) {
     errors.push(`package is missing required runtime entry ${requiredPath}`);
+  }
+}
+
+for (const forbiddenPath of FORBIDDEN_LOCALNET_ENGINE_PATHS) {
+  if (packagePaths.has(forbiddenPath)) {
+    errors.push(`${forbiddenPath}: LocalNet engine must not ship in the SDK (use @fairmint/canton-dev-tools)`);
   }
 }
 
@@ -200,8 +186,7 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-verifyPackagedLocalnetBinary();
-
 console.log(
   `✓ ${result.name}@${result.version} package artifact is ${formatBytes(result.unpackedSize)} unpacked across ${result.files.length} files`
 );
+console.log('✓ LocalNet engine excluded (owned by @fairmint/canton-dev-tools)');
