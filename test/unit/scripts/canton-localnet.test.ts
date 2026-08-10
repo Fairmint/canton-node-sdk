@@ -36,6 +36,6 @@ describe('canton-localnet Splice version selection', (): void => {
   });
 
   it('falls back to the built-in version when the packaged version is blank', (): void => {
-    expect(runPackagedLocalnetWithVersion(' \n\t')).toBe('0.6.8');
+    expect(runPackagedLocalnetWithVersion(' \n\t')).toBe('0.6.14');
   });
 });
