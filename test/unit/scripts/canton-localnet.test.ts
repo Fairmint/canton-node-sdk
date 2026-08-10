@@ -98,4 +98,63 @@ describe('canton-localnet soft delegation', (): void => {
       rmSync(packageRoot, { recursive: true, force: true });
     }
   });
+
+  it('applies CANTON_LOCALNET_INFRA_ONLY=true before soft-delegation', (): void => {
+    const packageRoot = mkdtempSync(resolve(tmpdir(), 'canton-localnet-infra-default-'));
+    const localnetBin = resolve(packageRoot, 'bin/canton-localnet');
+    const devToolsBin = resolve(packageRoot, 'node_modules/@fairmint/canton-dev-tools/bin/canton-dev-tools');
+
+    mkdirSync(resolve(packageRoot, 'bin'), { recursive: true });
+    mkdirSync(resolve(packageRoot, 'scripts'), { recursive: true });
+    mkdirSync(resolve(devToolsBin, '..'), { recursive: true });
+    copyFileSync(resolve(REPO_ROOT, 'bin/canton-localnet'), localnetBin);
+    chmodSync(localnetBin, 0o755);
+    writeFileSync(resolve(packageRoot, 'scripts/localnet-cloud.sh'), 'printf "legacy\\n"\n');
+    writeFileSync(devToolsBin, '#!/usr/bin/env bash\nprintf "infra:%s\\n" "${CANTON_LOCALNET_INFRA_ONLY}"\n');
+    chmodSync(devToolsBin, 0o755);
+
+    try {
+      const output = execFileSync(localnetBin, ['status'], {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          CANTON_LOCALNET_FORCE_LEGACY: '',
+          // Unset so the package binary must supply the documented default.
+          CANTON_LOCALNET_INFRA_ONLY: '',
+        },
+      });
+      expect(output.trim()).toBe('infra:true');
+    } finally {
+      rmSync(packageRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves an explicit CANTON_LOCALNET_INFRA_ONLY override on soft-delegation', (): void => {
+    const packageRoot = mkdtempSync(resolve(tmpdir(), 'canton-localnet-infra-override-'));
+    const localnetBin = resolve(packageRoot, 'bin/canton-localnet');
+    const devToolsBin = resolve(packageRoot, 'node_modules/@fairmint/canton-dev-tools/bin/canton-dev-tools');
+
+    mkdirSync(resolve(packageRoot, 'bin'), { recursive: true });
+    mkdirSync(resolve(packageRoot, 'scripts'), { recursive: true });
+    mkdirSync(resolve(devToolsBin, '..'), { recursive: true });
+    copyFileSync(resolve(REPO_ROOT, 'bin/canton-localnet'), localnetBin);
+    chmodSync(localnetBin, 0o755);
+    writeFileSync(resolve(packageRoot, 'scripts/localnet-cloud.sh'), 'printf "legacy\\n"\n');
+    writeFileSync(devToolsBin, '#!/usr/bin/env bash\nprintf "infra:%s\\n" "${CANTON_LOCALNET_INFRA_ONLY}"\n');
+    chmodSync(devToolsBin, 0o755);
+
+    try {
+      const output = execFileSync(localnetBin, ['status'], {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          CANTON_LOCALNET_FORCE_LEGACY: '',
+          CANTON_LOCALNET_INFRA_ONLY: 'false',
+        },
+      });
+      expect(output.trim()).toBe('infra:false');
+    } finally {
+      rmSync(packageRoot, { recursive: true, force: true });
+    }
+  });
 });

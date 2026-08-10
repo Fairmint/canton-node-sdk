@@ -50,4 +50,4 @@ leak compiled tests into the tarball.
 ## Related packages
 
 - Canonical LocalNet owner: [`@fairmint/canton-dev-tools`](https://github.com/Fairmint/canton-dev-tools)
-- Cross-SDK audit: `docs/sdk-package-boundary-audit.md` in that repo (ENG-1635)
+- Soft migration / hard cutover tracking: [ENG-1635](https://linear.app/fairmint/issue/ENG-1635/establish-canton-dev-tools-and-migrate-shared-canton-test)

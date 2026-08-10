@@ -100,6 +100,12 @@ find_dev_tools_bin() {
   return 1
 }
 
+# Defaults advertised by this package binary. Apply before soft-delegation so
+# Dev Tools inherits the same infra-only default as the legacy fallback path.
+apply_package_localnet_defaults() {
+  export CANTON_LOCALNET_INFRA_ONLY="${CANTON_LOCALNET_INFRA_ONLY:-true}"
+}
+
 maybe_delegate_to_dev_tools() {
   local dev_tools_bin=""
 
@@ -110,6 +116,8 @@ maybe_delegate_to_dev_tools() {
   if ! dev_tools_bin="$(find_dev_tools_bin)"; then
     return 1
   fi
+
+  apply_package_localnet_defaults
 
   log "Delegating to @fairmint/canton-dev-tools (ENG-1635). Set CANTON_LOCALNET_FORCE_LEGACY=1 to use deprecated SDK LocalNet scripts."
   exec "${dev_tools_bin}" "$@"
@@ -261,7 +269,7 @@ run_legacy_localnet() {
     export CANTON_LOCALNET_QUICKSTART_DIR="${dir}"
   fi
   export CANTON_LOCALNET_SPLICE_VERSION="${CANTON_LOCALNET_SPLICE_VERSION:-$(default_splice_version)}"
-  export CANTON_LOCALNET_INFRA_ONLY="${CANTON_LOCALNET_INFRA_ONLY:-true}"
+  apply_package_localnet_defaults
 
   exec bash "${LOCALNET_SCRIPT}" "$@"
 }
