@@ -7,6 +7,12 @@ module.exports = {
   transform: {
     '^.+\\.ts$': 'ts-jest',
   },
+  // LocalNet helpers from @fairmint/canton-dev-tools peer on this package; map to
+  // workspace source so branded types and runtime clients match local changes.
+  moduleNameMapper: {
+    '^@fairmint/canton-node-sdk$': '<rootDir>/src/index.ts',
+    '^@fairmint/canton-node-sdk/(.*)$': '<rootDir>/src/$1',
+  },
   collectCoverageFrom: ['src/**/*.ts', '!src/**/*.d.ts', '!src/**/*.test.ts', '!src/**/*.spec.ts'],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],

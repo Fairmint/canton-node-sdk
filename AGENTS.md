@@ -15,6 +15,9 @@ not ship a LocalNet engine or `canton-localnet` binary.
 - Integration helpers: import from `@fairmint/canton-dev-tools/testing`.
 - Pins / auth defaults: see Dev Tools
   [COMPATIBILITY.md](https://github.com/Fairmint/canton-dev-tools/blob/main/COMPATIBILITY.md).
+- Workspace TypeScript/Jest map `@fairmint/canton-node-sdk` to local `src/` so Dev Tools
+  peer types match this checkout (`tsconfig.lint.json` paths, `jest.config.js`
+  `moduleNameMapper`).
 
 ## Cursor Cloud specific instructions
 
