@@ -6,6 +6,10 @@ export const DarFileSchema = z.instanceof(Buffer);
 
 /** Trace context for distributed tracing. */
 export const TraceContextSchema = z.object({
+  /** W3C traceparent (AsyncAPI / Ledger JSON API). */
+  traceparent: z.string().optional(),
+  /** W3C tracestate (AsyncAPI / Ledger JSON API). */
+  tracestate: z.string().optional(),
   /** Trace ID for the request. */
   traceId: z.string().optional(),
   /** Span ID for the current operation. */
