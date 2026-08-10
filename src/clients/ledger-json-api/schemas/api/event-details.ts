@@ -22,7 +22,7 @@ export const CreatedEventDetailsSchema = z.object({
   /** Canonical Base64 encoding of a 32-byte contract-key hash when a key is present. */
   contractKeyHash: z.string().optional(),
   /** Arguments used to create the contract. */
-  createArgument: z.unknown(),
+  createArgument: RecordSchema,
   /** Serialized event blob for the created contract (optional when includeCreatedEventBlob is false). */
   createdEventBlob: z.string().optional(),
   /** Interface views requested by matching interface filters. */
