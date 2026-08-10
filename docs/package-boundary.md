@@ -11,24 +11,9 @@ repository / CI-only. Repeatable enforcement lives in `npm run check:package-art
 | Runtime SDK | `build/src/**` | Ledger / Validator / Scan clients and helpers from `src/` |
 | Package metadata | `package.json`, `LICENSE`, `README.md` | Always included by npm |
 
-### Soft-migration LocalNet CLI (temporary)
-
-| Surface | Path / field | Notes |
-| --- | --- | --- |
-| LocalNet CLI | `bin/canton-localnet` (`package.json#bin`) | Soft-delegates to `@fairmint/canton-dev-tools` when installed |
-| Cloud LocalNet helper | `scripts/localnet-cloud.sh` | Used by the fallback CLI path |
-
-**TODO (ENG-1635 hard cutover):** remove `bin/canton-localnet` and `scripts/localnet-cloud.sh`
-from `package.json` `files` / `bin` once consumers depend on `@fairmint/canton-dev-tools` for
-LocalNet. Until then, package artifact checks *require* these paths (known published surface) and
-document the exception.
-
-Prefer:
-
-```bash
-npx @fairmint/canton-dev-tools start
-npm install -D @fairmint/canton-dev-tools
-```
+LocalNet CLI and shared integration-test helpers are **not** published here. They live in
+[`@fairmint/canton-dev-tools`](https://www.npmjs.com/package/@fairmint/canton-dev-tools)
+(`0.1.1+`), including `scripts/localnet-cloud.sh` and `@fairmint/canton-dev-tools/testing`.
 
 ## CI-only / must not publish
 
@@ -38,7 +23,8 @@ npm install -D @fairmint/canton-dev-tools
 | `*.dar` | DAML archives are not Node runtime artifacts |
 | `fixtures/**` | Test fixtures (none shipped today; guarded) |
 | `test/**`, `build/test/**` | Unit / LocalNet integration tests |
-| `scripts/**` except `localnet-cloud.sh` | Codegen, release, and lint tooling |
+| `scripts/**` | Codegen, release, lint tooling (LocalNet engine removed) |
+| `bin/**` | No published CLI; use `@fairmint/canton-dev-tools` |
 | `examples/**`, `build/examples/**` | Demo sources (see wiki / repo tree) |
 | `build/scripts/**` | Compiled lint/codegen helpers |
 | `node_modules/**`, crash dumps (`core*`) | Accidental local artifacts |
@@ -50,4 +36,5 @@ leak compiled tests into the tarball.
 ## Related packages
 
 - Canonical LocalNet owner: [`@fairmint/canton-dev-tools`](https://github.com/Fairmint/canton-dev-tools)
-- Soft migration / hard cutover tracking: [ENG-1635](https://linear.app/fairmint/issue/ENG-1635/establish-canton-dev-tools-and-migrate-shared-canton-test)
+  ([COMPATIBILITY.md](https://github.com/Fairmint/canton-dev-tools/blob/main/COMPATIBILITY.md))
+- Tracking: [ENG-1635](https://linear.app/fairmint/issue/ENG-1635/establish-canton-dev-tools-and-migrate-shared-canton-test)

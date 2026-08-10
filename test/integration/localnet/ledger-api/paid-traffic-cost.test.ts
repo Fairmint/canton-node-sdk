@@ -10,7 +10,7 @@ import { CompletionStreamResponseSchema } from '../../../../src/clients/ledger-j
 import { EnvLoader } from '../../../../src/core/config/EnvLoader';
 import { ConfigurationError } from '../../../../src/core/errors';
 import { getPaidTrafficCostFromCompletion } from '../../../../src/utils/traffic/paid-traffic-cost';
-import { buildIntegrationTestClientConfig } from '../../../utils/testConfig';
+import { buildIntegrationTestClientConfig } from '@fairmint/canton-dev-tools/testing';
 import { getClient } from './setup';
 
 const WALLET_APP_INSTALL_TEMPLATE_SUFFIX = 'Splice.Wallet.Install:WalletAppInstall';

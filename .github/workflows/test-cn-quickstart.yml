@@ -63,7 +63,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/libs/cn-quickstart/quickstart/.env.local
-          key: quickstart-env-${{ runner.os }}-${{ hashFiles('.github/workflows/test-cn-quickstart.yml', 'package.json', 'package-lock.json', 'scripts/localnet-cloud.sh') }}-${{ steps.quickstart-env-cache-key.outputs.submodules }}
+          key: quickstart-env-${{ runner.os }}-${{ hashFiles('.github/workflows/test-cn-quickstart.yml', 'package.json', 'package-lock.json') }}-${{ steps.quickstart-env-cache-key.outputs.submodules }}
 
       - name: Restore Node Dependencies Cache
         id: node-cache-restore

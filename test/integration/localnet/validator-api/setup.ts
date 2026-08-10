@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { ApiError, CantonRuntime, ValidatorApiClient } from '../../../../src';
-import { buildIntegrationTestClientConfig, retry } from '../../../utils/testConfig';
+import { buildIntegrationTestClientConfig, retry } from '@fairmint/canton-dev-tools/testing';
 
 const DEFAULT_VALIDATOR_USER_NAME = 'app-provider-validator';
 const VALIDATOR_ONBOARDING_TIMEOUT_MS = 240_000;

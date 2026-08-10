@@ -1,35 +1,32 @@
 # canton-node-sdk
 
-See [CLAUDE.md](CLAUDE.md), [README.md](README.md), and `.cursor/skills/localnet-testing/SKILL.md`.
+See [CLAUDE.md](CLAUDE.md), [README.md](README.md), and
+`.cursor/skills/localnet-testing/SKILL.md`. `package.json` (`localnet:*` scripts) is the source of
+truth for LocalNet commands in this repo; lifecycle is owned by
+`@fairmint/canton-dev-tools@0.1.1+`.
 
 ## LocalNet ownership (ENG-1635)
 
-**`@fairmint/canton-dev-tools` owns LocalNet pins going forward** (cn-quickstart ref, Splice,
-Scribe, protocol version). See that package's `COMPATIBILITY.md`.
+**`@fairmint/canton-dev-tools` owns LocalNet** (CLI, pins, and shared test helpers). This SDK does
+not ship a LocalNet engine or `canton-localnet` binary.
 
-This repository still ships `bin/canton-localnet` and `scripts/localnet-cloud.sh` as a **soft
-migration** fallback:
-
-- `bin/canton-localnet` soft-delegates to `@fairmint/canton-dev-tools` when that package is
-  installed (optionalDependency / optional peer).
-- Set `CANTON_LOCALNET_FORCE_LEGACY=1` to force the deprecated SDK scripts.
-- `package.json` `localnet:*` scripts still call `bin/canton-localnet` (which prefers Dev Tools).
-- Prefer `npx @fairmint/canton-dev-tools <command>` or `npm run localnet:dev-tools -- <command>`
-  when the optional dependency is present.
-- Do **not** treat SDK-local pins in `bin/canton-localnet` as the long-term source of truth.
+- Install pin: `devDependency` `@fairmint/canton-dev-tools@0.1.1` (exact).
+- Repo scripts: `npm run localnet:*` → `canton-dev-tools <command>`.
+- Integration helpers: import from `@fairmint/canton-dev-tools/testing`.
+- Pins / auth defaults: see Dev Tools
+  [COMPATIBILITY.md](https://github.com/Fairmint/canton-dev-tools/blob/main/COMPATIBILITY.md).
 
 ## Cursor Cloud specific instructions
 
 Repo checks (`npm install`, `npm run fix`, `npm test`, `npm run build`) need no dashboard secrets.
-`npm install` does not require `NPM_TOKEN` here (dependencies are public). The optional
-`@fairmint/canton-dev-tools` git dependency needs GitHub network access (public repo).
+`npm install` does not require `NPM_TOKEN` here (dependencies are public).
 
 ### Canton LocalNet on a cloud VM
 
-LocalNet runs Canton Network Quickstart in Docker. `npm run localnet:start` (=
-`bin/canton-localnet start`, which prefers `@fairmint/canton-dev-tools`, infra-only + OAuth2 by
-default) is self-provisioning on the cloud image: it `apt`-installs Docker, starts a `dockerd` (vfs
-storage driver, iptables-legacy) via passwordless `sudo`, adds
+LocalNet runs Canton Network Quickstart in Docker via `@fairmint/canton-dev-tools`.
+`npm run localnet:start` (= `canton-dev-tools start`, infra-only + OAuth2 by default) is
+self-provisioning on the cloud image: it `apt`-installs Docker, starts a `dockerd` (vfs storage
+driver, iptables-legacy) via passwordless `sudo`, adds
 `scan.localhost`/`sv.localhost`/`wallet.localhost` to `/etc/hosts`, runs cn-quickstart `make setup`,
 brings up the compose stack, and waits for the Validator, Scan, and Ledger JSON APIs.
 

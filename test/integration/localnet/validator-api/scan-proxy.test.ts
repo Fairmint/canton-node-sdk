@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { ApiError } from '../../../../src';
 import type { components } from '../../../../src/generated/apps/validator/src/main/openapi/scan-proxy';
-import { retry } from '../../../utils/testConfig';
+import { retry } from '@fairmint/canton-dev-tools/testing';
 import { getClient as getScanClient } from '../scan-api/setup';
 import { ensureValidatorUserOnboarded, getClient, VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS } from './setup';
 

@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { type ValidatorWalletTransaction } from '../../../../src';
-import { retry } from '../../../utils/testConfig';
+import { retry } from '@fairmint/canton-dev-tools/testing';
 import { getClient as getLedgerClient } from '../ledger-api/setup';
 import { ensureValidatorUserOnboarded, getClient, VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS } from './setup';
 

@@ -44,25 +44,31 @@ npm test
 npm run build
 ```
 
-### LocalNet (ENG-1635 soft migration)
+### LocalNet (owned by `@fairmint/canton-dev-tools`)
 
-**Pin owner:** [`@fairmint/canton-dev-tools`](https://github.com/Fairmint/canton-dev-tools) (see its
-`COMPATIBILITY.md`). This SDK still ships `bin/canton-localnet` / `scripts/localnet-cloud.sh` as a
-temporary fallback. The SDK binary soft-delegates to Dev Tools when that optional dependency is
-installed.
+LocalNet lifecycle and shared test helpers live in
+[`@fairmint/canton-dev-tools@0.1.1`](https://www.npmjs.com/package/@fairmint/canton-dev-tools)
+(see its [COMPATIBILITY.md](https://github.com/Fairmint/canton-dev-tools/blob/main/COMPATIBILITY.md)).
+This SDK does not publish a LocalNet CLI or `scripts/localnet-cloud.sh`.
 
 ```bash
-# Preferred once Dev Tools is available (optionalDependency / optional peer):
-npx @fairmint/canton-dev-tools start
-npm run localnet:dev-tools -- readiness
+npm install   # installs @fairmint/canton-dev-tools as an exact-pinned devDependency
+npm run localnet:start
+npm run localnet:smoke
+npm run localnet:stop
 
-# Existing SDK scripts still work (delegate when possible, else legacy scripts):
-npm run localnet:verify
+# Or call the Dev Tools CLI directly:
+npx @fairmint/canton-dev-tools start
 ```
 
-Until `@fairmint/canton-dev-tools` is published to npm, this repo pins the optional dependency to
-the ENG-1635 git SHA. After publish, swap that pin to a semver range. Do not delete
-`scripts/localnet-cloud.sh` until the hard-cutover follow-up.
+Integration helpers:
+
+```ts
+import {
+  buildIntegrationTestClientConfig,
+  getLocalnetParticipantAdminLedgerClient,
+} from '@fairmint/canton-dev-tools/testing';
+```
 
 See [docs/package-boundary.md](docs/package-boundary.md) for what the npm package publishes versus
 CI-only surfaces (`npm run check:package-artifacts`).

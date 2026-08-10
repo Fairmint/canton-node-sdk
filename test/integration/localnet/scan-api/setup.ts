@@ -1,7 +1,7 @@
 /** Shared setup for ScanApiClient integration tests. */
 
 import { CantonRuntime, ScanApiClient } from '../../../../src';
-import { buildIntegrationTestClientConfig } from '../../../utils/testConfig';
+import { buildIntegrationTestClientConfig } from '@fairmint/canton-dev-tools/testing';
 
 let client: ScanApiClient | null = null;
 
