@@ -29,7 +29,8 @@ jobs:
           node-version: '22.14'
 
       - name: Upgrade npm
-        run: npm install --global npm@^11.10.0
+        # npm >=11.17 required for .npmrc min-release-age-exclude (@fairmint/*).
+        run: npm install --global npm@^11.17.0
 
       - name: Initialize Submodules
         run: |
