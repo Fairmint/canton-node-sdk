@@ -29,11 +29,25 @@ export const LedgerJsonValueSchema: z.ZodType<LedgerJsonValue> = z
   })
   .transform(cloneLedgerJsonValue);
 
-/** Accept a wire-null Scala `Option.None`, then expose the generated optional-property shape. */
+/**
+ * Accept a wire-null Scala `Option.None`, then expose the generated optional-property shape.
+ * `.optional()` is applied outside the transform so object keys stay optional under
+ * `exactOptionalPropertyTypes`.
+ */
+type LedgerNullableOptionalResponseField<Schema extends z.ZodType> = z.ZodOptional<
+  z.ZodPipe<
+    z.ZodUnion<readonly [Schema, z.ZodNull]>,
+    z.ZodTransform<z.output<Schema> | undefined, z.output<Schema> | null>
+  >
+>;
+
 export const ledgerNullableOptionalResponseField = <Schema extends z.ZodType>(
   schema: Schema
-): z.ZodType<z.output<Schema> | undefined, z.input<Schema> | null | undefined> =>
-  schema.nullish().transform((value): z.output<Schema> | undefined => value ?? undefined);
+): LedgerNullableOptionalResponseField<Schema> =>
+  z
+    .union([schema, z.null()])
+    .transform((value): z.output<Schema> | undefined => (value ?? undefined) as z.output<Schema> | undefined)
+    .optional();
 
 /**
  * Ledger `paidTrafficCost` wire union (protobuf JSON int64): JSON number or digit-only string.
