@@ -93,7 +93,10 @@ export const JsReassignmentSchema = z.looseObject({
   recordTime: z.string(),
   /** Synchronizer that synchronized this reassignment. */
   synchronizerId: z.string(),
-  /** Traffic cost paid by this participant for the (un)assignment request (optional). */
+  /**
+   * Traffic cost paid by this participant for the (un)assignment request (`Option[Long]`).
+   * Wire may send number, digit string, or `null`; outputs normalize to digit string or `undefined`.
+   */
   paidTrafficCost: ledgerOptionalPaidTrafficCostSchema,
 });
 

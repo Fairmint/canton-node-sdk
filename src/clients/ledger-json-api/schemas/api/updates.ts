@@ -56,7 +56,10 @@ export const JsTransactionSchema = z.looseObject({
    * to `undefined`.
    */
   externalTransactionHash: ledgerNullableOptionalResponseField(z.string()),
-  /** Traffic cost paid by this participant for the confirmation request (optional). */
+  /**
+   * Traffic cost paid by this participant for the confirmation request (`Option[Long]`).
+   * Wire may send number, digit string, or `null`; outputs normalize to digit string or `undefined`.
+   */
   paidTrafficCost: ledgerOptionalPaidTrafficCostSchema,
 });
 
@@ -100,6 +103,9 @@ const TopologyEventEventSchema = z.union([
   z.object({ Empty: z.object({}) }),
   z.object({ ParticipantAuthorizationAdded: z.object({ value: TopologyAuthorizationValueSchema }) }),
   z.object({ ParticipantAuthorizationChanged: z.object({ value: TopologyAuthorizationValueSchema }) }),
+  z.object({
+    ParticipantAuthorizationOnboarding: z.object({ value: TopologyAuthorizationValueSchema }),
+  }),
   z.object({
     ParticipantAuthorizationRevoked: z.object({
       value: z.object({

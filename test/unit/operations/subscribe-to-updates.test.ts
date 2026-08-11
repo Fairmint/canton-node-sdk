@@ -24,7 +24,7 @@ const SYNCHRONIZER_ID = 'global-domain::fingerprint';
 export function createWireTransactionUpdateMessage(overrides?: {
   offset?: number;
   includeExercised?: boolean;
-  /** When true, mirror Splice wire: `traceContext`/`externalTransactionHash`/`contractKey` as null. */
+  /** When true, mirror Splice wire: optional Scala `Option` fields as explicit JSON null. */
   nullOptionalFields?: boolean;
 }): Record<string, unknown> {
   const offset = overrides?.offset ?? 6_619_776;
@@ -84,13 +84,13 @@ export function createWireTransactionUpdateMessage(overrides?: {
           recordTime: '2026-08-10T12:00:00.123456Z',
           events,
           ...(nullOptional
-            ? { traceContext: null, externalTransactionHash: null }
+            ? { traceContext: null, externalTransactionHash: null, paidTrafficCost: null }
             : {
                 traceContext: {
                   traceparent: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
                 },
+                paidTrafficCost: 0,
               }),
-          paidTrafficCost: 0,
         },
       },
     },
@@ -114,8 +114,9 @@ export function createWireOffsetCheckpointMessage(offset = 6_619_775): Record<st
 /** Representative Reassignment frame (value-wrapped). */
 export function createWireReassignmentUpdateMessage(
   offset = 6_619_780,
-  overrides?: { nullTraceContext?: boolean }
+  overrides?: { nullOptionalFields?: boolean }
 ): Record<string, unknown> {
+  const nullOptional = overrides?.nullOptionalFields === true;
   return {
     update: {
       Reassignment: {
@@ -124,7 +125,7 @@ export function createWireReassignmentUpdateMessage(
           offset,
           recordTime: '2026-08-10T12:00:00.123456Z',
           synchronizerId: SYNCHRONIZER_ID,
-          ...(overrides?.nullTraceContext ? { traceContext: null } : {}),
+          ...(nullOptional ? { traceContext: null, paidTrafficCost: null } : { paidTrafficCost: 0 }),
           events: [
             {
               JsUnassignedEvent: {
@@ -139,6 +140,35 @@ export function createWireReassignmentUpdateMessage(
                   submitter: PARTY,
                   reassignmentCounter: 1,
                   packageName: 'splice-amulet',
+                },
+              },
+            },
+          ],
+        },
+      },
+    },
+  };
+}
+
+/** Representative TopologyTransaction with ParticipantAuthorizationOnboarding. */
+export function createWireTopologyOnboardingUpdateMessage(offset = 6_619_790): Record<string, unknown> {
+  return {
+    update: {
+      TopologyTransaction: {
+        value: {
+          updateId: '1220topologyhash',
+          offset,
+          recordTime: '2026-08-10T12:00:00.123456Z',
+          synchronizerId: SYNCHRONIZER_ID,
+          events: [
+            {
+              event: {
+                ParticipantAuthorizationOnboarding: {
+                  value: {
+                    partyId: PARTY,
+                    participantId: 'participant::fingerprint',
+                    participantPermission: 'PARTICIPANT_PERMISSION_SUBMISSION',
+                  },
                 },
               },
             },
@@ -171,6 +201,7 @@ describe('WsUpdateSchema / UpdatesWsMessageSchema wire fixtures', (): void => {
             value: {
               traceContext?: unknown;
               externalTransactionHash?: unknown;
+              paidTrafficCost?: unknown;
               events: Array<{ CreatedEvent?: { contractKey?: unknown }; ExercisedEvent?: { interfaceId?: unknown } }>;
             };
           };
@@ -179,11 +210,25 @@ describe('WsUpdateSchema / UpdatesWsMessageSchema wire fixtures', (): void => {
     ).update.Transaction.value;
     expect(transaction.traceContext).toBeUndefined();
     expect(transaction.externalTransactionHash).toBeUndefined();
+    expect(transaction.paidTrafficCost).toBeUndefined();
     expect(transaction.events[0]?.CreatedEvent?.contractKey).toBeUndefined();
     expect(transaction.events[1]?.ExercisedEvent?.interfaceId).toBeUndefined();
     // Wire sent explicit nulls; parsed output must not re-expose null for these optionals.
     expect(transaction).not.toHaveProperty('traceContext', null);
+    expect(transaction).not.toHaveProperty('paidTrafficCost', null);
     expect(transaction.events[0]?.CreatedEvent).not.toHaveProperty('contractKey', null);
+  });
+
+  it('normalizes present paidTrafficCost number wire to digit string', (): void => {
+    const result = UpdatesWsMessageSchema.safeParse(createWireTransactionUpdateMessage());
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      return;
+    }
+    const { paidTrafficCost } = (
+      result.data as { update: { Transaction: { value: { paidTrafficCost?: unknown } } } }
+    ).update.Transaction.value;
+    expect(paidTrafficCost).toBe('0');
   });
 
   it('accepts OffsetCheckpoint frames', (): void => {
@@ -194,18 +239,43 @@ describe('WsUpdateSchema / UpdatesWsMessageSchema wire fixtures', (): void => {
     expect(UpdatesWsMessageSchema.safeParse(createWireReassignmentUpdateMessage()).success).toBe(true);
   });
 
-  it('accepts value-wrapped Reassignment frames with null traceContext normalized to undefined', (): void => {
+  it('accepts value-wrapped Reassignment frames with null optionals normalized to undefined', (): void => {
     const result = UpdatesWsMessageSchema.safeParse(
-      createWireReassignmentUpdateMessage(6_619_780, { nullTraceContext: true })
+      createWireReassignmentUpdateMessage(6_619_780, { nullOptionalFields: true })
     );
     expect(result.success).toBe(true);
     if (!result.success) {
       return;
     }
     const reassignment = (
-      result.data as { update: { Reassignment: { value: { traceContext?: unknown } } } }
+      result.data as {
+        update: { Reassignment: { value: { traceContext?: unknown; paidTrafficCost?: unknown } } };
+      }
     ).update.Reassignment.value;
     expect(reassignment.traceContext).toBeUndefined();
+    expect(reassignment.paidTrafficCost).toBeUndefined();
+  });
+
+  it('accepts TopologyTransaction with ParticipantAuthorizationOnboarding', (): void => {
+    const result = UpdatesWsMessageSchema.safeParse(createWireTopologyOnboardingUpdateMessage());
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      return;
+    }
+    const topology = (
+      result.data as {
+        update: {
+          TopologyTransaction: {
+            value: {
+              events: Array<{
+                event?: { ParticipantAuthorizationOnboarding?: { value: { partyId: string } } };
+              }>;
+            };
+          };
+        };
+      }
+    ).update.TopologyTransaction.value;
+    expect(topology.events[0]?.event?.ParticipantAuthorizationOnboarding?.value.partyId).toBe(PARTY);
   });
 
   it('rejects the pre-#379 mistaken flat Transaction shape (no value wrapper)', (): void => {
@@ -406,6 +476,7 @@ describe('SubscribeToUpdates', (): void => {
           value: {
             traceContext?: unknown;
             externalTransactionHash?: unknown;
+            paidTrafficCost?: unknown;
             events: Array<{
               CreatedEvent?: { representativePackageId?: string; acsDelta?: boolean; contractKey?: unknown };
             }>;
@@ -419,6 +490,7 @@ describe('SubscribeToUpdates', (): void => {
     const { value } = delivered.update.Transaction;
     expect(value.traceContext).toBeUndefined();
     expect(value.externalTransactionHash).toBeUndefined();
+    expect(value.paidTrafficCost).toBeUndefined();
     const created = value.events[0]?.CreatedEvent;
     expect(created?.representativePackageId).toBe(PACKAGE_ID);
     expect(created?.acsDelta).toBe(true);

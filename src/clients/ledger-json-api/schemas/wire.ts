@@ -43,8 +43,12 @@ export const ledgerPaidTrafficCostSchema = z
   .union([z.number().int(), z.string().regex(/^\d+$/)])
   .transform((value): string => (typeof value === 'number' ? String(value) : value));
 
-/** Optional `paidTrafficCost` on update / reassignment bodies. */
-export const ledgerOptionalPaidTrafficCostSchema = ledgerPaidTrafficCostSchema.optional();
+/**
+ * Optional `paidTrafficCost` on update / reassignment bodies (`Option[Long]`).
+ * Wire may send JSON `null`; outputs normalize to `undefined` after digit-string coercion.
+ */
+export const ledgerOptionalPaidTrafficCostSchema =
+  ledgerNullableOptionalResponseField(ledgerPaidTrafficCostSchema);
 
 /** Canonical padded Base64 used by protobuf JSON `bytes` fields. Base64url and non-canonical padding are rejected. */
 export const LedgerBase64BytesSchema = z.string().refine(isCanonicalStandardBase64, {

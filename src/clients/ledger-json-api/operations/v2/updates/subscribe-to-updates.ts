@@ -274,8 +274,8 @@ export class SubscribeToUpdates {
                   }
                 );
               }
-              // Deliver Zod output: wire `null` optional fields are normalized to `undefined`, while
-              // `z.looseObject` on event/transaction schemas keeps unknown Ledger fields (future wire additions).
+              // Deliver normalized Zod output (not the raw wire frame): null optionals → undefined,
+              // paidTrafficCost coerced to digit string, while `z.looseObject` preserves unknown Ledger fields.
               const message = decoded.data;
 
               // Surface Canton error frames immediately; a slow consumer callback must not delay stream failure.
