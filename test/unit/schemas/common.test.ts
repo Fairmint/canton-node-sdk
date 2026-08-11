@@ -27,6 +27,23 @@ describe('Common Schemas', () => {
       });
       expect(result.success).toBe(true);
     });
+
+    it('accepts null W3C fields from Ledger JSON wire', () => {
+      const result = TraceContextSchema.safeParse({
+        traceparent: null,
+        tracestate: null,
+        traceId: 'abc123',
+        metadata: null,
+      });
+      expect(result.success).toBe(true);
+      if (!result.success) {
+        return;
+      }
+      expect(result.data.traceparent).toBeNull();
+      expect(result.data.tracestate).toBeNull();
+      expect(result.data.metadata).toBeNull();
+      expect(result.data.traceId).toBe('abc123');
+    });
   });
 
   describe('DeduplicationDurationSchema', () => {

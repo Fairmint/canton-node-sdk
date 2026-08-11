@@ -59,8 +59,8 @@ export const CompletionSchema = z.object({
       ])
       .optional()
       .nullable(),
-    /** Trace context (optional). */
-    traceContext: TraceContextSchema.optional(),
+    /** Trace context (optional). Wire may send `null` or nested null W3C fields (`tracestate` / `traceparent`). */
+    traceContext: TraceContextSchema.nullish(),
     /**
      * Traffic cost (in traffic units) paid by this participant for ordering the confirmation request. Present on recent
      * Canton Ledger API versions; omitted or zero for older nodes. The API may send int64 as a JSON string.

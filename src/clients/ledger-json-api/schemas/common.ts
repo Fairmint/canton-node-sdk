@@ -4,20 +4,25 @@ import { RecordSchema } from './base';
 /** DAR file content as a binary Buffer. */
 export const DarFileSchema = z.instanceof(Buffer);
 
-/** Trace context for distributed tracing. */
+/**
+ * Trace context for distributed tracing.
+ *
+ * Ledger JSON API / Splice often send optional W3C fields as JSON `null` (not omitted). Accept null on the wire (same
+ * as omitted) so completions and updates parse.
+ */
 export const TraceContextSchema = z.looseObject({
   /** W3C traceparent (AsyncAPI / Ledger JSON API). */
-  traceparent: z.string().optional(),
+  traceparent: z.string().nullish(),
   /** W3C tracestate (AsyncAPI / Ledger JSON API). */
-  tracestate: z.string().optional(),
+  tracestate: z.string().nullish(),
   /** Trace ID for the request. */
-  traceId: z.string().optional(),
+  traceId: z.string().nullish(),
   /** Span ID for the current operation. */
-  spanId: z.string().optional(),
+  spanId: z.string().nullish(),
   /** Parent span ID (optional). */
-  parentSpanId: z.string().optional(),
+  parentSpanId: z.string().nullish(),
   /** Additional trace metadata. */
-  metadata: z.record(z.string(), z.string()).optional(),
+  metadata: z.record(z.string(), z.string()).nullish(),
 });
 
 /** Deduplication duration. */

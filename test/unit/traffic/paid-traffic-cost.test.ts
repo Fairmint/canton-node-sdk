@@ -60,4 +60,23 @@ describe('paidTrafficCost schema rejects negatives', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('accepts null tracestate on CompletionSchema (LocalNet wire)', () => {
+    const result = CompletionSchema.safeParse({
+      value: {
+        commandId: 'cmd-1',
+        submissionId: 'sub-1',
+        offset: 1,
+        synchronizerTime: { synchronizerId: 'sync', recordTime: '1970-01-01T00:00:00Z' },
+        traceContext: { traceparent: null, tracestate: null },
+        paidTrafficCost: 17,
+      },
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      return;
+    }
+    expect(result.data.value.paidTrafficCost).toBe(17);
+    expect(result.data.value.traceContext?.tracestate).toBeNull();
+  });
 });
