@@ -368,7 +368,10 @@ describe('SubscribeToUpdates', (): void => {
   });
 
   it('delivers normalized Transaction frames to onMessage without stripping known wire fields', async (): Promise<void> => {
-    const wireMessage = createWireTransactionUpdateMessage({ offset: 6_619_776, nullOptionalFields: true });
+    const wireMessage = {
+      ...createWireTransactionUpdateMessage({ offset: 6_619_776, nullOptionalFields: true }),
+      topLevelExtension: 'preserve-me',
+    };
     const onMessage = jest.fn().mockResolvedValue(undefined);
     mockConnect.mockImplementation(
       async (
@@ -397,6 +400,7 @@ describe('SubscribeToUpdates', (): void => {
 
     expect(onMessage).toHaveBeenCalledTimes(1);
     const delivered = onMessage.mock.calls[0]?.[0] as {
+      topLevelExtension?: unknown;
       update: {
         Transaction: {
           value: {
@@ -411,7 +415,8 @@ describe('SubscribeToUpdates', (): void => {
     };
     // Normalized Zod output (not the raw wire object): null optionals → undefined.
     expect(delivered).not.toBe(wireMessage);
-    const value = delivered.update.Transaction.value;
+    expect(delivered.topLevelExtension).toBe('preserve-me');
+    const { value } = delivered.update.Transaction;
     expect(value.traceContext).toBeUndefined();
     expect(value.externalTransactionHash).toBeUndefined();
     const created = value.events[0]?.CreatedEvent;

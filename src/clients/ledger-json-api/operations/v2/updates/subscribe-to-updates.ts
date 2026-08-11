@@ -97,7 +97,8 @@ export type SubscribeToUpdatesParams = z.infer<typeof SubscribeToUpdatesParamsSc
  * `OffsetCheckpoint`). REST `JsTransaction`-named wrappers stay on REST response schemas, not this WS stream.
  */
 export const UpdatesWsMessageSchema = z.union([
-  z.object({ update: WsUpdateSchema }),
+  // Preserve unknown top-level WS frame fields (future Ledger extensions beyond `update`).
+  z.looseObject({ update: WsUpdateSchema }),
   JsCantonErrorSchema,
   WsCantonErrorSchema,
 ]);
@@ -274,7 +275,7 @@ export class SubscribeToUpdates {
                 );
               }
               // Deliver Zod output: wire `null` optional fields are normalized to `undefined`, while
-              // `.passthrough()` on event/transaction schemas keeps unknown Ledger fields (future wire additions).
+              // `z.looseObject` on event/transaction schemas keeps unknown Ledger fields (future wire additions).
               const message = decoded.data;
 
               // Surface Canton error frames immediately; a slow consumer callback must not delay stream failure.

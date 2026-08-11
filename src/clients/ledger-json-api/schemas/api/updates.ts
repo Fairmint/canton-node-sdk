@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TraceContextSchema } from '../common';
-import { ledgerNullableOptionalResponseField } from '../wire';
+import { ledgerNullableOptionalResponseField, ledgerOptionalPaidTrafficCostSchema } from '../wire';
 import { JsCommandsSchema } from './commands';
 import { OffsetCheckpointSchema } from './completions';
 import {
@@ -30,61 +30,57 @@ export const TransactionEventSchema = z.union([
 ]);
 
 /** Transaction details (AsyncAPI `JsTransaction`). */
-export const JsTransactionSchema = z
-  .object({
-    /** Unique update ID for the transaction. */
-    updateId: z.string(),
-    /** Command ID associated with the transaction (optional). */
-    commandId: z.string().optional(),
-    /** Workflow ID associated with the transaction (optional). */
-    workflowId: z.string().optional(),
-    /** Effective time of the transaction (ISO 8601). */
-    effectiveAt: z.string(),
-    /** Offset of the transaction in the ledger stream. */
-    offset: z.number(),
-    /** Collection of transaction events (Created/Archived/Exercised). */
-    events: z.array(TransactionEventSchema),
-    /** Synchronizer that synchronized the transaction. */
-    synchronizerId: z.string(),
-    /**
-     * Trace context (optional). Splice/Canton wire often sends `null` when absent; outputs normalize to `undefined`.
-     */
-    traceContext: ledgerNullableOptionalResponseField(TraceContextSchema),
-    /** Record time of the transaction. */
-    recordTime: z.string(),
-    /**
-     * External transaction hash for externally signed submissions (optional). Wire may send `null`; outputs normalize
-     * to `undefined`.
-     */
-    externalTransactionHash: ledgerNullableOptionalResponseField(z.string()),
-    /** Traffic cost paid by this participant for the confirmation request (optional). */
-    paidTrafficCost: z.union([z.number().int(), z.string().regex(/^\d+$/)]).optional(),
-  })
-  .passthrough();
+export const JsTransactionSchema = z.looseObject({
+  /** Unique update ID for the transaction. */
+  updateId: z.string(),
+  /** Command ID associated with the transaction (optional). */
+  commandId: z.string().optional(),
+  /** Workflow ID associated with the transaction (optional). */
+  workflowId: z.string().optional(),
+  /** Effective time of the transaction (ISO 8601). */
+  effectiveAt: z.string(),
+  /** Offset of the transaction in the ledger stream. */
+  offset: z.number(),
+  /** Collection of transaction events (Created/Archived/Exercised). */
+  events: z.array(TransactionEventSchema),
+  /** Synchronizer that synchronized the transaction. */
+  synchronizerId: z.string(),
+  /**
+   * Trace context (optional). Splice/Canton wire often sends `null` when absent; outputs normalize to `undefined`.
+   */
+  traceContext: ledgerNullableOptionalResponseField(TraceContextSchema),
+  /** Record time of the transaction. */
+  recordTime: z.string(),
+  /**
+   * External transaction hash for externally signed submissions (optional). Wire may send `null`; outputs normalize
+   * to `undefined`.
+   */
+  externalTransactionHash: ledgerNullableOptionalResponseField(z.string()),
+  /** Traffic cost paid by this participant for the confirmation request (optional). */
+  paidTrafficCost: ledgerOptionalPaidTrafficCostSchema,
+});
 
 /** Transaction tree details. */
-export const JsTransactionTreeSchema = z
-  .object({
-    /** Unique update ID for the transaction. */
-    updateId: z.string(),
-    /** Command ID associated with the transaction (optional). */
-    commandId: z.string().optional(),
-    /** Workflow ID associated with the transaction (optional). */
-    workflowId: z.string().optional(),
-    /** Effective time of the transaction (ISO 8601). */
-    effectiveAt: z.string(),
-    /** Offset of the transaction in the ledger stream. */
-    offset: z.number(),
-    /** Map of event node IDs to tree events. */
-    eventsById: z.record(z.string(), TreeEventSchema),
-    /** Synchronizer that synchronized the transaction. */
-    synchronizerId: z.string(),
-    /** Trace context (optional; wire may be null → undefined). */
-    traceContext: ledgerNullableOptionalResponseField(TraceContextSchema),
-    /** Record time of the transaction. */
-    recordTime: z.string(),
-  })
-  .passthrough();
+export const JsTransactionTreeSchema = z.looseObject({
+  /** Unique update ID for the transaction. */
+  updateId: z.string(),
+  /** Command ID associated with the transaction (optional). */
+  commandId: z.string().optional(),
+  /** Workflow ID associated with the transaction (optional). */
+  workflowId: z.string().optional(),
+  /** Effective time of the transaction (ISO 8601). */
+  effectiveAt: z.string(),
+  /** Offset of the transaction in the ledger stream. */
+  offset: z.number(),
+  /** Map of event node IDs to tree events. */
+  eventsById: z.record(z.string(), TreeEventSchema),
+  /** Synchronizer that synchronized the transaction. */
+  synchronizerId: z.string(),
+  /** Trace context (optional; wire may be null → undefined). */
+  traceContext: ledgerNullableOptionalResponseField(TraceContextSchema),
+  /** Record time of the transaction. */
+  recordTime: z.string(),
+});
 
 /** Update (oneOf transaction or transaction tree) — REST/JS naming variants. */
 export const JsUpdateSchema = z.union([
@@ -115,12 +111,12 @@ const TopologyEventEventSchema = z.union([
 ]);
 
 /** Topology transaction event schema for WebSocket streams (AsyncAPI `TopologyEvent`). */
-export const WsTopologyEventSchema = z.object({
+export const WsTopologyEventSchema = z.looseObject({
   event: TopologyEventEventSchema.optional(),
 });
 
 /** Topology transaction body (AsyncAPI `JsTopologyTransaction`). */
-export const WsTopologyTransactionSchema = z.object({
+export const WsTopologyTransactionSchema = z.looseObject({
   /** Unique update ID for the topology transaction. */
   updateId: z.string(),
   /** Offset of the topology transaction in the ledger stream. */

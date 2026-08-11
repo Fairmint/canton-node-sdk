@@ -35,6 +35,17 @@ export const ledgerNullableOptionalResponseField = <Schema extends z.ZodType>(
 ): z.ZodType<z.output<Schema> | undefined, z.input<Schema> | null | undefined> =>
   schema.nullish().transform((value): z.output<Schema> | undefined => value ?? undefined);
 
+/**
+ * Ledger `paidTrafficCost` wire (protobuf JSON int64): JSON number or digit-only string.
+ * Normalizes to a digit string so consumers do not branch on `number | string`.
+ */
+export const ledgerPaidTrafficCostSchema = z
+  .union([z.number().int(), z.string().regex(/^\d+$/)])
+  .transform((value): string => (typeof value === 'number' ? String(value) : value));
+
+/** Optional `paidTrafficCost` on update / reassignment bodies. */
+export const ledgerOptionalPaidTrafficCostSchema = ledgerPaidTrafficCostSchema.optional();
+
 /** Canonical padded Base64 used by protobuf JSON `bytes` fields. Base64url and non-canonical padding are rejected. */
 export const LedgerBase64BytesSchema = z.string().refine(isCanonicalStandardBase64, {
   message: 'Expected canonical padded standard Base64',

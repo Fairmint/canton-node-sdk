@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TraceContextSchema } from '../common';
-import { ledgerNullableOptionalResponseField } from '../wire';
+import { ledgerNullableOptionalResponseField, ledgerOptionalPaidTrafficCostSchema } from '../wire';
 import { AssignCommandSchema, UnassignCommandSchema } from './commands';
 import { CreatedEventDetailsSchema, EmptyCommandSchema, UnassignedEventDetailsSchema } from './event-details';
 import { EventFormatSchema } from './events';
@@ -73,31 +73,29 @@ export const JsReassignmentEventSchema = z.union([
 ]);
 
 /** Complete reassignment view. */
-export const JsReassignmentSchema = z
-  .object({
-    /** Unique update ID for the reassignment. */
-    updateId: z.string(),
-    /** Command ID that resulted in this reassignment (optional). */
-    commandId: z.string().optional(),
-    /** Workflow ID (optional). */
-    workflowId: z.string().optional(),
-    /** Offset of the reassignment. */
-    offset: z.number(),
-    /** Collection of reassignment events. */
-    events: z.array(JsReassignmentEventSchema),
-    /**
-     * Trace context (optional). Wire often sends JSON `null` for Scala `Option.None`; outputs normalize to
-     * `undefined` so consumers see optional, not nullable.
-     */
-    traceContext: ledgerNullableOptionalResponseField(TraceContextSchema),
-    /** Record time of the reassignment. */
-    recordTime: z.string(),
-    /** Synchronizer that synchronized this reassignment. */
-    synchronizerId: z.string(),
-    /** Traffic cost paid by this participant for the (un)assignment request (optional). */
-    paidTrafficCost: z.union([z.number().int(), z.string().regex(/^\d+$/)]).optional(),
-  })
-  .passthrough();
+export const JsReassignmentSchema = z.looseObject({
+  /** Unique update ID for the reassignment. */
+  updateId: z.string(),
+  /** Command ID that resulted in this reassignment (optional). */
+  commandId: z.string().optional(),
+  /** Workflow ID (optional). */
+  workflowId: z.string().optional(),
+  /** Offset of the reassignment. */
+  offset: z.number(),
+  /** Collection of reassignment events. */
+  events: z.array(JsReassignmentEventSchema),
+  /**
+   * Trace context (optional). Wire often sends JSON `null` for Scala `Option.None`; outputs normalize to
+   * `undefined` so consumers see optional, not nullable.
+   */
+  traceContext: ledgerNullableOptionalResponseField(TraceContextSchema),
+  /** Record time of the reassignment. */
+  recordTime: z.string(),
+  /** Synchronizer that synchronized this reassignment. */
+  synchronizerId: z.string(),
+  /** Traffic cost paid by this participant for the (un)assignment request (optional). */
+  paidTrafficCost: ledgerOptionalPaidTrafficCostSchema,
+});
 
 /** Submit and wait for reassignment response. */
 export const JsSubmitAndWaitForReassignmentResponseSchema = z.object({
