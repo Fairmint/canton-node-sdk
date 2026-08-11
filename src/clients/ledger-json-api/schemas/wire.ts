@@ -36,16 +36,24 @@ export const ledgerNullableOptionalResponseField = <Schema extends z.ZodType>(
   schema.nullish().transform((value): z.output<Schema> | undefined => value ?? undefined);
 
 /**
- * Ledger `paidTrafficCost` wire (protobuf JSON int64): JSON number or digit-only string.
- * Normalizes to a digit string so consumers do not branch on `number | string`.
+ * Ledger `paidTrafficCost` wire union (protobuf JSON int64): JSON number or digit-only string.
  * Traffic cost is non-negative; reject negative JSON numbers (digit strings already exclude `-`).
  */
-export const ledgerPaidTrafficCostSchema = z
-  .union([z.number().int().nonnegative(), z.string().regex(/^\d+$/)])
-  .transform((value): string => (typeof value === 'number' ? String(value) : value));
+export const ledgerPaidTrafficCostWireSchema = z.union([
+  z.number().int().nonnegative(),
+  z.string().regex(/^\d+$/),
+]);
 
 /**
- * Optional `paidTrafficCost` on update / reassignment bodies (`Option[Long]`).
+ * Ledger `paidTrafficCost` wire value normalized to a digit string so consumers do not branch on
+ * `number | string`.
+ */
+export const ledgerPaidTrafficCostSchema = ledgerPaidTrafficCostWireSchema.transform(
+  (value): string => (typeof value === 'number' ? String(value) : value)
+);
+
+/**
+ * Optional `paidTrafficCost` on completion / update / reassignment bodies (`Option[Long]`).
  * Wire may send JSON `null`; outputs normalize to `undefined` after digit-string coercion.
  */
 export const ledgerOptionalPaidTrafficCostSchema =

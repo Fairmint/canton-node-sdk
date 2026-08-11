@@ -28,7 +28,7 @@ describe('Common Schemas', () => {
       expect(result.success).toBe(true);
     });
 
-    it('accepts null W3C fields from Ledger JSON wire', () => {
+    it('normalizes null W3C fields from Ledger JSON wire to undefined', () => {
       const result = TraceContextSchema.safeParse({
         traceparent: null,
         tracestate: null,
@@ -39,9 +39,9 @@ describe('Common Schemas', () => {
       if (!result.success) {
         return;
       }
-      expect(result.data.traceparent).toBeNull();
-      expect(result.data.tracestate).toBeNull();
-      expect(result.data.metadata).toBeNull();
+      expect(result.data.traceparent).toBeUndefined();
+      expect(result.data.tracestate).toBeUndefined();
+      expect(result.data.metadata).toBeUndefined();
       expect(result.data.traceId).toBe('abc123');
     });
   });

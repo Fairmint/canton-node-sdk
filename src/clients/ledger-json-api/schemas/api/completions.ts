@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TraceContextSchema } from '../common';
+import { ledgerNullableOptionalResponseField, ledgerOptionalPaidTrafficCostSchema } from '../wire';
 import { DeduplicationPeriodSchema } from './commands';
 import { StatusDetailsSchema } from './event-details';
 
@@ -59,13 +60,17 @@ export const CompletionSchema = z.object({
       ])
       .optional()
       .nullable(),
-    /** Trace context (optional). Wire may send `null` or nested null W3C fields (`tracestate` / `traceparent`). */
-    traceContext: TraceContextSchema.nullish(),
+    /**
+     * Trace context (optional). Wire may send `null` or nested null W3C fields (`tracestate` / `traceparent`);
+     * outputs normalize to `undefined`.
+     */
+    traceContext: ledgerNullableOptionalResponseField(TraceContextSchema),
     /**
      * Traffic cost (in traffic units) paid by this participant for ordering the confirmation request. Present on recent
-     * Canton Ledger API versions; omitted or zero for older nodes. The API may send int64 as a JSON string.
+     * Canton Ledger API versions; omitted or zero for older nodes. Wire may send number, digit string, or `null`;
+     * outputs normalize to digit string or `undefined`.
      */
-    paidTrafficCost: z.union([z.number().int().nonnegative(), z.string().regex(/^\d+$/)]).optional(),
+    paidTrafficCost: ledgerOptionalPaidTrafficCostSchema,
 
     /** Offset for resuming the stream. */
     offset: z.number(),

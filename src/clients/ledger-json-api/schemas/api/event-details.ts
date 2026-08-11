@@ -23,6 +23,11 @@ export const CreatedEventDetailsSchema = z.looseObject({
   /**
    * Contract key, if present. Wire may send any Daml JSON value, or `null` for absent / Optional.None.
    * Outputs normalize wire `null` to `undefined` (optional property), not `null`.
+   *
+   * Unlike `LedgerCreatedEventSchema`, this stream/event-details path does not keep hash-aware `null`
+   * for present Daml `Optional.None` keys: subscribe-to-updates delivers the PR null→undefined
+   * consumer shape. Use `LedgerCreatedEventSchema` (e.g. contract-by-id) when Optional.None must be
+   * distinguished via `contractKeyHash`.
    */
   contractKey: ledgerNullableOptionalResponseField(LedgerJsonValueSchema),
   /** Canonical Base64 encoding of a 32-byte contract-key hash when a key is present. */
