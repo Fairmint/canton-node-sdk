@@ -38,9 +38,10 @@ export const ledgerNullableOptionalResponseField = <Schema extends z.ZodType>(
 /**
  * Ledger `paidTrafficCost` wire (protobuf JSON int64): JSON number or digit-only string.
  * Normalizes to a digit string so consumers do not branch on `number | string`.
+ * Traffic cost is non-negative; reject negative JSON numbers (digit strings already exclude `-`).
  */
 export const ledgerPaidTrafficCostSchema = z
-  .union([z.number().int(), z.string().regex(/^\d+$/)])
+  .union([z.number().int().nonnegative(), z.string().regex(/^\d+$/)])
   .transform((value): string => (typeof value === 'number' ? String(value) : value));
 
 /**

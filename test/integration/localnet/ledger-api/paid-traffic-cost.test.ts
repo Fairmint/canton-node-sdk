@@ -15,6 +15,13 @@ import { getClient } from './setup';
 
 const WALLET_APP_INSTALL_TEMPLATE_SUFFIX = 'Splice.Wallet.Install:WalletAppInstall';
 
+/** Bound for each HTTP completions batch (suite load can exceed the old limit of 50). */
+const BLOCKING_COMPLETION_LIMIT = 200;
+/** Total time budget for HTTP poll after WS already observed the completion. */
+const BLOCKING_POLL_TIMEOUT_MS = 60_000;
+const BLOCKING_POLL_INITIAL_DELAY_MS = 250;
+const BLOCKING_POLL_MAX_DELAY_MS = 2_000;
+
 /** Env (local dev) or active-contracts snapshot (CI without .env.local). */
 async function resolveWalletAppInstallContext(
   client: ReturnType<typeof getClient>,
@@ -70,24 +77,165 @@ async function resolveLedgerUserId(client: ReturnType<typeof getClient>, validat
   }
 }
 
-function findCompletionForSubmission(
-  rows: unknown[],
-  submissionId: string
-): ReturnType<typeof CompletionStreamResponseSchema.safeParse>['data'] | undefined {
-  for (const row of rows) {
-    const parsed = CompletionStreamResponseSchema.safeParse(row);
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+type ParsedCompletionRow = NonNullable<ReturnType<typeof CompletionStreamResponseSchema.safeParse>['data']>;
+
+interface FindCompletionResult {
+  readonly row: ParsedCompletionRow | undefined;
+  readonly parseFailures: number;
+  readonly lastParseError: string | undefined;
+  /** Highest completion/checkpoint offset seen in successfully parsed rows (for pagination). */
+  readonly maxOffset: number | undefined;
+  /** Raw rows whose `submissionId` matched before schema parse (helps diagnose silent safeParse skips). */
+  readonly rawSubmissionIdHits: number;
+}
+
+function extractOffset(parsed: ParsedCompletionRow): number | undefined {
+  const { completionResponse } = parsed;
+  if ('Completion' in completionResponse) {
+    return completionResponse.Completion.value.offset;
+  }
+  if ('OffsetCheckpoint' in completionResponse) {
+    return completionResponse.OffsetCheckpoint.value.offset;
+  }
+  return undefined;
+}
+
+function rawSubmissionIdEquals(row: unknown, submissionId: string): boolean {
+  if (row === null || typeof row !== 'object') {
+    return false;
+  }
+  const response = (row as { completionResponse?: unknown }).completionResponse;
+  if (response === null || typeof response !== 'object') {
+    return false;
+  }
+  const completion = (response as { Completion?: unknown }).Completion;
+  if (completion === null || typeof completion !== 'object') {
+    return false;
+  }
+  const value = (completion as { value?: unknown }).value;
+  if (value === null || typeof value !== 'object') {
+    return false;
+  }
+  return (value as { submissionId?: unknown }).submissionId === submissionId;
+}
+
+function findCompletionForSubmission(rows: unknown[], submissionId: string): FindCompletionResult {
+  let parseFailures = 0;
+  let lastParseError: string | undefined;
+  let maxOffset: number | undefined;
+  let rawSubmissionIdHits = 0;
+  let row: ParsedCompletionRow | undefined;
+
+  for (const candidate of rows) {
+    if (rawSubmissionIdEquals(candidate, submissionId)) {
+      rawSubmissionIdHits += 1;
+    }
+    const parsed = CompletionStreamResponseSchema.safeParse(candidate);
     if (!parsed.success) {
+      parseFailures += 1;
+      lastParseError = parsed.error.message;
       continue;
+    }
+    const offset = extractOffset(parsed.data);
+    if (offset !== undefined && (maxOffset === undefined || offset > maxOffset)) {
+      maxOffset = offset;
     }
     const cr = parsed.data.completionResponse;
     if (!('Completion' in cr)) {
       continue;
     }
     if (cr.Completion.value.submissionId === submissionId) {
-      return parsed.data;
+      row = parsed.data;
     }
   }
-  return undefined;
+
+  return { row, parseFailures, lastParseError, maxOffset, rawSubmissionIdHits };
+}
+
+/**
+ * Poll HTTP `/v2/commands/completions` until the submission appears (or timeout).
+ * Mirrors WS wait resilience: backoff between empty polls, raise limit, paginate past full pages.
+ */
+async function pollBlockingCompletionForSubmission(
+  client: ReturnType<typeof getClient>,
+  params: {
+    readonly userId: string;
+    readonly partyId: string;
+    readonly beginExclusive: number;
+    readonly submissionId: string;
+  }
+): Promise<ParsedCompletionRow> {
+  const { userId, partyId, submissionId } = params;
+  let cursor = params.beginExclusive;
+  const deadline = Date.now() + BLOCKING_POLL_TIMEOUT_MS;
+  let delayMs = BLOCKING_POLL_INITIAL_DELAY_MS;
+  let lastBatchSize = 0;
+  let totalParseFailures = 0;
+  let lastParseError: string | undefined;
+  let rawSubmissionIdHits = 0;
+
+  while (Date.now() < deadline) {
+    const blocking = await client.completions({
+      userId,
+      parties: [partyId],
+      beginExclusive: cursor,
+      limit: BLOCKING_COMPLETION_LIMIT,
+    });
+    lastBatchSize = blocking.length;
+
+    const found = findCompletionForSubmission(blocking, submissionId);
+    totalParseFailures += found.parseFailures;
+    if (found.lastParseError !== undefined) {
+      lastParseError = found.lastParseError;
+    }
+    rawSubmissionIdHits += found.rawSubmissionIdHits;
+
+    if (found.row) {
+      if (found.parseFailures > 0) {
+        console.warn(
+          `Blocking completions: skipped ${found.parseFailures} unparseable row(s) before match` +
+            (found.lastParseError !== undefined ? ` (last: ${found.lastParseError})` : '')
+        );
+      }
+      return found.row;
+    }
+
+    // Full page without a match: advance cursor and keep paging (suite load can exceed one page).
+    if (blocking.length >= BLOCKING_COMPLETION_LIMIT && found.maxOffset !== undefined && found.maxOffset > cursor) {
+      cursor = found.maxOffset;
+      continue;
+    }
+
+    // Re-query ledger end between idle polls (surface stall if offset never advances).
+    try {
+      await client.getLedgerEnd({});
+    } catch {
+      // Ignore ledger-end probe failures; still retry completions.
+    }
+
+    await sleep(delayMs);
+    delayMs = Math.min(delayMs * 2, BLOCKING_POLL_MAX_DELAY_MS);
+  }
+
+  const parseHint =
+    totalParseFailures > 0
+      ? `; safeParse skipped ${totalParseFailures} row(s)` +
+        (lastParseError !== undefined ? ` (last: ${lastParseError})` : '') +
+        (rawSubmissionIdHits > 0
+          ? `; raw submissionId matched ${rawSubmissionIdHits} unparseable row(s)`
+          : '')
+      : '';
+
+  throw new Error(
+    `Blocking completions did not include submissionId=${submissionId} ` +
+      `(limit=${BLOCKING_COMPLETION_LIMIT}, lastBatchSize=${lastBatchSize}, beginExclusive=${cursor}${parseHint})`
+  );
 }
 
 describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
@@ -160,19 +308,12 @@ describe('LedgerJsonApiClient / paidTrafficCost on completions', () => {
 
     expect(wsResult.updateId).toMatch(/\S+/);
 
-    const blocking = await client.completions({
+    const row = await pollBlockingCompletionForSubmission(client, {
       userId,
-      parties: [partyId],
+      partyId,
       beginExclusive,
-      limit: 50,
+      submissionId,
     });
-
-    const row = findCompletionForSubmission(blocking, submissionId);
-    if (!row) {
-      throw new Error(
-        `Blocking completions did not include submissionId=${submissionId} (check limit=${50} or timing)`
-      );
-    }
 
     const { completionResponse } = row;
     if (!('Completion' in completionResponse)) {
