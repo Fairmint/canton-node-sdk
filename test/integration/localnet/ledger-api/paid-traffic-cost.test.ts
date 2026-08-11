@@ -77,8 +77,8 @@ async function resolveLedgerUserId(client: ReturnType<typeof getClient>, validat
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
+async function sleep(ms: number): Promise<void> {
+  await new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
   });
 }
@@ -118,7 +118,7 @@ function rawSubmissionIdEquals(row: unknown, submissionId: string): boolean {
   if (completion === null || typeof completion !== 'object') {
     return false;
   }
-  const value = (completion as { value?: unknown }).value;
+  const { value } = completion as { value?: unknown };
   if (value === null || typeof value !== 'object') {
     return false;
   }
@@ -192,15 +192,16 @@ async function pollBlockingCompletionForSubmission(
     const found = findCompletionForSubmission(blocking, submissionId);
     totalParseFailures += found.parseFailures;
     if (found.lastParseError !== undefined) {
-      lastParseError = found.lastParseError;
+      ({ lastParseError } = found);
     }
     rawSubmissionIdHits += found.rawSubmissionIdHits;
 
     if (found.row) {
       if (found.parseFailures > 0) {
+        const parseDetail =
+          found.lastParseError !== undefined ? ` (last: ${found.lastParseError})` : '';
         console.warn(
-          `Blocking completions: skipped ${found.parseFailures} unparseable row(s) before match` +
-            (found.lastParseError !== undefined ? ` (last: ${found.lastParseError})` : '')
+          `Blocking completions: skipped ${found.parseFailures} unparseable row(s) before match${parseDetail}`
         );
       }
       return found.row;
@@ -225,16 +226,17 @@ async function pollBlockingCompletionForSubmission(
 
   const parseHint =
     totalParseFailures > 0
-      ? `; safeParse skipped ${totalParseFailures} row(s)` +
-        (lastParseError !== undefined ? ` (last: ${lastParseError})` : '') +
-        (rawSubmissionIdHits > 0
-          ? `; raw submissionId matched ${rawSubmissionIdHits} unparseable row(s)`
-          : '')
+      ? `; safeParse skipped ${totalParseFailures} row(s)${
+          lastParseError !== undefined ? ` (last: ${lastParseError})` : ''
+        }${
+          rawSubmissionIdHits > 0
+            ? `; raw submissionId matched ${rawSubmissionIdHits} unparseable row(s)`
+            : ''
+        }`
       : '';
 
   throw new Error(
-    `Blocking completions did not include submissionId=${submissionId} ` +
-      `(limit=${BLOCKING_COMPLETION_LIMIT}, lastBatchSize=${lastBatchSize}, beginExclusive=${cursor}${parseHint})`
+    `Blocking completions did not include submissionId=${submissionId} (limit=${BLOCKING_COMPLETION_LIMIT}, lastBatchSize=${lastBatchSize}, beginExclusive=${cursor}${parseHint})`
   );
 }
 
