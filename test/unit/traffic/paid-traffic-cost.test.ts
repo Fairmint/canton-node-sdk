@@ -30,17 +30,9 @@ describe('getPaidTrafficCostFromCompletion', () => {
   });
 
   it('returns undefined for a non-digit string', () => {
-    expect(
-      getPaidTrafficCostFromCompletion({
-        value: {
-          commandId: 'cmd-1',
-          offset: 1,
-          synchronizerTime: { synchronizerId: 'sync', recordTime: '1970-01-01T00:00:00Z' },
-          // Bypass schema normalization to exercise the reader guard.
-          paidTrafficCost: '42.5' as unknown as string,
-        },
-      })
-    ).toBeUndefined();
+    const completion = makeCompletion();
+    Object.assign(completion.value, { paidTrafficCost: '42.5' });
+    expect(getPaidTrafficCostFromCompletion(completion)).toBeUndefined();
   });
 });
 
