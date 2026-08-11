@@ -157,10 +157,33 @@ describe('WsUpdateSchema / UpdatesWsMessageSchema wire fixtures', (): void => {
     expect(WsUpdateSchema.safeParse(message['update']).success).toBe(true);
   });
 
-  it('accepts Splice-style null optional fields (traceContext, externalTransactionHash, contractKey)', (): void => {
+  it('accepts Splice-style null optional fields and normalizes them to undefined', (): void => {
     const message = createWireTransactionUpdateMessage({ nullOptionalFields: true });
     const result = UpdatesWsMessageSchema.safeParse(message);
     expect(result.success).toBe(true);
+    if (!result.success) {
+      return;
+    }
+    const transaction = (
+      result.data as {
+        update: {
+          Transaction: {
+            value: {
+              traceContext?: unknown;
+              externalTransactionHash?: unknown;
+              events: Array<{ CreatedEvent?: { contractKey?: unknown }; ExercisedEvent?: { interfaceId?: unknown } }>;
+            };
+          };
+        };
+      }
+    ).update.Transaction.value;
+    expect(transaction.traceContext).toBeUndefined();
+    expect(transaction.externalTransactionHash).toBeUndefined();
+    expect(transaction.events[0]?.CreatedEvent?.contractKey).toBeUndefined();
+    expect(transaction.events[1]?.ExercisedEvent?.interfaceId).toBeUndefined();
+    // Wire sent explicit nulls; parsed output must not re-expose null for these optionals.
+    expect(transaction).not.toHaveProperty('traceContext', null);
+    expect(transaction.events[0]?.CreatedEvent).not.toHaveProperty('contractKey', null);
   });
 
   it('accepts OffsetCheckpoint frames', (): void => {
@@ -171,10 +194,18 @@ describe('WsUpdateSchema / UpdatesWsMessageSchema wire fixtures', (): void => {
     expect(UpdatesWsMessageSchema.safeParse(createWireReassignmentUpdateMessage()).success).toBe(true);
   });
 
-  it('accepts value-wrapped Reassignment frames with null traceContext', (): void => {
-    expect(UpdatesWsMessageSchema.safeParse(createWireReassignmentUpdateMessage(6_619_780, { nullTraceContext: true })).success).toBe(
-      true
+  it('accepts value-wrapped Reassignment frames with null traceContext normalized to undefined', (): void => {
+    const result = UpdatesWsMessageSchema.safeParse(
+      createWireReassignmentUpdateMessage(6_619_780, { nullTraceContext: true })
     );
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      return;
+    }
+    const reassignment = (
+      result.data as { update: { Reassignment: { value: { traceContext?: unknown } } } }
+    ).update.Reassignment.value;
+    expect(reassignment.traceContext).toBeUndefined();
   });
 
   it('rejects the pre-#379 mistaken flat Transaction shape (no value wrapper)', (): void => {
@@ -192,6 +223,22 @@ describe('WsUpdateSchema / UpdatesWsMessageSchema wire fixtures', (): void => {
     };
     const result = UpdatesWsMessageSchema.safeParse(flat);
     expect(result.success).toBe(false);
+  });
+
+  it('rejects REST JsTransaction-named wrappers on the WebSocket union', (): void => {
+    const restShaped = {
+      update: {
+        JsTransaction: {
+          updateId: '1220transactionhash',
+          effectiveAt: '2026-08-10T12:00:00.123456Z',
+          offset: 1,
+          synchronizerId: SYNCHRONIZER_ID,
+          recordTime: '2026-08-10T12:00:00.123456Z',
+          events: [],
+        },
+      },
+    };
+    expect(UpdatesWsMessageSchema.safeParse(restShaped).success).toBe(false);
   });
 
   it('rejects the mistaken JsCreated event kind shape used before the wire fix', (): void => {
@@ -320,8 +367,8 @@ describe('SubscribeToUpdates', (): void => {
     expect(onMessage).not.toHaveBeenCalled();
   });
 
-  it('delivers value-wrapped Transaction frames to onMessage without stripping wire fields', async (): Promise<void> => {
-    const wireMessage = createWireTransactionUpdateMessage({ offset: 6_619_776 });
+  it('delivers normalized Transaction frames to onMessage without stripping known wire fields', async (): Promise<void> => {
+    const wireMessage = createWireTransactionUpdateMessage({ offset: 6_619_776, nullOptionalFields: true });
     const onMessage = jest.fn().mockResolvedValue(undefined);
     mockConnect.mockImplementation(
       async (
@@ -349,13 +396,27 @@ describe('SubscribeToUpdates', (): void => {
     await new SubscribeToUpdates(client as never).connect({ beginExclusive: 42, onMessage });
 
     expect(onMessage).toHaveBeenCalledTimes(1);
-    const delivered = onMessage.mock.calls[0]?.[0] as typeof wireMessage;
-    expect(delivered).toBe(wireMessage);
-    const created = (
-      delivered['update'] as {
-        Transaction: { value: { events: Array<{ CreatedEvent?: { representativePackageId?: string } }> } };
-      }
-    ).Transaction.value.events[0]?.CreatedEvent;
+    const delivered = onMessage.mock.calls[0]?.[0] as {
+      update: {
+        Transaction: {
+          value: {
+            traceContext?: unknown;
+            externalTransactionHash?: unknown;
+            events: Array<{
+              CreatedEvent?: { representativePackageId?: string; acsDelta?: boolean; contractKey?: unknown };
+            }>;
+          };
+        };
+      };
+    };
+    // Normalized Zod output (not the raw wire object): null optionals → undefined.
+    expect(delivered).not.toBe(wireMessage);
+    const value = delivered.update.Transaction.value;
+    expect(value.traceContext).toBeUndefined();
+    expect(value.externalTransactionHash).toBeUndefined();
+    const created = value.events[0]?.CreatedEvent;
     expect(created?.representativePackageId).toBe(PACKAGE_ID);
+    expect(created?.acsDelta).toBe(true);
+    expect(created?.contractKey).toBeUndefined();
   });
 });

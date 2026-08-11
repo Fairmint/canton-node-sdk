@@ -12,7 +12,7 @@ import {
   type JsCantonError,
   type WsCantonError,
 } from '../../../schemas/api/errors';
-import { JsUpdateSchema, WsUpdateSchema } from '../../../schemas/api/updates';
+import { WsUpdateSchema } from '../../../schemas/api/updates';
 import { buildEventFormat } from '../utils/event-format-builder';
 
 const path = '/v2/updates' as const;
@@ -91,14 +91,13 @@ export type SubscribeToUpdatesParams = z.infer<typeof SubscribeToUpdatesParamsSc
 };
 
 /**
- * Runtime wire union for `/v2/updates` frames.
+ * Runtime wire union for `/v2/updates` WebSocket frames.
  *
- * Prefer {@link WsUpdateSchema} (AsyncAPI `Update` with value-wrapped Transaction/Reassignment/TopologyTransaction).
- * {@link JsUpdateSchema} remains for legacy JS-named variants seen in some REST-shaped payloads.
+ * AsyncAPI-only: value-wrapped {@link WsUpdateSchema} (`Transaction` / `Reassignment` / `TopologyTransaction` /
+ * `OffsetCheckpoint`). REST `JsTransaction`-named wrappers stay on REST response schemas, not this WS stream.
  */
 export const UpdatesWsMessageSchema = z.union([
   z.object({ update: WsUpdateSchema }),
-  z.object({ update: JsUpdateSchema }),
   JsCantonErrorSchema,
   WsCantonErrorSchema,
 ]);
@@ -274,9 +273,9 @@ export class SubscribeToUpdates {
                   }
                 );
               }
-              // Deliver the original frame after validation so Zod does not strip unknown wire fields
-              // (e.g. representativePackageId, acsDelta, AsyncAPI TraceContext.traceparent).
-              const message = parsed as UpdatesWsMessage;
+              // Deliver Zod output: wire `null` optional fields are normalized to `undefined`, while
+              // `.passthrough()` on event/transaction schemas keeps unknown Ledger fields (future wire additions).
+              const message = decoded.data;
 
               // Surface Canton error frames immediately; a slow consumer callback must not delay stream failure.
               if (isErrorMessage(message)) {
