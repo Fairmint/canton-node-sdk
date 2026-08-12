@@ -3,14 +3,14 @@
 See [CLAUDE.md](CLAUDE.md), [README.md](README.md), and
 `.cursor/skills/localnet-testing/SKILL.md`. `package.json` (`localnet:*` scripts) is the source of
 truth for LocalNet commands in this repo; lifecycle is owned by
-`@fairmint/canton-dev-tools@0.1.1+`.
+`@fairmint/canton-dev-tools@0.1.7+`.
 
 ## LocalNet ownership (ENG-1635)
 
 **`@fairmint/canton-dev-tools` owns LocalNet** (CLI, pins, and shared test helpers). This SDK does
 not ship a LocalNet engine or `canton-localnet` binary.
 
-- Install pin: `devDependency` `@fairmint/canton-dev-tools@0.1.1` (exact).
+- Install pin: `devDependency` `@fairmint/canton-dev-tools@0.1.7` (exact).
 - Repo scripts: `npm run localnet:*` → `canton-dev-tools <command>`.
 - Integration helpers: import from `@fairmint/canton-dev-tools/testing`.
 - Pins / auth defaults: see Dev Tools
@@ -39,10 +39,11 @@ Prerequisites (on demand — heavy, not in the dashboard update script):
 git submodule update --init --recursive --depth 1 libs/cn-quickstart
 git submodule update --init --depth 1 libs/splice
 npm install
-npm run localnet:start   # first run ~10-15 min: image pulls + Splice DSO bootstrap
-npm run localnet:smoke   # Keycloak/Validator/Scan/Ledger reachability
-npm run localnet:stop
+npm run localnet:start       # first run ~10-15 min: image pulls + Splice DSO bootstrap
+npm run localnet:readiness   # Keycloak/Validator/Scan/Ledger reachability (alias: smoke)
+npm run localnet:teardown    # alias: stop
 ```
+
 
 Verified ready endpoints: Ledger JSON API `http://localhost:3975/v2/version` (returned `3.5.4`),
 Scan `http://scan.localhost:4000/api/scan/v0/dso-party-id` (returns the DSO party id), Validator

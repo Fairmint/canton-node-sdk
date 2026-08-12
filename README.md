@@ -47,19 +47,22 @@ npm run build
 ### LocalNet (owned by `@fairmint/canton-dev-tools`)
 
 LocalNet lifecycle and shared test helpers live in
-[`@fairmint/canton-dev-tools@0.1.1`](https://www.npmjs.com/package/@fairmint/canton-dev-tools)
+[`@fairmint/canton-dev-tools@0.1.7`](https://www.npmjs.com/package/@fairmint/canton-dev-tools)
 (see its [COMPATIBILITY.md](https://github.com/Fairmint/canton-dev-tools/blob/main/COMPATIBILITY.md)).
 This SDK does not publish a LocalNet CLI or `scripts/localnet-cloud.sh`.
 
 ```bash
 npm install   # installs @fairmint/canton-dev-tools as an exact-pinned devDependency
 npm run localnet:start
-npm run localnet:smoke
-npm run localnet:stop
+npm run localnet:readiness   # alias: localnet:smoke
+npm run localnet:teardown    # alias: localnet:stop
 
 # Or call the Dev Tools CLI directly:
 npx @fairmint/canton-dev-tools start
+npx @fairmint/canton-dev-tools readiness
+npx @fairmint/canton-dev-tools teardown
 ```
+
 
 Integration helpers:
 

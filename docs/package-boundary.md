@@ -13,7 +13,7 @@ repository / CI-only. Repeatable enforcement lives in `npm run check:package-art
 
 LocalNet CLI and shared integration-test helpers are **not** published here. They live in
 [`@fairmint/canton-dev-tools`](https://www.npmjs.com/package/@fairmint/canton-dev-tools)
-(`0.1.1+`), including `scripts/localnet-cloud.sh` and `@fairmint/canton-dev-tools/testing`.
+(`0.1.7+`), including `scripts/localnet-cloud.sh` and `@fairmint/canton-dev-tools/testing`.
 
 ## CI-only / must not publish
 
