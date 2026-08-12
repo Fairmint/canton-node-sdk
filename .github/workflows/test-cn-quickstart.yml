@@ -124,10 +124,10 @@ jobs:
       - name: Run LocalNet Smoke + Integration Tests
         run: |
           echo "Running tests..."
-          npm run localnet:smoke
+          npm run localnet:readiness
           npm run test:integration
           echo "✓ Tests passed!"
 
       - name: Show Logs on Failure
         if: failure()
-        run: npm run localnet:logs
+        run: npm run localnet:diagnostics

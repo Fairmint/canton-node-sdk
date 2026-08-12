@@ -54,12 +54,15 @@ This SDK does not publish a LocalNet CLI or `scripts/localnet-cloud.sh`.
 ```bash
 npm install   # installs @fairmint/canton-dev-tools as an exact-pinned devDependency
 npm run localnet:start
-npm run localnet:smoke
-npm run localnet:stop
+npm run localnet:readiness   # alias: localnet:smoke
+npm run localnet:teardown    # alias: localnet:stop
 
 # Or call the Dev Tools CLI directly:
 npx @fairmint/canton-dev-tools start
+npx @fairmint/canton-dev-tools readiness
+npx @fairmint/canton-dev-tools teardown
 ```
+
 
 Integration helpers:
 

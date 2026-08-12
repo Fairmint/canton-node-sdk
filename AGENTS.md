@@ -39,10 +39,11 @@ Prerequisites (on demand — heavy, not in the dashboard update script):
 git submodule update --init --recursive --depth 1 libs/cn-quickstart
 git submodule update --init --depth 1 libs/splice
 npm install
-npm run localnet:start   # first run ~10-15 min: image pulls + Splice DSO bootstrap
-npm run localnet:smoke   # Keycloak/Validator/Scan/Ledger reachability
-npm run localnet:stop
+npm run localnet:start       # first run ~10-15 min: image pulls + Splice DSO bootstrap
+npm run localnet:readiness   # Keycloak/Validator/Scan/Ledger reachability (alias: smoke)
+npm run localnet:teardown    # alias: stop
 ```
+
 
 Verified ready endpoints: Ledger JSON API `http://localhost:3975/v2/version` (returned `3.5.4`),
 Scan `http://scan.localhost:4000/api/scan/v0/dso-party-id` (returns the DSO party id), Validator
