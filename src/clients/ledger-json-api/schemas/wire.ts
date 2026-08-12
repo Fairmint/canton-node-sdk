@@ -29,11 +29,49 @@ export const LedgerJsonValueSchema: z.ZodType<LedgerJsonValue> = z
   })
   .transform(cloneLedgerJsonValue);
 
-/** Accept a wire-null Scala `Option.None`, then expose the generated optional-property shape. */
+/**
+ * Accept a wire-null Scala `Option.None`, then expose the generated optional-property shape.
+ * `.optional()` is applied outside the transform so object keys stay optional under
+ * `exactOptionalPropertyTypes`.
+ */
+type LedgerNullableOptionalResponseField<Schema extends z.ZodType> = z.ZodOptional<
+  z.ZodPipe<
+    z.ZodUnion<readonly [Schema, z.ZodNull]>,
+    z.ZodTransform<z.output<Schema> | undefined, z.output<Schema> | null>
+  >
+>;
+
 export const ledgerNullableOptionalResponseField = <Schema extends z.ZodType>(
   schema: Schema
-): z.ZodType<z.output<Schema> | undefined, z.input<Schema> | null | undefined> =>
-  schema.nullish().transform((value): z.output<Schema> | undefined => value ?? undefined);
+): LedgerNullableOptionalResponseField<Schema> =>
+  z
+    .union([schema, z.null()])
+    .transform((value): z.output<Schema> | undefined => (value ?? undefined) as z.output<Schema> | undefined)
+    .optional();
+
+/**
+ * Ledger `paidTrafficCost` wire union (protobuf JSON int64): JSON number or digit-only string.
+ * Traffic cost is non-negative; reject negative JSON numbers (digit strings already exclude `-`).
+ */
+export const ledgerPaidTrafficCostWireSchema = z.union([
+  z.number().int().nonnegative(),
+  z.string().regex(/^\d+$/),
+]);
+
+/**
+ * Ledger `paidTrafficCost` wire value normalized to a digit string so consumers do not branch on
+ * `number | string`.
+ */
+export const ledgerPaidTrafficCostSchema = ledgerPaidTrafficCostWireSchema.transform(
+  (value): string => (typeof value === 'number' ? String(value) : value)
+);
+
+/**
+ * Optional `paidTrafficCost` on completion / update / reassignment bodies (`Option[Long]`).
+ * Wire may send JSON `null`; outputs normalize to `undefined` after digit-string coercion.
+ */
+export const ledgerOptionalPaidTrafficCostSchema =
+  ledgerNullableOptionalResponseField(ledgerPaidTrafficCostSchema);
 
 /** Canonical padded Base64 used by protobuf JSON `bytes` fields. Base64url and non-canonical padding are rejected. */
 export const LedgerBase64BytesSchema = z.string().refine(isCanonicalStandardBase64, {

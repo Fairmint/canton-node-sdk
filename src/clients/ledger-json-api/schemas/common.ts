@@ -1,19 +1,29 @@
 import { z } from 'zod';
 import { RecordSchema } from './base';
+import { ledgerNullableOptionalResponseField } from './wire';
 
 /** DAR file content as a binary Buffer. */
 export const DarFileSchema = z.instanceof(Buffer);
 
-/** Trace context for distributed tracing. */
-export const TraceContextSchema = z.object({
+/**
+ * Trace context for distributed tracing.
+ *
+ * Ledger JSON API / Splice often send optional W3C fields as JSON `null` (not omitted). Accept null on the wire and
+ * expose `undefined` to consumers (same as omitted). Safe for request schemas too: callers send strings or omit.
+ */
+export const TraceContextSchema = z.looseObject({
+  /** W3C traceparent (AsyncAPI / Ledger JSON API). */
+  traceparent: ledgerNullableOptionalResponseField(z.string()),
+  /** W3C tracestate (AsyncAPI / Ledger JSON API). */
+  tracestate: ledgerNullableOptionalResponseField(z.string()),
   /** Trace ID for the request. */
-  traceId: z.string().optional(),
+  traceId: ledgerNullableOptionalResponseField(z.string()),
   /** Span ID for the current operation. */
-  spanId: z.string().optional(),
+  spanId: ledgerNullableOptionalResponseField(z.string()),
   /** Parent span ID (optional). */
-  parentSpanId: z.string().optional(),
+  parentSpanId: ledgerNullableOptionalResponseField(z.string()),
   /** Additional trace metadata. */
-  metadata: z.record(z.string(), z.string()).optional(),
+  metadata: ledgerNullableOptionalResponseField(z.record(z.string(), z.string())),
 });
 
 /** Deduplication duration. */

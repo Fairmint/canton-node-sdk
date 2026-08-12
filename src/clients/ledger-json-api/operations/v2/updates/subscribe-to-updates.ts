@@ -12,7 +12,7 @@ import {
   type JsCantonError,
   type WsCantonError,
 } from '../../../schemas/api/errors';
-import { JsUpdateSchema, WsUpdateSchema } from '../../../schemas/api/updates';
+import { WsUpdateSchema } from '../../../schemas/api/updates';
 import { buildEventFormat } from '../utils/event-format-builder';
 
 const path = '/v2/updates' as const;
@@ -90,14 +90,30 @@ export type SubscribeToUpdatesParams = z.infer<typeof SubscribeToUpdatesParamsSc
   onTokenRefreshNeeded?: WebSocketOptions['onTokenRefreshNeeded'];
 };
 
-const UpdatesWsMessageSchema = z.union([
-  z.object({ update: JsUpdateSchema }),
-  z.object({ update: WsUpdateSchema }),
+/**
+ * Runtime wire union for `/v2/updates` WebSocket frames.
+ *
+ * AsyncAPI-only: value-wrapped {@link WsUpdateSchema} (`Transaction` / `Reassignment` / `TopologyTransaction` /
+ * `OffsetCheckpoint`). REST `JsTransaction`-named wrappers stay on REST response schemas, not this WS stream.
+ */
+export const UpdatesWsMessageSchema = z.union([
+  // Preserve unknown top-level WS frame fields (future Ledger extensions beyond `update`).
+  z.looseObject({ update: WsUpdateSchema }),
   JsCantonErrorSchema,
   WsCantonErrorSchema,
 ]);
 
 export type UpdatesWsMessage = z.infer<typeof UpdatesWsMessageSchema>;
+
+/** Format Zod issues for ApiError messages / Slack logs. */
+function formatZodIssues(error: z.ZodError): string {
+  return error.issues
+    .map((issue) => {
+      const issuePath = issue.path.length > 0 ? issue.path.join('.') : '(root)';
+      return `${issuePath}: ${issue.message}`;
+    })
+    .join('; ');
+}
 
 /**
  * Subscribes to ledger updates via WebSocket connection.
@@ -248,8 +264,18 @@ export class SubscribeToUpdates {
             onMessage: async (parsed): Promise<void> => {
               const decoded = UpdatesWsMessageSchema.safeParse(parsed);
               if (!decoded.success) {
-                throw new ApiError('Unexpected ledger updates WebSocket message');
+                // Include Zod issue details so Slack/logs can diagnose the next wire-shape mismatch.
+                throw new ApiError(
+                  `Unexpected ledger updates WebSocket message: ${formatZodIssues(decoded.error)}`,
+                  undefined,
+                  undefined,
+                  {
+                    zodIssues: decoded.error.issues,
+                  }
+                );
               }
+              // Deliver normalized Zod output (not the raw wire frame): null optionals → undefined,
+              // paidTrafficCost coerced to digit string, while `z.looseObject` preserves unknown Ledger fields.
               const message = decoded.data;
 
               // Surface Canton error frames immediately; a slow consumer callback must not delay stream failure.
