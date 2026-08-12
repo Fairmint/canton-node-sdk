@@ -25,7 +25,7 @@
     "build/src/**"
   ],
   "scripts": {
-    "artifacts:manifest": "mkdir -p artifacts && npm pack --dry-run --json --ignore-scripts > /tmp/npm-pack.json 2>/dev/null && jq -r '.[0].files[].path' /tmp/npm-pack.json | sort | tsx scripts/collapse-manifest.ts > artifacts/npm-manifest.txt",
+    "artifacts:manifest": "mkdir -p artifacts && npm pack --dry-run --json --ignore-scripts > /tmp/npm-pack.json 2>/dev/null && jq -r '.[0].files[].path' /tmp/npm-pack.json | sort | canton-dev-tools collapse-manifest > artifacts/npm-manifest.txt",
     "build": "npm run build:core && npm run build:lint",
     "build:core": "npm run generate:openapi-types && npm run build:core:generate-client-methods && npm run tsc7",
     "build:core:generate-client-methods": "tsx scripts/generate-all-client-methods.ts",
@@ -54,7 +54,7 @@
     "localnet:teardown": "canton-dev-tools teardown",
     "localnet:verify": "canton-dev-tools verify",
     "prepack": "npm run clean && npm run build:core",
-    "prepare-release": "tsx scripts/prepare-release.ts",
+    "prepare-release": "canton-dev-tools prepare-release",
     "prepublishOnly": "npm run prepack",
     "revoke-user-rights": "tsx scripts/revoke-user-rights.ts",
     "test": "jest",
@@ -79,7 +79,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@fairmint/canton-dev-tools": "0.1.1",
+    "@fairmint/canton-dev-tools": "0.1.7",
     "@types/jest": "30.0.0",
     "@types/node": "26.1.0",
     "@types/ws": "8.18.1",

@@ -3,14 +3,14 @@
 See [CLAUDE.md](CLAUDE.md), [README.md](README.md), and
 `.cursor/skills/localnet-testing/SKILL.md`. `package.json` (`localnet:*` scripts) is the source of
 truth for LocalNet commands in this repo; lifecycle is owned by
-`@fairmint/canton-dev-tools@0.1.1+`.
+`@fairmint/canton-dev-tools@0.1.7+`.
 
 ## LocalNet ownership (ENG-1635)
 
 **`@fairmint/canton-dev-tools` owns LocalNet** (CLI, pins, and shared test helpers). This SDK does
 not ship a LocalNet engine or `canton-localnet` binary.
 
-- Install pin: `devDependency` `@fairmint/canton-dev-tools@0.1.1` (exact).
+- Install pin: `devDependency` `@fairmint/canton-dev-tools@0.1.7` (exact).
 - Repo scripts: `npm run localnet:*` → `canton-dev-tools <command>`.
 - Integration helpers: import from `@fairmint/canton-dev-tools/testing`.
 - Pins / auth defaults: see Dev Tools
