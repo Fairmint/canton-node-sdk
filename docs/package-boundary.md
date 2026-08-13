@@ -37,4 +37,3 @@ leak compiled tests into the tarball.
 
 - Canonical LocalNet owner: [`@fairmint/canton-dev-tools`](https://github.com/Fairmint/canton-dev-tools)
   ([COMPATIBILITY.md](https://github.com/Fairmint/canton-dev-tools/blob/main/COMPATIBILITY.md))
-- Tracking: ENG-1635
