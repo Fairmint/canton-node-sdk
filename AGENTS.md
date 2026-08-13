@@ -49,13 +49,10 @@ Verified ready endpoints: Ledger JSON API `http://localhost:3975/v2/version` (re
 Scan `http://scan.localhost:4000/api/scan/v0/dso-party-id` (returns the DSO party id), Validator
 `http://localhost:3903/...` (200/401).
 
-Known gotchas hit in this cloud/multi-repo setup:
+Known gotchas:
 
-- **Port 3000 conflict.** LocalNet's `nginx` binds host `127.0.0.1:3000`, which collides with the
-  `apiv2` dev gateway (also `:3000`). Free `:3000` (stop the apiv2 dev server) before starting
-  LocalNet, or `nginx` fails with `failed to bind host port 127.0.0.1:3000: address already in use`.
-- **`nginx` left network-less after a failed start.** If `nginx`'s first start fails (e.g. the port
-  clash above), the container is created but never attached to the `quickstart` Docker network, then
+- **`nginx` left network-less after a failed start.** If `nginx`'s first start fails (e.g. a host
+  port bind error), the container is created but never attached to the `quickstart` Docker network, then
   crash-loops with `host not found in upstream "splice"`. Fix: `sudo docker rm -f nginx` and re-run
   `npm run localnet:start` so it is recreated and attached.
 - **Splice force-recreate can stall Scan readiness.** The SDK patches the Splice config
