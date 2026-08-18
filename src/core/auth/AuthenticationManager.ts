@@ -5,7 +5,8 @@ import {
 } from '@hardlydifficult/rest-client';
 import { TimeoutError } from '../errors';
 import { abortableSleep, createAbortError, isAbortError, throwIfAborted } from '../http/abort';
-import { DEFAULT_HTTP_RETRY_CONFIG, DEFAULT_HTTP_TIMEOUT_MS } from '../http/HttpClient';
+import { DEFAULT_HTTP_TIMEOUT_MS } from '../http/HttpClient';
+import { DEFAULT_READ_RETRY_MAX_ATTEMPTS, defaultReadRetryBackoffMs } from '../http/request-retry';
 import { type Logger } from '../logging';
 import { type AuthConfig } from '../types';
 
@@ -122,13 +123,14 @@ export class AuthenticationManager {
   }
 
   /**
-   * Retries the live token POST for transient failures only. Callers still share this promise via
-   * `pendingAuthentication`, so concurrent `authenticate()` waits join one in-flight request including its retries.
-   * Backoff is not tied to any one caller's AbortSignal: aborting a waiter unblocks that caller via
-   * `withAuthTimeout` without cancelling retries for remaining joiners.
+   * Retries the live token POST for transient failures only, using the same attempt budget and backoff as
+   * semantic-read HttpClient retries. Callers still share this promise via `pendingAuthentication`, so concurrent
+   * `authenticate()` waits join one in-flight request including its retries. Backoff is not tied to any one caller's
+   * AbortSignal: aborting a waiter unblocks that caller via `withAuthTimeout` without cancelling retries for remaining
+   * joiners.
    */
   private async authenticateDelegateWithRetry(): Promise<string> {
-    const maxAttempts = DEFAULT_HTTP_RETRY_CONFIG.maxRetries + 1;
+    const maxAttempts = DEFAULT_READ_RETRY_MAX_ATTEMPTS;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
@@ -137,7 +139,7 @@ export class AuthenticationManager {
         if (attempt >= maxAttempts || !isRetryableTokenError(error)) {
           throw error;
         }
-        await abortableSleep(DEFAULT_HTTP_RETRY_CONFIG.delayMs, undefined);
+        await abortableSleep(defaultReadRetryBackoffMs({ attempt }), undefined);
       }
     }
 

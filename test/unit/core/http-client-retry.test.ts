@@ -6,8 +6,13 @@ import {
   TimeoutError,
   UnknownMutationOutcomeError,
 } from '../../../src/core/errors';
+import { abortableSleep } from '../../../src/core/http/abort';
 import { HttpClient } from '../../../src/core/http/HttpClient';
-import { type HttpRequestOptions } from '../../../src/core/http/request-retry';
+import {
+  DEFAULT_READ_RETRY_DELAYS_MS,
+  DEFAULT_READ_RETRY_MAX_ATTEMPTS,
+  type HttpRequestOptions,
+} from '../../../src/core/http/request-retry';
 import { type Logger } from '../../../src/core/logging';
 
 jest.mock('axios', () => {
@@ -25,6 +30,21 @@ jest.mock('axios', () => {
     isCancel: actual.isCancel,
   };
 });
+
+jest.mock('../../../src/core/http/abort', () => {
+  const actual = jest.requireActual<typeof import('../../../src/core/http/abort')>(
+    '../../../src/core/http/abort'
+  );
+  return {
+    ...actual,
+    abortableSleep: jest.fn(actual.abortableSleep),
+  };
+});
+
+const mockedAbortableSleep = abortableSleep as jest.MockedFunction<typeof abortableSleep>;
+const actualAbortableSleep = jest.requireActual<typeof import('../../../src/core/http/abort')>(
+  '../../../src/core/http/abort'
+).abortableSleep;
 
 interface MockAxiosInstance {
   readonly get: jest.Mock;
@@ -1070,5 +1090,37 @@ describe('HttpClient mutation retry safety', () => {
 
     await expect(request).rejects.toMatchObject({ name: 'AbortError' });
     expect(axiosInstance.post).not.toHaveBeenCalled();
+  });
+});
+
+describe('HttpClient default semantic-read retry schedule', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedAbortableSleep.mockImplementation(async () => undefined);
+  });
+
+  afterEach(() => {
+    mockedAbortableSleep.mockImplementation(actualAbortableSleep);
+  });
+
+  it('uses the shared 60s backoff after successive 503 GET failures', async () => {
+    const { client, axiosInstance } = createClient();
+    axiosInstance.get.mockRejectedValue(createAxiosError(503));
+
+    await expect(client.makeGetRequest('https://ledger.example/v2/version')).rejects.toBeInstanceOf(ApiError);
+
+    expect(axiosInstance.get).toHaveBeenCalledTimes(DEFAULT_READ_RETRY_MAX_ATTEMPTS);
+    expect(mockedAbortableSleep.mock.calls.map(([delayMs]) => delayMs)).toEqual([...DEFAULT_READ_RETRY_DELAYS_MS]);
+  });
+
+  it('still honors setRetryConfig({ maxRetries, delayMs: 0 }) instead of the default schedule', async () => {
+    const { client, axiosInstance } = createClient();
+    client.setRetryConfig({ maxRetries: 3, delayMs: 0 });
+    axiosInstance.get.mockRejectedValue(createAxiosError(503));
+
+    await expect(client.makeGetRequest('https://ledger.example/v2/version')).rejects.toBeInstanceOf(ApiError);
+
+    expect(axiosInstance.get).toHaveBeenCalledTimes(4);
+    expect(mockedAbortableSleep).not.toHaveBeenCalled();
   });
 });

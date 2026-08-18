@@ -4,7 +4,10 @@ import { AuthenticationManager as RestClientAuthenticationManager } from '@hardl
 import { AuthenticationManager } from '../../../src/core/auth/AuthenticationManager';
 import { TimeoutError } from '../../../src/core/errors';
 import { abortableSleep, throwIfAborted } from '../../../src/core/http/abort';
-import { DEFAULT_HTTP_RETRY_CONFIG } from '../../../src/core/http/HttpClient';
+import {
+  DEFAULT_READ_RETRY_DELAYS_MS,
+  DEFAULT_READ_RETRY_MAX_ATTEMPTS,
+} from '../../../src/core/http/request-retry';
 import { type AuthConfig } from '../../../src/core/types';
 
 jest.mock('../../../src/core/http/abort', () => {
@@ -57,7 +60,7 @@ function writeStatus(res: http.ServerResponse, status: number, body: unknown): v
 }
 
 describe('AuthenticationManager token-endpoint retry', () => {
-  const expectedAttempts = DEFAULT_HTTP_RETRY_CONFIG.maxRetries + 1;
+  const expectedAttempts = DEFAULT_READ_RETRY_MAX_ATTEMPTS;
 
   beforeEach(() => {
     mockedAbortableSleep.mockImplementation(async (_ms: number, signal?: AbortSignal) => {
@@ -101,6 +104,7 @@ describe('AuthenticationManager token-endpoint retry', () => {
       const manager = new AuthenticationManager(server.url, createAuthConfig());
       await expect(manager.authenticate(0)).rejects.toThrow(/Authentication failed[\s\S]*502/u);
       expect(requestCount).toBe(expectedAttempts);
+      expect(mockedAbortableSleep.mock.calls.map(([delayMs]) => delayMs)).toEqual([...DEFAULT_READ_RETRY_DELAYS_MS]);
     } finally {
       await server.close();
     }
