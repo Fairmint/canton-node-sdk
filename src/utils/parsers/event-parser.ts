@@ -1,3 +1,4 @@
+import { CantonError, type ErrorContext } from '../../core/errors';
 import { isRecord, isString } from '../../core/utils';
 
 export interface ParsedTemplateId {
@@ -129,6 +130,33 @@ export function hasTemplateName(templateId: string, expectedTemplateName: string
   } catch {
     return false;
   }
+}
+
+/** The `Module:Template` part of a template id, dropping the leading package id or `#package-name`. */
+export function qualifiedTemplateName(templateId: string): string {
+  const firstColon = templateId.indexOf(':');
+  return firstColon === -1 ? templateId : templateId.slice(firstColon + 1);
+}
+
+/**
+ * Match a template id from a ledger event against a filter, ignoring the package component.
+ *
+ * A create event always names the package _id_ that produced it, which a caller cannot know in advance; a filter is
+ * usually written with a package _name_ (`#MyPackage:Module:Template`) or without a package at all
+ * (`Module:Template`, or just `Template`). All three forms match here.
+ */
+export function matchesTemplateId(templateId: string, filter: string): boolean {
+  if (templateId === filter) return true;
+
+  const idSuffix = templateId.split(':').slice(1);
+  if (idSuffix.length === 0) return false;
+
+  const filterParts = filter.split(':');
+  const filterSuffix = filterParts.length > idSuffix.length ? filterParts.slice(1) : filterParts;
+  if (filterSuffix.length === 0 || filterSuffix.length > idSuffix.length) return false;
+
+  const offset = idSuffix.length - filterSuffix.length;
+  return filterSuffix.every((part, index) => part === idSuffix[offset + index]);
 }
 
 export function parseCreatedEvent(event: unknown): ParsedCreatedEvent | null {
@@ -275,13 +303,15 @@ function getEventsById(transaction: unknown): Readonly<Record<string, unknown>> 
 
   for (const path of paths) {
     const eventsById = getNestedRecord(transaction, path);
-    if (eventsById) return eventsById;
+    if (eventsById && Object.keys(eventsById).length > 0) return eventsById;
   }
 
   return null;
 }
 
 function getEventArray(transaction: unknown): readonly unknown[] | null {
+  if (Array.isArray(transaction)) return transaction;
+
   const paths: ReadonlyArray<readonly string[]> = [
     ['events'],
     ['transactionTree', 'events'],
@@ -296,11 +326,30 @@ function getEventArray(transaction: unknown): readonly unknown[] | null {
   return null;
 }
 
-export function extractEventsFromTransaction(transaction: unknown): ParsedTransactionEvents {
-  const eventsById = getEventsById(transaction);
-  const events = eventsById ? Object.values(eventsById) : (getEventArray(transaction) ?? []);
+/** Node ids are numeric strings, but a map preserves whatever order it was built with. */
+function compareNodeIds(left: string, right: string): number {
+  const leftNumber = Number(left);
+  const rightNumber = Number(right);
+  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) return leftNumber - rightNumber;
+  return left < right ? -1 : left > right ? 1 : 0;
+}
 
-  return events.reduce<ParsedTransactionEvents>(
+/**
+ * The raw events of a transaction in node-id order, from whichever shape the response used: a tree keyed by node id, or
+ * a flat event array, wrapped in `transactionTree`, in `transaction`, or on its own.
+ */
+export function getTransactionEvents(transaction: unknown): readonly unknown[] {
+  const eventsById = getEventsById(transaction);
+  if (eventsById) {
+    return Object.keys(eventsById)
+      .sort(compareNodeIds)
+      .map((key) => eventsById[key]);
+  }
+  return getEventArray(transaction) ?? [];
+}
+
+export function extractEventsFromTransaction(transaction: unknown): ParsedTransactionEvents {
+  return getTransactionEvents(transaction).reduce<ParsedTransactionEvents>(
     (acc, event) => {
       const created = parseCreatedEvent(event);
       if (created) acc.created.push(created);
@@ -315,4 +364,99 @@ export function extractEventsFromTransaction(transaction: unknown): ParsedTransa
     },
     { created: [], archived: [], exercised: [] }
   );
+}
+
+export const TransactionParseErrorCode = {
+  EXERCISE_RESULT_NOT_FOUND: 'TRANSACTION_EXERCISE_RESULT_NOT_FOUND',
+  UPDATE_ID_NOT_FOUND: 'TRANSACTION_UPDATE_ID_NOT_FOUND',
+} as const;
+
+export type TransactionParseErrorCode =
+  (typeof TransactionParseErrorCode)[keyof typeof TransactionParseErrorCode];
+
+/** Thrown when a transaction response does not contain something the caller asserted it would. */
+export class TransactionParseError extends CantonError {
+  public override readonly name: string;
+
+  public constructor(code: TransactionParseErrorCode, message: string, context?: ErrorContext) {
+    super(message, code, context);
+    this.name = 'TransactionParseError';
+  }
+}
+
+/** The update id of a transaction response, or `undefined` when it names none. */
+export function getTransactionUpdateId(transaction: unknown): string | undefined {
+  const paths: ReadonlyArray<readonly string[]> = [['updateId'], ['transactionTree', 'updateId'], ['transaction', 'updateId']];
+
+  for (const path of paths) {
+    let current: unknown = transaction;
+    for (const segment of path) {
+      if (!isRecord(current)) {
+        current = undefined;
+        break;
+      }
+      current = current[segment];
+    }
+    if (isString(current) && current.length > 0) return current;
+  }
+
+  return undefined;
+}
+
+/** The update id, for a caller that needs to correlate a submission with what the ledger did. */
+export function requireTransactionUpdateId(transaction: unknown): string {
+  const updateId = getTransactionUpdateId(transaction);
+  if (updateId === undefined) {
+    throw new TransactionParseError(
+      TransactionParseErrorCode.UPDATE_ID_NOT_FOUND,
+      'The transaction names no update id.'
+    );
+  }
+  return updateId;
+}
+
+/** Every exercise of `choice` in the transaction, in node-id order. */
+export function findExercisedEvents(transaction: unknown, choice: string): ParsedExercisedEvent[] {
+  return extractEventsFromTransaction(transaction).exercised.filter((event) => event.choice === choice);
+}
+
+/** The first exercise of any of `choices`, in node-id order — the order the transaction produced them. */
+export function findExercisedEvent(
+  transaction: unknown,
+  choices: string | readonly string[]
+): ParsedExercisedEvent | undefined {
+  const wanted = typeof choices === 'string' ? [choices] : choices;
+  return extractEventsFromTransaction(transaction).exercised.find((event) => wanted.includes(event.choice));
+}
+
+/** The return value of the first exercise of `choice`, or `undefined` when the transaction contains none. */
+export function findExerciseResult(transaction: unknown, choice: string | readonly string[]): unknown {
+  return findExercisedEvent(transaction, choice)?.exerciseResult;
+}
+
+/**
+ * The return value of the named choice. A caller asking for it is asserting the transaction contains it, so a
+ * transaction without that exercise is reported rather than returned as `undefined`.
+ */
+export function requireExerciseResult(transaction: unknown, choice: string | readonly string[]): unknown {
+  const exercised = findExercisedEvent(transaction, choice);
+  if (!exercised) {
+    const wanted = typeof choice === 'string' ? choice : choice.join(', ');
+    throw new TransactionParseError(
+      TransactionParseErrorCode.EXERCISE_RESULT_NOT_FOUND,
+      `The transaction contains no ${wanted} exercise.`,
+      { choice: wanted, updateId: getTransactionUpdateId(transaction) }
+    );
+  }
+  return exercised.exerciseResult;
+}
+
+/**
+ * Contract ids created by the transaction, in node-id order, optionally narrowed to one template. The filter is matched
+ * package-agnostically by {@link matchesTemplateId}.
+ */
+export function findCreatedContractIds(transaction: unknown, templateFilter?: string): string[] {
+  return extractEventsFromTransaction(transaction)
+    .created.filter((created) => templateFilter === undefined || matchesTemplateId(created.templateId, templateFilter))
+    .map((created) => created.contractId);
 }
