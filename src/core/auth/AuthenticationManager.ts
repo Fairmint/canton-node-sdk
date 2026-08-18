@@ -4,8 +4,8 @@ import {
   type RestClientLogger,
 } from '@hardlydifficult/rest-client';
 import { TimeoutError } from '../errors';
-import { createAbortError, throwIfAborted } from '../http/abort';
-import { DEFAULT_HTTP_TIMEOUT_MS } from '../http/HttpClient';
+import { abortableSleep, createAbortError, isAbortError, throwIfAborted } from '../http/abort';
+import { DEFAULT_HTTP_RETRY_CONFIG, DEFAULT_HTTP_TIMEOUT_MS } from '../http/HttpClient';
 import { type Logger } from '../logging';
 import { type AuthConfig } from '../types';
 
@@ -67,7 +67,8 @@ export class AuthenticationManager {
    * still-pending delegate call keeps running and updates cached token state once it eventually settles.
    *
    * `signal`, when supplied, stops waiting immediately on abort instead of holding the timer for the full
-   * `timeoutMs`; it does not cancel the underlying delegate call either. An already-aborted `signal`
+   * `timeoutMs`. Abort also cancels sleep between token-endpoint retries for the in-flight request this caller
+   * started; it does not abort a token POST that has already been dispatched. An already-aborted `signal`
    * short-circuits before the delegate is ever invoked, independent of `timeoutMs`.
    */
   public async authenticate(timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS, signal?: AbortSignal): Promise<string> {
@@ -91,8 +92,7 @@ export class AuthenticationManager {
     this.logAuthDebug('token_request', beforeSnapshot, { requestReason });
 
     const requestGeneration = this.authGeneration;
-    const authenticationPromise = this.delegate
-      .authenticate()
+    const authenticationPromise = this.authenticateDelegateWithRetry(signal)
       .then((token) => {
         if (requestGeneration !== this.authGeneration) {
           this.delegate.clearToken();
@@ -119,6 +119,28 @@ export class AuthenticationManager {
 
     this.pendingAuthentication = authenticationPromise;
     return this.withAuthTimeout(authenticationPromise, timeoutMs, signal);
+  }
+
+  /**
+   * Retries the live token POST for transient failures only. Callers still share this promise via
+   * `pendingAuthentication`, so concurrent `authenticate()` waits join one in-flight request including its retries.
+   */
+  private async authenticateDelegateWithRetry(signal?: AbortSignal): Promise<string> {
+    const maxAttempts = DEFAULT_HTTP_RETRY_CONFIG.maxRetries + 1;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      throwIfAborted(signal);
+      try {
+        return await this.delegate.authenticate();
+      } catch (error) {
+        if (attempt >= maxAttempts || !isRetryableTokenError(error)) {
+          throw error;
+        }
+        await abortableSleep(DEFAULT_HTTP_RETRY_CONFIG.delayMs, signal);
+      }
+    }
+
+    throw new Error('Token request retry loop completed without a response or error');
   }
 
   public async getBearerToken(timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS, signal?: AbortSignal): Promise<string> {
@@ -271,6 +293,38 @@ export class AuthenticationManager {
   private shouldLogAuthDebug(): boolean {
     return this.debugEnabled && this.debugContext.authType === 'oauth2';
   }
+}
+
+/**
+ * Token POSTs bypass HttpClient, so rest-client's single axios.post is retried here for transient failures only.
+ */
+function isRetryableTokenError(error: unknown): boolean {
+  if (error instanceof TimeoutError || isAbortError(error)) {
+    return false;
+  }
+
+  const status = readErrorStatus(error);
+  if (status !== undefined) {
+    // 5xx from the token endpoint (Authentik 502/EOF) is typically a brief backend blip.
+    // 4xx like 401/403/400 invalid_grant is a credential/request problem and will not recover.
+    return status >= 500 && status < 600;
+  }
+
+  // Missing access_token and grant-config problems are AuthenticationError, not transport failures.
+  if (error instanceof Error && error.name === 'AuthenticationError') {
+    return false;
+  }
+
+  // No HTTP status: axios no-response (ECONNRESET, ECONNREFUSED, EPIPE, connection EOF, etc.).
+  return true;
+}
+
+function readErrorStatus(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null || !('status' in error)) {
+    return undefined;
+  }
+  const { status } = error;
+  return typeof status === 'number' && Number.isInteger(status) ? status : undefined;
 }
 
 /** Converts Canton's auth config format to rest-client's auth config format. */

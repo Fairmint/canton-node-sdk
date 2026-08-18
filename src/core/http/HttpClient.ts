@@ -12,7 +12,7 @@ import {
 } from '../errors';
 import { type Logger } from '../logging';
 import { type RequestConfig } from '../types';
-import { awaitWithAbort, createAbortError, isAbortError, throwIfAborted } from './abort';
+import { abortableSleep, awaitWithAbort, createAbortError, isAbortError, throwIfAborted } from './abort';
 import {
   snapshotHttpRequestOptions,
   type DeepReadonly,
@@ -35,6 +35,9 @@ export interface HttpClientRetryConfig {
   /** Delay between read-only retries in milliseconds. */
   readonly delayMs: number;
 }
+
+/** Default read-retry policy: 3 retries after the first attempt (4 total), 6s fixed delay. */
+export const DEFAULT_HTTP_RETRY_CONFIG: HttpClientRetryConfig = { maxRetries: 3, delayMs: 6000 };
 
 /**
  * Socket-inactivity timeout applied to every request unless a caller overrides it.
@@ -78,7 +81,7 @@ export class HttpClient {
   private readonly bearerTokenProvider: ((signal?: AbortSignal) => Promise<string>) | undefined;
   private readonly logger: Logger | undefined;
   private readonly defaultTimeoutMs: number;
-  private retryConfig: HttpClientRetryConfig = { maxRetries: 3, delayMs: 6000 };
+  private retryConfig: HttpClientRetryConfig = { ...DEFAULT_HTTP_RETRY_CONFIG };
 
   // Error message formatting constants
   private static readonly CAUSE_TRUNCATE_LENGTH = 200;
@@ -424,7 +427,7 @@ export class HttpClient {
       throwIfAborted(signal);
       return;
     }
-    await this.abortableSleep(delayMs, signal);
+    await abortableSleep(delayMs, signal);
   }
 
   private createAttemptContext<Body>(
@@ -938,21 +941,5 @@ export class HttpClient {
   private isTimeoutError(error: unknown): error is AxiosError {
     if (!axios.isAxiosError(error) || error.response !== undefined) return false;
     return error.code === 'ECONNABORTED';
-  }
-
-  private async abortableSleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
-    throwIfAborted(signal);
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        signal?.removeEventListener('abort', onAbort);
-        resolve();
-      }, ms);
-      const onAbort = (): void => {
-        clearTimeout(timer);
-        signal?.removeEventListener('abort', onAbort);
-        reject(createAbortError(signal));
-      };
-      signal?.addEventListener('abort', onAbort, { once: true });
-    });
   }
 }

@@ -25,6 +25,25 @@ export function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) throw createAbortError(signal);
 }
 
+/**
+ * Sleep that rejects with AbortError and clears its timer if `signal` aborts, so cancellation never leaks a handle.
+ */
+export async function abortableSleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
+  throwIfAborted(signal);
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      reject(createAbortError(signal));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 /** Race any synchronous or asynchronous pre-dispatch work against cancellation. */
 export async function awaitWithAbort<Value>(
   work: () => Value | Promise<Value>,
