@@ -1,6 +1,10 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { AuthenticationManager as RestClientAuthenticationManager } from '@hardlydifficult/rest-client';
+import {
+  AuthenticationError as RestClientAuthenticationError,
+  AuthenticationManager as RestClientAuthenticationManager,
+  HttpError,
+} from '@hardlydifficult/rest-client';
 import { AuthenticationManager } from '../../../src/core/auth/AuthenticationManager';
 import { TimeoutError } from '../../../src/core/errors';
 import { abortableSleep, throwIfAborted } from '../../../src/core/http/abort';
@@ -126,6 +130,103 @@ describe('AuthenticationManager token-endpoint retry', () => {
     }
   });
 
+  it('does not clear a newer cached token when a stale retry wakes after clearToken', async () => {
+    let requestCount = 0;
+    let markSleepStarted: (() => void) | undefined;
+    const sleepStarted = new Promise<void>((resolve) => {
+      markSleepStarted = resolve;
+    });
+    let releaseSleep: (() => void) | undefined;
+    const sleepHeld = new Promise<void>((resolve) => {
+      releaseSleep = resolve;
+    });
+
+    mockedAbortableSleep.mockImplementation(async (_ms: number, signal?: AbortSignal) => {
+      expect(signal).toBeUndefined();
+      markSleepStarted?.();
+      await sleepHeld;
+    });
+
+    const server = await startServer((_req, res) => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        writeStatus(res, 502, 'failed to connect to authentik backend: EOF');
+        return;
+      }
+      writeOAuthToken(res, 'newer-token');
+    });
+
+    const clearTokenSpy = jest.spyOn(RestClientAuthenticationManager.prototype, 'clearToken');
+
+    try {
+      const manager = new AuthenticationManager(server.url, createAuthConfig());
+      const staleAuth = manager.authenticate(0);
+
+      await sleepStarted;
+      manager.clearToken();
+      expect(clearTokenSpy).toHaveBeenCalledTimes(1);
+
+      await expect(manager.authenticate(0)).resolves.toBe('newer-token');
+      expect(requestCount).toBe(2);
+
+      mockedAbortableSleep.mockImplementation(async () => {});
+      releaseSleep?.();
+
+      await expect(staleAuth).resolves.toBe('newer-token');
+      expect(clearTokenSpy).toHaveBeenCalledTimes(1);
+
+      await expect(manager.authenticate(0)).resolves.toBe('newer-token');
+      expect(requestCount).toBe(2);
+    } finally {
+      clearTokenSpy.mockRestore();
+      await server.close();
+    }
+  });
+
+  it('does not call clearToken when a stale retry exhausts after clearToken', async () => {
+    let requestCount = 0;
+    let markSleepStarted: (() => void) | undefined;
+    const sleepStarted = new Promise<void>((resolve) => {
+      markSleepStarted = resolve;
+    });
+    let releaseSleep: (() => void) | undefined;
+    const sleepHeld = new Promise<void>((resolve) => {
+      releaseSleep = resolve;
+    });
+
+    mockedAbortableSleep.mockImplementation(async (_ms: number, signal?: AbortSignal) => {
+      expect(signal).toBeUndefined();
+      markSleepStarted?.();
+      await sleepHeld;
+    });
+
+    const server = await startServer((_req, res) => {
+      requestCount += 1;
+      writeStatus(res, 502, 'failed to connect to authentik backend: EOF');
+    });
+
+    const clearTokenSpy = jest.spyOn(RestClientAuthenticationManager.prototype, 'clearToken');
+
+    try {
+      const manager = new AuthenticationManager(server.url, createAuthConfig());
+      const staleAuth = manager.authenticate(0);
+
+      await sleepStarted;
+      manager.clearToken();
+      expect(clearTokenSpy).toHaveBeenCalledTimes(1);
+
+      mockedAbortableSleep.mockImplementation(async () => {});
+      releaseSleep?.();
+
+      await expect(staleAuth).rejects.toThrow(/Authentication failed[\s\S]*502/u);
+      expect(clearTokenSpy).toHaveBeenCalledTimes(1);
+      expect(requestCount).toBe(expectedAttempts);
+    } finally {
+      clearTokenSpy.mockRestore();
+      await server.close();
+    }
+  });
+
   it('retries a dropped token connection (ECONNRESET) and succeeds', async () => {
     let requestCount = 0;
     const server = await startServer((req, res) => {
@@ -146,6 +247,101 @@ describe('AuthenticationManager token-endpoint retry', () => {
     }
   });
 
+  it('retries a status-less HttpError when ECONNRESET is in the message', async () => {
+    const authenticateSpy = jest
+      .spyOn(RestClientAuthenticationManager.prototype, 'authenticate')
+      .mockRejectedValueOnce(
+        new HttpError('Authentication failed for https://auth.example/: undefined read ECONNRESET')
+      )
+      .mockResolvedValueOnce('recovered-token');
+
+    try {
+      const manager = new AuthenticationManager('https://auth.example', createAuthConfig());
+      await expect(manager.authenticate(0)).resolves.toBe('recovered-token');
+      expect(authenticateSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      authenticateSpy.mockRestore();
+    }
+  });
+
+  it('retries a status-less HttpError when ECONNRESET is only on cause.code', async () => {
+    const cause = Object.assign(new Error('socket destroyed'), { code: 'ECONNRESET' });
+    const wrapped = new HttpError('Authentication failed for https://auth.example/: undefined Request failed');
+    Object.defineProperty(wrapped, 'cause', { value: cause });
+
+    const authenticateSpy = jest
+      .spyOn(RestClientAuthenticationManager.prototype, 'authenticate')
+      .mockRejectedValueOnce(wrapped)
+      .mockResolvedValueOnce('recovered-token');
+
+    try {
+      const manager = new AuthenticationManager('https://auth.example', createAuthConfig());
+      await expect(manager.authenticate(0)).resolves.toBe('recovered-token');
+      expect(authenticateSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      authenticateSpy.mockRestore();
+    }
+  });
+
+  it('does not retry a status-less generic Error without a transport signal', async () => {
+    const authenticateSpy = jest
+      .spyOn(RestClientAuthenticationManager.prototype, 'authenticate')
+      .mockRejectedValue(new Error('unexpected token-endpoint failure'));
+
+    try {
+      const manager = new AuthenticationManager('https://auth.example', createAuthConfig());
+      await expect(manager.authenticate(0)).rejects.toThrow('unexpected token-endpoint failure');
+      expect(authenticateSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      authenticateSpy.mockRestore();
+    }
+  });
+
+  it('does not retry a status-less HttpError without a transport signal', async () => {
+    const authenticateSpy = jest
+      .spyOn(RestClientAuthenticationManager.prototype, 'authenticate')
+      .mockRejectedValue(new HttpError('Authentication failed for https://auth.example/: undefined Request failed'));
+
+    try {
+      const manager = new AuthenticationManager('https://auth.example', createAuthConfig());
+      await expect(manager.authenticate(0)).rejects.toThrow(/Authentication failed/u);
+      expect(authenticateSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      authenticateSpy.mockRestore();
+    }
+  });
+
+  it('does not retry a rest-client AuthenticationError', async () => {
+    const authenticateSpy = jest
+      .spyOn(RestClientAuthenticationManager.prototype, 'authenticate')
+      .mockRejectedValue(new RestClientAuthenticationError('Authentication response missing access_token'));
+
+    try {
+      const manager = new AuthenticationManager('https://auth.example', createAuthConfig());
+      await expect(manager.authenticate(0)).rejects.toThrow('Authentication response missing access_token');
+      expect(authenticateSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      authenticateSpy.mockRestore();
+    }
+  });
+
+  it('retries a 502 HttpError from the token request', async () => {
+    const authenticateSpy = jest
+      .spyOn(RestClientAuthenticationManager.prototype, 'authenticate')
+      .mockRejectedValueOnce(
+        new HttpError('Authentication failed for https://auth.example/: 502 Bad Gateway', 502, 'Bad Gateway')
+      )
+      .mockResolvedValueOnce('recovered-token');
+
+    try {
+      const manager = new AuthenticationManager('https://auth.example', createAuthConfig());
+      await expect(manager.authenticate(0)).resolves.toBe('recovered-token');
+      expect(authenticateSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      authenticateSpy.mockRestore();
+    }
+  });
+
   it('does not retry TimeoutError from the token request', async () => {
     const authenticateSpy = jest
       .spyOn(RestClientAuthenticationManager.prototype, 'authenticate')
@@ -154,6 +350,25 @@ describe('AuthenticationManager token-endpoint retry', () => {
     try {
       const manager = new AuthenticationManager('https://auth.example', createAuthConfig());
       await expect(manager.authenticate(0)).rejects.toThrow(TimeoutError);
+      expect(authenticateSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      authenticateSpy.mockRestore();
+    }
+  });
+
+  it('does not retry AbortError from the token request', async () => {
+    const abortError = new Error('token request aborted');
+    abortError.name = 'AbortError';
+    const authenticateSpy = jest
+      .spyOn(RestClientAuthenticationManager.prototype, 'authenticate')
+      .mockRejectedValue(abortError);
+
+    try {
+      const manager = new AuthenticationManager('https://auth.example', createAuthConfig());
+      await expect(manager.authenticate(0)).rejects.toMatchObject({
+        name: 'AbortError',
+        message: 'token request aborted',
+      });
       expect(authenticateSpy).toHaveBeenCalledTimes(1);
     } finally {
       authenticateSpy.mockRestore();

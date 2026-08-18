@@ -95,20 +95,20 @@ export class AuthenticationManager {
     const requestGeneration = this.authGeneration;
     const authenticationPromise = this.authenticateDelegateWithRetry()
       .then((token) => {
-        if (requestGeneration !== this.authGeneration) {
-          this.delegate.clearToken();
-        }
-
         const afterSnapshot = this.captureTokenSnapshot();
         this.logAuthDebug(beforeSnapshot.hasToken ? 'token_refreshed' : 'token_issued', afterSnapshot, {
           requestReason,
+          ...(requestGeneration !== this.authGeneration ? { staleRequest: true } : {}),
         });
+        // When generation advanced, `token` is a newer cache hit or this attempt's fetch. Do not
+        // clearToken — that would wipe a warm cache other waiters already joined after clearToken.
         return token;
       })
       .catch((error) => {
         this.logAuthDebug('token_request_failed', beforeSnapshot, {
           error: formatAuthDebugError(error),
           requestReason,
+          ...(requestGeneration !== this.authGeneration ? { staleRequest: true } : {}),
         });
         throw error;
       })
@@ -299,6 +299,22 @@ export class AuthenticationManager {
 }
 
 /**
+ * Node/axios transport codes that are safe to retry on a token POST. `ECONNABORTED` is intentionally omitted:
+ * axios uses it for request timeouts, which must not be retried (same reason as {@link TimeoutError}).
+ */
+const RETRYABLE_TOKEN_TRANSPORT_CODES = new Set([
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'EPIPE',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ETIMEDOUT',
+]);
+
+const RETRYABLE_TOKEN_TRANSPORT_SIGNAL_PATTERN =
+  /\b(?:ECONNRESET|ECONNREFUSED|EPIPE|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|EOF)\b/iu;
+
+/**
  * Token POSTs bypass HttpClient, so rest-client's single axios.post is retried here for transient failures only.
  */
 function isRetryableTokenError(error: unknown): boolean {
@@ -318,8 +334,49 @@ function isRetryableTokenError(error: unknown): boolean {
     return false;
   }
 
-  // No HTTP status: axios no-response (ECONNRESET, ECONNREFUSED, EPIPE, connection EOF, etc.).
-  return true;
+  // Rest-client wraps axios no-response as a status-less HttpError whose `.code` is `HTTP_ERROR`, dropping
+  // the Node transport code. Only retry when a recognized connect-level signal is still visible.
+  return hasRetryableTokenTransportSignal(error);
+}
+
+function hasRetryableTokenTransportSignal(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  const stack: unknown[] = [error];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === null || current === undefined || seen.has(current)) {
+      continue;
+    }
+    if (typeof current === 'string') {
+      if (RETRYABLE_TOKEN_TRANSPORT_SIGNAL_PATTERN.test(current)) {
+        return true;
+      }
+      continue;
+    }
+    if (typeof current !== 'object') {
+      continue;
+    }
+    seen.add(current);
+
+    if ('code' in current && typeof current.code === 'string' && RETRYABLE_TOKEN_TRANSPORT_CODES.has(current.code)) {
+      return true;
+    }
+    if ('message' in current && typeof current.message === 'string') {
+      stack.push(current.message);
+    }
+    if ('cause' in current) {
+      stack.push(current.cause);
+    }
+    if ('error' in current) {
+      stack.push(current.error);
+    }
+    if ('context' in current) {
+      stack.push(current.context);
+    }
+  }
+
+  return false;
 }
 
 function readErrorStatus(error: unknown): number | undefined {
