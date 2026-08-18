@@ -110,10 +110,13 @@ describe('LedgerJsonApiClient / Contract by ID', () => {
     const { client, contractId, partyId } = await getAppProviderContractContext();
 
     await expect(
-      client.getContractById({
-        contractId: mutateContractId(contractId),
-        queryingParties: [partyId],
-      })
+      client.getContractById(
+        {
+          contractId: mutateContractId(contractId),
+          queryingParties: [partyId],
+        },
+        { retry: { kind: 'none' } }
+      )
     ).rejects.toMatchObject({
       name: 'ApiError',
       status: 404,
@@ -153,10 +156,13 @@ describe('LedgerJsonApiClient / Contract by ID', () => {
 
     await withReadAsAnyParty(client, async () => {
       await expect(
-        client.getContractById({
-          contractId,
-          queryingParties: [nonStakeholderParty],
-        })
+        client.getContractById(
+          {
+            contractId,
+            queryingParties: [nonStakeholderParty],
+          },
+          { retry: { kind: 'none' } }
+        )
       ).rejects.toMatchObject({ name: 'ApiError', status: 404 });
     });
   }, 120_000);

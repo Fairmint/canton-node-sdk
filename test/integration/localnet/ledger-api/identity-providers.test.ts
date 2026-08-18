@@ -24,9 +24,12 @@ describe('LedgerJsonApiClient / IdentityProviders', () => {
 
     // Try to get the default IDP (empty string or 'default')
     try {
-      const response = await client.getIdentityProviderConfig({
-        idpId: '',
-      });
+      const response = await client.getIdentityProviderConfig(
+        {
+          idpId: '',
+        },
+        { retry: { kind: 'none' } }
+      );
 
       expect(response).toBeDefined();
       expect(response.identityProviderConfig).toBeDefined();

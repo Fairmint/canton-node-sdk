@@ -27,9 +27,12 @@ describe('ValidatorApiClient / Registry', () => {
     const client = getClient();
 
     await expect(
-      client.getInstrument({
-        instrumentId: 'non-existent-instrument',
-      })
+      client.getInstrument(
+        {
+          instrumentId: 'non-existent-instrument',
+        },
+        { retry: { kind: 'none' } }
+      )
     ).rejects.toThrow();
   });
 });
