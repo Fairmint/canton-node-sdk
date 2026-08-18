@@ -59,3 +59,34 @@ export function readVariant(
   if (!isRecord(value) || typeof value['tag'] !== 'string') return undefined;
   return { tag: value['tag'], value: isRecord(value['value']) ? value['value'] : {} };
 }
+
+/**
+ * A variant field of a result record, which must be one of the variants the reader knows.
+ *
+ * A missing field or an unrecognized tag is reported rather than folded into the nearest status. The standard's
+ * `_Failed` output means the units went back to the sender, so answering an unknown tag with it would tell a caller a
+ * transfer was returned when nothing here knows what happened to it.
+ */
+export function requireKnownVariant(
+  result: Record<string, unknown>,
+  field: string,
+  known: readonly string[],
+  what: string
+): { readonly tag: string; readonly value: Record<string, unknown> } {
+  const variant = readVariant(result[field]);
+  if (!variant) {
+    throw new TokenStandardV1ResultError(
+      TokenStandardV1ResultErrorCode.RESULT_INVALID,
+      `The ${what} names no ${field}.`,
+      { field }
+    );
+  }
+  if (!known.includes(variant.tag)) {
+    throw new TokenStandardV1ResultError(
+      TokenStandardV1ResultErrorCode.RESULT_INVALID,
+      `Unknown ${what} ${field}: ${variant.tag}.`,
+      { field, tag: variant.tag, known: [...known] }
+    );
+  }
+  return variant;
+}

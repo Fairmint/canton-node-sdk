@@ -45,17 +45,71 @@ describe('token standard v1 burn-mint results', () => {
     ]);
 
     expect(parseBurnMintResult(response).outputHoldingCids).toEqual([]);
+    expect(parseMintedHoldings(response)).toEqual([]);
   });
 
-  it('falls back to the created holdings when the mint went through an enforcement action', () => {
+  it('reads the created holdings when the caller names the enforcement choice that minted them', () => {
     const response = transactionTree([
       { exercised: exercised({ choice: 'BurnHoldingEnforcement', exerciseResult: {} }) },
       { created: created(BURN_OFFER_TEMPLATE, 'cid-offer') },
       { created: created(HOLDING_TEMPLATE, 'cid-reissued') },
     ]);
 
-    expect(parseMintedHoldings(response, { holdingTemplate: HOLDING_TEMPLATE })).toEqual(['cid-reissued']);
-    expect(parseMintedHoldings(response)).toEqual(['cid-offer', 'cid-reissued']);
+    expect(
+      parseMintedHoldings(response, {
+        mintingChoices: ['BurnHoldingEnforcement'],
+        holdingTemplate: HOLDING_TEMPLATE,
+      })
+    ).toEqual(['cid-reissued']);
+  });
+
+  it('refuses to call every create a mint when the transaction carries no burn-mint result', () => {
+    const response = transactionTree([
+      { exercised: exercised({ choice: 'BurnHoldingEnforcement', exerciseResult: {} }) },
+      { created: created(BURN_OFFER_TEMPLATE, 'cid-offer') },
+      { created: created(HOLDING_TEMPLATE, 'cid-reissued') },
+    ]);
+
+    expect(() => parseMintedHoldings(response)).toThrow(/minted nothing/);
+  });
+
+  it('refuses the fallback when none of the named minting choices was exercised', () => {
+    const response = transactionTree([
+      { exercised: exercised({ choice: TokenStandardV1Choice.transfer, exerciseResult: {} }) },
+      { created: created(HOLDING_TEMPLATE, 'cid-change') },
+    ]);
+
+    expect(() =>
+      parseMintedHoldings(response, {
+        mintingChoices: ['BurnHoldingEnforcement'],
+        holdingTemplate: HOLDING_TEMPLATE,
+      })
+    ).toThrow(/nor any of these minting choices/);
+  });
+
+  it('reports a pure confiscation as no minted holdings rather than as a failure', () => {
+    const response = transactionTree([
+      { exercised: exercised({ choice: 'BurnHoldingEnforcement', exerciseResult: {} }) },
+      { created: created(BURN_OFFER_TEMPLATE, 'cid-offer') },
+    ]);
+
+    expect(
+      parseMintedHoldings(response, {
+        mintingChoices: ['BurnHoldingEnforcement'],
+        holdingTemplate: HOLDING_TEMPLATE,
+      })
+    ).toEqual([]);
+  });
+
+  it('reads a burn-mint result that is not a record as a failure, not as a reason to read the creates', () => {
+    const response = transactionTree([
+      { exercised: exercised({ choice: TokenStandardV1Choice.burnMint, exerciseResult: 'nonsense' }) },
+      { created: created(HOLDING_TEMPLATE, 'cid-created') },
+    ]);
+
+    expect(() => parseMintedHoldings(response, { holdingTemplate: HOLDING_TEMPLATE })).toThrow(
+      /returned no result record/
+    );
   });
 
   it('says so when the transaction contains no burn-mint at all', () => {
@@ -162,6 +216,46 @@ describe('token standard v1 transfer results', () => {
 
     expect(() => parseTransferResult(response)).toThrow(/contains none of these exercises/);
   });
+
+  it('reports an output tag the standard does not define rather than calling the transfer failed', () => {
+    const response = transactionTree([
+      {
+        exercised: exercised({
+          choice: TokenStandardV1Choice.transfer,
+          exerciseResult: {
+            senderChangeCids: ['cid-change'],
+            output: { tag: 'TransferInstructionResult_Quantum', value: {} },
+          },
+        }),
+      },
+    ]);
+
+    let thrown: unknown;
+    try {
+      parseTransferResult(response);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toMatchObject({
+      name: 'TokenStandardV1ResultError',
+      code: TokenStandardV1ResultErrorCode.RESULT_INVALID,
+      context: { tag: 'TransferInstructionResult_Quantum' },
+    });
+  });
+
+  it('reports a transfer result that names no output at all', () => {
+    const response = transactionTree([
+      {
+        exercised: exercised({
+          choice: TokenStandardV1Choice.transferInstructionAccept,
+          exerciseResult: { senderChangeCids: [], meta: { values: {} } },
+        }),
+      },
+    ]);
+
+    expect(() => parseTransferResult(response)).toThrow(/transfer result names no output/);
+  });
 });
 
 describe('token standard v1 allocation results', () => {
@@ -209,6 +303,58 @@ describe('token standard v1 allocation results', () => {
       senderChangeCids: [],
       allocationCid: undefined,
     });
+  });
+
+  it('reads a rejected allocation as failed, from the standard failed variant', () => {
+    const response = transactionTree([
+      {
+        exercised: exercised({
+          choice: TokenStandardV1Choice.allocate,
+          exerciseResult: {
+            senderChangeCids: ['cid-returned'],
+            output: { tag: 'AllocationInstructionResult_Failed', value: {} },
+          },
+        }),
+      },
+    ]);
+
+    expect(parseAllocationResult(response)).toEqual({
+      updateId: UPDATE_ID,
+      status: 'failed',
+      senderChangeCids: ['cid-returned'],
+      allocationCid: undefined,
+    });
+  });
+
+  it('reports an allocation output tag it does not know rather than calling the allocation failed', () => {
+    const response = transactionTree([
+      {
+        exercised: exercised({
+          choice: TokenStandardV1Choice.allocate,
+          exerciseResult: {
+            senderChangeCids: [],
+            output: { tag: 'AllocationInstructionResult_Deferred', value: {} },
+          },
+        }),
+      },
+    ]);
+
+    expect(() => parseAllocationResult(response)).toThrow(
+      /Unknown allocation result output: AllocationInstructionResult_Deferred/
+    );
+  });
+
+  it('reports an allocation result that names no output at all', () => {
+    const response = transactionTree([
+      {
+        exercised: exercised({
+          choice: TokenStandardV1Choice.allocate,
+          exerciseResult: { senderChangeCids: [], meta: { values: {} } },
+        }),
+      },
+    ]);
+
+    expect(() => parseAllocationResult(response)).toThrow(/allocation result names no output/);
   });
 
   it('reads delivery and unwinding through the same result, which differ only in who gets the holdings', () => {

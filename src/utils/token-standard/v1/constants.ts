@@ -56,6 +56,28 @@ export const TOKEN_STANDARD_V1_TRANSFER_RESULT_CHOICES: readonly string[] = [
   TokenStandardV1Choice.transferInstructionUpdate,
 ];
 
+/** The three `TransferInstructionResult.output` variants the standard defines. */
+export const TokenStandardV1TransferResultTag = {
+  completed: 'TransferInstructionResult_Completed',
+  pending: 'TransferInstructionResult_Pending',
+  failed: 'TransferInstructionResult_Failed',
+} as const;
+
+export const TOKEN_STANDARD_V1_TRANSFER_RESULT_TAGS: readonly string[] = Object.values(
+  TokenStandardV1TransferResultTag
+);
+
+/** The three `AllocationInstructionResult.output` variants the standard defines. */
+export const TokenStandardV1AllocationResultTag = {
+  completed: 'AllocationInstructionResult_Completed',
+  pending: 'AllocationInstructionResult_Pending',
+  failed: 'AllocationInstructionResult_Failed',
+} as const;
+
+export const TOKEN_STANDARD_V1_ALLOCATION_RESULT_TAGS: readonly string[] = Object.values(
+  TokenStandardV1AllocationResultTag
+);
+
 /** The three exits an allocation has, all returning holdings; the difference is who gets them. */
 export const TOKEN_STANDARD_V1_ALLOCATION_EXIT_CHOICES: readonly string[] = [
   TokenStandardV1Choice.allocationExecuteTransfer,

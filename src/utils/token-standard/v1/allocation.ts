@@ -7,11 +7,16 @@
  */
 
 import { requireTransactionUpdateId } from '../../parsers/event-parser';
-import { TOKEN_STANDARD_V1_ALLOCATION_EXIT_CHOICES, TokenStandardV1Choice } from './constants';
+import {
+  TOKEN_STANDARD_V1_ALLOCATION_EXIT_CHOICES,
+  TOKEN_STANDARD_V1_ALLOCATION_RESULT_TAGS,
+  TokenStandardV1AllocationResultTag,
+  TokenStandardV1Choice,
+} from './constants';
 import {
   readContractIds,
-  readVariant,
   requireContractIds,
+  requireKnownVariant,
   requireResultRecord,
   requireResultRecordOfAny,
 } from './result';
@@ -26,14 +31,19 @@ export interface TokenStandardV1AllocationResult {
   readonly allocationCid: string | undefined;
 }
 
-/** The `AllocationInstructionResult` of `AllocationFactory_Allocate`. */
+/**
+ * The `AllocationInstructionResult` of `AllocationFactory_Allocate`.
+ *
+ * As with a transfer, `failed` is reported only for the standard's `_Failed` output; an undefined output tag, or a
+ * result naming no output, is reported rather than read as a rejected allocation.
+ */
 export function parseAllocationResult(transaction: unknown): TokenStandardV1AllocationResult {
   const result = requireResultRecord(transaction, TokenStandardV1Choice.allocate);
   const updateId = requireTransactionUpdateId(transaction);
   const senderChangeCids = requireContractIds(result['senderChangeCids'], 'senderChangeCids');
-  const output = readVariant(result['output']);
+  const output = requireKnownVariant(result, 'output', TOKEN_STANDARD_V1_ALLOCATION_RESULT_TAGS, 'allocation result');
 
-  if (output?.tag === 'AllocationInstructionResult_Completed') {
+  if (output.tag === TokenStandardV1AllocationResultTag.completed) {
     const { allocationCid } = output.value;
     return {
       updateId,
@@ -45,7 +55,7 @@ export function parseAllocationResult(transaction: unknown): TokenStandardV1Allo
 
   return {
     updateId,
-    status: output?.tag === 'AllocationInstructionResult_Pending' ? 'pending' : 'failed',
+    status: output.tag === TokenStandardV1AllocationResultTag.pending ? 'pending' : 'failed',
     senderChangeCids,
     allocationCid: undefined,
   };
