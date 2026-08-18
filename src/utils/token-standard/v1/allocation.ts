@@ -6,7 +6,7 @@
  * between them is who gets them.
  */
 
-import { requireTransactionUpdateId } from '../../parsers/event-parser';
+import { findExercisedEvent, requireTransactionUpdateId } from '../../parsers/event-parser';
 import {
   TOKEN_STANDARD_V1_ALLOCATION_EXIT_CHOICES,
   TOKEN_STANDARD_V1_ALLOCATION_RESULT_TAGS,
@@ -17,6 +17,7 @@ import {
   readContractIds,
   requireContractIds,
   requireKnownVariant,
+  requireNonEmptyString,
   requireResultRecord,
   requireResultRecordOfAny,
 } from './result';
@@ -29,6 +30,8 @@ export interface TokenStandardV1AllocationResult {
   readonly senderChangeCids: string[];
   /** The allocation the units are now reserved under. */
   readonly allocationCid: string | undefined;
+  /** The pending instruction, when the allocation did not complete in this transaction. */
+  readonly allocationInstructionCid: string | undefined;
 }
 
 /**
@@ -44,20 +47,34 @@ export function parseAllocationResult(transaction: unknown): TokenStandardV1Allo
   const output = requireKnownVariant(result, 'output', TOKEN_STANDARD_V1_ALLOCATION_RESULT_TAGS, 'allocation result');
 
   if (output.tag === TokenStandardV1AllocationResultTag.completed) {
-    const { allocationCid } = output.value;
     return {
       updateId,
       status: 'completed',
       senderChangeCids,
-      allocationCid: typeof allocationCid === 'string' ? allocationCid : undefined,
+      allocationCid: requireNonEmptyString(output.value['allocationCid'], 'allocationCid'),
+      allocationInstructionCid: undefined,
+    };
+  }
+
+  if (output.tag === TokenStandardV1AllocationResultTag.pending) {
+    return {
+      updateId,
+      status: 'pending',
+      senderChangeCids,
+      allocationCid: undefined,
+      allocationInstructionCid: requireNonEmptyString(
+        output.value['allocationInstructionCid'],
+        'allocationInstructionCid'
+      ),
     };
   }
 
   return {
     updateId,
-    status: output.tag === TokenStandardV1AllocationResultTag.pending ? 'pending' : 'failed',
+    status: 'failed',
     senderChangeCids,
     allocationCid: undefined,
+    allocationInstructionCid: undefined,
   };
 }
 
@@ -71,9 +88,15 @@ export interface TokenStandardV1AllocationTransferResult {
 /** The result of the allocation exit in this transaction — `Allocation_ExecuteTransfer`, `_Cancel` or `_Withdraw`. */
 export function parseAllocationTransferResult(transaction: unknown): TokenStandardV1AllocationTransferResult {
   const result = requireResultRecordOfAny(transaction, TOKEN_STANDARD_V1_ALLOCATION_EXIT_CHOICES);
+  const exercised = findExercisedEvent(transaction, TOKEN_STANDARD_V1_ALLOCATION_EXIT_CHOICES);
+  const executedTransfer = exercised?.choice === TokenStandardV1Choice.allocationExecuteTransfer;
   return {
     updateId: requireTransactionUpdateId(transaction),
-    senderHoldingCids: readContractIds(result['senderHoldingCids']),
-    receiverHoldingCids: readContractIds(result['receiverHoldingCids']),
+    senderHoldingCids: executedTransfer
+      ? readContractIds(result['senderHoldingCids'])
+      : requireContractIds(result['senderHoldingCids'], 'senderHoldingCids'),
+    receiverHoldingCids: executedTransfer
+      ? requireContractIds(result['receiverHoldingCids'], 'receiverHoldingCids')
+      : readContractIds(result['receiverHoldingCids']),
   };
 }

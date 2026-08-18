@@ -38,14 +38,15 @@ export function parseBurnMintResult(transaction: unknown): TokenStandardV1BurnMi
 export interface ParseMintedHoldingsOptions {
   /**
    * Registry-specific choices that mint without going through the burn-mint factory, such as an admin recovery's
-   * `BurnHoldingEnforcement`, which returns contract ids of the concrete template rather than a burn-mint result. The
-   * fallback reads create events only when the transaction exercised one of these — the stricter of the two opt-ins,
-   * because it names the choice that did the minting rather than trusting the transaction's creates.
+   * `BurnHoldingEnforcement`, which returns contract ids of the concrete template rather than a burn-mint result.
+   * Required together with `holdingTemplate` to enable the create-event fallback, which then runs only when the
+   * transaction exercised one of these.
    */
   readonly mintingChoices?: readonly string[];
   /**
    * Template of the concrete holding contract, narrowing the fallback's create events to it. Matched
-   * package-agnostically, so `Module:Template`, `Template`, or a fully qualified id all work.
+   * package-agnostically, so `Module:Template`, `Template`, or a fully qualified id all work. Required together with
+   * `mintingChoices` to enable the create-event fallback.
    */
   readonly holdingTemplate?: string;
 }
@@ -55,8 +56,8 @@ export interface ParseMintedHoldingsOptions {
  *
  * Create events are never read on their own: every contract a transaction happened to create is not the same thing as
  * the outputs of a mint, and answering with the first would name a sender's change as minted supply. A caller whose
- * registry mints outside the factory opts into the fallback by naming `mintingChoices`, `holdingTemplate`, or both;
- * without either, a transaction carrying no burn-mint result is reported.
+ * registry mints outside the factory opts into the fallback by naming both `mintingChoices` and `holdingTemplate`;
+ * without both, a transaction carrying no burn-mint result is reported.
  */
 export function parseMintedHoldings(transaction: unknown, options: ParseMintedHoldingsOptions = {}): string[] {
   if (findExercisedEvent(transaction, TokenStandardV1Choice.burnMint)) {
@@ -65,14 +66,19 @@ export function parseMintedHoldings(transaction: unknown, options: ParseMintedHo
   }
 
   const { mintingChoices, holdingTemplate } = options;
-  if (mintingChoices === undefined && holdingTemplate === undefined) {
+  const canFallback =
+    Array.isArray(mintingChoices) &&
+    mintingChoices.length > 0 &&
+    typeof holdingTemplate === 'string' &&
+    holdingTemplate.length > 0;
+  if (!canFallback) {
     throw new TokenStandardV1ResultError(
       TokenStandardV1ResultErrorCode.RESULT_NOT_FOUND,
-      `The transaction contains no ${TokenStandardV1Choice.burnMint} exercise, so it minted nothing. Name mintingChoices or holdingTemplate to read a registry-specific mint from the create events instead.`,
+      `The transaction contains no ${TokenStandardV1Choice.burnMint} exercise, so it minted nothing. Name mintingChoices and holdingTemplate to read a registry-specific mint from the create events instead.`,
       { choice: TokenStandardV1Choice.burnMint, updateId: getTransactionUpdateId(transaction) }
     );
   }
-  if (mintingChoices !== undefined && !findExercisedEvent(transaction, mintingChoices)) {
+  if (!findExercisedEvent(transaction, mintingChoices)) {
     throw new TokenStandardV1ResultError(
       TokenStandardV1ResultErrorCode.RESULT_NOT_FOUND,
       `The transaction contains neither a ${TokenStandardV1Choice.burnMint} exercise nor any of these minting choices: ${mintingChoices.join(', ')}.`,

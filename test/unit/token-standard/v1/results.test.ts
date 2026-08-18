@@ -73,6 +73,28 @@ describe('token standard v1 burn-mint results', () => {
     expect(() => parseMintedHoldings(response)).toThrow(/minted nothing/);
   });
 
+  it('refuses the create-event fallback unless both mintingChoices and holdingTemplate are named', () => {
+    const response = transactionTree([
+      { exercised: exercised({ choice: 'BurnHoldingEnforcement', exerciseResult: {} }) },
+      { created: created(BURN_OFFER_TEMPLATE, 'cid-offer') },
+      { created: created(HOLDING_TEMPLATE, 'cid-reissued') },
+    ]);
+
+    expect(() => parseMintedHoldings(response, { holdingTemplate: HOLDING_TEMPLATE })).toThrow(/minted nothing/);
+    expect(() => parseMintedHoldings(response, { mintingChoices: ['BurnHoldingEnforcement'] })).toThrow(
+      /minted nothing/
+    );
+    expect(() => parseMintedHoldings(response, { mintingChoices: [], holdingTemplate: HOLDING_TEMPLATE })).toThrow(
+      /minted nothing/
+    );
+    expect(
+      parseMintedHoldings(response, {
+        mintingChoices: ['BurnHoldingEnforcement'],
+        holdingTemplate: HOLDING_TEMPLATE,
+      })
+    ).toEqual(['cid-reissued']);
+  });
+
   it('refuses the fallback when none of the named minting choices was exercised', () => {
     const response = transactionTree([
       { exercised: exercised({ choice: TokenStandardV1Choice.transfer, exerciseResult: {} }) },
@@ -113,9 +135,31 @@ describe('token standard v1 burn-mint results', () => {
   });
 
   it('says so when the transaction contains no burn-mint at all', () => {
-    expect(() => parseBurnMintResult(transactionTree([{ created: created(HOLDING_TEMPLATE, 'cid-1') }]))).toThrow(
-      /no BurnMintFactory_BurnMint exercise/
-    );
+    let thrown: unknown;
+    try {
+      parseBurnMintResult(transactionTree([{ created: created(HOLDING_TEMPLATE, 'cid-1') }]));
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toMatchObject({
+      name: 'TokenStandardV1ResultError',
+      code: TokenStandardV1ResultErrorCode.RESULT_NOT_FOUND,
+      context: { updateId: UPDATE_ID },
+    });
+  });
+
+  it('reports mixed outputCids as invalid rather than dropping the non-strings', () => {
+    const response = transactionTree([
+      {
+        exercised: exercised({
+          choice: TokenStandardV1Choice.burnMint,
+          exerciseResult: { outputCids: ['cid-1', 42] },
+        }),
+      },
+    ]);
+
+    expect(() => parseBurnMintResult(response)).toThrow(/not a list of contract ids/);
   });
 
   it('reports a burn-mint result that names no outputCids', () => {
@@ -173,6 +217,25 @@ describe('token standard v1 transfer results', () => {
       transferInstructionCid: 'cid-instruction',
     });
   });
+
+  it.each([undefined, 42, ''] as const)(
+    'refuses a pending transfer whose instruction cid is %j',
+    (transferInstructionCid) => {
+      const response = transactionTree([
+        {
+          exercised: exercised({
+            choice: TokenStandardV1Choice.transfer,
+            exerciseResult: {
+              senderChangeCids: ['cid-change'],
+              output: { tag: 'TransferInstructionResult_Pending', value: { transferInstructionCid } },
+            },
+          }),
+        },
+      ]);
+
+      expect(() => parseTransferResult(response)).toThrow(/no transferInstructionCid/);
+    }
+  );
 
   it('reads a return path as failed, with the returned units as sender change', () => {
     const response = flatTransaction([
@@ -278,8 +341,28 @@ describe('token standard v1 allocation results', () => {
       status: 'completed',
       senderChangeCids: ['cid-change'],
       allocationCid: 'cid-allocation',
+      allocationInstructionCid: undefined,
     });
   });
+
+  it.each([undefined, 42, ''] as const)(
+    'refuses a completed allocation whose allocation cid is %j',
+    (allocationCid) => {
+      const response = transactionTree([
+        {
+          exercised: exercised({
+            choice: TokenStandardV1Choice.allocate,
+            exerciseResult: {
+              senderChangeCids: ['cid-change'],
+              output: { tag: 'AllocationInstructionResult_Completed', value: { allocationCid } },
+            },
+          }),
+        },
+      ]);
+
+      expect(() => parseAllocationResult(response)).toThrow(/no allocationCid/);
+    }
+  );
 
   it('reads a pending allocation instruction without an allocation', () => {
     const response = transactionTree([
@@ -302,8 +385,28 @@ describe('token standard v1 allocation results', () => {
       status: 'pending',
       senderChangeCids: [],
       allocationCid: undefined,
+      allocationInstructionCid: 'cid-instruction',
     });
   });
+
+  it.each([undefined, 42, ''] as const)(
+    'refuses a pending allocation whose instruction cid is %j',
+    (allocationInstructionCid) => {
+      const response = transactionTree([
+        {
+          exercised: exercised({
+            choice: TokenStandardV1Choice.allocate,
+            exerciseResult: {
+              senderChangeCids: [],
+              output: { tag: 'AllocationInstructionResult_Pending', value: { allocationInstructionCid } },
+            },
+          }),
+        },
+      ]);
+
+      expect(() => parseAllocationResult(response)).toThrow(/no allocationInstructionCid/);
+    }
+  );
 
   it('reads a rejected allocation as failed, from the standard failed variant', () => {
     const response = transactionTree([
@@ -323,6 +426,22 @@ describe('token standard v1 allocation results', () => {
       status: 'failed',
       senderChangeCids: ['cid-returned'],
       allocationCid: undefined,
+      allocationInstructionCid: undefined,
+    });
+  });
+
+  it('reports a missing allocate exercise as a token standard result error, not a parse error', () => {
+    let thrown: unknown;
+    try {
+      parseAllocationResult(transactionTree([{ created: created(HOLDING_TEMPLATE, 'cid-1') }]));
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toMatchObject({
+      name: 'TokenStandardV1ResultError',
+      code: TokenStandardV1ResultErrorCode.RESULT_NOT_FOUND,
+      context: { updateId: UPDATE_ID },
     });
   });
 
@@ -385,6 +504,45 @@ describe('token standard v1 allocation results', () => {
       senderHoldingCids: ['cid-returned'],
       receiverHoldingCids: [],
     });
+  });
+
+  it('reports execute without receiver holdings as invalid, not as an empty delivery', () => {
+    const response = transactionTree([
+      {
+        exercised: exercised({
+          choice: TokenStandardV1Choice.allocationExecuteTransfer,
+          exerciseResult: { senderHoldingCids: [], meta: { values: {} } },
+        }),
+      },
+    ]);
+
+    expect(() => parseAllocationTransferResult(response)).toThrow(/no receiverHoldingCids/);
+  });
+
+  it('reports cancel without sender holdings as invalid, not as an empty unwind', () => {
+    const response = transactionTree([
+      {
+        exercised: exercised({
+          choice: TokenStandardV1Choice.allocationCancel,
+          exerciseResult: { receiverHoldingCids: [], meta: { values: {} } },
+        }),
+      },
+    ]);
+
+    expect(() => parseAllocationTransferResult(response)).toThrow(/no senderHoldingCids/);
+  });
+
+  it('reports withdraw without sender holdings as invalid, not as an empty unwind', () => {
+    const response = transactionTree([
+      {
+        exercised: exercised({
+          choice: TokenStandardV1Choice.allocationWithdraw,
+          exerciseResult: { meta: { values: {} } },
+        }),
+      },
+    ]);
+
+    expect(() => parseAllocationTransferResult(response)).toThrow(/no senderHoldingCids/);
   });
 
   it('reports a result that is not a record rather than reading fields off it', () => {

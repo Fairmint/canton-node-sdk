@@ -1,18 +1,10 @@
 import { isRecord } from '../../../core/utils';
-import { findExercisedEvent, getTransactionUpdateId, requireExerciseResult } from '../../parsers/event-parser';
+import { findExercisedEvent, getTransactionUpdateId } from '../../parsers/event-parser';
 import { TokenStandardV1ResultError, TokenStandardV1ResultErrorCode } from './errors';
 
 /** The record a standard choice returned, or a failure: a caller asking for it asserts the transaction contains it. */
 export function requireResultRecord(transaction: unknown, choice: string): Record<string, unknown> {
-  const result = requireExerciseResult(transaction, choice);
-  if (!isRecord(result)) {
-    throw new TokenStandardV1ResultError(
-      TokenStandardV1ResultErrorCode.RESULT_INVALID,
-      `The ${choice} exercise returned no result record.`,
-      { choice, updateId: getTransactionUpdateId(transaction) }
-    );
-  }
-  return result;
+  return requireResultRecordOfAny(transaction, [choice]);
 }
 
 /** The record returned by the first of `choices` this transaction exercised. */
@@ -35,6 +27,18 @@ export function requireResultRecordOfAny(transaction: unknown, choices: readonly
   return exercised.exerciseResult;
 }
 
+/** A required non-empty string from a result record. */
+export function requireNonEmptyString(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new TokenStandardV1ResultError(
+      TokenStandardV1ResultErrorCode.RESULT_INVALID,
+      `The exercise result has no ${field}.`,
+      { field }
+    );
+  }
+  return value;
+}
+
 /** A required list of contract ids from a result record. */
 export function requireContractIds(value: unknown, field: string): string[] {
   if (!Array.isArray(value)) {
@@ -44,7 +48,18 @@ export function requireContractIds(value: unknown, field: string): string[] {
       { field }
     );
   }
-  return value.filter((entry): entry is string => typeof entry === 'string');
+  const contractIds: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string') {
+      throw new TokenStandardV1ResultError(
+        TokenStandardV1ResultErrorCode.RESULT_INVALID,
+        `The ${field} is not a list of contract ids.`,
+        { field }
+      );
+    }
+    contractIds.push(entry);
+  }
+  return contractIds;
 }
 
 /** An optional list of contract ids, which the token standard omits rather than sending empty on some paths. */

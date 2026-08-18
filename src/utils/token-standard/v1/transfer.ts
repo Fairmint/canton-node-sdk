@@ -11,7 +11,7 @@ import {
   TOKEN_STANDARD_V1_TRANSFER_RESULT_TAGS,
   TokenStandardV1TransferResultTag,
 } from './constants';
-import { requireContractIds, requireKnownVariant, requireResultRecordOfAny } from './result';
+import { requireContractIds, requireKnownVariant, requireNonEmptyString, requireResultRecordOfAny } from './result';
 
 /** What became of the units: delivered, waiting on the receiver, or returned to the sender. */
 export type TokenStandardV1TransferStatus = 'completed' | 'pending' | 'failed';
@@ -51,13 +51,12 @@ export function parseTransferResult(transaction: unknown): TokenStandardV1Transf
   }
 
   if (output.tag === TokenStandardV1TransferResultTag.pending) {
-    const { transferInstructionCid } = output.value;
     return {
       updateId,
       status: 'pending',
       senderChangeCids,
       receiverHoldingCids: [],
-      transferInstructionCid: typeof transferInstructionCid === 'string' ? transferInstructionCid : undefined,
+      transferInstructionCid: requireNonEmptyString(output.value['transferInstructionCid'], 'transferInstructionCid'),
     };
   }
 
