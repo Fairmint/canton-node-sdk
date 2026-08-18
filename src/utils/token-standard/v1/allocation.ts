@@ -93,10 +93,10 @@ export function parseAllocationTransferResult(transaction: unknown): TokenStanda
   return {
     updateId: requireTransactionUpdateId(transaction),
     senderHoldingCids: executedTransfer
-      ? readContractIds(result['senderHoldingCids'])
+      ? readContractIds(result['senderHoldingCids'], 'senderHoldingCids')
       : requireContractIds(result['senderHoldingCids'], 'senderHoldingCids'),
     receiverHoldingCids: executedTransfer
       ? requireContractIds(result['receiverHoldingCids'], 'receiverHoldingCids')
-      : readContractIds(result['receiverHoldingCids']),
+      : readContractIds(result['receiverHoldingCids'], 'receiverHoldingCids'),
   };
 }

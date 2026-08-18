@@ -63,8 +63,11 @@ export function requireContractIds(value: unknown, field: string): string[] {
 }
 
 /** An optional list of contract ids, which the token standard omits rather than sending empty on some paths. */
-export function readContractIds(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+export function readContractIds(value: unknown, field: string): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return requireContractIds(value, field);
 }
 
 /** `{ tag, value }`, the Daml JSON encoding of a variant. */

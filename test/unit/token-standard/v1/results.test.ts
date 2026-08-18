@@ -506,6 +506,32 @@ describe('token standard v1 allocation results', () => {
     });
   });
 
+  it('reports mixed optional holding cids as invalid rather than dropping the non-strings', () => {
+    const executed = transactionTree([
+      {
+        exercised: exercised({
+          choice: TokenStandardV1Choice.allocationExecuteTransfer,
+          exerciseResult: {
+            senderHoldingCids: ['cid-change', 42],
+            receiverHoldingCids: ['cid-receiver'],
+            meta: { values: {} },
+          },
+        }),
+      },
+    ]);
+    const cancelled = transactionTree([
+      {
+        exercised: exercised({
+          choice: TokenStandardV1Choice.allocationCancel,
+          exerciseResult: { senderHoldingCids: ['cid-returned'], receiverHoldingCids: ['cid-extra', 42] },
+        }),
+      },
+    ]);
+
+    expect(() => parseAllocationTransferResult(executed)).toThrow(/not a list of contract ids/);
+    expect(() => parseAllocationTransferResult(cancelled)).toThrow(/not a list of contract ids/);
+  });
+
   it('reports execute without receiver holdings as invalid, not as an empty delivery', () => {
     const response = transactionTree([
       {
