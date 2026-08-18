@@ -110,6 +110,23 @@ export type HttpRequestRetryStrategy<Body> =
   | ExactBodyHttpRequestRetryStrategy<Body>
   | DerivedBodyHttpRequestRetryStrategy<Body>;
 
+/**
+ * Sleeps after successive semantic-read failures so the final retry starts at 60s:
+ * 2s + 5s + 10s + 20s + 23s.
+ */
+export const DEFAULT_READ_RETRY_DELAYS_MS = [2000, 5000, 10000, 20000, 23000] as const;
+
+/** Six total attempts: one initial request plus one retry per delay. */
+export const DEFAULT_READ_RETRY_MAX_ATTEMPTS = DEFAULT_READ_RETRY_DELAYS_MS.length + 1;
+
+/**
+ * Maps `HttpClient.waitForRetry`'s failed-attempt number onto {@link DEFAULT_READ_RETRY_DELAYS_MS}.
+ * After attempt 1 fails, sleep delays[0] (2s); after attempt 5 fails, sleep delays[4] (23s).
+ */
+export function defaultReadRetryBackoffMs(context: { readonly attempt: number }): number {
+  return DEFAULT_READ_RETRY_DELAYS_MS[context.attempt - 1] ?? 0;
+}
+
 interface HttpRequestControlOptions<Body> {
   readonly signal?: AbortSignal;
   readonly retry?: HttpRequestRetryStrategy<Body>;

@@ -13,9 +13,12 @@ describe('LedgerJsonApiClient / Events', () => {
     // Test with a non-existent contract ID
     // Should return 404 or similar, not crash
     try {
-      await client.getEventsByContractId({
-        contractId: 'non-existent-contract-id-00000',
-      });
+      await client.getEventsByContractId(
+        {
+          contractId: 'non-existent-contract-id-00000',
+        },
+        { retry: { kind: 'none' } }
+      );
     } catch (error) {
       // Expected - contract not found
       expect(error).toBeDefined();

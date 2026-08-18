@@ -11,9 +11,12 @@ describe('ScanApiClient / Contracts', () => {
     const client = getClient();
 
     try {
-      const response = await client.lookupFeaturedAppRight({
-        providerPartyId: 'non-existent-provider',
-      });
+      const response = await client.lookupFeaturedAppRight(
+        {
+          providerPartyId: 'non-existent-provider',
+        },
+        { retry: { kind: 'none' } }
+      );
 
       expect(response).toBeDefined();
     } catch (error) {

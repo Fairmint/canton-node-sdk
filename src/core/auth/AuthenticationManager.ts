@@ -4,8 +4,9 @@ import {
   type RestClientLogger,
 } from '@hardlydifficult/rest-client';
 import { TimeoutError } from '../errors';
-import { createAbortError, throwIfAborted } from '../http/abort';
+import { abortableSleep, createAbortError, isAbortError, throwIfAborted } from '../http/abort';
 import { DEFAULT_HTTP_TIMEOUT_MS } from '../http/HttpClient';
+import { DEFAULT_READ_RETRY_MAX_ATTEMPTS, defaultReadRetryBackoffMs } from '../http/request-retry';
 import { type Logger } from '../logging';
 import { type AuthConfig } from '../types';
 
@@ -67,8 +68,9 @@ export class AuthenticationManager {
    * still-pending delegate call keeps running and updates cached token state once it eventually settles.
    *
    * `signal`, when supplied, stops waiting immediately on abort instead of holding the timer for the full
-   * `timeoutMs`; it does not cancel the underlying delegate call either. An already-aborted `signal`
-   * short-circuits before the delegate is ever invoked, independent of `timeoutMs`.
+   * `timeoutMs`. Abort and timeout stop this caller waiting; they do not cancel in-flight token work or retry
+   * backoff shared with other waiters. An already-aborted `signal` short-circuits before the delegate is ever
+   * invoked, independent of `timeoutMs`.
    */
   public async authenticate(timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS, signal?: AbortSignal): Promise<string> {
     // Check before touching the delegate or any shared in-flight state: an already-aborted caller must never
@@ -91,23 +93,22 @@ export class AuthenticationManager {
     this.logAuthDebug('token_request', beforeSnapshot, { requestReason });
 
     const requestGeneration = this.authGeneration;
-    const authenticationPromise = this.delegate
-      .authenticate()
+    const authenticationPromise = this.authenticateDelegateWithRetry()
       .then((token) => {
-        if (requestGeneration !== this.authGeneration) {
-          this.delegate.clearToken();
-        }
-
         const afterSnapshot = this.captureTokenSnapshot();
         this.logAuthDebug(beforeSnapshot.hasToken ? 'token_refreshed' : 'token_issued', afterSnapshot, {
           requestReason,
+          ...(requestGeneration !== this.authGeneration ? { staleRequest: true } : {}),
         });
+        // When generation advanced, `token` is a newer cache hit or this attempt's fetch. Do not
+        // clearToken — that would wipe a warm cache other waiters already joined after clearToken.
         return token;
       })
       .catch((error) => {
         this.logAuthDebug('token_request_failed', beforeSnapshot, {
           error: formatAuthDebugError(error),
           requestReason,
+          ...(requestGeneration !== this.authGeneration ? { staleRequest: true } : {}),
         });
         throw error;
       })
@@ -119,6 +120,30 @@ export class AuthenticationManager {
 
     this.pendingAuthentication = authenticationPromise;
     return this.withAuthTimeout(authenticationPromise, timeoutMs, signal);
+  }
+
+  /**
+   * Retries the live token POST for transient failures only, using the same attempt budget and backoff as
+   * semantic-read HttpClient retries. Callers still share this promise via `pendingAuthentication`, so concurrent
+   * `authenticate()` waits join one in-flight request including its retries. Backoff is not tied to any one caller's
+   * AbortSignal: aborting a waiter unblocks that caller via `withAuthTimeout` without cancelling retries for remaining
+   * joiners.
+   */
+  private async authenticateDelegateWithRetry(): Promise<string> {
+    const maxAttempts = DEFAULT_READ_RETRY_MAX_ATTEMPTS;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        return await this.delegate.authenticate();
+      } catch (error) {
+        if (attempt >= maxAttempts || !isRetryableTokenError(error)) {
+          throw error;
+        }
+        await abortableSleep(defaultReadRetryBackoffMs({ attempt }), undefined);
+      }
+    }
+
+    throw new Error('Token request retry loop completed without a response or error');
   }
 
   public async getBearerToken(timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS, signal?: AbortSignal): Promise<string> {
@@ -271,6 +296,96 @@ export class AuthenticationManager {
   private shouldLogAuthDebug(): boolean {
     return this.debugEnabled && this.debugContext.authType === 'oauth2';
   }
+}
+
+/**
+ * Node/axios transport codes that are safe to retry on a token POST. `ECONNABORTED` is intentionally omitted:
+ * axios uses it for request timeouts, which must not be retried (same reason as {@link TimeoutError}).
+ */
+const RETRYABLE_TOKEN_TRANSPORT_CODES = new Set([
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'EPIPE',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ETIMEDOUT',
+]);
+
+const RETRYABLE_TOKEN_TRANSPORT_SIGNAL_PATTERN =
+  /\b(?:ECONNRESET|ECONNREFUSED|EPIPE|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|EOF)\b|socket hang up/iu;
+
+/**
+ * Token POSTs bypass HttpClient, so rest-client's single axios.post is retried here for transient failures only.
+ */
+function isRetryableTokenError(error: unknown): boolean {
+  if (error instanceof TimeoutError || isAbortError(error)) {
+    return false;
+  }
+
+  const status = readErrorStatus(error);
+  if (status !== undefined) {
+    // 5xx from the token endpoint (Authentik 502/EOF) is typically a brief backend blip.
+    // 4xx like 401/403/400 invalid_grant is a credential/request problem and will not recover.
+    return status >= 500 && status < 600;
+  }
+
+  // Missing access_token and grant-config problems are AuthenticationError, not transport failures.
+  if (error instanceof Error && error.name === 'AuthenticationError') {
+    return false;
+  }
+
+  // Rest-client wraps axios no-response as a status-less HttpError whose `.code` is `HTTP_ERROR`, dropping
+  // the Node transport code. Only retry when a recognized connect-level signal is still visible in the
+  // message, `cause`, nested `code`, or axios's usual "socket hang up" text.
+  return hasRetryableTokenTransportSignal(error);
+}
+
+function hasRetryableTokenTransportSignal(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  const stack: unknown[] = [error];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === null || current === undefined || seen.has(current)) {
+      continue;
+    }
+    if (typeof current === 'string') {
+      if (RETRYABLE_TOKEN_TRANSPORT_SIGNAL_PATTERN.test(current)) {
+        return true;
+      }
+      continue;
+    }
+    if (typeof current !== 'object') {
+      continue;
+    }
+    seen.add(current);
+
+    if ('code' in current && typeof current.code === 'string' && RETRYABLE_TOKEN_TRANSPORT_CODES.has(current.code)) {
+      return true;
+    }
+    if ('message' in current && typeof current.message === 'string') {
+      stack.push(current.message);
+    }
+    if ('cause' in current) {
+      stack.push(current.cause);
+    }
+    if ('error' in current) {
+      stack.push(current.error);
+    }
+    if ('context' in current) {
+      stack.push(current.context);
+    }
+  }
+
+  return false;
+}
+
+function readErrorStatus(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null || !('status' in error)) {
+    return undefined;
+  }
+  const { status } = error;
+  return typeof status === 'number' && Number.isInteger(status) ? status : undefined;
 }
 
 /** Converts Canton's auth config format to rest-client's auth config format. */

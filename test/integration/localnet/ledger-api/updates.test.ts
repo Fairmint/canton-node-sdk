@@ -25,10 +25,13 @@ describe('LedgerJsonApiClient / Updates', () => {
     const client = getClient();
 
     await expect(
-      client.getUpdateById({
-        updateId: 'non-existent-update-id-12345',
-        readAs: [partyId],
-      })
+      client.getUpdateById(
+        {
+          updateId: 'non-existent-update-id-12345',
+          readAs: [partyId],
+        },
+        { retry: { kind: 'none' } }
+      )
     ).rejects.toThrow();
   });
 

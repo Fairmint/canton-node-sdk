@@ -94,6 +94,9 @@ function expectTransferCommandStatuses(response: TransferCommandStatusResponse):
   }
 }
 
+/** Skip HttpClient's 404-retry budget; these lookups are expected to miss. */
+const NO_RETRY = { retry: { kind: 'none' as const } };
+
 function expectNotFound(error: unknown): void {
   expect(error).toBeInstanceOf(ApiError);
   expect((error as ApiError).status).toBe(404);
@@ -261,9 +264,12 @@ describe('ValidatorApiClient / ScanProxy', () => {
     const client = getClient();
 
     await expect(
-      client.lookupTransferPreapprovalByParty({
-        partyId: 'non-existent-party-id',
-      })
+      client.lookupTransferPreapprovalByParty(
+        {
+          partyId: 'non-existent-party-id',
+        },
+        NO_RETRY
+      )
     ).rejects.toThrow();
   });
 
@@ -271,9 +277,12 @@ describe('ValidatorApiClient / ScanProxy', () => {
     const client = getClient();
 
     await expect(
-      client.lookupTransferCommandCounterByParty({
-        party: 'non-existent-party-id',
-      })
+      client.lookupTransferCommandCounterByParty(
+        {
+          party: 'non-existent-party-id',
+        },
+        NO_RETRY
+      )
     ).rejects.toThrow();
   });
 
@@ -283,7 +292,7 @@ describe('ValidatorApiClient / ScanProxy', () => {
     expect(userStatus.party_id).toEqual(expect.any(String));
 
     try {
-      const response = await client.lookupTransferCommandCounterByParty({ party: userStatus.party_id });
+      const response = await client.lookupTransferCommandCounterByParty({ party: userStatus.party_id }, NO_RETRY);
       expectContractWithState(response.transfer_command_counter);
 
       const { nextNonce } = response.transfer_command_counter.contract.payload;
@@ -301,10 +310,13 @@ describe('ValidatorApiClient / ScanProxy', () => {
     const client = getClient();
 
     await expect(
-      client.lookupTransferCommandStatus({
-        sender: 'non-existent-sender',
-        nonce: 0,
-      })
+      client.lookupTransferCommandStatus(
+        {
+          sender: 'non-existent-sender',
+          nonce: 0,
+        },
+        NO_RETRY
+      )
     ).rejects.toThrow();
   });
 
@@ -314,10 +326,13 @@ describe('ValidatorApiClient / ScanProxy', () => {
     expect(userStatus.party_id).toEqual(expect.any(String));
 
     try {
-      const response = await client.lookupTransferCommandStatus({
-        sender: userStatus.party_id,
-        nonce: 0,
-      });
+      const response = await client.lookupTransferCommandStatus(
+        {
+          sender: userStatus.party_id,
+          nonce: 0,
+        },
+        NO_RETRY
+      );
       expectTransferCommandStatuses(response);
     } catch (error) {
       // A fresh LocalNet wallet is allowed to have no TransferCommand for nonce zero.
@@ -338,9 +353,12 @@ describe('ValidatorApiClient / ScanProxy', () => {
     const client = getClient();
 
     await expect(
-      client.lookupFeaturedAppRight({
-        partyId: 'non-existent-provider',
-      })
+      client.lookupFeaturedAppRight(
+        {
+          partyId: 'non-existent-provider',
+        },
+        NO_RETRY
+      )
     ).rejects.toThrow();
   });
 });

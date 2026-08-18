@@ -44,9 +44,12 @@ describe('ValidatorApiClient / ExternalParties', () => {
 
     // Use a non-existent party ID - should return error
     await expect(
-      client.getExternalPartyBalance({
-        partyId: 'non-existent-party-id',
-      })
+      client.getExternalPartyBalance(
+        {
+          partyId: 'non-existent-party-id',
+        },
+        { retry: { kind: 'none' } }
+      )
     ).rejects.toThrow();
   });
 });

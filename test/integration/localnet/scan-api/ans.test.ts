@@ -11,9 +11,12 @@ describe('ScanApiClient / ANS', () => {
     const client = getClient();
 
     await expect(
-      client.lookupAnsEntryByName({
-        name: 'non-existent-name.unverified.cns',
-      })
+      client.lookupAnsEntryByName(
+        {
+          name: 'non-existent-name.unverified.cns',
+        },
+        { retry: { kind: 'none' } }
+      )
     ).rejects.toThrow();
   });
 
@@ -21,9 +24,12 @@ describe('ScanApiClient / ANS', () => {
     const client = getClient();
 
     await expect(
-      client.lookupAnsEntryByParty({
-        party: 'non-existent-party-id',
-      })
+      client.lookupAnsEntryByParty(
+        {
+          party: 'non-existent-party-id',
+        },
+        { retry: { kind: 'none' } }
+      )
     ).rejects.toThrow();
   });
 

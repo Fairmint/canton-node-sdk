@@ -12,8 +12,10 @@ import {
 } from '../errors';
 import { type Logger } from '../logging';
 import { type RequestConfig } from '../types';
-import { awaitWithAbort, createAbortError, isAbortError, throwIfAborted } from './abort';
+import { abortableSleep, awaitWithAbort, createAbortError, isAbortError, throwIfAborted } from './abort';
 import {
+  DEFAULT_READ_RETRY_MAX_ATTEMPTS,
+  defaultReadRetryBackoffMs,
   snapshotHttpRequestOptions,
   type DeepReadonly,
   type HttpReadAttemptUrlContext,
@@ -32,9 +34,14 @@ import { cloneRequestValue, deepFreezeRequestValue } from './request-value';
 export interface HttpClientRetryConfig {
   /** Number of retries after the initial attempt for requests explicitly classified as semantic reads. */
   readonly maxRetries: number;
-  /** Delay between read-only retries in milliseconds. */
-  readonly delayMs: number;
+  /** Fixed delay between read retries. Omit to use {@link defaultReadRetryBackoffMs}. */
+  readonly delayMs?: number;
 }
+
+/** Default read-retry policy: 5 retries after the first attempt (6 total) using the shared 60s schedule. */
+export const DEFAULT_HTTP_RETRY_CONFIG: HttpClientRetryConfig = {
+  maxRetries: DEFAULT_READ_RETRY_MAX_ATTEMPTS - 1,
+};
 
 /**
  * Socket-inactivity timeout applied to every request unless a caller overrides it.
@@ -78,7 +85,7 @@ export class HttpClient {
   private readonly bearerTokenProvider: ((signal?: AbortSignal) => Promise<string>) | undefined;
   private readonly logger: Logger | undefined;
   private readonly defaultTimeoutMs: number;
-  private retryConfig: HttpClientRetryConfig = { maxRetries: 3, delayMs: 6000 };
+  private retryConfig: HttpClientRetryConfig = { ...DEFAULT_HTTP_RETRY_CONFIG };
 
   // Error message formatting constants
   private static readonly CAUSE_TRUNCATE_LENGTH = 200;
@@ -107,7 +114,7 @@ export class HttpClient {
     if (!Number.isInteger(config.maxRetries) || config.maxRetries < 0) {
       throw new ConfigurationError('HTTP maxRetries must be a non-negative integer');
     }
-    if (!Number.isFinite(config.delayMs) || config.delayMs < 0) {
+    if (config.delayMs !== undefined && (!Number.isFinite(config.delayMs) || config.delayMs < 0)) {
       throw new ConfigurationError('HTTP retry delayMs must be a non-negative finite number');
     }
     this.retryConfig = { ...config };
@@ -371,7 +378,7 @@ export class HttpClient {
       return Object.freeze({
         kind: 'exact-body',
         maxAttempts: this.retryConfig.maxRetries + 1,
-        backoffMs: this.retryConfig.delayMs,
+        backoffMs: this.retryConfig.delayMs ?? defaultReadRetryBackoffMs,
       });
     }
     return Object.freeze({ kind: 'none' });
@@ -409,7 +416,8 @@ export class HttpClient {
     signal: AbortSignal | undefined
   ): Promise<void> {
     if (strategy.kind === 'none') return;
-    const configuredBackoff = strategy.backoffMs ?? this.retryConfig.delayMs;
+    // `context.attempt` is the failed attempt (1 after the first failure), not the next attempt.
+    const configuredBackoff = strategy.backoffMs ?? this.retryConfig.delayMs ?? defaultReadRetryBackoffMs;
     const delayMs =
       typeof configuredBackoff === 'function'
         ? await awaitWithAbort(async (): Promise<number> => {
@@ -424,7 +432,7 @@ export class HttpClient {
       throwIfAborted(signal);
       return;
     }
-    await this.abortableSleep(delayMs, signal);
+    await abortableSleep(delayMs, signal);
   }
 
   private createAttemptContext<Body>(
@@ -938,21 +946,5 @@ export class HttpClient {
   private isTimeoutError(error: unknown): error is AxiosError {
     if (!axios.isAxiosError(error) || error.response !== undefined) return false;
     return error.code === 'ECONNABORTED';
-  }
-
-  private async abortableSleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
-    throwIfAborted(signal);
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        signal?.removeEventListener('abort', onAbort);
-        resolve();
-      }, ms);
-      const onAbort = (): void => {
-        clearTimeout(timer);
-        signal?.removeEventListener('abort', onAbort);
-        reject(createAbortError(signal));
-      };
-      signal?.addEventListener('abort', onAbort, { once: true });
-    });
   }
 }

@@ -11,9 +11,12 @@ describe('ScanApiClient / Transfers', () => {
     const client = getClient();
 
     try {
-      const response = await client.lookupTransferPreapprovalByParty({
-        party: 'non-existent-party-id',
-      });
+      const response = await client.lookupTransferPreapprovalByParty(
+        {
+          party: 'non-existent-party-id',
+        },
+        { retry: { kind: 'none' } }
+      );
 
       expect(response).toBeDefined();
     } catch (error) {
@@ -26,9 +29,12 @@ describe('ScanApiClient / Transfers', () => {
     const client = getClient();
 
     try {
-      const response = await client.lookupTransferCommandCounterByParty({
-        party: 'non-existent-party-id',
-      });
+      const response = await client.lookupTransferCommandCounterByParty(
+        {
+          party: 'non-existent-party-id',
+        },
+        { retry: { kind: 'none' } }
+      );
 
       expect(response).toBeDefined();
     } catch (error) {
@@ -41,10 +47,13 @@ describe('ScanApiClient / Transfers', () => {
     const client = getClient();
 
     try {
-      const response = await client.lookupTransferCommandStatus({
-        sender: 'non-existent-sender',
-        nonce: 0,
-      });
+      const response = await client.lookupTransferCommandStatus(
+        {
+          sender: 'non-existent-sender',
+          nonce: 0,
+        },
+        { retry: { kind: 'none' } }
+      );
 
       expect(response).toBeDefined();
     } catch (error) {
