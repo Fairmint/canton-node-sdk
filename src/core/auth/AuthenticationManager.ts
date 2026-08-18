@@ -312,7 +312,7 @@ const RETRYABLE_TOKEN_TRANSPORT_CODES = new Set([
 ]);
 
 const RETRYABLE_TOKEN_TRANSPORT_SIGNAL_PATTERN =
-  /\b(?:ECONNRESET|ECONNREFUSED|EPIPE|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|EOF)\b/iu;
+  /\b(?:ECONNRESET|ECONNREFUSED|EPIPE|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|EOF)\b|socket hang up/iu;
 
 /**
  * Token POSTs bypass HttpClient, so rest-client's single axios.post is retried here for transient failures only.
@@ -335,7 +335,8 @@ function isRetryableTokenError(error: unknown): boolean {
   }
 
   // Rest-client wraps axios no-response as a status-less HttpError whose `.code` is `HTTP_ERROR`, dropping
-  // the Node transport code. Only retry when a recognized connect-level signal is still visible.
+  // the Node transport code. Only retry when a recognized connect-level signal is still visible in the
+  // message, `cause`, nested `code`, or axios's usual "socket hang up" text.
   return hasRetryableTokenTransportSignal(error);
 }
 

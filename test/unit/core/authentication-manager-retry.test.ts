@@ -264,6 +264,23 @@ describe('AuthenticationManager token-endpoint retry', () => {
     }
   });
 
+  it('retries a status-less HttpError when axios reports socket hang up', async () => {
+    const authenticateSpy = jest
+      .spyOn(RestClientAuthenticationManager.prototype, 'authenticate')
+      .mockRejectedValueOnce(
+        new HttpError('Authentication failed for https://auth.example/: undefined socket hang up')
+      )
+      .mockResolvedValueOnce('recovered-token');
+
+    try {
+      const manager = new AuthenticationManager('https://auth.example', createAuthConfig());
+      await expect(manager.authenticate(0)).resolves.toBe('recovered-token');
+      expect(authenticateSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      authenticateSpy.mockRestore();
+    }
+  });
+
   it('retries a status-less HttpError when ECONNRESET is only on cause.code', async () => {
     const cause = Object.assign(new Error('socket destroyed'), { code: 'ECONNRESET' });
     const wrapped = new HttpError('Authentication failed for https://auth.example/: undefined Request failed');
