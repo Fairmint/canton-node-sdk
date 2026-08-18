@@ -67,9 +67,9 @@ export class AuthenticationManager {
    * still-pending delegate call keeps running and updates cached token state once it eventually settles.
    *
    * `signal`, when supplied, stops waiting immediately on abort instead of holding the timer for the full
-   * `timeoutMs`. Abort also cancels sleep between token-endpoint retries for the in-flight request this caller
-   * started; it does not abort a token POST that has already been dispatched. An already-aborted `signal`
-   * short-circuits before the delegate is ever invoked, independent of `timeoutMs`.
+   * `timeoutMs`. Abort and timeout stop this caller waiting; they do not cancel in-flight token work or retry
+   * backoff shared with other waiters. An already-aborted `signal` short-circuits before the delegate is ever
+   * invoked, independent of `timeoutMs`.
    */
   public async authenticate(timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS, signal?: AbortSignal): Promise<string> {
     // Check before touching the delegate or any shared in-flight state: an already-aborted caller must never
@@ -92,7 +92,7 @@ export class AuthenticationManager {
     this.logAuthDebug('token_request', beforeSnapshot, { requestReason });
 
     const requestGeneration = this.authGeneration;
-    const authenticationPromise = this.authenticateDelegateWithRetry(signal)
+    const authenticationPromise = this.authenticateDelegateWithRetry()
       .then((token) => {
         if (requestGeneration !== this.authGeneration) {
           this.delegate.clearToken();
@@ -124,19 +124,20 @@ export class AuthenticationManager {
   /**
    * Retries the live token POST for transient failures only. Callers still share this promise via
    * `pendingAuthentication`, so concurrent `authenticate()` waits join one in-flight request including its retries.
+   * Backoff is not tied to any one caller's AbortSignal: aborting a waiter unblocks that caller via
+   * `withAuthTimeout` without cancelling retries for remaining joiners.
    */
-  private async authenticateDelegateWithRetry(signal?: AbortSignal): Promise<string> {
+  private async authenticateDelegateWithRetry(): Promise<string> {
     const maxAttempts = DEFAULT_HTTP_RETRY_CONFIG.maxRetries + 1;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-      throwIfAborted(signal);
       try {
         return await this.delegate.authenticate();
       } catch (error) {
         if (attempt >= maxAttempts || !isRetryableTokenError(error)) {
           throw error;
         }
-        await abortableSleep(DEFAULT_HTTP_RETRY_CONFIG.delayMs, signal);
+        await abortableSleep(DEFAULT_HTTP_RETRY_CONFIG.delayMs, undefined);
       }
     }
 

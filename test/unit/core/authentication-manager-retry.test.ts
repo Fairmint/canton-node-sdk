@@ -179,20 +179,21 @@ describe('AuthenticationManager token-endpoint retry', () => {
     }
   });
 
-  it('rejects with AbortError during retry backoff and does not leak timers', async () => {
-    const actualAbortableSleep = jest.requireActual<typeof import('../../../src/core/http/abort')>(
-      '../../../src/core/http/abort'
-    ).abortableSleep;
-
+  it('rejects the aborted caller during retry backoff without cancelling shared retry or leaking wait timers', async () => {
     let requestCount = 0;
     let markSleepStarted: (() => void) | undefined;
     const sleepStarted = new Promise<void>((resolve) => {
       markSleepStarted = resolve;
     });
+    let releaseSleep: (() => void) | undefined;
+    const sleepHeld = new Promise<void>((resolve) => {
+      releaseSleep = resolve;
+    });
 
-    mockedAbortableSleep.mockImplementation(async (ms: number, signal?: AbortSignal) => {
+    mockedAbortableSleep.mockImplementation(async (_ms: number, signal?: AbortSignal) => {
+      expect(signal).toBeUndefined();
       markSleepStarted?.();
-      return actualAbortableSleep(ms, signal);
+      await sleepHeld;
     });
 
     const server = await startServer((_req, res) => {
@@ -205,7 +206,7 @@ describe('AuthenticationManager token-endpoint retry', () => {
       try {
         const manager = new AuthenticationManager(server.url, createAuthConfig());
         const controller = new AbortController();
-        const request = manager.authenticate(0, controller.signal);
+        const request = manager.authenticate(60_000, controller.signal);
 
         await sleepStarted;
         expect(jest.getTimerCount()).toBeGreaterThan(0);
@@ -216,11 +217,66 @@ describe('AuthenticationManager token-endpoint retry', () => {
           message: 'stop waiting for token retry',
         });
 
+        // withAuthTimeout unblocks this caller and clears its wait timer. Shared backoff is independent of
+        // the caller's signal, so abort must not reject abortableSleep.
         expect(jest.getTimerCount()).toBe(0);
         expect(requestCount).toBe(1);
+
+        const followUp = manager.authenticate(0);
+        mockedAbortableSleep.mockImplementation(async () => {});
+        releaseSleep?.();
+        await expect(followUp).rejects.toThrow(/Authentication failed[\s\S]*502/u);
+        expect(requestCount).toBe(expectedAttempts);
       } finally {
         jest.useRealTimers();
       }
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('does not fail a joiner when the leader aborts during shared retry backoff', async () => {
+    let requestCount = 0;
+    let markSleepStarted: (() => void) | undefined;
+    const sleepStarted = new Promise<void>((resolve) => {
+      markSleepStarted = resolve;
+    });
+    let releaseSleep: (() => void) | undefined;
+    const sleepHeld = new Promise<void>((resolve) => {
+      releaseSleep = resolve;
+    });
+
+    mockedAbortableSleep.mockImplementation(async (_ms: number, signal?: AbortSignal) => {
+      expect(signal).toBeUndefined();
+      markSleepStarted?.();
+      await sleepHeld;
+    });
+
+    const server = await startServer((_req, res) => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        writeStatus(res, 502, 'failed to connect to authentik backend: EOF');
+        return;
+      }
+      writeOAuthToken(res, 'joiner-token');
+    });
+
+    try {
+      const manager = new AuthenticationManager(server.url, createAuthConfig());
+      const leaderController = new AbortController();
+      const leader = manager.authenticate(0, leaderController.signal);
+      const joiner = manager.authenticate(0);
+
+      await sleepStarted;
+      leaderController.abort(new Error('leader stopped waiting'));
+      await expect(leader).rejects.toMatchObject({
+        name: 'AbortError',
+        message: 'leader stopped waiting',
+      });
+
+      releaseSleep?.();
+      await expect(joiner).resolves.toBe('joiner-token');
+      expect(requestCount).toBe(2);
     } finally {
       await server.close();
     }
