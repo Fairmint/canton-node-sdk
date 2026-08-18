@@ -142,8 +142,8 @@ export function qualifiedTemplateName(templateId: string): string {
  * Match a template id from a ledger event against a filter, ignoring the package component.
  *
  * A create event always names the package _id_ that produced it, which a caller cannot know in advance; a filter is
- * usually written with a package _name_ (`#MyPackage:Module:Template`) or without a package at all
- * (`Module:Template`, or just `Template`). All three forms match here.
+ * usually written with a package _name_ (`#MyPackage:Module:Template`) or without a package at all (`Module:Template`,
+ * or just `Template`). All three forms match here.
  */
 export function matchesTemplateId(templateId: string, filter: string): boolean {
   if (templateId === filter) return true;
@@ -371,8 +371,7 @@ export const TransactionParseErrorCode = {
   UPDATE_ID_NOT_FOUND: 'TRANSACTION_UPDATE_ID_NOT_FOUND',
 } as const;
 
-export type TransactionParseErrorCode =
-  (typeof TransactionParseErrorCode)[keyof typeof TransactionParseErrorCode];
+export type TransactionParseErrorCode = (typeof TransactionParseErrorCode)[keyof typeof TransactionParseErrorCode];
 
 /** Thrown when a transaction response does not contain something the caller asserted it would. */
 export class TransactionParseError extends CantonError {
@@ -386,7 +385,11 @@ export class TransactionParseError extends CantonError {
 
 /** The update id of a transaction response, or `undefined` when it names none. */
 export function getTransactionUpdateId(transaction: unknown): string | undefined {
-  const paths: ReadonlyArray<readonly string[]> = [['updateId'], ['transactionTree', 'updateId'], ['transaction', 'updateId']];
+  const paths: ReadonlyArray<readonly string[]> = [
+    ['updateId'],
+    ['transactionTree', 'updateId'],
+    ['transaction', 'updateId'],
+  ];
 
   for (const path of paths) {
     let current: unknown = transaction;

@@ -377,13 +377,22 @@ describe('event-parser', () => {
 
   describe('matchesTemplateId', () => {
     it('matches a package id against a package-name filter, and a bare qualified name', () => {
-      expect(matchesTemplateId('abc123:WrappedAssets.Holding:WrappedAsset', '#WrappedAssets-v01:WrappedAssets.Holding:WrappedAsset')).toBe(true);
-      expect(matchesTemplateId('abc123:WrappedAssets.Holding:WrappedAsset', 'WrappedAssets.Holding:WrappedAsset')).toBe(true);
+      expect(
+        matchesTemplateId(
+          'abc123:WrappedAssets.Holding:WrappedAsset',
+          '#WrappedAssets-v01:WrappedAssets.Holding:WrappedAsset'
+        )
+      ).toBe(true);
+      expect(matchesTemplateId('abc123:WrappedAssets.Holding:WrappedAsset', 'WrappedAssets.Holding:WrappedAsset')).toBe(
+        true
+      );
       expect(matchesTemplateId('abc123:WrappedAssets.Holding:WrappedAsset', 'WrappedAsset')).toBe(true);
     });
 
     it('does not match a different module or template', () => {
-      expect(matchesTemplateId('abc123:WrappedAssets.Holding:WrappedAsset', 'WrappedAssets.Locked:WrappedAsset')).toBe(false);
+      expect(matchesTemplateId('abc123:WrappedAssets.Holding:WrappedAsset', 'WrappedAssets.Locked:WrappedAsset')).toBe(
+        false
+      );
       expect(matchesTemplateId('abc123:WrappedAssets.Holding:WrappedAsset', 'FrozenWrappedAsset')).toBe(false);
       expect(matchesTemplateId('abc123:WrappedAssets.Holding:WrappedAsset', '')).toBe(false);
     });
@@ -400,10 +409,24 @@ describe('event-parser', () => {
       transaction: {
         updateId: 'update-1',
         events: [
-          { ExercisedEvent: { contractId: 'cid-1', templateId: 'pkg:Module:Factory', choice: 'Freeze', exerciseResult: 'cid-frozen' } },
+          {
+            ExercisedEvent: {
+              contractId: 'cid-1',
+              templateId: 'pkg:Module:Factory',
+              choice: 'Freeze',
+              exerciseResult: 'cid-frozen',
+            },
+          },
           { CreatedEvent: { contractId: 'created-1', templateId: 'pkg:Module:Holding' } },
           { CreatedEvent: { contractId: 'created-2', templateId: 'pkg:Module:Other' } },
-          { ExercisedEvent: { contractId: 'cid-2', templateId: 'pkg:Module:Factory', choice: 'Unfreeze', exerciseResult: null } },
+          {
+            ExercisedEvent: {
+              contractId: 'cid-2',
+              templateId: 'pkg:Module:Factory',
+              choice: 'Unfreeze',
+              exerciseResult: null,
+            },
+          },
         ],
       },
     };

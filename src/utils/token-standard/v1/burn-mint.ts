@@ -7,11 +7,7 @@
  */
 
 import { isRecord } from '../../../core/utils';
-import {
-  findExercisedEvent,
-  findCreatedContractIds,
-  requireTransactionUpdateId,
-} from '../../parsers/event-parser';
+import { findExercisedEvent, findCreatedContractIds, requireTransactionUpdateId } from '../../parsers/event-parser';
 import { TokenStandardV1Choice } from './constants';
 import { requireContractIds, requireResultRecord } from './result';
 

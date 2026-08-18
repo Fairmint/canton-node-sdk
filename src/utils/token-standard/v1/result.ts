@@ -53,7 +53,9 @@ export function readContractIds(value: unknown): string[] {
 }
 
 /** `{ tag, value }`, the Daml JSON encoding of a variant. */
-export function readVariant(value: unknown): { readonly tag: string; readonly value: Record<string, unknown> } | undefined {
+export function readVariant(
+  value: unknown
+): { readonly tag: string; readonly value: Record<string, unknown> } | undefined {
   if (!isRecord(value) || typeof value['tag'] !== 'string') return undefined;
   return { tag: value['tag'], value: isRecord(value['value']) ? value['value'] : {} };
 }

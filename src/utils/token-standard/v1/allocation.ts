@@ -8,7 +8,13 @@
 
 import { requireTransactionUpdateId } from '../../parsers/event-parser';
 import { TOKEN_STANDARD_V1_ALLOCATION_EXIT_CHOICES, TokenStandardV1Choice } from './constants';
-import { readContractIds, readVariant, requireContractIds, requireResultRecord, requireResultRecordOfAny } from './result';
+import {
+  readContractIds,
+  readVariant,
+  requireContractIds,
+  requireResultRecord,
+  requireResultRecordOfAny,
+} from './result';
 import type { TokenStandardV1TransferStatus } from './transfer';
 
 export interface TokenStandardV1AllocationResult {
@@ -28,7 +34,7 @@ export function parseAllocationResult(transaction: unknown): TokenStandardV1Allo
   const output = readVariant(result['output']);
 
   if (output?.tag === 'AllocationInstructionResult_Completed') {
-    const allocationCid = output.value['allocationCid'];
+    const { allocationCid } = output.value;
     return {
       updateId,
       status: 'completed',

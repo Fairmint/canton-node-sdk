@@ -41,7 +41,7 @@ export function parseTransferResult(transaction: unknown): TokenStandardV1Transf
   }
 
   if (output?.tag === 'TransferInstructionResult_Pending') {
-    const transferInstructionCid = output.value['transferInstructionCid'];
+    const { transferInstructionCid } = output.value;
     return {
       updateId,
       status: 'pending',
