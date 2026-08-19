@@ -50,7 +50,7 @@ export function requireContractIds(value: unknown, field: string): string[] {
   }
   const contractIds: string[] = [];
   for (const entry of value) {
-    if (typeof entry !== 'string') {
+    if (typeof entry !== 'string' || entry.length === 0) {
       throw new TokenStandardV1ResultError(
         TokenStandardV1ResultErrorCode.RESULT_INVALID,
         `The ${field} is not a list of contract ids.`,

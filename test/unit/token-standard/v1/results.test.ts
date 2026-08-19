@@ -162,6 +162,19 @@ describe('token standard v1 burn-mint results', () => {
     expect(() => parseBurnMintResult(response)).toThrow(/not a list of contract ids/);
   });
 
+  it('reports empty-string outputCids as invalid rather than accepting them', () => {
+    const response = transactionTree([
+      {
+        exercised: exercised({
+          choice: TokenStandardV1Choice.burnMint,
+          exerciseResult: { outputCids: ['cid-1', ''] },
+        }),
+      },
+    ]);
+
+    expect(() => parseBurnMintResult(response)).toThrow(/not a list of contract ids/);
+  });
+
   it('reports a burn-mint result that names no outputCids', () => {
     const response = transactionTree([
       { exercised: exercised({ choice: TokenStandardV1Choice.burnMint, exerciseResult: { meta: { values: {} } } }) },
