@@ -201,9 +201,6 @@ export function buildTokenStandardV1TransferChoiceArgument(
   requireInputRecord(params, 'params');
   requireInputRecord(params.transfer, 'transfer');
   if (params.extraArgs !== undefined) requireInputRecord(params.extraArgs, 'extraArgs');
-  if (params.transfer.instrumentId !== undefined) {
-    requireInputRecord(params.transfer.instrumentId, 'transfer.instrumentId');
-  }
   if (params.transfer.meta !== undefined) requireInputRecord(params.transfer.meta, 'transfer.meta');
   return {
     expectedAdmin: requireNonEmpty(params.expectedAdmin, 'expectedAdmin'),
