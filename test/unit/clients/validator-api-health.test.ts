@@ -39,7 +39,6 @@ function createClient(): { client: ValidatorApiClient; mockAxiosInstance: MockAx
   };
 
   const client = new ValidatorApiClient(new CantonRuntime(config));
-  // eslint-disable-next-line @typescript-eslint/unbound-method -- axios.create is a mocked function in this test module
   const mockResults = jest.mocked(axios.create).mock.results;
   const latestResult = mockResults[mockResults.length - 1];
   if (!latestResult) {

@@ -201,6 +201,15 @@ const eslintConfig = [
       '@typescript-eslint/no-redundant-type-constituents': 'off',
     },
   },
+  // typescript-eslint 8.69+ tightened unbound-method to flag bare method
+  // references like the jest idiom `expect(mock.method)`. Test files never
+  // rely on `this` for these references, so relax the rule in tests only.
+  {
+    files: ['test/**/*'],
+    rules: {
+      '@typescript-eslint/unbound-method': 'off',
+    },
+  },
   // Prettier config last to override any conflicting rules
   eslintConfigPrettier,
 ];

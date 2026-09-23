@@ -29,9 +29,9 @@ const missingRecordTime: ClientResponse = {};
 // @ts-expect-error The generated response contract does not include additional envelope fields.
 const extraResponseField: ClientResponse = { record_time: '2026-07-10T12:00:01Z', unexpected: true };
 
-void clientParams;
-void clientResponse;
-void missingMigrationId;
-void wireQueryName;
-void missingRecordTime;
-void extraResponseField;
+clientParams;
+clientResponse;
+missingMigrationId;
+wireQueryName;
+missingRecordTime;
+extraResponseField;

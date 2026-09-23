@@ -68,11 +68,11 @@ const unsupportedBranch: ValidatorWalletTransaction = {
   date: '2026-07-10T02:00:00Z',
 };
 
-void firstPage;
-void followingPage;
-void response;
-void publicEventIds;
-void narrowTransaction;
-void missingPageSize;
-void numericCursor;
-void unsupportedBranch;
+firstPage;
+followingPage;
+response;
+publicEventIds;
+narrowTransaction;
+missingPageSize;
+numericCursor;
+unsupportedBranch;

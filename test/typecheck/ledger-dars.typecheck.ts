@@ -37,4 +37,4 @@ void client.validateDar({ darFile: Buffer.from('dar'), synchronizerId: 'sync::on
 
 // @ts-expect-error Successful DAR upload responses cannot expose arbitrary properties.
 const invalidResponse: UploadDarResponse = { packageId: 'unexpected' };
-void invalidResponse;
+invalidResponse;

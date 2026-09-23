@@ -193,6 +193,7 @@ describe('external-party lifecycle reconciliation', (): void => {
       markPartyDetailsStarted = resolve;
     });
     ledgerClient.getPartyDetails.mockImplementationOnce(
+      // eslint-disable-next-line @typescript-eslint/promise-function-async -- non-async arrow preserves rejection timing under abort
       () =>
         new Promise<never>((_resolve, reject) => {
           rejectPartyDetails = reject;

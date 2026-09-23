@@ -39,8 +39,8 @@ const invalidTuplePayload: DeepReadonly<NonEmptyTuplePayload> = {
   // @ts-expect-error DeepReadonly must preserve non-empty tuple constraints.
   values: [],
 };
-void validTuplePayload;
-void invalidTuplePayload;
+validTuplePayload;
+invalidTuplePayload;
 void parameterizedRequestCallback('value', 5);
 
 void client.allocateExternalParty(signedRequest, {
@@ -52,7 +52,7 @@ void client.allocateExternalParty(signedRequest, {
       const [transaction] = params.onboardingTransactions;
       if (transaction && 'signatures' in transaction) {
         const signature: string = transaction.signatures[0]?.signature ?? '';
-        void signature;
+        signature;
       }
       return signedRequest;
     },
@@ -78,7 +78,7 @@ void client.allocateExternalParty(requestWithCallerOnlyMetadata, {
     maxAttempts: 1,
     beforeAttempt: ({ params }) => {
       // @ts-expect-error Retry hooks expose validated declared params, not caller-only structural extensions.
-      void params.callerOnlyMetadata;
+      params.callerOnlyMetadata;
     },
   },
 });
@@ -130,7 +130,7 @@ const invalidGetOperationConfig = {
   requestSemantics: 'mutation',
   // @ts-expect-error Factory-created GET operations cannot use mutation semantics.
 } satisfies ApiOperationConfig<void, unknown>;
-void invalidGetOperationConfig;
+invalidGetOperationConfig;
 
 const invalidDeleteOperationConfig = {
   paramsSchema: z.void(),
@@ -139,7 +139,7 @@ const invalidDeleteOperationConfig = {
   requestSemantics: 'read',
   // @ts-expect-error Factory-created DELETE operations cannot use read semantics.
 } satisfies ApiOperationConfig<void, unknown>;
-void invalidDeleteOperationConfig;
+invalidDeleteOperationConfig;
 
 const invalidPatchOperationConfig = {
   paramsSchema: z.void(),
@@ -148,7 +148,7 @@ const invalidPatchOperationConfig = {
   requestSemantics: 'read',
   // @ts-expect-error Factory-created PATCH operations cannot use read semantics.
 } satisfies ApiOperationConfig<void, unknown>;
-void invalidPatchOperationConfig;
+invalidPatchOperationConfig;
 
 // Custom ApiOperation subclasses retain their declared params while forwarding the same typed options.
 void client.getParties({}, { signal: new AbortController().signal });

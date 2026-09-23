@@ -60,7 +60,6 @@ function createClient(
   mockAxiosInstance: MockAxiosInstance;
 } {
   const client = new ScanApiClient(new CantonRuntime(config), options);
-  // eslint-disable-next-line @typescript-eslint/unbound-method -- axios.create is a mocked function in this test module
   const mockResults = jest.mocked(axios.create).mock.results;
   const latestResultIndex = mockResults.length - 1;
   const latestResult = latestResultIndex >= 0 ? mockResults[latestResultIndex] : undefined;

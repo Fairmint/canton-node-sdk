@@ -424,6 +424,7 @@ async function readExistingExternalPartyAfterAllocationConflict(
   const abortError = new ValidationError('Canton external-party conflict reconciliation was aborted', { partyId });
   const createAbortError = (): ValidationError => abortError;
   try {
+    // eslint-disable-next-line @typescript-eslint/promise-function-async -- non-async arrow preserves rejection timing expected by race tests
     const partyDetailsResponse = await runWithAbortSignal(signal, createAbortError, () =>
       signal === undefined
         ? ledgerClient.getPartyDetails({
