@@ -62,7 +62,6 @@
     "tsc7": "node node_modules/typescript-7/bin/tsc"
   },
   "dependencies": {
-    "@canton-network/wallet-sdk": "1.5.1",
     "@hardlydifficult/rest-client": "1.0.65",
     "@hardlydifficult/websocket": "1.0.73",
     "@stellar/stellar-base": "15.0.0",
