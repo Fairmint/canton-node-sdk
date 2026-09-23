@@ -19,9 +19,9 @@ const missingAmount: TapRequest = { command_id: 'tap-command-123' };
 // @ts-expect-error The generated tap response requires its created contract id.
 const missingContractId: TapResponse = {};
 
-void requestWithCommandId;
-void requestWithoutCommandId;
-void response;
-void numericAmount;
-void missingAmount;
-void missingContractId;
+requestWithCommandId;
+requestWithoutCommandId;
+response;
+numericAmount;
+missingAmount;
+missingContractId;

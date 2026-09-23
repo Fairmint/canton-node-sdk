@@ -12,7 +12,7 @@ import {
   CANTON_ED25519_SIGNATURE_ALGORITHM,
   CANTON_RAW_SIGNATURE_FORMAT,
   createExternalPartyWithSigner,
-  ExternalPartyConflictReconciliationError,
+  type ExternalPartyConflictReconciliationError,
   getExternalPartyIdForHintAndPublicKey,
   listExternalPartyIdsForPublicKey,
   prepareExternalPartyOnboarding,
@@ -381,6 +381,7 @@ describe('external-party onboarding helpers', () => {
     });
     ledgerClient.allocateExternalParty.mockRejectedValueOnce(allocationError);
     ledgerClient.getPartyDetails.mockImplementationOnce(
+      // eslint-disable-next-line @typescript-eslint/promise-function-async -- non-async arrow preserves rejection timing under abort
       () =>
         new Promise<never>((_resolve, reject) => {
           rejectConfirmation = reject;

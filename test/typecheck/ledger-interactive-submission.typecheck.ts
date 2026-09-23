@@ -142,14 +142,14 @@ const prepareResponse: PrepareResponse = {
   hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V3',
 };
 
-void executeAndWaitForTransactionRequest;
-void invalidHelperHashingScheme;
-void unspecifiedTransactionShape;
-void executeAndWaitResponse;
-void prepareRequest;
-void unspecifiedPrepareHashingScheme;
-void unspecifiedCostHintSigningAlgorithm;
-void prepareResponse;
+executeAndWaitForTransactionRequest;
+invalidHelperHashingScheme;
+unspecifiedTransactionShape;
+executeAndWaitResponse;
+prepareRequest;
+unspecifiedPrepareHashingScheme;
+unspecifiedCostHintSigningAlgorithm;
+prepareResponse;
 
 const invalidOffsetRequest: ExecuteAndWaitRequest = {
   ...executeAndWaitRequest,
@@ -256,11 +256,11 @@ const invalidExerciseChoiceArgument: ExercisedTransactionEvent['choiceArgument']
 // @ts-expect-error Exercise results are JSON values when present.
 const invalidExerciseResult: ExercisedTransactionEvent['exerciseResult'] = Symbol('invalid');
 
-void normalizedTraceContext;
-void normalizedTraceState;
-void nullTraceState;
-void rawExternalHashString;
-void unvalidatedExternalHash;
+normalizedTraceContext;
+normalizedTraceState;
+nullTraceState;
+rawExternalHashString;
+unvalidatedExternalHash;
 
 type PrepareCommand = PrepareRequest['commands'][number];
 type CreateArguments = Extract<PrepareCommand, { CreateCommand: unknown }>['CreateCommand']['createArguments'];
@@ -329,43 +329,43 @@ const invalidMultiBranchEvent: InteractiveSubmissionEvent = {
   CreatedEvent: createdEvent,
 };
 
-void invalidOffsetRequest;
-void invalidHashingSchemeRequest;
-void unspecifiedHashingSchemeRequest;
-void decodedProtoAny;
-void invalidDecodedProtoAny;
-void invalidSignatureFormat;
-void unspecifiedSignatureFormat;
-void invalidSigningAlgorithm;
-void unspecifiedSigningAlgorithm;
-void emptyTransactionEvents;
-void nullContractKey;
-void nullInterfaceViewValue;
-void createdEventArgument;
-void exerciseChoiceArgument;
-void exerciseResult;
-void invalidCreatedEventArgument;
-void invalidExerciseChoiceArgument;
-void invalidExerciseResult;
-void createArguments;
-void exerciseArguments;
-void createAndExerciseCreateArguments;
-void createAndExerciseChoiceArguments;
-void exerciseByKeyContractKey;
-void exerciseByKeyChoiceArgument;
-void prefetchContractKey;
-void invalidCreateArguments;
-void invalidExerciseArguments;
-void invalidCreateAndExerciseCreateArguments;
-void invalidCreateAndExerciseChoiceArguments;
-void invalidExerciseByKeyContractKey;
-void invalidExerciseByKeyChoiceArgument;
-void invalidPrefetchContractKey;
-void invalidMultiBranchCommand;
-void invalidMultiBranchDeduplication;
-void invalidMultiBranchTime;
-void invalidMultiBranchIdentifierFilter;
-void invalidMultiBranchEvent;
+invalidOffsetRequest;
+invalidHashingSchemeRequest;
+unspecifiedHashingSchemeRequest;
+decodedProtoAny;
+invalidDecodedProtoAny;
+invalidSignatureFormat;
+unspecifiedSignatureFormat;
+invalidSigningAlgorithm;
+unspecifiedSigningAlgorithm;
+emptyTransactionEvents;
+nullContractKey;
+nullInterfaceViewValue;
+createdEventArgument;
+exerciseChoiceArgument;
+exerciseResult;
+invalidCreatedEventArgument;
+invalidExerciseChoiceArgument;
+invalidExerciseResult;
+createArguments;
+exerciseArguments;
+createAndExerciseCreateArguments;
+createAndExerciseChoiceArguments;
+exerciseByKeyContractKey;
+exerciseByKeyChoiceArgument;
+prefetchContractKey;
+invalidCreateArguments;
+invalidExerciseArguments;
+invalidCreateAndExerciseCreateArguments;
+invalidCreateAndExerciseChoiceArguments;
+invalidExerciseByKeyContractKey;
+invalidExerciseByKeyChoiceArgument;
+invalidPrefetchContractKey;
+invalidMultiBranchCommand;
+invalidMultiBranchDeduplication;
+invalidMultiBranchTime;
+invalidMultiBranchIdentifierFilter;
+invalidMultiBranchEvent;
 
 const invalidPackagePreference: PrepareRequest = {
   ...prepareRequest,
@@ -381,8 +381,8 @@ const incompletePrepareResponse: PrepareResponse = {
   hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V3',
 };
 
-void invalidPackagePreference;
-void incompletePrepareResponse;
+invalidPackagePreference;
+incompletePrepareResponse;
 
 type Assert<Condition extends true> = Condition;
 type IsRequired<Container, Key extends keyof Container> = {} extends Pick<Container, Key> ? false : true;
@@ -510,18 +510,18 @@ const absentPreferredPackage: PreferredPackageVersionResponse = {};
 // @ts-expect-error Public responses normalize wire null into an absent optional property.
 const wireNullPreferredPackage: PreferredPackageVersionResponse = { packagePreference: null };
 
-void multipleRawPrepareCommands;
-void multiplePrepareCommands;
+multipleRawPrepareCommands;
+multiplePrepareCommands;
 void ledgerClient.interactiveSubmissionGetPreferredPackageVersion(
   preferredPackageVersionRequest,
   preferredPackageVersionOptions
 );
 void ledgerClient.interactiveSubmissionGetPreferredPackages(preferredPackagesRequest, preferredPackagesOptions);
-void preferredPackagesRequest;
-void preferredPackageVersionRequest;
-void preferredPackagesResponse;
-void absentPreferredPackage;
-void wireNullPreferredPackage;
+preferredPackagesRequest;
+preferredPackageVersionRequest;
+preferredPackagesResponse;
+absentPreferredPackage;
+wireNullPreferredPackage;
 
 // @ts-expect-error Every derived traffic-cost estimate includes its server estimation timestamp.
 const trafficEstimateWithoutTimestamp: TrafficCostEstimate = {
@@ -533,15 +533,15 @@ const trafficEstimateWithoutTimestamp: TrafficCostEstimate = {
   costInDollars: 0.01,
 };
 
-void emptyPartySignatures;
-void partyWithoutSignatures;
-void emptyRawPartySignatureGroups;
-void emptyRawSignatures;
-void emptyRawPrepareCommands;
-void emptyRawActAs;
-void emptyPrepareCommands;
-void emptyActAsParties;
-void trafficEstimateWithoutTimestamp;
-void invalidExecuteExactBodyOptions;
-void invalidExecuteAndWaitExactBodyOptions;
-void invalidExecuteAndWaitForTransactionExactBodyOptions;
+emptyPartySignatures;
+partyWithoutSignatures;
+emptyRawPartySignatureGroups;
+emptyRawSignatures;
+emptyRawPrepareCommands;
+emptyRawActAs;
+emptyPrepareCommands;
+emptyActAsParties;
+trafficEstimateWithoutTimestamp;
+invalidExecuteExactBodyOptions;
+invalidExecuteAndWaitExactBodyOptions;
+invalidExecuteAndWaitForTransactionExactBodyOptions;

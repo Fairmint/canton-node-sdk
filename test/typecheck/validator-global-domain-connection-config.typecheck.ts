@@ -49,6 +49,6 @@ const wrongCase: GetDecentralizedSynchronizerConnectionConfigResponse = {
   sequencerConnections: response.sequencer_connections,
 };
 
-void response;
-void missingPatience;
-void wrongCase;
+response;
+missingPatience;
+wrongCase;

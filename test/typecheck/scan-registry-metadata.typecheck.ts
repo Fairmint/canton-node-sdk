@@ -60,4 +60,4 @@ function assertClientSurface(client: ScanApiClient): void {
   void client.listInstruments({ pageSize: 25, unknown: true });
 }
 
-void assertClientSurface;
+assertClientSurface;
