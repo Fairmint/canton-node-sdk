@@ -143,7 +143,9 @@ describe('Token Standard V1 holdings', () => {
       contractIds: ['#seven', '#four'],
       totalBaseUnits: '11000000',
     });
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).toHaveBeenCalledTimes(1);
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).toHaveBeenCalledWith({
       parties: ['Buyer::alice'],
       interfaceIds: [TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID],
@@ -494,6 +496,7 @@ describe('Token Standard V1 holdings', () => {
     ).rejects.toMatchObject({
       code: 'TOKEN_STANDARD_V1_HOLDING_INPUT_INVALID',
     });
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).not.toHaveBeenCalled();
   });
 
@@ -515,6 +518,7 @@ describe('Token Standard V1 holdings', () => {
       code: 'TOKEN_STANDARD_V1_HOLDING_INPUT_INVALID',
       context: { field: 'activeAtOffset' },
     });
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).not.toHaveBeenCalled();
   });
 });

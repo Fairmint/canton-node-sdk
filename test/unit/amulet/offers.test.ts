@@ -171,6 +171,7 @@ describe('createTransferOffer', () => {
     });
 
     const mockEnvLoaderInstance = EnvLoader.getInstance();
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(mockEnvLoaderInstance.getValidatorWalletAppInstallContractId).toHaveBeenCalledWith('localnet');
 
     const callArgs = mockClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
