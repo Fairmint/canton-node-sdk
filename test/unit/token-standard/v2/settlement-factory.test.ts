@@ -470,9 +470,7 @@ describe('Token Standard V2 settlement-factory helpers', () => {
       metadata,
     });
 
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(scan.getSettlementFactoryFromRegistry).toHaveBeenCalledTimes(1);
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(scan.getSettlementFactoryFromRegistry).toHaveBeenCalledWith({
       registryUrl: 'https://registry.example/token',
       choiceArguments: {
@@ -537,7 +535,6 @@ describe('Token Standard V2 settlement-factory helpers', () => {
       excludeDebugFields: false,
     });
 
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(scan.getSettlementFactoryFromRegistry).toHaveBeenCalledWith(
       expect.objectContaining({ excludeDebugFields: false })
     );
@@ -561,7 +558,6 @@ describe('Token Standard V2 settlement-factory helpers', () => {
       name: 'TokenStandardV2SettlementFactoryError',
       code: TokenStandardV2SettlementFactoryErrorCode.INPUT_INVALID,
     });
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(scan.getSettlementFactoryFromRegistry).not.toHaveBeenCalled();
   });
 
@@ -678,7 +674,6 @@ describe('Token Standard V2 settlement-factory helpers', () => {
         settlementFactoryContractId: '   ',
       })
     ).toThrow(TokenStandardV2SettlementFactoryError);
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(scan.getSettlementFactoryFromRegistry).not.toHaveBeenCalled();
   });
 });

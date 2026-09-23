@@ -230,9 +230,7 @@ describe('discoverTokenStandardV2AllocationState', () => {
       view: completedView,
     });
 
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).toHaveBeenCalledTimes(1);
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).toHaveBeenCalledWith({
       parties: ['Buyer::alice', 'Venue::operator'],
       interfaceIds: [TOKEN_STANDARD_V2_ALLOCATION_INTERFACE_ID, TOKEN_STANDARD_V2_ALLOCATION_INSTRUCTION_INTERFACE_ID],
@@ -264,7 +262,6 @@ describe('discoverTokenStandardV2AllocationState', () => {
       allocationInstructionCid: '#allocation-instruction',
       view: pendingView,
     });
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).toHaveBeenCalledTimes(1);
   });
 
@@ -281,7 +278,6 @@ describe('discoverTokenStandardV2AllocationState', () => {
 
     expect(state).toEqual({ type: 'Unknown' });
     expect(state.type).not.toBe('Failed');
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).toHaveBeenCalledTimes(1);
   });
 
@@ -319,7 +315,6 @@ describe('discoverTokenStandardV2AllocationState', () => {
         activeAtOffset: 42,
       })
     ).resolves.toEqual({ type: 'Unknown' });
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).toHaveBeenCalledTimes(1);
   });
 
@@ -424,7 +419,6 @@ describe('discoverTokenStandardV2AllocationState', () => {
       type: 'Completed',
       allocationCid: '#allocation',
     });
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).toHaveBeenCalledTimes(1);
   });
 
@@ -505,7 +499,6 @@ describe('discoverTokenStandardV2AllocationState', () => {
       code: TokenStandardV2AllocationStateErrorCode.AMBIGUOUS,
       context: { completedCids: [...completedCids], pendingCids: [...pendingCids] },
     });
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).toHaveBeenCalledTimes(1);
   });
 
@@ -562,7 +555,6 @@ describe('discoverTokenStandardV2AllocationState', () => {
         activeAtOffset: 42,
       })
     ).resolves.toEqual({ type: 'Unknown' });
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).toHaveBeenCalledTimes(1);
   });
 
@@ -591,7 +583,6 @@ describe('discoverTokenStandardV2AllocationState', () => {
       code: TokenStandardV2AllocationStateErrorCode.INTERFACE_VIEW_INVALID,
       context: { contractId: '#malformed-allocation' },
     });
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).toHaveBeenCalledTimes(1);
   });
 
@@ -625,7 +616,6 @@ describe('discoverTokenStandardV2AllocationState', () => {
         field: 'view.allocation.transferLegSides',
       },
     });
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).toHaveBeenCalledTimes(1);
   });
 
@@ -689,7 +679,6 @@ describe('discoverTokenStandardV2AllocationState', () => {
         activeAtOffset: 42,
       })
     ).rejects.toMatchObject({ code: TokenStandardV2AllocationStateErrorCode.INPUT_INVALID });
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).not.toHaveBeenCalled();
   });
 
@@ -708,7 +697,6 @@ describe('discoverTokenStandardV2AllocationState', () => {
       code: TokenStandardV2AllocationStateErrorCode.INPUT_INVALID,
       context: { field: 'activeAtOffset' },
     });
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).not.toHaveBeenCalled();
   });
 
@@ -740,7 +728,6 @@ describe('discoverTokenStandardV2AllocationState', () => {
         activeAtOffset: 42,
       })
     ).rejects.toMatchObject({ code: TokenStandardV2AllocationStateErrorCode.INPUT_INVALID });
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).not.toHaveBeenCalled();
   });
 });
@@ -888,9 +875,7 @@ describe('getTokenStandardV2AllocationViewsByContractIds', () => {
       { allocationCid: '#receiver', view: secondView },
       { allocationCid: '#sender', view: completedView },
     ]);
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).toHaveBeenCalledTimes(1);
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).toHaveBeenCalledWith({
       parties: ['Buyer::alice', 'Venue::operator'],
       interfaceIds: [TOKEN_STANDARD_V2_ALLOCATION_INTERFACE_ID],
@@ -920,7 +905,6 @@ describe('getTokenStandardV2AllocationViewsByContractIds', () => {
         activeAtOffset: 42,
       },
     });
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).toHaveBeenCalledTimes(1);
   });
 
@@ -954,7 +938,6 @@ describe('getTokenStandardV2AllocationViewsByContractIds', () => {
         activeAtOffset: 42,
       })
     ).rejects.toMatchObject({ code: TokenStandardV2AllocationStateErrorCode.INPUT_INVALID });
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(ledger.getActiveContracts).not.toHaveBeenCalled();
   });
 });

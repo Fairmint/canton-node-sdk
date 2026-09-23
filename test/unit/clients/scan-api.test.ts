@@ -60,7 +60,6 @@ function createClient(
   mockAxiosInstance: MockAxiosInstance;
 } {
   const client = new ScanApiClient(new CantonRuntime(config), options);
-  // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
   const mockResults = jest.mocked(axios.create).mock.results;
   const latestResultIndex = mockResults.length - 1;
   const latestResult = latestResultIndex >= 0 ? mockResults[latestResultIndex] : undefined;

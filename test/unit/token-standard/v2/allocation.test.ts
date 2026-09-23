@@ -336,7 +336,6 @@ describe('Token Standard V2 allocation helpers', () => {
       scan,
     });
 
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- bare jest mock reference, no this-capture risk
     expect(scan.getAllocationFactoryV2FromRegistry).toHaveBeenCalledWith({
       registryUrl: 'https://cash.example/token-registry',
       choiceArguments: {

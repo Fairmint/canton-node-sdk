@@ -201,6 +201,15 @@ const eslintConfig = [
       '@typescript-eslint/no-redundant-type-constituents': 'off',
     },
   },
+  // Test-only override: jest mocks are invoked as bare functions and never rely on
+  // `this`, so unbound-method reports false positives there. Disabled for test files
+  // only; non-test code keeps full protection, with no per-assertion suppressions.
+  {
+    files: ['test/**/*'],
+    rules: {
+      '@typescript-eslint/unbound-method': 'off',
+    },
+  },
   // Prettier config last to override any conflicting rules
   eslintConfigPrettier,
 ];
