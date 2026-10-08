@@ -120,8 +120,9 @@ const AMULET_RULES_TRANSFER_CHOICE = 'AmuletRules_Transfer';
 
 /**
  * Parses fee information from a transaction that contains an `AmuletRules_Transfer` exercise. Accepts anything
- * {@link findExercisedEvent} understands: a submit-and-wait-for-transaction response, a `JsTransaction`, or a bare event
- * array — fetched with `TRANSACTION_SHAPE_LEDGER_EFFECTS` so exercised events are present.
+ * {@link findExercisedEvent} understands: a submit-and-wait-for-transaction response, a `getUpdateById` /
+ * `getUpdateByOffset` response, a `JsTransaction`, or a bare event array — fetched with
+ * `TRANSACTION_SHAPE_LEDGER_EFFECTS` so exercised events are present.
  *
  * @example
  *   ```ts

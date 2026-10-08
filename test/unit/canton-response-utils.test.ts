@@ -16,6 +16,14 @@ describe('canton-response-utils', (): void => {
       expect(readOptionalCantonUpdateId({ transaction: { updateId: 'nested-update' } })).toBe('nested-update');
     });
 
+    it('reads updateId from a getUpdateById response', (): void => {
+      expect(
+        readOptionalCantonUpdateId({
+          update: { Transaction: { value: { updateId: 'lookup-update' } } },
+        })
+      ).toBe('lookup-update');
+    });
+
     it('returns null when no update id is present', (): void => {
       expect(readOptionalCantonUpdateId({})).toBeNull();
       expect(readOptionalCantonUpdateId({ transaction: { events: [] } })).toBeNull();

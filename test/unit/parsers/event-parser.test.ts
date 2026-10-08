@@ -296,6 +296,30 @@ describe('event-parser', () => {
       expect(result.created[0]?.contractId).toBe('created-1');
     });
 
+    it('extracts events and the update id from a getUpdateById response', () => {
+      const response = {
+        update: {
+          Transaction: {
+            value: {
+              updateId: 'update-lookup',
+              events: [
+                {
+                  CreatedEvent: {
+                    contractId: 'created-lookup',
+                    templateId: 'pkg:Module:Created',
+                  },
+                },
+              ],
+            },
+          },
+        },
+      };
+
+      expect(extractEventsFromTransaction(response).created[0]?.contractId).toBe('created-lookup');
+      expect(getTransactionUpdateId(response)).toBe('update-lookup');
+      expect(getTransactionUpdateId({ Transaction: { value: { updateId: 'update-direct' } } })).toBe('update-direct');
+    });
+
     it('extracts from transaction.events arrays', () => {
       const result = extractEventsFromTransaction({
         transaction: {

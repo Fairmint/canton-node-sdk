@@ -283,12 +283,18 @@ function getNestedArray(value: unknown, path: readonly string[]): readonly unkno
 
 /**
  * The raw events of a transaction in the order the ledger produced them (node-id order): a bare event array, a
- * `JsTransaction` (`events`), or a response wrapping one (`transaction.events`).
+ * `JsTransaction` (`events`), a submit response (`transaction.events`), or a lookup response
+ * (`update.Transaction.value.events` from `getUpdateById` / `getUpdateByOffset`).
  */
 export function getTransactionEvents(transaction: unknown): readonly unknown[] {
   if (Array.isArray(transaction)) return transaction;
 
-  const paths: ReadonlyArray<readonly string[]> = [['events'], ['transaction', 'events']];
+  const paths: ReadonlyArray<readonly string[]> = [
+    ['events'],
+    ['transaction', 'events'],
+    ['Transaction', 'value', 'events'],
+    ['update', 'Transaction', 'value', 'events'],
+  ];
 
   for (const path of paths) {
     const events = getNestedArray(transaction, path);
@@ -335,7 +341,12 @@ export class TransactionParseError extends CantonError {
 
 /** The update id of a transaction response, or `undefined` when it names none. */
 export function getTransactionUpdateId(transaction: unknown): string | undefined {
-  const paths: ReadonlyArray<readonly string[]> = [['updateId'], ['transaction', 'updateId']];
+  const paths: ReadonlyArray<readonly string[]> = [
+    ['updateId'],
+    ['transaction', 'updateId'],
+    ['Transaction', 'value', 'updateId'],
+    ['update', 'Transaction', 'value', 'updateId'],
+  ];
 
   for (const path of paths) {
     let current: unknown = transaction;
