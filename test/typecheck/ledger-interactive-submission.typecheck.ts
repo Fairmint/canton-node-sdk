@@ -39,18 +39,9 @@ type ExecuteAndWaitOptions = Parameters<LedgerJsonApiClient['interactiveSubmissi
 type ExecuteAndWaitForTransactionOptions = Parameters<
   LedgerJsonApiClient['interactiveSubmissionExecuteAndWaitForTransaction']
 >[1];
-type PreferredPackageVersionRequest = Parameters<
-  LedgerJsonApiClient['interactiveSubmissionGetPreferredPackageVersion']
->[0];
-type PreferredPackageVersionOptions = Parameters<
-  LedgerJsonApiClient['interactiveSubmissionGetPreferredPackageVersion']
->[1];
 type PreferredPackagesRequest = Parameters<LedgerJsonApiClient['interactiveSubmissionGetPreferredPackages']>[0];
 type PreferredPackagesOptions = Parameters<LedgerJsonApiClient['interactiveSubmissionGetPreferredPackages']>[1];
 type PreferredPackagesResponse = Awaited<ReturnType<LedgerJsonApiClient['interactiveSubmissionGetPreferredPackages']>>;
-type PreferredPackageVersionResponse = Awaited<
-  ReturnType<LedgerJsonApiClient['interactiveSubmissionGetPreferredPackageVersion']>
->;
 
 const executeAndWaitRequest: ExecuteAndWaitRequest = {
   preparedTransaction: 'prepared-transaction',
@@ -486,14 +477,6 @@ void ledgerClient.interactiveSubmissionExecuteAndWaitForTransaction(
 const preferredPackagesRequest: PreferredPackagesRequest = {
   packageVettingRequirements: [{ packageName: 'quickstart-licensing', parties: ['party::fingerprint'] }],
 };
-const preferredPackageVersionRequest: PreferredPackageVersionRequest = {
-  packageName: 'quickstart-licensing',
-  parties: ['party::fingerprint'],
-};
-const preferredPackageVersionOptions: PreferredPackageVersionOptions = {
-  signal,
-  retry: { kind: 'none' },
-};
 const preferredPackagesOptions: PreferredPackagesOptions = {
   signal,
   retry: {
@@ -506,22 +489,12 @@ const preferredPackagesResponse: PreferredPackagesResponse = {
   packageReferences: [{ packageId: 'package-id', packageName: 'quickstart-licensing', packageVersion: '1.0.0' }],
   synchronizerId: 'synchronizer::id',
 };
-const absentPreferredPackage: PreferredPackageVersionResponse = {};
-// @ts-expect-error Public responses normalize wire null into an absent optional property.
-const wireNullPreferredPackage: PreferredPackageVersionResponse = { packagePreference: null };
 
 multipleRawPrepareCommands;
 multiplePrepareCommands;
-void ledgerClient.interactiveSubmissionGetPreferredPackageVersion(
-  preferredPackageVersionRequest,
-  preferredPackageVersionOptions
-);
 void ledgerClient.interactiveSubmissionGetPreferredPackages(preferredPackagesRequest, preferredPackagesOptions);
 preferredPackagesRequest;
-preferredPackageVersionRequest;
 preferredPackagesResponse;
-absentPreferredPackage;
-wireNullPreferredPackage;
 
 // @ts-expect-error Every derived traffic-cost estimate includes its server estimation timestamp.
 const trafficEstimateWithoutTimestamp: TrafficCostEstimate = {

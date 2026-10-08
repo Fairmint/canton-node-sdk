@@ -14,13 +14,12 @@ import {
   flatTransaction,
   flattenedTransaction,
   HOLDING_TEMPLATE,
-  transactionTree,
   UPDATE_ID,
 } from './transactions-fixture';
 
 describe('token standard v1 burn-mint results', () => {
   it('names the minted holdings in output order, from the exercise result rather than the creates', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.burnMint,
@@ -39,7 +38,7 @@ describe('token standard v1 burn-mint results', () => {
   });
 
   it('reads a burn as an empty output list, not as a missing result', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       { exercised: exercised({ choice: 'Accept' }) },
       { exercised: exercised({ choice: TokenStandardV1Choice.burnMint, exerciseResult: { outputCids: [] } }) },
     ]);
@@ -49,7 +48,7 @@ describe('token standard v1 burn-mint results', () => {
   });
 
   it('reads the created holdings when the caller names the enforcement choice that minted them', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       { exercised: exercised({ choice: 'BurnHoldingEnforcement', exerciseResult: {} }) },
       { created: created(BURN_OFFER_TEMPLATE, 'cid-offer') },
       { created: created(HOLDING_TEMPLATE, 'cid-reissued') },
@@ -64,7 +63,7 @@ describe('token standard v1 burn-mint results', () => {
   });
 
   it('refuses to call every create a mint when the transaction carries no burn-mint result', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       { exercised: exercised({ choice: 'BurnHoldingEnforcement', exerciseResult: {} }) },
       { created: created(BURN_OFFER_TEMPLATE, 'cid-offer') },
       { created: created(HOLDING_TEMPLATE, 'cid-reissued') },
@@ -74,7 +73,7 @@ describe('token standard v1 burn-mint results', () => {
   });
 
   it('refuses the create-event fallback unless both mintingChoices and holdingTemplate are named', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       { exercised: exercised({ choice: 'BurnHoldingEnforcement', exerciseResult: {} }) },
       { created: created(BURN_OFFER_TEMPLATE, 'cid-offer') },
       { created: created(HOLDING_TEMPLATE, 'cid-reissued') },
@@ -96,7 +95,7 @@ describe('token standard v1 burn-mint results', () => {
   });
 
   it('refuses the fallback when none of the named minting choices was exercised', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       { exercised: exercised({ choice: TokenStandardV1Choice.transfer, exerciseResult: {} }) },
       { created: created(HOLDING_TEMPLATE, 'cid-change') },
     ]);
@@ -110,7 +109,7 @@ describe('token standard v1 burn-mint results', () => {
   });
 
   it('reports a pure confiscation as no minted holdings rather than as a failure', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       { exercised: exercised({ choice: 'BurnHoldingEnforcement', exerciseResult: {} }) },
       { created: created(BURN_OFFER_TEMPLATE, 'cid-offer') },
     ]);
@@ -124,7 +123,7 @@ describe('token standard v1 burn-mint results', () => {
   });
 
   it('reads a burn-mint result that is not a record as a failure, not as a reason to read the creates', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       { exercised: exercised({ choice: TokenStandardV1Choice.burnMint, exerciseResult: 'nonsense' }) },
       { created: created(HOLDING_TEMPLATE, 'cid-created') },
     ]);
@@ -137,7 +136,7 @@ describe('token standard v1 burn-mint results', () => {
   it('says so when the transaction contains no burn-mint at all', () => {
     let thrown: unknown;
     try {
-      parseBurnMintResult(transactionTree([{ created: created(HOLDING_TEMPLATE, 'cid-1') }]));
+      parseBurnMintResult(flatTransaction([{ created: created(HOLDING_TEMPLATE, 'cid-1') }]));
     } catch (error) {
       thrown = error;
     }
@@ -150,7 +149,7 @@ describe('token standard v1 burn-mint results', () => {
   });
 
   it('reports mixed outputCids as invalid rather than dropping the non-strings', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.burnMint,
@@ -163,7 +162,7 @@ describe('token standard v1 burn-mint results', () => {
   });
 
   it('reports empty-string outputCids as invalid rather than accepting them', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.burnMint,
@@ -176,7 +175,7 @@ describe('token standard v1 burn-mint results', () => {
   });
 
   it('reports a burn-mint result that names no outputCids', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       { exercised: exercised({ choice: TokenStandardV1Choice.burnMint, exerciseResult: { meta: { values: {} } } }) },
     ]);
 
@@ -186,7 +185,7 @@ describe('token standard v1 burn-mint results', () => {
 
 describe('token standard v1 transfer results', () => {
   it('reads a completed transfer, from any of the five choices that return one', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.transferInstructionAccept,
@@ -209,7 +208,7 @@ describe('token standard v1 transfer results', () => {
   });
 
   it('names the pending offer, and the change that went back to the sender with it', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.transfer,
@@ -234,7 +233,7 @@ describe('token standard v1 transfer results', () => {
   it.each([undefined, 42, ''] as const)(
     'refuses a pending transfer whose instruction cid is %j',
     (transferInstructionCid) => {
-      const response = transactionTree([
+      const response = flatTransaction([
         {
           exercised: exercised({
             choice: TokenStandardV1Choice.transfer,
@@ -288,13 +287,13 @@ describe('token standard v1 transfer results', () => {
   });
 
   it('says so when the transaction contains no transfer result', () => {
-    const response = transactionTree([{ created: created(HOLDING_TEMPLATE, 'cid-1') }]);
+    const response = flatTransaction([{ created: created(HOLDING_TEMPLATE, 'cid-1') }]);
 
     expect(() => parseTransferResult(response)).toThrow(/contains none of these exercises/);
   });
 
   it('reports an output tag the standard does not define rather than calling the transfer failed', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.transfer,
@@ -321,7 +320,7 @@ describe('token standard v1 transfer results', () => {
   });
 
   it('reports a transfer result that names no output at all', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.transferInstructionAccept,
@@ -336,7 +335,7 @@ describe('token standard v1 transfer results', () => {
 
 describe('token standard v1 allocation results', () => {
   it('names the allocation the units are reserved under', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.allocate,
@@ -361,7 +360,7 @@ describe('token standard v1 allocation results', () => {
   it.each([undefined, 42, ''] as const)(
     'refuses a completed allocation whose allocation cid is %j',
     (allocationCid) => {
-      const response = transactionTree([
+      const response = flatTransaction([
         {
           exercised: exercised({
             choice: TokenStandardV1Choice.allocate,
@@ -378,7 +377,7 @@ describe('token standard v1 allocation results', () => {
   );
 
   it('reads a pending allocation instruction without an allocation', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.allocate,
@@ -405,7 +404,7 @@ describe('token standard v1 allocation results', () => {
   it.each([undefined, 42, ''] as const)(
     'refuses a pending allocation whose instruction cid is %j',
     (allocationInstructionCid) => {
-      const response = transactionTree([
+      const response = flatTransaction([
         {
           exercised: exercised({
             choice: TokenStandardV1Choice.allocate,
@@ -422,7 +421,7 @@ describe('token standard v1 allocation results', () => {
   );
 
   it('reads a rejected allocation as failed, from the standard failed variant', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.allocate,
@@ -446,7 +445,7 @@ describe('token standard v1 allocation results', () => {
   it('reports a missing allocate exercise as a token standard result error, not a parse error', () => {
     let thrown: unknown;
     try {
-      parseAllocationResult(transactionTree([{ created: created(HOLDING_TEMPLATE, 'cid-1') }]));
+      parseAllocationResult(flatTransaction([{ created: created(HOLDING_TEMPLATE, 'cid-1') }]));
     } catch (error) {
       thrown = error;
     }
@@ -459,7 +458,7 @@ describe('token standard v1 allocation results', () => {
   });
 
   it('reports an allocation output tag it does not know rather than calling the allocation failed', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.allocate,
@@ -477,7 +476,7 @@ describe('token standard v1 allocation results', () => {
   });
 
   it('reports an allocation result that names no output at all', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.allocate,
@@ -490,7 +489,7 @@ describe('token standard v1 allocation results', () => {
   });
 
   it('reads delivery and unwinding through the same result, which differ only in who gets the holdings', () => {
-    const executed = transactionTree([
+    const executed = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.allocationExecuteTransfer,
@@ -498,7 +497,7 @@ describe('token standard v1 allocation results', () => {
         }),
       },
     ]);
-    const cancelled = transactionTree([
+    const cancelled = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.allocationCancel,
@@ -520,7 +519,7 @@ describe('token standard v1 allocation results', () => {
   });
 
   it('reports mixed optional holding cids as invalid rather than dropping the non-strings', () => {
-    const executed = transactionTree([
+    const executed = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.allocationExecuteTransfer,
@@ -532,7 +531,7 @@ describe('token standard v1 allocation results', () => {
         }),
       },
     ]);
-    const cancelled = transactionTree([
+    const cancelled = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.allocationCancel,
@@ -546,7 +545,7 @@ describe('token standard v1 allocation results', () => {
   });
 
   it('reports execute without receiver holdings as invalid, not as an empty delivery', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.allocationExecuteTransfer,
@@ -559,7 +558,7 @@ describe('token standard v1 allocation results', () => {
   });
 
   it('reports cancel without sender holdings as invalid, not as an empty unwind', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.allocationCancel,
@@ -572,7 +571,7 @@ describe('token standard v1 allocation results', () => {
   });
 
   it('reports withdraw without sender holdings as invalid, not as an empty unwind', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       {
         exercised: exercised({
           choice: TokenStandardV1Choice.allocationWithdraw,
@@ -585,7 +584,7 @@ describe('token standard v1 allocation results', () => {
   });
 
   it('reports a result that is not a record rather than reading fields off it', () => {
-    const response = transactionTree([
+    const response = flatTransaction([
       { exercised: exercised({ choice: TokenStandardV1Choice.allocationWithdraw, exerciseResult: 'nonsense' }) },
     ]);
 
@@ -593,7 +592,7 @@ describe('token standard v1 allocation results', () => {
   });
 
   it('carries the token standard v1 error code on a missing result', () => {
-    const response = transactionTree([{ created: created(HOLDING_TEMPLATE, 'cid-1') }]);
+    const response = flatTransaction([{ created: created(HOLDING_TEMPLATE, 'cid-1') }]);
 
     let thrown: unknown;
     try {

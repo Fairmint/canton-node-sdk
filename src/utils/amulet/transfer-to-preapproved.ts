@@ -1,8 +1,8 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import {
-  type SubmitAndWaitForTransactionTreeParams,
-  type SubmitAndWaitForTransactionTreeResponse,
-} from '../../clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction-tree';
+  type SubmitAndWaitForTransactionParams,
+  type SubmitAndWaitForTransactionResponse,
+} from '../../clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction';
 import { type DisclosedContract, type ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/commands';
 import { type ValidatorApiClient } from '../../clients/validator-api';
 import { OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
@@ -35,7 +35,7 @@ export interface TransferToPreapprovedResult {
     /** Domain ID where the transfer occurred. */
     readonly domainId: string;
     /** Transfer result summary. */
-    readonly transferResult: SubmitAndWaitForTransactionTreeResponse;
+    readonly transferResult: SubmitAndWaitForTransactionResponse;
   }>;
 }
 
@@ -212,14 +212,14 @@ export async function transferToPreapproved(
     }
 
     // Submit the command
-    const submitParams: SubmitAndWaitForTransactionTreeParams = {
+    const submitParams: SubmitAndWaitForTransactionParams = {
       commands: [transferCommand],
       commandId: `transfer-preapproved-${transfer.recipientPartyId}-${Date.now()}`,
       actAs: [params.senderPartyId],
       disclosedContracts: transferDisclosedContracts,
     };
 
-    const result = await ledgerClient.submitAndWaitForTransactionTree(submitParams);
+    const result = await ledgerClient.submitAndWaitForTransaction(submitParams);
 
     transferResults.push({
       recipientPartyId: transfer.recipientPartyId,

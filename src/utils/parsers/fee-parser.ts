@@ -1,11 +1,12 @@
 /**
- * Helpers for decoding Amulet fee breakdown from exercised transaction trees (`AmuletRules_Transfer`).
+ * Helpers for decoding the Amulet fee breakdown from an `AmuletRules_Transfer` exercise.
  *
- * Typical flow: submit a transfer, read `transactionTreeById`, pass `eventTree` into {@link parseFeesFromEventTree}.
+ * Typical flow: submit a transfer (or fetch its update by id with ledger effects) and pass the transaction into
+ * {@link parseFeesFromTransaction}.
  */
 
-import { type TreeEvent } from '../../clients/ledger-json-api/schemas/api/events';
 import { ValidationError } from '../../core/errors';
+import { findExercisedEvent, type ParsedExercisedEvent } from './event-parser';
 
 /** A single party's balance change from a transfer. */
 export interface BalanceChange {
@@ -115,69 +116,43 @@ function addStrings(a: string, b: string): string {
   return decLen > 0 ? `${intSum}.${decResult}`.replace(/\.?0+$/, '') : intSum;
 }
 
-/**
- * Finds the AmuletRules_Transfer event in an event tree
- *
- * @param eventTree - The event tree as a Record<string, TreeEvent>
- * @returns The TreeEvent containing fee information, or null if not found
- */
-function findAmuletRulesTransferEvent(eventTree: Record<string, TreeEvent>): TreeEvent | null {
-  for (const [, treeEvent] of Object.entries(eventTree)) {
-    if ('ExercisedTreeEvent' in treeEvent) {
-      const exercisedEvent = treeEvent.ExercisedTreeEvent.value;
-      if (exercisedEvent.choice === 'AmuletRules_Transfer') {
-        return treeEvent;
-      }
-    }
-  }
-  return null;
-}
+const AMULET_RULES_TRANSFER_CHOICE = 'AmuletRules_Transfer';
 
 /**
- * Parses fee information from an event tree (`Record<string, TreeEvent>`), usually from a transaction tree response.
- *
- * @param eventTree - Event tree containing an `AmuletRules_Transfer` exercise
- * @returns Structured totals, per-party balance deltas, and simple arithmetic validation flags
- * @throws ValidationError when no transferable fee-bearing exercise exists in the tree
+ * Parses fee information from a transaction that contains an `AmuletRules_Transfer` exercise. Accepts anything
+ * {@link findExercisedEvent} understands: a submit-and-wait-for-transaction response, a `JsTransaction`, or a bare event
+ * array — fetched with `TRANSACTION_SHAPE_LEDGER_EFFECTS` so exercised events are present.
  *
  * @example
- * ```ts
- * const analysis = parseFeesFromEventTree(transaction.transactionTreeById.eventTree);
- * console.log(analysis.totalFees, analysis.feeBreakdown.holdingFees);
- * ```
+ *   ```ts
+ *   const analysis = parseFeesFromTransaction(response);
+ *   console.log(analysis.totalFees, analysis.feeBreakdown.holdingFees);
+ *   ```;
+ *
+ * @param transaction - Transaction containing an `AmuletRules_Transfer` exercise
+ * @returns Structured totals, per-party balance deltas, and simple arithmetic validation flags
+ * @throws ValidationError when the transaction contains no `AmuletRules_Transfer` exercise
  */
-export function parseFeesFromEventTree(eventTree: Record<string, TreeEvent>): FeeAnalysis {
-  const amuletRulesEvent = findAmuletRulesTransferEvent(eventTree);
+export function parseFeesFromTransaction(transaction: unknown): FeeAnalysis {
+  const amuletRulesEvent = findExercisedEvent(transaction, AMULET_RULES_TRANSFER_CHOICE);
 
   if (!amuletRulesEvent) {
-    throw new ValidationError('No AmuletRules_Transfer event found in event tree', {
-      eventCount: Object.keys(eventTree).length,
-    });
+    throw new ValidationError('No AmuletRules_Transfer event found in transaction');
   }
 
-  return parseFeesFromUpdate(amuletRulesEvent);
+  return parseFeesFromExercisedEvent(amuletRulesEvent);
 }
 
 /**
- * Parses fee information from a TreeEvent
+ * Parses fee information from a parsed `AmuletRules_Transfer` exercised event.
  *
- * @param treeEvent - The TreeEvent object
+ * @param exercisedEvent - The exercised event (see {@link ParsedExercisedEvent})
  * @returns FeeAnalysis object with extracted fee information and validation
  */
-export function parseFeesFromUpdate(treeEvent: TreeEvent): FeeAnalysis {
-  // Check if this is an exercised event that contains fee information
-  if (!('ExercisedTreeEvent' in treeEvent)) {
-    throw new ValidationError('No fee information found in TreeEvent - only exercised events contain fee data', {
-      eventType: Object.keys(treeEvent)[0],
-    });
-  }
-
-  const exercisedEvent = treeEvent.ExercisedTreeEvent.value;
-
-  // Check if this is an AmuletRules_Transfer choice which contains fee information
-  if (exercisedEvent.choice !== 'AmuletRules_Transfer') {
+export function parseFeesFromExercisedEvent(exercisedEvent: ParsedExercisedEvent): FeeAnalysis {
+  if (exercisedEvent.choice !== AMULET_RULES_TRANSFER_CHOICE) {
     throw new ValidationError(
-      'No fee information found in TreeEvent - only AmuletRules_Transfer choices contain fee data',
+      'No fee information found in exercised event - only AmuletRules_Transfer choices contain fee data',
       { choice: exercisedEvent.choice }
     );
   }

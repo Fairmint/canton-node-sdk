@@ -63,10 +63,11 @@ export interface ParsedTransactionEvents {
 type EventVariant = 'created' | 'archived' | 'exercised';
 type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 
+/** Transaction events use `CreatedEvent`; the events-by-contract-id response uses `createdEvent`. */
 const VARIANT_KEYS: Record<EventVariant, readonly string[]> = {
-  created: ['CreatedTreeEvent', 'CreatedEvent', 'createdEvent'],
-  archived: ['ArchivedTreeEvent', 'ArchivedEvent', 'archivedEvent'],
-  exercised: ['ExercisedTreeEvent', 'ExercisedEvent', 'exercisedEvent'],
+  created: ['CreatedEvent', 'createdEvent'],
+  archived: ['ArchivedEvent', 'archivedEvent'],
+  exercised: ['ExercisedEvent', 'exercisedEvent'],
 };
 
 function readString(value: unknown): string | undefined {
@@ -98,9 +99,7 @@ function unwrapVariant(event: unknown, variant: EventVariant): Readonly<Record<s
 
   for (const key of VARIANT_KEYS[variant]) {
     const wrapper = event[key];
-    if (!isRecord(wrapper)) continue;
-    const { value } = wrapper;
-    return readRecord(value) ?? wrapper;
+    if (isRecord(wrapper)) return wrapper;
   }
 
   return null;
@@ -273,15 +272,6 @@ export function parseExercisedEvent(event: unknown): ParsedExercisedEvent | null
   return result;
 }
 
-function getNestedRecord(value: unknown, path: readonly string[]): Readonly<Record<string, unknown>> | null {
-  let current = value;
-  for (const segment of path) {
-    if (!isRecord(current)) return null;
-    current = current[segment];
-  }
-  return readRecord(current) ?? null;
-}
-
 function getNestedArray(value: unknown, path: readonly string[]): readonly unknown[] | null {
   let current = value;
   for (const segment of path) {
@@ -291,61 +281,21 @@ function getNestedArray(value: unknown, path: readonly string[]): readonly unkno
   return Array.isArray(current) ? current : null;
 }
 
-function getEventsById(transaction: unknown): Readonly<Record<string, unknown>> | null {
-  const paths: ReadonlyArray<readonly string[]> = [
-    ['eventsById'],
-    ['eventTree'],
-    ['transactionTree', 'eventsById'],
-    ['transactionTree', 'eventTree'],
-    ['transaction', 'eventsById'],
-    ['transaction', 'eventTree'],
-  ];
-
-  for (const path of paths) {
-    const eventsById = getNestedRecord(transaction, path);
-    if (eventsById && Object.keys(eventsById).length > 0) return eventsById;
-  }
-
-  return null;
-}
-
-function getEventArray(transaction: unknown): readonly unknown[] | null {
+/**
+ * The raw events of a transaction in the order the ledger produced them (node-id order): a bare event array, a
+ * `JsTransaction` (`events`), or a response wrapping one (`transaction.events`).
+ */
+export function getTransactionEvents(transaction: unknown): readonly unknown[] {
   if (Array.isArray(transaction)) return transaction;
 
-  const paths: ReadonlyArray<readonly string[]> = [
-    ['events'],
-    ['transactionTree', 'events'],
-    ['transaction', 'events'],
-  ];
+  const paths: ReadonlyArray<readonly string[]> = [['events'], ['transaction', 'events']];
 
   for (const path of paths) {
     const events = getNestedArray(transaction, path);
     if (events) return events;
   }
 
-  return null;
-}
-
-/** Node ids are numeric strings, but a map preserves whatever order it was built with. */
-function compareNodeIds(left: string, right: string): number {
-  const leftNumber = Number(left);
-  const rightNumber = Number(right);
-  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) return leftNumber - rightNumber;
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-
-/**
- * The raw events of a transaction in node-id order, from whichever shape the response used: a tree keyed by node id, or
- * a flat event array, wrapped in `transactionTree`, in `transaction`, or on its own.
- */
-export function getTransactionEvents(transaction: unknown): readonly unknown[] {
-  const eventsById = getEventsById(transaction);
-  if (eventsById) {
-    return Object.keys(eventsById)
-      .sort(compareNodeIds)
-      .map((key) => eventsById[key]);
-  }
-  return getEventArray(transaction) ?? [];
+  return [];
 }
 
 export function extractEventsFromTransaction(transaction: unknown): ParsedTransactionEvents {
@@ -385,11 +335,7 @@ export class TransactionParseError extends CantonError {
 
 /** The update id of a transaction response, or `undefined` when it names none. */
 export function getTransactionUpdateId(transaction: unknown): string | undefined {
-  const paths: ReadonlyArray<readonly string[]> = [
-    ['updateId'],
-    ['transactionTree', 'updateId'],
-    ['transaction', 'updateId'],
-  ];
+  const paths: ReadonlyArray<readonly string[]> = [['updateId'], ['transaction', 'updateId']];
 
   for (const path of paths) {
     let current: unknown = transaction;

@@ -1,104 +1,109 @@
-import type { TreeEvent } from '../../../src/clients/ledger-json-api/schemas/api/events';
 import {
   formatFeeAmount,
-  parseFeesFromEventTree,
-  parseFeesFromUpdate,
+  parseFeesFromExercisedEvent,
+  parseFeesFromTransaction,
   validateFeeAnalysis,
   type FeeAnalysis,
 } from '../../../src/utils/parsers/fee-parser';
+import { parseExercisedEvent, type ParsedExercisedEvent } from '../../../src/utils/parsers/event-parser';
 
-// Helper to create mock events - use `as unknown as TreeEvent` to avoid strict type checking on test mocks
-const createAmuletRulesTransferEvent = (summary: Record<string, unknown>): TreeEvent =>
-  ({
-    ExercisedTreeEvent: {
-      value: {
-        contractId: 'contract-123',
-        templateId: 'pkg:Splice.Amulet:AmuletRules',
-        choice: 'AmuletRules_Transfer',
-        choiceArgument: {},
-        exerciseResult: {
-          round: { number: '10' },
-          summary: {
-            inputAppRewardAmount: '0',
-            inputValidatorRewardAmount: '0',
-            inputSvRewardAmount: '0',
-            inputAmuletAmount: '100',
-            holdingFees: '0.001',
-            outputFees: ['0.002', '0.003'],
-            senderChangeFee: '0.0005',
-            senderChangeAmount: '50',
-            amuletPrice: '1.0',
-            inputValidatorFaucetAmount: '0',
-            balanceChanges: [
-              ['party1', { changeToInitialAmountAsOfRoundZero: '-50', changeToHoldingFeesRate: '0' }],
-              ['party2', { changeToInitialAmountAsOfRoundZero: '49.9935', changeToHoldingFeesRate: '0' }],
-            ],
-            ...summary,
-          },
-          createdAmulets: [],
-          senderChangeAmulet: 'amulet-123',
-        },
+const createAmuletRulesTransferEvent = (summary: Record<string, unknown>): Record<string, unknown> => ({
+  ExercisedEvent: {
+    offset: 10,
+    nodeId: 2,
+    contractId: 'contract-123',
+    templateId: 'pkg:Splice.Amulet:AmuletRules',
+    choice: 'AmuletRules_Transfer',
+    choiceArgument: {},
+    actingParties: ['party1'],
+    witnessParties: ['party1'],
+    consuming: false,
+    lastDescendantNodeId: 5,
+    packageName: 'splice-amulet',
+    exerciseResult: {
+      round: { number: '10' },
+      summary: {
+        inputAppRewardAmount: '0',
+        inputValidatorRewardAmount: '0',
+        inputSvRewardAmount: '0',
+        inputAmuletAmount: '100',
+        holdingFees: '0.001',
+        outputFees: ['0.002', '0.003'],
+        senderChangeFee: '0.0005',
+        senderChangeAmount: '50',
+        amuletPrice: '1.0',
+        inputValidatorFaucetAmount: '0',
+        balanceChanges: [
+          ['party1', { changeToInitialAmountAsOfRoundZero: '-50', changeToHoldingFeesRate: '0' }],
+          ['party2', { changeToInitialAmountAsOfRoundZero: '49.9935', changeToHoldingFeesRate: '0' }],
+        ],
+        ...summary,
       },
+      createdAmulets: [],
+      senderChangeAmulet: 'amulet-123',
     },
-  }) as unknown as TreeEvent;
+  },
+});
 
-const createNonTransferEvent = (): TreeEvent =>
-  ({
-    ExercisedTreeEvent: {
-      value: {
-        contractId: 'contract-123',
-        templateId: 'pkg:Splice.Wallet:WalletInstall',
-        choice: 'SomeOtherChoice',
-        choiceArgument: {},
-        exerciseResult: {},
-      },
-    },
-  }) as unknown as TreeEvent;
+const createNonTransferEvent = (): Record<string, unknown> => ({
+  ExercisedEvent: {
+    contractId: 'contract-123',
+    templateId: 'pkg:Splice.Wallet:WalletInstall',
+    choice: 'SomeOtherChoice',
+    choiceArgument: {},
+    exerciseResult: {},
+  },
+});
 
-const createCreatedEvent = (): TreeEvent =>
-  ({
-    CreatedTreeEvent: {
-      value: {
-        contractId: 'contract-123',
-        templateId: 'pkg:Module:Template',
-      },
-    },
-  }) as unknown as TreeEvent;
+const createCreatedEvent = (): Record<string, unknown> => ({
+  CreatedEvent: {
+    contractId: 'contract-123',
+    templateId: 'pkg:Module:Template',
+  },
+});
+
+const exercised = (event: Record<string, unknown>): ParsedExercisedEvent => {
+  const parsed = parseExercisedEvent(event);
+  if (!parsed) throw new Error('fixture is not an exercised event');
+  return parsed;
+};
 
 describe('fee-parser', () => {
-  describe('parseFeesFromEventTree', () => {
-    it('extracts fees from event tree with AmuletRules_Transfer', () => {
-      const eventTree: Record<string, TreeEvent> = {
-        '1': createCreatedEvent(),
-        '2': createAmuletRulesTransferEvent({}),
+  describe('parseFeesFromTransaction', () => {
+    it('extracts fees from a submit response containing AmuletRules_Transfer', () => {
+      const response = {
+        transaction: { updateId: 'update-1', events: [createCreatedEvent(), createAmuletRulesTransferEvent({})] },
       };
 
-      const result = parseFeesFromEventTree(eventTree);
+      const result = parseFeesFromTransaction(response);
 
       expect(result.feeBreakdown.holdingFees).toBe('0.001');
       expect(result.feeBreakdown.outputFees).toEqual(['0.002', '0.003']);
       expect(result.feeBreakdown.senderChangeFee).toBe('0.0005');
     });
 
-    it('throws when no AmuletRules_Transfer event found', () => {
-      const eventTree: Record<string, TreeEvent> = {
-        '1': createCreatedEvent(),
-        '2': createNonTransferEvent(),
-      };
+    it('extracts fees from a bare event array', () => {
+      const result = parseFeesFromTransaction([createAmuletRulesTransferEvent({})]);
 
-      expect(() => parseFeesFromEventTree(eventTree)).toThrow('No AmuletRules_Transfer event found in event tree');
+      expect(result.feeBreakdown.holdingFees).toBe('0.001');
     });
 
-    it('throws for empty event tree', () => {
-      expect(() => parseFeesFromEventTree({})).toThrow('No AmuletRules_Transfer event found in event tree');
+    it('throws when no AmuletRules_Transfer event found', () => {
+      const events = [createCreatedEvent(), createNonTransferEvent()];
+
+      expect(() => parseFeesFromTransaction({ events })).toThrow('No AmuletRules_Transfer event found in transaction');
+    });
+
+    it('throws for a transaction without events', () => {
+      expect(() => parseFeesFromTransaction({ events: [] })).toThrow(
+        'No AmuletRules_Transfer event found in transaction'
+      );
     });
   });
 
-  describe('parseFeesFromUpdate', () => {
+  describe('parseFeesFromExercisedEvent', () => {
     it('parses fees from valid exercised event', () => {
-      const event = createAmuletRulesTransferEvent({});
-
-      const result = parseFeesFromUpdate(event);
+      const result = parseFeesFromExercisedEvent(exercised(createAmuletRulesTransferEvent({})));
 
       expect(result.feeBreakdown.holdingFees).toBe('0.001');
       expect(result.feeBreakdown.outputFees).toEqual(['0.002', '0.003']);
@@ -112,7 +117,7 @@ describe('fee-parser', () => {
         senderChangeFee: '0.25',
       });
 
-      const result = parseFeesFromUpdate(event);
+      const result = parseFeesFromExercisedEvent(exercised(event));
 
       // 1.5 + 0.5 + 0.25 + 0.25 = 2.5
       expect(parseFloat(result.totalFees)).toBeCloseTo(2.5);
@@ -126,7 +131,7 @@ describe('fee-parser', () => {
         ],
       });
 
-      const result = parseFeesFromUpdate(event);
+      const result = parseFeesFromExercisedEvent(exercised(event));
 
       expect(result.balanceChanges).toHaveLength(2);
       expect(result.balanceChanges[0]).toEqual({
@@ -144,9 +149,7 @@ describe('fee-parser', () => {
     it('validates fee balance calculation', () => {
       // The isBalanced check verifies totalBalanceChange + totalFees ≈ 0
       // Using the default mock values to test this
-      const event = createAmuletRulesTransferEvent({});
-
-      const result = parseFeesFromUpdate(event);
+      const result = parseFeesFromExercisedEvent(exercised(createAmuletRulesTransferEvent({})));
 
       // Verify fee validation structure exists
       expect(result.feeValidation).toHaveProperty('isBalanced');
@@ -162,59 +165,43 @@ describe('fee-parser', () => {
         balanceChanges: [['alice', { changeToInitialAmountAsOfRoundZero: '-5', changeToHoldingFeesRate: '0' }]],
       });
 
-      const result = parseFeesFromUpdate(event);
+      const result = parseFeesFromExercisedEvent(exercised(event));
 
       expect(result.feeValidation.isBalanced).toBe(false);
       expect(result.feeValidation.discrepancy).toBeDefined();
     });
 
-    it('throws for non-exercised event', () => {
-      const event = createCreatedEvent();
-
-      expect(() => parseFeesFromUpdate(event)).toThrow(
-        'No fee information found in TreeEvent - only exercised events contain fee data'
+    it('throws for non-transfer exercised event', () => {
+      expect(() => parseFeesFromExercisedEvent(exercised(createNonTransferEvent()))).toThrow(
+        'No fee information found in exercised event - only AmuletRules_Transfer choices contain fee data'
       );
     });
 
-    it('throws for non-transfer exercised event', () => {
-      const event = createNonTransferEvent();
+    it('throws when the exercise result carries no summary', () => {
+      const event = {
+        ExercisedEvent: {
+          contractId: 'contract-123',
+          templateId: 'pkg:Splice.Amulet:AmuletRules',
+          choice: 'AmuletRules_Transfer',
+          choiceArgument: {},
+          exerciseResult: { round: { number: '10' } },
+        },
+      };
 
-      expect(() => parseFeesFromUpdate(event)).toThrow(
-        'No fee information found in TreeEvent - only AmuletRules_Transfer choices contain fee data'
+      expect(() => parseFeesFromExercisedEvent(exercised(event))).toThrow(
+        'No fee information found in exercise result'
       );
     });
 
     it('handles missing optional fields with defaults', () => {
-      const event = {
-        ExercisedTreeEvent: {
-          value: {
-            contractId: 'contract-123',
-            templateId: 'pkg:Splice.Amulet:AmuletRules',
-            choice: 'AmuletRules_Transfer',
-            choiceArgument: {},
-            exerciseResult: {
-              round: { number: '10' },
-              summary: {
-                inputAppRewardAmount: '0',
-                inputValidatorRewardAmount: '0',
-                inputSvRewardAmount: '0',
-                inputAmuletAmount: '100',
-                holdingFees: '0.5',
-                outputFees: [],
-                senderChangeFee: '0.1',
-                senderChangeAmount: '50',
-                amuletPrice: '1.0',
-                inputValidatorFaucetAmount: '0',
-                balanceChanges: [],
-              },
-              createdAmulets: [],
-              senderChangeAmulet: 'amulet-123',
-            },
-          },
-        },
-      } as unknown as TreeEvent;
+      const event = createAmuletRulesTransferEvent({
+        holdingFees: '0.5',
+        outputFees: [],
+        senderChangeFee: '0.1',
+        balanceChanges: [],
+      });
 
-      const result = parseFeesFromUpdate(event);
+      const result = parseFeesFromExercisedEvent(exercised(event));
 
       expect(result.feeBreakdown.outputFees).toEqual([]);
       expect(result.balanceChanges).toEqual([]);

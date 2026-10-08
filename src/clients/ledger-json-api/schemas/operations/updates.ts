@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { NonEmptyStringSchema } from './base';
 
 // Filter content schemas matching AsyncAPI spec
 const InterfaceFilterContentSchema = z.object({
@@ -101,15 +100,6 @@ export const TransactionFormatSchema = z.object({
 
 export type TransactionFormat = z.infer<typeof TransactionFormatSchema>;
 
-export const GetTransactionTreeByOffsetParamsSchema = z.object({
-  /** Offset in the ledger to fetch the transaction tree from. */
-  offset: NonEmptyStringSchema,
-  /** Parties to include in the query (optional). */
-  parties: z.array(z.string()).optional(),
-});
-
-export type GetTransactionTreeByOffsetParams = z.infer<typeof GetTransactionTreeByOffsetParamsSchema>;
-
 /** Shared update format schema for selecting which update types to include. */
 export const UpdateFormatSchema = z.object({
   includeTransactions: TransactionFormatSchema.optional(),
@@ -141,31 +131,12 @@ export const GetUpdatesParamsSchema = z.object({
   updateFormat: UpdateFormatSchema,
 });
 
-/** Same as GetUpdatesParams but for tree structures. */
-export const GetUpdateTreesParamsSchema = GetUpdatesParamsSchema;
-
-/** Parameters for retrieving a specific transaction by its offset. */
-export const GetTransactionByOffsetParamsSchema = z.object({
-  /** Offset of the transaction being looked up. */
-  offset: z.number(),
-  /** Transaction format for the request. */
-  transactionFormat: TransactionFormatSchema,
-});
-
 /** Parameters for retrieving a specific update by its offset. */
 export const GetUpdateByOffsetParamsSchema = z.object({
   /** Offset of the update being looked up. */
   offset: z.number(),
   /** Update format for the request. */
   updateFormat: UpdateFormatSchema,
-});
-
-/** Schema for get transaction by id parameters. Defines parameters for retrieving a specific transaction by its ID. */
-export const GetTransactionByIdParamsSchema = z.object({
-  /** ID of the transaction to fetch. */
-  updateId: z.string(),
-  /** Transaction format for the request. */
-  transactionFormat: TransactionFormatSchema,
 });
 
 /** Schema for get update by id parameters. Defines parameters for retrieving a specific update by its ID. */
@@ -176,19 +147,7 @@ export const GetUpdateByIdParamsSchema = z.object({
   requestingParties: z.array(z.string()).optional(),
 });
 
-/** Schema for get transaction tree by id parameters. Defines parameters for retrieving a transaction tree by its ID. */
-export const GetTransactionTreeByIdParamsSchema = z.object({
-  /** Update ID to fetch the transaction tree for. */
-  updateId: NonEmptyStringSchema,
-  /** Parties to include in the query (optional). */
-  parties: z.array(z.string()).optional(),
-});
-
 // Export types
 export type GetUpdatesParams = z.infer<typeof GetUpdatesParamsSchema>;
-export type GetUpdateTreesParams = z.infer<typeof GetUpdateTreesParamsSchema>;
-export type GetTransactionByOffsetParams = z.infer<typeof GetTransactionByOffsetParamsSchema>;
 export type GetUpdateByOffsetParams = z.infer<typeof GetUpdateByOffsetParamsSchema>;
-export type GetTransactionByIdParams = z.infer<typeof GetTransactionByIdParamsSchema>;
 export type GetUpdateByIdParams = z.infer<typeof GetUpdateByIdParamsSchema>;
-export type GetTransactionTreeByIdParams = z.infer<typeof GetTransactionTreeByIdParamsSchema>;

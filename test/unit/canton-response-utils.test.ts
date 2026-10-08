@@ -1,10 +1,28 @@
 import {
   findCantonCoinBalance,
   normalizeCantonContractItem,
+  readOptionalCantonUpdateId,
   type CantonWalletBalances,
 } from '../../src/utils/canton-response-utils';
 
 describe('canton-response-utils', (): void => {
+  describe('readOptionalCantonUpdateId', (): void => {
+    it('reads updateId from the top level', (): void => {
+      expect(readOptionalCantonUpdateId({ updateId: 'update-1' })).toBe('update-1');
+      expect(readOptionalCantonUpdateId({ update_id: 'update-2' })).toBe('update-2');
+    });
+
+    it('reads updateId nested under transaction', (): void => {
+      expect(readOptionalCantonUpdateId({ transaction: { updateId: 'nested-update' } })).toBe('nested-update');
+    });
+
+    it('returns null when no update id is present', (): void => {
+      expect(readOptionalCantonUpdateId({})).toBeNull();
+      expect(readOptionalCantonUpdateId({ transaction: { events: [] } })).toBeNull();
+      expect(readOptionalCantonUpdateId(null)).toBeNull();
+    });
+  });
+
   describe('normalizeCantonContractItem', (): void => {
     it('normalizes flat active contract items', (): void => {
       expect(

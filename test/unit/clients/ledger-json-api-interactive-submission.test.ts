@@ -1284,39 +1284,6 @@ describe('LedgerJsonApiClient interactive submission execution', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
-  it('uses the exact preferred-package-version URL and normalizes a wire-null preference', async () => {
-    const client = createClient();
-    const get = jest.spyOn(client, 'makeGetRequest').mockResolvedValue({ packagePreference: null });
-
-    await expect(
-      client.interactiveSubmissionGetPreferredPackageVersion({
-        packageName: 'quickstart-licensing',
-        parties: ['Alice::fingerprint', 'Bob::fingerprint'],
-        synchronizerId: 'synchronizer::id',
-        vettingValidAt: '2026-07-09T12:00:00Z',
-      })
-    ).resolves.toEqual({});
-
-    const requestedUrl = get.mock.calls[0]?.[0];
-    expect(requestedUrl).toBe(
-      'https://ledger.example.test/v2/interactive-submission/preferred-package-version?parties=Alice%3A%3Afingerprint&parties=Bob%3A%3Afingerprint&package-name=quickstart-licensing&vetting_valid_at=2026-07-09T12%3A00%3A00Z&synchronizer-id=synchronizer%3A%3Aid'
-    );
-  });
-
-  it.each([
-    ['an empty package name', { packageName: '' }],
-    ['an empty party', { packageName: 'quickstart-licensing', parties: [''] }],
-    ['a non-RFC3339 vetting time', { packageName: 'quickstart-licensing', vettingValidAt: '2026-07-09 12:00:00' }],
-  ])('rejects preferred-package-version requests with %s', async (_description, request) => {
-    const client = createClient();
-    const get = jest.spyOn(client, 'makeGetRequest');
-
-    await expect(client.interactiveSubmissionGetPreferredPackageVersion(request)).rejects.toThrow(
-      'Parameter validation failed'
-    );
-    expect(get).not.toHaveBeenCalled();
-  });
-
   it('posts and validates exact non-empty preferred-package formats', async () => {
     const client = createClient();
     const response = {

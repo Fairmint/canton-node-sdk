@@ -4,8 +4,8 @@ import { TransactionBatch } from '../../../src/utils/transactions/TransactionBat
 
 const createMockLedgerClient = (): jest.Mocked<LedgerJsonApiClient> =>
   ({
-    submitAndWaitForTransactionTree: jest.fn().mockResolvedValue({
-      transactionTree: { updateId: 'update-123' },
+    submitAndWaitForTransaction: jest.fn().mockResolvedValue({
+      transaction: { updateId: 'update-123' },
     }),
     submitAndWait: jest.fn().mockResolvedValue({ updateId: 'update-456' }),
     asyncSubmit: jest.fn().mockResolvedValue(undefined),
@@ -204,24 +204,24 @@ describe('TransactionBatch', () => {
     });
   });
 
-  describe('submitAndWaitForTransactionTree', () => {
+  describe('submitAndWaitForTransaction', () => {
     it('submits batch and returns updateId', async () => {
       const batch = new TransactionBatch(mockClient, ['party1']);
       batch.addCommand(createMockCommand('1'));
 
-      const result = await batch.submitAndWaitForTransactionTree();
+      const result = await batch.submitAndWaitForTransaction();
 
       expect(result).toEqual({ updateId: 'update-123' });
-      expect(mockClient.submitAndWaitForTransactionTree).toHaveBeenCalled();
+      expect(mockClient.submitAndWaitForTransaction).toHaveBeenCalled();
     });
 
     it('includes actAs parties', async () => {
       const batch = new TransactionBatch(mockClient, ['party1', 'party2']);
       batch.addCommand(createMockCommand('1'));
 
-      await batch.submitAndWaitForTransactionTree();
+      await batch.submitAndWaitForTransaction();
 
-      expect(mockClient.submitAndWaitForTransactionTree).toHaveBeenCalledWith(
+      expect(mockClient.submitAndWaitForTransaction).toHaveBeenCalledWith(
         expect.objectContaining({
           actAs: ['party1', 'party2'],
         })
@@ -232,9 +232,9 @@ describe('TransactionBatch', () => {
       const batch = new TransactionBatch(mockClient, ['party1'], ['readParty1']);
       batch.addCommand(createMockCommand('1'));
 
-      await batch.submitAndWaitForTransactionTree();
+      await batch.submitAndWaitForTransaction();
 
-      expect(mockClient.submitAndWaitForTransactionTree).toHaveBeenCalledWith(
+      expect(mockClient.submitAndWaitForTransaction).toHaveBeenCalledWith(
         expect.objectContaining({
           actAs: ['party1'],
           readAs: ['readParty1'],
@@ -251,9 +251,9 @@ describe('TransactionBatch', () => {
       batch.addDisclosedContracts([contract1Duplicate]);
       batch.addCommand(createMockCommand('1'));
 
-      await batch.submitAndWaitForTransactionTree();
+      await batch.submitAndWaitForTransaction();
 
-      const callArgs = mockClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+      const callArgs = mockClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
       expect(callArgs?.disclosedContracts).toHaveLength(1);
     });
   });

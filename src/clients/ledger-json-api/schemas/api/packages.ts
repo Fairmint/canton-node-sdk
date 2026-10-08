@@ -31,15 +31,7 @@ export const PackageVettingRequirementSchema = z.strictObject({
   packageName: z.string().min(1),
 });
 
-/** Package preference details. */
-export const PackagePreferenceSchema = z.strictObject({
-  /** Package reference. */
-  packageReference: PackageReferenceSchema,
-  /** Synchronizer ID. */
-  synchronizerId: z.string().min(1),
-});
-
-/** Get preferred package version request. */
+/** Get preferred packages request. */
 export const GetPreferredPackagesRequestSchema = z.strictObject({
   /** Package vetting requirements. */
   packageVettingRequirements: z.array(PackageVettingRequirementSchema).min(1),
@@ -57,24 +49,10 @@ export const GetPreferredPackagesResponseSchema = z.strictObject({
   synchronizerId: z.string().min(1),
 });
 
-/** Get preferred package version response. */
-export const GetPreferredPackageVersionResponseSchema = z
-  .strictObject({
-    /** Package preference (optional). */
-    packagePreference: PackagePreferenceSchema.nullish(),
-  })
-  .transform((response) =>
-    response.packagePreference === null || response.packagePreference === undefined
-      ? {}
-      : { packagePreference: response.packagePreference }
-  );
-
 // Export types
 export type ListPackagesResponse = z.infer<typeof ListPackagesResponseSchema>;
 export type GetPackageStatusResponse = z.infer<typeof GetPackageStatusResponseSchema>;
 export type PackageReference = z.infer<typeof PackageReferenceSchema>;
 export type PackageVettingRequirement = z.infer<typeof PackageVettingRequirementSchema>;
-export type PackagePreference = z.infer<typeof PackagePreferenceSchema>;
 export type GetPreferredPackagesRequest = z.infer<typeof GetPreferredPackagesRequestSchema>;
 export type GetPreferredPackagesResponse = z.infer<typeof GetPreferredPackagesResponseSchema>;
-export type GetPreferredPackageVersionResponse = z.infer<typeof GetPreferredPackageVersionResponseSchema>;

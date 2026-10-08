@@ -3,18 +3,8 @@ import { TraceContextSchema } from '../common';
 import { ledgerNullableOptionalResponseField, ledgerOptionalPaidTrafficCostSchema } from '../wire';
 import { JsCommandsSchema } from './commands';
 import { OffsetCheckpointSchema } from './completions';
-import {
-  ArchivedEventDetailsSchema,
-  CreatedEventDetailsSchema,
-  ExercisedEventDetailsSchema,
-} from './event-details';
-import {
-  ArchivedTreeEventSchema,
-  CreatedTreeEventSchema,
-  EventFormatSchema,
-  ExercisedTreeEventSchema,
-  TreeEventSchema,
-} from './events';
+import { ArchivedEventDetailsSchema, CreatedEventDetailsSchema, ExercisedEventDetailsSchema } from './event-details';
+import { EventFormatSchema } from './events';
 import { JsReassignmentSchema } from './reassignment';
 
 /**
@@ -45,50 +35,25 @@ export const JsTransactionSchema = z.looseObject({
   events: z.array(TransactionEventSchema),
   /** Synchronizer that synchronized the transaction. */
   synchronizerId: z.string(),
-  /**
-   * Trace context (optional). Splice/Canton wire often sends `null` when absent; outputs normalize to `undefined`.
-   */
+  /** Trace context (optional). Splice/Canton wire often sends `null` when absent; outputs normalize to `undefined`. */
   traceContext: ledgerNullableOptionalResponseField(TraceContextSchema),
   /** Record time of the transaction. */
   recordTime: z.string(),
   /**
-   * External transaction hash for externally signed submissions (optional). Wire may send `null`; outputs normalize
-   * to `undefined`.
+   * External transaction hash for externally signed submissions (optional). Wire may send `null`; outputs normalize to
+   * `undefined`.
    */
   externalTransactionHash: ledgerNullableOptionalResponseField(z.string()),
   /**
-   * Traffic cost paid by this participant for the confirmation request (`Option[Long]`).
-   * Wire may send number, digit string, or `null`; outputs normalize to digit string or `undefined`.
+   * Traffic cost paid by this participant for the confirmation request (`Option[Long]`). Wire may send number, digit
+   * string, or `null`; outputs normalize to digit string or `undefined`.
    */
   paidTrafficCost: ledgerOptionalPaidTrafficCostSchema,
 });
 
-/** Transaction tree details. */
-export const JsTransactionTreeSchema = z.looseObject({
-  /** Unique update ID for the transaction. */
-  updateId: z.string(),
-  /** Command ID associated with the transaction (optional). */
-  commandId: z.string().optional(),
-  /** Workflow ID associated with the transaction (optional). */
-  workflowId: z.string().optional(),
-  /** Effective time of the transaction (ISO 8601). */
-  effectiveAt: z.string(),
-  /** Offset of the transaction in the ledger stream. */
-  offset: z.number(),
-  /** Map of event node IDs to tree events. */
-  eventsById: z.record(z.string(), TreeEventSchema),
-  /** Synchronizer that synchronized the transaction. */
-  synchronizerId: z.string(),
-  /** Trace context (optional; wire may be null → undefined). */
-  traceContext: ledgerNullableOptionalResponseField(TraceContextSchema),
-  /** Record time of the transaction. */
-  recordTime: z.string(),
-});
-
-/** Update (oneOf transaction or transaction tree) — REST/JS naming variants. */
+/** Update (transaction or offset checkpoint) — REST/JS naming variants. */
 export const JsUpdateSchema = z.union([
   z.object({ JsTransaction: JsTransactionSchema }),
-  z.object({ JsTransactionTree: JsTransactionTreeSchema }),
   z.object({ OffsetCheckpoint: OffsetCheckpointSchema }),
 ]);
 
@@ -153,13 +118,6 @@ export const WsUpdateSchema = z.union([
   z.object({ Transaction: z.object({ value: JsTransactionSchema }) }),
 ]);
 
-/** WebSocket `/v2/updates/trees` update wrappers (deprecated trees endpoint). */
-export const WsUpdateTreesSchema = z.union([
-  z.object({ OffsetCheckpoint: OffsetCheckpointSchema }),
-  z.object({ Reassignment: z.object({ value: JsReassignmentSchema }) }),
-  z.object({ TransactionTree: z.object({ value: JsTransactionTreeSchema }) }),
-]);
-
 /** Update stream request. */
 export const UpdateStreamRequestSchema = z.object({
   /** User ID for the stream (optional if using authentication). */
@@ -206,89 +164,23 @@ export const GetUpdatesResponseSchema = z.array(
   })
 );
 
-/** Get update trees response (array of transaction trees). */
-export const GetUpdateTreesResponseSchema = z.array(
-  z.object({
-    /** The update. */
-    update: z.object({ JsTransactionTree: JsTransactionTreeSchema }),
-  })
-);
-
-/** Get transaction response. */
-export const GetTransactionResponseSchema = z.object({
-  /** The transaction. */
-  transaction: JsTransactionSchema,
-});
-
-/**
- * Event wrapper for tree events in GetTransaction responses. The API returns events in a flattened format like {
- * CreatedEvent: {...} } rather than the nested { CreatedTreeEvent: { value: {...} } } format used in streams. This
- * schema extracts the inner `value` from each tree event schema to match the actual response.
- */
-export const TransactionTreeEventSchema = z.union([
-  z.object({ ArchivedEvent: ArchivedTreeEventSchema.shape.ArchivedTreeEvent.shape.value }),
-  z.object({ CreatedEvent: CreatedTreeEventSchema.shape.CreatedTreeEvent.shape.value }),
-  z.object({ ExercisedEvent: ExercisedTreeEventSchema.shape.ExercisedTreeEvent.shape.value }),
-]);
-
-/**
- * Get transaction response (actual API response format). The API returns events as an array of tree events, not update
- * events.
- */
-export const GetTransactionResponseActualSchema = z.object({
-  /** The transaction. */
-  transaction: z.object({
-    /** Unique update ID for the transaction. */
-    updateId: z.string(),
-    /** Command ID associated with the transaction (optional). */
-    commandId: z.string().optional(),
-    /** Workflow ID associated with the transaction (optional). */
-    workflowId: z.string().optional(),
-    /** Effective time of the transaction (ISO 8601). */
-    effectiveAt: z.string(),
-    /** Offset of the transaction in the ledger stream. */
-    offset: z.number(),
-    /** Collection of tree events (not update events). */
-    events: z.array(TransactionTreeEventSchema),
-    /** Record time of the transaction. */
-    recordTime: z.string(),
-    /** Synchronizer ID for the transaction. */
-    synchronizerId: z.string(),
-    /** Trace context for distributed tracing (optional; wire may be null → undefined). */
-    traceContext: ledgerNullableOptionalResponseField(TraceContextSchema),
-  }),
-});
-
 /** Get update response. */
 export const GetUpdateResponseSchema = z.object({
   /** The update. */
   update: JsUpdateSchema,
 });
 
-/** Get transaction tree response. */
-export const GetTransactionTreeResponseSchema = z.object({
-  /** The transaction tree. */
-  transaction: JsTransactionTreeSchema,
-});
-
 // Export types
 export type TransactionEvent = z.infer<typeof TransactionEventSchema>;
 export type JsTransaction = z.infer<typeof JsTransactionSchema>;
-export type JsTransactionTree = z.infer<typeof JsTransactionTreeSchema>;
 export type JsUpdate = z.infer<typeof JsUpdateSchema>;
 export type WsTopologyEvent = z.infer<typeof WsTopologyEventSchema>;
 export type WsTopologyTransaction = z.infer<typeof WsTopologyTransactionSchema>;
 export type WsUpdate = z.infer<typeof WsUpdateSchema>;
-export type WsUpdateTrees = z.infer<typeof WsUpdateTreesSchema>;
-export type TransactionTreeEvent = z.infer<typeof TransactionTreeEventSchema>;
 export type UpdateStreamRequest = z.infer<typeof UpdateStreamRequestSchema>;
 export type UpdateStreamResponse = z.infer<typeof UpdateStreamResponseSchema>;
 export type JsSubmitAndWaitForTransactionRequest = z.infer<typeof JsSubmitAndWaitForTransactionRequestSchema>;
 export type JsSubmitAndWaitForTransactionResponse = z.infer<typeof JsSubmitAndWaitForTransactionResponseSchema>;
 export type SubmitAndWaitResponse = z.infer<typeof SubmitAndWaitResponseSchema>;
 export type GetUpdatesResponse = z.infer<typeof GetUpdatesResponseSchema>;
-export type GetUpdateTreesResponse = z.infer<typeof GetUpdateTreesResponseSchema>;
-export type GetTransactionResponse = z.infer<typeof GetTransactionResponseSchema>;
 export type GetUpdateResponse = z.infer<typeof GetUpdateResponseSchema>;
-export type GetTransactionTreeResponse = z.infer<typeof GetTransactionTreeResponseSchema>;
-export type GetTransactionResponseActual = z.infer<typeof GetTransactionResponseActualSchema>;

@@ -1,5 +1,5 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
-import { type SubmitAndWaitForTransactionTreeParams } from '../../clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction-tree';
+import { type SubmitAndWaitForTransactionParams } from '../../clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction';
 import { type DisclosedContract, type ExerciseCommand } from '../../clients/ledger-json-api/schemas/api/commands';
 import { type ValidatorApiClient } from '../../clients/validator-api';
 import { ApiError, OperationError, OperationErrorCode } from '../../core/errors';
@@ -94,7 +94,7 @@ export async function preApproveTransfers(
   }
 
   const MAX_RETRIES = 3;
-  let result: Awaited<ReturnType<typeof ledgerClient.submitAndWaitForTransactionTree>>;
+  let result: Awaited<ReturnType<typeof ledgerClient.submitAndWaitForTransaction>>;
 
   for (let attempt = 0; ; attempt++) {
     const amulets = await getAmuletsForTransfer({
@@ -139,7 +139,7 @@ export async function preApproveTransfers(
       },
     };
 
-    const submitParams: SubmitAndWaitForTransactionTreeParams = {
+    const submitParams: SubmitAndWaitForTransactionParams = {
       commands: [createCommand],
       commandId: `create-preapproval-${Date.now()}`,
       actAs: [params.receiverPartyId],
@@ -147,7 +147,7 @@ export async function preApproveTransfers(
     };
 
     try {
-      result = await ledgerClient.submitAndWaitForTransactionTree(submitParams);
+      result = await ledgerClient.submitAndWaitForTransaction(submitParams);
       break;
     } catch (error: unknown) {
       if (error instanceof ApiError && error.status === 409 && attempt < MAX_RETRIES) {
@@ -170,7 +170,7 @@ export async function preApproveTransfers(
   if (!contractId) {
     throw new OperationError('Failed to create TransferPreapproval contract', OperationErrorCode.TRANSACTION_FAILED, {
       receiverPartyId: params.receiverPartyId,
-      updateId: result.transactionTree.updateId,
+      updateId: result.transaction.updateId,
     });
   }
 

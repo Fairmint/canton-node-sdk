@@ -27,20 +27,7 @@ export const GetPreferredPackagesParamsSchema = z.object({
   vettingValidAt: z.string().optional(),
 });
 
-/** Schema for get preferred package version parameters. */
-export const GetPreferredPackageVersionParamsSchema = z.object({
-  /** Package name to get preferred version for. */
-  packageName: z.string(),
-  /** Parties whose vetting state should be considered. */
-  parties: z.array(z.string()),
-  /** Synchronizer ID (optional). */
-  synchronizerId: z.string().optional(),
-  /** Vetting valid at timestamp (optional). */
-  vettingValidAt: z.string().optional(),
-});
-
 // Export types
 export type ListPackagesParams = z.infer<typeof ListPackagesParamsSchema>;
 export type GetPackageStatusParams = z.infer<typeof GetPackageStatusParamsSchema>;
 export type GetPreferredPackagesParams = z.infer<typeof GetPreferredPackagesParamsSchema>;
-export type GetPreferredPackageVersionParams = z.infer<typeof GetPreferredPackageVersionParamsSchema>;

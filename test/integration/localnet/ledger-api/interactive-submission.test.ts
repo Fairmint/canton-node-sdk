@@ -60,11 +60,11 @@ async function resolveSynchronizerId(client: LedgerJsonApiClient, validatorParty
 type InteractiveTransactionFormat = NonNullable<
   Parameters<LedgerJsonApiClient['interactiveSubmissionExecuteAndWaitForTransaction']>[0]['transactionFormat']
 >;
-type LookupTransactionFormat = Parameters<LedgerJsonApiClient['getTransactionById']>[0]['transactionFormat'];
 type InteractiveSubmissionTransaction = Awaited<
   ReturnType<LedgerJsonApiClient['interactiveSubmissionExecuteAndWaitForTransaction']>
 >['transaction'];
-type LookupTransaction = Awaited<ReturnType<LedgerJsonApiClient['getTransactionById']>>['transaction'];
+type LookupUpdate = NonNullable<Awaited<ReturnType<LedgerJsonApiClient['getUpdateById']>>['update']>;
+type LookupTransaction = Extract<LookupUpdate, { Transaction: unknown }>['Transaction']['value'];
 
 function interactiveTransactionFormatFor(partyId: string): InteractiveTransactionFormat {
   return {
@@ -86,24 +86,17 @@ function interactiveTransactionFormatFor(partyId: string): InteractiveTransactio
   };
 }
 
-function lookupTransactionFormatFor(partyId: string): LookupTransactionFormat {
-  return {
-    eventFormat: {
-      filtersByParty: {
-        [partyId]: {
-          cumulative: [
-            {
-              identifierFilter: {
-                WildcardFilter: { value: { includeCreatedEventBlob: true } },
-              },
-            },
-          ],
-        },
-      },
-      verbose: true,
-    },
-    transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA',
-  };
+async function lookupTransactionByUpdateId(
+  client: LedgerJsonApiClient,
+  updateId: string,
+  readAs: readonly string[]
+): Promise<LookupTransaction> {
+  const response = await client.getUpdateById({ updateId, readAs: [...readAs] });
+  const { update } = response;
+  if (update === undefined || !('Transaction' in update)) {
+    throw new Error(`Update ${updateId} did not resolve to a transaction`);
+  }
+  return update.Transaction.value;
 }
 
 function expectSubmittedTransferPreapprovalProposal(
@@ -240,11 +233,6 @@ describe('LedgerJsonApiClient / Interactive submission', () => {
       rights: [{ kind: { CanActAs: { value: { party: external.partyId } } } }],
     });
 
-    const preferredVersion = await client.interactiveSubmissionGetPreferredPackageVersion({
-      packageName: 'splice-wallet',
-      parties: [external.partyId, validatorParty],
-      synchronizerId,
-    });
     const preferredPackages = await client.interactiveSubmissionGetPreferredPackages({
       packageVettingRequirements: [{ packageName: 'splice-wallet', parties: [external.partyId, validatorParty] }],
       synchronizerId,
@@ -254,7 +242,6 @@ describe('LedgerJsonApiClient / Interactive submission', () => {
       throw new Error('preferred-packages returned no splice-wallet reference');
     }
     expect(packageReference.packageName).toBe('splice-wallet');
-    expect(preferredVersion.packagePreference?.packageReference).toEqual(packageReference);
 
     const asyncPrepared = await prepareSignedTransferPreapprovalProposal({
       client,
@@ -281,13 +268,9 @@ describe('LedgerJsonApiClient / Interactive submission', () => {
       beginExclusive: ledgerEnd.offset,
       timeoutMs: 120_000,
     });
-    const lookupTransactionFormat = lookupTransactionFormatFor(external.partyId);
-    const asyncTransaction = await client.getTransactionById({
-      updateId: completion.updateId,
-      transactionFormat: lookupTransactionFormat,
-    });
-    expect(asyncTransaction.transaction.updateId).toBe(completion.updateId);
-    expectSubmittedTransferPreapprovalProposal(asyncTransaction.transaction, asyncPrepared);
+    const asyncTransaction = await lookupTransactionByUpdateId(client, completion.updateId, [external.partyId]);
+    expect(asyncTransaction.updateId).toBe(completion.updateId);
+    expectSubmittedTransferPreapprovalProposal(asyncTransaction, asyncPrepared);
 
     const waitPrepared = await prepareSignedTransferPreapprovalProposal({
       client,
@@ -304,12 +287,9 @@ describe('LedgerJsonApiClient / Interactive submission', () => {
     const waitResult = await client.interactiveSubmissionExecuteAndWait(waitPrepared.request);
     expect(waitResult.updateId).toMatch(/\S+/);
     expect(waitResult.completionOffset).toBeGreaterThan(0);
-    const waitedTransaction = await client.getTransactionById({
-      updateId: waitResult.updateId,
-      transactionFormat: lookupTransactionFormat,
-    });
-    expect(waitedTransaction.transaction.updateId).toBe(waitResult.updateId);
-    expectSubmittedTransferPreapprovalProposal(waitedTransaction.transaction, waitPrepared);
+    const waitedTransaction = await lookupTransactionByUpdateId(client, waitResult.updateId, [external.partyId]);
+    expect(waitedTransaction.updateId).toBe(waitResult.updateId);
+    expectSubmittedTransferPreapprovalProposal(waitedTransaction, waitPrepared);
 
     const transactionPrepared = await prepareSignedTransferPreapprovalProposal({
       client,
