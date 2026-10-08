@@ -134,4 +134,12 @@ describe('findCreatedEventByTemplateId', () => {
     expect(result).toBeDefined();
     expect(result?.contractId).toBe('contract-1');
   });
+
+  it('matches a package-less expected id against a packaged ledger id', () => {
+    const response = createMockResponse([createCreatedEvent('contract-1', 'pkg-id:Splice.Amulet:TransferPreapproval')]);
+
+    const result = findCreatedEventByTemplateId(response, 'Splice.Amulet:TransferPreapproval');
+
+    expect(result?.contractId).toBe('contract-1');
+  });
 });

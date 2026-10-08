@@ -765,7 +765,7 @@ export async function submitPreparedTokenStandardV2Allocation(
   if (!result) {
     throw new TokenStandardV2AllocationError(
       TokenStandardV2AllocationErrorCode.RESULT_NOT_FOUND,
-      `${TOKEN_STANDARD_V2_ALLOCATION_FACTORY_ALLOCATE_CHOICE} result was not found in the transaction tree.`,
+      `${TOKEN_STANDARD_V2_ALLOCATION_FACTORY_ALLOCATE_CHOICE} result was not found in the transaction.`,
       { updateId: readTransactionUpdateId(response) }
     );
   }

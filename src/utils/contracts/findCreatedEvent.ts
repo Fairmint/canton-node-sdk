@@ -15,6 +15,17 @@ export function isCreatedEventEntry(event: unknown): event is { readonly Created
 }
 
 /**
+ * Template identity with the package component removed.
+ *
+ * Ledger template IDs are `package:Module:Entity` (package id or `#package-name`). A package is present only when there
+ * are at least three colon-separated segments; `Module:Entity` is already package-agnostic and must be kept whole.
+ */
+function templateIdentity(templateId: string): string {
+  const segments = templateId.split(':');
+  return segments.length >= 3 ? segments.slice(1).join(':') : templateId;
+}
+
+/**
  * The first contract created by the transaction whose template matches `expectedTemplateId`, ignoring the package
  * component (so `#pkg-name:Module:Template`, `pkg-id:Module:Template` and `Module:Template` all match).
  */
@@ -22,18 +33,12 @@ export function findCreatedEventByTemplateId(
   response: SubmitAndWaitForTransactionResponse,
   expectedTemplateId: string
 ): TransactionCreatedEvent | undefined {
-  const expectedTemplateIdSuffix = expectedTemplateId.includes(':')
-    ? expectedTemplateId.substring(expectedTemplateId.indexOf(':') + 1)
-    : expectedTemplateId;
+  const expectedIdentity = templateIdentity(expectedTemplateId);
 
   for (const event of response.transaction.events) {
     if (!isCreatedEventEntry(event)) continue;
     const created = event.CreatedEvent;
-    const actualTemplateIdSuffix = created.templateId.includes(':')
-      ? created.templateId.substring(created.templateId.indexOf(':') + 1)
-      : created.templateId;
-
-    if (actualTemplateIdSuffix === expectedTemplateIdSuffix) {
+    if (templateIdentity(created.templateId) === expectedIdentity) {
       return created;
     }
   }

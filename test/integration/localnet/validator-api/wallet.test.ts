@@ -124,8 +124,18 @@ describe('ValidatorApiClient / Wallet', () => {
               updateFormat: {
                 includeTransactions: {
                   eventFormat: {
-                    filtersByParty: { [userStatus.party_id]: { cumulative: [] } },
-                    verbose: false,
+                    filtersByParty: {
+                      [userStatus.party_id]: {
+                        cumulative: [
+                          {
+                            identifierFilter: {
+                              WildcardFilter: { value: { includeCreatedEventBlob: false } },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                    verbose: true,
                   },
                   transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA',
                 },

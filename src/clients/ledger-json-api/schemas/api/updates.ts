@@ -164,10 +164,15 @@ export const GetUpdatesResponseSchema = z.array(
   })
 );
 
-/** Get update response. */
+/**
+ * Get update by id / offset response.
+ *
+ * The lookup wire shape is `{ update?: Update }`, where a transaction is `{ Transaction: { value: JsTransaction } }`
+ * (same wrappers as the updates WebSocket), not `{ JsTransaction }`.
+ */
 export const GetUpdateResponseSchema = z.object({
-  /** The update. */
-  update: JsUpdateSchema,
+  /** The update, absent when the offset or id did not produce one. */
+  update: WsUpdateSchema.optional(),
 });
 
 // Export types
