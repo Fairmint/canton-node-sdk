@@ -33,4 +33,8 @@ describe('GetUpdateResponseSchema', () => {
   it('rejects the JsTransaction discriminator', () => {
     expect(GetUpdateResponseSchema.safeParse({ update: { JsTransaction: transaction } }).success).toBe(false);
   });
+
+  it('rejects a response that omits the update', () => {
+    expect(GetUpdateResponseSchema.safeParse({}).success).toBe(false);
+  });
 });
