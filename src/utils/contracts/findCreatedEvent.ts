@@ -1,66 +1,45 @@
-import { type SubmitAndWaitForTransactionTreeResponse } from '../../clients/ledger-json-api/operations';
+import { type SubmitAndWaitForTransactionResponse } from '../../clients/ledger-json-api/operations';
+import { isRecord, isString } from '../../core/utils';
 
-/** Canonical CreatedTreeEvent value structure from the Ledger JSON API. */
-export interface CreatedTreeEventValue {
-  readonly contractId: string;
-  readonly templateId: string;
-  readonly contractKey: string | null;
-  readonly createArgument: Readonly<Record<string, unknown>>;
-  readonly createdEventBlob: string;
-  readonly witnessParties: readonly string[];
-  readonly signatories: readonly string[];
-  readonly observers: readonly string[];
-  readonly createdAt: string;
-  readonly packageName: string;
-  readonly offset: number;
-  readonly nodeId: number;
-  readonly interfaceViews: readonly string[];
-  readonly implementedInterfaces?: readonly string[];
+/** One entry of `transaction.events` as returned by the Ledger JSON API. */
+export type TransactionEventEntry = SubmitAndWaitForTransactionResponse['transaction']['events'][number];
+
+/** The `CreatedEvent` payload of a transaction event. */
+export type TransactionCreatedEvent = Extract<TransactionEventEntry, { CreatedEvent: unknown }>['CreatedEvent'];
+
+/** Type guard for the `{ CreatedEvent: ... }` entry of `transaction.events`. */
+export function isCreatedEventEntry(event: unknown): event is { readonly CreatedEvent: TransactionCreatedEvent } {
+  if (!isRecord(event)) return false;
+  const created = event['CreatedEvent'];
+  return isRecord(created) && isString(created['templateId']) && isString(created['contractId']);
 }
 
-export interface CreatedTreeEventWrapper {
-  readonly CreatedTreeEvent: {
-    readonly value: CreatedTreeEventValue;
-  };
+/**
+ * Template identity with the package component removed.
+ *
+ * Ledger template IDs are `package:Module:Entity` (package id or `#package-name`). A package is present only when there
+ * are at least three colon-separated segments; `Module:Entity` is already package-agnostic and must be kept whole.
+ */
+function templateIdentity(templateId: string): string {
+  const segments = templateId.split(':');
+  return segments.length >= 3 ? segments.slice(1).join(':') : templateId;
 }
 
-/** Type guard to check if an event is a CreatedTreeEvent wrapper */
-export function isCreatedTreeEventWrapper(event: unknown): event is CreatedTreeEventWrapper {
-  if (!event || typeof event !== 'object') return false;
-  if (!('CreatedTreeEvent' in event)) return false;
-  const wrapper = event as { CreatedTreeEvent?: unknown };
-  if (!wrapper.CreatedTreeEvent || typeof wrapper.CreatedTreeEvent !== 'object') return false;
-  const created = wrapper.CreatedTreeEvent as { value?: unknown };
-  if (!created.value || typeof created.value !== 'object') return false;
-  const value = created.value as { templateId?: unknown; contractId?: unknown };
-  return typeof value.templateId === 'string' && typeof value.contractId === 'string';
-}
-
+/**
+ * The first contract created by the transaction whose template matches `expectedTemplateId`, ignoring the package
+ * component (so `#pkg-name:Module:Template`, `pkg-id:Module:Template` and `Module:Template` all match).
+ */
 export function findCreatedEventByTemplateId(
-  response: SubmitAndWaitForTransactionTreeResponse,
+  response: SubmitAndWaitForTransactionResponse,
   expectedTemplateId: string
-): CreatedTreeEventWrapper | undefined {
-  const { transactionTree } = response;
-  const { eventsById } = transactionTree;
+): TransactionCreatedEvent | undefined {
+  const expectedIdentity = templateIdentity(expectedTemplateId);
 
-  // Extract the part after the first ':' from the expected template ID for matching
-  const expectedTemplateIdSuffix = expectedTemplateId.includes(':')
-    ? expectedTemplateId.substring(expectedTemplateId.indexOf(':') + 1)
-    : expectedTemplateId;
-
-  for (const event of Object.values(eventsById)) {
-    if (isCreatedTreeEventWrapper(event)) {
-      const created = event.CreatedTreeEvent.value;
-      if (created.templateId) {
-        // Extract the part after the first ':' from the actual template ID
-        const actualTemplateIdSuffix = created.templateId.includes(':')
-          ? created.templateId.substring(created.templateId.indexOf(':') + 1)
-          : created.templateId;
-
-        if (actualTemplateIdSuffix === expectedTemplateIdSuffix) {
-          return event;
-        }
-      }
+  for (const event of response.transaction.events) {
+    if (!isCreatedEventEntry(event)) continue;
+    const created = event.CreatedEvent;
+    if (templateIdentity(created.templateId) === expectedIdentity) {
+      return created;
     }
   }
   return undefined;

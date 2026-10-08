@@ -1,5 +1,9 @@
 export * from './completion-stream';
 export { LedgerJsonApiClient } from './LedgerJsonApiClient.generated';
+export type {
+  SubmitAndWaitForTransactionParams,
+  SubmitAndWaitForTransactionResponse,
+} from './operations/v2/commands/submit-and-wait-for-transaction';
 export {
   GetContractByIdRequestSchema,
   GetContractByIdResponseSchema,

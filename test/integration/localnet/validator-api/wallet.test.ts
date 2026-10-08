@@ -119,10 +119,33 @@ describe('ValidatorApiClient / Wallet', () => {
               throw new Error(`Ledger creation event for tapped contract ${contractId} is not available yet`);
             }
 
-            const transactionTree = await ledgerClient.getTransactionTreeByOffset({
-              offset: String(createdEvent.offset),
+            const updateResponse = await ledgerClient.getUpdateByOffset({
+              offset: createdEvent.offset,
+              updateFormat: {
+                includeTransactions: {
+                  eventFormat: {
+                    filtersByParty: {
+                      [userStatus.party_id]: {
+                        cumulative: [
+                          {
+                            identifierFilter: {
+                              WildcardFilter: { value: { includeCreatedEventBlob: false } },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                    verbose: true,
+                  },
+                  transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA',
+                },
+              },
             });
-            return transactionTree.transaction.updateId;
+            const { update } = updateResponse;
+            if (update === undefined || !('Transaction' in update)) {
+              throw new Error(`Ledger update at offset ${createdEvent.offset} is not a transaction`);
+            }
+            return update.Transaction.value.updateId;
           },
           {
             timeoutMs: 60_000,

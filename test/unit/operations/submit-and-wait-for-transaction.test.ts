@@ -1,4 +1,5 @@
 import {
+  defaultSubmitTransactionFormat,
   SubmitAndWaitForTransaction,
   type SubmitAndWaitForTransactionParams,
 } from '../../../src/clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction';
@@ -40,12 +41,30 @@ describe('SubmitAndWaitForTransaction', () => {
           actAs: ['alice::123'],
           readAs: ['reader::123'],
         },
+        transactionFormat: defaultSubmitTransactionFormat(['alice::123', 'reader::123']),
       },
       expect.objectContaining({
         contentType: 'application/json',
         includeBearerToken: true,
       })
     );
+  });
+
+  it('defaults to verbose ledger effects for every submitting party when no transactionFormat is given', () => {
+    expect(defaultSubmitTransactionFormat(['alice::123', 'reader::123', 'alice::123'])).toEqual({
+      eventFormat: {
+        filtersByParty: {
+          'alice::123': {
+            cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: true } } } }],
+          },
+          'reader::123': {
+            cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: true } } } }],
+          },
+        },
+        verbose: true,
+      },
+      transactionShape: 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
+    });
   });
 
   it('keeps transactionFormat at the top level of the request envelope', async () => {

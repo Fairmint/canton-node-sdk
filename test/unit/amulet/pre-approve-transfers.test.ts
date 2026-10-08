@@ -64,42 +64,38 @@ const createMockValidatorClient = (): jest.Mocked<ValidatorApiClient> =>
     }),
   }) as unknown as jest.Mocked<ValidatorApiClient>;
 
-interface MockTransactionTreeResponse {
-  transactionTree: {
+interface MockTransactionResponse {
+  transaction: {
     updateId: string;
     commandId: string;
     effectiveAt: string;
     offset: string;
-    eventsById: Record<string, { CreatedTreeEvent: { value: { contractId: string; templateId: string } } }>;
-    rootEventIds: string[];
+    events: Array<{ CreatedEvent: { contractId: string; templateId: string } }>;
     synchronizerId: string;
     traceContext: undefined;
     recordTime: string;
   };
 }
 
-const createMockLedgerClient = (transactionTreeResponse: unknown): jest.Mocked<LedgerJsonApiClient> =>
+const createMockLedgerClient = (transactionResponse: unknown): jest.Mocked<LedgerJsonApiClient> =>
   ({
-    submitAndWaitForTransactionTree: jest.fn().mockResolvedValue(transactionTreeResponse),
+    submitAndWaitForTransaction: jest.fn().mockResolvedValue(transactionResponse),
   }) as unknown as jest.Mocked<LedgerJsonApiClient>;
 
-const createTransactionTreeResponse = (preapprovalContractId: string): MockTransactionTreeResponse => ({
-  transactionTree: {
+const createTransactionResponse = (preapprovalContractId: string): MockTransactionResponse => ({
+  transaction: {
     updateId: 'update-123',
     commandId: 'cmd-123',
     effectiveAt: '2026-01-01T00:00:00Z',
     offset: '100',
-    eventsById: {
-      '1': {
-        CreatedTreeEvent: {
-          value: {
-            contractId: preapprovalContractId,
-            templateId: 'pkg:Splice.AmuletRules:TransferPreapproval',
-          },
+    events: [
+      {
+        CreatedEvent: {
+          contractId: preapprovalContractId,
+          templateId: 'pkg:Splice.AmuletRules:TransferPreapproval',
         },
       },
-    },
-    rootEventIds: ['1'],
+    ],
     synchronizerId: 'sync-123',
     traceContext: undefined,
     recordTime: '2026-01-01T00:00:00Z',
@@ -113,7 +109,7 @@ describe('preApproveTransfers', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockValidatorClient = createMockValidatorClient();
-    mockLedgerClient = createMockLedgerClient(createTransactionTreeResponse('preapproval-contract-123'));
+    mockLedgerClient = createMockLedgerClient(createTransactionResponse('preapproval-contract-123'));
   });
 
   it('creates transfer preapproval and returns result', async () => {
@@ -143,8 +139,8 @@ describe('preApproveTransfers', () => {
       receiverPartyId: 'receiver::fingerprint',
     });
 
-    expect(mockLedgerClient.submitAndWaitForTransactionTree).toHaveBeenCalledTimes(1);
-    const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    expect(mockLedgerClient.submitAndWaitForTransaction).toHaveBeenCalledTimes(1);
+    const callArgs = mockLedgerClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
 
     expect(callArgs?.commands).toHaveLength(1);
     const command = callArgs?.commands[0];
@@ -162,7 +158,7 @@ describe('preApproveTransfers', () => {
       receiverPartyId: 'receiver::fingerprint',
     });
 
-    const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockLedgerClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     const exerciseCmd = getExerciseCommand(callArgs?.commands[0]);
     expect(exerciseCmd?.choiceArgument['provider']).toBe('receiver::fingerprint');
   });
@@ -173,7 +169,7 @@ describe('preApproveTransfers', () => {
       providerPartyId: 'provider::fingerprint',
     });
 
-    const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockLedgerClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     const exerciseCmd = getExerciseCommand(callArgs?.commands[0]);
     expect(exerciseCmd?.choiceArgument['provider']).toBe('provider::fingerprint');
   });
@@ -186,7 +182,7 @@ describe('preApproveTransfers', () => {
       expiresAt: customExpiry,
     });
 
-    const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockLedgerClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     const exerciseCmd = getExerciseCommand(callArgs?.commands[0]);
     expect(exerciseCmd?.choiceArgument['expiresAt']).toBe('2026-12-31T23:59:59.000Z');
   });
@@ -198,7 +194,7 @@ describe('preApproveTransfers', () => {
       receiverPartyId: 'receiver::fingerprint',
     });
 
-    const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockLedgerClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     const exerciseCmd = getExerciseCommand(callArgs?.commands[0]);
     const expiresAtStr = exerciseCmd?.choiceArgument['expiresAt'] as string;
     const expiresAt = new Date(expiresAtStr).getTime();
@@ -217,7 +213,7 @@ describe('preApproveTransfers', () => {
       receiverPartyId: 'receiver::fingerprint',
     });
 
-    const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockLedgerClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     expect(callArgs?.disclosedContracts).toBeDefined();
     expect(callArgs?.disclosedContracts?.length).toBeGreaterThan(0);
 
@@ -239,7 +235,7 @@ describe('preApproveTransfers', () => {
       receiverPartyId: 'receiver::fingerprint',
     });
 
-    const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockLedgerClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     const featuredContract = callArgs?.disclosedContracts?.find(
       (c: DisclosedContract) => c.contractId === 'featured-app-right-123'
     );
@@ -256,7 +252,7 @@ describe('preApproveTransfers', () => {
     expect(result.contractId).toBe('preapproval-contract-123');
 
     // Should still work, just without featured app right contract
-    const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockLedgerClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     const exerciseCmd = getExerciseCommand(callArgs?.commands[0]);
     const context = exerciseCmd?.choiceArgument['context'] as { context: { featuredAppRight: string | null } };
     expect(context.context.featuredAppRight).toBeNull();
@@ -267,7 +263,7 @@ describe('preApproveTransfers', () => {
       receiverPartyId: 'receiver::fingerprint',
     });
 
-    const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockLedgerClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     expect(callArgs?.actAs).toEqual(['receiver::fingerprint']);
   });
 
@@ -283,8 +279,8 @@ describe('preApproveTransfers', () => {
   });
 
   it('throws when transaction returns no preapproval contract', async () => {
-    mockLedgerClient.submitAndWaitForTransactionTree.mockResolvedValue({
-      transactionTree: {
+    mockLedgerClient.submitAndWaitForTransaction.mockResolvedValue({
+      transaction: {
         updateId: 'update-123',
         commandId: 'cmd-123',
         workflowId: 'workflow-123',
@@ -292,27 +288,25 @@ describe('preApproveTransfers', () => {
         offset: 100,
         synchronizerId: 'sync-123',
         recordTime: '2026-01-01T00:00:00Z',
-        eventsById: {
-          '1': {
-            CreatedTreeEvent: {
-              value: {
-                offset: 100,
-                nodeId: 1,
-                contractId: 'other-contract-123',
-                templateId: 'pkg:Some.Other:Contract', // Not TransferPreapproval
-                createArgument: {},
-                createdEventBlob: 'blob-123',
-                createdAt: '2026-01-01T00:00:00Z',
-                witnessParties: ['party1'],
-                signatories: ['party1'],
-                observers: [],
-                packageName: 'test-package',
-                representativePackageId: 'pkg-123',
-                acsDelta: true,
-              },
+        events: [
+          {
+            CreatedEvent: {
+              offset: 100,
+              nodeId: 1,
+              contractId: 'other-contract-123',
+              templateId: 'pkg:Some.Other:Contract', // Not TransferPreapproval
+              createArgument: {},
+              createdEventBlob: 'blob-123',
+              createdAt: '2026-01-01T00:00:00Z',
+              witnessParties: ['party1'],
+              signatories: ['party1'],
+              observers: [],
+              packageName: 'test-package',
+              representativePackageId: 'pkg-123',
+              acsDelta: true,
             },
           },
-        },
+        ],
       },
     });
 
@@ -324,8 +318,8 @@ describe('preApproveTransfers', () => {
   });
 
   it('does not match similarly named preapproval templates', async () => {
-    mockLedgerClient.submitAndWaitForTransactionTree.mockResolvedValue({
-      transactionTree: {
+    mockLedgerClient.submitAndWaitForTransaction.mockResolvedValue({
+      transaction: {
         updateId: 'update-123',
         commandId: 'cmd-123',
         workflowId: 'workflow-123',
@@ -333,27 +327,25 @@ describe('preApproveTransfers', () => {
         offset: 100,
         synchronizerId: 'sync-123',
         recordTime: '2026-01-01T00:00:00Z',
-        eventsById: {
-          '1': {
-            CreatedTreeEvent: {
-              value: {
-                offset: 100,
-                nodeId: 1,
-                contractId: 'other-contract-123',
-                templateId: 'pkg:Splice.AmuletRules:NotTransferPreapproval',
-                createArgument: {},
-                createdEventBlob: 'blob-123',
-                createdAt: '2026-01-01T00:00:00Z',
-                witnessParties: ['party1'],
-                signatories: ['party1'],
-                observers: [],
-                packageName: 'test-package',
-                representativePackageId: 'pkg-123',
-                acsDelta: true,
-              },
+        events: [
+          {
+            CreatedEvent: {
+              offset: 100,
+              nodeId: 1,
+              contractId: 'other-contract-123',
+              templateId: 'pkg:Splice.AmuletRules:NotTransferPreapproval',
+              createArgument: {},
+              createdEventBlob: 'blob-123',
+              createdAt: '2026-01-01T00:00:00Z',
+              witnessParties: ['party1'],
+              signatories: ['party1'],
+              observers: [],
+              packageName: 'test-package',
+              representativePackageId: 'pkg-123',
+              acsDelta: true,
             },
           },
-        },
+        ],
       },
     });
 
@@ -369,7 +361,7 @@ describe('preApproveTransfers', () => {
       receiverPartyId: 'receiver::fingerprint',
     });
 
-    const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockLedgerClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     const exerciseCmd = getExerciseCommand(callArgs?.commands[0]);
     expect(exerciseCmd?.choiceArgument['inputs']).toEqual([{ tag: 'InputAmulet', value: 'amulet-123' }]);
   });

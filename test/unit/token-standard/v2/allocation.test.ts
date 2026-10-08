@@ -1,4 +1,4 @@
-import type { SubmitAndWaitForTransactionTreeResponse } from '../../../../src/clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction-tree';
+import type { SubmitAndWaitForTransactionResponse } from '../../../../src/clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction';
 import {
   buildTokenStandardV2AllocationChoiceArgument,
   buildTokenStandardV2AllocationCommand,
@@ -515,49 +515,45 @@ describe('Token Standard V2 allocation helpers', () => {
       scan,
     });
     const response = {
-      transactionTree: {
+      transaction: {
         updateId: 'update-3',
-        eventsById: {
-          0: {
-            ExercisedTreeEvent: {
-              value: {
-                contractId: '#other-allocation-factory',
-                templateId: TOKEN_STANDARD_V2_ALLOCATION_FACTORY_INTERFACE_ID,
-                choice: TOKEN_STANDARD_V2_ALLOCATION_FACTORY_ALLOCATE_CHOICE,
-                exerciseResult: {
-                  output: {
-                    tag: 'AllocationInstructionResult_Completed',
-                    value: { allocationCid: '#wrong-allocation' },
-                  },
-                  ...allocationResultCommon,
+        events: [
+          {
+            ExercisedEvent: {
+              contractId: '#other-allocation-factory',
+              templateId: TOKEN_STANDARD_V2_ALLOCATION_FACTORY_INTERFACE_ID,
+              choice: TOKEN_STANDARD_V2_ALLOCATION_FACTORY_ALLOCATE_CHOICE,
+              exerciseResult: {
+                output: {
+                  tag: 'AllocationInstructionResult_Completed',
+                  value: { allocationCid: '#wrong-allocation' },
                 },
+                ...allocationResultCommon,
               },
             },
           },
-          1: {
-            ExercisedTreeEvent: {
-              value: {
-                contractId: '#allocation-factory',
-                templateId: TOKEN_STANDARD_V2_ALLOCATION_FACTORY_INTERFACE_ID,
-                choice: TOKEN_STANDARD_V2_ALLOCATION_FACTORY_ALLOCATE_CHOICE,
-                exerciseResult: {
-                  output: {
-                    tag: 'AllocationInstructionResult_Completed',
-                    value: { allocationCid: '#allocation' },
-                  },
-                  ...allocationResultCommon,
+          {
+            ExercisedEvent: {
+              contractId: '#allocation-factory',
+              templateId: TOKEN_STANDARD_V2_ALLOCATION_FACTORY_INTERFACE_ID,
+              choice: TOKEN_STANDARD_V2_ALLOCATION_FACTORY_ALLOCATE_CHOICE,
+              exerciseResult: {
+                output: {
+                  tag: 'AllocationInstructionResult_Completed',
+                  value: { allocationCid: '#allocation' },
                 },
+                ...allocationResultCommon,
               },
             },
           },
-        },
+        ],
       },
-    } as unknown as SubmitAndWaitForTransactionTreeResponse;
-    const submitAndWaitForTransactionTree = jest.fn(async () => response);
+    } as unknown as SubmitAndWaitForTransactionResponse;
+    const submitAndWaitForTransaction = jest.fn(async () => response);
 
     await expect(
       submitPreparedTokenStandardV2Allocation({
-        ledger: { submitAndWaitForTransactionTree },
+        ledger: { submitAndWaitForTransaction },
         prepared,
         actAs: [' Buyer::alice '],
         readAs: ['Observer::ops'],
@@ -573,7 +569,7 @@ describe('Token Standard V2 allocation helpers', () => {
       result: { type: 'Completed', allocationCid: '#allocation', ...allocationResultCommon },
       response,
     });
-    expect(submitAndWaitForTransactionTree).toHaveBeenCalledWith({
+    expect(submitAndWaitForTransaction).toHaveBeenCalledWith({
       commands: [prepared.command],
       actAs: ['Buyer::alice'],
       readAs: ['Observer::ops'],
@@ -588,13 +584,13 @@ describe('Token Standard V2 allocation helpers', () => {
 
     await expect(
       submitPreparedTokenStandardV2Allocation({
-        ledger: { submitAndWaitForTransactionTree },
+        ledger: { submitAndWaitForTransaction },
         prepared,
         actAs: ['Buyer::alice'],
         commandId: ' ',
       })
     ).rejects.toThrow(TokenStandardV2AllocationError);
-    expect(submitAndWaitForTransactionTree).toHaveBeenCalledTimes(1);
+    expect(submitAndWaitForTransaction).toHaveBeenCalledTimes(1);
   });
 
   test('rejects malformed submit inputs with typed errors before ledger submission', async () => {
@@ -609,9 +605,9 @@ describe('Token Standard V2 allocation helpers', () => {
         },
       }),
     });
-    const submitAndWaitForTransactionTree = jest.fn();
+    const submitAndWaitForTransaction = jest.fn();
     const validParams = {
-      ledger: { submitAndWaitForTransactionTree },
+      ledger: { submitAndWaitForTransaction },
       prepared,
       actAs: ['Buyer::alice'],
       commandId: 'allocation-command',
@@ -628,7 +624,7 @@ describe('Token Standard V2 allocation helpers', () => {
       { ...validParams, ledger: null },
       { ...validParams, ledger: undefined },
       { ...validParams, ledger: {} },
-      { ...validParams, ledger: { submitAndWaitForTransactionTree: null } },
+      { ...validParams, ledger: { submitAndWaitForTransaction: null } },
     ];
 
     for (const params of malformedParams) {
@@ -639,6 +635,6 @@ describe('Token Standard V2 allocation helpers', () => {
         code: 'TOKEN_STANDARD_V2_ALLOCATION_INPUT_INVALID',
       });
     }
-    expect(submitAndWaitForTransactionTree).not.toHaveBeenCalled();
+    expect(submitAndWaitForTransaction).not.toHaveBeenCalled();
   });
 });

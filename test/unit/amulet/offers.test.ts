@@ -20,44 +20,42 @@ jest.mock('../../../src/core/config/EnvLoader', () => ({
   },
 }));
 
-interface MockTransactionTreeResponse {
-  transactionTree: {
+interface MockTransactionResponse {
+  transaction: {
     updateId: string;
     commandId: string;
     effectiveAt: string;
     offset: string;
-    eventsById: Record<string, unknown>;
-    rootEventIds: string[];
+    events: Array<
+      { CreatedEvent: { contractId: string; templateId: string } } | { ExercisedEvent: { contractId: string } }
+    >;
     synchronizerId: string;
     traceContext: undefined;
     recordTime: string;
   };
 }
 
-const createMockLedgerClient = (transactionTreeResponse: unknown): jest.Mocked<LedgerJsonApiClient> =>
+const createMockLedgerClient = (transactionResponse: unknown): jest.Mocked<LedgerJsonApiClient> =>
   ({
     getNetwork: jest.fn().mockReturnValue('localnet'),
     getPartyId: jest.fn().mockReturnValue('validator-party::fingerprint'),
-    submitAndWaitForTransactionTree: jest.fn().mockResolvedValue(transactionTreeResponse),
+    submitAndWaitForTransaction: jest.fn().mockResolvedValue(transactionResponse),
   }) as unknown as jest.Mocked<LedgerJsonApiClient>;
 
-const createTransactionTreeResponse = (contractId: string): MockTransactionTreeResponse => ({
-  transactionTree: {
+const createTransactionResponse = (contractId: string): MockTransactionResponse => ({
+  transaction: {
     updateId: 'update-123',
     commandId: 'cmd-123',
     effectiveAt: '2026-01-01T00:00:00Z',
     offset: '100',
-    eventsById: {
-      '1': {
-        CreatedTreeEvent: {
-          value: {
-            contractId,
-            templateId: 'pkg:Splice.Wallet.TransferOffer:TransferOffer',
-          },
+    events: [
+      {
+        CreatedEvent: {
+          contractId,
+          templateId: 'pkg:Splice.Wallet.TransferOffer:TransferOffer',
         },
       },
-    },
-    rootEventIds: ['1'],
+    ],
     synchronizerId: 'sync-123',
     traceContext: undefined,
     recordTime: '2026-01-01T00:00:00Z',
@@ -70,7 +68,7 @@ describe('createTransferOffer', () => {
   });
 
   it('creates a transfer offer and returns contract ID', async () => {
-    const mockClient = createMockLedgerClient(createTransactionTreeResponse('transfer-offer-contract-123'));
+    const mockClient = createMockLedgerClient(createTransactionResponse('transfer-offer-contract-123'));
 
     const result = await createTransferOffer({
       ledgerClient: mockClient,
@@ -80,30 +78,25 @@ describe('createTransferOffer', () => {
     });
 
     expect(result).toBe('transfer-offer-contract-123');
-    expect(mockClient.submitAndWaitForTransactionTree).toHaveBeenCalledTimes(1);
+    expect(mockClient.submitAndWaitForTransaction).toHaveBeenCalledTimes(1);
   });
 
-  it('finds transfer offer created events without relying on event id', async () => {
-    const mockResponse = createTransactionTreeResponse('transfer-offer-contract-123');
-    mockResponse.transactionTree.eventsById = {
-      '1': {
-        CreatedTreeEvent: {
-          value: {
-            contractId: 'other-contract-123',
-            templateId: 'pkg:Splice.Wallet.TransferOffer:NotTransferOffer',
-          },
+  it('finds transfer offer created events without relying on event order', async () => {
+    const mockResponse = createTransactionResponse('transfer-offer-contract-123');
+    mockResponse.transaction.events = [
+      {
+        CreatedEvent: {
+          contractId: 'other-contract-123',
+          templateId: 'pkg:Splice.Wallet.TransferOffer:NotTransferOffer',
         },
       },
-      '7': {
-        CreatedTreeEvent: {
-          value: {
-            contractId: 'transfer-offer-contract-123',
-            templateId: 'pkg:Splice.Wallet.TransferOffer:TransferOffer',
-          },
+      {
+        CreatedEvent: {
+          contractId: 'transfer-offer-contract-123',
+          templateId: 'pkg:Splice.Wallet.TransferOffer:TransferOffer',
         },
       },
-    };
-    mockResponse.transactionTree.rootEventIds = ['7'];
+    ];
     const mockClient = createMockLedgerClient(mockResponse);
 
     const result = await createTransferOffer({
@@ -117,7 +110,7 @@ describe('createTransferOffer', () => {
   });
 
   it('uses validator party as actAs', async () => {
-    const mockClient = createMockLedgerClient(createTransactionTreeResponse('contract-123'));
+    const mockClient = createMockLedgerClient(createTransactionResponse('contract-123'));
 
     await createTransferOffer({
       ledgerClient: mockClient,
@@ -126,7 +119,7 @@ describe('createTransferOffer', () => {
       description: 'Test transfer',
     });
 
-    expect(mockClient.submitAndWaitForTransactionTree).toHaveBeenCalledWith(
+    expect(mockClient.submitAndWaitForTransaction).toHaveBeenCalledWith(
       expect.objectContaining({
         actAs: ['validator-party::fingerprint'],
       })
@@ -134,7 +127,7 @@ describe('createTransferOffer', () => {
   });
 
   it('submits correct command structure', async () => {
-    const mockClient = createMockLedgerClient(createTransactionTreeResponse('contract-123'));
+    const mockClient = createMockLedgerClient(createTransactionResponse('contract-123'));
 
     await createTransferOffer({
       ledgerClient: mockClient,
@@ -143,7 +136,7 @@ describe('createTransferOffer', () => {
       description: 'Test transfer',
     });
 
-    const callArgs = mockClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     expect(callArgs?.commands).toHaveLength(1);
 
     const command = callArgs?.commands[0];
@@ -161,7 +154,7 @@ describe('createTransferOffer', () => {
   });
 
   it('uses wallet app install contract ID from EnvLoader', async () => {
-    const mockClient = createMockLedgerClient(createTransactionTreeResponse('contract-123'));
+    const mockClient = createMockLedgerClient(createTransactionResponse('contract-123'));
 
     await createTransferOffer({
       ledgerClient: mockClient,
@@ -173,13 +166,13 @@ describe('createTransferOffer', () => {
     const mockEnvLoaderInstance = EnvLoader.getInstance();
     expect(mockEnvLoaderInstance.getValidatorWalletAppInstallContractId).toHaveBeenCalledWith('localnet');
 
-    const callArgs = mockClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     const exerciseCmd = getExerciseCommand(callArgs?.commands[0]);
     expect(exerciseCmd?.contractId).toBe('wallet-install-contract-id');
   });
 
   it('uses provided expiresAt date', async () => {
-    const mockClient = createMockLedgerClient(createTransactionTreeResponse('contract-123'));
+    const mockClient = createMockLedgerClient(createTransactionResponse('contract-123'));
     const customExpiry = new Date('2026-12-31T23:59:59Z');
 
     await createTransferOffer({
@@ -190,13 +183,13 @@ describe('createTransferOffer', () => {
       expiresAt: customExpiry,
     });
 
-    const callArgs = mockClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     const exerciseCmd = getExerciseCommand(callArgs?.commands[0]);
     expect(exerciseCmd?.choiceArgument['expiresAt']).toBe('2026-12-31T23:59:59.000Z');
   });
 
   it('defaults expiresAt to 24 hours from now', async () => {
-    const mockClient = createMockLedgerClient(createTransactionTreeResponse('contract-123'));
+    const mockClient = createMockLedgerClient(createTransactionResponse('contract-123'));
     const beforeCall = Date.now();
 
     await createTransferOffer({
@@ -206,7 +199,7 @@ describe('createTransferOffer', () => {
       description: 'Test transfer',
     });
 
-    const callArgs = mockClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     const exerciseCmd = getExerciseCommand(callArgs?.commands[0]);
     const expiresAtStr = exerciseCmd?.choiceArgument['expiresAt'] as string;
     const expiresAt = new Date(expiresAtStr).getTime();
@@ -220,15 +213,13 @@ describe('createTransferOffer', () => {
 
   it('throws when response has no created event', async () => {
     const mockClient = createMockLedgerClient({
-      transactionTree: {
+      transaction: {
         updateId: 'update-123',
-        eventsById: {
-          '1': {
-            ExercisedTreeEvent: {
-              value: { contractId: 'contract-123' },
-            },
+        events: [
+          {
+            ExercisedEvent: { contractId: 'contract-123' },
           },
-        },
+        ],
       },
     });
 
@@ -244,9 +235,9 @@ describe('createTransferOffer', () => {
 
   it('throws when response has no events', async () => {
     const mockClient = createMockLedgerClient({
-      transactionTree: {
+      transaction: {
         updateId: 'update-123',
-        eventsById: {},
+        events: [],
       },
     });
 
@@ -267,7 +258,7 @@ describe('acceptTransferOffer', () => {
   });
 
   it('accepts a transfer offer', async () => {
-    const mockResponse = createTransactionTreeResponse('accepted-contract-123');
+    const mockResponse = createTransactionResponse('accepted-contract-123');
     const mockClient = createMockLedgerClient(mockResponse);
 
     const result = await acceptTransferOffer({
@@ -277,11 +268,11 @@ describe('acceptTransferOffer', () => {
     });
 
     expect(result).toBe(mockResponse);
-    expect(mockClient.submitAndWaitForTransactionTree).toHaveBeenCalledTimes(1);
+    expect(mockClient.submitAndWaitForTransaction).toHaveBeenCalledTimes(1);
   });
 
   it('submits correct command structure', async () => {
-    const mockClient = createMockLedgerClient(createTransactionTreeResponse('contract-123'));
+    const mockClient = createMockLedgerClient(createTransactionResponse('contract-123'));
 
     await acceptTransferOffer({
       ledgerClient: mockClient,
@@ -289,7 +280,7 @@ describe('acceptTransferOffer', () => {
       acceptingPartyId: 'receiver::fingerprint',
     });
 
-    const callArgs = mockClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     expect(callArgs?.commands).toHaveLength(1);
 
     const command = callArgs?.commands[0];
@@ -302,7 +293,7 @@ describe('acceptTransferOffer', () => {
   });
 
   it('uses accepting party as actAs', async () => {
-    const mockClient = createMockLedgerClient(createTransactionTreeResponse('contract-123'));
+    const mockClient = createMockLedgerClient(createTransactionResponse('contract-123'));
 
     await acceptTransferOffer({
       ledgerClient: mockClient,
@@ -310,7 +301,7 @@ describe('acceptTransferOffer', () => {
       acceptingPartyId: 'receiver::fingerprint',
     });
 
-    expect(mockClient.submitAndWaitForTransactionTree).toHaveBeenCalledWith(
+    expect(mockClient.submitAndWaitForTransaction).toHaveBeenCalledWith(
       expect.objectContaining({
         actAs: ['receiver::fingerprint'],
       })
@@ -318,7 +309,7 @@ describe('acceptTransferOffer', () => {
   });
 
   it('generates command IDs with accept-transfer prefix', async () => {
-    const mockClient = createMockLedgerClient(createTransactionTreeResponse('contract-123'));
+    const mockClient = createMockLedgerClient(createTransactionResponse('contract-123'));
 
     await acceptTransferOffer({
       ledgerClient: mockClient,
@@ -326,7 +317,7 @@ describe('acceptTransferOffer', () => {
       acceptingPartyId: 'receiver::fingerprint',
     });
 
-    const commandId = mockClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0]?.commandId;
+    const commandId = mockClient.submitAndWaitForTransaction.mock.calls[0]?.[0]?.commandId;
 
     expect(commandId).toMatch(/^accept-transfer-\d+$/);
   });

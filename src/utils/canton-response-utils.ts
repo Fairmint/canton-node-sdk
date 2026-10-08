@@ -2,12 +2,7 @@ import { OperationError, OperationErrorCode } from '../core/errors';
 import { isRecord } from '../core/utils';
 
 export type CantonContractCreateArgument =
-  | readonly unknown[]
-  | Record<string, unknown>
-  | string
-  | number
-  | boolean
-  | null;
+  readonly unknown[] | Record<string, unknown> | string | number | boolean | null;
 
 export interface CantonNormalizedContract {
   readonly contractId: string;
@@ -87,7 +82,22 @@ export function readOptionalCantonUpdateId(source: unknown): string | null {
     const value = source[key];
     if (typeof value === 'string' && value.trim()) return value;
   }
-  return readOptionalCantonUpdateId(source['transactionTree']);
+  const { transaction, update, Transaction: transactionUpdate } = source;
+  const nested = readOptionalCantonUpdateId(transaction);
+  if (nested) return nested;
+
+  if (isRecord(update)) {
+    const { Transaction: updateTransaction } = update;
+    if (isRecord(updateTransaction)) {
+      const { value } = updateTransaction;
+      return readOptionalCantonUpdateId(value);
+    }
+  }
+  if (isRecord(transactionUpdate)) {
+    const { value } = transactionUpdate;
+    return readOptionalCantonUpdateId(value);
+  }
+  return null;
 }
 
 export function objectOrEmpty(value: unknown): Record<string, unknown> {

@@ -1,32 +1,22 @@
-import type { SubmitAndWaitForTransactionTreeResponse } from '../../clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction-tree';
-import { type CreatedTreeEventWrapper, isCreatedTreeEventWrapper } from '../contracts/findCreatedEvent';
+import type { SubmitAndWaitForTransactionResponse } from '../../clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction';
+import { isCreatedEventEntry, type TransactionCreatedEvent } from '../contracts/findCreatedEvent';
 
 /**
- * Finds a CreatedTreeEvent for a given template name from a transaction tree response. The template name search
- * excludes the templateId prefix and matches the template name portion.
+ * Finds the first contract created by a transaction whose template name (the part after the last colon, e.g.
+ * `FeaturedAppActivityMarker`) equals `templateName`.
  *
- * @param response - The SubmitAndWaitForTransactionTreeResponse containing the transaction tree
- * @param templateName - The template name to search for (e.g., "Splice.Amulet:FeaturedAppActivityMarker")
- * @returns The CreatedTreeEvent if found, undefined otherwise
+ * @param response - The submit-and-wait-for-transaction response
+ * @param templateName - The template name to search for, without module or package
+ * @returns The created event if found, undefined otherwise
  */
 export function findCreatedEventByTemplateName(
-  response: SubmitAndWaitForTransactionTreeResponse,
+  response: SubmitAndWaitForTransactionResponse,
   templateName: string
-): CreatedTreeEventWrapper | undefined {
-  const { transactionTree } = response;
-
-  // Iterate through all events in the transaction tree
-  for (const event of Object.values(transactionTree.eventsById)) {
-    // Check if this is a CreatedTreeEvent using type guard
-    if (isCreatedTreeEventWrapper(event)) {
-      const fullTemplateId = event.CreatedTreeEvent.value.templateId;
-
-      // Extract the template name part (after the last colon)
-      const templateNamePart = fullTemplateId.split(':').pop();
-
-      if (templateNamePart === templateName) {
-        return event;
-      }
+): TransactionCreatedEvent | undefined {
+  for (const event of response.transaction.events) {
+    if (!isCreatedEventEntry(event)) continue;
+    if (event.CreatedEvent.templateId.split(':').pop() === templateName) {
+      return event.CreatedEvent;
     }
   }
 

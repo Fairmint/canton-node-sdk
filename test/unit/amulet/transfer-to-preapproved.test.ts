@@ -71,14 +71,13 @@ const createMockValidatorClient = (): jest.Mocked<ValidatorApiClient> =>
 
 const createMockLedgerClient = (): jest.Mocked<LedgerJsonApiClient> =>
   ({
-    submitAndWaitForTransactionTree: jest.fn().mockResolvedValue({
-      transactionTree: {
+    submitAndWaitForTransaction: jest.fn().mockResolvedValue({
+      transaction: {
         updateId: 'update-123',
         commandId: 'cmd-123',
         effectiveAt: '2026-01-01T00:00:00Z',
         offset: '100',
-        eventsById: {},
-        rootEventIds: [],
+        events: [],
         synchronizerId: 'sync-123',
         traceContext: undefined,
         recordTime: '2026-01-01T00:00:00Z',
@@ -145,7 +144,7 @@ describe('transferToPreapproved', () => {
     });
 
     expect(result.transferResults).toHaveLength(2);
-    expect(mockLedgerClient.submitAndWaitForTransactionTree).toHaveBeenCalledTimes(2);
+    expect(mockLedgerClient.submitAndWaitForTransaction).toHaveBeenCalledTimes(2);
   });
 
   it('throws when no transfers provided', async () => {
@@ -208,7 +207,7 @@ describe('transferToPreapproved', () => {
       transfers: [{ recipientPartyId: 'recipient::fingerprint', amount: '100', description: 'Payment' }],
     });
 
-    const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockLedgerClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     expect(callArgs?.commands).toHaveLength(1);
 
     const exerciseCmd = getExerciseCommand(callArgs?.commands[0]);
@@ -228,7 +227,7 @@ describe('transferToPreapproved', () => {
       transfers: [{ recipientPartyId: 'recipient::fingerprint', amount: '100' }],
     });
 
-    const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockLedgerClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     const exerciseCmd = getExerciseCommand(callArgs?.commands[0]);
     expect(exerciseCmd?.choiceArgument['description']).toBeNull();
   });
@@ -239,7 +238,7 @@ describe('transferToPreapproved', () => {
       transfers: [{ recipientPartyId: 'recipient::fingerprint', amount: '100' }],
     });
 
-    const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockLedgerClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     expect(callArgs?.actAs).toEqual(['sender::fingerprint']);
   });
 
@@ -249,7 +248,7 @@ describe('transferToPreapproved', () => {
       transfers: [{ recipientPartyId: 'recipient::fingerprint', amount: '100' }],
     });
 
-    const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockLedgerClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     expect(callArgs?.disclosedContracts).toBeDefined();
     expect(callArgs?.disclosedContracts?.length).toBeGreaterThan(0);
 
@@ -267,7 +266,7 @@ describe('transferToPreapproved', () => {
       transfers: [{ recipientPartyId: 'recipient::fingerprint', amount: '100' }],
     });
 
-    const callArgs = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0];
+    const callArgs = mockLedgerClient.submitAndWaitForTransaction.mock.calls[0]?.[0];
     const exerciseCmd = getExerciseCommand(callArgs?.commands[0]);
     expect(exerciseCmd?.choiceArgument['inputs']).toEqual([{ tag: 'InputAmulet', value: 'amulet-123' }]);
   });
@@ -322,8 +321,8 @@ describe('transferToPreapproved', () => {
       ],
     });
 
-    const call1CommandId = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[0]?.[0]?.commandId;
-    const call2CommandId = mockLedgerClient.submitAndWaitForTransactionTree.mock.calls[1]?.[0]?.commandId;
+    const call1CommandId = mockLedgerClient.submitAndWaitForTransaction.mock.calls[0]?.[0]?.commandId;
+    const call2CommandId = mockLedgerClient.submitAndWaitForTransaction.mock.calls[1]?.[0]?.commandId;
 
     expect(call1CommandId).not.toBe(call2CommandId);
     expect(call1CommandId).toContain('recipient1::fingerprint');

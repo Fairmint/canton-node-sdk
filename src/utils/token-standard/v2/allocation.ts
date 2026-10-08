@@ -1,7 +1,7 @@
 import type {
-  SubmitAndWaitForTransactionTreeParams,
-  SubmitAndWaitForTransactionTreeResponse,
-} from '../../../clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction-tree';
+  SubmitAndWaitForTransactionParams,
+  SubmitAndWaitForTransactionResponse,
+} from '../../../clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction';
 import type { Command, DisclosedContract, ExerciseCommand } from '../../../clients/ledger-json-api/schemas';
 import type { GetAllocationFactoryV2FromRegistryParams } from '../../../clients/scan-api/operations/v0/registry/allocation-instruction/v2/get-allocation-factory-v2-from-registry';
 import { CantonError, type ErrorContext } from '../../../core/errors';
@@ -128,9 +128,7 @@ export interface PreparedTokenStandardV2AllocationCommand {
 }
 
 export interface TokenStandardV2AllocationLedgerClient {
-  submitAndWaitForTransactionTree(
-    params: SubmitAndWaitForTransactionTreeParams
-  ): Promise<SubmitAndWaitForTransactionTreeResponse>;
+  submitAndWaitForTransaction(params: SubmitAndWaitForTransactionParams): Promise<SubmitAndWaitForTransactionResponse>;
 }
 
 export interface SubmitPreparedTokenStandardV2AllocationParams {
@@ -141,7 +139,7 @@ export interface SubmitPreparedTokenStandardV2AllocationParams {
   /** Stable across retries so Canton command deduplication can protect against duplicate allocations. */
   readonly commandId: string;
   readonly submissionId?: string;
-  readonly deduplicationPeriod?: SubmitAndWaitForTransactionTreeParams['deduplicationPeriod'];
+  readonly deduplicationPeriod?: SubmitAndWaitForTransactionParams['deduplicationPeriod'];
   readonly synchronizerId?: string;
   readonly userId?: string;
   readonly workflowId?: string;
@@ -174,7 +172,7 @@ export type TokenStandardV2AllocationInstructionResult =
 export interface SubmitPreparedTokenStandardV2AllocationResult {
   readonly updateId: string;
   readonly result: TokenStandardV2AllocationInstructionResult;
-  readonly response: SubmitAndWaitForTransactionTreeResponse;
+  readonly response: SubmitAndWaitForTransactionResponse;
 }
 
 function requireNonEmpty(value: unknown, fieldName: string): string {
@@ -713,10 +711,10 @@ export function findTokenStandardV2AllocationInstructionResult(
   return undefined;
 }
 
-function readTransactionTreeUpdateId(response: unknown): string | undefined {
+function readTransactionUpdateId(response: unknown): string | undefined {
   if (!isRecord(response)) return undefined;
-  const transactionTree = isRecord(response['transactionTree']) ? response['transactionTree'] : undefined;
-  return readNonEmptyString(transactionTree?.['updateId']);
+  const transaction = isRecord(response['transaction']) ? response['transaction'] : undefined;
+  return readNonEmptyString(transaction?.['updateId']);
 }
 
 export async function submitPreparedTokenStandardV2Allocation(
@@ -725,11 +723,11 @@ export async function submitPreparedTokenStandardV2Allocation(
   requireInputRecord(params, 'params');
   requireInputRecord(params.prepared, 'prepared');
   requireInputRecord(params.ledger, 'ledger');
-  if (typeof params.ledger.submitAndWaitForTransactionTree !== 'function') {
+  if (typeof params.ledger.submitAndWaitForTransaction !== 'function') {
     throw new TokenStandardV2AllocationError(
       TokenStandardV2AllocationErrorCode.INPUT_INVALID,
-      'ledger.submitAndWaitForTransactionTree must be a function.',
-      { field: 'ledger.submitAndWaitForTransactionTree' }
+      'ledger.submitAndWaitForTransaction must be a function.',
+      { field: 'ledger.submitAndWaitForTransaction' }
     );
   }
   requireInputRecord(params.prepared.command, 'prepared.command');
@@ -746,7 +744,7 @@ export async function submitPreparedTokenStandardV2Allocation(
   );
   const actAs = normalizeStrings(params.actAs, 'actAs');
   const readAs = params.readAs === undefined ? [] : normalizeStrings(params.readAs, 'readAs', true);
-  const submitParams: SubmitAndWaitForTransactionTreeParams = {
+  const submitParams: SubmitAndWaitForTransactionParams = {
     commands: [params.prepared.command],
     actAs,
     commandId: requireNonEmpty(params.commandId, 'commandId'),
@@ -762,20 +760,20 @@ export async function submitPreparedTokenStandardV2Allocation(
     ...(params.userId !== undefined ? { userId: requireNonEmpty(params.userId, 'userId') } : {}),
     ...(params.workflowId !== undefined ? { workflowId: requireNonEmpty(params.workflowId, 'workflowId') } : {}),
   };
-  const response = await params.ledger.submitAndWaitForTransactionTree(submitParams);
+  const response = await params.ledger.submitAndWaitForTransaction(submitParams);
   const result = findTokenStandardV2AllocationInstructionResult(response, allocationFactoryContractId);
   if (!result) {
     throw new TokenStandardV2AllocationError(
       TokenStandardV2AllocationErrorCode.RESULT_NOT_FOUND,
-      `${TOKEN_STANDARD_V2_ALLOCATION_FACTORY_ALLOCATE_CHOICE} result was not found in the transaction tree.`,
-      { updateId: readTransactionTreeUpdateId(response) }
+      `${TOKEN_STANDARD_V2_ALLOCATION_FACTORY_ALLOCATE_CHOICE} result was not found in the transaction.`,
+      { updateId: readTransactionUpdateId(response) }
     );
   }
-  const updateId = readTransactionTreeUpdateId(response);
+  const updateId = readTransactionUpdateId(response);
   if (!updateId) {
     throw new TokenStandardV2AllocationError(
       TokenStandardV2AllocationErrorCode.RESULT_INVALID,
-      'Token Standard V2 allocation submission response did not include transactionTree.updateId.',
+      'Token Standard V2 allocation submission response did not include transaction.updateId.',
       { response }
     );
   }

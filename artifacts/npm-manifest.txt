@@ -15,7 +15,6 @@ build/src/clients/ledger-json-api/operations/v2/commands/index
 build/src/clients/ledger-json-api/operations/v2/commands/submit-and-wait
 build/src/clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-reassignment
 build/src/clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction
-build/src/clients/ledger-json-api/operations/v2/commands/submit-and-wait-for-transaction-tree
 build/src/clients/ledger-json-api/operations/v2/commands/subscribe-to-completions
 build/src/clients/ledger-json-api/operations/v2/events/get-events-by-contract-id
 build/src/clients/ledger-json-api/operations/v2/events/index
@@ -28,7 +27,6 @@ build/src/clients/ledger-json-api/operations/v2/idps/post
 build/src/clients/ledger-json-api/operations/v2/index
 build/src/clients/ledger-json-api/operations/v2/interactive-submission/allocate-party
 build/src/clients/ledger-json-api/operations/v2/interactive-submission/create-user
-build/src/clients/ledger-json-api/operations/v2/interactive-submission/get-preferred-package-version
 build/src/clients/ledger-json-api/operations/v2/interactive-submission/get-preferred-packages
 build/src/clients/ledger-json-api/operations/v2/interactive-submission/index
 build/src/clients/ledger-json-api/operations/v2/interactive-submission/upload-dar
@@ -47,10 +45,6 @@ build/src/clients/ledger-json-api/operations/v2/state/get-connected-synchronizer
 build/src/clients/ledger-json-api/operations/v2/state/get-latest-pruned-offsets
 build/src/clients/ledger-json-api/operations/v2/state/get-ledger-end
 build/src/clients/ledger-json-api/operations/v2/state/index
-build/src/clients/ledger-json-api/operations/v2/updates/get-transaction-by-id
-build/src/clients/ledger-json-api/operations/v2/updates/get-transaction-by-offset
-build/src/clients/ledger-json-api/operations/v2/updates/get-transaction-tree-by-id
-build/src/clients/ledger-json-api/operations/v2/updates/get-transaction-tree-by-offset
 build/src/clients/ledger-json-api/operations/v2/updates/get-update-by-id
 build/src/clients/ledger-json-api/operations/v2/updates/get-update-by-offset
 build/src/clients/ledger-json-api/operations/v2/updates/index

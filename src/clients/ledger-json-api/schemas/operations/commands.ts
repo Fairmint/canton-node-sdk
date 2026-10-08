@@ -5,10 +5,7 @@ import { MinLedgerTimeRelSchema, PrefetchContractKeySchema, TraceContextSchema }
 import { NonEmptyStringSchema } from './base';
 import { OperationEventFormatSchema, TransactionFormatSchema } from './updates';
 
-/**
- * Shared fields for all command submission schemas. These are common across submit-and-wait, async submit, and
- * transaction tree variants.
- */
+/** Shared fields for all command submission schemas. These are common across submit-and-wait and async submit. */
 const BaseCommandParamsSchema = z.object({
   /** Commands to submit. */
   commands: z.array(CompositeCommandSchema),
@@ -72,8 +69,6 @@ export const SubmitAndWaitForReassignmentParamsSchema = z.object({
   eventFormat: OperationEventFormatSchema.optional(),
 });
 
-export const SubmitAndWaitForTransactionTreeParamsSchema = BaseCommandParamsSchema;
-
 export const AsyncSubmitParamsSchema = BaseCommandParamsSchema;
 
 export const AsyncSubmitReassignmentParamsSchema = z.object({
@@ -98,7 +93,6 @@ export const CompletionsParamsSchema = z.object({
 export type SubmitAndWaitParams = z.infer<typeof SubmitAndWaitParamsSchema>;
 export type SubmitAndWaitForTransactionParams = z.infer<typeof SubmitAndWaitForTransactionParamsSchema>;
 export type SubmitAndWaitForReassignmentParams = z.infer<typeof SubmitAndWaitForReassignmentParamsSchema>;
-export type SubmitAndWaitForTransactionTreeParams = z.infer<typeof SubmitAndWaitForTransactionTreeParamsSchema>;
 export type AsyncSubmitParams = z.infer<typeof AsyncSubmitParamsSchema>;
 export type AsyncSubmitReassignmentParams = z.infer<typeof AsyncSubmitReassignmentParamsSchema>;
 export type CompletionsParams = z.infer<typeof CompletionsParamsSchema>;

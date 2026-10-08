@@ -34,7 +34,7 @@ describe('createParty', () => {
     // Setup mock return values
     (offersModule.createTransferOffer as jest.Mock).mockResolvedValue('transfer-offer-contract-123');
     (offersModule.acceptTransferOffer as jest.Mock).mockResolvedValue({
-      transactionTree: { updateId: 'update-123' },
+      transaction: { updateId: 'update-123' },
     });
     (preApproveModule.preApproveTransfers as jest.Mock).mockResolvedValue({
       contractId: 'preapproval-contract-123',

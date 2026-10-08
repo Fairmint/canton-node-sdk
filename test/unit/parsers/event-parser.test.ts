@@ -47,21 +47,19 @@ describe('event-parser', () => {
   });
 
   describe('parseCreatedEvent', () => {
-    it('parses CreatedTreeEvent wrappers', () => {
+    it('parses CreatedEvent wrappers', () => {
       const result = parseCreatedEvent({
-        CreatedTreeEvent: {
-          value: {
-            contractId: 'contract-1',
-            templateId: 'pkg:Module:Template',
-            packageName: 'package-name',
-            createArgument: { owner: 'alice' },
-            witnessParties: ['alice'],
-            signatories: ['alice'],
-            observers: ['bob'],
-            offset: 12,
-            nodeId: 1,
-            createdEventBlob: 'blob',
-          },
+        CreatedEvent: {
+          contractId: 'contract-1',
+          templateId: 'pkg:Module:Template',
+          packageName: 'package-name',
+          createArgument: { owner: 'alice' },
+          witnessParties: ['alice'],
+          signatories: ['alice'],
+          observers: ['bob'],
+          offset: 12,
+          nodeId: 1,
+          createdEventBlob: 'blob',
         },
       });
 
@@ -83,10 +81,8 @@ describe('event-parser', () => {
       expect(
         parseCreatedEvent({
           CreatedEvent: {
-            value: {
-              contractId: 'contract-1',
-              templateId: 'pkg:Module:Template',
-            },
+            contractId: 'contract-1',
+            templateId: 'pkg:Module:Template',
           },
           synchronizerId: 'sync-1',
         })
@@ -98,7 +94,7 @@ describe('event-parser', () => {
       });
     });
 
-    it('parses flattened CreatedEvent wrappers', () => {
+    it('parses CreatedEvent wrappers with createArguments', () => {
       expect(
         parseCreatedEvent({
           CreatedEvent: {
@@ -130,22 +126,20 @@ describe('event-parser', () => {
     });
 
     it('returns null for malformed created events', () => {
-      expect(parseCreatedEvent({ CreatedTreeEvent: { value: { templateId: 'pkg:Module:Template' } } })).toBeNull();
-      expect(parseCreatedEvent({ ExercisedTreeEvent: { value: { contractId: 'contract-1' } } })).toBeNull();
+      expect(parseCreatedEvent({ CreatedEvent: { templateId: 'pkg:Module:Template' } })).toBeNull();
+      expect(parseCreatedEvent({ ExercisedEvent: { contractId: 'contract-1' } })).toBeNull();
     });
   });
 
   describe('parseArchivedEvent', () => {
-    it('parses ArchivedTreeEvent wrappers', () => {
+    it('parses ArchivedEvent wrappers', () => {
       expect(
         parseArchivedEvent({
-          ArchivedTreeEvent: {
-            value: {
-              contractId: 'contract-1',
-              templateId: 'pkg:Module:Template',
-              witnessParties: ['alice'],
-              offset: 99,
-            },
+          ArchivedEvent: {
+            contractId: 'contract-1',
+            templateId: 'pkg:Module:Template',
+            witnessParties: ['alice'],
+            offset: 99,
           },
         })
       ).toEqual({
@@ -156,10 +150,10 @@ describe('event-parser', () => {
       });
     });
 
-    it('parses flattened ArchivedEvent wrappers', () => {
+    it('parses lowercase archivedEvent wrappers', () => {
       expect(
         parseArchivedEvent({
-          ArchivedEvent: {
+          archivedEvent: {
             contractId: 'contract-1',
             templateId: 'pkg:Module:Template',
           },
@@ -171,25 +165,23 @@ describe('event-parser', () => {
     });
 
     it('returns null for malformed archived events', () => {
-      expect(parseArchivedEvent({ ArchivedTreeEvent: { value: { contractId: 'contract-1' } } })).toBeNull();
+      expect(parseArchivedEvent({ ArchivedEvent: { contractId: 'contract-1' } })).toBeNull();
     });
   });
 
   describe('parseExercisedEvent', () => {
-    it('parses ExercisedTreeEvent wrappers', () => {
+    it('parses ExercisedEvent wrappers', () => {
       expect(
         parseExercisedEvent({
-          ExercisedTreeEvent: {
-            value: {
-              contractId: 'contract-1',
-              templateId: 'pkg:Module:Template',
-              choice: 'Archive',
-              choiceArgument: { reason: 'done' },
-              exerciseResult: { archived: true },
-              actingParties: ['alice'],
-              consuming: true,
-              offset: 10,
-            },
+          ExercisedEvent: {
+            contractId: 'contract-1',
+            templateId: 'pkg:Module:Template',
+            choice: 'Archive',
+            choiceArgument: { reason: 'done' },
+            exerciseResult: { archived: true },
+            actingParties: ['alice'],
+            consuming: true,
+            offset: 10,
           },
         })
       ).toEqual({
@@ -204,7 +196,7 @@ describe('event-parser', () => {
       });
     });
 
-    it('parses flattened ExercisedEvent wrappers', () => {
+    it('parses ExercisedEvent wrappers with exerciseArgument', () => {
       expect(
         parseExercisedEvent({
           ExercisedEvent: {
@@ -243,11 +235,9 @@ describe('event-parser', () => {
     it('returns null for malformed exercised events', () => {
       expect(
         parseExercisedEvent({
-          ExercisedTreeEvent: {
-            value: {
-              contractId: 'contract-1',
-              templateId: 'pkg:Module:Template',
-            },
+          ExercisedEvent: {
+            contractId: 'contract-1',
+            templateId: 'pkg:Module:Template',
           },
         })
       ).toBeNull();
@@ -255,37 +245,31 @@ describe('event-parser', () => {
   });
 
   describe('extractEventsFromTransaction', () => {
-    it('extracts created, archived, and exercised events from a transaction tree response', () => {
+    it('extracts created, archived, and exercised events from a transaction response', () => {
       const result = extractEventsFromTransaction({
-        transactionTree: {
-          eventsById: {
-            '1': {
-              CreatedTreeEvent: {
-                value: {
-                  contractId: 'created-1',
-                  templateId: 'pkg:Module:Created',
-                },
+        transaction: {
+          events: [
+            {
+              CreatedEvent: {
+                contractId: 'created-1',
+                templateId: 'pkg:Module:Created',
               },
             },
-            '2': {
-              ArchivedTreeEvent: {
-                value: {
-                  contractId: 'archived-1',
-                  templateId: 'pkg:Module:Archived',
-                },
+            {
+              ArchivedEvent: {
+                contractId: 'archived-1',
+                templateId: 'pkg:Module:Archived',
               },
             },
-            '3': {
-              ExercisedTreeEvent: {
-                value: {
-                  contractId: 'exercised-1',
-                  templateId: 'pkg:Module:Exercised',
-                  choice: 'Choice',
-                },
+            {
+              ExercisedEvent: {
+                contractId: 'exercised-1',
+                templateId: 'pkg:Module:Exercised',
+                choice: 'Choice',
               },
             },
-            '4': { unknown: true },
-          },
+            { unknown: true },
+          ],
         },
       });
 
@@ -297,23 +281,43 @@ describe('event-parser', () => {
       expect(result.exercised[0]?.contractId).toBe('exercised-1');
     });
 
-    it('extracts from transaction.eventsById shapes', () => {
+    it('extracts from a top-level events array', () => {
       const result = extractEventsFromTransaction({
-        transaction: {
-          eventsById: {
-            '1': {
-              CreatedEvent: {
-                value: {
-                  contractId: 'created-1',
-                  templateId: 'pkg:Module:Created',
-                },
-              },
+        events: [
+          {
+            CreatedEvent: {
+              contractId: 'created-1',
+              templateId: 'pkg:Module:Created',
             },
           },
-        },
+        ],
       });
 
       expect(result.created[0]?.contractId).toBe('created-1');
+    });
+
+    it('extracts events and the update id from a getUpdateById response', () => {
+      const response = {
+        update: {
+          Transaction: {
+            value: {
+              updateId: 'update-lookup',
+              events: [
+                {
+                  CreatedEvent: {
+                    contractId: 'created-lookup',
+                    templateId: 'pkg:Module:Created',
+                  },
+                },
+              ],
+            },
+          },
+        },
+      };
+
+      expect(extractEventsFromTransaction(response).created[0]?.contractId).toBe('created-lookup');
+      expect(getTransactionUpdateId(response)).toBe('update-lookup');
+      expect(getTransactionUpdateId({ Transaction: { value: { updateId: 'update-direct' } } })).toBe('update-direct');
     });
 
     it('extracts from transaction.events arrays', () => {
@@ -333,7 +337,7 @@ describe('event-parser', () => {
       expect(result.created[0]?.contractId).toBe('created-1');
     });
 
-    it('returns empty arrays when no event map is present', () => {
+    it('returns empty arrays when no events are present', () => {
       expect(extractEventsFromTransaction({})).toEqual({
         created: [],
         archived: [],
@@ -341,29 +345,14 @@ describe('event-parser', () => {
       });
     });
 
-    it('orders eventsById by node id rather than by insertion order', () => {
+    it('preserves ledger event array order', () => {
       const result = extractEventsFromTransaction({
-        transactionTree: {
-          eventsById: {
-            '10': createdTreeEvent('created-10'),
-            '2': createdTreeEvent('created-2'),
-            '1': createdTreeEvent('created-1'),
-          },
+        transaction: {
+          events: [createdEvent('created-1'), createdEvent('created-2'), createdEvent('created-10')],
         },
       });
 
       expect(result.created.map((created) => created.contractId)).toEqual(['created-1', 'created-2', 'created-10']);
-    });
-
-    it('falls back to the flat event array when eventsById is present but empty', () => {
-      const result = extractEventsFromTransaction({
-        transaction: {
-          eventsById: {},
-          events: [{ CreatedEvent: { contractId: 'created-1', templateId: 'pkg:Module:Created' } }],
-        },
-      });
-
-      expect(result.created[0]?.contractId).toBe('created-1');
     });
 
     it('reads a bare event array', () => {
@@ -433,9 +422,8 @@ describe('event-parser', () => {
 
     it('reads the update id from every wrapper shape', () => {
       expect(getTransactionUpdateId(transaction)).toBe('update-1');
-      expect(getTransactionUpdateId({ transactionTree: { updateId: 'update-2' } })).toBe('update-2');
       expect(getTransactionUpdateId({ updateId: 'update-3' })).toBe('update-3');
-      expect(getTransactionUpdateId({ transactionTree: { eventsById: {} } })).toBeUndefined();
+      expect(getTransactionUpdateId({ transaction: { events: [] } })).toBeUndefined();
       expect(() => requireTransactionUpdateId('not a transaction')).toThrow('The transaction names no update id.');
     });
 
@@ -473,6 +461,6 @@ describe('event-parser', () => {
   });
 });
 
-function createdTreeEvent(contractId: string): unknown {
-  return { CreatedTreeEvent: { value: { contractId, templateId: 'pkg:Module:Created' } } };
+function createdEvent(contractId: string): unknown {
+  return { CreatedEvent: { contractId, templateId: 'pkg:Module:Created' } };
 }

@@ -15,7 +15,7 @@ interface SubmitParams {
  *   const result = await new TransactionBatch(client, [partyId])
  *     .addCommand(exerciseCmd)
  *     .addDisclosedContracts(disclosed)
- *     .submitAndWaitForTransactionTree();
+ *     .submitAndWaitForTransaction();
  */
 export class TransactionBatch {
   private readonly client: LedgerJsonApiClient;
@@ -26,7 +26,8 @@ export class TransactionBatch {
 
   /**
    * @param client - Ledger client performing submits (`submitAndWait`, etc.).
-   * @param actAs - Parties authorized as controllers/signer contexts on submissions (typically `readAs[0]` sender chain).
+   * @param actAs - Parties authorized as controllers/signer contexts on submissions (typically `readAs[0]` sender
+   *   chain).
    * @param readAs - Extra disclosure/read scopes forwarded verbatim when omitted elsewhere on submissions.
    */
   constructor(client: LedgerJsonApiClient, actAs: readonly string[], readAs?: readonly string[]) {
@@ -94,11 +95,11 @@ export class TransactionBatch {
     return params;
   }
 
-  /** Submits all queued commands and waits for a transaction tree response. */
-  public async submitAndWaitForTransactionTree(): Promise<{ readonly updateId: string }> {
+  /** Submits all queued commands and waits for the resulting transaction (ledger-effects shape). */
+  public async submitAndWaitForTransaction(): Promise<{ readonly updateId: string }> {
     const submitParams = this.prepareSubmitParams();
-    const response = await this.client.submitAndWaitForTransactionTree(submitParams);
-    return { updateId: response.transactionTree.updateId };
+    const response = await this.client.submitAndWaitForTransaction(submitParams);
+    return { updateId: response.transaction.updateId };
   }
 
   /** Submits all queued commands and waits for completion. */

@@ -1,5 +1,5 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
-import { type SubmitAndWaitForTransactionTreeResponse } from '../../clients/ledger-json-api/operations';
+import { type SubmitAndWaitForTransactionResponse } from '../../clients/ledger-json-api/operations';
 import { EnvLoader } from '../../core/config/EnvLoader';
 import { OperationError, OperationErrorCode } from '../../core/errors';
 import { extractEventsFromTransaction, hasTemplateName } from '../parsers';
@@ -43,7 +43,7 @@ export async function createTransferOffer(params: CreateTransferOfferParams): Pr
   const trackingId = `transfer-offer-${Date.now()}`;
   const defaultExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-  const transferOfferCid = await ledgerClient.submitAndWaitForTransactionTree({
+  const transferOfferCid = await ledgerClient.submitAndWaitForTransaction({
     commands: [
       {
         ExerciseCommand: {
@@ -85,10 +85,10 @@ export async function createTransferOffer(params: CreateTransferOfferParams): Pr
  */
 export async function acceptTransferOffer(
   params: AcceptTransferOfferParams
-): Promise<SubmitAndWaitForTransactionTreeResponse> {
+): Promise<SubmitAndWaitForTransactionResponse> {
   const { ledgerClient, transferOfferContractId, acceptingPartyId } = params;
 
-  return ledgerClient.submitAndWaitForTransactionTree({
+  return ledgerClient.submitAndWaitForTransaction({
     commands: [
       {
         ExerciseCommand: {
