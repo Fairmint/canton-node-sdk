@@ -3,6 +3,7 @@ import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated
 import { type JsGetActiveContractsResponse, type JsGetActiveContractsResponseItem } from '../../../schemas/api/state';
 import {
   ACTIVE_CONTRACTS_PATH,
+  activeContractsCloseError,
   buildActiveContractsRequest,
   decodeActiveContractsFrame,
   type ActiveContractsParams,
@@ -14,6 +15,9 @@ import {
  * WebSocket variant returns the same snapshot and automatically closes the connection once the current state is sent.
  * Wrapping the WebSocket call behind a simple awaitable method gives a better DX and keeps the door open for optional
  * streaming via a callback. To read a snapshot without holding it in memory, use `streamActiveContracts`.
+ *
+ * The promise resolves only on the participant's normal close (1000) after the last item. Any other close, such as a
+ * dropped connection, rejects instead of resolving with part of the snapshot.
  */
 
 export type GetActiveContractsParams = ActiveContractsParams & {
@@ -58,10 +62,15 @@ export class GetActiveContracts {
                 reject(err instanceof Error ? err : new Error(String(err)));
               }
             },
-            onClose: () => {
+            onClose: (code, reason) => {
               if (!settled) {
                 settled = true;
-                resolve(results);
+                const error = activeContractsCloseError(code, reason);
+                if (error === undefined) {
+                  resolve(results);
+                } else {
+                  reject(error);
+                }
               }
             },
           },

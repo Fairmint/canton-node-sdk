@@ -244,6 +244,28 @@ describe('StreamActiveContracts', () => {
     expect(connection.subscription.close).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    [1006, '', 'Active-contracts stream closed before the snapshot completed [1006]'],
+    [1001, 'going away', 'Active-contracts stream closed before the snapshot completed [1001]: going away'],
+  ])(
+    'rejects after yielding the items received before a close with code %i and no error',
+    async (code, reason, message) => {
+      const { items, first, connection } = await startStream();
+
+      void connection.handlers.onMessage(activeContractFrame('00a'));
+      void connection.handlers.onMessage(activeContractFrame('00b'));
+      void connection.handlers.onClose?.(code, reason);
+
+      await expect(first).resolves.toEqual({ done: false, value: activeContractItem('00a') });
+      await expect(items.next()).resolves.toEqual({ done: false, value: activeContractItem('00b') });
+      const failure = items.next();
+      await expect(failure).rejects.toBeInstanceOf(ApiError);
+      await expect(failure).rejects.toThrow(message);
+      expect(connection.subscription.close).toHaveBeenCalledTimes(1);
+      await expect(items.next()).resolves.toEqual({ done: true, value: undefined });
+    }
+  );
+
   it('closes the socket and stops delivery when the consumer breaks out early', async () => {
     mockConnect.mockImplementationOnce(async (_path: string, _request: unknown, handlers: Handlers) => {
       const subscription: Subscription = {
@@ -411,6 +433,26 @@ describe('GetActiveContracts beside the stream', () => {
     ).resolves.toEqual([activeContractItem('00a'), activeContractItem('00b')]);
     expect(onItem.mock.calls).toEqual([[activeContractItem('00a')], [activeContractItem('00b')]]);
   });
+
+  it.each([
+    [1006, '', 'Active-contracts stream closed before the snapshot completed [1006]'],
+    [1001, 'going away', 'Active-contracts stream closed before the snapshot completed [1001]: going away'],
+  ])(
+    'rejects instead of resolving with part of the snapshot on a close with code %i',
+    async (code, reason, message) => {
+      mockConnect.mockImplementation(async (_path: string, _request: unknown, handlers: Handlers) => {
+        await handlers.onMessage(activeContractFrame('00a'));
+        await handlers.onClose?.(code, reason);
+        return { close: jest.fn(), isConnected: () => false, getConnectionState: () => 3 };
+      });
+      const onItem = jest.fn();
+
+      const result = new GetActiveContracts({} as never).execute({ parties: [PARTY], activeAtOffset: 42, onItem });
+      await expect(result).rejects.toBeInstanceOf(ApiError);
+      await expect(result).rejects.toThrow(message);
+      expect(onItem).toHaveBeenCalledTimes(1);
+    }
+  );
 
   it('still rejects on a Canton error frame', async () => {
     mockConnect.mockImplementation(async (_path: string, _request: unknown, handlers: Handlers) => {

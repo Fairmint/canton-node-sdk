@@ -130,6 +130,24 @@ function toError(errorResponse: JsCantonError | WsCantonError): ApiError {
   return new ApiError(`WebSocket error [${codeStr}]: ${errorResponse.message}`);
 }
 
+/** Close code the participant sends once it has sent the whole snapshot. */
+const SNAPSHOT_COMPLETE_CLOSE_CODE = 1000;
+
+/**
+ * The error a socket close stands for, or `undefined` when the close completes the snapshot.
+ *
+ * The participant reports failures as error frames and closes with 1000 after the last item. Every close that
+ * `WebSocketClient` starts itself reports an error first, so any other code that reaches `onClose` comes from the peer
+ * or the network: a dropped connection (1006), a proxy idle timeout or a server going away (1001). The items received
+ * before it are only part of the snapshot.
+ */
+export function activeContractsCloseError(code: number, reason: string): ApiError | undefined {
+  if (code === SNAPSHOT_COMPLETE_CLOSE_CODE) return undefined;
+  return new ApiError(
+    `Active-contracts stream closed before the snapshot completed [${code}]${reason === '' ? '' : `: ${reason}`}`
+  );
+}
+
 export function decodeActiveContractsFrame(parsed: unknown): ActiveContractsFrame {
   const decoded = ActiveContractsResponseMessageSchema.safeParse(parsed);
   if (!decoded.success) {

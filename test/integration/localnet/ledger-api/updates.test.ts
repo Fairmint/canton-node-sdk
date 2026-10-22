@@ -4,20 +4,20 @@
  * Tests for retrieving transactions and updates from the ledger.
  */
 
-import { randomUUID } from 'node:crypto';
-
 import {
   TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID,
   TransactionShape,
   buildUpdateFormat,
   type LedgerJsonApiClient,
 } from '../../../../src';
-import { retry } from '@fairmint/canton-dev-tools/testing';
+import { ensureValidatorUserOnboarded, VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS } from '../validator-api/setup';
 import {
-  ensureValidatorUserOnboarded,
-  getClient as getValidatorClient,
-  VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS,
-} from '../validator-api/setup';
+  expectCreatedEventBlob,
+  expectHoldingView,
+  findOrTapHolding,
+  type HoldingCreate,
+  type ViewedCreatedEvent,
+} from './holding';
 import { getClient, resolveValidatorPartyId } from './setup';
 
 const WALLET_APP_INSTALL_TEMPLATE_SUFFIX = 'Splice.Wallet.Install:WalletAppInstall';
@@ -59,65 +59,6 @@ function createdContractIds(update: TransactionUpdate): string[] {
   );
 }
 
-const HOLDING_INTERFACE_SUFFIX = ':Splice.Api.Token.HoldingV1:Holding';
-
-interface HoldingCreate {
-  readonly party: string;
-  readonly contractId: string;
-  readonly offset: number;
-}
-
-/** Finds one of the wallet party's HoldingV1 contracts and the offset that created it, tapping Amulet if it has none. */
-async function findOrTapHolding(): Promise<HoldingCreate> {
-  const validatorClient = getValidatorClient();
-  const { party_id: party } = await validatorClient.getUserStatus();
-  const client = getClient();
-  client.setPartyId(party);
-
-  const findHolding = async (): Promise<HoldingCreate | undefined> => {
-    const snapshot = await client.getActiveContracts({
-      parties: [party],
-      interfaceIds: [TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID],
-      includeInterfaceView: false,
-    });
-    for (const item of snapshot) {
-      if ('JsActiveContract' in item.contractEntry) {
-        const { contractId, offset } = item.contractEntry.JsActiveContract.createdEvent;
-        return { party, contractId, offset };
-      }
-    }
-    return undefined;
-  };
-
-  const existing = await findHolding();
-  if (existing) {
-    return existing;
-  }
-  await validatorClient.tap({ amount: '10', command_id: `holding-interface-view-${randomUUID()}` });
-  return retry(
-    async (): Promise<HoldingCreate> => {
-      const tapped = await findHolding();
-      if (!tapped) {
-        throw new Error(`The tapped Amulet of ${party} is not active yet`);
-      }
-      return tapped;
-    },
-    { description: `a HoldingV1 contract of ${party}` }
-  );
-}
-
-interface ViewedCreatedEvent {
-  readonly contractId: string;
-  readonly createdEventBlob?: string | undefined;
-  readonly interfaceViews?:
-    | ReadonlyArray<{
-        readonly interfaceId: string;
-        readonly viewStatus: { readonly code: number };
-        readonly viewValue?: unknown;
-      }>
-    | undefined;
-}
-
 type TransactionEvent =
   | { readonly CreatedEvent: ViewedCreatedEvent }
   | { readonly ArchivedEvent: unknown }
@@ -133,19 +74,6 @@ function holdingCreatedEvent(events: readonly TransactionEvent[], contractId: st
     throw new Error(`No CreatedEvent for Holding ${contractId}`);
   }
   return event;
-}
-
-function expectHoldingView(event: ViewedCreatedEvent, owner: string): void {
-  const views = (event.interfaceViews ?? []).filter((view) => view.interfaceId.endsWith(HOLDING_INTERFACE_SUFFIX));
-  expect(views).toHaveLength(1);
-  const [view] = views;
-  expect(view?.viewStatus.code).toBe(0);
-  expect(view?.viewValue).toEqual(expect.objectContaining({ owner }));
-}
-
-function expectCreatedEventBlob(event: ViewedCreatedEvent): void {
-  expect(event.createdEventBlob).toEqual(expect.any(String));
-  expect(event.createdEventBlob).not.toHaveLength(0);
 }
 
 type SubscribeToUpdatesMessage = Parameters<

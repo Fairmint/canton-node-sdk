@@ -3,6 +3,7 @@ import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated
 import type { JsGetActiveContractsResponseItem } from '../../../schemas/api/state';
 import {
   ACTIVE_CONTRACTS_PATH,
+  activeContractsCloseError,
   buildActiveContractsRequest,
   decodeActiveContractsFrame,
   type ActiveContractsParams,
@@ -97,9 +98,10 @@ class SnapshotQueue {
  * only as a stream, so this reads the same WebSocket but hands each item to the consumer as it arrives and keeps no
  * reference to it afterwards. The iterator connects on its first `next()` and yields items in the order the participant
  * sends them. When the consumer falls {@link ACTIVE_CONTRACTS_STREAM_HIGH_WATER_MARK} items behind, the socket stops
- * reading until it catches up. A Canton error frame, an unexpected frame or the idle timeout ends the iteration with an
- * error once the items received before it have been yielded. Leaving a `for await` loop early, by `break`, `return` or
- * a throw, closes the socket; an iterator driven by hand must be run to the end or closed with `return()`.
+ * reading until it catches up. A Canton error frame, an unexpected frame, the idle timeout or a close other than the
+ * participant's normal close (1000), such as a dropped connection, ends the iteration with an error once the items
+ * received before it have been yielded. Leaving a `for await` loop early, by `break`, `return` or a throw, closes the
+ * socket; an iterator driven by hand must be run to the end or closed with `return()`.
  *
  * @example
  *   ```typescript
@@ -138,8 +140,8 @@ export class StreamActiveContracts {
         onError: (err) => {
           queue.end(err);
         },
-        onClose: () => {
-          queue.end();
+        onClose: (code, reason) => {
+          queue.end(activeContractsCloseError(code, reason));
         },
       },
       { idleTimeoutMs }
