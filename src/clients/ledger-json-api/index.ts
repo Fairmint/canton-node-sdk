@@ -4,6 +4,15 @@ export type {
   SubmitAndWaitForTransactionParams,
   SubmitAndWaitForTransactionResponse,
 } from './operations/v2/commands/submit-and-wait-for-transaction';
+export { TransactionShape } from './operations/v2/updates/subscribe-to-updates';
+export {
+  buildEventFormat,
+  buildTransactionFormat,
+  buildUpdateFormat,
+  type EventFormatBuilderParams,
+  type TransactionFormatBuilderParams,
+  type UpdateFormatBuilderParams,
+} from './operations/v2/utils/event-format-builder';
 export {
   GetContractByIdRequestSchema,
   GetContractByIdResponseSchema,
