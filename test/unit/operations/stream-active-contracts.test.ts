@@ -2,6 +2,7 @@ import { GetActiveContracts } from '../../../src/clients/ledger-json-api/operati
 import {
   ACTIVE_CONTRACTS_STREAM_HIGH_WATER_MARK,
   StreamActiveContracts,
+  type ActiveContractsStream,
   type StreamActiveContractsParams,
 } from '../../../src/clients/ledger-json-api/operations/v2/state/stream-active-contracts';
 import {
@@ -89,22 +90,60 @@ function lastConnection(): Connection {
   return connection;
 }
 
-function stream(
-  params: StreamActiveContractsParams = { parties: [PARTY], activeAtOffset: 42 }
-): AsyncGenerator<JsGetActiveContractsResponseItem, void, undefined> {
+type Items = AsyncIterator<JsGetActiveContractsResponseItem, void, undefined>;
+
+const ONLY_ONCE = 'An active-contracts stream can be iterated only once';
+
+function stream(params: StreamActiveContractsParams = { parties: [PARTY], activeAtOffset: 42 }): ActiveContractsStream {
   return new StreamActiveContracts({} as never).execute(params);
 }
 
-/** Starts a stream and waits until it has connected; `first` is the pending first `next()`. */
+/** Starts iterating a stream and waits until it has connected; `first` is the pending first `next()`. */
 async function startStream(params?: StreamActiveContractsParams): Promise<{
-  readonly items: AsyncGenerator<JsGetActiveContractsResponseItem, void, undefined>;
+  readonly snapshot: ActiveContractsStream;
+  readonly items: Items;
   readonly first: Promise<IteratorResult<JsGetActiveContractsResponseItem, void>>;
   readonly connection: Connection;
 }> {
-  const items = stream(params);
+  const snapshot = stream(params);
+  const items = snapshot[Symbol.asyncIterator]();
   const first = items.next();
   await flush();
-  return { items, first, connection: lastConnection() };
+  return { snapshot, items, first, connection: lastConnection() };
+}
+
+/** Makes the next connection deliver `frames`, then close with `closeCode` if one is given. */
+function connectDelivering(frames: readonly unknown[], closeCode?: number): void {
+  mockConnect.mockImplementationOnce(async (_path: string, _request: unknown, handlers: Handlers) => {
+    const subscription: Subscription = {
+      close: jest.fn(),
+      pause: jest.fn(),
+      resume: jest.fn(),
+      isConnected: () => true,
+      getConnectionState: () => 1,
+    };
+    connections.push({ handlers, subscription });
+    setImmediate(() => {
+      for (const frame of frames) {
+        void handlers.onMessage(frame);
+      }
+      if (closeCode !== undefined) {
+        void handlers.onClose?.(closeCode, '');
+      }
+    });
+    return subscription;
+  });
+}
+
+/** Contract IDs of the active contracts in a full iteration of `snapshot`. */
+async function readContractIds(snapshot: ActiveContractsStream): Promise<string[]> {
+  const ids: string[] = [];
+  for await (const item of snapshot) {
+    if ('JsActiveContract' in item.contractEntry) {
+      ids.push(item.contractEntry.JsActiveContract.createdEvent.contractId);
+    }
+  }
+  return ids;
 }
 
 describe('StreamActiveContracts', () => {
@@ -125,7 +164,7 @@ describe('StreamActiveContracts', () => {
   });
 
   it('connects only when the first item is requested', async () => {
-    const items = stream();
+    const items = stream()[Symbol.asyncIterator]();
     await flush();
     expect(mockConnect).not.toHaveBeenCalled();
 
@@ -215,7 +254,9 @@ describe('StreamActiveContracts', () => {
     await expect(failure).rejects.toBeInstanceOf(ApiError);
     await expect(failure).rejects.toThrow('WebSocket error [PERMISSION_DENIED]: party not hosted');
     expect(connection.subscription.close).toHaveBeenCalledTimes(1);
-    await expect(items.next()).resolves.toEqual({ done: true, value: undefined });
+    // A failed iterator keeps failing instead of reporting the snapshot as done.
+    await expect(items.next()).rejects.toThrow('WebSocket error [PERMISSION_DENIED]: party not hosted');
+    expect(mockConnect).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -262,30 +303,64 @@ describe('StreamActiveContracts', () => {
       await expect(failure).rejects.toBeInstanceOf(ApiError);
       await expect(failure).rejects.toThrow(message);
       expect(connection.subscription.close).toHaveBeenCalledTimes(1);
-      await expect(items.next()).resolves.toEqual({ done: true, value: undefined });
+      await expect(items.next()).rejects.toThrow(message);
+      expect(mockConnect).toHaveBeenCalledTimes(1);
     }
   );
 
+  it('cannot be iterated again after a failure, so a retry around the same stream does not report an empty snapshot', async () => {
+    connectDelivering([activeContractFrame('00a')], 1006);
+    const snapshot = stream();
+
+    await expect(readContractIds(snapshot)).rejects.toThrow(
+      'Active-contracts stream closed before the snapshot completed [1006]'
+    );
+    await expect(readContractIds(snapshot)).rejects.toThrow(ONLY_ONCE);
+    expect(() => snapshot[Symbol.asyncIterator]()).toThrow(ONLY_ONCE);
+    expect(mockConnect).toHaveBeenCalledTimes(1);
+
+    // A new stream reads the snapshot again.
+    connectDelivering([activeContractFrame('00a'), activeContractFrame('00b')], 1000);
+    await expect(readContractIds(stream())).resolves.toEqual(['00a', '00b']);
+    expect(mockConnect).toHaveBeenCalledTimes(2);
+  });
+
+  it('cannot be iterated again after it completes', async () => {
+    connectDelivering([activeContractFrame('00a')], 1000);
+    const snapshot = stream();
+
+    await expect(readContractIds(snapshot)).resolves.toEqual(['00a']);
+    await expect(readContractIds(snapshot)).rejects.toThrow(ONLY_ONCE);
+    expect(mockConnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects next() after return() closed the iterator before the snapshot completed', async () => {
+    const { items, first, connection } = await startStream();
+    void connection.handlers.onMessage(activeContractFrame('00a'));
+    void connection.handlers.onMessage(activeContractFrame('00b'));
+    await expect(first).resolves.toEqual({ done: false, value: activeContractItem('00a') });
+
+    await expect(items.return?.()).resolves.toEqual({ done: true, value: undefined });
+    expect(connection.subscription.close).toHaveBeenCalledTimes(1);
+    await expect(items.next()).rejects.toThrow('Active-contracts stream was closed before the snapshot completed');
+    await expect(items.next()).rejects.toThrow('Active-contracts stream was closed before the snapshot completed');
+  });
+
+  it('keeps reporting done after the snapshot completed, even once return() is called', async () => {
+    const { items, first, connection } = await startStream();
+    void connection.handlers.onClose?.(1000, 'snapshot complete');
+    await expect(first).resolves.toEqual({ done: true, value: undefined });
+
+    await expect(items.return?.()).resolves.toEqual({ done: true, value: undefined });
+    await expect(items.next()).resolves.toEqual({ done: true, value: undefined });
+  });
+
   it('closes the socket and stops delivery when the consumer breaks out early', async () => {
-    mockConnect.mockImplementationOnce(async (_path: string, _request: unknown, handlers: Handlers) => {
-      const subscription: Subscription = {
-        close: jest.fn(),
-        pause: jest.fn(),
-        resume: jest.fn(),
-        isConnected: () => true,
-        getConnectionState: () => 1,
-      };
-      connections.push({ handlers, subscription });
-      setImmediate(() => {
-        void handlers.onMessage(activeContractFrame('00a'));
-        void handlers.onMessage(activeContractFrame('00b'));
-      });
-      return subscription;
-    });
-    const items = stream();
+    connectDelivering([activeContractFrame('00a'), activeContractFrame('00b')]);
+    const snapshot = stream();
 
     const seen: JsGetActiveContractsResponseItem[] = [];
-    for await (const item of items) {
+    for await (const item of snapshot) {
       seen.push(item);
       break;
     }
@@ -296,29 +371,31 @@ describe('StreamActiveContracts', () => {
     expect(() => {
       void handlers.onMessage(activeContractFrame('00c'));
     }).not.toThrow();
-    await expect(items.next()).resolves.toEqual({ done: true, value: undefined });
+    // Iterating again would yield nothing and look like an empty snapshot, so it throws.
+    await expect(readContractIds(snapshot)).rejects.toThrow(ONLY_ONCE);
+    expect(mockConnect).toHaveBeenCalledTimes(1);
   });
 
   it('closes the socket when the consumer throws inside the loop', async () => {
-    const { items, first, connection } = await startStream();
-    void connection.handlers.onMessage(activeContractFrame('00a'));
-    await first;
+    connectDelivering([activeContractFrame('00a'), activeContractFrame('00b')]);
 
     const consume = async (): Promise<void> => {
-      void connection.handlers.onMessage(activeContractFrame('00b'));
-      for await (const item of items) {
+      for await (const item of stream()) {
         throw new Error(`consumer failed on ${JSON.stringify(item.workflowId)}`);
       }
     };
 
     await expect(consume()).rejects.toThrow('consumer failed');
-    expect(connection.subscription.close).toHaveBeenCalledTimes(1);
+    expect(lastConnection().subscription.close).toHaveBeenCalledTimes(1);
   });
 
   it('propagates a failed connection without a socket to close', async () => {
     mockConnect.mockRejectedValueOnce(new Error('authentication failed'));
 
-    await expect(stream().next()).rejects.toThrow('authentication failed');
+    const items = stream()[Symbol.asyncIterator]();
+    await expect(items.next()).rejects.toThrow('authentication failed');
+    await expect(items.next()).rejects.toThrow('authentication failed');
+    expect(mockConnect).toHaveBeenCalledTimes(1);
   });
 
   it('applies the default idle timeout and forwards a caller-supplied one', async () => {
@@ -390,17 +467,36 @@ describe('StreamActiveContracts', () => {
     );
   });
 
-  it('defaults the offset to the ledger end and the parties to the client', async () => {
+  it('reports the offset passed in as the offset the snapshot is read at', async () => {
+    const { snapshot, first, connection } = await startStream({ parties: [PARTY], activeAtOffset: 42 });
+    expect(snapshot.activeAtOffset).toBe(42);
+    void connection.handlers.onClose?.(1000, 'snapshot complete');
+    await first;
+
+    expect(snapshot.activeAtOffset).toBe(42);
+  });
+
+  it('defaults the offset to the ledger end, reports it, and defaults the parties to the client', async () => {
     const client = {
       getLedgerEnd: jest.fn().mockResolvedValue({ offset: 99 }),
       buildPartyList: () => ['Bob::fingerprint'],
     };
-    const items = new StreamActiveContracts(client as never).execute({});
+    const snapshot = new StreamActiveContracts(client as never).execute({});
+    expect(snapshot.activeAtOffset).toBeUndefined();
+    const items = snapshot[Symbol.asyncIterator]();
+    expect(client.getLedgerEnd).not.toHaveBeenCalled();
+
     const first = items.next();
     await flush();
+    // Known before the first item, so a reader can record where to continue the update stream from.
+    expect(snapshot.activeAtOffset).toBe(99);
+    void lastConnection().handlers.onMessage(activeContractFrame('00a'));
     void lastConnection().handlers.onClose?.(1000, 'snapshot complete');
-    await first;
+    await expect(first).resolves.toEqual({ done: false, value: activeContractItem('00a') });
+    await expect(items.next()).resolves.toEqual({ done: true, value: undefined });
 
+    expect(snapshot.activeAtOffset).toBe(99);
+    expect(client.getLedgerEnd).toHaveBeenCalledTimes(1);
     expect(client.getLedgerEnd).toHaveBeenCalledWith({});
     expect(mockConnect).toHaveBeenCalledWith(
       '/v2/state/active-contracts',

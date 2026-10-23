@@ -178,8 +178,7 @@ function extractClassOperationInfos(fileContent: string): OperationInfo[] {
       (member): member is ts.MethodDeclaration =>
         ts.isMethodDeclaration(member) &&
         ts.isIdentifier(member.name) &&
-        (member.name.text === 'execute' || member.name.text === 'connect') &&
-        hasModifier(member, ts.SyntaxKind.AsyncKeyword)
+        (member.name.text === 'execute' || member.name.text === 'connect')
     );
     if (!method || !ts.isIdentifier(method.name)) continue;
 

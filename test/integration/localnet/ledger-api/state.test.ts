@@ -58,17 +58,21 @@ describe('LedgerJsonApiClient / State', () => {
 
     test('streams the same WalletAppInstall snapshot that getActiveContracts collects', async () => {
       const client = getClient();
-      const { offset: activeAtOffset } = await client.getLedgerEnd({});
-      if (activeAtOffset === undefined) {
-        throw new Error('Ledger end response did not include an offset');
-      }
-      const params = { parties: [party], templateIds: [WALLET_APP_INSTALL_TEMPLATE_ID], activeAtOffset };
+      const filter = { parties: [party], templateIds: [WALLET_APP_INSTALL_TEMPLATE_ID] };
 
-      const collected = (await client.getActiveContracts(params)).flatMap(activeContractIds);
+      // Without an offset the stream reads at the ledger end and reports which offset that was.
+      const snapshot = client.streamActiveContracts(filter);
       const streamed: string[] = [];
-      for await (const item of client.streamActiveContracts(params)) {
+      for await (const item of snapshot) {
         streamed.push(...activeContractIds(item));
       }
+      const { activeAtOffset } = snapshot;
+      if (activeAtOffset === undefined) {
+        throw new Error('The stream did not report the offset it read at');
+      }
+      expect(activeAtOffset).toBeGreaterThan(0);
+
+      const collected = (await client.getActiveContracts({ ...filter, activeAtOffset })).flatMap(activeContractIds);
 
       expect(streamed.length).toBeGreaterThan(0);
       expect(streamed).toEqual(collected);

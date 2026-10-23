@@ -1,5 +1,6 @@
 import {
   TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID,
+  type ActiveContractsStream,
   type GetActiveContractsParams,
   type JsGetActiveContractsResponse,
   type JsGetActiveContractsResponseItem,
@@ -33,13 +34,25 @@ const collectParams: GetActiveContractsParams = {
 };
 
 export async function typecheckStreamActiveContracts(): Promise<void> {
-  const items: AsyncIterable<JsGetActiveContractsResponseItem> = ledgerClient.streamActiveContracts(streamParams);
+  const stream: ActiveContractsStream = ledgerClient.streamActiveContracts(streamParams);
+  const items: AsyncIterable<JsGetActiveContractsResponseItem> = stream;
   for await (const item of items) {
     if ('JsActiveContract' in item.contractEntry) {
       const { contractId } = item.contractEntry.JsActiveContract.createdEvent;
       const id: string = contractId;
       id;
     }
+  }
+  // The offset is known once iteration has started, so it may be undefined.
+  const { activeAtOffset }: { readonly activeAtOffset: number | undefined } = stream;
+  // @ts-expect-error the offset is read-only.
+  stream.activeAtOffset = 7;
+  if (activeAtOffset !== undefined) {
+    await ledgerClient.subscribeToUpdates({
+      parties: ['Alice'],
+      beginExclusive: activeAtOffset,
+      onMessage: () => undefined,
+    });
   }
 
   const snapshot: JsGetActiveContractsResponse = await ledgerClient.getActiveContracts(collectParams);

@@ -18,6 +18,10 @@ import {
  *
  * The promise resolves only on the participant's normal close (1000) after the last item. Any other close, such as a
  * dropped connection, rejects instead of resolving with part of the snapshot.
+ *
+ * When `activeAtOffset` is omitted the snapshot is read at the ledger end, and the result does not say which offset
+ * that was. A reader that continues with `subscribeToUpdates` passes `activeAtOffset` explicitly and the same value as
+ * `beginExclusive`; reading the ledger end again instead would skip the updates in between.
  */
 
 export type GetActiveContractsParams = ActiveContractsParams & {

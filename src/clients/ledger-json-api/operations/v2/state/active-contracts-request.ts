@@ -39,7 +39,10 @@ export const ActiveContractsParamsSchema = z.object({
   includeInterfaceView: z.boolean().optional(),
   /** Include created event blobs in template and interface filter results (default false). */
   includeCreatedEventBlob: z.boolean().optional(),
-  /** Allow caller to omit activeAtOffset; we'll default to ledger end */
+  /**
+   * Offset to read the snapshot at; defaults to the ledger end. A reader that continues with `subscribeToUpdates` uses
+   * the same offset as `beginExclusive`.
+   */
   activeAtOffset: z.number().optional(),
   /** Fail the snapshot when no message arrives for this many milliseconds. `0` waits indefinitely. */
   idleTimeoutMs: z.number().min(0).optional(),

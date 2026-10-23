@@ -5,7 +5,7 @@ export type {
   SubmitAndWaitForTransactionResponse,
 } from './operations/v2/commands/submit-and-wait-for-transaction';
 export type { GetActiveContractsParams } from './operations/v2/state/get-active-contracts';
-export type { StreamActiveContractsParams } from './operations/v2/state/stream-active-contracts';
+export type { ActiveContractsStream, StreamActiveContractsParams } from './operations/v2/state/stream-active-contracts';
 export { TransactionShape } from './operations/v2/updates/subscribe-to-updates';
 export {
   buildEventFormat,
