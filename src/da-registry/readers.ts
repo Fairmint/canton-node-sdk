@@ -53,8 +53,10 @@ export function readRequirements(value: unknown): Array<{ issuer: string; claims
 }
 
 function requirementKey(r: { issuer: string; claims: ClaimSpec[] }): string {
-  // JSON keeps claim pairs unambiguous: a delimiter-joined key would equate one claim `a=1,b=2` with two claims.
-  return JSON.stringify([r.issuer, r.claims.map((c) => [c.property, c.value]).sort()]);
+  // JSON keeps claim pairs unambiguous both for equality and for the sort itself: a delimiter-joined key would
+  // equate one claim `a=1,b=2` with two claims, and comma-stringified pairs would sort `('a','b,c')` and
+  // `('a,b','c')` identically.
+  return JSON.stringify([r.issuer, r.claims.map((c) => JSON.stringify([c.property, c.value])).sort()]);
 }
 
 /** Order-insensitive equality of two requirement lists. */

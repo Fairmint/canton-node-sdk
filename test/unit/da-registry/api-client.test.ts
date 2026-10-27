@@ -48,6 +48,11 @@ describe('createDaRegistryApi', () => {
     await expect(api.operatorParty()).rejects.toBeInstanceOf(ValidationError);
   });
 
+  it('rejects a successful response with a non-record body instead of treating it as a 404', async () => {
+    const api = createDaRegistryApi(BASE, mockHttp(jest.fn().mockResolvedValue({ data: null }), jest.fn()));
+    await expect(api.registryInfo('ota::1220bb')).rejects.toBeInstanceOf(ValidationError);
+  });
+
   it('returns registry info and instrument metadata, null on 404', async () => {
     const info = { supportedApis: { 'splice-api-token-transfer-instruction-v2': {} } };
     const get = jest

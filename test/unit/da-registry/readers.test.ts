@@ -81,6 +81,14 @@ describe('claim and requirement readers', () => {
     expect(sameRequirements(oneClaim, twoClaims)).toBe(false);
   });
 
+  it('compares order-insensitively even when claim pairs contain commas', () => {
+    const claims = [
+      { property: 'a', value: 'b,c' },
+      { property: 'a,b', value: 'c' },
+    ];
+    expect(sameRequirements([{ issuer: 'x', claims }], [{ issuer: 'x', claims: [...claims].reverse() }])).toBe(true);
+  });
+
   it('reads Daml Optional Bool', () => {
     expect(readOptionalBool(true)).toBe(true);
     expect(readOptionalBool(false)).toBe(false);

@@ -100,6 +100,8 @@ export function createDaRegistryApi(
   async function getOrNull(url: string): Promise<Record<string, unknown> | null> {
     try {
       const { data } = await http.get<Record<string, unknown>>(url);
+      // A successful body must be a record; a `null` body would masquerade as the 404 sentinel below.
+      if (!isRecord(data)) throw new ValidationError(`DA API GET ${url} returned a malformed body`);
       return data;
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 404) return null;
