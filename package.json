@@ -75,7 +75,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@fairmint/canton-dev-tools": "0.1.11",
+    "@fairmint/canton-dev-tools": "0.1.13",
     "@types/jest": "30.0.0",
     "@types/node": "26.6.2",
     "@types/ws": "8.18.1",
