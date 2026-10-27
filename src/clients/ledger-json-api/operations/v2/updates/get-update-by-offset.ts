@@ -21,7 +21,7 @@ export type GetUpdateByOffsetResponse =
  *     offset: 1000,
  *     updateFormat: buildUpdateFormat({
  *       parties: ['party1'],
- *       interfaceIds: ['#OpenCapTableApi-v01:Fairmint.OpenCapTableApi.OcfObject:OcfObject'],
+ *       interfaceIds: ['#example-package:Example.Module:Asset'],
  *     }),
  *   });
  *   ```;

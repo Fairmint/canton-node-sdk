@@ -4,8 +4,8 @@ import {
   buildUpdateFormat,
 } from '../../../src/clients/ledger-json-api/operations/v2/utils/event-format-builder';
 
-const OCF_OBJECT = '#OpenCapTableApi-v01:Fairmint.OpenCapTableApi.OcfObject:OcfObject';
-const REGISTER_CONTRACT = '#OpenCapTableApi-v01:Fairmint.OpenCapTableApi.RegisterContract:RegisterContract';
+const ASSET_INTERFACE = '#example-package:Example.Module:Asset';
+const REGISTRY_INTERFACE = '#example-package:Example.Module:Registry';
 
 describe('buildEventFormat', () => {
   it('builds interface-only filters with interface views enabled by default', () => {
@@ -94,7 +94,7 @@ describe('buildEventFormat', () => {
 
 describe('buildTransactionFormat', () => {
   it('wraps the event format and defaults to the LedgerEffects shape', () => {
-    const params = { parties: ['Alice'], interfaceIds: [OCF_OBJECT] };
+    const params = { parties: ['Alice'], interfaceIds: [ASSET_INTERFACE] };
 
     expect(buildTransactionFormat(params)).toEqual({
       eventFormat: buildEventFormat(params),
@@ -116,7 +116,7 @@ describe('buildTransactionFormat', () => {
 describe('buildUpdateFormat', () => {
   const params = {
     parties: ['Alice', 'Bob'],
-    interfaceIds: [OCF_OBJECT, REGISTER_CONTRACT],
+    interfaceIds: [ASSET_INTERFACE, REGISTRY_INTERFACE],
     includeCreatedEventBlob: true,
   };
   const eventFormat = buildEventFormat(params);

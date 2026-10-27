@@ -2,10 +2,10 @@ import { CreatedEventDetailsSchema } from '../../../src/clients/ledger-json-api/
 import { JsInterfaceViewSchema } from '../../../src/clients/ledger-json-api/schemas/api/interface-view';
 import { JsGetActiveContractsResponseItemSchema } from '../../../src/clients/ledger-json-api/schemas/api/state';
 
-const OCF_OBJECT = '#OpenCapTableApi-v01:Fairmint.OpenCapTableApi.OcfObject:OcfObject';
+const ASSET_INTERFACE = '#example-package:Example.Module:Asset';
 
 const FAILED_VIEW_WIRE = {
-  interfaceId: OCF_OBJECT,
+  interfaceId: ASSET_INTERFACE,
   viewStatus: { code: 9, message: 'view failed', details: [] },
   viewValue: null,
   implementationPackageId: null,
@@ -58,14 +58,14 @@ describe('CreatedEventDetailsSchema interface views', () => {
 describe('JsInterfaceViewSchema', () => {
   it('omits a null implementationPackageId on a successful view', () => {
     const result = JsInterfaceViewSchema.parse({
-      interfaceId: OCF_OBJECT,
+      interfaceId: ASSET_INTERFACE,
       implementationPackageId: null,
       viewStatus: { code: 0, message: '', details: [] },
       viewValue: { cap_table_id: 'cap-table-1', object_type: 'STAKEHOLDER', object_id: 's-1', security_ids: [] },
     });
 
     expect(result).toEqual({
-      interfaceId: OCF_OBJECT,
+      interfaceId: ASSET_INTERFACE,
       viewStatus: { code: 0, message: '', details: [] },
       viewValue: { cap_table_id: 'cap-table-1', object_type: 'STAKEHOLDER', object_id: 's-1', security_ids: [] },
     });
@@ -76,7 +76,7 @@ describe('JsInterfaceViewSchema', () => {
     const result = JsInterfaceViewSchema.parse(FAILED_VIEW_WIRE);
 
     expect(result).toEqual({
-      interfaceId: OCF_OBJECT,
+      interfaceId: ASSET_INTERFACE,
       viewStatus: { code: 9, message: 'view failed', details: [] },
     });
     expect(result).not.toHaveProperty('viewValue');
@@ -85,12 +85,12 @@ describe('JsInterfaceViewSchema', () => {
 
   it('parses a failed view whose viewValue and implementationPackageId are omitted', () => {
     const result = JsInterfaceViewSchema.parse({
-      interfaceId: OCF_OBJECT,
+      interfaceId: ASSET_INTERFACE,
       viewStatus: { code: 9, message: 'view failed', details: [] },
     });
 
     expect(result).toEqual({
-      interfaceId: OCF_OBJECT,
+      interfaceId: ASSET_INTERFACE,
       viewStatus: { code: 9, message: 'view failed', details: [] },
     });
   });
@@ -113,7 +113,7 @@ describe('JsInterfaceViewSchema', () => {
             offset: 42,
             nodeId: 0,
             contractId: 'contract-1',
-            templateId: '#OpenCapTable-v35:Fairmint.OpenCapTable.CapTable:CapTable',
+            templateId: '#example-package:Example.Module:Ledger',
             contractKey: null,
             createArgument: { issuer: 'Alice' },
             interfaceViews: [FAILED_VIEW_WIRE],
@@ -121,7 +121,7 @@ describe('JsInterfaceViewSchema', () => {
             signatories: ['Alice'],
             observers: [],
             createdAt: '2026-10-22T00:00:00Z',
-            packageName: 'OpenCapTable-v35',
+            packageName: 'example-package',
           },
           synchronizerId: 'global-domain::fingerprint',
           reassignmentCounter: 0,
@@ -135,7 +135,7 @@ describe('JsInterfaceViewSchema', () => {
     }
     const [view] = entry.JsActiveContract.createdEvent.interfaceViews;
     expect(view).toEqual({
-      interfaceId: OCF_OBJECT,
+      interfaceId: ASSET_INTERFACE,
       viewStatus: { code: 9, message: 'view failed', details: [] },
     });
     expect(view).not.toHaveProperty('viewValue');

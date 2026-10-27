@@ -43,7 +43,7 @@ export type GetUpdateByIdResponse = paths[typeof endpoint]['post']['responses'][
  *   const update = await client.getUpdateById({
  *     updateId: '1220...',
  *     readAs: ['party1'],
- *     interfaceIds: ['#OpenCapTableApi-v01:Fairmint.OpenCapTableApi.OcfObject:OcfObject'],
+ *     interfaceIds: ['#example-package:Example.Module:Asset'],
  *   });
  *   ```;
  */

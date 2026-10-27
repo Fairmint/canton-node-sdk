@@ -3,7 +3,7 @@ import { CantonRuntime, type ClientConfig } from '../../../src/core';
 
 const PARTY = 'validator::fingerprint';
 const OTHER_PARTY = 'other::fingerprint';
-const OCF_OBJECT = '#OpenCapTableApi-v01:Fairmint.OpenCapTableApi.OcfObject:OcfObject';
+const ASSET_INTERFACE = '#example-package:Example.Module:Asset';
 const WALLET_APP_INSTALL = '#splice-wallet:Splice.Wallet.Install:WalletAppInstall';
 const ENDPOINT = 'https://ledger.example.test/v2/updates/update-by-id';
 
@@ -87,7 +87,7 @@ describe('LedgerJsonApiClient getUpdateById', () => {
     const client = createClient();
     const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({});
 
-    await client.getUpdateById({ updateId: '1220abc', readAs: [PARTY], interfaceIds: [OCF_OBJECT] });
+    await client.getUpdateById({ updateId: '1220abc', readAs: [PARTY], interfaceIds: [ASSET_INTERFACE] });
 
     expect(post.mock.calls[0]?.[1]).toEqual({
       updateId: '1220abc',
@@ -101,7 +101,11 @@ describe('LedgerJsonApiClient getUpdateById', () => {
                   {
                     identifierFilter: {
                       InterfaceFilter: {
-                        value: { interfaceId: OCF_OBJECT, includeInterfaceView: true, includeCreatedEventBlob: false },
+                        value: {
+                          interfaceId: ASSET_INTERFACE,
+                          includeInterfaceView: true,
+                          includeCreatedEventBlob: false,
+                        },
                       },
                     },
                   },
@@ -123,7 +127,7 @@ describe('LedgerJsonApiClient getUpdateById', () => {
       updateId: '1220abc',
       readAs: [PARTY],
       templateIds: [WALLET_APP_INSTALL],
-      interfaceIds: [OCF_OBJECT],
+      interfaceIds: [ASSET_INTERFACE],
       includeInterfaceView: false,
       includeCreatedEventBlob: true,
       transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA',
@@ -146,7 +150,11 @@ describe('LedgerJsonApiClient getUpdateById', () => {
                   {
                     identifierFilter: {
                       InterfaceFilter: {
-                        value: { interfaceId: OCF_OBJECT, includeInterfaceView: false, includeCreatedEventBlob: true },
+                        value: {
+                          interfaceId: ASSET_INTERFACE,
+                          includeInterfaceView: false,
+                          includeCreatedEventBlob: true,
+                        },
                       },
                     },
                   },
@@ -165,7 +173,7 @@ describe('LedgerJsonApiClient getUpdateById', () => {
     const buildPartyList = jest.spyOn(client, 'buildPartyList').mockReturnValue(['listed-1', 'listed-2']);
     const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({});
 
-    await client.getUpdateById({ updateId: '1220abc', readAs: [], interfaceIds: [OCF_OBJECT] });
+    await client.getUpdateById({ updateId: '1220abc', readAs: [], interfaceIds: [ASSET_INTERFACE] });
 
     expect(buildPartyList).toHaveBeenCalled();
     const body = post.mock.calls[0]?.[1] as {

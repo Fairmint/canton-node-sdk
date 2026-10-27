@@ -1,7 +1,7 @@
 import { LedgerJsonApiClient, buildUpdateFormat } from '../../../src/clients/ledger-json-api';
 import { CantonRuntime, type ClientConfig } from '../../../src/core';
 
-const OCF_OBJECT = '#OpenCapTableApi-v01:Fairmint.OpenCapTableApi.OcfObject:OcfObject';
+const ASSET_INTERFACE = '#example-package:Example.Module:Asset';
 
 const config: ClientConfig = {
   network: 'localnet',
@@ -25,7 +25,7 @@ describe('LedgerJsonApiClient getUpdateByOffset', () => {
     const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({});
     const updateFormat = buildUpdateFormat({
       parties: ['Alice'],
-      interfaceIds: [OCF_OBJECT],
+      interfaceIds: [ASSET_INTERFACE],
       transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA',
     });
 
@@ -48,7 +48,11 @@ describe('LedgerJsonApiClient getUpdateByOffset', () => {
                 {
                   identifierFilter: {
                     InterfaceFilter: {
-                      value: { interfaceId: OCF_OBJECT, includeInterfaceView: true, includeCreatedEventBlob: false },
+                      value: {
+                        interfaceId: ASSET_INTERFACE,
+                        includeInterfaceView: true,
+                        includeCreatedEventBlob: false,
+                      },
                     },
                   },
                 },
@@ -65,7 +69,7 @@ describe('LedgerJsonApiClient getUpdateByOffset', () => {
               {
                 identifierFilter: {
                   InterfaceFilter: {
-                    value: { interfaceId: OCF_OBJECT, includeInterfaceView: true, includeCreatedEventBlob: false },
+                    value: { interfaceId: ASSET_INTERFACE, includeInterfaceView: true, includeCreatedEventBlob: false },
                   },
                 },
               },

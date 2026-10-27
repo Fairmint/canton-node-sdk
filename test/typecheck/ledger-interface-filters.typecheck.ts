@@ -16,10 +16,10 @@ type GetUpdateByOffsetParams = Parameters<LedgerJsonApiClient['getUpdateByOffset
 type GetUpdateByIdParams = Parameters<LedgerJsonApiClient['getUpdateById']>[0];
 type SubscribeToUpdatesParams = Parameters<LedgerJsonApiClient['subscribeToUpdates']>[0];
 
-const OCF_OBJECT = '#OpenCapTableApi-v01:Fairmint.OpenCapTableApi.OcfObject:OcfObject';
-const REGISTER_CONTRACT = '#OpenCapTableApi-v01:Fairmint.OpenCapTableApi.RegisterContract:RegisterContract';
+const ASSET_INTERFACE = '#example-package:Example.Module:Asset';
+const REGISTRY_INTERFACE = '#example-package:Example.Module:Registry';
 
-const eventFormatParams: EventFormatBuilderParams = { parties: ['Alice'], interfaceIds: [OCF_OBJECT] };
+const eventFormatParams: EventFormatBuilderParams = { parties: ['Alice'], interfaceIds: [ASSET_INTERFACE] };
 const transactionFormatParams: TransactionFormatBuilderParams = {
   ...eventFormatParams,
   transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA',
@@ -44,7 +44,7 @@ const shapeFromEnum: TransactionFormatBuilderParams = {
 
 const subscribeParams: SubscribeToUpdatesParams = {
   parties: ['Alice'],
-  interfaceIds: [OCF_OBJECT, REGISTER_CONTRACT],
+  interfaceIds: [ASSET_INTERFACE, REGISTRY_INTERFACE],
   includeInterfaceView: true,
   includeCreatedEventBlob: false,
   transactionShape: TransactionShape.TRANSACTION_SHAPE_ACS_DELTA,
@@ -59,7 +59,7 @@ const updateByIdParams: GetUpdateByIdParams = {
   updateId: '1220abc',
   readAs: ['Alice'],
   templateIds: ['#splice-wallet:Splice.Wallet.Install:WalletAppInstall'],
-  interfaceIds: [OCF_OBJECT],
+  interfaceIds: [ASSET_INTERFACE],
   includeInterfaceView: true,
   includeCreatedEventBlob: true,
   transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA',

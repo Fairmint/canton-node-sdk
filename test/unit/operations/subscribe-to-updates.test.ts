@@ -20,8 +20,8 @@ const PACKAGE_ID = '12'.repeat(32);
 const CONTRACT_ID = `00${'ab'.repeat(32)}`;
 const PARTY = 'Alice::fingerprint';
 const SYNCHRONIZER_ID = 'global-domain::fingerprint';
-const OCF_OBJECT = '#OpenCapTableApi-v01:Fairmint.OpenCapTableApi.OcfObject:OcfObject';
-const REGISTER_CONTRACT = '#OpenCapTableApi-v01:Fairmint.OpenCapTableApi.RegisterContract:RegisterContract';
+const ASSET_INTERFACE = '#example-package:Example.Module:Asset';
+const REGISTRY_INTERFACE = '#example-package:Example.Module:Registry';
 
 /** Representative `/v2/updates` Transaction frame (AsyncAPI value-wrapped JsTransaction). */
 export function createWireTransactionUpdateMessage(overrides?: {
@@ -608,12 +608,12 @@ describe('SubscribeToUpdates request', (): void => {
     await new SubscribeToUpdates(client as never).connect({
       parties: ['Alice'],
       beginExclusive: 42,
-      interfaceIds: [OCF_OBJECT, REGISTER_CONTRACT],
+      interfaceIds: [ASSET_INTERFACE, REGISTRY_INTERFACE],
       includeCreatedEventBlob: true,
     });
 
     const flags = { includeInterfaceView: true, includeCreatedEventBlob: true };
-    const cumulative = [interfaceFilter(OCF_OBJECT, flags), interfaceFilter(REGISTER_CONTRACT, flags)];
+    const cumulative = [interfaceFilter(ASSET_INTERFACE, flags), interfaceFilter(REGISTRY_INTERFACE, flags)];
     expect(sentRequest()).toEqual({
       beginExclusive: 42,
       verbose: false,
@@ -633,12 +633,14 @@ describe('SubscribeToUpdates request', (): void => {
     await new SubscribeToUpdates(client as never).connect({
       parties: ['Alice'],
       beginExclusive: 42,
-      interfaceIds: [OCF_OBJECT],
+      interfaceIds: [ASSET_INTERFACE],
       includeInterfaceView: false,
       transactionShape: TransactionShape.TRANSACTION_SHAPE_ACS_DELTA,
     });
 
-    const cumulative = [interfaceFilter(OCF_OBJECT, { includeInterfaceView: false, includeCreatedEventBlob: false })];
+    const cumulative = [
+      interfaceFilter(ASSET_INTERFACE, { includeInterfaceView: false, includeCreatedEventBlob: false }),
+    ];
     expect(sentRequest()).toEqual({
       beginExclusive: 42,
       verbose: false,
@@ -657,13 +659,13 @@ describe('SubscribeToUpdates request', (): void => {
       includeExercised: false,
       interfaceViews: [
         {
-          interfaceId: OCF_OBJECT,
+          interfaceId: ASSET_INTERFACE,
           implementationPackageId: PACKAGE_ID,
           viewStatus: { code: 0, message: '', details: [] },
           viewValue: { cap_table_id: 'cap-table-1', object_type: 'STAKEHOLDER', object_id: 's-1', security_ids: [] },
         },
         {
-          interfaceId: REGISTER_CONTRACT,
+          interfaceId: REGISTRY_INTERFACE,
           implementationPackageId: null,
           viewStatus: { code: 9, message: 'view failed', details: [] },
           viewValue: null,
@@ -676,7 +678,7 @@ describe('SubscribeToUpdates request', (): void => {
     await new SubscribeToUpdates(client as never).connect({
       parties: ['Alice'],
       beginExclusive: 42,
-      interfaceIds: [OCF_OBJECT, REGISTER_CONTRACT],
+      interfaceIds: [ASSET_INTERFACE, REGISTRY_INTERFACE],
       onMessage,
     });
 
@@ -687,13 +689,13 @@ describe('SubscribeToUpdates request', (): void => {
     const views = delivered.update.Transaction.value.events[0]?.CreatedEvent?.interfaceViews;
     expect(views).toStrictEqual([
       {
-        interfaceId: OCF_OBJECT,
+        interfaceId: ASSET_INTERFACE,
         implementationPackageId: PACKAGE_ID,
         viewStatus: { code: 0, message: '', details: [] },
         viewValue: { cap_table_id: 'cap-table-1', object_type: 'STAKEHOLDER', object_id: 's-1', security_ids: [] },
       },
       {
-        interfaceId: REGISTER_CONTRACT,
+        interfaceId: REGISTRY_INTERFACE,
         viewStatus: { code: 9, message: 'view failed', details: [] },
       },
     ]);
