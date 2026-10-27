@@ -584,6 +584,33 @@ describe('WebSocketClient', () => {
     expect(socket.resume.mock.invocationCallOrder[0]).toBeLessThan(socket.close.mock.invocationCallOrder[0] ?? 0);
   });
 
+  it('keeps an error listener after close so cancelling a socket that is still connecting cannot throw', async () => {
+    const client = {
+      getApiUrl: () => 'https://ledger.example',
+      authenticate: jest.fn().mockResolvedValue('token'),
+      getTokenIssuedAt: () => null,
+      getTokenExpiryTime: () => null,
+      getLogger: () => undefined,
+    } as unknown as BaseClient;
+
+    const onError = jest.fn();
+    const subscription = await new WebSocketClient(client).connect(
+      '/v2/state/active-contracts',
+      { activeAtOffset: 42 },
+      { onMessage: jest.fn(), onError }
+    );
+    const socket = mockSockets[0];
+    if (!socket) throw new Error('Expected WebSocketClient to construct one socket.');
+
+    subscription.close();
+    // `ws` reports the cancelled handshake as an error after close() returns. Emitting on an EventEmitter with no
+    // 'error' listener throws, as it would in the process.
+    expect(() =>
+      socket.emit('error', new Error('WebSocket was closed before the connection was established'))
+    ).not.toThrow();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('waits indefinitely when no idle timeout is configured', async () => {
     jest.useFakeTimers();
     const client = {

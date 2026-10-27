@@ -27,6 +27,7 @@ class SnapshotQueue {
   private failure: Error | undefined;
   private wake: (() => void) | undefined;
   private ended = false;
+  private closed = false;
 
   public get hasEnded(): boolean {
     return this.ended;
@@ -77,10 +78,12 @@ class SnapshotQueue {
     }
   }
 
-  /** Ends the stream, drops the items no one will take, and closes the socket. */
+  /** Ends the stream, drops the items no one will take, and closes the socket; closing again does nothing. */
   public close(): void {
     this.end();
     this.items.length = 0;
+    if (this.closed) return;
+    this.closed = true;
     this.subscription?.close();
   }
 
@@ -95,31 +98,58 @@ class SnapshotQueue {
  * The iterator of an {@link ActiveContractsStream}. It reports `done` only after the participant's normal close has
  * completed the snapshot. Once the read fails, every later `next()` rejects with the same error, and once `return()`
  * has closed the stream early, every later `next()` rejects too, so that no caller takes part of the snapshot for all
- * of it.
+ * of it. Calls to `next()` are served one at a time in the order they were made, each checking the stored failure again
+ * after it has waited, so a call that was already pending when the stream failed or was closed rejects too. `return()`
+ * closes the socket at once, whether or not a `next()` is waiting for a frame or the connection is still being set up.
  */
 class SnapshotIterator implements AsyncIterator<JsGetActiveContractsResponseItem, void, undefined> {
   private completed = false;
+  private cancelled = false;
   private failure: { readonly error: unknown } | undefined;
+  private queue: SnapshotQueue | undefined;
+  private tail: Promise<unknown> = Promise.resolve();
 
-  constructor(private readonly items: AsyncGenerator<JsGetActiveContractsResponseItem, void, undefined>) {}
+  constructor(private readonly open: () => Promise<SnapshotQueue>) {}
 
   public async next(): Promise<IteratorResult<JsGetActiveContractsResponseItem, void>> {
-    if (this.failure !== undefined) throw this.failure.error;
-    try {
-      const result = await this.items.next();
-      if (result.done === true) this.completed = true;
-      return result;
-    } catch (error) {
-      this.failure ??= { error };
-      throw error;
-    }
+    const result = this.tail.then(async () => this.advance());
+    this.tail = result.catch(() => undefined);
+    return result;
   }
 
   public async return(): Promise<IteratorResult<JsGetActiveContractsResponseItem, void>> {
     if (!this.completed) {
+      this.cancelled = true;
       this.failure ??= { error: new Error('Active-contracts stream was closed before the snapshot completed') };
+      this.queue?.close();
     }
-    return this.items.return(undefined);
+    return Promise.resolve({ done: true, value: undefined });
+  }
+
+  private async advance(): Promise<IteratorResult<JsGetActiveContractsResponseItem, void>> {
+    this.rethrow();
+    if (this.completed) return { done: true, value: undefined };
+    try {
+      this.queue ??= await this.open();
+      // A return() that came while the connection was being set up could not close a socket that did not exist yet.
+      if (this.cancelled) this.queue.close();
+      const item = await this.queue.take();
+      this.rethrow();
+      if (item === undefined) {
+        this.completed = true;
+        this.queue.close();
+        return { done: true, value: undefined };
+      }
+      return { done: false, value: item };
+    } catch (error) {
+      this.failure ??= { error };
+      this.queue?.close();
+      throw this.failure.error;
+    }
+  }
+
+  private rethrow(): void {
+    if (this.failure !== undefined) throw this.failure.error;
   }
 }
 
@@ -154,10 +184,10 @@ export class ActiveContractsStream implements AsyncIterable<JsGetActiveContracts
       );
     }
     this.iterated = true;
-    return new SnapshotIterator(this.read());
+    return new SnapshotIterator(async () => this.open());
   }
 
-  private async *read(): AsyncGenerator<JsGetActiveContractsResponseItem, void, undefined> {
+  private async open(): Promise<SnapshotQueue> {
     const { requestMessage, idleTimeoutMs } = await buildActiveContractsRequest(this.client, this.params);
     this.offset = requestMessage.activeAtOffset;
 
@@ -188,16 +218,7 @@ export class ActiveContractsStream implements AsyncIterable<JsGetActiveContracts
       { idleTimeoutMs }
     );
     queue.attach(subscription);
-
-    try {
-      for (;;) {
-        const item = await queue.take();
-        if (item === undefined) return;
-        yield item;
-      }
-    } finally {
-      queue.close();
-    }
+    return queue;
   }
 }
 

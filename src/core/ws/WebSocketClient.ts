@@ -58,9 +58,7 @@ export interface WebSocketOptions {
    * initiate a new connection with a fresh token. Returns the close code and reason.
    */
   readonly onTokenRefreshNeeded?: () =>
-    | { code?: number; reason?: string }
-    | void
-    | Promise<{ code?: number; reason?: string } | void>;
+    { code?: number; reason?: string } | void | Promise<{ code?: number; reason?: string } | void>;
 }
 
 // calculateTokenRefreshTime is imported from @hardlydifficult/websocket
@@ -381,6 +379,10 @@ export class WebSocketClient {
         }
         // Remove all event listeners to prevent memory leaks
         socket.removeAllListeners();
+        // Closing a socket that is still connecting makes `ws` emit an error ("closed before the connection was
+        // established") on a later tick. With no listener it would be thrown as an uncaught exception, so one that
+        // ignores it stays on until the socket is gone.
+        socket.on('error', () => undefined);
         // A paused socket would not read the peer's close frame, leaving the close handshake to time out.
         if (paused) {
           paused = false;

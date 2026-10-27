@@ -346,6 +346,66 @@ describe('StreamActiveContracts', () => {
     await expect(items.next()).rejects.toThrow('Active-contracts stream was closed before the snapshot completed');
   });
 
+  it('rejects every next() that was already pending when the stream failed, none as done', async () => {
+    const { items, first, connection } = await startStream();
+    const second = items.next();
+    const third = items.next();
+    void connection.handlers.onClose?.(1006, '');
+
+    await expect(first).rejects.toThrow('closed before the snapshot completed [1006]');
+    await expect(second).rejects.toThrow('closed before the snapshot completed [1006]');
+    await expect(third).rejects.toThrow('closed before the snapshot completed [1006]');
+    await expect(items.next()).rejects.toThrow('closed before the snapshot completed [1006]');
+  });
+
+  it('rejects the next() calls that were pending when return() closed the stream, none as done', async () => {
+    const { items, first, connection } = await startStream();
+    const second = items.next();
+    const returned = items.return?.();
+
+    await expect(returned).resolves.toEqual({ done: true, value: undefined });
+    expect(connection.subscription.close).toHaveBeenCalledTimes(1);
+    await expect(first).rejects.toThrow('Active-contracts stream was closed before the snapshot completed');
+    await expect(second).rejects.toThrow('Active-contracts stream was closed before the snapshot completed');
+  });
+
+  it('closes the socket at once when return() comes while next() waits for a frame on a silent stream', async () => {
+    const { items, first, connection } = await startStream({ parties: [PARTY], activeAtOffset: 42, idleTimeoutMs: 0 });
+    expect(connection.subscription.close).not.toHaveBeenCalled();
+
+    // Nothing has arrived and no timer will fire, so only return() can end the wait.
+    await expect(items.return?.()).resolves.toEqual({ done: true, value: undefined });
+    expect(connection.subscription.close).toHaveBeenCalledTimes(1);
+    await expect(first).rejects.toThrow('Active-contracts stream was closed before the snapshot completed');
+  });
+
+  it('closes the socket opened by a connection that was still being set up when return() was called', async () => {
+    let finishConnecting: (() => void) | undefined;
+    mockConnect.mockImplementationOnce(async (_path: string, _request: unknown, handlers: Handlers) => {
+      await new Promise<void>((resolve) => {
+        finishConnecting = resolve;
+      });
+      const subscription: Subscription = {
+        close: jest.fn(),
+        pause: jest.fn(),
+        resume: jest.fn(),
+        isConnected: () => true,
+        getConnectionState: () => 1,
+      };
+      connections.push({ handlers, subscription });
+      return subscription;
+    });
+    const items = stream()[Symbol.asyncIterator]();
+    const first = items.next();
+    await flush();
+    expect(connections).toHaveLength(0);
+
+    await expect(items.return?.()).resolves.toEqual({ done: true, value: undefined });
+    finishConnecting?.();
+    await expect(first).rejects.toThrow('Active-contracts stream was closed before the snapshot completed');
+    expect(lastConnection().subscription.close).toHaveBeenCalled();
+  });
+
   it('keeps reporting done after the snapshot completed, even once return() is called', async () => {
     const { items, first, connection } = await startStream();
     void connection.handlers.onClose?.(1000, 'snapshot complete');
