@@ -1,5 +1,6 @@
 import {
   SubscribeToUpdates,
+  TransactionShape,
   UpdatesWsMessageSchema,
 } from '../../../src/clients/ledger-json-api/operations/v2/updates/subscribe-to-updates';
 import { WsUpdateSchema } from '../../../src/clients/ledger-json-api/schemas/api/updates';
@@ -19,6 +20,8 @@ const PACKAGE_ID = '12'.repeat(32);
 const CONTRACT_ID = `00${'ab'.repeat(32)}`;
 const PARTY = 'Alice::fingerprint';
 const SYNCHRONIZER_ID = 'global-domain::fingerprint';
+const ASSET_INTERFACE = '#example-package:Example.Module:Asset';
+const REGISTRY_INTERFACE = '#example-package:Example.Module:Registry';
 
 /** Representative `/v2/updates` Transaction frame (AsyncAPI value-wrapped JsTransaction). */
 export function createWireTransactionUpdateMessage(overrides?: {
@@ -26,6 +29,8 @@ export function createWireTransactionUpdateMessage(overrides?: {
   includeExercised?: boolean;
   /** When true, mirror Splice wire: optional Scala `Option` fields as explicit JSON null. */
   nullOptionalFields?: boolean;
+  /** Interface views carried by the CreatedEvent (wire shape). */
+  interfaceViews?: Array<Record<string, unknown>>;
 }): Record<string, unknown> {
   const offset = overrides?.offset ?? 6_619_776;
   const nullOptional = overrides?.nullOptionalFields === true;
@@ -39,6 +44,7 @@ export function createWireTransactionUpdateMessage(overrides?: {
         ...(nullOptional ? { contractKey: null } : {}),
         createArgument: { dso: 'DSO', provider: PARTY, amount: '1.0' },
         createdEventBlob: Buffer.from('blob').toString('base64'),
+        ...(overrides?.interfaceViews !== undefined ? { interfaceViews: overrides.interfaceViews } : {}),
         witnessParties: [PARTY],
         signatories: [PARTY],
         observers: [],
@@ -225,9 +231,8 @@ describe('WsUpdateSchema / UpdatesWsMessageSchema wire fixtures', (): void => {
     if (!result.success) {
       return;
     }
-    const { paidTrafficCost } = (
-      result.data as { update: { Transaction: { value: { paidTrafficCost?: unknown } } } }
-    ).update.Transaction.value;
+    const { paidTrafficCost } = (result.data as { update: { Transaction: { value: { paidTrafficCost?: unknown } } } })
+      .update.Transaction.value;
     expect(paidTrafficCost).toBe('0');
   });
 
@@ -495,5 +500,204 @@ describe('SubscribeToUpdates', (): void => {
     expect(created?.representativePackageId).toBe(PACKAGE_ID);
     expect(created?.acsDelta).toBe(true);
     expect(created?.contractKey).toBeUndefined();
+  });
+});
+
+describe('SubscribeToUpdates request', (): void => {
+  const client = {
+    buildPartyList: (): string[] => ['Default'],
+    getLedgerEnd: jest.fn().mockResolvedValue({ offset: 1 }),
+  };
+
+  interface Handlers {
+    onMessage: (message: unknown) => Promise<void>;
+    onClose?: (code: number, reason: string) => void;
+  }
+
+  /** Resolves the connection immediately; frames are delivered before the stream closes. */
+  function mockStream(frames: unknown[] = []): void {
+    mockConnect.mockImplementation(async (_path: string, _request: unknown, handlers: Handlers): Promise<unknown> => {
+      for (const frame of frames) {
+        await handlers.onMessage(frame);
+      }
+      handlers.onClose?.(1000, 'stream complete');
+      return { close: jest.fn(), isConnected: (): boolean => false, getConnectionState: (): number => 3 };
+    });
+  }
+
+  function sentRequest(): unknown {
+    expect(mockConnect).toHaveBeenCalledTimes(1);
+    const [path, request] = mockConnect.mock.calls[0] as [string, unknown];
+    expect(path).toBe('/v2/updates');
+    return request;
+  }
+
+  function interfaceFilter(
+    interfaceId: string,
+    flags: { includeInterfaceView: boolean; includeCreatedEventBlob: boolean }
+  ): Record<string, unknown> {
+    return { identifierFilter: { InterfaceFilter: { value: { interfaceId, ...flags } } } };
+  }
+
+  beforeEach((): void => {
+    mockConnect.mockReset();
+  });
+
+  it('keeps the template-only request unchanged', async (): Promise<void> => {
+    mockStream();
+
+    await new SubscribeToUpdates(client as never).connect({
+      parties: ['Alice'],
+      beginExclusive: 42,
+      templateIds: ['#splice-amulet:Splice.Amulet:Amulet'],
+    });
+
+    const templateFilters = {
+      Alice: {
+        cumulative: [
+          {
+            identifierFilter: {
+              TemplateFilter: {
+                value: { templateId: '#splice-amulet:Splice.Amulet:Amulet', includeCreatedEventBlob: false },
+              },
+            },
+          },
+        ],
+      },
+    };
+    expect(sentRequest()).toEqual({
+      beginExclusive: 42,
+      verbose: false,
+      updateFormat: {
+        includeTransactions: {
+          eventFormat: { verbose: false, filtersByParty: templateFilters },
+          transactionShape: 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
+        },
+        includeReassignments: { filtersByParty: templateFilters, verbose: false },
+      },
+    });
+  });
+
+  it('keeps the unfiltered request unchanged, including topology events on the default party list', async (): Promise<void> => {
+    mockStream();
+
+    await new SubscribeToUpdates(client as never).connect({
+      beginExclusive: 7,
+      endInclusive: 9,
+      includeReassignments: false,
+      includeTopologyEvents: true,
+    });
+
+    expect(sentRequest()).toEqual({
+      beginExclusive: 7,
+      endInclusive: 9,
+      verbose: false,
+      updateFormat: {
+        includeTransactions: {
+          eventFormat: { verbose: false, filtersByParty: { Default: { cumulative: [] } } },
+          transactionShape: 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
+        },
+        includeTopologyEvents: { includeParticipantAuthorizationEvents: { parties: ['Default'] } },
+      },
+    });
+  });
+
+  it('puts interface filters into the transaction and reassignment formats', async (): Promise<void> => {
+    mockStream();
+
+    await new SubscribeToUpdates(client as never).connect({
+      parties: ['Alice'],
+      beginExclusive: 42,
+      interfaceIds: [ASSET_INTERFACE, REGISTRY_INTERFACE],
+      includeCreatedEventBlob: true,
+    });
+
+    const flags = { includeInterfaceView: true, includeCreatedEventBlob: true };
+    const cumulative = [interfaceFilter(ASSET_INTERFACE, flags), interfaceFilter(REGISTRY_INTERFACE, flags)];
+    expect(sentRequest()).toEqual({
+      beginExclusive: 42,
+      verbose: false,
+      updateFormat: {
+        includeTransactions: {
+          eventFormat: { verbose: false, filtersByParty: { Alice: { cumulative } } },
+          transactionShape: 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
+        },
+        includeReassignments: { filtersByParty: { Alice: { cumulative } }, verbose: false },
+      },
+    });
+  });
+
+  it('forwards includeInterfaceView and the transaction shape', async (): Promise<void> => {
+    mockStream();
+
+    await new SubscribeToUpdates(client as never).connect({
+      parties: ['Alice'],
+      beginExclusive: 42,
+      interfaceIds: [ASSET_INTERFACE],
+      includeInterfaceView: false,
+      transactionShape: TransactionShape.TRANSACTION_SHAPE_ACS_DELTA,
+    });
+
+    const cumulative = [
+      interfaceFilter(ASSET_INTERFACE, { includeInterfaceView: false, includeCreatedEventBlob: false }),
+    ];
+    expect(sentRequest()).toEqual({
+      beginExclusive: 42,
+      verbose: false,
+      updateFormat: {
+        includeTransactions: {
+          eventFormat: { verbose: false, filtersByParty: { Alice: { cumulative } } },
+          transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA',
+        },
+        includeReassignments: { filtersByParty: { Alice: { cumulative } }, verbose: false },
+      },
+    });
+  });
+
+  it('delivers successful and failed interface views to onMessage normalized', async (): Promise<void> => {
+    const frame = createWireTransactionUpdateMessage({
+      includeExercised: false,
+      interfaceViews: [
+        {
+          interfaceId: ASSET_INTERFACE,
+          implementationPackageId: PACKAGE_ID,
+          viewStatus: { code: 0, message: '', details: [] },
+          viewValue: { cap_table_id: 'cap-table-1', object_type: 'STAKEHOLDER', object_id: 's-1', security_ids: [] },
+        },
+        {
+          interfaceId: REGISTRY_INTERFACE,
+          implementationPackageId: null,
+          viewStatus: { code: 9, message: 'view failed', details: [] },
+          viewValue: null,
+        },
+      ],
+    });
+    mockStream([frame]);
+    const onMessage = jest.fn().mockResolvedValue(undefined);
+
+    await new SubscribeToUpdates(client as never).connect({
+      parties: ['Alice'],
+      beginExclusive: 42,
+      interfaceIds: [ASSET_INTERFACE, REGISTRY_INTERFACE],
+      onMessage,
+    });
+
+    expect(onMessage).toHaveBeenCalledTimes(1);
+    const delivered = onMessage.mock.calls[0]?.[0] as {
+      update: { Transaction: { value: { events: Array<{ CreatedEvent?: { interfaceViews: unknown[] } }> } } };
+    };
+    const views = delivered.update.Transaction.value.events[0]?.CreatedEvent?.interfaceViews;
+    expect(views).toStrictEqual([
+      {
+        interfaceId: ASSET_INTERFACE,
+        implementationPackageId: PACKAGE_ID,
+        viewStatus: { code: 0, message: '', details: [] },
+        viewValue: { cap_table_id: 'cap-table-1', object_type: 'STAKEHOLDER', object_id: 's-1', security_ids: [] },
+      },
+      {
+        interfaceId: REGISTRY_INTERFACE,
+        viewStatus: { code: 9, message: 'view failed', details: [] },
+      },
+    ]);
   });
 });

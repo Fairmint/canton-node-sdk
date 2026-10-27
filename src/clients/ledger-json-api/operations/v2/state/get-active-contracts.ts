@@ -1,59 +1,30 @@
-import { z } from 'zod';
-import { ApiError } from '../../../../../core/errors';
-import { DEFAULT_HTTP_TIMEOUT_MS } from '../../../../../core/http/HttpClient';
 import { WebSocketClient } from '../../../../../core/ws/WebSocketClient';
 import type { LedgerJsonApiClient } from '../../../LedgerJsonApiClient.generated';
+import { type JsGetActiveContractsResponse, type JsGetActiveContractsResponseItem } from '../../../schemas/api/state';
 import {
-  JsCantonErrorSchema,
-  WsCantonErrorSchema,
-  type JsCantonError,
-  type WsCantonError,
-} from '../../../schemas/api/errors';
-import {
-  JsGetActiveContractsResponseItemSchema,
-  type JsGetActiveContractsResponse,
-  type JsGetActiveContractsResponseItem,
-} from '../../../schemas/api/state';
-import { buildEventFormat } from '../utils/event-format-builder';
-
-const path = '/v2/state/active-contracts' as const;
-
-/**
- * Idle timeout for the active-contracts snapshot stream.
- *
- * The snapshot is a bounded stream that the server closes on its own, so silence this long means the connection is hung
- * rather than slow. Callers that expect longer gaps can raise it or pass `0` to wait indefinitely.
- *
- * Intentionally reuses {@link DEFAULT_HTTP_TIMEOUT_MS} rather than an independent literal: both exist to detect a hung
- * connection at the same "this is clearly stuck" horizon.
- */
-const DEFAULT_IDLE_TIMEOUT_MS = DEFAULT_HTTP_TIMEOUT_MS;
+  ACTIVE_CONTRACTS_PATH,
+  activeContractsCloseError,
+  buildActiveContractsRequest,
+  decodeActiveContractsFrame,
+  type ActiveContractsParams,
+  type ActiveContractsRequestMessage,
+} from './active-contracts-request';
 
 /**
  * We intentionally do not expose the JSON/REST version of this endpoint. The REST variant is too limited, while the
  * WebSocket variant returns the same snapshot and automatically closes the connection once the current state is sent.
  * Wrapping the WebSocket call behind a simple awaitable method gives a better DX and keeps the door open for optional
- * streaming via a callback.
+ * streaming via a callback. To read a snapshot without holding it in memory, use `streamActiveContracts`.
+ *
+ * The promise resolves only on the participant's normal close (1000) after the last item. Any other close, such as a
+ * dropped connection, rejects instead of resolving with part of the snapshot.
+ *
+ * When `activeAtOffset` is omitted the snapshot is read at the ledger end, and the result does not say which offset
+ * that was. A reader that continues with `subscribeToUpdates` passes `activeAtOffset` explicitly and the same value as
+ * `beginExclusive`; reading the ledger end again instead would skip the updates in between.
  */
 
-const ActiveContractsParamsSchema = z.object({
-  /** Optional list of parties to scope the filter. */
-  parties: z.array(z.string()).optional(),
-  /** Optional template filters applied server-side. */
-  templateIds: z.array(z.string()).optional(),
-  /** Optional interface filters applied server-side. */
-  interfaceIds: z.array(z.string()).optional(),
-  /** Include interface views in InterfaceFilter results (default true). */
-  includeInterfaceView: z.boolean().optional(),
-  /** Include created event blobs in template and interface filter results (default false). */
-  includeCreatedEventBlob: z.boolean().optional(),
-  /** Allow caller to omit activeAtOffset; we'll default to ledger end */
-  activeAtOffset: z.number().optional(),
-  /** Fail the snapshot when no message arrives for this many milliseconds. `0` waits indefinitely. */
-  idleTimeoutMs: z.number().min(0).optional(),
-});
-
-export type GetActiveContractsParams = z.infer<typeof ActiveContractsParamsSchema> & {
+export type GetActiveContractsParams = ActiveContractsParams & {
   /** Optional per-item callback to consume results as they arrive. */
   onItem?: (item: JsGetActiveContractsResponseItem) => void | Promise<void>;
 };
@@ -62,56 +33,7 @@ export class GetActiveContracts {
   constructor(private readonly client: LedgerJsonApiClient) {}
 
   public async execute(params: GetActiveContractsParams): Promise<JsGetActiveContractsResponse> {
-    const validated = ActiveContractsParamsSchema.parse(params);
-
-    // Determine activeAtOffset (default to ledger end if not specified)
-    let activeAtOffset: number;
-    if (validated.activeAtOffset !== undefined) {
-      ({ activeAtOffset } = validated);
-    } else {
-      const ledgerEnd = await this.client.getLedgerEnd({});
-      const { offset } = ledgerEnd;
-      if (offset === undefined) {
-        throw new ApiError('Ledger end response did not include an offset');
-      }
-      activeAtOffset = offset;
-    }
-
-    // Build party list - default to client's party list if not provided
-    const partyList =
-      validated.parties && validated.parties.length > 0 ? validated.parties : this.client.buildPartyList();
-
-    // Build event format
-    const eventFormat = buildEventFormat({
-      parties: partyList,
-      ...(validated.templateIds !== undefined && { templateIds: validated.templateIds }),
-      ...(validated.interfaceIds !== undefined && { interfaceIds: validated.interfaceIds }),
-      ...(validated.includeInterfaceView !== undefined && {
-        includeInterfaceView: validated.includeInterfaceView,
-      }),
-      ...(validated.includeCreatedEventBlob !== undefined && {
-        includeCreatedEventBlob: validated.includeCreatedEventBlob,
-      }),
-    });
-
-    // Request message type for the active contracts WebSocket endpoint
-    interface ActiveContractsRequestMessage {
-      verbose: boolean;
-      activeAtOffset: number;
-      eventFormat: ReturnType<typeof buildEventFormat>;
-    }
-
-    const ActiveContractsResponseMessageSchema = z.union([
-      JsGetActiveContractsResponseItemSchema,
-      JsCantonErrorSchema,
-      WsCantonErrorSchema,
-    ]);
-
-    const requestMessage: ActiveContractsRequestMessage = {
-      verbose: false,
-      activeAtOffset,
-      eventFormat,
-    };
+    const { requestMessage, idleTimeoutMs } = await buildActiveContractsRequest(this.client, params);
 
     const wsClient = new WebSocketClient(this.client);
 
@@ -119,43 +41,23 @@ export class GetActiveContracts {
       const results: JsGetActiveContractsResponse = [];
       let settled = false;
 
-      /** Convert a Canton error response to a proper Error object */
-      const toError = (errorResponse: JsCantonError | WsCantonError): Error => {
-        // JsCantonError has 'message' string, WsCantonError has 'cause' string
-        // JsCantonError has code as object, WsCantonError has code as string
-        if ('cause' in errorResponse) {
-          // WsCantonError
-          return new ApiError(`WebSocket error [${errorResponse.code}]: ${errorResponse.cause}`);
-        }
-        // JsCantonError
-        const codeStr = JSON.stringify(errorResponse.code);
-        return new ApiError(`WebSocket error [${codeStr}]: ${errorResponse.message}`);
-      };
-
       void wsClient
         .connect<ActiveContractsRequestMessage, unknown>(
-          path,
+          ACTIVE_CONTRACTS_PATH,
           requestMessage,
           {
             onMessage: async (parsed): Promise<void> => {
-              const decoded = ActiveContractsResponseMessageSchema.safeParse(parsed);
-              if (!decoded.success) {
-                throw new ApiError('Unexpected active-contracts WebSocket message');
-              }
-              const message = decoded.data;
+              const frame = decodeActiveContractsFrame(parsed);
 
-              // Distinguish item vs error union members
-              if ('contractEntry' in message) {
-                results.push(message);
+              if ('item' in frame) {
+                results.push(frame.item);
                 if (typeof params.onItem === 'function') {
-                  await params.onItem(message);
+                  await params.onItem(frame.item);
                 }
               } else if (!settled) {
-                // Treat any non-item as an error message
-                const error = toError(message);
                 settled = true;
-                reject(error);
-                throw error;
+                reject(frame.error);
+                throw frame.error;
               }
             },
             onError: (err) => {
@@ -164,14 +66,19 @@ export class GetActiveContracts {
                 reject(err instanceof Error ? err : new Error(String(err)));
               }
             },
-            onClose: () => {
+            onClose: (code, reason) => {
               if (!settled) {
                 settled = true;
-                resolve(results);
+                const error = activeContractsCloseError(code, reason);
+                if (error === undefined) {
+                  resolve(results);
+                } else {
+                  reject(error);
+                }
               }
             },
           },
-          { idleTimeoutMs: validated.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS }
+          { idleTimeoutMs }
         )
         .catch((err: unknown) => {
           if (!settled) {

@@ -4,7 +4,81 @@
  * Tests for retrieving transactions and updates from the ledger.
  */
 
-import { getClient } from './setup';
+import {
+  TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID,
+  TransactionShape,
+  buildUpdateFormat,
+  type LedgerJsonApiClient,
+} from '../../../../src';
+import { ensureValidatorUserOnboarded, VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS } from '../validator-api/setup';
+import {
+  expectCreatedEventBlob,
+  expectHoldingView,
+  findOrTapHolding,
+  type HoldingCreate,
+  type ViewedCreatedEvent,
+} from './holding';
+import { getClient, resolveValidatorPartyId } from './setup';
+
+const WALLET_APP_INSTALL_TEMPLATE_SUFFIX = 'Splice.Wallet.Install:WalletAppInstall';
+const WALLET_APP_INSTALL_TEMPLATE_ID = `#splice-wallet:${WALLET_APP_INSTALL_TEMPLATE_SUFFIX}`;
+
+interface WalletAppInstallCreate {
+  readonly party: string;
+  readonly contractId: string;
+  readonly offset: number;
+}
+
+/** Finds the validator party's WalletAppInstall in the active contract set and the offset that created it. */
+async function findWalletAppInstallCreate(): Promise<WalletAppInstallCreate> {
+  const party = await resolveValidatorPartyId();
+  const client = getClient();
+  client.setPartyId(party);
+
+  const snapshot = await client.getActiveContracts({ parties: [party], templateIds: [WALLET_APP_INSTALL_TEMPLATE_ID] });
+  for (const item of snapshot) {
+    const entry = item.contractEntry;
+    if ('JsActiveContract' in entry) {
+      const { contractId, offset, templateId } = entry.JsActiveContract.createdEvent;
+      if (templateId.includes(WALLET_APP_INSTALL_TEMPLATE_SUFFIX)) {
+        return { party, contractId, offset };
+      }
+    }
+  }
+  throw new Error(`The validator party ${party} has no active WalletAppInstall`);
+}
+
+type TransactionUpdate = Extract<
+  NonNullable<Awaited<ReturnType<LedgerJsonApiClient['getUpdateById']>>['update']>,
+  { Transaction: unknown }
+>;
+
+function createdContractIds(update: TransactionUpdate): string[] {
+  return update.Transaction.value.events.flatMap((event) =>
+    'CreatedEvent' in event ? [event.CreatedEvent.contractId] : []
+  );
+}
+
+type TransactionEvent =
+  | { readonly CreatedEvent: ViewedCreatedEvent }
+  | { readonly ArchivedEvent: unknown }
+  | { readonly ExercisedEvent: unknown };
+
+function holdingCreatedEvent(events: readonly TransactionEvent[], contractId: string): ViewedCreatedEvent {
+  const created = events.flatMap((event) =>
+    'CreatedEvent' in event && event.CreatedEvent.contractId === contractId ? [event.CreatedEvent] : []
+  );
+  expect(created).toHaveLength(1);
+  const [event] = created;
+  if (!event) {
+    throw new Error(`No CreatedEvent for Holding ${contractId}`);
+  }
+  return event;
+}
+
+type SubscribeToUpdatesMessage = Parameters<
+  NonNullable<Parameters<LedgerJsonApiClient['subscribeToUpdates']>[0]['onMessage']>
+>[0];
 
 describe('LedgerJsonApiClient / Updates', () => {
   let partyId: string;
@@ -43,5 +117,118 @@ describe('LedgerJsonApiClient / Updates', () => {
     expect(ledgerEnd).toBeDefined();
     expect(ledgerEnd.offset).toBeDefined();
     expect(typeof ledgerEnd.offset).toBe('number');
+  });
+
+  describe('template and interface filters', () => {
+    let created: WalletAppInstallCreate;
+    let updateId: string;
+
+    beforeAll(async () => {
+      created = await findWalletAppInstallCreate();
+    });
+
+    test('getUpdateByOffset with a built update format returns the filtered CreatedEvent', async () => {
+      const client = getClient();
+
+      const response = await client.getUpdateByOffset({
+        offset: created.offset,
+        updateFormat: buildUpdateFormat({
+          parties: [created.party],
+          templateIds: [WALLET_APP_INSTALL_TEMPLATE_ID],
+          transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA',
+        }),
+      });
+
+      const { update } = response;
+      if (update === undefined || !('Transaction' in update)) {
+        throw new Error(`Offset ${created.offset} did not resolve to a transaction`);
+      }
+      expect(createdContractIds(update)).toContain(created.contractId);
+      ({ updateId } = update.Transaction.value);
+    });
+
+    test('getUpdateById with the same template filter returns the same update', async () => {
+      expect(updateId).toBeDefined();
+      const client = getClient();
+
+      const response = await client.getUpdateById({
+        updateId,
+        readAs: [created.party],
+        templateIds: [WALLET_APP_INSTALL_TEMPLATE_ID],
+        transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA',
+      });
+
+      const { update } = response;
+      if (update === undefined || !('Transaction' in update)) {
+        throw new Error(`Update ${updateId} did not resolve to a transaction`);
+      }
+      expect(update.Transaction.value.updateId).toBe(updateId);
+      expect(createdContractIds(update)).toContain(created.contractId);
+    });
+  });
+
+  describe('interface views on update reads', () => {
+    let holding: HoldingCreate;
+
+    beforeAll(async () => {
+      await ensureValidatorUserOnboarded();
+      holding = await findOrTapHolding();
+    }, VALIDATOR_ONBOARDING_HOOK_TIMEOUT_MS);
+
+    async function holdingTransactionEvents(includeInterfaceView: boolean): Promise<readonly TransactionEvent[]> {
+      const response = await getClient().getUpdateByOffset({
+        offset: holding.offset,
+        updateFormat: buildUpdateFormat({
+          parties: [holding.party],
+          interfaceIds: [TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID],
+          includeInterfaceView,
+          includeCreatedEventBlob: true,
+          transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA',
+        }),
+      });
+      const { update } = response;
+      if (update === undefined || !('Transaction' in update)) {
+        throw new Error(`Offset ${holding.offset} did not resolve to a transaction`);
+      }
+      return update.Transaction.value.events;
+    }
+
+    test('getUpdateByOffset with a Holding interface filter returns the view and the created-event blob', async () => {
+      const event = holdingCreatedEvent(await holdingTransactionEvents(true), holding.contractId);
+
+      expectHoldingView(event, holding.party);
+      expectCreatedEventBlob(event);
+    });
+
+    test('subscribeToUpdates with a Holding interface filter delivers the view and the created-event blob', async () => {
+      const messages: SubscribeToUpdatesMessage[] = [];
+
+      await getClient().subscribeToUpdates({
+        parties: [holding.party],
+        beginExclusive: holding.offset - 1,
+        endInclusive: holding.offset,
+        interfaceIds: [TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID],
+        includeInterfaceView: true,
+        includeCreatedEventBlob: true,
+        transactionShape: TransactionShape.TRANSACTION_SHAPE_ACS_DELTA,
+        onMessage: (message) => {
+          messages.push(message);
+        },
+      });
+
+      const events = messages.flatMap((message) =>
+        'update' in message && 'Transaction' in message.update ? message.update.Transaction.value.events : []
+      );
+      const event = holdingCreatedEvent(events, holding.contractId);
+      expectHoldingView(event, holding.party);
+      expectCreatedEventBlob(event);
+    });
+
+    test('an interface filter without views returns the Holding with no interface view', async () => {
+      const event = holdingCreatedEvent(await holdingTransactionEvents(false), holding.contractId);
+
+      expect(event.interfaceViews).toEqual([]);
+      expectCreatedEventBlob(event);
+    });
   });
 });

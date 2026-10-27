@@ -1,6 +1,6 @@
 /** Shared setup for LedgerJsonApiClient integration tests. */
 
-import { CantonRuntime, LedgerJsonApiClient } from '../../../../src';
+import { CantonRuntime, LedgerJsonApiClient, LedgerPartyIdSchema, ValidatorApiClient } from '../../../../src';
 import { EnvLoader } from '../../../../src/core/config/EnvLoader';
 import { ConfigurationError } from '../../../../src/core/errors';
 import { buildIntegrationTestClientConfig } from '@fairmint/canton-dev-tools/testing';
@@ -18,6 +18,13 @@ export function getClient(): LedgerJsonApiClient {
     client = new LedgerJsonApiClient(new CantonRuntime(config));
   }
   return client;
+}
+
+/** The app-provider validator's party, which holds the validator's WalletAppInstall. */
+export async function resolveValidatorPartyId(): Promise<string> {
+  const runtime = new CantonRuntime({ network: 'localnet', provider: 'app-provider' });
+  const validatorInfo = await new ValidatorApiClient(runtime).getValidatorUserInfo();
+  return LedgerPartyIdSchema.parse(validatorInfo.party_id);
 }
 
 /** Resolve the validator wallet-install contract from local configuration or the live active-contract snapshot. */

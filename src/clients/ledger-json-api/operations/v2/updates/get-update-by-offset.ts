@@ -9,6 +9,23 @@ export type GetUpdateByOffsetParams = z.infer<typeof GetUpdateByOffsetParamsSche
 export type GetUpdateByOffsetResponse =
   paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
 
+/**
+ * Fetches the update at one offset, formatted by the caller's `updateFormat`.
+ *
+ * Build `updateFormat` with `buildUpdateFormat` for template or interface filters, with or without created event blobs
+ * and interface views, and for either transaction shape.
+ *
+ * @example
+ *   ```typescript
+ *   const update = await client.getUpdateByOffset({
+ *     offset: 1000,
+ *     updateFormat: buildUpdateFormat({
+ *       parties: ['party1'],
+ *       interfaceIds: ['#example-package:Example.Module:Asset'],
+ *     }),
+ *   });
+ *   ```;
+ */
 export const GetUpdateByOffset = createApiOperation<GetUpdateByOffsetParams, GetUpdateByOffsetResponse>({
   paramsSchema: GetUpdateByOffsetParamsSchema,
   method: 'POST',

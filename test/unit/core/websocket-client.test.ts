@@ -10,6 +10,8 @@ jest.mock('ws', () => {
     public static readonly OPEN = 1;
     public readonly close = jest.fn();
     public readonly send = jest.fn();
+    public readonly pause = jest.fn();
+    public readonly resume = jest.fn();
     public readyState = MockWebSocket.OPEN;
 
     public constructor(..._args: unknown[]) {
@@ -28,6 +30,8 @@ jest.mock('ws', () => {
 type MockSocket = EventEmitter & {
   readonly close: jest.Mock;
   readonly send: jest.Mock;
+  readonly pause: jest.Mock;
+  readonly resume: jest.Mock;
   readyState: number;
 };
 
@@ -483,6 +487,101 @@ describe('WebSocketClient', () => {
 
     expect(onError).not.toHaveBeenCalled();
     expect(socket.close).not.toHaveBeenCalled();
+  });
+
+  it('stops reading and the idle timeout while paused, and restarts both on resume', async () => {
+    jest.useFakeTimers();
+    const client = {
+      getApiUrl: () => 'https://ledger.example',
+      authenticate: jest.fn().mockResolvedValue('token'),
+      getTokenIssuedAt: () => null,
+      getTokenExpiryTime: () => null,
+      getLogger: () => undefined,
+    } as unknown as BaseClient;
+    const onMessage = jest.fn();
+    const onError = jest.fn();
+
+    const subscription = await new WebSocketClient(client).connect(
+      '/v2/state/active-contracts',
+      { activeAtOffset: 42 },
+      { onMessage, onError },
+      { idleTimeoutMs: 30_000 }
+    );
+    const socket = mockSockets[0];
+    if (!socket) throw new Error('Expected WebSocketClient to construct one socket.');
+
+    socket.emit('open');
+    subscription.pause?.();
+    subscription.pause?.();
+    expect(socket.pause).toHaveBeenCalledTimes(1);
+
+    // A frame the socket had already read is still delivered, but does not restart the watchdog.
+    socket.emit('message', Buffer.from(JSON.stringify({ contractEntry: { JsActiveContract: {} } })));
+    await jest.advanceTimersByTimeAsync(60 * 60 * 1000);
+    expect(onMessage).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+    expect(socket.close).not.toHaveBeenCalled();
+
+    subscription.resume?.();
+    subscription.resume?.();
+    expect(socket.resume).toHaveBeenCalledTimes(1);
+    await jest.advanceTimersByTimeAsync(29_000);
+    expect(socket.close).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(2_000);
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'WebSocket idle timeout: no message received for 30000ms' })
+    );
+    expect(socket.close).toHaveBeenCalledWith(4008, 'WebSocket idle timeout');
+  });
+
+  it('does not pause a socket that is not open', async () => {
+    const client = {
+      getApiUrl: () => 'https://ledger.example',
+      authenticate: jest.fn().mockResolvedValue('token'),
+      getTokenIssuedAt: () => null,
+      getTokenExpiryTime: () => null,
+      getLogger: () => undefined,
+    } as unknown as BaseClient;
+
+    const subscription = await new WebSocketClient(client).connect(
+      '/v2/state/active-contracts',
+      { activeAtOffset: 42 },
+      { onMessage: jest.fn() }
+    );
+    const socket = mockSockets[0];
+    if (!socket) throw new Error('Expected WebSocketClient to construct one socket.');
+
+    socket.readyState = 0;
+    subscription.pause?.();
+    subscription.resume?.();
+
+    expect(socket.pause).not.toHaveBeenCalled();
+    expect(socket.resume).not.toHaveBeenCalled();
+  });
+
+  it('resumes a paused socket before closing it so the close handshake can complete', async () => {
+    const client = {
+      getApiUrl: () => 'https://ledger.example',
+      authenticate: jest.fn().mockResolvedValue('token'),
+      getTokenIssuedAt: () => null,
+      getTokenExpiryTime: () => null,
+      getLogger: () => undefined,
+    } as unknown as BaseClient;
+
+    const subscription = await new WebSocketClient(client).connect(
+      '/v2/state/active-contracts',
+      { activeAtOffset: 42 },
+      { onMessage: jest.fn() }
+    );
+    const socket = mockSockets[0];
+    if (!socket) throw new Error('Expected WebSocketClient to construct one socket.');
+
+    subscription.pause?.();
+    subscription.close();
+
+    expect(socket.resume).toHaveBeenCalledTimes(1);
+    expect(socket.close).toHaveBeenCalledTimes(1);
+    expect(socket.resume.mock.invocationCallOrder[0]).toBeLessThan(socket.close.mock.invocationCallOrder[0] ?? 0);
   });
 
   it('waits indefinitely when no idle timeout is configured', async () => {

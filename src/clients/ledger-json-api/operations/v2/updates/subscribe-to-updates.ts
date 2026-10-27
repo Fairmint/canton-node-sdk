@@ -13,7 +13,7 @@ import {
   type WsCantonError,
 } from '../../../schemas/api/errors';
 import { WsUpdateSchema } from '../../../schemas/api/updates';
-import { buildEventFormat } from '../utils/event-format-builder';
+import { buildUpdateFormat } from '../utils/event-format-builder';
 
 const path = '/v2/updates' as const;
 
@@ -49,7 +49,11 @@ const SubscribeToUpdatesParamsSchema = z.object({
   parties: z.array(z.string()).optional(),
   /** Optional template filters applied server-side. */
   templateIds: z.array(z.string()).optional(),
-  /** Include created event blob in TemplateFilter results (default false). */
+  /** Optional interface filters applied server-side. */
+  interfaceIds: z.array(z.string()).optional(),
+  /** Include interface views in InterfaceFilter results (default true). */
+  includeInterfaceView: z.boolean().optional(),
+  /** Include created event blobs in template and interface filter results (default false). */
   includeCreatedEventBlob: z.boolean().optional(),
   /** Beginning of the requested ledger section. Defaults to ledger end if not provided. */
   beginExclusive: z.number().optional(),
@@ -162,53 +166,19 @@ export class SubscribeToUpdates {
     const partyList =
       validated.parties && validated.parties.length > 0 ? validated.parties : this.client.buildPartyList();
 
-    // Build event format
-    const eventFormat = buildEventFormat({
+    // Build update format: transactions, plus reassignments (default) and topology events (opt-in)
+    const updateFormat = buildUpdateFormat({
       parties: partyList,
       ...(validated.templateIds !== undefined && { templateIds: validated.templateIds }),
+      ...(validated.interfaceIds !== undefined && { interfaceIds: validated.interfaceIds }),
+      ...(validated.includeInterfaceView !== undefined && { includeInterfaceView: validated.includeInterfaceView }),
       ...(validated.includeCreatedEventBlob !== undefined && {
         includeCreatedEventBlob: validated.includeCreatedEventBlob,
       }),
+      ...(validated.transactionShape !== undefined && { transactionShape: validated.transactionShape }),
+      ...(validated.includeReassignments !== undefined && { includeReassignments: validated.includeReassignments }),
+      ...(validated.includeTopologyEvents !== undefined && { includeTopologyEvents: validated.includeTopologyEvents }),
     });
-
-    // Build update format with optional features
-    const updateFormat: {
-      includeTransactions?: {
-        eventFormat: ReturnType<typeof buildEventFormat>;
-        transactionShape: TransactionShape;
-      };
-      includeReassignments?: {
-        filtersByParty: ReturnType<typeof buildEventFormat>['filtersByParty'];
-        verbose: boolean;
-      };
-      includeTopologyEvents?: {
-        includeParticipantAuthorizationEvents: {
-          parties: string[];
-        };
-      };
-    } = {
-      includeTransactions: {
-        eventFormat,
-        transactionShape: validated.transactionShape ?? TransactionShape.TRANSACTION_SHAPE_LEDGER_EFFECTS,
-      },
-    };
-
-    // Add reassignments if enabled (default true)
-    if (validated.includeReassignments !== false) {
-      updateFormat.includeReassignments = {
-        filtersByParty: eventFormat.filtersByParty,
-        verbose: false,
-      };
-    }
-
-    // Add topology events if enabled (default false)
-    if (validated.includeTopologyEvents === true) {
-      updateFormat.includeTopologyEvents = {
-        includeParticipantAuthorizationEvents: {
-          parties: partyList,
-        },
-      };
-    }
 
     // Build request message
     const requestMessage = {

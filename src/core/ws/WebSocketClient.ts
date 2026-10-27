@@ -12,6 +12,14 @@ export interface WebSocketSubscription {
   readonly isConnected: () => boolean;
   /** Returns the raw WebSocket readyState value. */
   readonly getConnectionState: () => number;
+  /**
+   * Stops reading inbound frames, and suspends the idle timeout, until `resume` is called. Frames the socket has
+   * already read may still be delivered. A consumer that falls behind uses it to push back on the server instead of
+   * buffering.
+   */
+  readonly pause?: () => void;
+  /** Resumes reading inbound frames after `pause` and restarts the idle timeout. */
+  readonly resume?: () => void;
 }
 
 /** Callbacks for WebSocket lifecycle events. Only `onMessage` is required. */
@@ -191,6 +199,8 @@ export class WebSocketClient {
     // Idle watchdog for a peer that completes the handshake and then stops sending. Without it, a caller awaiting a
     // terminal message (such as the active-contracts snapshot) waits forever.
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    // While the caller has paused reading, the silence is ours rather than the peer's, so the watchdog stays off.
+    let paused = false;
     const clearIdleTimer = (): void => {
       if (idleTimer !== null) {
         clearTimeout(idleTimer);
@@ -198,7 +208,7 @@ export class WebSocketClient {
       }
     };
     const restartIdleTimer = (): void => {
-      if (idleTimeoutMs === 0) return;
+      if (idleTimeoutMs === 0 || paused) return;
       clearIdleTimer();
       idleTimer = setTimeout(() => {
         idleTimer = null;
@@ -371,10 +381,29 @@ export class WebSocketClient {
         }
         // Remove all event listeners to prevent memory leaks
         socket.removeAllListeners();
+        // A paused socket would not read the peer's close frame, leaving the close handshake to time out.
+        if (paused) {
+          paused = false;
+          socket.resume();
+        }
         socket.close();
       },
       isConnected: () => socket.readyState === WebSocket.OPEN,
       getConnectionState: () => socket.readyState,
+      pause: () => {
+        if (paused || socket.readyState !== WebSocket.OPEN) return;
+        paused = true;
+        clearIdleTimer();
+        socket.pause();
+      },
+      resume: () => {
+        if (!paused) return;
+        paused = false;
+        socket.resume();
+        if (socket.readyState === WebSocket.OPEN) {
+          restartIdleTimer();
+        }
+      },
     };
   }
 
