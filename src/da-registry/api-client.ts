@@ -112,6 +112,8 @@ export function createDaRegistryApi(
   async function post(url: string, body: unknown): Promise<unknown> {
     try {
       const { data } = await http.post<unknown>(url, body);
+      // A successful body must be a record; anything else would fail later with a raw TypeError.
+      if (!isRecord(data)) throw new ValidationError(`DA API POST ${url} returned a malformed body`);
       return data;
     } catch (error) {
       throw describe(error, `POST ${url}`);
@@ -121,6 +123,8 @@ export function createDaRegistryApi(
   async function postOrNull(url: string, body: unknown): Promise<unknown> {
     try {
       const { data } = await http.post<unknown>(url, body);
+      // A successful body must be a record; a `null` body would masquerade as the 404 sentinel below.
+      if (!isRecord(data)) throw new ValidationError(`DA API POST ${url} returned a malformed body`);
       return data;
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 404) return null;

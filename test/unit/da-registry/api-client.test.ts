@@ -53,6 +53,14 @@ describe('createDaRegistryApi', () => {
     await expect(api.registryInfo('ota::1220bb')).rejects.toBeInstanceOf(ValidationError);
   });
 
+  it('rejects a successful POST with a non-record body instead of treating it as not indexed', async () => {
+    const api = createDaRegistryApi(BASE, mockHttp(jest.fn(), jest.fn().mockResolvedValue({ data: null })));
+    await expect(api.mintOfferFactory('holder::1220cc', { admin: 'ota::1220bb', id: 'CNTN' })).rejects.toBeInstanceOf(
+      ValidationError
+    );
+    await expect(api.transferFactory('ota::1220bb', TRANSFER)).rejects.toBeInstanceOf(ValidationError);
+  });
+
   it('returns registry info and instrument metadata, null on 404', async () => {
     const info = { supportedApis: { 'splice-api-token-transfer-instruction-v2': {} } };
     const get = jest
