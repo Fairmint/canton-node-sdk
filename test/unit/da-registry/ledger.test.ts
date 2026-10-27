@@ -35,6 +35,7 @@ describe('createDaRegistryLedger', () => {
     expect(client.getActiveContracts).toHaveBeenCalledWith({
       parties: ['ota::1220bb'],
       templateIds: ['#utility-registry-v0:Utility.Registry.V0.Rule.Transfer:TransferRule'],
+      includeCreatedEventBlob: false,
     });
   });
 

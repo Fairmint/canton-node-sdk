@@ -38,7 +38,7 @@ export interface DaRegistryLedger {
 
 export function createDaRegistryLedger(
   client: LedgerJsonApiClient,
-  options: { synchronizerId: string; packageIdSelectionPreference: string[] }
+  options: { synchronizerId: string; packageIdSelectionPreference: string[]; includeCreatedEventBlob?: boolean }
 ): DaRegistryLedger {
   return {
     activeContracts: async (parties, templateIds) =>
@@ -46,6 +46,8 @@ export function createDaRegistryLedger(
         parties,
         templateIds,
         synchronizerId: options.synchronizerId,
+        // Blobs are only needed for disclosure; DA's API supplies those, so the default read skips them.
+        includeCreatedEventBlob: options.includeCreatedEventBlob ?? false,
       }),
     submit: async (submission) =>
       submitLedgerCommands(client, submission, {
