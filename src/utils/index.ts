@@ -3,6 +3,7 @@ export * from './canton-response-utils';
 export * from './contracts';
 export * from './external-signing';
 export * from './health';
+export * from './ledger';
 export * from './mining';
 export * from './parsers';
 export * from './party';

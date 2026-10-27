@@ -8,4 +8,5 @@ export {
 } from './Canton';
 export * from './clients';
 export * from './core';
+export * from './da-registry';
 export * from './utils';
