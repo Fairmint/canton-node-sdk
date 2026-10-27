@@ -10,7 +10,7 @@ export interface SubmitLedgerCommandsOptions {
    * Package ids the participant prefers when resolving package-name-form template ids. Pinning the packages both
    * confirming nodes vet keeps a multi-node workflow (for example a registrar and its operator) on the same code.
    */
-  packageIdSelectionPreference?: string[];
+  packageIdSelectionPreference?: readonly string[];
 }
 
 /**
@@ -32,7 +32,7 @@ export async function submitLedgerCommands(
     actAs: submission.actAs,
     synchronizerId: options.synchronizerId,
     ...(options.packageIdSelectionPreference && options.packageIdSelectionPreference.length > 0
-      ? { packageIdSelectionPreference: options.packageIdSelectionPreference }
+      ? { packageIdSelectionPreference: [...options.packageIdSelectionPreference] }
       : {}),
     ...(submission.disclosedContracts && submission.disclosedContracts.length > 0
       ? { disclosedContracts: submission.disclosedContracts }

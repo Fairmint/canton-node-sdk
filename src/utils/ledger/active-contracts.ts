@@ -1,4 +1,5 @@
 import { type LedgerJsonApiClient } from '../../clients';
+import { ValidationError } from '../../core/errors';
 import { isJsActiveContractItem } from '../contracts';
 import { type ActiveContract } from './types';
 
@@ -29,6 +30,11 @@ export async function getActiveContractsByTemplate(
   client: LedgerJsonApiClient,
   params: GetActiveContractsByTemplateParams
 ): Promise<ActiveContract[]> {
+  // The underlying operation replaces an empty party list with the client's default parties; never let an explicit
+  // but empty selection fall back to reading as the validator party.
+  if (params.parties.length === 0) {
+    throw new ValidationError('getActiveContractsByTemplate requires at least one party');
+  }
   const items = await client.getActiveContracts({
     parties: params.parties,
     templateIds: params.templateIds,

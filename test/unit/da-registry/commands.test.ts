@@ -124,11 +124,26 @@ describe('provider and registrar onboarding commands', () => {
 describe('instrument configuration commands', () => {
   const payload = {
     instrumentId: 'CNTN',
-    additionalIdentifiers: [] as [],
+    additionalIdentifiers: [],
     issuerRequirements: [{ issuer: OTA, requiredClaims: [{ _1: 'canRedeem', _2: 'CNTN' }] }],
     holderRequirements: [{ issuer: OTA, requiredClaims: [{ _1: 'canTransfer', _2: 'CNTN' }] }],
     useBlockList: false,
   };
+
+  it('accepts non-empty additional identifiers', () => {
+    const withIdentifiers = {
+      ...payload,
+      additionalIdentifiers: [{ id: 'CNTN', scheme: 'RegistrarInternalScheme' }],
+    };
+    expect(createInstrumentConfiguration('svc-1', withIdentifiers)).toEqual({
+      ExerciseCommand: {
+        templateId: DA_REGISTRY_TEMPLATES.registrarService,
+        contractId: 'svc-1',
+        choice: 'RegistrarService_CreateInstrumentConfiguration',
+        choiceArgument: withIdentifiers,
+      },
+    });
+  });
 
   it('creates, replaces and archives instrument configurations', () => {
     expect(createInstrumentConfiguration('svc-1', payload)).toEqual({

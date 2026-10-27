@@ -38,7 +38,11 @@ export interface DaRegistryLedger {
 
 export function createDaRegistryLedger(
   client: LedgerJsonApiClient,
-  options: { synchronizerId: string; packageIdSelectionPreference: string[]; includeCreatedEventBlob?: boolean }
+  options: {
+    synchronizerId: string;
+    packageIdSelectionPreference: readonly string[];
+    includeCreatedEventBlob?: boolean;
+  }
 ): DaRegistryLedger {
   return {
     activeContracts: async (parties, templateIds) =>

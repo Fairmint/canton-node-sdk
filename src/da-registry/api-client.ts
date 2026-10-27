@@ -9,7 +9,9 @@
  */
 import axios, { type AxiosInstance } from 'axios';
 import { ApiError, ValidationError } from '../core/errors';
+import { isRecord } from '../core/utils';
 import { type DisclosedContract } from '../utils/ledger';
+import { type TokenStandardV1Transfer } from '../utils/token-standard';
 
 export interface DaRegistryChoiceContext {
   choiceContextData: { values: Record<string, unknown> };
@@ -45,7 +47,7 @@ export interface DaRegistryApi {
     instrumentId: DaRegistryInstrumentId
   ) => Promise<DaRegistryFactoryWithContext | null>;
   /** The factory a sender exercises `TransferFactory_Transfer` on, and its context. Read only. */
-  transferFactory: (admin: string, transfer: Record<string, unknown>) => Promise<DaRegistryTransferFactoryWithContext>;
+  transferFactory: (admin: string, transfer: TokenStandardV1Transfer) => Promise<DaRegistryTransferFactoryWithContext>;
 }
 
 const TIMEOUT_MS = 30_000;
@@ -68,9 +70,16 @@ export function parseDaRegistryDisclosedContract(raw: unknown): DisclosedContrac
 }
 
 export function parseDaRegistryChoiceContext(raw: unknown): DaRegistryChoiceContext {
-  const c = (raw ?? {}) as { choiceContextData?: { values?: Record<string, unknown> }; disclosedContracts?: unknown[] };
+  const c = (raw ?? {}) as { choiceContextData?: { values?: unknown }; disclosedContracts?: unknown };
+  const values = c.choiceContextData?.values;
+  if (values !== undefined && !isRecord(values)) {
+    throw new ValidationError('DA API returned a choice context whose values are not a record');
+  }
+  if (c.disclosedContracts !== undefined && !Array.isArray(c.disclosedContracts)) {
+    throw new ValidationError('DA API returned disclosed contracts that are not a list');
+  }
   return {
-    choiceContextData: { values: c.choiceContextData?.values ?? {} },
+    choiceContextData: { values: values ?? {} },
     disclosedContracts: (c.disclosedContracts ?? []).map(parseDaRegistryDisclosedContract),
   };
 }
@@ -135,7 +144,8 @@ export function createDaRegistryApi(
       const raw = await post(`${tokenStandard(admin)}/registry/transfer-instruction/v1/transfer-factory`, {
         choiceArguments: {
           expectedAdmin: admin,
-          transfer,
+          // The V1 choice argument requires `meta`; the public transfer input lets callers omit it.
+          transfer: { ...transfer, meta: transfer.meta ?? { values: {} } },
           extraArgs: { context: { values: {} }, meta: { values: {} } },
         },
         excludeDebugFields: true,

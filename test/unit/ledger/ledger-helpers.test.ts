@@ -118,6 +118,14 @@ describe('getActiveContractsByTemplate', () => {
     });
     expect(client.getActiveContracts).toHaveBeenCalledWith(expect.objectContaining({ includeCreatedEventBlob: true }));
   });
+
+  it('rejects an empty party list instead of falling back to the client default party', async () => {
+    const client = mockClient();
+    await expect(getActiveContractsByTemplate(client, { parties: [], templateIds: ['#pkg:M:E'] })).rejects.toThrow(
+      /at least one party/
+    );
+    expect(client.getActiveContracts).not.toHaveBeenCalled();
+  });
 });
 
 describe('submitLedgerCommands', () => {
@@ -170,6 +178,18 @@ describe('submitLedgerCommands', () => {
     expect(params['actAs']).toEqual(['ota::1220aa']);
     expect(params['packageIdSelectionPreference']).toEqual(['pkg-1']);
     expect(String(params['commandId'])).toMatch(/^da-registry-devnet-supply-[0-9a-f-]{36}$/);
+  });
+
+  it('accepts a readonly package-id preference and copies it', async () => {
+    const submit = jest.fn().mockResolvedValue({ transaction: { updateId: 'u', events: [] } });
+    const client = mockClient({ submitAndWaitForTransaction: submit });
+    const pins = ['pkg-1', 'pkg-2'] as const;
+
+    await submitLedgerCommands(client, submission, { synchronizerId: SYNC, packageIdSelectionPreference: pins });
+
+    const params = submit.mock.calls[0]?.[0] as { packageIdSelectionPreference?: string[] };
+    expect(params.packageIdSelectionPreference).toEqual(['pkg-1', 'pkg-2']);
+    expect(params.packageIdSelectionPreference).not.toBe(pins);
   });
 
   it('omits disclosed contracts and package preference when absent, and unique-ifies repeated submissions', async () => {

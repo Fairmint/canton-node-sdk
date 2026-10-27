@@ -100,6 +100,16 @@ describe('createDaRegistryApi', () => {
     await expect(api.mintOfferFactory('holder::1220cc', { admin: 'ota::1220bb', id: 'CNTN' })).resolves.toBeNull();
   });
 
+  const TRANSFER = {
+    sender: 'ota::1220bb',
+    receiver: 'alice::1220cc',
+    amount: '10',
+    instrumentId: { admin: 'ota::1220bb', id: 'CNTN' },
+    requestedAt: '2026-10-26T00:00:00Z',
+    executeBefore: '2026-10-26T01:00:00Z',
+    inputHoldingCids: ['holding-1'],
+  };
+
   it('fetches the transfer factory, validating transferKind', async () => {
     const post = jest.fn().mockResolvedValue({
       data: {
@@ -109,7 +119,7 @@ describe('createDaRegistryApi', () => {
       },
     });
     const api = createDaRegistryApi(BASE, mockHttp(jest.fn(), post));
-    const transfer = { sender: 'ota::1220bb', receiver: 'alice::1220cc', amount: '10' };
+    const transfer = { ...TRANSFER, meta: { values: { reason: 'seed delivery' } } };
 
     const factory = await api.transferFactory('ota::1220bb', transfer);
 
@@ -129,10 +139,22 @@ describe('createDaRegistryApi', () => {
     expect(factory.choiceContext.disclosedContracts).toHaveLength(1);
   });
 
+  it('defaults missing transfer metadata to an empty map, as the V1 choice argument requires', async () => {
+    const post = jest.fn().mockResolvedValue({
+      data: { factoryId: 'f', transferKind: 'self', choiceContext: {} },
+    });
+    const api = createDaRegistryApi(BASE, mockHttp(jest.fn(), post));
+
+    await api.transferFactory('ota::1220bb', TRANSFER);
+
+    const body = post.mock.calls[0]?.[1] as { choiceArguments: { transfer: { meta?: unknown } } };
+    expect(body.choiceArguments.transfer.meta).toEqual({ values: {} });
+  });
+
   it('rejects an unknown transferKind', async () => {
     const post = jest.fn().mockResolvedValue({ data: { factoryId: 'f', transferKind: 'sideways' } });
     const api = createDaRegistryApi(BASE, mockHttp(jest.fn(), post));
-    await expect(api.transferFactory('ota::1220bb', {})).rejects.toThrow(/transferKind sideways/);
+    await expect(api.transferFactory('ota::1220bb', TRANSFER)).rejects.toThrow(/transferKind sideways/);
   });
 
   it('throws an ApiError with the request and the response body for non-404 failures', async () => {
@@ -147,7 +169,7 @@ describe('createDaRegistryApi', () => {
 
   it('keeps the 404 body in the message of a transfer-factory failure', async () => {
     const api = createDaRegistryApi(BASE, mockHttp(jest.fn(), jest.fn().mockImplementation(notFound)));
-    await expect(api.transferFactory('ota::1220bb', {})).rejects.toThrow(/not found/);
+    await expect(api.transferFactory('ota::1220bb', TRANSFER)).rejects.toThrow(/not found/);
   });
 });
 
@@ -174,5 +196,10 @@ describe('response parsers', () => {
       choiceContextData: { values: {} },
       disclosedContracts: [],
     });
+  });
+
+  it('rejects malformed choice contexts with a ValidationError', () => {
+    expect(() => parseDaRegistryChoiceContext({ choiceContextData: { values: [] } })).toThrow(ValidationError);
+    expect(() => parseDaRegistryChoiceContext({ disclosedContracts: {} })).toThrow(ValidationError);
   });
 });

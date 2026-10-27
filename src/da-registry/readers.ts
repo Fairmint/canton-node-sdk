@@ -53,10 +53,8 @@ export function readRequirements(value: unknown): Array<{ issuer: string; claims
 }
 
 function requirementKey(r: { issuer: string; claims: ClaimSpec[] }): string {
-  return `${r.issuer}|${r.claims
-    .map((c) => `${c.property}=${c.value}`)
-    .sort()
-    .join(',')}`;
+  // JSON keeps claim pairs unambiguous: a delimiter-joined key would equate one claim `a=1,b=2` with two claims.
+  return JSON.stringify([r.issuer, r.claims.map((c) => [c.property, c.value]).sort()]);
 }
 
 /** Order-insensitive equality of two requirement lists. */

@@ -67,6 +67,20 @@ describe('claim and requirement readers', () => {
     );
   });
 
+  it('distinguishes one claim containing a delimiter from two claims', () => {
+    const oneClaim = [{ issuer: 'x', claims: [{ property: 'a', value: '1,b=2' }] }];
+    const twoClaims = [
+      {
+        issuer: 'x',
+        claims: [
+          { property: 'a', value: '1' },
+          { property: 'b', value: '2' },
+        ],
+      },
+    ];
+    expect(sameRequirements(oneClaim, twoClaims)).toBe(false);
+  });
+
   it('reads Daml Optional Bool', () => {
     expect(readOptionalBool(true)).toBe(true);
     expect(readOptionalBool(false)).toBe(false);

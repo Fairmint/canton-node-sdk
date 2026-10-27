@@ -117,7 +117,12 @@ export function createAllocationFactory(registrarServiceCid: string): LedgerComm
 
 export interface InstrumentConfigurationPayload {
   instrumentId: string;
-  additionalIdentifiers: [];
+  /**
+   * Additional `InstrumentIdentifier` records for the instrument, in DA's Daml JSON encoding (an identifier carries at
+   * least `id` and `scheme`; `DA_REGISTRAR_INTERNAL_SCHEME` is the scheme for registrar-defined instruments). Empty
+   * when the instrument has a single identifier.
+   */
+  additionalIdentifiers: Array<Record<string, unknown>>;
   issuerRequirements: PartyCredentialRequirement[];
   holderRequirements: PartyCredentialRequirement[];
   useBlockList: boolean;
