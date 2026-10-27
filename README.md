@@ -33,6 +33,16 @@ main().catch((error: unknown) => {
 });
 ```
 
+## Reading the ledger by interface
+
+`getActiveContracts`, `subscribeToUpdates`, `getUpdateById` and `getUpdateByOffset` accept
+`interfaceIds` filters, with `includeInterfaceView` and `includeCreatedEventBlob` to return each
+contract's interface view and created-event blob. `streamActiveContracts` reads a large active
+contract set without collecting it in memory: it yields items as they arrive, applies back-pressure
+to the participant, and throws if the connection closes before the snapshot is complete. Its
+`activeAtOffset` is the offset to pass to `subscribeToUpdates` as `beginExclusive`. See
+[`examples/stream-active-contracts.ts`](https://github.com/Fairmint/canton-node-sdk/blob/main/examples/stream-active-contracts.ts).
+
 ## Repository setup and checks
 
 ```bash
@@ -47,8 +57,8 @@ npm run build
 ### LocalNet (owned by `@fairmint/canton-dev-tools`)
 
 LocalNet lifecycle and shared test helpers live in
-[`@fairmint/canton-dev-tools@0.1.11`](https://www.npmjs.com/package/@fairmint/canton-dev-tools)
-(see its [COMPATIBILITY.md](https://github.com/Fairmint/canton-dev-tools/blob/main/COMPATIBILITY.md)).
+[`@fairmint/canton-dev-tools@0.1.11`](https://www.npmjs.com/package/@fairmint/canton-dev-tools) (see
+its [COMPATIBILITY.md](https://github.com/Fairmint/canton-dev-tools/blob/main/COMPATIBILITY.md)).
 This SDK does not publish a LocalNet CLI or `scripts/localnet-cloud.sh`.
 
 ```bash
@@ -62,7 +72,6 @@ npx @fairmint/canton-dev-tools start
 npx @fairmint/canton-dev-tools readiness
 npx @fairmint/canton-dev-tools teardown
 ```
-
 
 Integration helpers:
 
