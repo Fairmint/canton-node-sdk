@@ -18,6 +18,10 @@ describe('setup decimals', () => {
     expect(formatDecimal(parseDecimal('10000') - parseDecimal('9999.9999999999'))).toBe('0.0000000001');
   });
 
+  it('reads a long run of trailing zeros in linear time', () => {
+    expect(formatDecimal(parseDecimal(`1.${'0'.repeat(200_000)}`))).toBe('1');
+  });
+
   it.each(['', 'abc', '1e3', '1.', '.5', '0.00000000001'])('rejects %j', (input) => {
     expect(() => parseDecimal(input)).toThrow();
   });
