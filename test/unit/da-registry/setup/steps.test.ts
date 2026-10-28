@@ -1002,6 +1002,21 @@ describe('instrument configuration convergence', () => {
     expect(h.since(mark)).toEqual([]);
   });
 
+  it('on TestNet, as on MainNet, blocks on a differing live configuration instead of rewriting it', async () => {
+    const { h, original } = await convergedWithServiceCid(await convergedMainnet());
+    h.fake.archive(original.contractId);
+    h.fake.seed('instrumentConfiguration', { ...original.createArgument, checkBlockList: true });
+    const testnet = configVariant(MAINNET_CONFIG, (raw) => {
+      raw.network = 'testnet';
+    });
+
+    const assessment = await h.assess('instrument-configuration', testnet);
+
+    expect(assessment.status).toBe('blocked');
+    expect(assessment.summary).toBe('the live configuration differs from the config; change it by hand, not by apply');
+    expect(assessment.actions).toBeUndefined();
+  });
+
   it('on MainNet still archives a second matching configuration', async () => {
     const { h, original } = await convergedWithServiceCid(await convergedMainnet());
     h.fake.seed('instrumentConfiguration', original.createArgument);

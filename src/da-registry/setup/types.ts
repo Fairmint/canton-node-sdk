@@ -12,7 +12,10 @@ import { type DaRegistryLedger } from '../ledger';
 import { type DaRegistryPackageRequirement } from '../packages';
 import { type ClaimSpec } from '../readers';
 
-/** The Canton network a declared state targets. On MainNet the setup never rewrites a live instrument configuration. */
+/**
+ * The Canton network a declared state targets. Outside DevNet the setup never rewrites a live instrument configuration,
+ * since holders there hold credentials for the live claims.
+ */
 export type DaRegistrySetupNetwork = 'devnet' | 'testnet' | 'mainnet';
 
 /**

@@ -524,7 +524,7 @@ function instrumentStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
         summary = 'no configuration';
         commands.push(createInstrumentConfiguration(service.contractId, payload));
       } else {
-        if (!firstMatching && config.network === 'mainnet') {
+        if (!firstMatching && config.network !== 'devnet') {
           // Every holder's credential carries the old claims, so rewriting the requirements freezes them all at once.
           return {
             ...blocked('the live configuration differs from the config; change it by hand, not by apply', [

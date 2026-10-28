@@ -18,6 +18,7 @@ import {
   type DaRegistrySetupStepStatus,
 } from './types';
 
+/** `plan` reads and prints every step; `apply` also submits the pending ones. */
 export type DaRegistrySetupRunMode = 'plan' | 'apply';
 
 /** What one step ended as, and what `apply` submitted for it. */
@@ -33,6 +34,7 @@ export interface DaRegistrySetupStepResult {
   applied: string[];
 }
 
+/** One run: each step's result, the overall outcome, and whether a person must act. */
 export interface DaRegistrySetupRunResult {
   mode: DaRegistrySetupRunMode;
   steps: DaRegistrySetupStepResult[];
