@@ -834,6 +834,35 @@ describe('allowlist drift', () => {
     });
   });
 
+  it('blocks on a credential carrying the setup’s id whose extra claim shares only a value with this instrument’s', async () => {
+    // Claims whose value does not name the instrument (`true`): another instrument's claim with the same value is not ours.
+    const valued = configVariant(devnet, (raw) => {
+      raw.instrument.claims.transfer = { property: 'DEMO.canTransfer', value: 'true' };
+      raw.instrument.claims.redemption = { property: 'DEMO.canRedeem', value: 'true' };
+    });
+    const h = await converged(valued);
+    const original = nth(credentialsOf(h, HOLDER_A), 0);
+    h.fake.archive(original.contractId);
+    const mixed = h.fake.seed('credential', {
+      ...original.createArgument,
+      claims: [
+        ...(original.createArgument['claims'] as unknown[]),
+        { subject: HOLDER_A, property: 'OTHER.canTransfer', value: 'true' },
+      ],
+    });
+
+    const assessment = await h.assess('credentials');
+
+    expect(assessment).toEqual({
+      status: 'blocked',
+      summary: "Test holder A's credential also carries claims for other instruments",
+      notes: [
+        `credential ${mixed} carries OTHER.canTransfer=true`,
+        'split it by hand so this instrument’s claims stand alone',
+      ],
+    });
+  });
+
   it('blocks on a holder-held credential of an unlisted party only when pruning', async () => {
     const h = await converged();
     const original = nth(credentialsOf(h, HOLDER_B), 0);
@@ -1052,6 +1081,19 @@ describe('supply', () => {
     expect(submissionLabels(h.since(mark))).toEqual(['MintOffer.MintOffer_Cancel']);
     expect(h.fake.contracts('mintOffer')).toEqual([]);
     expect(h.fake.balance().toFixed()).toBe('1000000');
+  });
+
+  it('cancels two expired setup offers in successive rounds without tripping the repeat-write guard', async () => {
+    const h = await converged();
+    h.fake.seed('mintOffer', mintOfferArgs('5', isoAt(-2 * HOUR_MS), isoAt(-HOUR_MS)));
+    h.fake.seed('mintOffer', mintOfferArgs('7', isoAt(-2 * HOUR_MS), isoAt(-HOUR_MS)));
+
+    const mark = h.fake.submissions.length;
+    const result = await h.run('apply');
+
+    expect(result.outcome).toBe('done');
+    expect(submissionLabels(h.since(mark))).toEqual(['MintOffer.MintOffer_Cancel', 'MintOffer.MintOffer_Cancel']);
+    expect(h.fake.contracts('mintOffer')).toEqual([]);
   });
 
   it('cancels a valid setup offer that would take supply above the total', async () => {
@@ -1713,6 +1755,29 @@ describe('DA API', () => {
     expect(assessment.notes).toHaveLength(3);
     expect(assessment.notes?.[0]).toBe(
       `${REGISTRAR_LABEL}: DA serves [00stale], not ${nth(credentialsOf(h, REGISTRAR), 0).contractId}`
+    );
+  });
+
+  it('waits while DA serves an archived instrument configuration in its context', async () => {
+    const h = await converged();
+    const realFactory = h.fake.da.mintOfferFactory;
+    h.fake.da.mintOfferFactory = async (holder, instrumentId) => {
+      const factory = await realFactory(holder, instrumentId);
+      if (factory) {
+        factory.choiceContext.choiceContextData.values['utility.digitalasset.com/instrument-configuration'] = {
+          tag: 'AV_ContractId',
+          value: '00archived',
+        };
+      }
+      return factory;
+    };
+    const [current] = h.fake.contracts('instrumentConfiguration');
+
+    const assessment = await h.assess('da-api');
+
+    expect(assessment.status).toBe('waiting');
+    expect(assessment.notes?.[0]).toBe(
+      `${REGISTRAR_LABEL}: DA serves instrument configuration 00archived, not ${current?.contractId ?? ''}`
     );
   });
 

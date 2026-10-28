@@ -589,8 +589,19 @@ function readCredential(contract: ActiveContract): CredentialView {
   };
 }
 
+/** A claim's identity: structured, so no property or value text can make two different claims look alike. */
 function claimKey(c: ClaimSpec): string {
+  return JSON.stringify([c.property, c.value]);
+}
+
+/** A claim as operators read it. */
+function claimLabel(c: ClaimSpec): string {
   return `${c.property}=${c.value}`;
+}
+
+/** A claim set's identity, independent of order. */
+function claimSetKey(claims: readonly ClaimSpec[]): string {
+  return JSON.stringify(claims.map(claimKey).sort());
 }
 
 function credentialsStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
@@ -644,7 +655,8 @@ function credentialsStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
         for (const claim of view.claims.filter((c) => instrumentClaimKeys.has(claimKey(c)))) {
           const listedClaims = entries.has(claim.subject) ? desiredClaims(claim.subject).map(claimKey) : null;
           const withheld = listedClaims ? !listedClaims.includes(claimKey(claim)) : config.credentials.pruneUnlisted;
-          if (withheld) grantedElsewhere.push(`${view.contract.contractId} gives ${claim.subject} ${claimKey(claim)}`);
+          if (withheld)
+            grantedElsewhere.push(`${view.contract.contractId} gives ${claim.subject} ${claimLabel(claim)}`);
         }
       }
       if (grantedElsewhere.length > 0) {
@@ -656,27 +668,28 @@ function credentialsStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
 
       /**
        * Archiving a credential with other instruments' claims would revoke those too; a person splits it. On a
-       * credential this setup issued (it carries the config's id), a claim scoped to this instrument by its value is
-       * ours even under an old property name, so renaming a claim retires the old credentials.
+       * credential this setup issued (it carries the config's id), a claim whose value is this instrument's id is ours
+       * even under an old property name, so renaming a claim retires the old credentials. Any other claim is not ours,
+       * even if its value matches one of this instrument's claims (`true`, say).
        */
-      const instrumentClaimValues = new Set(Object.values(config.instrument.claims).map((c) => c.value));
       const outOfScope = (view: CredentialView): ClaimSpec[] =>
         view.claims.filter(
           (c) =>
             !instrumentClaimKeys.has(claimKey(c)) &&
-            !(field(view.contract, 'id') === config.credentials.id && instrumentClaimValues.has(c.value))
+            !(field(view.contract, 'id') === config.credentials.id && c.value === config.instrument.id)
         );
 
       for (const entry of config.credentials.parties) {
         if (handled.has(entry.party)) continue;
-        const desiredKeys = desiredClaims(entry.party).map(claimKey).sort();
+        const desired = desiredClaims(entry.party);
+        const desiredLabels = desired.map(claimLabel).sort();
         const existing = managed.filter((v) => v.subjects.includes(entry.party));
         const [current] = existing;
         const ok =
           current !== undefined &&
           existing.length === 1 &&
           current.subjects.length === 1 &&
-          current.claims.map(claimKey).sort().join(',') === desiredKeys.join(',') &&
+          claimSetKey(current.claims) === claimSetKey(desired) &&
           field(current.contract, 'id') === config.credentials.id &&
           field(current.contract, 'description') === config.credentials.description &&
           current.observers.length === 1 &&
@@ -686,7 +699,7 @@ function credentialsStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
           Date.parse(current.validUntil) === validUntilMs;
         if (ok) {
           handled.add(entry.party);
-          evidence[entry.label] = `${desiredKeys.join(' + ')} (${current.contract.contractId.slice(0, 16)}…)`;
+          evidence[entry.label] = `${desiredLabels.join(' + ')} (${current.contract.contractId.slice(0, 16)}…)`;
           continue;
         }
 
@@ -709,7 +722,7 @@ function credentialsStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
           const foreign = outOfScope(view);
           if (foreign.length > 0) {
             return blocked(`${entry.label}'s credential also carries claims for other instruments`, [
-              `credential ${view.contract.contractId} carries ${foreign.map(claimKey).join(', ')}`,
+              `credential ${view.contract.contractId} carries ${foreign.map(claimLabel).join(', ')}`,
               'split it by hand so this instrument’s claims stand alone',
             ]);
           }
@@ -750,7 +763,7 @@ function credentialsStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
         actions.push({
           description:
             affected.size === 0
-              ? `issue the credential for ${who} (${desiredKeys.join(' + ')})`
+              ? `issue the credential for ${who} (${desiredLabels.join(' + ')})`
               : `replace the credential(s) for ${who}${unlistedInGroup.length > 0 ? `, revoking unlisted ${unlistedInGroup.join(', ')}` : ''}`,
           submission: submission(ctx, 'credentials', registrar, commands),
         });
@@ -764,7 +777,7 @@ function credentialsStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
           const foreign = outOfScope(view);
           if (foreign.length > 0) {
             return blocked('an unlisted party’s credential also carries claims for other instruments', [
-              `credential ${view.contract.contractId} carries ${foreign.map(claimKey).join(', ')}`,
+              `credential ${view.contract.contractId} carries ${foreign.map(claimLabel).join(', ')}`,
               'split it by hand so this instrument’s claims stand alone',
             ]);
           }
@@ -1056,7 +1069,8 @@ function daApiStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
     awaitMs: 3 * 60_000,
     async assess() {
       const state = await loadRegistryState(ctx);
-      if (!currentInstrumentConfiguration(ctx, state)) return needs('instrument-configuration');
+      const configuration = currentInstrumentConfiguration(ctx, state);
+      if (!configuration) return needs('instrument-configuration');
       const [info, instrument] = await Promise.all([
         ctx.da.registryInfo(registrar),
         ctx.da.instrumentMetadata(registrar, config.instrument.id),
@@ -1096,7 +1110,19 @@ function daApiStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
             lagging.push(`${entry.label}: DA has not indexed the allocation factory or instrument yet`);
             continue;
           }
-          const served = offer.choiceContext.choiceContextData.values[DA_REGISTRY_CONTEXT_KEYS.issuerCredentials] as
+          // A context naming an archived configuration fails every transaction built on it, e.g. after a
+          // useBlockList change replaced the configuration but not the credentials.
+          const { values } = offer.choiceContext.choiceContextData;
+          const servedConfiguration = (
+            values[DA_REGISTRY_CONTEXT_KEYS.instrumentConfiguration] as { value?: string } | undefined
+          )?.value;
+          if (servedConfiguration !== configuration.contractId) {
+            lagging.push(
+              `${entry.label}: DA serves instrument configuration ${String(servedConfiguration)}, not ${configuration.contractId}`
+            );
+            continue;
+          }
+          const served = values[DA_REGISTRY_CONTEXT_KEYS.issuerCredentials] as
             { value?: Array<{ value?: string }> } | undefined;
           const servedCids = (served?.value ?? []).map((v) => v.value);
           if (servedCids.includes(credential.contract.contractId)) evidence[entry.label] = 'credential served';

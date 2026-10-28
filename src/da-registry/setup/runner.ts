@@ -10,9 +10,10 @@
  * such as the allowlist, can be pending while earlier ones are. A step that throws, or whose submission the ledger
  * rejects, is reported as `blocked` with the error, so every run ends with a summary.
  */
-import { type LedgerSubmission } from '../../utils/ledger';
+import { type LedgerCommand, type LedgerSubmission } from '../../utils/ledger';
 import {
   DaRegistrySetupDependencyError,
+  type DaRegistrySetupAction,
   type DaRegistrySetupStep,
   type DaRegistrySetupStepAssessment,
   type DaRegistrySetupStepStatus,
@@ -81,6 +82,26 @@ function indent(text: string, prefix: string): string {
     .split('\n')
     .map((line) => `${prefix}${line}`)
     .join('\n');
+}
+
+/** What a command acts on: the contract and choice it exercises, or the template it creates. */
+function commandTarget(command: LedgerCommand): string[] {
+  if ('ExerciseCommand' in command) {
+    return ['exercise', command.ExerciseCommand.contractId, command.ExerciseCommand.choice];
+  }
+  if ('CreateAndExerciseCommand' in command) {
+    return [
+      'create-and-exercise',
+      command.CreateAndExerciseCommand.templateId,
+      command.CreateAndExerciseCommand.choice,
+    ];
+  }
+  return ['create', command.CreateCommand.templateId];
+}
+
+/** A round's identity: each action's description and the contracts and templates its commands act on. */
+function roundFingerprint(actions: readonly DaRegistrySetupAction[]): string {
+  return JSON.stringify(actions.map((a) => [a.description, a.submission.commands.map(commandTarget)]));
 }
 
 function errorMessage(error: unknown): string {
@@ -159,12 +180,13 @@ export async function runDaRegistrySetupSteps(
       let rounds = 0;
       let waitDeadline: number | undefined;
       // A round that plans exactly what the round before it just submitted means the step does not read back its own
-      // write (for example a reader that does not match the ledger's encoding); repeating it would only churn.
+      // write (for example a reader that does not match the ledger's encoding); repeating it would only churn. Rounds
+      // are compared by what they act on, not by their timestamps, which every round regenerates.
       let lastRound: string | undefined;
       for (;;) {
         if (assessment.status === 'pending' && rounds < DA_REGISTRY_SETUP_MAX_ROUNDS_PER_STEP) {
           const descriptions = (assessment.actions ?? []).map((a) => a.description);
-          const round = JSON.stringify(descriptions);
+          const round = roundFingerprint(assessment.actions ?? []);
           if (round === lastRound) {
             assessment = {
               status: 'blocked',
