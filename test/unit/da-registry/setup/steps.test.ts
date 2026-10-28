@@ -1861,6 +1861,32 @@ describe('DA API', () => {
     );
   });
 
+  it('waits while DA’s context also names an archived credential', async () => {
+    const h = await converged();
+    const current = nth(credentialsOf(h, REGISTRAR), 0).contractId;
+    const realFactory = h.fake.da.mintOfferFactory;
+    h.fake.da.mintOfferFactory = async (holder, instrumentId) => {
+      const factory = await realFactory(holder, instrumentId);
+      if (factory) {
+        factory.choiceContext.choiceContextData.values['utility.digitalasset.com/issuer-credentials'] = {
+          tag: 'AV_List',
+          value: [
+            { tag: 'AV_ContractId', value: current },
+            { tag: 'AV_ContractId', value: '00archivedcredential' },
+          ],
+        };
+      }
+      return factory;
+    };
+
+    const assessment = await h.assess('da-api');
+
+    expect(assessment.status).toBe('waiting');
+    expect(assessment.notes?.[0]).toBe(
+      `${REGISTRAR_LABEL}: DA also serves credentials that are no longer active: 00archivedcredential`
+    );
+  });
+
   it('waits while DA serves an allocation factory that is no longer active', async () => {
     const h = await converged();
     const realFactory = h.fake.da.mintOfferFactory;

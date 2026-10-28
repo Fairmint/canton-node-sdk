@@ -210,9 +210,11 @@ export async function runDaRegistrySetupSteps(
             waitDeadline = deps.now() + step.awaitMs;
             deps.log(`      🕒 polling up to ${Math.ceil(step.awaitMs / 60_000)} min: ${assessment.summary}`);
           }
-          if (deps.now() >= waitDeadline) break;
+          const left = waitDeadline - deps.now();
+          if (left <= 0) break;
           lastRound = undefined;
-          await deps.sleep(WAIT_POLL_MS);
+          // The last poll waits only until the deadline, so polling never outlasts awaitMs.
+          await deps.sleep(Math.min(WAIT_POLL_MS, left));
         } else {
           break;
         }

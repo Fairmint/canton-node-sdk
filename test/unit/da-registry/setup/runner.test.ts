@@ -263,6 +263,16 @@ describe('runDaRegistrySetupSteps in apply mode', () => {
     expect(lines.join('\n')).toContain('polling up to 1 min: waiting summary');
   });
 
+  it('never polls past the deadline when awaitMs is not a multiple of the poll interval', async () => {
+    const waiting = scriptedStep('waiting', [assessment('waiting')], 25_000);
+    const { deps, elapsed } = makeDeps();
+
+    await runDaRegistrySetupSteps([waiting.step], 'apply', deps);
+
+    expect(deps.sleep.mock.calls.map(([ms]) => ms)).toEqual([POLL_MS, POLL_MS, 5_000]);
+    expect(elapsed()).toBe(25_000);
+  });
+
   it('continues once a waiting step turns done during polling', async () => {
     const waiting = scriptedStep(
       'waiting',

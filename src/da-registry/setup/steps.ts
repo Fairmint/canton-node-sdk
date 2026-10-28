@@ -1107,6 +1107,7 @@ function daApiStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
       const state = await loadRegistryState(ctx);
       const configuration = currentInstrumentConfiguration(ctx, state);
       if (!configuration) return needs('instrument-configuration');
+      const activeCredentials = new Set(state.byTemplate('credential').map((c) => c.contractId));
       const activeFactories = new Set(
         ownedByRegistrar(ctx, state.byTemplate('allocationFactory'), ['provider', 'registrar']).map((c) => c.contractId)
       );
@@ -1169,10 +1170,15 @@ function daApiStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
           const served = values[DA_REGISTRY_CONTEXT_KEYS.issuerCredentials] as
             { value?: Array<{ value?: string }> } | undefined;
           const servedCids = (served?.value ?? []).map((v) => v.value);
-          if (servedCids.includes(credential.contract.contractId)) evidence[entry.label] = 'credential served';
-          else {
+          // A context that also names an archived credential fails every transaction built on it.
+          const archived = servedCids.filter((cid) => cid === undefined || !activeCredentials.has(cid));
+          if (!servedCids.includes(credential.contract.contractId)) {
             lagging.push(`${entry.label}: DA serves [${servedCids.join(', ')}], not ${credential.contract.contractId}`);
-          }
+          } else if (archived.length > 0) {
+            lagging.push(
+              `${entry.label}: DA also serves credentials that are no longer active: ${archived.join(', ')}`
+            );
+          } else evidence[entry.label] = 'credential served';
         }
       }
 
