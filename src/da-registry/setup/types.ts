@@ -86,6 +86,11 @@ export interface DaRegistrySetupConfig {
     id: string;
     claims: Record<DaRegistrySetupClaimKind, ClaimSpec>;
     useBlockList: boolean;
+    /**
+     * Stops the instrument: while true, `apply` archives its configuration and does not recreate it, so nothing mints,
+     * burns, transfers or settles. Clearing it and applying restores the configuration.
+     */
+    halted?: boolean;
   };
   /** The allowlist: one registrar-issued, registrar-held credential per listed party. */
   credentials: {

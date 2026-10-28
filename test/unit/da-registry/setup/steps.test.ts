@@ -1,4 +1,5 @@
 import {
+  archiveInstrumentConfiguration,
   buildDaRegistrySetupSteps,
   DA_REGISTRY_SETUP_MINT_REFERENCE_PREFIX,
   desiredDaRegistryInstrumentConfiguration,
@@ -1731,6 +1732,55 @@ describe('DA packages', () => {
       'utility-registry-v0: both vet nothing, config pins 0.8.2',
       'if DA’s node lacks the pinned version, ask DA; if both vet another bundle, upgrade @fairmint/canton-node-sdk to a release whose command builders target it, then update the pins in the config',
     ]);
+  });
+});
+
+describe('instrument halt', () => {
+  const halted = configVariant(devnet, (raw) => {
+    raw.instrument.halted = true;
+  });
+
+  it('archives every configuration, keeps it archived on a later apply, and restores it when cleared', async () => {
+    const h = await converged();
+    const configurations = h.fake.contracts('instrumentConfiguration');
+    expect(configurations).toHaveLength(1);
+
+    const planned = await h.assess('instrument-configuration', halted);
+    expect(planned.status).toBe('pending');
+    expect(planned.summary).toBe('halted: archive the configuration');
+    const service = nth(h.fake.contracts('registrarService'), 0);
+    expect(onlySubmission(planned).commands).toEqual(
+      configurations.map((c) => archiveInstrumentConfiguration(service.contractId, c.contractId))
+    );
+
+    const stopped = await h.run('apply', halted);
+    expect(stopped.outcome).toBe('done');
+    expect(h.fake.contracts('instrumentConfiguration')).toEqual([]);
+    expect(Object.fromEntries(stopped.steps.map((s) => [s.id, s.summary]))).toEqual(
+      expect.objectContaining({
+        'instrument-configuration': 'halted: no configuration',
+        supply: 'instrument halted: no mints',
+        'da-api': 'instrument halted: DA’s API not checked',
+        deliveries: 'instrument halted: no deliveries',
+      })
+    );
+
+    const mark = h.fake.submissions.length;
+    expect((await h.run('apply', halted)).outcome).toBe('done');
+    expect(h.since(mark)).toEqual([]);
+
+    expect((await h.run('apply')).outcome).toBe('done');
+    expect(h.fake.contracts('instrumentConfiguration')).toHaveLength(1);
+  });
+
+  it('halts on MainNet too: archiving is deliberate, unlike a rewrite', async () => {
+    const h = await convergedMainnet();
+    const mainnetHalted = configVariant(mainnet, (raw) => {
+      raw.instrument.halted = true;
+    });
+
+    expect((await h.run('apply', mainnetHalted)).outcome).toBe('done');
+    expect(h.fake.contracts('instrumentConfiguration')).toEqual([]);
   });
 });
 

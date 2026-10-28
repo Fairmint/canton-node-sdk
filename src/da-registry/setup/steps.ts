@@ -495,12 +495,15 @@ function instrumentStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
   const { transfer, redemption } = config.instrument.claims;
   return {
     id: 'instrument-configuration',
-    title: `The ${config.instrument.id} instrument requires the registrar's credentials`,
+    title: config.instrument.halted
+      ? `The ${config.instrument.id} instrument is halted: no configuration exists`
+      : `The ${config.instrument.id} instrument requires the registrar's credentials`,
     why: [
       `Holders need the transfer claim (${transfer.property}=${transfer.value}) to send or receive, and the`,
       `redemption claim (${redemption.property}=${redemption.value}) to receive a mint or burn, so a`,
       'redemption-only credential freezes trading but keeps redemption open. Blocklist:',
-      `${config.instrument.useBlockList ? 'on' : 'off'}. Exactly one configuration may exist per instrument.`,
+      `${config.instrument.useBlockList ? 'on' : 'off'}. Exactly one configuration may exist per instrument. While the`,
+      'instrument is halted, none may exist, so nothing mints, burns, transfers or settles.',
     ].join('\n'),
     async assess() {
       const state = await loadRegistryState(ctx);
@@ -508,6 +511,25 @@ function instrumentStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
       if (!service) return needs('registrar-service');
       const payload = desiredDaRegistryInstrumentConfiguration(config);
       const existing = instrumentConfigurations(ctx, state);
+      if (config.instrument.halted) {
+        if (existing.length === 0) return { status: 'done', summary: 'halted: no configuration' };
+        return {
+          status: 'pending',
+          summary: 'halted: archive the configuration',
+          evidence: { instrumentConfiguration: cids(existing) },
+          actions: [
+            {
+              description: 'archive the instrument configuration (halted)',
+              submission: submission(
+                ctx,
+                'instrument-configuration',
+                registrar,
+                existing.map((c) => archiveInstrumentConfiguration(service.contractId, c.contractId))
+              ),
+            },
+          ],
+        };
+      }
       const matching = existing.filter((c) => instrumentMatches(c, payload));
       const [firstMatching] = matching;
       const [firstExisting] = existing;
@@ -963,6 +985,9 @@ function supplyStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
       if (target === null) {
         return { status: 'done', summary: 'not managed here', evidence: { supply: formatDecimal(supply) } };
       }
+      if (config.instrument.halted) {
+        return { status: 'done', summary: 'instrument halted: no mints', evidence: { supply: formatDecimal(supply) } };
+      }
       const configuration = currentInstrumentConfiguration(ctx, state);
       if (!configuration) return needs('instrument-configuration');
       const [factory] = ownedByRegistrar(ctx, state.byTemplate('allocationFactory'), ['provider', 'registrar']);
@@ -1068,6 +1093,7 @@ function daApiStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
     ].join('\n'),
     awaitMs: 3 * 60_000,
     async assess() {
+      if (config.instrument.halted) return { status: 'done', summary: 'instrument halted: DA’s API not checked' };
       const state = await loadRegistryState(ctx);
       const configuration = currentInstrumentConfiguration(ctx, state);
       if (!configuration) return needs('instrument-configuration');
@@ -1163,6 +1189,7 @@ function deliveriesStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
     awaitMs: 3 * 60_000,
     async assess() {
       if (config.deliveries.length === 0) return { status: 'done', summary: 'no deliveries configured' };
+      if (config.instrument.halted) return { status: 'done', summary: 'instrument halted: no deliveries' };
       const state = await loadRegistryState(ctx);
       if (!currentInstrumentConfiguration(ctx, state)) return needs('instrument-configuration');
       const holdings = instrumentHoldings(ctx, state);
