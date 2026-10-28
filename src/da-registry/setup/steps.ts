@@ -105,11 +105,19 @@ async function requireReadableRegistry(ctx: DaRegistrySetupContext): Promise<voi
   }
 }
 
-async function loadRegistryState(ctx: DaRegistrySetupContext): Promise<RegistryState> {
+/**
+ * The registrar's view of the registry. Holdings are the whole register, which grows with every holder, so only the
+ * steps that count them (supply, deliveries) read them; for the others `byTemplate('holding')` is empty.
+ */
+async function loadRegistryState(
+  ctx: DaRegistrySetupContext,
+  { holdings = false }: { holdings?: boolean } = {}
+): Promise<RegistryState> {
   await requireReadableRegistry(ctx);
+  const keys = REGISTRY_TEMPLATE_KEYS.filter((k) => holdings || k !== 'holding');
   const contracts = await ctx.ledger.activeContracts(
     [ctx.config.registrar.party],
-    REGISTRY_TEMPLATE_KEYS.map((k) => DA_REGISTRY_TEMPLATES[k])
+    keys.map((k) => DA_REGISTRY_TEMPLATES[k])
   );
   return { byTemplate: (key) => contracts.filter((c) => isDaRegistryTemplate(c, key)) };
 }
@@ -546,8 +554,10 @@ function instrumentStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
         summary = 'no configuration';
         commands.push(createInstrumentConfiguration(service.contractId, payload));
       } else {
-        if (!firstMatching && config.network !== 'devnet') {
+        if (existing.some((c) => !instrumentMatches(c, payload)) && config.network !== 'devnet') {
           // Every holder's credential carries the old claims, so rewriting the requirements freezes them all at once.
+          // That holds for any differing live configuration, even beside a matching one; only identical duplicates
+          // are archived.
           return {
             ...blocked('the live configuration differs from the config; change it by hand, not by apply', [
               'rewriting the requirements freezes every holder whose credential carries the old claims',
@@ -980,7 +990,7 @@ function supplyStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
       'follow an off-ledger process, leave supply unset.',
     ].join('\n'),
     async assess() {
-      const state = await loadRegistryState(ctx);
+      const state = await loadRegistryState(ctx, { holdings: true });
       const supply = sum(instrumentHoldings(ctx, state));
       if (target === null) {
         return { status: 'done', summary: 'not managed here', evidence: { supply: formatDecimal(supply) } };
@@ -1097,6 +1107,9 @@ function daApiStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
       const state = await loadRegistryState(ctx);
       const configuration = currentInstrumentConfiguration(ctx, state);
       if (!configuration) return needs('instrument-configuration');
+      const activeFactories = new Set(
+        ownedByRegistrar(ctx, state.byTemplate('allocationFactory'), ['provider', 'registrar']).map((c) => c.contractId)
+      );
       const [info, instrument] = await Promise.all([
         ctx.da.registryInfo(registrar),
         ctx.da.instrumentMetadata(registrar, config.instrument.id),
@@ -1134,6 +1147,11 @@ function daApiStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
           const offer = await ctx.da.mintOfferFactory(entry.party, { admin: registrar, id: config.instrument.id });
           if (!offer) {
             lagging.push(`${entry.label}: DA has not indexed the allocation factory or instrument yet`);
+            continue;
+          }
+          // After registrar-service recreates an archived factory, DA can still serve the old one for a while.
+          if (!activeFactories.has(offer.factoryId)) {
+            lagging.push(`${entry.label}: DA serves allocation factory ${offer.factoryId}, which is not active`);
             continue;
           }
           // A context naming an archived configuration fails every transaction built on it, e.g. after a
@@ -1190,7 +1208,7 @@ function deliveriesStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
     async assess() {
       if (config.deliveries.length === 0) return { status: 'done', summary: 'no deliveries configured' };
       if (config.instrument.halted) return { status: 'done', summary: 'instrument halted: no deliveries' };
-      const state = await loadRegistryState(ctx);
+      const state = await loadRegistryState(ctx, { holdings: true });
       if (!currentInstrumentConfiguration(ctx, state)) return needs('instrument-configuration');
       const holdings = instrumentHoldings(ctx, state);
       // The registrar spends only its basic account (label ""), where every setup mint lands.
@@ -1214,11 +1232,13 @@ function deliveriesStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
           continue;
         }
         const inputs: HoldingView[] = [];
+        let selected = 0n;
         for (const h of spendable) {
-          if (sum(inputs) >= deficit) break;
+          if (selected >= deficit) break;
           inputs.push(h);
+          selected += h.amount;
         }
-        if (sum(inputs) < deficit) {
+        if (selected < deficit) {
           return blocked(
             `the registrar holds ${formatDecimal(sum(spendable))} spendable, short of ${formatDecimal(deficit)} for ${target.label}`,
             ['raise supply.total or lower minBalance in the config']

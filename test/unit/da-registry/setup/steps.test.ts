@@ -1,5 +1,6 @@
 import {
   archiveInstrumentConfiguration,
+  DA_REGISTRY_TEMPLATES,
   buildDaRegistrySetupSteps,
   DA_REGISTRY_SETUP_MINT_REFERENCE_PREFIX,
   desiredDaRegistryInstrumentConfiguration,
@@ -1047,6 +1048,20 @@ describe('instrument configuration convergence', () => {
     expect(assessment.actions).toBeUndefined();
   });
 
+  it('on MainNet blocks on a differing live configuration even beside a matching one', async () => {
+    const { h, original } = await convergedWithServiceCid(await convergedMainnet());
+    h.fake.seed('instrumentConfiguration', { ...original.createArgument, checkBlockList: true });
+    const mark = h.fake.submissions.length;
+
+    const assessment = await h.assess('instrument-configuration');
+    await h.run('apply');
+
+    expect(assessment.status).toBe('blocked');
+    expect(assessment.summary).toBe('the live configuration differs from the config; change it by hand, not by apply');
+    expect(h.since(mark)).toEqual([]);
+    expect(h.fake.contracts('instrumentConfiguration')).toHaveLength(2);
+  });
+
   it('on MainNet still archives a second matching configuration', async () => {
     const { h, original } = await convergedWithServiceCid(await convergedMainnet());
     h.fake.seed('instrumentConfiguration', original.createArgument);
@@ -1735,6 +1750,21 @@ describe('DA packages', () => {
   });
 });
 
+describe('holdings reads', () => {
+  it('reads the holding register only in the steps that count holdings', async () => {
+    const h = await converged();
+    const holdingTemplate = DA_REGISTRY_TEMPLATES.holding;
+    const reads = jest.spyOn(h.fake.ledger, 'activeContracts');
+
+    await h.run('plan');
+
+    const withHoldings = reads.mock.calls.filter(([, templates]) => templates.includes(holdingTemplate));
+    expect(reads.mock.calls.length).toBeGreaterThan(withHoldings.length);
+    // supply and deliveries, once each
+    expect(withHoldings).toHaveLength(2);
+  });
+});
+
 describe('instrument halt', () => {
   const halted = configVariant(devnet, (raw) => {
     raw.instrument.halted = true;
@@ -1828,6 +1858,22 @@ describe('DA API', () => {
     expect(assessment.status).toBe('waiting');
     expect(assessment.notes?.[0]).toBe(
       `${REGISTRAR_LABEL}: DA serves instrument configuration 00archived, not ${current?.contractId ?? ''}`
+    );
+  });
+
+  it('waits while DA serves an allocation factory that is no longer active', async () => {
+    const h = await converged();
+    const realFactory = h.fake.da.mintOfferFactory;
+    h.fake.da.mintOfferFactory = async (holder, instrumentId) => {
+      const factory = await realFactory(holder, instrumentId);
+      return factory && { ...factory, factoryId: '00archivedfactory' };
+    };
+
+    const assessment = await h.assess('da-api');
+
+    expect(assessment.status).toBe('waiting');
+    expect(assessment.notes?.[0]).toBe(
+      `${REGISTRAR_LABEL}: DA serves allocation factory 00archivedfactory, which is not active`
     );
   });
 
