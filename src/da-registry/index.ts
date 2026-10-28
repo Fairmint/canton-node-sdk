@@ -4,4 +4,5 @@ export * from './commands';
 export * from './ledger';
 export * from './packages';
 export * from './readers';
+export * from './setup';
 export * from './templates';
