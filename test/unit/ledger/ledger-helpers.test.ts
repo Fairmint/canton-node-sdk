@@ -5,6 +5,7 @@ import {
   getConnectedSynchronizerIds,
   getPreferredPackages,
   listUploadedPackageIds,
+  resolveLedgerVisibility,
   submitLedgerCommands,
   uploadAndVetDar,
   type LedgerSubmission,
@@ -250,6 +251,82 @@ describe('checkUserActAs', () => {
   it('throws when the ledger returns no user', async () => {
     const client = mockClient({ getAuthenticatedUser: jest.fn().mockResolvedValue({}) });
     await expect(checkUserActAs(client, [])).rejects.toThrow('authenticated user');
+  });
+});
+
+describe('resolveLedgerVisibility', () => {
+  it('detects CanReadAsAnyParty and unions CanActAs and CanReadAs in both right shapes', async () => {
+    const listUserRights = jest.fn().mockResolvedValue({
+      rights: [
+        { kind: { CanActAs: { party: 'alice::1220aa' } } },
+        { kind: { CanReadAs: { value: { party: 'carol::1220cc' } } } },
+        { kind: { CanActAs: { value: { party: 'bob::1220bb' } } } },
+        { kind: { CanReadAs: { party: 'alice::1220aa' } } },
+        { kind: { CanExecuteAs: { value: { party: 'dave::1220dd' } } } },
+        { kind: { CanReadAsAnyParty: { value: {} } } },
+        { kind: { ParticipantAdmin: {} } },
+      ],
+    });
+    const client = mockClient({ listUserRights });
+
+    await expect(resolveLedgerVisibility(client)).resolves.toEqual({
+      userId: 'ledger-user',
+      canReadAsAnyParty: true,
+      readableParties: ['alice::1220aa', 'bob::1220bb', 'carol::1220cc'],
+      participantAdmin: true,
+    });
+    expect(listUserRights).toHaveBeenCalledWith({ userId: 'ledger-user' });
+  });
+
+  it('accepts the unwrapped CanReadAsAnyParty shape', async () => {
+    const client = mockClient({
+      listUserRights: jest.fn().mockResolvedValue({ rights: [{ kind: { CanReadAsAnyParty: {} } }] }),
+    });
+
+    await expect(resolveLedgerVisibility(client)).resolves.toMatchObject({
+      canReadAsAnyParty: true,
+      readableParties: [],
+      participantAdmin: false,
+    });
+  });
+
+  it('does not treat CanExecuteAsAnyParty, ParticipantAdmin or IdentityProviderAdmin as read rights', async () => {
+    const client = mockClient({
+      listUserRights: jest.fn().mockResolvedValue({
+        rights: [
+          { kind: { CanExecuteAsAnyParty: { value: {} } } },
+          { kind: { ParticipantAdmin: { value: {} } } },
+          { kind: { IdentityProviderAdmin: { value: {} } } },
+        ],
+      }),
+    });
+
+    await expect(resolveLedgerVisibility(client)).resolves.toEqual({
+      userId: 'ledger-user',
+      canReadAsAnyParty: false,
+      readableParties: [],
+      participantAdmin: true,
+    });
+  });
+
+  it('checks the given user without asking for the authenticated one', async () => {
+    const getAuthenticatedUser = jest.fn();
+    const listUserRights = jest.fn().mockResolvedValue({ rights: [] });
+    const client = mockClient({ getAuthenticatedUser, listUserRights });
+
+    await expect(resolveLedgerVisibility(client, { userId: 'saver' })).resolves.toEqual({
+      userId: 'saver',
+      canReadAsAnyParty: false,
+      readableParties: [],
+      participantAdmin: false,
+    });
+    expect(getAuthenticatedUser).not.toHaveBeenCalled();
+    expect(listUserRights).toHaveBeenCalledWith({ userId: 'saver' });
+  });
+
+  it('throws when the ledger returns no user', async () => {
+    const client = mockClient({ getAuthenticatedUser: jest.fn().mockResolvedValue({}) });
+    await expect(resolveLedgerVisibility(client)).rejects.toThrow('authenticated user');
   });
 });
 

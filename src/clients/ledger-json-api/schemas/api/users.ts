@@ -20,13 +20,28 @@ export const CanReadAsSchema = z.object({
   party: z.string(),
 });
 
+/** The right to prepare and execute submissions as a party. It grants no reads. */
+export const CanExecuteAsSchema = z.object({
+  /** The party the user can execute as. */
+  party: z.string(),
+});
+
+/** The participant's super-reader right: read as every party hosted on the participant (`filtersForAnyParty`). */
 export const CanReadAsAnyPartySchema = z.object({});
+
+/** The right to prepare and execute submissions as any party. It grants no reads. */
+export const CanExecuteAsAnyPartySchema = z.object({});
 
 export const IdentityProviderAdminSchema = z.object({});
 
 export const ParticipantAdminSchema = z.object({});
 
-/** User right kind (oneOf all right types). */
+/**
+ * User right kind (oneOf all right types).
+ *
+ * The JSON Ledger API wraps each right's payload in `value` (`{ CanActAs: { value: { party } } }`), as the grant and
+ * revoke request schemas do. Older versions of this schema described the payload unwrapped; both shapes are accepted.
+ */
 export const RightKindSchema = z.union([
   z.object({ CanActAs: CanActAsSchema }),
   z.object({ CanReadAs: CanReadAsSchema }),
@@ -34,6 +49,15 @@ export const RightKindSchema = z.union([
   z.object({ Empty: z.object({}) }),
   z.object({ IdentityProviderAdmin: IdentityProviderAdminSchema }),
   z.object({ ParticipantAdmin: ParticipantAdminSchema }),
+  z.object({ CanExecuteAs: CanExecuteAsSchema }),
+  z.object({ CanExecuteAsAnyParty: CanExecuteAsAnyPartySchema }),
+  z.object({ CanActAs: z.object({ value: CanActAsSchema }) }),
+  z.object({ CanReadAs: z.object({ value: CanReadAsSchema }) }),
+  z.object({ CanReadAsAnyParty: z.object({ value: CanReadAsAnyPartySchema }) }),
+  z.object({ IdentityProviderAdmin: z.object({ value: IdentityProviderAdminSchema }) }),
+  z.object({ ParticipantAdmin: z.object({ value: ParticipantAdminSchema }) }),
+  z.object({ CanExecuteAs: z.object({ value: CanExecuteAsSchema }) }),
+  z.object({ CanExecuteAsAnyParty: z.object({ value: CanExecuteAsAnyPartySchema }) }),
 ]);
 
 /** User right. */
@@ -223,6 +247,8 @@ export type ObjectMeta = z.infer<typeof ObjectMetaSchema>;
 export type CanActAs = z.infer<typeof CanActAsSchema>;
 export type CanReadAs = z.infer<typeof CanReadAsSchema>;
 export type CanReadAsAnyParty = z.infer<typeof CanReadAsAnyPartySchema>;
+export type CanExecuteAs = z.infer<typeof CanExecuteAsSchema>;
+export type CanExecuteAsAnyParty = z.infer<typeof CanExecuteAsAnyPartySchema>;
 export type IdentityProviderAdmin = z.infer<typeof IdentityProviderAdminSchema>;
 export type ParticipantAdmin = z.infer<typeof ParticipantAdminSchema>;
 export type RightKind = z.infer<typeof RightKindSchema>;
