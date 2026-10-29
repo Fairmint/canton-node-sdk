@@ -40,4 +40,27 @@ describe('LedgerJsonApiClient user rights', () => {
       expectedConfig
     );
   });
+
+  it('sends value-wrapped rights, execute rights included, in the create-user request body', async () => {
+    const client = new LedgerJsonApiClient(new CantonRuntime(config));
+    const user = { id: 'user-id', isDeactivated: false };
+    const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({ user });
+    const rights = [
+      { kind: { CanActAs: { value: { party: 'alice::1220aa' } } } },
+      { kind: { CanReadAs: { value: { party: 'bob::1220bb' } } } },
+      { kind: { CanExecuteAs: { value: { party: 'carol::1220cc' } } } },
+      { kind: { CanReadAsAnyParty: { value: {} } } },
+      { kind: { CanExecuteAsAnyParty: { value: {} } } },
+      { kind: { IdentityProviderAdmin: { value: {} } } },
+      { kind: { ParticipantAdmin: { value: {} } } },
+    ];
+
+    await client.createUser({ user, rights });
+
+    expect(post).toHaveBeenCalledWith(
+      'https://ledger.example.test/v2/users',
+      { user, rights },
+      { contentType: 'application/json', includeBearerToken: true }
+    );
+  });
 });

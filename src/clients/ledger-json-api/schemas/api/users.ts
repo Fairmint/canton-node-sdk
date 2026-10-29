@@ -41,8 +41,19 @@ export const ParticipantAdminSchema = z.object({});
  *
  * The JSON Ledger API wraps each right's payload in `value` (`{ CanActAs: { value: { party } } }`), as the grant and
  * revoke request schemas do. Older versions of this schema described the payload unwrapped; both shapes are accepted.
+ *
+ * The wrapped variants come first on purpose: a union takes its first match, and an unwrapped empty-payload variant
+ * also matches a wrapped payload and would strip its `value`.
  */
 export const RightKindSchema = z.union([
+  z.object({ CanActAs: z.object({ value: CanActAsSchema }) }),
+  z.object({ CanReadAs: z.object({ value: CanReadAsSchema }) }),
+  z.object({ CanReadAsAnyParty: z.object({ value: CanReadAsAnyPartySchema }) }),
+  z.object({ Empty: z.object({ value: z.object({}) }) }),
+  z.object({ IdentityProviderAdmin: z.object({ value: IdentityProviderAdminSchema }) }),
+  z.object({ ParticipantAdmin: z.object({ value: ParticipantAdminSchema }) }),
+  z.object({ CanExecuteAs: z.object({ value: CanExecuteAsSchema }) }),
+  z.object({ CanExecuteAsAnyParty: z.object({ value: CanExecuteAsAnyPartySchema }) }),
   z.object({ CanActAs: CanActAsSchema }),
   z.object({ CanReadAs: CanReadAsSchema }),
   z.object({ CanReadAsAnyParty: CanReadAsAnyPartySchema }),
@@ -51,13 +62,6 @@ export const RightKindSchema = z.union([
   z.object({ ParticipantAdmin: ParticipantAdminSchema }),
   z.object({ CanExecuteAs: CanExecuteAsSchema }),
   z.object({ CanExecuteAsAnyParty: CanExecuteAsAnyPartySchema }),
-  z.object({ CanActAs: z.object({ value: CanActAsSchema }) }),
-  z.object({ CanReadAs: z.object({ value: CanReadAsSchema }) }),
-  z.object({ CanReadAsAnyParty: z.object({ value: CanReadAsAnyPartySchema }) }),
-  z.object({ IdentityProviderAdmin: z.object({ value: IdentityProviderAdminSchema }) }),
-  z.object({ ParticipantAdmin: z.object({ value: ParticipantAdminSchema }) }),
-  z.object({ CanExecuteAs: z.object({ value: CanExecuteAsSchema }) }),
-  z.object({ CanExecuteAsAnyParty: z.object({ value: CanExecuteAsAnyPartySchema }) }),
 ]);
 
 /** User right. */
