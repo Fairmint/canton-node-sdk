@@ -91,7 +91,10 @@ export async function checkUserActAs(client: LedgerJsonApiClient, parties: strin
 
 /**
  * Reports what a ledger user can read: whether it may use any-party reads, and which parties it may read as. Without
- * `userId` it checks the authenticated user.
+ * `userId` (or with an empty one) it checks the authenticated user.
+ *
+ * An explicit `userId` describes that user's rights, not necessarily what this client's token can read: the client
+ * reads as the user its token authenticates.
  *
  * Rights can change while a reader runs (Canton then aborts its streams), so long-running readers should resolve this
  * again on reconnect. Listing another user's rights needs ParticipantAdmin or IdentityProviderAdmin.
@@ -100,7 +103,9 @@ export async function resolveLedgerVisibility(
   client: LedgerJsonApiClient,
   options: { userId?: string } = {}
 ): Promise<LedgerVisibility> {
-  const userId = options.userId ?? (await authenticatedUserId(client));
+  // An empty userId is absent: `??` would list the rights of a user named ''.
+  const userId =
+    options.userId === undefined || options.userId === '' ? await authenticatedUserId(client) : options.userId;
   const rights = await listRights(client, userId);
   const readableParties = [
     ...new Set([...definedParties(rights, canActAsParty), ...definedParties(rights, canReadAsParty)]),

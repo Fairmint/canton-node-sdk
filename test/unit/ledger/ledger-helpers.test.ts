@@ -324,6 +324,14 @@ describe('resolveLedgerVisibility', () => {
     expect(listUserRights).toHaveBeenCalledWith({ userId: 'saver' });
   });
 
+  it('treats an empty userId as absent and checks the authenticated user', async () => {
+    const listUserRights = jest.fn().mockResolvedValue({ rights: [] });
+    const client = mockClient({ listUserRights });
+
+    await expect(resolveLedgerVisibility(client, { userId: '' })).resolves.toMatchObject({ userId: 'ledger-user' });
+    expect(listUserRights).toHaveBeenCalledWith({ userId: 'ledger-user' });
+  });
+
   it('throws when the ledger returns no user', async () => {
     const client = mockClient({ getAuthenticatedUser: jest.fn().mockResolvedValue({}) });
     await expect(resolveLedgerVisibility(client)).rejects.toThrow('authenticated user');
