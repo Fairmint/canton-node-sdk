@@ -824,7 +824,9 @@ describe('SubscribeToUpdates close semantics', (): void => {
     await new SubscribeToUpdates(client as never).connect({
       beginExclusive: 1,
       endInclusive: 100,
-      onClose: (info) => infos.push(info),
+      onClose: (info) => {
+        infos.push(info);
+      },
     });
 
     expect(infos).toStrictEqual([{ code: 1006, reason: '', initiatedBy: 'peer', complete: false, lastOffset: 15 }]);
@@ -849,6 +851,38 @@ describe('SubscribeToUpdates close semantics', (): void => {
       complete: true,
       lastOffset: 15,
     });
+  });
+
+  it('rejects a peer close with 1000 of an unbounded stream, which never completes', async (): Promise<void> => {
+    mockStream(frames, { code: 1000, reason: 'stream complete' });
+    const onClose = jest.fn();
+
+    const error: unknown = await new SubscribeToUpdates(client as never)
+      .connect({ beginExclusive: 1, rejectOnAbnormalClose: true, onClose })
+      .then(
+        () => undefined,
+        (err: unknown) => err
+      );
+
+    expect(error).toBeInstanceOf(UpdatesStreamClosedError);
+    expect(error).toMatchObject({ closeCode: 1000, initiatedBy: 'peer', lastOffset: 15 });
+    expect(onClose).toHaveBeenCalledWith({
+      code: 1000,
+      reason: 'stream complete',
+      initiatedBy: 'peer',
+      complete: false,
+      lastOffset: 15,
+    });
+  });
+
+  it('still resolves a peer close with 1000 of an unbounded stream by default, reported as incomplete', async (): Promise<void> => {
+    mockStream(frames, { code: 1000, reason: 'stream complete' });
+    const onClose = jest.fn();
+
+    await expect(
+      new SubscribeToUpdates(client as never).connect({ beginExclusive: 1, onClose })
+    ).resolves.toBeUndefined();
+    expect(onClose).toHaveBeenCalledWith(expect.objectContaining({ code: 1000, complete: false }));
   });
 
   it('rejects a network close with a retryable error carrying the last offset', async (): Promise<void> => {
@@ -907,5 +941,61 @@ describe('SubscribeToUpdates close semantics', (): void => {
         },
       })
     ).rejects.toThrow('cursor write failed');
+  });
+
+  it('rejects with the error an async onClose callback rejects with', async (): Promise<void> => {
+    mockStream(frames, { code: 1000, reason: 'stream complete' });
+
+    await expect(
+      new SubscribeToUpdates(client as never).connect({
+        beginExclusive: 1,
+        endInclusive: 100,
+        onClose: async (): Promise<void> => {
+          await Promise.resolve();
+          throw new Error('async cursor write failed');
+        },
+      })
+    ).rejects.toThrow('async cursor write failed');
+  });
+
+  it('waits for an async onClose callback before it resolves', async (): Promise<void> => {
+    mockStream(frames, { code: 1000, reason: 'stream complete' });
+    const events: string[] = [];
+
+    await new SubscribeToUpdates(client as never).connect({
+      beginExclusive: 1,
+      endInclusive: 100,
+      onClose: async (): Promise<void> => {
+        await new Promise((resolve) => setImmediate(resolve));
+        events.push('onClose finished');
+      },
+    });
+    events.push('subscription resolved');
+
+    expect(events).toStrictEqual(['onClose finished', 'subscription resolved']);
+  });
+
+  it('waits for an async onClose callback before it rejects with the close error', async (): Promise<void> => {
+    mockStream(frames, { code: 1006, reason: '' });
+    const events: string[] = [];
+
+    const error: unknown = await new SubscribeToUpdates(client as never)
+      .connect({
+        beginExclusive: 1,
+        endInclusive: 100,
+        rejectOnAbnormalClose: true,
+        onClose: async (): Promise<void> => {
+          await new Promise((resolve) => setImmediate(resolve));
+          events.push('onClose finished');
+        },
+      })
+      .then(
+        () => undefined,
+        (err: unknown) => err
+      );
+    events.push('subscription rejected');
+
+    expect(error).toBeInstanceOf(UpdatesStreamClosedError);
+    expect(events).toStrictEqual(['onClose finished', 'subscription rejected']);
   });
 });

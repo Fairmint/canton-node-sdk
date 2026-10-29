@@ -88,7 +88,8 @@ const SubscribeToUpdatesParamsSchema = z.object({
   transactionShape: z.nativeEnum(TransactionShape).optional(),
   /**
    * Reject with an {@link UpdatesStreamClosedError} when the stream closes without completing: a close the token refresh
-   * started, or a peer or network close with a code other than 1000. Default false, which resolves on every close.
+   * started, a peer or network close with a code other than 1000, or any close of an unbounded stream (no
+   * `endInclusive`), which never closes as complete. Default false, which resolves on every close.
    */
   rejectOnAbnormalClose: z.boolean().optional(),
 });
@@ -105,7 +106,10 @@ export interface UpdatesStreamCloseInfo {
   readonly code: number;
   readonly reason: string;
   readonly initiatedBy: UpdatesStreamCloseInitiator;
-  /** True only for a peer close with code 1000, which is how the participant ends a bounded stream. */
+  /**
+   * True only for a bounded stream (`endInclusive` set) that the peer closed with code 1000, which is how the
+   * participant ends it. An unbounded stream never closes as complete.
+   */
   readonly complete: boolean;
   /**
    * The highest offset among frames whose `onMessage` completed, including `OffsetCheckpoint` frames. Every frame
@@ -115,8 +119,9 @@ export interface UpdatesStreamCloseInfo {
 }
 
 /**
- * The updates stream closed before it completed, so the offsets after `lastOffset` (or after `beginExclusive` when it
- * is `undefined`) up to the requested end were not delivered. Retry by subscribing again from `lastOffset`.
+ * The updates stream closed before it completed (an unbounded stream never completes). The offsets after `lastOffset`
+ * (or after `beginExclusive` when it is `undefined`) were not delivered, up to `endInclusive` of a bounded stream.
+ * Retry by subscribing again from `lastOffset`.
  */
 export class UpdatesStreamClosedError extends ApiError {
   public override readonly name: string;
@@ -166,10 +171,10 @@ export type SubscribeToUpdatesParams = z.infer<typeof SubscribeToUpdatesParamsSc
 
   /**
    * Called once when the stream closes without an error having been reported first, before the returned promise
-   * settles. Use `complete` and `lastOffset` to tell a finished bounded window from an interrupted one. A throw rejects
-   * the subscription with that error.
+   * settles; the promise waits for an async callback. Use `complete` and `lastOffset` to tell a finished bounded window
+   * from an interrupted one. A throw or a rejection rejects the subscription with that error.
    */
-  onClose?: (info: UpdatesStreamCloseInfo) => void;
+  onClose?: (info: UpdatesStreamCloseInfo) => void | Promise<void>;
 };
 
 /**
@@ -189,7 +194,14 @@ export type UpdatesWsMessage = z.infer<typeof UpdatesWsMessageSchema>;
 
 /**
  * The ledger offset an updates frame carries: a transaction, reassignment, topology transaction or `OffsetCheckpoint`.
- * A reader may advance its resume cursor to it once the frame is handled. Error frames have none.
+ * Error frames have none.
+ *
+ * `onMessage` callbacks run concurrently: the socket dispatches the next frame without waiting for an async callback,
+ * so a frame can finish before an earlier one. A durable resume cursor may therefore advance to an offset only once
+ * every frame with a lower offset is handled: serialize the work in `onMessage`, or track a low-water mark (the highest
+ * offset at or below which every delivered frame is handled). Alternatively use
+ * {@link UpdatesStreamCloseInfo.lastOffset} or {@link UpdatesStreamClosedError.lastOffset}, which are valid after the
+ * close drain: by then every in-flight `onMessage` has finished.
  */
 export function getUpdateOffset(message: UpdatesWsMessage): number | undefined {
   if (!('update' in message)) return undefined;
@@ -228,8 +240,9 @@ function formatZodIssues(error: z.ZodError): string {
  * that:
  *
  * - Pass `rejectOnAbnormalClose: true` to reject with a retryable {@link UpdatesStreamClosedError} carrying the close
- *   code, who started the close and the last handled offset; only a peer close with code 1000 resolves.
- * - Or pass `onClose` to receive the same {@link UpdatesStreamCloseInfo} before the promise resolves.
+ *   code, who started the close and the last handled offset; only a peer close with code 1000 of a bounded stream
+ *   resolves, so every close of an unbounded stream rejects.
+ * - Or pass `onClose` to receive the same {@link UpdatesStreamCloseInfo} before the promise settles.
  *
  * Every frame with an offset, `OffsetCheckpoint` included, reaches `onMessage`; {@link getUpdateOffset} reads it.
  *
@@ -405,7 +418,7 @@ export class SubscribeToUpdates {
                 reject(err instanceof Error ? err : new Error(String(err)));
               }
             },
-            onClose: (code, reason) => {
+            onClose: async (code, reason): Promise<void> => {
               if (settled) return;
               settled = true;
               const initiatedBy: UpdatesStreamCloseInitiator = tokenRefreshStarted ? 'token-refresh' : 'peer';
@@ -413,11 +426,13 @@ export class SubscribeToUpdates {
                 code,
                 reason,
                 initiatedBy,
-                complete: initiatedBy === 'peer' && code === NORMAL_CLOSE_CODE,
+                // An unbounded stream has no end to reach, so no close of it completes a window.
+                complete: validated.endInclusive !== undefined && initiatedBy === 'peer' && code === NORMAL_CLOSE_CODE,
                 lastOffset,
               };
+              // The socket only logs a failure of this handler, so catch an async callback's rejection here.
               try {
-                params.onClose?.(info);
+                await params.onClose?.(info);
               } catch (err) {
                 reject(err instanceof Error ? err : new Error(String(err)));
                 return;
