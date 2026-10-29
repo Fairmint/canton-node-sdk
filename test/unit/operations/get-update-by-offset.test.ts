@@ -81,3 +81,27 @@ describe('LedgerJsonApiClient getUpdateByOffset', () => {
     });
   });
 });
+
+describe('LedgerJsonApiClient getUpdateByOffset any party', () => {
+  it('keeps filtersForAnyParty on transactions and reassignments through parameter validation', async () => {
+    const client = new LedgerJsonApiClient(new CantonRuntime(config));
+    const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({});
+    const updateFormat = buildUpdateFormat({ parties: [], anyParty: true });
+
+    await client.getUpdateByOffset({ offset: 5, updateFormat });
+
+    const anyPartyFilter = {
+      cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: false } } } }],
+    };
+    expect(post.mock.calls[0]?.[1]).toEqual({
+      offset: 5,
+      updateFormat: {
+        includeTransactions: {
+          eventFormat: { verbose: false, filtersByParty: {}, filtersForAnyParty: anyPartyFilter },
+          transactionShape: 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
+        },
+        includeReassignments: { verbose: false, filtersByParty: {}, filtersForAnyParty: anyPartyFilter },
+      },
+    });
+  });
+});

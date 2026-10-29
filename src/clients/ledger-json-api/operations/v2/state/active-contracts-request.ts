@@ -29,8 +29,16 @@ export const ACTIVE_CONTRACTS_PATH = '/v2/state/active-contracts' as const;
 const DEFAULT_IDLE_TIMEOUT_MS = DEFAULT_HTTP_TIMEOUT_MS;
 
 export const ActiveContractsParamsSchema = z.object({
-  /** Optional list of parties to scope the filter. */
+  /**
+   * Optional list of parties to scope the filter. Without `anyParty`, an empty or missing list falls back to the
+   * client's party list.
+   */
   parties: z.array(z.string()).optional(),
+  /**
+   * Read the contracts of every party hosted on the participant (`filtersForAnyParty`), plus any listed `parties`; the
+   * client's party list is not added. Needs the `CanReadAsAnyParty` user right.
+   */
+  anyParty: z.boolean().optional(),
   /** Optional template filters applied server-side. */
   templateIds: z.array(z.string()).optional(),
   /** Optional interface filters applied server-side. */
@@ -85,12 +93,18 @@ export async function buildActiveContractsRequest(
     activeAtOffset = offset;
   }
 
-  // Build party list - default to client's party list if not provided
-  const partyList = validated.parties && validated.parties.length > 0 ? validated.parties : client.buildPartyList();
+  // Build party list - default to client's party list if not provided (an any-party read lists only the given parties)
+  const anyParty = validated.anyParty === true;
+  const partyList = anyParty
+    ? (validated.parties ?? [])
+    : validated.parties && validated.parties.length > 0
+      ? validated.parties
+      : client.buildPartyList();
 
   // Build event format
   const eventFormat = buildEventFormat({
     parties: partyList,
+    ...(anyParty && { anyParty }),
     ...(validated.templateIds !== undefined && { templateIds: validated.templateIds }),
     ...(validated.interfaceIds !== undefined && { interfaceIds: validated.interfaceIds }),
     ...(validated.includeInterfaceView !== undefined && {

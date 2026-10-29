@@ -9,8 +9,16 @@ const endpoint = '/v2/updates/update-by-id' as const;
 const GetUpdateByIdParamsSchema = z.object({
   /** The ID of the update to fetch. */
   updateId: z.string().min(1, 'updateId must be a non-empty string'),
-  /** Parties to read as. With a template or interface filter, an empty list falls back to the client's party list. */
+  /**
+   * Parties to read as. With a template or interface filter and without `anyParty`, an empty list falls back to the
+   * client's party list.
+   */
   readAs: z.array(z.string()),
+  /**
+   * Also read as every party hosted on the participant (`filtersForAnyParty`), which needs the `CanReadAsAnyParty` user
+   * right. `readAs` may then be empty; the client's party list is never added.
+   */
+  anyParty: z.boolean().optional(),
   /** Optional template filters applied server-side. */
   templateIds: z.array(z.string()).optional(),
   /** Optional interface filters applied server-side. */
@@ -36,7 +44,7 @@ export type GetUpdateByIdResponse = paths[typeof endpoint]['post']['responses'][
  * Without `templateIds` or `interfaceIds` the request reads every event the `readAs` parties can see (a wildcard filter
  * per party) with created event blobs included. With at least one template or interface filter, only matching events
  * are returned, and created event blobs are included only when `includeCreatedEventBlob` is `true`. Interface views are
- * included by default.
+ * included by default. With `anyParty`, the same filter also applies to every party hosted on the participant.
  *
  * @example
  *   ```typescript
@@ -60,6 +68,7 @@ export const GetUpdateById = createApiOperation<GetUpdateByIdParams, GetUpdateBy
 
     const transactionShape = params.transactionShape ?? 'TRANSACTION_SHAPE_LEDGER_EFFECTS';
     const hasFilters = (params.templateIds?.length ?? 0) > 0 || (params.interfaceIds?.length ?? 0) > 0;
+    const anyParty = params.anyParty === true;
 
     // Build the request body according to the API specification
     if (hasFilters) {
@@ -69,7 +78,8 @@ export const GetUpdateById = createApiOperation<GetUpdateByIdParams, GetUpdateBy
           includeTransactions: {
             eventFormat: {
               ...buildEventFormat({
-                parties: params.readAs.length > 0 ? params.readAs : client.buildPartyList(),
+                parties: params.readAs.length > 0 || anyParty ? params.readAs : client.buildPartyList(),
+                ...(anyParty && { anyParty }),
                 ...(params.templateIds !== undefined && { templateIds: params.templateIds }),
                 ...(params.interfaceIds !== undefined && { interfaceIds: params.interfaceIds }),
                 ...(params.includeInterfaceView !== undefined && { includeInterfaceView: params.includeInterfaceView }),
@@ -83,30 +93,28 @@ export const GetUpdateById = createApiOperation<GetUpdateByIdParams, GetUpdateBy
       };
     }
 
+    const wildcard = {
+      cumulative: [
+        {
+          identifierFilter: {
+            WildcardFilter: {
+              value: {
+                includeCreatedEventBlob: params.includeCreatedEventBlob ?? true,
+              },
+            },
+          },
+        },
+      ],
+    };
+
     return {
       updateId: params.updateId,
       updateFormat: {
         includeTransactions: {
           eventFormat: {
             verbose: true,
-            filtersByParty: Object.fromEntries(
-              params.readAs.map((party) => [
-                party,
-                {
-                  cumulative: [
-                    {
-                      identifierFilter: {
-                        WildcardFilter: {
-                          value: {
-                            includeCreatedEventBlob: params.includeCreatedEventBlob ?? true,
-                          },
-                        },
-                      },
-                    },
-                  ],
-                },
-              ])
-            ),
+            filtersByParty: Object.fromEntries(params.readAs.map((party) => [party, wildcard])),
+            ...(anyParty && { filtersForAnyParty: wildcard }),
           },
           transactionShape,
         },

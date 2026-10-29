@@ -211,3 +211,116 @@ describe('LedgerJsonApiClient getUpdateById', () => {
     expect(post).not.toHaveBeenCalled();
   });
 });
+
+describe('LedgerJsonApiClient getUpdateById any party', () => {
+  const wildcard = {
+    cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: true } } } }],
+  };
+
+  it('adds a wildcard filtersForAnyParty to an unfiltered read, with or without readAs parties', async () => {
+    const client = createClient();
+    const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({});
+    const buildPartyList = jest.spyOn(client, 'buildPartyList');
+
+    await client.getUpdateById({ updateId: '1220abc', readAs: [], anyParty: true });
+    await client.getUpdateById({ updateId: '1220abc', readAs: [PARTY], anyParty: true });
+
+    expect(buildPartyList).not.toHaveBeenCalled();
+    expect(post.mock.calls[0]?.[1]).toEqual({
+      updateId: '1220abc',
+      updateFormat: {
+        includeTransactions: {
+          eventFormat: { verbose: true, filtersByParty: {}, filtersForAnyParty: wildcard },
+          transactionShape: 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
+        },
+      },
+    });
+    expect(post.mock.calls[1]?.[1]).toEqual({
+      updateId: '1220abc',
+      updateFormat: {
+        includeTransactions: {
+          eventFormat: { verbose: true, filtersByParty: { [PARTY]: wildcard }, filtersForAnyParty: wildcard },
+          transactionShape: 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
+        },
+      },
+    });
+  });
+
+  it('puts a filtered read into filtersForAnyParty without falling back to the client party list', async () => {
+    const client = createClient();
+    const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({});
+    const buildPartyList = jest.spyOn(client, 'buildPartyList');
+
+    await client.getUpdateById({ updateId: '1220abc', readAs: [], anyParty: true, interfaceIds: [ASSET_INTERFACE] });
+
+    expect(buildPartyList).not.toHaveBeenCalled();
+    expect(post.mock.calls[0]?.[1]).toEqual({
+      updateId: '1220abc',
+      updateFormat: {
+        includeTransactions: {
+          eventFormat: {
+            verbose: true,
+            filtersByParty: {},
+            filtersForAnyParty: {
+              cumulative: [
+                {
+                  identifierFilter: {
+                    InterfaceFilter: {
+                      value: {
+                        interfaceId: ASSET_INTERFACE,
+                        includeInterfaceView: true,
+                        includeCreatedEventBlob: false,
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+          transactionShape: 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
+        },
+      },
+    });
+  });
+});
+
+describe('LedgerJsonApiClient getEventsByContractId', () => {
+  const ENDPOINT_EVENTS = 'https://ledger.example.test/v2/events/events-by-contract-id';
+  const wildcard = {
+    cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: true } } } }],
+  };
+
+  it('keeps reading as the client party plus readAs by default', async () => {
+    const client = createClient();
+    const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({});
+
+    await client.getEventsByContractId({ contractId: '00cid', readAs: [OTHER_PARTY] });
+
+    expect(post).toHaveBeenCalledWith(
+      ENDPOINT_EVENTS,
+      {
+        contractId: '00cid',
+        eventFormat: { verbose: true, filtersByParty: { [PARTY]: wildcard, [OTHER_PARTY]: wildcard } },
+      },
+      { contentType: 'application/json', includeBearerToken: true },
+      expect.objectContaining({ requestSemantics: 'read' })
+    );
+  });
+
+  it('reads as any party plus only the readAs parties with anyParty', async () => {
+    const client = createClient();
+    const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({});
+
+    await client.getEventsByContractId({ contractId: '00cid', anyParty: true });
+    await client.getEventsByContractId({ contractId: '00cid', readAs: [OTHER_PARTY], anyParty: true });
+
+    expect(post.mock.calls[0]?.[1]).toEqual({
+      contractId: '00cid',
+      eventFormat: { verbose: true, filtersByParty: {}, filtersForAnyParty: wildcard },
+    });
+    expect(post.mock.calls[1]?.[1]).toEqual({
+      contractId: '00cid',
+      eventFormat: { verbose: true, filtersByParty: { [OTHER_PARTY]: wildcard }, filtersForAnyParty: wildcard },
+    });
+  });
+});

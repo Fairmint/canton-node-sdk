@@ -69,6 +69,26 @@ describe('GetActiveContracts', () => {
     );
   });
 
+  it('reads the contracts of any party without the client party list', async () => {
+    const buildPartyList = jest.fn(() => ['Default']);
+    const operation = new GetActiveContracts({ buildPartyList } as never);
+
+    await operation.execute({ anyParty: true, activeAtOffset: 42, includeCreatedEventBlob: true });
+
+    expect(buildPartyList).not.toHaveBeenCalled();
+    expect(mockConnect.mock.calls[0]?.[1]).toStrictEqual({
+      verbose: false,
+      activeAtOffset: 42,
+      eventFormat: {
+        verbose: false,
+        filtersByParty: {},
+        filtersForAnyParty: {
+          cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: true } } } }],
+        },
+      },
+    });
+  });
+
   it('applies a default idle timeout so a silent snapshot stream cannot hang', async () => {
     await new GetActiveContracts({} as never).execute({ parties: ['Alice'], activeAtOffset: 42 });
 

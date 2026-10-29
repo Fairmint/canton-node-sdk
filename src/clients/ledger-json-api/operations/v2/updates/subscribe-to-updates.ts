@@ -17,6 +17,9 @@ import { buildUpdateFormat } from '../utils/event-format-builder';
 
 const path = '/v2/updates' as const;
 
+/** Close code the participant sends after the last update of a bounded stream. */
+const NORMAL_CLOSE_CODE = 1000;
+
 /**
  * The `TransactionShape` enum defines the event shape for `Transaction`s and can have two different flavors AcsDelta
  * and LedgerEffects.
@@ -45,8 +48,17 @@ export enum TransactionShape {
 }
 
 const SubscribeToUpdatesParamsSchema = z.object({
-  /** Optional list of parties to scope the filter. */
+  /**
+   * Optional list of parties to scope the filter. Without `anyParty`, an empty or missing list falls back to the
+   * client's party list.
+   */
   parties: z.array(z.string()).optional(),
+  /**
+   * Read as every party hosted on the participant (`filtersForAnyParty`), plus any listed `parties`. The client's party
+   * list is not added. The ledger user needs the `CanReadAsAnyParty` right (see `resolveLedgerVisibility`);
+   * reassignments and topology events then read as any party too.
+   */
+  anyParty: z.boolean().optional(),
   /** Optional template filters applied server-side. */
   templateIds: z.array(z.string()).optional(),
   /** Optional interface filters applied server-side. */
@@ -74,7 +86,66 @@ const SubscribeToUpdatesParamsSchema = z.object({
   includeTopologyEvents: z.boolean().optional(),
   /** Transaction shape (default TRANSACTION_SHAPE_LEDGER_EFFECTS). */
   transactionShape: z.nativeEnum(TransactionShape).optional(),
+  /**
+   * Reject with an {@link UpdatesStreamClosedError} when the stream closes without completing: a close the token refresh
+   * started, or a peer or network close with a code other than 1000. Default false, which resolves on every close.
+   */
+  rejectOnAbnormalClose: z.boolean().optional(),
 });
+
+/** Who started a close of the updates stream. */
+export type UpdatesStreamCloseInitiator =
+  /** The participant, a proxy or the network (the server's normal end of a bounded stream is code 1000). */
+  | 'peer'
+  /** The proactive token refresh (`onTokenRefreshNeeded`), whatever close code it used. */
+  | 'token-refresh';
+
+/** How the updates stream closed. */
+export interface UpdatesStreamCloseInfo {
+  readonly code: number;
+  readonly reason: string;
+  readonly initiatedBy: UpdatesStreamCloseInitiator;
+  /** True only for a peer close with code 1000, which is how the participant ends a bounded stream. */
+  readonly complete: boolean;
+  /**
+   * The highest offset among frames whose `onMessage` completed, including `OffsetCheckpoint` frames. Every frame
+   * received before the close has been handled by then. `undefined` when no frame arrived.
+   */
+  readonly lastOffset: number | undefined;
+}
+
+/**
+ * The updates stream closed before it completed, so the offsets after `lastOffset` (or after `beginExclusive` when it
+ * is `undefined`) up to the requested end were not delivered. Retry by subscribing again from `lastOffset`.
+ */
+export class UpdatesStreamClosedError extends ApiError {
+  public override readonly name: string;
+  /** Always true: the stream can be resumed from `lastOffset`. */
+  public readonly retryable = true;
+  public readonly closeCode: number;
+  public readonly closeReason: string;
+  public readonly initiatedBy: UpdatesStreamCloseInitiator;
+  public readonly lastOffset: number | undefined;
+
+  constructor(info: UpdatesStreamCloseInfo) {
+    super(
+      `Ledger updates stream closed before it completed [${info.code}]${info.reason === '' ? '' : `: ${info.reason}`} (initiated by ${info.initiatedBy}, last offset ${info.lastOffset ?? 'none'})`,
+      undefined,
+      undefined,
+      {
+        closeCode: info.code,
+        closeReason: info.reason,
+        initiatedBy: info.initiatedBy,
+        lastOffset: info.lastOffset ?? null,
+      }
+    );
+    this.name = 'UpdatesStreamClosedError';
+    this.closeCode = info.code;
+    this.closeReason = info.reason;
+    this.initiatedBy = info.initiatedBy;
+    this.lastOffset = info.lastOffset;
+  }
+}
 
 export type SubscribeToUpdatesParams = z.infer<typeof SubscribeToUpdatesParamsSchema> & {
   /** Optional per-message callback to consume updates as they arrive. */
@@ -92,6 +163,13 @@ export type SubscribeToUpdatesParams = z.infer<typeof SubscribeToUpdatesParamsSc
    * token, and create a new subscription from the last processed offset.
    */
   onTokenRefreshNeeded?: WebSocketOptions['onTokenRefreshNeeded'];
+
+  /**
+   * Called once when the stream closes without an error having been reported first, before the returned promise
+   * settles. Use `complete` and `lastOffset` to tell a finished bounded window from an interrupted one. A throw rejects
+   * the subscription with that error.
+   */
+  onClose?: (info: UpdatesStreamCloseInfo) => void;
 };
 
 /**
@@ -108,6 +186,19 @@ export const UpdatesWsMessageSchema = z.union([
 ]);
 
 export type UpdatesWsMessage = z.infer<typeof UpdatesWsMessageSchema>;
+
+/**
+ * The ledger offset an updates frame carries: a transaction, reassignment, topology transaction or `OffsetCheckpoint`.
+ * A reader may advance its resume cursor to it once the frame is handled. Error frames have none.
+ */
+export function getUpdateOffset(message: UpdatesWsMessage): number | undefined {
+  if (!('update' in message)) return undefined;
+  const { update } = message;
+  if ('Transaction' in update) return update.Transaction.value.offset;
+  if ('Reassignment' in update) return update.Reassignment.value.offset;
+  if ('TopologyTransaction' in update) return update.TopologyTransaction.value.offset;
+  return update.OffsetCheckpoint.value.offset;
+}
 
 /** Format Zod issues for ApiError messages / Slack logs. */
 function formatZodIssues(error: z.ZodError): string {
@@ -129,6 +220,21 @@ function formatZodIssues(error: z.ZodError): string {
  * 2. **Persistent streaming**: Specify only `beginExclusive` (or omit both) to create a long-lived WebSocket connection
  *    that streams real-time updates indefinitely. The connection remains open until manually closed via the returned
  *    subscription object or an error occurs.
+ *
+ * **Close semantics.** The returned promise rejects on a Canton error frame, a socket error, an invalid frame or a
+ * failing `onMessage`. By default it resolves on every other close, including a close that the proactive token refresh
+ * started (code 4000 unless `onTokenRefreshNeeded` says otherwise) and an abnormal network close such as 1006. A
+ * bounded reader that treats a resolved promise as "window complete" would then skip the rest of the window. To detect
+ * that:
+ *
+ * - Pass `rejectOnAbnormalClose: true` to reject with a retryable {@link UpdatesStreamClosedError} carrying the close
+ *   code, who started the close and the last handled offset; only a peer close with code 1000 resolves.
+ * - Or pass `onClose` to receive the same {@link UpdatesStreamCloseInfo} before the promise resolves.
+ *
+ * Every frame with an offset, `OffsetCheckpoint` included, reaches `onMessage`; {@link getUpdateOffset} reads it.
+ *
+ * **Any party.** With `anyParty: true` the request reads as every party hosted on the participant, which needs the
+ * `CanReadAsAnyParty` user right.
  *
  * @example
  *   ```typescript
@@ -162,13 +268,19 @@ export class SubscribeToUpdates {
       beginExclusive = ledgerEnd.offset;
     }
 
-    // Build party list - default to client's party list if not provided
-    const partyList =
-      validated.parties && validated.parties.length > 0 ? validated.parties : this.client.buildPartyList();
+    // Build party list - default to client's party list if not provided. An any-party reader lists only the parties the
+    // caller asked for: the any-party filter already covers the client's parties.
+    const anyParty = validated.anyParty === true;
+    const partyList = anyParty
+      ? (validated.parties ?? [])
+      : validated.parties && validated.parties.length > 0
+        ? validated.parties
+        : this.client.buildPartyList();
 
     // Build update format: transactions, plus reassignments (default) and topology events (opt-in)
     const updateFormat = buildUpdateFormat({
       parties: partyList,
+      ...(anyParty && { anyParty }),
       ...(validated.templateIds !== undefined && { templateIds: validated.templateIds }),
       ...(validated.interfaceIds !== undefined && { interfaceIds: validated.interfaceIds }),
       ...(validated.includeInterfaceView !== undefined && { includeInterfaceView: validated.includeInterfaceView }),
@@ -190,14 +302,28 @@ export class SubscribeToUpdates {
 
     const wsClient = new WebSocketClient(this.client);
 
+    // The socket closes right after `onTokenRefreshNeeded` returns, with whatever code it picks (1000 included), so the
+    // close handler cannot tell a token-refresh close from the participant's end of a bounded stream by code alone.
+    let tokenRefreshStarted = false;
+    const { onTokenRefreshNeeded } = params;
+
     // Build WebSocket options for token refresh handling (only include defined properties)
     let wsOptions: WebSocketOptions | undefined;
-    if (params.onTokenExpiring !== undefined || params.onTokenRefreshNeeded !== undefined) {
+    if (params.onTokenExpiring !== undefined || onTokenRefreshNeeded !== undefined) {
       wsOptions = {
         ...(params.onTokenExpiring !== undefined && { onTokenExpiring: params.onTokenExpiring }),
-        ...(params.onTokenRefreshNeeded !== undefined && { onTokenRefreshNeeded: params.onTokenRefreshNeeded }),
+        ...(onTokenRefreshNeeded !== undefined && {
+          onTokenRefreshNeeded: (): ReturnType<NonNullable<WebSocketOptions['onTokenRefreshNeeded']>> => {
+            tokenRefreshStarted = true;
+            return onTokenRefreshNeeded();
+          },
+        }),
       };
     }
+
+    // Highest offset whose frame `onMessage` handled. Frame callbacks can finish out of order, but all of them finish
+    // before the close handler runs.
+    let lastOffset: number | undefined;
 
     return new Promise<void>((resolve, reject) => {
       let settled = false;
@@ -267,6 +393,11 @@ export class SubscribeToUpdates {
               if (typeof params.onMessage === 'function') {
                 await params.onMessage(message);
               }
+
+              const offset = getUpdateOffset(message);
+              if (offset !== undefined && (lastOffset === undefined || offset > lastOffset)) {
+                lastOffset = offset;
+              }
             },
             onError: (err) => {
               if (!settled) {
@@ -274,11 +405,28 @@ export class SubscribeToUpdates {
                 reject(err instanceof Error ? err : new Error(String(err)));
               }
             },
-            onClose: () => {
-              if (!settled) {
-                settled = true;
-                resolve();
+            onClose: (code, reason) => {
+              if (settled) return;
+              settled = true;
+              const initiatedBy: UpdatesStreamCloseInitiator = tokenRefreshStarted ? 'token-refresh' : 'peer';
+              const info: UpdatesStreamCloseInfo = {
+                code,
+                reason,
+                initiatedBy,
+                complete: initiatedBy === 'peer' && code === NORMAL_CLOSE_CODE,
+                lastOffset,
+              };
+              try {
+                params.onClose?.(info);
+              } catch (err) {
+                reject(err instanceof Error ? err : new Error(String(err)));
+                return;
               }
+              if (validated.rejectOnAbnormalClose === true && !info.complete) {
+                reject(new UpdatesStreamClosedError(info));
+                return;
+              }
+              resolve();
             },
           },
           wsOptions

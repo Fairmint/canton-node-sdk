@@ -6,11 +6,20 @@ export type {
 } from './operations/v2/commands/submit-and-wait-for-transaction';
 export type { GetActiveContractsParams } from './operations/v2/state/get-active-contracts';
 export type { ActiveContractsStream, StreamActiveContractsParams } from './operations/v2/state/stream-active-contracts';
-export { TransactionShape } from './operations/v2/updates/subscribe-to-updates';
+export {
+  getUpdateOffset,
+  TransactionShape,
+  UpdatesStreamClosedError,
+  type SubscribeToUpdatesParams,
+  type UpdatesStreamCloseInfo,
+  type UpdatesStreamCloseInitiator,
+  type UpdatesWsMessage,
+} from './operations/v2/updates/subscribe-to-updates';
 export {
   buildEventFormat,
   buildTransactionFormat,
   buildUpdateFormat,
+  type BuiltEventFormat,
   type EventFormatBuilderParams,
   type TransactionFormatBuilderParams,
   type UpdateFormatBuilderParams,

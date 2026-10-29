@@ -1,8 +1,13 @@
 import {
+  getUpdateOffset,
   SubscribeToUpdates,
   TransactionShape,
+  UpdatesStreamClosedError,
   UpdatesWsMessageSchema,
+  type UpdatesStreamCloseInfo,
+  type UpdatesWsMessage,
 } from '../../../src/clients/ledger-json-api/operations/v2/updates/subscribe-to-updates';
+import type { WebSocketOptions } from '../../../src/core/ws/WebSocketClient';
 import { WsUpdateSchema } from '../../../src/clients/ledger-json-api/schemas/api/updates';
 import { ApiError } from '../../../src/core/errors';
 
@@ -699,5 +704,208 @@ describe('SubscribeToUpdates request', (): void => {
         viewStatus: { code: 9, message: 'view failed', details: [] },
       },
     ]);
+  });
+});
+
+describe('SubscribeToUpdates any party', (): void => {
+  beforeEach((): void => {
+    mockConnect.mockReset();
+    mockConnect.mockImplementation(
+      async (_path: string, _request: unknown, handlers: { onClose?: (code: number, reason: string) => void }) => {
+        handlers.onClose?.(1000, 'stream complete');
+        return { close: jest.fn(), isConnected: (): boolean => false, getConnectionState: (): number => 3 };
+      }
+    );
+  });
+
+  it('sends filtersForAnyParty without falling back to the client party list', async (): Promise<void> => {
+    const buildPartyList = jest.fn((): string[] => ['Default']);
+    const client = { buildPartyList, getLedgerEnd: jest.fn() };
+
+    await new SubscribeToUpdates(client as never).connect({
+      anyParty: true,
+      beginExclusive: 100,
+      endInclusive: 200,
+      includeCreatedEventBlob: true,
+      includeReassignments: false,
+    });
+
+    expect(buildPartyList).not.toHaveBeenCalled();
+    expect(mockConnect.mock.calls[0]?.[1]).toStrictEqual({
+      beginExclusive: 100,
+      endInclusive: 200,
+      verbose: false,
+      updateFormat: {
+        includeTransactions: {
+          eventFormat: {
+            verbose: false,
+            filtersByParty: {},
+            filtersForAnyParty: {
+              cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: true } } } }],
+            },
+          },
+          transactionShape: 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
+        },
+      },
+    });
+  });
+
+  it('adds only the caller-listed parties, and reassignments read as any party too', async (): Promise<void> => {
+    const buildPartyList = jest.fn((): string[] => ['Default']);
+    const client = { buildPartyList, getLedgerEnd: jest.fn() };
+
+    await new SubscribeToUpdates(client as never).connect({ anyParty: true, parties: ['Alice'], beginExclusive: 1 });
+
+    expect(buildPartyList).not.toHaveBeenCalled();
+    const request = mockConnect.mock.calls[0]?.[1] as {
+      updateFormat: { includeTransactions: { eventFormat: unknown }; includeReassignments: unknown };
+    };
+    const anyPartyFilter = {
+      cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: false } } } }],
+    };
+    expect(request.updateFormat.includeTransactions.eventFormat).toStrictEqual({
+      verbose: false,
+      filtersByParty: { Alice: { cumulative: [] } },
+      filtersForAnyParty: anyPartyFilter,
+    });
+    expect(request.updateFormat.includeReassignments).toStrictEqual({
+      filtersByParty: { Alice: { cumulative: [] } },
+      filtersForAnyParty: anyPartyFilter,
+      verbose: false,
+    });
+  });
+});
+
+describe('getUpdateOffset', (): void => {
+  it('reads the offset of every update kind, checkpoints included', (): void => {
+    const decode = (frame: unknown): UpdatesWsMessage => UpdatesWsMessageSchema.parse(frame);
+    expect(getUpdateOffset(decode(createWireTransactionUpdateMessage({ offset: 11 })))).toBe(11);
+    expect(getUpdateOffset(decode(createWireReassignmentUpdateMessage(12)))).toBe(12);
+    expect(getUpdateOffset(decode(createWireTopologyOnboardingUpdateMessage(13)))).toBe(13);
+    expect(getUpdateOffset(decode(createWireOffsetCheckpointMessage(14)))).toBe(14);
+    expect(getUpdateOffset(decode({ code: 'INTERNAL', cause: 'boom', errorCategory: 1 }))).toBeUndefined();
+  });
+});
+
+describe('SubscribeToUpdates close semantics', (): void => {
+  const client = { buildPartyList: (): string[] => ['Alice'], getLedgerEnd: jest.fn() };
+
+  interface Handlers {
+    onMessage: (message: unknown) => Promise<void>;
+    onClose?: (code: number, reason: string) => void;
+  }
+
+  /** Delivers the frames, optionally runs the token refresh, then closes with the given code. */
+  function mockStream(frames: unknown[], close: { code: number; reason: string; tokenRefresh?: boolean }): void {
+    mockConnect.mockImplementation(
+      async (_path: string, _request: unknown, handlers: Handlers, options?: WebSocketOptions): Promise<unknown> => {
+        for (const frame of frames) {
+          await handlers.onMessage(frame);
+        }
+        if (close.tokenRefresh === true) {
+          await options?.onTokenRefreshNeeded?.();
+        }
+        handlers.onClose?.(close.code, close.reason);
+        return { close: jest.fn(), isConnected: (): boolean => false, getConnectionState: (): number => 3 };
+      }
+    );
+  }
+
+  const frames = [createWireTransactionUpdateMessage({ offset: 10 }), createWireOffsetCheckpointMessage(15)];
+
+  beforeEach((): void => {
+    mockConnect.mockReset();
+  });
+
+  it('resolves on an abnormal close by default but reports it through onClose', async (): Promise<void> => {
+    mockStream(frames, { code: 1006, reason: '' });
+    const infos: UpdatesStreamCloseInfo[] = [];
+
+    await new SubscribeToUpdates(client as never).connect({
+      beginExclusive: 1,
+      endInclusive: 100,
+      onClose: (info) => infos.push(info),
+    });
+
+    expect(infos).toStrictEqual([{ code: 1006, reason: '', initiatedBy: 'peer', complete: false, lastOffset: 15 }]);
+  });
+
+  it('resolves a peer close with 1000 when rejectOnAbnormalClose is set', async (): Promise<void> => {
+    mockStream(frames, { code: 1000, reason: 'stream complete' });
+    const onClose = jest.fn();
+
+    await expect(
+      new SubscribeToUpdates(client as never).connect({
+        beginExclusive: 1,
+        endInclusive: 100,
+        rejectOnAbnormalClose: true,
+        onClose,
+      })
+    ).resolves.toBeUndefined();
+    expect(onClose).toHaveBeenCalledWith({
+      code: 1000,
+      reason: 'stream complete',
+      initiatedBy: 'peer',
+      complete: true,
+      lastOffset: 15,
+    });
+  });
+
+  it('rejects a network close with a retryable error carrying the last offset', async (): Promise<void> => {
+    mockStream(frames, { code: 1006, reason: '' });
+
+    const error: unknown = await new SubscribeToUpdates(client as never)
+      .connect({ beginExclusive: 1, endInclusive: 100, rejectOnAbnormalClose: true })
+      .then(
+        () => undefined,
+        (err: unknown) => err
+      );
+
+    expect(error).toBeInstanceOf(UpdatesStreamClosedError);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      retryable: true,
+      closeCode: 1006,
+      closeReason: '',
+      initiatedBy: 'peer',
+      lastOffset: 15,
+    });
+  });
+
+  it('rejects a token-refresh close even when it uses code 1000', async (): Promise<void> => {
+    mockStream(frames.slice(0, 1), { code: 1000, reason: 'refresh', tokenRefresh: true });
+    const onTokenRefreshNeeded = jest.fn(() => ({ code: 1000, reason: 'refresh' }));
+
+    const error: unknown = await new SubscribeToUpdates(client as never)
+      .connect({ beginExclusive: 1, endInclusive: 100, rejectOnAbnormalClose: true, onTokenRefreshNeeded })
+      .then(
+        () => undefined,
+        (err: unknown) => err
+      );
+
+    expect(onTokenRefreshNeeded).toHaveBeenCalledTimes(1);
+    expect(error).toBeInstanceOf(UpdatesStreamClosedError);
+    expect(error).toMatchObject({ closeCode: 1000, initiatedBy: 'token-refresh', lastOffset: 10 });
+  });
+
+  it('reports no offset when the stream closes before any frame', async (): Promise<void> => {
+    mockStream([], { code: 4000, reason: 'Token refresh required' });
+
+    await expect(
+      new SubscribeToUpdates(client as never).connect({ beginExclusive: 1, rejectOnAbnormalClose: true })
+    ).rejects.toMatchObject({ closeCode: 4000, initiatedBy: 'peer', lastOffset: undefined });
+  });
+
+  it('rejects with the error an onClose callback throws', async (): Promise<void> => {
+    mockStream(frames, { code: 1000, reason: 'stream complete' });
+
+    await expect(
+      new SubscribeToUpdates(client as never).connect({
+        beginExclusive: 1,
+        onClose: () => {
+          throw new Error('cursor write failed');
+        },
+      })
+    ).rejects.toThrow('cursor write failed');
   });
 });

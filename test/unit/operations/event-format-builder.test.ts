@@ -163,3 +163,82 @@ describe('buildUpdateFormat', () => {
     expect(Object.keys(updateFormat)).toEqual(['includeTransactions', 'includeReassignments', 'includeTopologyEvents']);
   });
 });
+
+describe('any-party formats', () => {
+  const wildcard = (includeCreatedEventBlob: boolean): Record<string, unknown> => ({
+    identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob } } },
+  });
+
+  it('still requires a party without anyParty', () => {
+    expect(() => buildEventFormat({ parties: [] })).toThrow('At least one party is required');
+    expect(() => buildEventFormat({ parties: [], anyParty: false })).toThrow('At least one party is required');
+    expect(() => buildUpdateFormat({ parties: [] })).toThrow('At least one party is required');
+  });
+
+  it('reads as any party alone with an explicit wildcard and an empty filtersByParty', () => {
+    expect(buildEventFormat({ parties: [], anyParty: true, includeCreatedEventBlob: true })).toStrictEqual({
+      verbose: false,
+      filtersByParty: {},
+      filtersForAnyParty: { cumulative: [wildcard(true)] },
+    });
+    expect(buildEventFormat({ parties: [], anyParty: true }).filtersForAnyParty).toStrictEqual({
+      cumulative: [wildcard(false)],
+    });
+  });
+
+  it('keeps the listed parties beside the any-party filter', () => {
+    expect(buildEventFormat({ parties: ['Alice'], anyParty: true, includeCreatedEventBlob: true })).toStrictEqual({
+      verbose: false,
+      filtersByParty: { Alice: { cumulative: [wildcard(true)] } },
+      filtersForAnyParty: { cumulative: [wildcard(true)] },
+    });
+  });
+
+  it('puts template and interface filters into the any-party filter', () => {
+    const format = buildEventFormat({
+      parties: [],
+      anyParty: true,
+      templateIds: ['#wallet:Splice.Wallet.Install:WalletAppInstall'],
+      interfaceIds: [ASSET_INTERFACE],
+    });
+
+    expect(format.filtersByParty).toStrictEqual({});
+    expect(format.filtersForAnyParty?.cumulative).toStrictEqual([
+      {
+        identifierFilter: {
+          TemplateFilter: {
+            value: { templateId: '#wallet:Splice.Wallet.Install:WalletAppInstall', includeCreatedEventBlob: false },
+          },
+        },
+      },
+      {
+        identifierFilter: {
+          InterfaceFilter: {
+            value: { interfaceId: ASSET_INTERFACE, includeInterfaceView: true, includeCreatedEventBlob: false },
+          },
+        },
+      },
+    ]);
+  });
+
+  it('carries the any-party filter into reassignments and asks for topology events of every party', () => {
+    const anyPartyFilter = { cumulative: [wildcard(true)] };
+
+    expect(
+      buildUpdateFormat({ parties: [], anyParty: true, includeCreatedEventBlob: true, includeTopologyEvents: true })
+    ).toStrictEqual({
+      includeTransactions: {
+        eventFormat: { verbose: false, filtersByParty: {}, filtersForAnyParty: anyPartyFilter },
+        transactionShape: 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
+      },
+      includeReassignments: { filtersByParty: {}, filtersForAnyParty: anyPartyFilter, verbose: false },
+      includeTopologyEvents: { includeParticipantAuthorizationEvents: { parties: [] } },
+    });
+  });
+
+  it('can leave reassignments out of an any-party update format', () => {
+    expect(Object.keys(buildUpdateFormat({ parties: ['Alice'], anyParty: true, includeReassignments: false }))).toEqual(
+      ['includeTransactions']
+    );
+  });
+});
