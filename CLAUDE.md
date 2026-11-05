@@ -7,3 +7,7 @@ Start with the [wiki Home](https://github.com/Fairmint/canton-node-sdk/wiki) and
 [`src/index.ts`](src/index.ts), generated-client source, runnable examples, and tests as the source
 of truth for exact behavior. Before handing off a change, run the relevant checks in `README.md` and
 [`package.json`](package.json).
+
+## Repository instructions for every agent
+
+@AGENTS.md
