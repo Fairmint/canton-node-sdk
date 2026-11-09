@@ -351,6 +351,9 @@ class RawFrameStream<Known extends string> {
         try {
           await this.spec.onFrame(frame);
         } catch (error) {
+          // A failed onFrame always surfaces, even when close() already stopped the stream: it replaces a pending
+          // successful ending, never an earlier error.
+          if (this.ending?.kind !== 'error') this.ending = { kind: 'error', error };
           this.stop({ kind: 'error', error });
           break;
         }

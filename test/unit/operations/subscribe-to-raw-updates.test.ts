@@ -456,6 +456,30 @@ describe('SubscribeToRawUpdates', () => {
     expect(seen).toEqual([101]);
   });
 
+  it('rejects with the error an in-flight onFrame throws after close(), rather than ending as closed', async () => {
+    const connection = captureConnection();
+    const gate = deferred();
+    const failure = new Error('archive write failed');
+    const stream = open({
+      onFrame: async (frame) => {
+        if (frame.offset === 102) {
+          await gate.promise;
+          throw failure;
+        }
+      },
+    });
+    const { send } = await connection;
+
+    send(transactionText(101));
+    send(transactionText(102));
+    await flush();
+    stream.close();
+    gate.resolve();
+
+    await expect(stream.done).rejects.toBe(failure);
+    expect(stream.lastOffset).toBe(101);
+  });
+
   it('stops reading while the consumer is a high-water mark behind and resumes at half', async () => {
     const connection = captureConnection();
     const gate = deferred();
