@@ -211,3 +211,102 @@ describe('LedgerJsonApiClient getUpdateById', () => {
     expect(post).not.toHaveBeenCalled();
   });
 });
+
+describe('LedgerJsonApiClient getUpdateById any-party', () => {
+  it('reads the update as every party with a wildcard and blobs, without a configured party', async () => {
+    const client = new LedgerJsonApiClient(
+      new CantonRuntime({
+        ...config,
+        apis: {
+          LEDGER_JSON_API: {
+            apiUrl: 'https://ledger.example.test',
+            auth: { grantType: 'client_credentials', clientId: 'ledger-client', clientSecret: 'secret' },
+          },
+        },
+      })
+    );
+    const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({});
+
+    await client.getUpdateById({ updateId: '1220abc', anyParty: true });
+
+    expect(post.mock.calls[0]?.[1]).toEqual({
+      updateId: '1220abc',
+      updateFormat: {
+        includeTransactions: {
+          eventFormat: {
+            verbose: true,
+            filtersByParty: {},
+            filtersForAnyParty: {
+              cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: true } } } }],
+            },
+          },
+          transactionShape: 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
+        },
+      },
+    });
+  });
+
+  it('applies interface filters to every party', async () => {
+    const client = createClient();
+    const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({});
+
+    await client.getUpdateById({ updateId: '1220abc', anyParty: true, interfaceIds: [ASSET_INTERFACE] });
+
+    expect(post.mock.calls[0]?.[1]).toEqual({
+      updateId: '1220abc',
+      updateFormat: {
+        includeTransactions: {
+          eventFormat: {
+            verbose: true,
+            filtersByParty: {},
+            filtersForAnyParty: {
+              cumulative: [
+                {
+                  identifierFilter: {
+                    InterfaceFilter: {
+                      value: {
+                        interfaceId: ASSET_INTERFACE,
+                        includeInterfaceView: true,
+                        includeCreatedEventBlob: false,
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+          transactionShape: 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
+        },
+      },
+    });
+  });
+
+  it('rejects readAs together with anyParty before any request', async () => {
+    const client = createClient();
+    const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({});
+    const both = { updateId: '1220abc', anyParty: true, readAs: [PARTY] } as unknown as Parameters<
+      LedgerJsonApiClient['getUpdateById']
+    >[0];
+
+    await expect(client.getUpdateById(both)).rejects.toThrow('pass either anyParty: true or readAs, not both');
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['readAs is missing', { updateId: '1220abc' }, 'readAs: Invalid input: expected array, received undefined'],
+    [
+      'a template filter is not a list',
+      { updateId: '1220abc', readAs: [PARTY], templateIds: 'pkg:Mod:T' },
+      'templateIds: Invalid input: expected array, received string',
+    ],
+    ['anyParty is false', { updateId: '1220abc', anyParty: false }, 'anyParty: anyParty must be true when it is given'],
+  ])('reports at its field that %s, as a party-list read always has', async (_name, params, message) => {
+    const client = createClient();
+    const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({});
+
+    await expect(
+      client.getUpdateById(params as unknown as Parameters<LedgerJsonApiClient['getUpdateById']>[0])
+    ).rejects.toThrow(`Parameter validation failed: ${message}`);
+    expect(post).not.toHaveBeenCalled();
+  });
+});

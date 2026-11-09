@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import {
   SubscribeToUpdates,
   TransactionShape,
@@ -699,5 +700,91 @@ describe('SubscribeToUpdates request', (): void => {
         viewStatus: { code: 9, message: 'view failed', details: [] },
       },
     ]);
+  });
+});
+
+describe('SubscribeToUpdates any-party request', (): void => {
+  interface Handlers {
+    onMessage: (message: unknown) => Promise<void>;
+    onClose?: (code: number, reason: string) => void;
+  }
+
+  beforeEach((): void => {
+    mockConnect.mockReset();
+    mockConnect.mockImplementation(async (_path: string, _request: unknown, handlers: Handlers): Promise<unknown> => {
+      handlers.onClose?.(1000, 'stream complete');
+      return { close: jest.fn(), isConnected: (): boolean => false, getConnectionState: (): number => 3 };
+    });
+  });
+
+  it('reads every party through filtersForAnyParty without consulting the client party list', async (): Promise<void> => {
+    const buildPartyList = jest.fn((): string[] => ['Default']);
+    const client = { buildPartyList, getLedgerEnd: jest.fn() };
+
+    await new SubscribeToUpdates(client as never).connect({
+      anyParty: true,
+      beginExclusive: 42,
+      includeCreatedEventBlob: true,
+      includeTopologyEvents: true,
+    });
+
+    const wildcard = {
+      cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: true } } } }],
+    };
+    expect(buildPartyList).not.toHaveBeenCalled();
+    expect(mockConnect.mock.calls[0]?.[1]).toEqual({
+      beginExclusive: 42,
+      verbose: false,
+      updateFormat: {
+        includeTransactions: {
+          eventFormat: { verbose: false, filtersByParty: {}, filtersForAnyParty: wildcard },
+          transactionShape: 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
+        },
+        includeReassignments: { verbose: false, filtersByParty: {}, filtersForAnyParty: wildcard },
+        includeTopologyEvents: { includeParticipantAuthorizationEvents: {} },
+      },
+    });
+  });
+
+  it('rejects anyParty together with parties before connecting', async (): Promise<void> => {
+    const client = { buildPartyList: (): string[] => ['Default'], getLedgerEnd: jest.fn() };
+    const both = { anyParty: true, parties: ['Alice'], beginExclusive: 1 } as unknown as Parameters<
+      SubscribeToUpdates['connect']
+    >[0];
+
+    await expect(new SubscribeToUpdates(client as never).connect(both)).rejects.toThrow(
+      'pass either anyParty: true or parties, not both'
+    );
+    expect(mockConnect).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['beginExclusive', { beginExclusive: 'abc' }, ['beginExclusive'], 'invalid_type'],
+    ['transactionShape', { beginExclusive: 1, transactionShape: 'BAD' }, ['transactionShape'], 'invalid_value'],
+    ['anyParty', { anyParty: false, beginExclusive: 1 }, ['anyParty'], 'custom'],
+  ])('reports a bad %s at its field, as a party-list subscription always has', async (_name, params, path, code) => {
+    const client = { buildPartyList: (): string[] => ['Default'], getLedgerEnd: jest.fn() };
+
+    const error = await new SubscribeToUpdates(client as never)
+      .connect(params as unknown as Parameters<SubscribeToUpdates['connect']>[0])
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(z.ZodError);
+    expect((error as z.ZodError).issues).toEqual([expect.objectContaining({ path, code })]);
+    expect(mockConnect).not.toHaveBeenCalled();
+  });
+
+  it('keeps the default to the client party list when neither is given', async (): Promise<void> => {
+    const client = { buildPartyList: (): string[] => ['Default'], getLedgerEnd: jest.fn() };
+
+    await new SubscribeToUpdates(client as never).connect({ beginExclusive: 3 });
+
+    const request = mockConnect.mock.calls[0]?.[1] as {
+      updateFormat: { includeTransactions: { eventFormat: Record<string, unknown> } };
+    };
+    expect(request.updateFormat.includeTransactions.eventFormat).toEqual({
+      verbose: false,
+      filtersByParty: { Default: { cumulative: [] } },
+    });
   });
 });
