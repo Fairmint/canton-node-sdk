@@ -62,29 +62,52 @@ function isNumberChar(char: number): boolean {
   );
 }
 
-function isIntegerToken(token: string): boolean {
-  return !token.includes('.') && !token.includes('e') && !token.includes('E');
+const NUMBER_TOKEN = /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/;
+
+/**
+ * The integer a number token denotes, in whatever form it is written (`12`, `1.2e1`, `1e+23`), or `undefined` when it
+ * denotes a non-integer. Only called on tokens that already read back as themselves, so the exponent is small (a larger
+ * one parses to `Infinity` or `0`, which reads back differently).
+ */
+function integerValue(token: string): bigint | undefined {
+  const match = NUMBER_TOKEN.exec(token);
+  if (match === null) return undefined;
+  const [, sign = '', whole = '', fraction = '', exponent = '0'] = match;
+  const digits = BigInt(`${whole}${fraction}`);
+  const scale = Number(exponent) - fraction.length;
+  let magnitude: bigint;
+  if (scale >= 0) {
+    magnitude = digits * 10n ** BigInt(scale);
+  } else {
+    const divisor = 10n ** BigInt(-scale);
+    if (digits % divisor !== 0n) return undefined;
+    magnitude = digits / divisor;
+  }
+  return sign === '-' ? -magnitude : magnitude;
 }
 
 /**
  * Whether `JSON.parse` reads the number token as exactly the number written, in the form written: JavaScript writes the
- * parsed number back as the same text, and, for an integer, the parsed number is that very integer. The second check
- * matters above 2^53, where JavaScript writes some integers it cannot hold with the trailing zeros they were written
- * with (`9223372036854775000` parses to 9223372036854774784 but is written back as `9223372036854775000`). The first
- * rejects an integer JavaScript holds but writes differently (`1152921504606846976`, 2^60, is written back as
- * `1152921504606847000`), so that serializing the parsed value never changes a number either.
+ * parsed number back as the same text, and, for a token that denotes an integer, the parsed number is that very
+ * integer. The second check matters above 2^53, where JavaScript writes some integers it cannot hold with the trailing
+ * zeros they were written with (`9223372036854775000` parses to 9223372036854774784 but is written back as
+ * `9223372036854775000`), or in exponent form (`1e+23` parses to 99999999999999991611392 but is written back as
+ * `1e+23`). The first rejects an integer JavaScript holds but writes differently (`1152921504606846976`, 2^60, is
+ * written back as `1152921504606847000`), so that serializing the parsed value never changes a number either.
  */
 function isExactNumber(token: string): boolean {
   const parsed = Number(token);
   // A finite number is written back without `Infinity`, so `BigInt(parsed)` below cannot throw.
   if (String(parsed) !== token) return false;
-  return !isIntegerToken(token) || BigInt(parsed) === BigInt(token);
+  const value = integerValue(token);
+  return value === undefined || (Number.isInteger(parsed) && BigInt(parsed) === value);
 }
 
 /** What JavaScript makes of the token: the integer it holds when that differs from the one written, else its text. */
 function describeParsed(token: string): string {
   const parsed = Number(token);
-  if (isIntegerToken(token) && Number.isFinite(parsed) && BigInt(parsed) !== BigInt(token)) {
+  const value = integerValue(token);
+  if (value !== undefined && Number.isInteger(parsed) && BigInt(parsed) !== value) {
     return BigInt(parsed).toString();
   }
   return String(parsed);

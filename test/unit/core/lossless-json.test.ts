@@ -43,6 +43,22 @@ describe('parseJsonLosslessly', () => {
     expect(() => parseJsonLosslessly(`[${token}]`)).toThrow(`(it reads back as ${held})`);
   });
 
+  it.each([
+    ['1e+23', '99999999999999991611392'],
+    ['-1e+23', '-99999999999999991611392'],
+    ['1.2345678901234566e+25', '12345678901234566097272832'],
+  ])('rejects the integer %s written in exponent form, which JavaScript holds as %s', (token, held) => {
+    // The same trap in exponent form: JavaScript writes the token back unchanged, but holds a different integer.
+    expect(String(Number(token))).toBe(token);
+    expect(BigInt(Number(token)).toString()).toBe(held);
+    expect(() => parseJsonLosslessly(`[${token}]`)).toThrow(`(it reads back as ${held})`);
+  });
+
+  it('accepts integers in exponent form that JavaScript holds exactly', () => {
+    // 10^21 and 10^22 are 2^n * 5^n with 5^n below 2^53, so a double holds them exactly.
+    expect(parseJsonLosslessly('[1e+21,1e+22,-1e+22]')).toEqual([1e21, 1e22, -1e22]);
+  });
+
   it('accepts integers above 2^53 that JavaScript holds exactly and writes back unchanged', () => {
     expect(parseJsonLosslessly('[9007199254740992,-9007199254740992,100000000000000000000]')).toEqual([
       2 ** 53,
