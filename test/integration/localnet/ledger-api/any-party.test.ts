@@ -2,8 +2,9 @@
  * LedgerJsonApiClient integration tests: reading as every party
  *
  * Checks the any-party reads against a real participant: the CanReadAsAnyParty right and the refusal without it, a raw
- * updates page and a raw updates stream of the same update (exact text, close, resume without a repeat), the active
- * contracts of every party, and a user's raw completions.
+ * updates page and a raw updates stream of the same update (the same bytes, close, resume without a repeat), the active
+ * contracts of every party, a user's raw completions, and another user's completions, which only a holder of the right
+ * may read.
  *
  * The known activity is a transfer offer from the validator's wallet to a party this test allocates and grants to no
  * user, so only an any-party read sees that party's side of it.
@@ -32,7 +33,7 @@ import {
   type RawUpdatesPage,
 } from '../../../../src';
 import { isRecord } from '../../../../src/core/utils';
-import { findCreatedContractId, retry } from '@fairmint/canton-dev-tools/testing';
+import { getLocalnetNonAdminLedgerClient, listCreatedEvents, retry } from '@fairmint/canton-dev-tools/testing';
 import { getClient, resolveValidatorPartyId, resolveWalletAppInstallContext } from './setup';
 
 const WALLET_APP_INSTALL_TEMPLATE_ID = '#splice-wallet:Splice.Wallet.Install:WalletAppInstall';
@@ -49,10 +50,18 @@ const ANY_PARTY_UPDATE_FORMAT = buildUpdateFormat({
 });
 
 /**
- * A refusal for a missing right: HTTP 403 on a request, an error frame with gRPC status PERMISSION_DENIED (7) on a
- * stream, or the redacted message Canton sends for security-sensitive errors such as PERMISSION_DENIED.
+ * The gRPC status PERMISSION_DENIED: how Canton refuses a read that needs a right the user lacks. A raw stream's error
+ * frame carries it as `grpcCodeValue`; a request gets it as HTTP 403.
  */
-const PERMISSION_DENIED_PATTERN = /status=403\b|"grpcCodeValue":7\b|PERMISSION_DENIED|security-sensitive/;
+const GRPC_PERMISSION_DENIED = 7;
+
+/**
+ * The cause Canton sends instead of the details of a security-sensitive error. PERMISSION_DENIED is one such error, but
+ * so are INTERNAL, UNAUTHENTICATED and a few others, and the SDK's active-contracts error keeps only Canton's code and
+ * cause, not the gRPC status. A match alone therefore does not prove a missing right: the refusal is checked next to
+ * the same read for the user's own parties, which must succeed.
+ */
+const REDACTED_CAUSE_PATTERN = /security-sensitive error/;
 
 /** Keys whose arrays are sets (of parties or interfaces): their order is not part of the value. */
 const UNORDERED_ARRAY_KEYS: ReadonlySet<string> = new Set([
@@ -67,13 +76,15 @@ const TEST_TIMEOUT_MS = 180_000;
 /** Longest wait for a stream to deliver a frame that is already on the ledger. */
 const STREAM_DEADLINE_MS = 90_000;
 
-/** A transfer offer from the validator's wallet that this test submitted. */
+/** A transfer offer that this test submitted. */
 interface TransferOfferSubmission {
   readonly commandId: string;
   readonly updateId: string;
   readonly offset: number;
   /** The created `TransferOffer`. */
   readonly contractId: string;
+  /** The DSO party the offer names. */
+  readonly dso: string;
 }
 
 /** The known activity every read below looks for. */
@@ -263,17 +274,47 @@ async function ensureCanReadAsAnyParty(client: LedgerJsonApiClient): Promise<Aut
   return assertCanReadAsAnyParty(client);
 }
 
+/** A stream refused for a missing right: it ended with an error frame carrying gRPC status PERMISSION_DENIED. */
+function expectStreamPermissionDenied(outcome: Outcome): void {
+  const error = outcome.ok ? undefined : outcome.error;
+  expect(error).toBeInstanceOf(RawStreamError);
+  expect(error).toMatchObject({
+    reason: 'error-frame',
+    context: { frame: { grpcCodeValue: GRPC_PERMISSION_DENIED } },
+  });
+}
+
 /**
- * Any-party reads by a user without CanReadAsAnyParty: the participant refuses the page with HTTP 403, ends the stream
- * with a PERMISSION_DENIED error frame, and refuses the active contracts, and `assertCanReadAsAnyParty` names the
- * missing right.
+ * Asks for the completions of `userId`, a user other than the client's, and expects PERMISSION_DENIED. The parties must
+ * be ones the client's user may read, so that only the user id can be refused. A stream allowed after all is closed at
+ * its first frame.
+ */
+async function expectCompletionsRefused(
+  client: LedgerJsonApiClient,
+  params: { readonly userId: string; readonly parties: readonly string[]; readonly beginExclusive: number }
+): Promise<void> {
+  const stream: RawStreamSubscription = client.subscribeToRawCompletions({
+    ...params,
+    onFrame: () => {
+      stream.close();
+    },
+  });
+  expectStreamPermissionDenied(await streamOutcome(stream, `the completions of user ${params.userId} to be refused`));
+}
+
+/**
+ * Any-party reads by a user without CanReadAsAnyParty: the participant refuses the page with HTTP 403 and the stream
+ * with a PERMISSION_DENIED error frame, refuses the active contracts while serving the same snapshot for the user's own
+ * parties, and `assertCanReadAsAnyParty` names the missing right.
  *
  * @returns `false` when the reads were allowed after all because another suite granted the user the right meanwhile
  */
-async function expectAnyPartyReadsRefused(client: LedgerJsonApiClient): Promise<boolean> {
+async function expectAnyPartyReadsRefused(client: LedgerJsonApiClient, userId: string): Promise<boolean> {
+  const ownParties = [...(await explicitReadParties(client, userId))];
+  expect(ownParties.length).toBeGreaterThan(0);
   const end = await readLedgerEnd(client);
   const begin = Math.max(end - 1, 0);
-  const [page, stream, contracts, check] = await Promise.all([
+  const [page, stream, contracts, ownContracts, check] = await Promise.all([
     outcomeOf(
       client.getRawUpdatesPage(
         { updateFormat: ANY_PARTY_UPDATE_FORMAT, beginOffsetExclusive: begin, endOffsetInclusive: end, maxPageSize: 1 },
@@ -292,8 +333,18 @@ async function expectAnyPartyReadsRefused(client: LedgerJsonApiClient): Promise<
     outcomeOf(
       client.getActiveContracts({ anyParty: true, activeAtOffset: end, templateIds: [WALLET_APP_INSTALL_TEMPLATE_ID] })
     ),
+    outcomeOf(
+      client.getActiveContracts({
+        parties: ownParties,
+        activeAtOffset: end,
+        templateIds: [WALLET_APP_INSTALL_TEMPLATE_ID],
+      })
+    ),
     outcomeOf(assertCanReadAsAnyParty(client)),
   ]);
+
+  // The control: the same snapshot, with the same token at the same offset, for the parties the user has rights for.
+  expect(ownContracts).toEqual({ ok: true });
 
   if (page.ok || stream.ok || contracts.ok || check.ok) {
     // Only a grant made while the reads ran explains an allowed read.
@@ -306,11 +357,12 @@ async function expectAnyPartyReadsRefused(client: LedgerJsonApiClient): Promise<
     return false;
   }
 
+  // Canton maps PERMISSION_DENIED, and nothing else, to HTTP 403.
   expect(page.error).toMatchObject({ name: 'ApiError', status: 403 });
-  expect(describeFailure(page.error)).toMatch(PERMISSION_DENIED_PATTERN);
-  expect(stream.error).toBeInstanceOf(RawStreamError);
-  expect(describeFailure(stream.error)).toMatch(PERMISSION_DENIED_PATTERN);
-  expect(describeFailure(contracts.error)).toMatch(PERMISSION_DENIED_PATTERN);
+  expectStreamPermissionDenied(stream);
+  // Only the redacted cause reaches this error (see REDACTED_CAUSE_PATTERN); the own-party control above ties it to
+  // the any-party scope.
+  expect(describeFailure(contracts.error)).toMatch(REDACTED_CAUSE_PATTERN);
   expect(check.error).toBeInstanceOf(MissingUserRightError);
   expect(check.error).toMatchObject({ requiredRight: 'CanReadAsAnyParty' });
   return true;
@@ -343,6 +395,32 @@ async function allocateUnlistedParty(
   return party;
 }
 
+/** The terms of a tiny Amulet transfer offer, tracked by its command id. */
+function transferOfferTerms(commandId: string): Record<string, string | Record<string, string>> {
+  return {
+    amount: { amount: '0.0000001', unit: 'AmuletUnit' },
+    description: 'any-party integration test',
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    trackingId: commandId,
+  };
+}
+
+/** The submission's update and the `TransferOffer` it created. */
+function submittedOffer(
+  commandId: string,
+  response: Awaited<ReturnType<LedgerJsonApiClient['submitAndWaitForTransaction']>>
+): TransferOfferSubmission {
+  const offer = listCreatedEvents(response).find(({ templateId }) =>
+    templateId.includes(TRANSFER_OFFER_TEMPLATE_SUFFIX)
+  );
+  const dso = offer?.createArgument['dso'];
+  if (offer === undefined || typeof dso !== 'string') {
+    throw new Error(`Command ${commandId} created no TransferOffer that names a DSO party`);
+  }
+  const { updateId, offset } = response.transaction;
+  return { commandId, updateId, offset, contractId: offer.contractId, dso };
+}
+
 /** Offers a tiny Amulet transfer from the validator's wallet to `receiver`, creating a `TransferOffer`. */
 async function submitTransferOffer(
   client: LedgerJsonApiClient,
@@ -364,19 +442,47 @@ async function submitTransferOffer(
           templateId: WALLET_APP_INSTALL_TEMPLATE_ID,
           contractId: params.walletAppInstallContractId,
           choice: 'WalletAppInstall_CreateTransferOffer',
-          choiceArgument: {
+          choiceArgument: { receiver: params.receiver, ...transferOfferTerms(commandId) },
+        },
+      },
+    ],
+  });
+  return submittedOffer(commandId, response);
+}
+
+/**
+ * `sender` creates a tiny Amulet `TransferOffer` to `receiver` directly. The sender is its only signatory, so the
+ * create needs no wallet, and nothing reacts to an offer between parties that have none.
+ */
+async function createTransferOffer(
+  client: LedgerJsonApiClient,
+  params: {
+    readonly sender: string;
+    readonly receiver: string;
+    readonly dso: string;
+    readonly synchronizerId: string | undefined;
+  }
+): Promise<TransferOfferSubmission> {
+  const commandId = `any-party-it-${randomUUID()}`;
+  const response = await client.submitAndWaitForTransaction({
+    commandId,
+    actAs: [params.sender],
+    ...(params.synchronizerId !== undefined ? { synchronizerId: params.synchronizerId } : {}),
+    commands: [
+      {
+        CreateCommand: {
+          templateId: TRANSFER_OFFER_TEMPLATE_ID,
+          createArguments: {
+            sender: params.sender,
             receiver: params.receiver,
-            amount: { amount: '0.0000001', unit: 'AmuletUnit' },
-            description: 'any-party integration test',
-            expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-            trackingId: commandId,
+            dso: params.dso,
+            ...transferOfferTerms(commandId),
           },
         },
       },
     ],
   });
-  const { updateId, offset } = response.transaction;
-  return { commandId, updateId, offset, contractId: findCreatedContractId(response, TRANSFER_OFFER_TEMPLATE_SUFFIX) };
+  return submittedOffer(commandId, response);
 }
 
 /** The validator's wallet offers a transfer to a new party that no user has a right to. */
@@ -472,7 +578,7 @@ async function explicitReadParties(client: LedgerJsonApiClient, userId: string):
 
 describe('LedgerJsonApiClient / Any-party reads', () => {
   test(
-    'refuses any-party reads to a user without CanReadAsAnyParty on the app-user participant',
+    "refuses any-party reads and another user's completions to a user without CanReadAsAnyParty on the app-user participant",
     async () => {
       // The app-user validator never holds CanReadAsAnyParty (contract-by-id.test.ts relies on that too), so this
       // control runs on every LocalNet, whatever rights the app-provider user already has.
@@ -484,7 +590,14 @@ describe('LedgerJsonApiClient / Any-party reads', () => {
         );
         return;
       }
-      expect(await expectAnyPartyReadsRefused(client)).toBe(true);
+      expect(await expectAnyPartyReadsRefused(client, rights.userId)).toBe(true);
+
+      // Completions of a user id other than its own, for parties it may read: only the user id can be refused.
+      await expectCompletionsRefused(client, {
+        userId: `any-party-it-other-user-${randomUUID()}`,
+        parties: [...(await explicitReadParties(client, rights.userId))],
+        beginExclusive: await readLedgerEnd(client),
+      });
     },
     TEST_TIMEOUT_MS
   );
@@ -499,7 +612,7 @@ describe('LedgerJsonApiClient / Any-party reads', () => {
           `Ledger user ${before.userId} already holds CanReadAsAnyParty (${before.rightNames.join(', ')}); negative control skipped`
         );
       } else {
-        if (!(await expectAnyPartyReadsRefused(client))) {
+        if (!(await expectAnyPartyReadsRefused(client, before.userId))) {
           console.info(`Another suite granted ${before.userId} CanReadAsAnyParty during the negative control`);
         }
         // Left granted: test files run in parallel and their reads with this user never depend on lacking it.
@@ -551,14 +664,11 @@ describe('LedgerJsonApiClient / Any-party reads', () => {
         const offer = createdEventOf(transaction, activity.contractId);
         expect(offer['witnessParties']).toEqual(expect.arrayContaining([activity.receiver]));
 
-        // Each item is a slice of the page text that parses to the page's own element.
-        const pageItems = isRecord(page.json) ? page.json['updates'] : undefined;
-        expect(Array.isArray(pageItems)).toBe(true);
-        page.updates.forEach((item, index) => {
+        // Each item is a slice of the page text that parses to the page's own element (`item.json` is that element).
+        for (const item of page.updates) {
           expect(page.text).toContain(item.text);
           expect(JSON.parse(item.text)).toEqual(item.json);
-          expect(item.json).toEqual(Array.isArray(pageItems) ? pageItems[index] : undefined);
-        });
+        }
 
         expectNumbersAsWritten(page.text);
         expectNumbersAsWritten(update.text);
@@ -597,16 +707,17 @@ describe('LedgerJsonApiClient / Any-party reads', () => {
         expect(transactionValue(frame.json)).toMatchObject({ updateId: activity.updateId, offset: activity.offset });
         expect(JSON.parse(frame.text)).toEqual(frame.json);
         expectNumbersAsWritten(frame.text);
-        // The page and the stream serialize the same JsUpdate with the same codec, but the page is read from the index
-        // database while a stream over recent offsets may be served from the in-memory fan-out buffer, and both build
-        // party lists from sets. So the frame must equal the page item up to the order of those set-valued arrays; the
-        // log line reports whether the bytes matched as well.
+        // The page and the stream read the update through the same buffered updates reader and write it with the same
+        // Transaction.toJson, so the frame is the page item byte for byte. Only an eviction from the in-memory fan-out
+        // buffer (200 updates on LocalNet) between two reads could make them differ, as the index database may list
+        // set-valued party arrays in another order; the content must agree regardless. The frame was read between two
+        // page reads, so it came from the same source as at least one of them.
+        const { update: pageItemAfter } = await readPageAt(client, activity.offset);
         expect(withUnorderedArraysSorted(frame.json)).toEqual(withUnorderedArraysSorted(pageItem.json));
-        const bytesEqual = frame.text === pageItem.text;
-        const jsonEqual = JSON.stringify(frame.json) === JSON.stringify(pageItem.json);
+        expect([pageItem.text, pageItemAfter.text]).toContain(frame.text);
         console.info(
-          `Raw stream frame of update ${activity.updateId} vs its page item: ${
-            bytesEqual ? 'byte-identical' : jsonEqual ? 'JSON-identical, bytes differ' : 'equal up to set order'
+          `Raw stream frame of update ${activity.updateId}: byte-identical to the page item read ${
+            frame.text === pageItem.text ? 'before the stream' : 'after the stream only'
           }`
         );
 
@@ -725,6 +836,79 @@ describe('LedgerJsonApiClient / Any-party reads', () => {
             typeof paidTrafficCost === 'number' ? paidTrafficCost : 'absent'
           }`
         );
+      },
+      TEST_TIMEOUT_MS
+    );
+
+    test(
+      "subscribeToRawCompletions gives another user's completion to a CanReadAsAnyParty holder and refuses it without",
+      async () => {
+        const reader = getClient();
+        const other = await getLocalnetNonAdminLedgerClient();
+        const otherRights = await getAuthenticatedUserRights(other);
+        expect(otherRights.userId).not.toBe(activity.userId);
+
+        // A new party that only the other user may act as, so its submission's completion belongs to that user alone.
+        // No other test knows the party, so revoking the right afterwards cannot disturb one.
+        const sender = await allocateUnlistedParty(reader, 'any-party-other-sender', activity.synchronizerId);
+        const actAsSender = { kind: { CanActAs: { value: { party: sender } } } } as const;
+        await reader.grantUserRights({ userId: otherRights.userId, rights: [actAsSender] });
+        try {
+          const beginExclusive = await readLedgerEnd(reader);
+          const offer = await createTransferOffer(other, {
+            sender,
+            receiver: activity.receiver,
+            dso: activity.dso,
+            synchronizerId: activity.synchronizerId,
+          });
+          const readCompletion = async (
+            client: LedgerJsonApiClient,
+            userId: string
+          ): Promise<RawRead<RawCompletionFrame>> =>
+            readRawUntil<RawCompletionFrame>(
+              (begin, onFrame) =>
+                client.subscribeToRawCompletions({ userId, parties: [sender], beginExclusive: begin, onFrame }),
+              beginExclusive,
+              (frame) => completionValue(frame.json)?.['commandId'] === offer.commandId,
+              `the completion of command ${offer.commandId} on the stream of user ${userId}`
+            );
+
+          if (otherRights.canReadAsAnyParty) {
+            console.info(
+              `Ledger user ${otherRights.userId} holds CanReadAsAnyParty; the cross-user refusal was skipped`
+            );
+          } else {
+            // Without the right, on the same party: its own completion is served, another user's is refused.
+            const own = await readCompletion(other, otherRights.userId);
+            expect(completionValue(own.last.json)).toMatchObject({
+              commandId: offer.commandId,
+              userId: otherRights.userId,
+            });
+            await expectCompletionsRefused(other, { userId: activity.userId, parties: [sender], beginExclusive });
+          }
+
+          // With the right, the reader gets the other user's completion, though none of its explicit rights names the
+          // party.
+          const read = await readCompletion(reader, otherRights.userId);
+          expect(read.end.reason).toBe('closed');
+          expect(read.end.lastOffset).toBe(offer.offset);
+          const frame = read.last;
+          expect(frame).toMatchObject({ kind: 'Completion', offset: offer.offset });
+          expect(JSON.parse(frame.text)).toEqual(frame.json);
+          expectNumbersAsWritten(frame.text);
+          expect(completionValue(frame.json)).toMatchObject({
+            commandId: offer.commandId,
+            userId: otherRights.userId,
+            updateId: offer.updateId,
+            offset: offer.offset,
+            actAs: [sender],
+          });
+          console.info(
+            `Ledger user ${activity.userId} read the completion of command ${offer.commandId} by user ${otherRights.userId} at offset ${offer.offset}`
+          );
+        } finally {
+          await reader.revokeUserRights({ userId: otherRights.userId, rights: [actAsSender] });
+        }
       },
       TEST_TIMEOUT_MS
     );
