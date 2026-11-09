@@ -391,6 +391,41 @@ describe('SubscribeToRawUpdates', () => {
     await expect(stream.done).resolves.toEqual({ reason: 'token-refresh', lastOffset: 101, closeCode: 1006 });
   });
 
+  it('rejects with the error a delayed onTokenExpiring throws, even though the refresh hook succeeds', async () => {
+    const connection = captureConnection();
+    const ledger = client();
+    const gate = deferred();
+    const failure = new Error('could not note the resume offset');
+    const onTokenRefreshNeeded = jest.fn().mockReturnValue({ code: 4000, reason: 'refresh' });
+    const stream = open(
+      {
+        onFrame: jest.fn(),
+        onTokenExpiring: async (): Promise<void> => {
+          await gate.promise;
+          throw failure;
+        },
+        onTokenRefreshNeeded,
+      },
+      ledger
+    );
+    const { send, handlers, options } = await connection;
+
+    send(transactionText(101));
+    // As the WebSocket client does: onTokenExpiring is started, not awaited, then onTokenRefreshNeeded is awaited.
+    void options.onTokenExpiring?.();
+    const refresh = options.onTokenRefreshNeeded?.();
+    gate.resolve();
+    await expect(refresh).rejects.toBe(failure);
+    expect(onTokenRefreshNeeded).not.toHaveBeenCalled();
+    expect(ledger.clearToken).toHaveBeenCalledTimes(1);
+    // The client reports the refresh hook's error, then closes the socket for the refresh.
+    handlers.onError?.(failure);
+    handlers.onClose?.(4000, 'Token refresh required');
+
+    await expect(stream.done).rejects.toBe(failure);
+    expect(stream.lastOffset).toBe(101);
+  });
+
   it('rejects with the error the refresh hook threw rather than ending with token-refresh', async () => {
     const connection = captureConnection();
     const ledger = client();

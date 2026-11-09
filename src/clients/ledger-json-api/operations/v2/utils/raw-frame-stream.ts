@@ -182,14 +182,26 @@ class RawFrameStream<Known extends string> {
 
   public start(): void {
     const { spec } = this;
+    const { onTokenExpiring } = spec;
+    // The WebSocket client starts onTokenExpiring without awaiting it, then awaits onTokenRefreshNeeded. Its failure
+    // would reach onError after the refresh had started, where it reads as the refresh's own handshake abort. So the
+    // hook's promise is kept here and awaited by onTokenRefreshNeeded below: a failure of either hook fails the stream.
+    let tokenExpiring: Promise<void> | undefined;
     const options: WebSocketOptions = {
       idleTimeoutMs: spec.idleTimeoutMs ?? 0,
-      ...(spec.onTokenExpiring !== undefined && { onTokenExpiring: spec.onTokenExpiring }),
+      ...(onTokenExpiring !== undefined && {
+        onTokenExpiring: async (): Promise<void> => {
+          tokenExpiring = Promise.resolve().then(onTokenExpiring);
+          // Reported through onTokenRefreshNeeded instead, which awaits it.
+          await tokenExpiring.catch(() => undefined);
+        },
+      }),
       // Always end the stream before the token expires, so the participant never cuts it off mid-read. The token is
       // cleared so that the next subscription authenticates afresh instead of reusing the expiring one.
       onTokenRefreshNeeded: async (): Promise<{ code?: number; reason?: string } | void> => {
         let closeParams: { code?: number; reason?: string } | void;
         try {
+          await tokenExpiring;
           closeParams = await spec.onTokenRefreshNeeded?.();
         } finally {
           // The expiring token is cleared even when the hook fails, so the next subscription never reuses it.

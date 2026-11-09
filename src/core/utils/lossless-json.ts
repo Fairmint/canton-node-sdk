@@ -106,6 +106,9 @@ function isExactNumber(token: string): boolean {
 /** What JavaScript makes of the token: the integer it holds when that differs from the one written, else its text. */
 function describeParsed(token: string): string {
   const parsed = Number(token);
+  // An overflowed or underflowed token may carry any exponent: never expand it (10n ** huge would throw or exhaust
+  // memory). JavaScript holds Infinity or 0 for it, which is what to report.
+  if (!Number.isFinite(parsed) || parsed === 0) return String(parsed);
   const value = integerValue(token);
   if (value !== undefined && Number.isInteger(parsed) && BigInt(parsed) !== value) {
     return BigInt(parsed).toString();

@@ -54,6 +54,15 @@ describe('parseJsonLosslessly', () => {
     expect(() => parseJsonLosslessly(`[${token}]`)).toThrow(`(it reads back as ${held})`);
   });
 
+  it.each([
+    ['1e10000000000000000000000', 'Infinity'],
+    ['-1e10000000000000000000000', '-Infinity'],
+    ['1e-10000000000000000000000', '0'],
+  ])('rejects the overflowing or underflowing number %s without expanding its exponent', (token, held) => {
+    expect(() => parseJsonLosslessly(`[${token}]`)).toThrow(LossyJsonError);
+    expect(() => parseJsonLosslessly(`[${token}]`)).toThrow(`(it reads back as ${held})`);
+  });
+
   it('accepts integers in exponent form that JavaScript holds exactly', () => {
     // 10^21 and 10^22 are 2^n * 5^n with 5^n below 2^53, so a double holds them exactly.
     expect(parseJsonLosslessly('[1e+21,1e+22,-1e+22]')).toEqual([1e21, 1e22, -1e22]);
