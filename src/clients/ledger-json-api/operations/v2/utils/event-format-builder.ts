@@ -183,9 +183,11 @@ export function buildEventFormat(
     throw new Error('At least one party is required for event format filters');
   }
 
+  // Fresh objects per party, as before any-party support: a caller adjusting one party's filters must not change
+  // another party's.
   const buildCumulative = (): FilterCumulative => {
     if (identifierFilters.length > 0) {
-      return identifierFilters;
+      return buildIdentifierFilters(params);
     }
     if (params.includeCreatedEventBlob) {
       return wildcardFilter(true);

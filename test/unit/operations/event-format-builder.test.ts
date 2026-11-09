@@ -90,6 +90,21 @@ describe('buildEventFormat', () => {
       },
     ]);
   });
+
+  it('gives each party its own filter objects, so adjusting one party leaves the others alone', () => {
+    const format = buildEventFormat({
+      parties: ['Alice', 'Bob'],
+      templateIds: ['#wallet:Splice.Wallet.Install:WalletAppInstall'],
+      includeCreatedEventBlob: true,
+    });
+    const alice = format.filtersByParty['Alice']?.cumulative;
+    const bob = format.filtersByParty['Bob']?.cumulative;
+    expect(alice).toEqual(bob);
+    expect(alice).not.toBe(bob);
+    expect(alice?.[0]).not.toBe(bob?.[0]);
+    alice?.push({ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: false } } } });
+    expect(bob).toHaveLength(1);
+  });
 });
 
 describe('buildTransactionFormat', () => {
