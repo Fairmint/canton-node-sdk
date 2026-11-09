@@ -43,22 +43,22 @@ async function hasReadAsAnyParty(client: LedgerJsonApiClient): Promise<boolean> 
   return rights.rights?.some((right) => right.kind !== undefined && 'CanReadAsAnyParty' in right.kind) ?? false;
 }
 
+/**
+ * Runs the callback while the client's user holds CanReadAsAnyParty, granting it first when missing. The right stays
+ * granted: Jest runs test files in parallel, and any-party.test.ts reads as every party with this same user, so
+ * revoking it here could refuse those reads mid-test.
+ */
 async function withReadAsAnyParty<T>(client: LedgerJsonApiClient, callback: () => Promise<T>): Promise<T> {
-  const authenticated = await client.getAuthenticatedUser({});
-  const right = { kind: { CanReadAsAnyParty: { value: {} } } } as const;
-  const alreadyGranted = await hasReadAsAnyParty(client);
-  if (!alreadyGranted) {
-    await client.grantUserRights({ userId: authenticated.user.id, rights: [right] });
+  if (!(await hasReadAsAnyParty(client))) {
+    const authenticated = await client.getAuthenticatedUser({});
+    await client.grantUserRights({
+      userId: authenticated.user.id,
+      rights: [{ kind: { CanReadAsAnyParty: { value: {} } } }],
+    });
   }
 
-  try {
-    expect(await hasReadAsAnyParty(client)).toBe(true);
-    return await callback();
-  } finally {
-    if (!alreadyGranted) {
-      await client.revokeUserRights({ userId: authenticated.user.id, rights: [right] });
-    }
-  }
+  expect(await hasReadAsAnyParty(client)).toBe(true);
+  return callback();
 }
 
 function mutateContractId(contractId: ContractId): ContractId {
