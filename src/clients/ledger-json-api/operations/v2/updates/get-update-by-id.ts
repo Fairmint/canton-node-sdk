@@ -3,14 +3,13 @@ import { createApiOperation } from '../../../../../core';
 import type { paths } from '../../../../../generated/canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi';
 import { TransactionShapeSchema } from '../../../schemas/operations/updates';
 import { buildEventFormat } from '../utils/event-format-builder';
+import { partyScopeGuard, type PartyScope } from '../utils/party-scope';
 
 const endpoint = '/v2/updates/update-by-id' as const;
 
-const GetUpdateByIdParamsSchema = z.object({
+const GetUpdateByIdFilterSchema = z.object({
   /** The ID of the update to fetch. */
   updateId: z.string().min(1, 'updateId must be a non-empty string'),
-  /** Parties to read as. With a template or interface filter, an empty list falls back to the client's party list. */
-  readAs: z.array(z.string()),
   /** Optional template filters applied server-side. */
   templateIds: z.array(z.string()).optional(),
   /** Optional interface filters applied server-side. */
@@ -26,6 +25,22 @@ const GetUpdateByIdParamsSchema = z.object({
   transactionShape: TransactionShapeSchema.optional(),
 });
 
+/** Either `readAs` (a party list) or `anyParty: true` (every party the participant hosts), never both. */
+const GetUpdateByIdParamsSchema = partyScopeGuard('readAs').pipe(
+  z.discriminatedUnion('anyParty', [
+    GetUpdateByIdFilterSchema.extend({
+      /** Parties to read as. With a template or interface filter, an empty list falls back to the client's party list. */
+      readAs: z.array(z.string()),
+      anyParty: z.undefined().optional(),
+    }),
+    GetUpdateByIdFilterSchema.extend({
+      /** Read as every party the participant hosts (`filtersForAnyParty`). Needs the `CanReadAsAnyParty` right. */
+      anyParty: z.literal(true),
+      readAs: z.undefined().optional(),
+    }),
+  ])
+);
+
 export type GetUpdateByIdParams = z.infer<typeof GetUpdateByIdParamsSchema>;
 
 export type GetUpdateByIdResponse = paths[typeof endpoint]['post']['responses']['200']['content']['application/json'];
@@ -38,6 +53,9 @@ export type GetUpdateByIdResponse = paths[typeof endpoint]['post']['responses'][
  * are returned, and created event blobs are included only when `includeCreatedEventBlob` is `true`. Interface views are
  * included by default.
  *
+ * Pass `anyParty: true` instead of `readAs` to read the update as every party the participant hosts
+ * (`filtersForAnyParty`, which needs the `CanReadAsAnyParty` right); the filters and defaults are the same.
+ *
  * @example
  *   ```typescript
  *   const update = await client.getUpdateById({
@@ -45,6 +63,7 @@ export type GetUpdateByIdResponse = paths[typeof endpoint]['post']['responses'][
  *     readAs: ['party1'],
  *     interfaceIds: ['#example-package:Example.Module:Asset'],
  *   });
+ *   const everyPartysView = await client.getUpdateById({ updateId: '1220...', anyParty: true });
  *   ```;
  */
 export const GetUpdateById = createApiOperation<GetUpdateByIdParams, GetUpdateByIdResponse>({
@@ -63,13 +82,17 @@ export const GetUpdateById = createApiOperation<GetUpdateByIdParams, GetUpdateBy
 
     // Build the request body according to the API specification
     if (hasFilters) {
+      const scope: PartyScope =
+        params.anyParty === true
+          ? { anyParty: true }
+          : { parties: params.readAs.length > 0 ? params.readAs : client.buildPartyList() };
       return {
         updateId: params.updateId,
         updateFormat: {
           includeTransactions: {
             eventFormat: {
               ...buildEventFormat({
-                parties: params.readAs.length > 0 ? params.readAs : client.buildPartyList(),
+                ...scope,
                 ...(params.templateIds !== undefined && { templateIds: params.templateIds }),
                 ...(params.interfaceIds !== undefined && { interfaceIds: params.interfaceIds }),
                 ...(params.includeInterfaceView !== undefined && { includeInterfaceView: params.includeInterfaceView }),
@@ -83,31 +106,31 @@ export const GetUpdateById = createApiOperation<GetUpdateByIdParams, GetUpdateBy
       };
     }
 
+    const wildcard = {
+      cumulative: [
+        {
+          identifierFilter: {
+            WildcardFilter: {
+              value: {
+                includeCreatedEventBlob: params.includeCreatedEventBlob ?? true,
+              },
+            },
+          },
+        },
+      ],
+    };
+
     return {
       updateId: params.updateId,
       updateFormat: {
         includeTransactions: {
-          eventFormat: {
-            verbose: true,
-            filtersByParty: Object.fromEntries(
-              params.readAs.map((party) => [
-                party,
-                {
-                  cumulative: [
-                    {
-                      identifierFilter: {
-                        WildcardFilter: {
-                          value: {
-                            includeCreatedEventBlob: params.includeCreatedEventBlob ?? true,
-                          },
-                        },
-                      },
-                    },
-                  ],
+          eventFormat:
+            params.anyParty === true
+              ? { verbose: true, filtersByParty: {}, filtersForAnyParty: wildcard }
+              : {
+                  verbose: true,
+                  filtersByParty: Object.fromEntries(params.readAs.map((party) => [party, wildcard])),
                 },
-              ])
-            ),
-          },
           transactionShape,
         },
       },

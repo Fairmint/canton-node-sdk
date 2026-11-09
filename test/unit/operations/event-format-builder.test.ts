@@ -163,3 +163,105 @@ describe('buildUpdateFormat', () => {
     expect(Object.keys(updateFormat)).toEqual(['includeTransactions', 'includeReassignments', 'includeTopologyEvents']);
   });
 });
+
+describe('any-party formats', () => {
+  const wildcard = (includeCreatedEventBlob: boolean): Record<string, unknown> => ({
+    cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob } } } }],
+  });
+
+  it('builds filtersForAnyParty with an explicit wildcard and no party filters', () => {
+    expect(buildEventFormat({ anyParty: true })).toEqual({
+      verbose: false,
+      filtersByParty: {},
+      filtersForAnyParty: wildcard(false),
+    });
+  });
+
+  it('carries includeCreatedEventBlob and verbose on the any-party wildcard', () => {
+    expect(buildEventFormat({ anyParty: true, includeCreatedEventBlob: true, verbose: true })).toEqual({
+      verbose: true,
+      filtersByParty: {},
+      filtersForAnyParty: wildcard(true),
+    });
+  });
+
+  it('puts template and interface filters under filtersForAnyParty', () => {
+    expect(
+      buildEventFormat({
+        anyParty: true,
+        templateIds: ['#pkg:Mod:T'],
+        interfaceIds: [ASSET_INTERFACE],
+        includeInterfaceView: false,
+        includeCreatedEventBlob: true,
+      })
+    ).toEqual({
+      verbose: false,
+      filtersByParty: {},
+      filtersForAnyParty: {
+        cumulative: [
+          {
+            identifierFilter: {
+              TemplateFilter: { value: { templateId: '#pkg:Mod:T', includeCreatedEventBlob: true } },
+            },
+          },
+          {
+            identifierFilter: {
+              InterfaceFilter: {
+                value: { interfaceId: ASSET_INTERFACE, includeInterfaceView: false, includeCreatedEventBlob: true },
+              },
+            },
+          },
+        ],
+      },
+    });
+  });
+
+  it('never consults a party list', () => {
+    const format = buildEventFormat({ anyParty: true });
+    expect(Object.keys(format.filtersByParty)).toEqual([]);
+  });
+
+  it('rejects both a party list and anyParty, and anyParty other than true, from untyped callers', () => {
+    const both = { anyParty: true, parties: ['Alice'] } as unknown as Parameters<typeof buildEventFormat>[0];
+    expect(() => buildEventFormat(both)).toThrow('Pass either anyParty: true or parties to the event format builder');
+    const notTrue = { anyParty: false, parties: ['Alice'] } as unknown as Parameters<typeof buildEventFormat>[0];
+    expect(() => buildEventFormat(notTrue)).toThrow('Pass either anyParty: true or parties');
+    const falseAlone = { anyParty: false } as unknown as Parameters<typeof buildEventFormat>[0];
+    expect(() => buildEventFormat(falseAlone)).toThrow('anyParty must be true when it is given');
+    const neither = {} as unknown as Parameters<typeof buildEventFormat>[0];
+    expect(() => buildEventFormat(neither)).toThrow('At least one party is required');
+  });
+
+  it('builds the raw ingester update format: LedgerEffects, reassignments and topology events for every party', () => {
+    expect(
+      buildUpdateFormat({ anyParty: true, includeCreatedEventBlob: true, includeTopologyEvents: true, verbose: true })
+    ).toEqual({
+      includeTransactions: {
+        eventFormat: { verbose: true, filtersByParty: {}, filtersForAnyParty: wildcard(true) },
+        transactionShape: 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
+      },
+      includeReassignments: { verbose: true, filtersByParty: {}, filtersForAnyParty: wildcard(true) },
+      // An empty participant-authorization format is every party.
+      includeTopologyEvents: { includeParticipantAuthorizationEvents: {} },
+    });
+  });
+
+  it('builds an any-party transaction format for either shape', () => {
+    expect(buildTransactionFormat({ anyParty: true, transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA' })).toEqual({
+      eventFormat: { verbose: false, filtersByParty: {}, filtersForAnyParty: wildcard(false) },
+      transactionShape: 'TRANSACTION_SHAPE_ACS_DELTA',
+    });
+  });
+
+  it('leaves the party-list formats unchanged: no filtersForAnyParty key, verbose false', () => {
+    const format = buildUpdateFormat({ parties: ['Alice'], includeTopologyEvents: true });
+    expect(format.includeTransactions?.eventFormat).toEqual({
+      verbose: false,
+      filtersByParty: { Alice: { cumulative: [] } },
+    });
+    expect(format.includeTransactions?.eventFormat).not.toHaveProperty('filtersForAnyParty');
+    expect(format.includeReassignments).toEqual({ filtersByParty: { Alice: { cumulative: [] } }, verbose: false });
+    expect(format.includeReassignments).not.toHaveProperty('filtersForAnyParty');
+    expect(format.includeTopologyEvents).toEqual({ includeParticipantAuthorizationEvents: { parties: ['Alice'] } });
+  });
+});

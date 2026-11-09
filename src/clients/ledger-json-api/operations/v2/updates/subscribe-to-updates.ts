@@ -14,6 +14,7 @@ import {
 } from '../../../schemas/api/errors';
 import { WsUpdateSchema } from '../../../schemas/api/updates';
 import { buildUpdateFormat } from '../utils/event-format-builder';
+import { partyScopeGuard, type PartyScope } from '../utils/party-scope';
 
 const path = '/v2/updates' as const;
 
@@ -44,9 +45,7 @@ export enum TransactionShape {
   TRANSACTION_SHAPE_LEDGER_EFFECTS = 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
 }
 
-const SubscribeToUpdatesParamsSchema = z.object({
-  /** Optional list of parties to scope the filter. */
-  parties: z.array(z.string()).optional(),
+const SubscribeToUpdatesFilterSchema = z.object({
   /** Optional template filters applied server-side. */
   templateIds: z.array(z.string()).optional(),
   /** Optional interface filters applied server-side. */
@@ -70,11 +69,30 @@ const SubscribeToUpdatesParamsSchema = z.object({
   endInclusive: z.number().optional(),
   /** Include reassignments in the stream (default true). */
   includeReassignments: z.boolean().optional(),
-  /** Include topology events in the stream (default false). */
+  /** Include topology events in the stream (default false); with `anyParty`, for every party. */
   includeTopologyEvents: z.boolean().optional(),
   /** Transaction shape (default TRANSACTION_SHAPE_LEDGER_EFFECTS). */
   transactionShape: z.nativeEnum(TransactionShape).optional(),
 });
+
+/**
+ * Either `parties` (optional; an empty or missing list falls back to the client's party list) or `anyParty: true`
+ * (every party the participant hosts, through `filtersForAnyParty`; needs `CanReadAsAnyParty`), never both.
+ */
+const SubscribeToUpdatesParamsSchema = partyScopeGuard('parties').pipe(
+  z.discriminatedUnion('anyParty', [
+    SubscribeToUpdatesFilterSchema.extend({
+      /** Optional list of parties to scope the filter. Defaults to the client's party list. */
+      parties: z.array(z.string()).optional(),
+      anyParty: z.undefined().optional(),
+    }),
+    SubscribeToUpdatesFilterSchema.extend({
+      /** Read as every party the participant hosts. Needs the `CanReadAsAnyParty` right. */
+      anyParty: z.literal(true),
+      parties: z.undefined().optional(),
+    }),
+  ])
+);
 
 export type SubscribeToUpdatesParams = z.infer<typeof SubscribeToUpdatesParamsSchema> & {
   /** Optional per-message callback to consume updates as they arrive. */
@@ -130,6 +148,10 @@ function formatZodIssues(error: z.ZodError): string {
  *    that streams real-time updates indefinitely. The connection remains open until manually closed via the returned
  *    subscription object or an error occurs.
  *
+ * Whose events: `parties` (an empty or missing list falls back to the client's party list), or `anyParty: true` for
+ * every party the participant hosts. Frames are delivered after Zod normalization; a raw archiver uses
+ * `subscribeToRawUpdates`, which delivers each frame exactly as received.
+ *
  * @example
  *   ```typescript
  *   // Bounded subscription (historical data)
@@ -147,6 +169,14 @@ function formatZodIssues(error: z.ZodError): string {
  *     parties: ['party1'],
  *     onMessage: (msg) => console.log(msg)
  *   });
+ *
+ *   // Every party the participant hosts (needs CanReadAsAnyParty)
+ *   await client.subscribeToUpdates({
+ *     beginExclusive: 2000,
+ *     anyParty: true,
+ *     includeTopologyEvents: true,
+ *     onMessage: (msg) => console.log(msg)
+ *   });
  *   ```;
  */
 export class SubscribeToUpdates {
@@ -162,13 +192,18 @@ export class SubscribeToUpdates {
       beginExclusive = ledgerEnd.offset;
     }
 
-    // Build party list - default to client's party list if not provided
-    const partyList =
-      validated.parties && validated.parties.length > 0 ? validated.parties : this.client.buildPartyList();
+    // Whose events to read: every party (anyParty), or the given parties, defaulting to the client's party list.
+    const scope: PartyScope =
+      validated.anyParty === true
+        ? { anyParty: true }
+        : {
+            parties:
+              validated.parties && validated.parties.length > 0 ? validated.parties : this.client.buildPartyList(),
+          };
 
     // Build update format: transactions, plus reassignments (default) and topology events (opt-in)
     const updateFormat = buildUpdateFormat({
-      parties: partyList,
+      ...scope,
       ...(validated.templateIds !== undefined && { templateIds: validated.templateIds }),
       ...(validated.interfaceIds !== undefined && { interfaceIds: validated.interfaceIds }),
       ...(validated.includeInterfaceView !== undefined && { includeInterfaceView: validated.includeInterfaceView }),

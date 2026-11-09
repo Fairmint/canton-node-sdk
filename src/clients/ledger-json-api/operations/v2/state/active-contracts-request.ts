@@ -13,6 +13,7 @@ import {
   type JsGetActiveContractsResponseItem,
 } from '../../../schemas/api/state';
 import { buildEventFormat } from '../utils/event-format-builder';
+import { partyScopeGuard, type PartyScope } from '../utils/party-scope';
 
 /** WebSocket endpoint shared by the collecting and the streaming active-contracts reads. */
 export const ACTIVE_CONTRACTS_PATH = '/v2/state/active-contracts' as const;
@@ -28,9 +29,7 @@ export const ACTIVE_CONTRACTS_PATH = '/v2/state/active-contracts' as const;
  */
 const DEFAULT_IDLE_TIMEOUT_MS = DEFAULT_HTTP_TIMEOUT_MS;
 
-export const ActiveContractsParamsSchema = z.object({
-  /** Optional list of parties to scope the filter. */
-  parties: z.array(z.string()).optional(),
+const ActiveContractsFilterSchema = z.object({
   /** Optional template filters applied server-side. */
   templateIds: z.array(z.string()).optional(),
   /** Optional interface filters applied server-side. */
@@ -48,6 +47,25 @@ export const ActiveContractsParamsSchema = z.object({
   idleTimeoutMs: z.number().min(0).optional(),
 });
 
+/**
+ * Either `parties` (optional; an empty or missing list falls back to the client's party list) or `anyParty: true`
+ * (every party the participant hosts, through `filtersForAnyParty`; needs `CanReadAsAnyParty`), never both.
+ */
+export const ActiveContractsParamsSchema = partyScopeGuard('parties').pipe(
+  z.discriminatedUnion('anyParty', [
+    ActiveContractsFilterSchema.extend({
+      /** Optional list of parties to scope the filter. Defaults to the client's party list. */
+      parties: z.array(z.string()).optional(),
+      anyParty: z.undefined().optional(),
+    }),
+    ActiveContractsFilterSchema.extend({
+      /** Read the contracts of every party the participant hosts. Needs the `CanReadAsAnyParty` right. */
+      anyParty: z.literal(true),
+      parties: z.undefined().optional(),
+    }),
+  ])
+);
+
 export type ActiveContractsParams = z.infer<typeof ActiveContractsParamsSchema>;
 
 /** Request message for the active contracts WebSocket endpoint. */
@@ -64,7 +82,7 @@ export interface ActiveContractsRequest {
 
 /**
  * Validates the parameters and builds the snapshot request. The offset defaults to the ledger end and the parties to
- * the client's party list.
+ * the client's party list; `anyParty: true` reads every party's contracts instead.
  */
 export async function buildActiveContractsRequest(
   client: LedgerJsonApiClient,
@@ -85,12 +103,15 @@ export async function buildActiveContractsRequest(
     activeAtOffset = offset;
   }
 
-  // Build party list - default to client's party list if not provided
-  const partyList = validated.parties && validated.parties.length > 0 ? validated.parties : client.buildPartyList();
+  // Whose contracts to read: every party (anyParty), or the given parties, defaulting to the client's party list.
+  const scope: PartyScope =
+    validated.anyParty === true
+      ? { anyParty: true }
+      : { parties: validated.parties && validated.parties.length > 0 ? validated.parties : client.buildPartyList() };
 
   // Build event format
   const eventFormat = buildEventFormat({
-    parties: partyList,
+    ...scope,
     ...(validated.templateIds !== undefined && { templateIds: validated.templateIds }),
     ...(validated.interfaceIds !== undefined && { interfaceIds: validated.interfaceIds }),
     ...(validated.includeInterfaceView !== undefined && {

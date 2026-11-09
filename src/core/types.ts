@@ -94,6 +94,12 @@ export interface RequestConfig {
    * `AbortSignal.timeout(ms)`) for a hard deadline. `0` disables the timer.
    */
   readonly timeoutMs?: number;
+  /**
+   * `'text'` resolves a successful request with the response body exactly as received (UTF-8 text) instead of the
+   * parsed JSON. A JSON error body is still parsed, so error codes such as `PARTICIPANT_PRUNED_DATA_ACCESSED` reach the
+   * thrown `ApiError`. Defaults to `'json'`.
+   */
+  readonly responseType?: 'json' | 'text';
 }
 
 /**

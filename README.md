@@ -43,6 +43,32 @@ to the participant, and throws if the connection closes before the snapshot is c
 `activeAtOffset` is the offset to pass to `subscribeToUpdates` as `beginExclusive`. See
 [`examples/stream-active-contracts.ts`](https://github.com/Fairmint/canton-node-sdk/blob/main/examples/stream-active-contracts.ts).
 
+## Reading as every party
+
+A party list is a filter: a party it misses, such as one allocated later, is read as if it did not
+exist. Every read that builds an event format also takes `anyParty: true` instead of a party list
+(`subscribeToUpdates`, `getUpdateById`, `getActiveContracts`, `streamActiveContracts`,
+`getEventsByContractId`, and the `buildEventFormat` / `buildTransactionFormat` / `buildUpdateFormat`
+builders for `getUpdateByOffset` and `getUpdatesPage`, whose any-party parameters are
+`AnyPartyEventFormatBuilderParams` and its transaction and update variants). It sends
+`filtersForAnyParty`, which covers every party the participant hosts, and needs the user's
+`CanReadAsAnyParty` right; `assertCanReadAsAnyParty(client)` checks it and throws a
+`MissingUserRightError` naming the user and the rights it holds. The types reject `anyParty`
+together with `parties` or `readAs`, and the reads reject the combination at run time. Without
+`anyParty`, every read behaves as before.
+
+For an archive of what the ledger said, `getRawUpdatesPage` and `subscribeToRawUpdates` return each
+page, page item or frame as the exact text the participant sent and its `JSON.parse` value, with no
+schema normalization, failing instead if parsing would change a number (for example an int64 that
+JavaScript cannot hold exactly) or drop a repeated key. Store the `text` of each page item or frame;
+re-serializing its `json` would reorder integer-like keys. The stream delivers every kind
+(transactions, reassignments, topology transactions and offset checkpoints) one at a time and in
+order, applies back-pressure, ends with reason `token-refresh` before the access token expires, and
+exposes `lastOffset` to resume from. `subscribeToRawCompletions` reads one user's completions the
+same way; it requires an explicit `userId` and a non-empty `parties` list, as the Ledger API does.
+See
+[`examples/read-any-party.ts`](https://github.com/Fairmint/canton-node-sdk/blob/main/examples/read-any-party.ts).
+
 ## Repository setup and checks
 
 ```bash

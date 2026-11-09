@@ -25,7 +25,11 @@ export interface WebSocketSubscription {
 /** Callbacks for WebSocket lifecycle events. Only `onMessage` is required. */
 export interface WebSocketHandlers<Message> {
   readonly onOpen?: () => void | Promise<void>;
-  readonly onMessage: (msg: Message) => void | Promise<void>;
+  /**
+   * Called with each frame parsed as JSON. `rawText` is the frame exactly as received (UTF-8), for a consumer that must
+   * keep what the server sent rather than its `JSON.parse` value.
+   */
+  readonly onMessage: (msg: Message, rawText?: string) => void | Promise<void>;
   readonly onError?: (err: Error) => void | Promise<void>;
   readonly onClose?: (code: number, reason: string) => void | Promise<void>;
 }
@@ -326,7 +330,7 @@ export class WebSocketClient {
       beginMessageCallback();
 
       void runCallback(
-        (): void | Promise<void> => handlers.onMessage(parsed as InboundMessage),
+        (): void | Promise<void> => handlers.onMessage(parsed as InboundMessage, dataString),
         (error) => {
           notifyError(error);
           socket.close(1011, 'Message handler failed');

@@ -264,7 +264,8 @@ export class HttpClient {
           requestBody,
           headers,
           signal,
-          timeoutMs
+          timeoutMs,
+          requestConfig.responseType ?? 'json'
         );
 
         this.observeLog(
@@ -483,23 +484,48 @@ export class HttpClient {
     body: Body,
     headers: Record<string, string>,
     signal: AbortSignal | undefined,
-    timeoutMs: number
+    timeoutMs: number,
+    responseType: 'json' | 'text'
   ): Promise<T> {
     const axiosConfig: AxiosRequestConfig = {
       headers,
       timeout: timeoutMs,
       ...(signal !== undefined ? { signal } : {}),
+      // Axios leaves a 'text' body unparsed: the caller receives the bytes the server sent, decoded as UTF-8.
+      ...(responseType === 'text' ? { responseType: 'text' } : {}),
     };
 
-    switch (method) {
-      case 'GET':
-        return (await this.axiosInstance.get<T>(url, axiosConfig)).data;
-      case 'POST':
-        return (await this.axiosInstance.post<T>(url, body, axiosConfig)).data;
-      case 'DELETE':
-        return (await this.axiosInstance.delete<T>(url, axiosConfig)).data;
-      case 'PATCH':
-        return (await this.axiosInstance.patch<T>(url, body, axiosConfig)).data;
+    try {
+      switch (method) {
+        case 'GET':
+          return (await this.axiosInstance.get<T>(url, axiosConfig)).data;
+        case 'POST':
+          return (await this.axiosInstance.post<T>(url, body, axiosConfig)).data;
+        case 'DELETE':
+          return (await this.axiosInstance.delete<T>(url, axiosConfig)).data;
+        case 'PATCH':
+          return (await this.axiosInstance.patch<T>(url, body, axiosConfig)).data;
+      }
+    } catch (error) {
+      if (responseType === 'text') HttpClient.parseTextErrorBody(error);
+      throw error;
+    }
+  }
+
+  /**
+   * A 'text' request leaves the error body unparsed too. Parse a JSON object body, as axios does for 'json' requests,
+   * so `handleRequestError` reads the Canton error code and message from it.
+   */
+  private static parseTextErrorBody(error: unknown): void {
+    if (!axios.isAxiosError<unknown>(error) || error.response === undefined) return;
+    const { response } = error;
+    const { data } = response;
+    if (typeof data !== 'string') return;
+    try {
+      const parsed: unknown = JSON.parse(data);
+      if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) response.data = parsed;
+    } catch {
+      // Not JSON: keep the text, which handleRequestError reports as the response body.
     }
   }
 
