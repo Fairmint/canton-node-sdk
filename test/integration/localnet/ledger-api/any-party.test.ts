@@ -231,22 +231,59 @@ function createdEventOf(transaction: Record<string, unknown> | undefined, contra
   return event;
 }
 
+const NUMBER_TOKEN = /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/;
+
 /**
- * Asserts that every number in a JSON text reads back exactly as it is written, using the source text `JSON.parse`
- * hands to a reviver (Node 22 and later): an independent check of the SDK's lossless parsing.
+ * The integer a JSON number token denotes, in whatever form it is written (`12`, `1.2e1`, `1e+23`), or `undefined` for
+ * a non-integer. Only called on a token that already reads back as its own text, so its exponent is small.
  */
-function expectNumbersAsWritten(text: string): void {
+function exactInteger(token: string): bigint | undefined {
+  const match = NUMBER_TOKEN.exec(token);
+  if (match === null) return undefined;
+  const [, sign = '', whole = '', fraction = '', exponent = '0'] = match;
+  const digits = BigInt(`${whole}${fraction}`);
+  const scale = Number(exponent) - fraction.length;
+  let magnitude: bigint;
+  if (scale >= 0) {
+    magnitude = digits * 10n ** BigInt(scale);
+  } else {
+    const divisor = 10n ** BigInt(-scale);
+    if (digits % divisor !== 0n) return undefined;
+    magnitude = digits / divisor;
+  }
+  return sign === '-' ? -magnitude : magnitude;
+}
+
+/** Each number in a JSON text that does not read back exactly as written, as "<written> read as <held>". */
+function numbersChangedByParse(text: string): { checked: number; changed: string[] } {
   const changed: string[] = [];
   let checked = 0;
   JSON.parse(text, (_key: string, value: unknown, context?: { readonly source?: string }): unknown => {
     if (typeof value === 'number' && context?.source !== undefined) {
       checked += 1;
-      if (String(value) !== context.source) {
-        changed.push(`${context.source} read as ${String(value)}`);
+      const { source } = context;
+      if (String(value) !== source) {
+        changed.push(`${source} read as ${String(value)}`);
+      } else if (Number.isInteger(value)) {
+        // JavaScript writes some integers it cannot hold with the digits they were written with:
+        // 9223372036854775000 is held as 9223372036854774784 but written back as 9223372036854775000.
+        const written = exactInteger(source);
+        if (written !== undefined && BigInt(value) !== written) {
+          changed.push(`${source} read as ${BigInt(value).toString()}`);
+        }
       }
     }
     return value;
   });
+  return { checked, changed };
+}
+
+/**
+ * Asserts that every number in a JSON text reads back exactly as it is written, using the source text `JSON.parse`
+ * hands to a reviver (Node 22 and later): an independent check of the SDK's lossless parsing.
+ */
+function expectNumbersAsWritten(text: string): void {
+  const { checked, changed } = numbersChangedByParse(text);
   expect(checked).toBeGreaterThan(0);
   expect(changed).toEqual([]);
 }
@@ -577,6 +614,21 @@ async function explicitReadParties(client: LedgerJsonApiClient, userId: string):
 }
 
 describe('LedgerJsonApiClient / Any-party reads', () => {
+  test('the independent number check catches every number JSON.parse rounds or rewrites', () => {
+    // No ledger needed: this proves the check the page and stream assertions rely on can fail.
+    expect(numbersChangedByParse('[9223372036854775000, 1e+23, 9007199254740993, 1.0, 1e3]').changed).toEqual([
+      '9223372036854775000 read as 9223372036854774784',
+      '1e+23 read as 99999999999999991611392',
+      '9007199254740993 read as 9007199254740992',
+      '1.0 read as 1',
+      '1e3 read as 1000',
+    ]);
+    expect(numbersChangedByParse('[0, -12, 3342, 9007199254740991, 1e+21, 1.5, -0.25]')).toEqual({
+      checked: 7,
+      changed: [],
+    });
+  });
+
   test(
     "refuses any-party reads and another user's completions to a user without CanReadAsAnyParty on the app-user participant",
     async () => {
