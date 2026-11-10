@@ -28,6 +28,14 @@ jobs:
         with:
           node-version: '22.14'
 
+      - name: Setup Java
+        # cn-quickstart's setup runs Gradle 8.8, which cannot run on the runner's default JDK 25
+        # ("What went wrong: 25.0.5"), so pin an LTS JDK it supports.
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Upgrade npm
         # npm >=11.17 required for .npmrc min-release-age-exclude (@fairmint/*).
         run: npm install --global npm@^11.17.0
