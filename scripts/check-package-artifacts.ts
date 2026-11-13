@@ -3,11 +3,12 @@
 /**
  * Repeatable npm package boundary check for @fairmint/canton-node-sdk.
  *
- * Production surface: build/src/** (+ package metadata). LocalNet CLI/helpers live in
- * @fairmint/canton-dev-tools and must not ship in this package.
+ * Production surface: build/src/** (+ package metadata). LocalNet CLI/helpers live in @fairmint/canton-dev-tools and
+ * must not ship in this package.
  */
 
 import { spawnSync, type SpawnSyncReturns } from 'child_process';
+import path from 'path';
 
 interface NpmPackFile {
   path: string;
@@ -35,12 +36,15 @@ const REQUIRED_RUNTIME_PATHS = [
   'build/src/clients/ledger-json-api/operations/v2/contracts/get-contract-by-id.d.ts',
   'build/src/clients/ledger-json-api/operations/v2/dars/upload-dar.d.ts',
   'build/src/clients/ledger-json-api/operations/v2/dars/validate-dar.d.ts',
+  // The browser-safe wallets entry point, imported by path (the package has no `exports` map).
+  'build/src/wallets/index.js',
+  'build/src/wallets/index.d.ts',
 ] as const;
 
-const FORBIDDEN_LOCALNET_ENGINE_PATHS = [
-  'bin/canton-localnet',
-  'scripts/localnet-cloud.sh',
-] as const;
+/** Loaded by browser bundles: it must require nothing but relative SDK files (no axios, ws, pino, dotenv, glob). */
+const BROWSER_SAFE_ENTRY = 'build/src/wallets/index.js';
+
+const FORBIDDEN_LOCALNET_ENGINE_PATHS = ['bin/canton-localnet', 'scripts/localnet-cloud.sh'] as const;
 
 function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
@@ -178,6 +182,30 @@ for (const file of result.files) {
   }
 }
 
+/** Modules `entry` requires (directly or through its relative files) when loaded in a fresh Node process. */
+function requiresWhileLoading(entry: string): string[] {
+  const script = `
+    const Module = require('module');
+    const seen = [];
+    const load = Module._load;
+    Module._load = function (request, parent, isMain) {
+      if (parent && parent.id !== '[eval]') seen.push(request);
+      return load.apply(this, arguments);
+    };
+    require(${JSON.stringify(path.resolve(entry))});
+    process.stdout.write(JSON.stringify(seen));
+  `;
+  const loaded = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8' });
+  throwIfSpawnFailed(`node -e require(${entry})`, loaded);
+  return JSON.parse(loaded.stdout) as string[];
+}
+
+for (const request of requiresWhileLoading(BROWSER_SAFE_ENTRY)) {
+  if (!request.startsWith('./') && !request.startsWith('../')) {
+    errors.push(`${BROWSER_SAFE_ENTRY}: requires ${request}; the wallets entry must stay browser-safe`);
+  }
+}
+
 if (errors.length > 0) {
   console.error(`\n${result.name}@${result.version} package artifact check failed:\n`);
   for (const error of errors) {
@@ -190,3 +218,4 @@ console.log(
   `✓ ${result.name}@${result.version} package artifact is ${formatBytes(result.unpackedSize)} unpacked across ${result.files.length} files`
 );
 console.log('✓ LocalNet engine excluded (owned by @fairmint/canton-dev-tools)');
+console.log(`✓ ${BROWSER_SAFE_ENTRY} requires only relative SDK files`);

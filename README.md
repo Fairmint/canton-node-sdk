@@ -69,6 +69,51 @@ same way; it requires an explicit `userId` and a non-empty `parties` list, as th
 See
 [`examples/read-any-party.ts`](https://github.com/Fairmint/canton-node-sdk/blob/main/examples/read-any-party.ts).
 
+## Token actions through a CIP-0103 wallet
+
+`Wallets` runs token standard (CIP-56) holder actions on Digital Asset Utility Registry instruments
+through any CIP-0103 (Canton dApp API) wallet provider: list holdings, mint offers, transfer offers
+and burn requests; accept a mint offer; preview and send a transfer; accept, reject or withdraw a
+transfer offer; request a burn; and create a transfer preapproval (experimental). It reads choice
+contexts from DA's public Utilities API with an injectable `fetch`, and talks to the wallet only
+through CIP-0103 (`getPrimaryAccount`, `ledgerApi`, `prepareExecuteAndWait`), so no wallet SDK is
+involved.
+
+It is browser-safe: import `@fairmint/canton-node-sdk/build/src/wallets/index.js`, which loads none
+of the SDK's Node dependencies. The package root also exports it as the `Wallets` namespace.
+
+```ts
+import {
+  createDaUtilitiesClient,
+  createTokenWallet,
+  type Cip103Provider,
+} from '@fairmint/canton-node-sdk/build/src/wallets/index.js';
+
+async function send(provider: Cip103Provider, receiver: string): Promise<void> {
+  const tokens = createTokenWallet({
+    provider, // any connected CIP-0103 provider
+    registry: createDaUtilitiesClient({ network: 'devnet' }),
+  });
+  const instrumentId = { admin: 'registrar::1220...', id: 'XMPL' };
+  const kind = await tokens.previewTransfer({ receiver, instrumentId, amount: '10' });
+  await tokens.transfer({ receiver, instrumentId, amount: '10', expectedKind: kind });
+}
+```
+
+- Writes never retry. A `WalletSubmitError` has `outcome` `rejected-by-user` (CIP-0103 4001),
+  `failed` (-32003, or a request the wallet refused before taking it on) or `unknown` (session
+  errors 4100/4900/4901 during a submit, timeouts, anything else): check the wallet before
+  resubmitting.
+- One write at a time per token wallet: a write started while another is in progress is refused with
+  `busy` before any read, so two writes never pick the same holdings.
+- Holdings count only when their registrar signed them, and offers and requests only when a trusted
+  registry provider signed them. By default a registrar must be its own provider; for a registrar
+  served by another provider pass `trustedProviders` to `createDaUtilitiesClient`. Contracts of any
+  other provider are never listed or acted on.
+- Amounts are exact decimals (at most 10 places, within Daml `Numeric 10`); inputs are picked
+  deterministically. `requirePreapproval: true` sends only when the receiver pre-approved the
+  transfer, and `expectedKind` refuses a transfer whose kind changed since the preview.
+
 ## Repository setup and checks
 
 ```bash
