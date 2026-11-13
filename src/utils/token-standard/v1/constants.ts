@@ -28,6 +28,9 @@ export const TOKEN_STANDARD_V1_ALLOCATION_FACTORY_INTERFACE_ID =
 export const TOKEN_STANDARD_V1_ALLOCATION_INTERFACE_ID =
   '#splice-api-token-allocation-v1:Splice.Api.Token.AllocationV1:Allocation';
 
+/** The metadata key CIP-56 uses for a transfer's (or a mint's or burn's) reason, shown to the receiver as its memo. */
+export const TOKEN_STANDARD_V1_REASON_META_KEY = 'splice.lfdecentralizedtrust.org/reason';
+
 /** Choice names as the Ledger JSON API spells them in an `ExerciseCommand`. */
 export const TokenStandardV1Choice = {
   burnMint: 'BurnMintFactory_BurnMint',

@@ -27,6 +27,10 @@ export const DA_REGISTRY_TEMPLATES = {
   holding: '#utility-registry-holding-v0:Utility.Registry.Holding.V0.Holding:Holding',
   // The `utility-registry-v0` `Holding.Mint` templates of the same name are legacy and disabled; use these.
   mintOffer: '#utility-registry-app-v0:Utility.Registry.App.V0.Model.Mint:MintOffer',
+  /** A holder's pending burn (redemption), created by `AllocationFactory_RequestBurn`. */
+  burnRequest: '#utility-registry-app-v0:Utility.Registry.App.V0.Model.Burn:BurnRequest',
+  /** A pending two-step transfer; it implements the token standard `TransferInstruction` interface. */
+  transferOffer: '#utility-registry-app-v0:Utility.Registry.App.V0.Model.Transfer:TransferOffer',
 } as const;
 
 export type DaRegistryTemplateKey = keyof typeof DA_REGISTRY_TEMPLATES;

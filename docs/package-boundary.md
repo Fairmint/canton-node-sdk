@@ -9,6 +9,7 @@ repository / CI-only. Repeatable enforcement lives in `npm run check:package-art
 | Surface | Path / field | Notes |
 | --- | --- | --- |
 | Runtime SDK | `build/src/**` | Ledger / Validator / Scan clients and helpers from `src/` |
+| Browser-safe wallets entry | `build/src/wallets/index.js` | CIP-0103 token actions; requires only dependency-free SDK files (checked) |
 | Package metadata | `package.json`, `LICENSE`, `README.md` | Always included by npm |
 
 LocalNet CLI and shared integration-test helpers are **not** published here. They live in
