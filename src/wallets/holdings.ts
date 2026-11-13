@@ -227,8 +227,10 @@ export function selectHoldings(
   }
 
   const fits = (c: { readonly total: bigint } | null): boolean => c !== null && c.total <= MAX_DECIMAL_UNITS;
-  let representable: { readonly picked: ReadonlyArray<{ readonly contractId: string }>; readonly total: bigint } | null =
-    null;
+  let representable: {
+    readonly picked: ReadonlyArray<{ readonly contractId: string }>;
+    readonly total: bigint;
+  } | null = null;
   let limited = '';
   for (const { group } of covering) {
     const searched = group.slice(0, MAX_SKIPPING_COVER_CANDIDATES);
