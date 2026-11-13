@@ -117,7 +117,7 @@ function createdEvent(active: ActiveContract): Record<string, unknown> {
   };
 }
 
-/** The template or interface id a `/v2/state/active-contracts` body filters on (and the party it filters for). */
+/** The template or interface id a `/v2/state/active-contracts(-page)` body filters on (and the party it filters for). */
 export function acsFilter(body: unknown): {
   party: string;
   filter: ContractFilter;
@@ -160,8 +160,8 @@ export interface FakeProvider extends Cip103Provider {
 
 /**
  * A fake CIP-0103 provider over an in-memory ledger: `getPrimaryAccount` answers `party`, `ledgerApi` serves the ledger
- * end and the ACS per template/interface filter, and `prepareExecuteAndWait` records the params and answers an executed
- * transaction (or throws `submitError`).
+ * end and the ACS (paged and unpaged) per template/interface filter, and `prepareExecuteAndWait` records the params and
+ * answers an executed transaction (or throws `submitError`).
  */
 export function fakeProvider(
   contracts: Record<string, ActiveContract[]>,
@@ -201,6 +201,21 @@ export function fakeProvider(
             reads.push(filter);
             const key = 'templateId' in filter ? filter.templateId : filter.interfaceId;
             return (contracts[key] ?? []).map((c) => acsEntry(createdEvent(c)));
+          }
+          if (requestMethod === 'post' && resource === '/v2/state/active-contracts-page') {
+            // Pages of `maxPageSize`; the page token is the index of the page's first entry.
+            const { filter } = acsFilter(body);
+            const { maxPageSize, pageToken } = body as { maxPageSize: number; pageToken?: string };
+            if (pageToken === undefined) reads.push(filter);
+            const key = 'templateId' in filter ? filter.templateId : filter.interfaceId;
+            const all = (contracts[key] ?? []).map((c) => acsEntry(createdEvent(c)));
+            const from = pageToken === undefined ? 0 : Number(pageToken);
+            const to = from + maxPageSize;
+            return {
+              activeContracts: all.slice(from, to),
+              activeAtOffset: LEDGER_END,
+              ...(to < all.length && { nextPageToken: String(to) }),
+            };
           }
           throw new RpcError(4200, `ledgerApi ${resource} is not allowed`);
         }
@@ -247,7 +262,11 @@ export class FakeLoopCip103Provider {
     if (!this.connected) throw new RpcError(4100, 'No authorized account');
     if (args.method === 'ledgerApi') {
       const params = args.params as { resource: string; body?: unknown };
-      const allowed = ['/v2/state/ledger-end', '/v2/state/active-contracts'].includes(params.resource);
+      const allowed = [
+        '/v2/state/ledger-end',
+        '/v2/state/active-contracts',
+        '/v2/state/active-contracts-page',
+      ].includes(params.resource);
       if (!allowed) {
         throw new RpcError(4200, `Unsupported ledgerApi ${params.resource}`);
       }

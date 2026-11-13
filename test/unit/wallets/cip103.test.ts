@@ -5,7 +5,7 @@ import {
   type Cip103Provider,
   type Cip103Request,
 } from '../../../src/wallets/cip103';
-import { CIP103_ERROR_CODES, cip103ErrorCode } from '../../../src/wallets/cip103';
+import { ACS_MAX_PAGES, ACS_PAGE_SIZE, CIP103_ERROR_CODES, cip103ErrorCode } from '../../../src/wallets/cip103';
 import { WalletReadError, WalletSubmitError, type WalletSubmission } from '../../../src/wallets';
 import { acsEntry, disclosed, HOLDER, RpcError } from './helpers';
 
@@ -28,6 +28,13 @@ function scriptedProvider(
 }
 
 const rpcError = (code: number, message: string): RpcError => new RpcError(code, message);
+
+/** A `JsGetActiveContractsPageResponse`. */
+const acsPage = (activeContracts: unknown[], activeAtOffset: number, nextPageToken?: string): unknown => ({
+  activeContracts,
+  activeAtOffset,
+  ...(nextPageToken !== undefined && { nextPageToken }),
+});
 
 const submission: WalletSubmission = {
   commands: [
@@ -99,7 +106,7 @@ describe('cip103Wallet.listActiveContracts', () => {
         const { resource } = params as { resource: string };
         return resource === '/v2/state/ledger-end'
           ? { offset: 42 }
-          : [acsEntry(createdEvent), { contractEntry: { JsEmpty: {} } }];
+          : acsPage([acsEntry(createdEvent), { contractEntry: { JsEmpty: {} } }], 42);
       },
     });
     const contracts = await cip103Wallet(provider, HOLDER).listActiveContracts({
@@ -125,10 +132,10 @@ describe('cip103Wallet.listActiveContracts', () => {
         method: 'ledgerApi',
         params: {
           requestMethod: 'post',
-          resource: '/v2/state/active-contracts',
+          resource: '/v2/state/active-contracts-page',
           body: {
-            verbose: false,
             activeAtOffset: 42,
+            maxPageSize: ACS_PAGE_SIZE,
             eventFormat: {
               verbose: false,
               filtersByParty: {
@@ -159,13 +166,16 @@ describe('cip103Wallet.listActiveContracts', () => {
       ledgerApi: (params) =>
         (params as { resource: string }).resource === '/v2/state/ledger-end'
           ? { offset: 1 }
-          : [
-              acsEntry({
-                ...createdEvent,
-                signatories: undefined,
-                packageName: undefined,
-              }),
-            ],
+          : acsPage(
+              [
+                acsEntry({
+                  ...createdEvent,
+                  signatories: undefined,
+                  packageName: undefined,
+                }),
+              ],
+              1
+            ),
     });
     const [read] = await cip103Wallet(provider, HOLDER).listActiveContracts({
       templateId: '#p:M:E',
@@ -177,7 +187,7 @@ describe('cip103Wallet.listActiveContracts', () => {
   it('asks for interface views on an interface filter', async () => {
     const provider = scriptedProvider({
       ledgerApi: (params) =>
-        (params as { resource: string }).resource === '/v2/state/ledger-end' ? { offset: 1 } : [],
+        (params as { resource: string }).resource === '/v2/state/ledger-end' ? { offset: 1 } : acsPage([], 1),
     });
     await cip103Wallet(provider, HOLDER).listActiveContracts({
       interfaceId: '#i:M:I',
@@ -209,10 +219,13 @@ describe('cip103Wallet.listActiveContracts', () => {
   });
 
   it.each([
-    ['no ledger end', { offset: 'x' }, []],
-    ['a non-list ACS', { offset: 1 }, { result: [] }],
-    ['an unknown entry', { offset: 1 }, [{ template_id: 'x' }]],
-    ['an active contract without ids', { offset: 1 }, [acsEntry({ templateId: 'x' })]],
+    ['no ledger end', { offset: 'x' }, acsPage([], 1)],
+    ['a page without a list', { offset: 1 }, { activeContracts: {}, activeAtOffset: 1 }],
+    ['an unpaged list', { offset: 1 }, []],
+    ['a page at another offset', { offset: 1 }, acsPage([], 2)],
+    ['a page token that is not a string', { offset: 1 }, { activeContracts: [], activeAtOffset: 1, nextPageToken: 7 }],
+    ['an unknown entry', { offset: 1 }, acsPage([{ template_id: 'x' }], 1)],
+    ['an active contract without ids', { offset: 1 }, acsPage([acsEntry({ templateId: 'x' })], 1)],
   ])('fails on %s', async (_label, end, acs) => {
     const provider = scriptedProvider({
       ledgerApi: (params) => ((params as { resource: string }).resource === '/v2/state/ledger-end' ? end : acs),
@@ -222,6 +235,114 @@ describe('cip103Wallet.listActiveContracts', () => {
         templateId: '#a:B:C',
       })
     ).rejects.toBeInstanceOf(WalletReadError);
+  });
+
+  it('follows the page token at one fixed offset until the last page', async () => {
+    const entry = (contractId: string): unknown => acsEntry({ ...createdEvent, contractId });
+    const pages: Record<string, unknown> = {
+      first: acsPage([entry('00a'), entry('00b')], 42, 'p2'),
+      p2: acsPage([entry('00c')], 42, 'p3'),
+      p3: acsPage([entry('00d')], 42, ''),
+    };
+    const provider = scriptedProvider({
+      ledgerApi: (params) => {
+        const { resource, body } = params as { resource: string; body?: { pageToken?: string } };
+        return resource === '/v2/state/ledger-end' ? { offset: 42 } : pages[body?.pageToken ?? 'first'];
+      },
+    });
+    const contracts = await cip103Wallet(provider, HOLDER).listActiveContracts({ templateId: '#a:B:C' });
+    expect(contracts.map((c) => c.contractId)).toEqual(['00a', '00b', '00c', '00d']);
+    const bodies = provider.requests.slice(1).map((r) => (r.method === 'ledgerApi' ? r.params : undefined));
+    expect(bodies.map((p) => p?.resource)).toEqual([
+      '/v2/state/active-contracts-page',
+      '/v2/state/active-contracts-page',
+      '/v2/state/active-contracts-page',
+    ]);
+    expect(bodies.map((p) => p?.body?.['activeAtOffset'])).toEqual([42, 42, 42]);
+    expect(bodies.map((p) => p?.body?.['pageToken'])).toEqual([undefined, 'p2', 'p3']);
+    // Only the token changes between pages.
+    expect({ ...bodies[2]?.body, pageToken: undefined }).toEqual({ ...bodies[0]?.body, pageToken: undefined });
+    expect(
+      provider.requests.filter((r) => r.method === 'ledgerApi' && r.params.resource === '/v2/state/ledger-end')
+    ).toHaveLength(1);
+  });
+
+  it(`fails rather than page past ${ACS_MAX_PAGES} pages`, async () => {
+    let page = 0;
+    const provider = scriptedProvider({
+      ledgerApi: (params) => {
+        if ((params as { resource: string }).resource === '/v2/state/ledger-end') return { offset: 1 };
+        page += 1;
+        return acsPage([], 1, `p${page}`);
+      },
+    });
+    const error = await cip103Wallet(provider, HOLDER)
+      .listActiveContracts({ templateId: '#a:B:C' })
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(WalletReadError);
+    expect((error as Error).message).toBe(
+      `The wallet's active contracts did not end within ${ACS_MAX_PAGES} pages of ${ACS_PAGE_SIZE}; nothing was read`
+    );
+    expect(page).toBe(ACS_MAX_PAGES);
+  });
+
+  it('fails on a page token that does not advance', async () => {
+    const provider = scriptedProvider({
+      ledgerApi: (params) =>
+        (params as { resource: string }).resource === '/v2/state/ledger-end' ? { offset: 1 } : acsPage([], 1, 'same'),
+    });
+    await expect(cip103Wallet(provider, HOLDER).listActiveContracts({ templateId: '#a:B:C' })).rejects.toThrow(
+      'The wallet returned the same active-contracts page token twice'
+    );
+  });
+
+  it.each([4200, -32601, -32004])(
+    'falls back once to the unpaged endpoint when the wallet answers the paged one with %i',
+    async (code) => {
+      const provider = scriptedProvider({
+        ledgerApi: (params) => {
+          const { resource } = params as { resource: string };
+          if (resource === '/v2/state/ledger-end') return { offset: 9 };
+          if (resource === '/v2/state/active-contracts-page') throw rpcError(code, 'not allowed');
+          return [acsEntry(createdEvent)];
+        },
+      });
+      const contracts = await cip103Wallet(provider, HOLDER).listActiveContracts({ templateId: '#a:B:C' });
+      expect(contracts.map((c) => c.contractId)).toEqual(['00c']);
+      const calls = provider.requests.map((r) => (r.method === 'ledgerApi' ? r.params : undefined));
+      expect(calls.map((p) => p?.resource)).toEqual([
+        '/v2/state/ledger-end',
+        '/v2/state/active-contracts-page',
+        '/v2/state/active-contracts',
+      ]);
+      expect(calls[2]?.body).toEqual({
+        verbose: false,
+        activeAtOffset: 9,
+        eventFormat: calls[1]?.body?.['eventFormat'],
+      });
+    }
+  );
+
+  it('does not fall back on other paged-read errors, or after the first page', async () => {
+    const failing = (code: number, afterFirst: boolean): Cip103Provider & { requests: Cip103Request[] } =>
+      scriptedProvider({
+        ledgerApi: (params) => {
+          const { resource, body } = params as { resource: string; body?: { pageToken?: string } };
+          if (resource === '/v2/state/ledger-end') return { offset: 1 };
+          if (resource === '/v2/state/active-contracts') return [];
+          if (afterFirst && body?.pageToken === undefined) return acsPage([], 1, 'p2');
+          throw rpcError(code, 'nope');
+        },
+      });
+    for (const provider of [failing(4100, false), failing(-32603, false), failing(4200, true)]) {
+      const error = await cip103Wallet(provider, HOLDER)
+        .listActiveContracts({ templateId: '#a:B:C' })
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(WalletReadError);
+      expect(
+        provider.requests.some((r) => r.method === 'ledgerApi' && r.params.resource === '/v2/state/active-contracts')
+      ).toBe(false);
+    }
   });
 
   it('reports a refused ledger API call with its code', async () => {

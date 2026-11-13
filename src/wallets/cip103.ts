@@ -5,8 +5,12 @@
  *
  * - Party: the `partyId` the dApp gives, else the wallet's primary account (`getPrimaryAccount`).
  * - Submit: `prepareExecuteAndWait` acting as that party only; resolves with `tx.payload.updateId`.
- * - Read: `ledgerApi` to the Ledger JSON API v2 (`/v2/state/ledger-end`, then `/v2/state/active-contracts` filtered to
- *   that party only).
+ * - Read: `ledgerApi` to the Ledger JSON API v2: `/v2/state/ledger-end`, then the pages of
+ *   `/v2/state/active-contracts-page` at that one offset, filtered to that party only (see {@link ACS_PAGE_SIZE}). It is
+ *   sent as POST, as the Ledger JSON API 3.6 OpenAPI, Loop's `ledgerApi` allowlist and
+ *   `@canton-network/core-acs-reader` do. A wallet that answers 4200, -32601 or -32004 (it does not offer the paged
+ *   endpoint) is read once through the unpaged `/v2/state/active-contracts` instead, which is subject to the
+ *   participant's `http-list-max-elements-limit`.
  *
  * Spec: CIP-0103 and the dApp API OpenRPC (`openrpc-dapp-api.json` 0.5.0).
  */
@@ -232,10 +236,53 @@ export async function primaryPartyId(provider: Cip103Provider): Promise<string> 
   return partyId;
 }
 
+/**
+ * Entries asked for per `/v2/state/active-contracts-page` request (`maxPageSize`). Well under the participant's default
+ * page and list limits, so a participant does not refuse it.
+ */
+export const ACS_PAGE_SIZE = 200;
+
+/**
+ * The most `/v2/state/active-contracts-page` requests one read makes ({@link ACS_PAGE_SIZE} × this = 100,000 contracts
+ * of one filter). A read that needs more fails with `WalletReadError` instead of paging on.
+ */
+export const ACS_MAX_PAGES = 500;
+
+/**
+ * Codes meaning the wallet does not offer the paged ACS endpoint at all (its `ledgerApi` allowlist lacks it, or it has
+ * no such method): the read then falls back, once, to the unpaged `/v2/state/active-contracts`.
+ */
+const PAGED_ACS_UNSUPPORTED_CODES: ReadonlySet<number> = new Set([
+  CIP103_ERROR_CODES.unsupportedMethod,
+  CIP103_ERROR_CODES.methodNotFound,
+  CIP103_ERROR_CODES.methodNotSupported,
+]);
+
+/** One `JsGetActiveContractsPageResponse`: `{activeContracts, activeAtOffset, nextPageToken?}`. */
+function readAcsPage(raw: unknown, offset: number): { entries: unknown[]; nextPageToken: string | undefined } {
+  if (!isRecord(raw) || !Array.isArray(raw['activeContracts'])) {
+    throw new WalletReadError('The wallet returned an active-contracts page without an activeContracts list');
+  }
+  const pageOffset = raw['activeAtOffset'];
+  if (pageOffset !== undefined && pageOffset !== offset) {
+    throw new WalletReadError(
+      `The wallet returned an active-contracts page at offset ${JSON.stringify(pageOffset)}, not the requested ${offset}`
+    );
+  }
+  const token = raw['nextPageToken'];
+  if (token !== undefined && token !== null && typeof token !== 'string') {
+    throw new WalletReadError('The wallet returned an active-contracts page with a nextPageToken that is not a string');
+  }
+  return {
+    entries: raw['activeContracts'],
+    nextPageToken: typeof token === 'string' && token.length > 0 ? token : undefined,
+  };
+}
+
 /** What the token actions need from a wallet: one party, its contracts, and a submit that waits for the commit. */
 export interface Cip103Wallet {
   readonly partyId: string;
-  /** Active contracts of `partyId` matching the filter. */
+  /** Active contracts of `partyId` matching the filter, as one snapshot at the ledger end. */
   listActiveContracts(filter: ContractFilter): Promise<ActiveContract[]>;
   /** Sign and submit as `partyId`; resolves once committed, else throws `WalletSubmitError`. Never retries. */
   submit(submission: WalletSubmission): Promise<SubmitResult>;
@@ -293,18 +340,58 @@ export function cip103Wallet(provider: Cip103Provider, partyId: string): Cip103W
                 },
               },
             };
-      const entries = await ledgerApi('post', '/v2/state/active-contracts', {
+      const eventFormat = {
         verbose: false,
-        activeAtOffset: offset,
-        eventFormat: {
-          verbose: false,
-          filtersByParty: {
-            [partyId]: { cumulative: [{ identifierFilter }] },
-          },
+        filtersByParty: {
+          [partyId]: { cumulative: [{ identifierFilter }] },
         },
-      });
-      if (!Array.isArray(entries)) {
-        throw new WalletReadError('The wallet returned active contracts that are not a list');
+      };
+
+      // Pages at the one offset read above, so every page belongs to the same snapshot. The unpaged endpoint fails once
+      // the matches exceed the participant's `http-list-max-elements-limit`; this one does not.
+      const entries: unknown[] = [];
+      let pageToken: string | undefined;
+      for (let page = 0; ; page += 1) {
+        if (page === ACS_MAX_PAGES) {
+          throw new WalletReadError(
+            `The wallet's active contracts did not end within ${ACS_MAX_PAGES} pages of ${ACS_PAGE_SIZE}; nothing was read`
+          );
+        }
+        let raw: unknown;
+        try {
+          raw = await ledgerApi('post', '/v2/state/active-contracts-page', {
+            activeAtOffset: offset,
+            eventFormat,
+            maxPageSize: ACS_PAGE_SIZE,
+            ...(pageToken !== undefined && { pageToken }),
+          });
+        } catch (error) {
+          // A wallet without the paged endpoint (an older allowlist): read the unpaged snapshot once instead.
+          if (
+            page === 0 &&
+            error instanceof WalletReadError &&
+            error.code !== undefined &&
+            PAGED_ACS_UNSUPPORTED_CODES.has(error.code)
+          ) {
+            const all = await ledgerApi('post', '/v2/state/active-contracts', {
+              verbose: false,
+              activeAtOffset: offset,
+              eventFormat,
+            });
+            if (!Array.isArray(all)) {
+              throw new WalletReadError('The wallet returned active contracts that are not a list');
+            }
+            return parseActiveContractEntries(all);
+          }
+          throw error;
+        }
+        const next = readAcsPage(raw, offset);
+        entries.push(...next.entries);
+        if (next.nextPageToken === undefined) break;
+        if (next.nextPageToken === pageToken) {
+          throw new WalletReadError('The wallet returned the same active-contracts page token twice');
+        }
+        pageToken = next.nextPageToken;
       }
       return parseActiveContractEntries(entries);
     },

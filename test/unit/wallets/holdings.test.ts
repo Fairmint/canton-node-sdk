@@ -5,7 +5,12 @@ import {
   type Holding,
   type InstrumentId,
 } from '../../../src/wallets';
-import { parseHolding, requirePositiveAmount, selectHoldings } from '../../../src/wallets/holdings';
+import {
+  MAX_SKIPPING_COVER_CANDIDATES,
+  parseHolding,
+  requirePositiveAmount,
+  selectHoldings,
+} from '../../../src/wallets/holdings';
 import { INSTRUMENT, contract, HOLDER, holdingView, OTHER, REGISTRAR } from './helpers';
 
 describe('decimal units', () => {
@@ -210,6 +215,44 @@ describe('selectHoldings', () => {
       }
       expect(caught).toBeInstanceOf(TokenWalletError);
       expect(caught).toMatchObject({ code: 'amount-out-of-range' });
+    });
+
+    it('skips holdings when both the largest-first and smallest-first covers overflow', () => {
+      // Largest first: 8e27 + 6e27 overflows; smallest first: 2e27 + 3e27 + 6e27 does too. 6e27 + 3e27 fits.
+      const holdings = [h('00two', e27(2)), h('00eight', e27(8)), h('00three', e27(3)), h('00six', e27(6))];
+      expect(selectHoldings(holdings, request(e27(9)))).toEqual({
+        inputHoldingCids: ['00six', '00three'],
+        selectedTotal: `${e27(9)}.0000000000`,
+        amount: `${e27(9)}.0000000000`,
+      });
+    });
+
+    it('takes the skipping cover with the fewest inputs', () => {
+      // From 8e27: 8e27 + 5e26 + 5e26 (3 inputs) after skipping 6e27 and 3e27; from 6e27: 6e27 + 3e27 (2 inputs).
+      const e26 = (n: number): string => `${n}${'0'.repeat(26)}`;
+      const holdings = [
+        h('00eight', e27(8)),
+        h('00six', e27(6)),
+        h('00three', e27(3)),
+        h('00half-a', e26(5)),
+        h('00half-b', e26(5)),
+      ];
+      expect(selectHoldings(holdings, request(e27(9))).inputHoldingCids).toEqual(['00six', '00three']);
+    });
+
+    it(`searches only the largest ${MAX_SKIPPING_COVER_CANDIDATES} holdings for a skipping cover`, () => {
+      // Any two 6e27 holdings overflow and one falls short; the 3e27 holdings that would complete a cover rank last.
+      const sixes = Array.from({ length: MAX_SKIPPING_COVER_CANDIDATES }, (_, i) =>
+        h(`00six${String(i).padStart(3, '0')}`, e27(6))
+      );
+      const threes = [h('00three-a', e27(3)), h('00three-b', e27(3))];
+      expect(() => selectHoldings([...sixes, ...threes], request(e27(9)))).toThrow(
+        `(searched the largest ${MAX_SKIPPING_COVER_CANDIDATES} of ${MAX_SKIPPING_COVER_CANDIDATES + 2} holdings)`
+      );
+      expect(selectHoldings([...sixes.slice(0, 10), ...threes], request(e27(9))).inputHoldingCids).toEqual([
+        '00six000',
+        '00three-a',
+      ]);
     });
 
     it('refuses an amount beyond the range', () => {

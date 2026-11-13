@@ -138,11 +138,44 @@ function cover(
 }
 
 /**
+ * The most candidates (largest first) {@link skippingCover} searches. The search is quadratic, so a wallet with more
+ * unlocked holdings of the instrument than this is searched over its largest ones only.
+ */
+export const MAX_SKIPPING_COVER_CANDIDATES = 500;
+
+/**
+ * A representable cover that may skip holdings, for when neither prefix cover fits the Numeric 10 range: for each start
+ * index of the largest-first `ordered`, add the holdings from there on, skipping any that would take the total past
+ * 10^28 - 10^-10, until the total reaches `needed`. Of the covers found, the one with the fewest inputs (then the
+ * earliest start) wins, so the result is deterministic. Null when no start index gives one.
+ */
+function skippingCover(
+  ordered: readonly Candidate[],
+  needed: bigint
+): { readonly picked: Candidate[]; readonly total: bigint } | null {
+  let best: { readonly picked: Candidate[]; readonly total: bigint } | null = null;
+  for (let start = 0; start < ordered.length; start += 1) {
+    const picked: Candidate[] = [];
+    let total = 0n;
+    for (let i = start; i < ordered.length && total < needed; i += 1) {
+      const candidate = ordered[i];
+      if (candidate === undefined || total + candidate.units > MAX_DECIMAL_UNITS) continue;
+      picked.push(candidate);
+      total += candidate.units;
+    }
+    if (total >= needed && (best === null || picked.length < best.picked.length)) {
+      best = { picked, total };
+    }
+  }
+  return best;
+}
+
+/**
  * Pick unlocked holdings of `owner` and `instrumentId` that cover `amount`: largest first (ties by contract id), so the
  * same holdings always give the same inputs, and as few as possible are used. The registry adds the inputs up as a Daml
- * `Numeric 10`, so when that cover's total exceeds 10^28 - 10^-10 the smallest holdings are tried first instead. Throws
- * `insufficient-balance` when the unlocked total is short, and `amount-out-of-range` when neither cover is
- * representable.
+ * `Numeric 10`, so when that cover's total exceeds 10^28 - 10^-10 the smallest holdings are tried first instead, and
+ * when that overflows too, a cover that skips holdings (see {@link skippingCover}). Throws `insufficient-balance` when
+ * the unlocked total is short, and `amount-out-of-range` when no cover found is representable.
  */
 export function selectHoldings(
   holdings: readonly Holding[],
@@ -172,13 +205,18 @@ export function selectHoldings(
       `Insufficient unlocked ${request.instrumentId.id}: need ${formatDecimalUnits(needed)}, have ${formatDecimalUnits(total)}`
     );
   }
-  const representable = [largestFirst, cover([...candidates].reverse(), needed)].find(
-    (c) => c !== null && c.total <= MAX_DECIMAL_UNITS
-  );
-  if (representable === undefined || representable === null) {
+  const fits = (c: { readonly total: bigint } | null): boolean => c !== null && c.total <= MAX_DECIMAL_UNITS;
+  let representable = [largestFirst, cover([...candidates].reverse(), needed)].find(fits) ?? null;
+  const searched = candidates.slice(0, MAX_SKIPPING_COVER_CANDIDATES);
+  representable ??= skippingCover(searched, needed);
+  if (representable === null) {
+    const limited =
+      searched.length < candidates.length
+        ? ` (searched the largest ${MAX_SKIPPING_COVER_CANDIDATES} of ${candidates.length} holdings)`
+        : '';
     throw new TokenWalletError(
       'amount-out-of-range',
-      `No set of unlocked ${request.instrumentId.id} holdings covers ${formatDecimalUnits(needed)} within the Daml Numeric 10 range; nothing was submitted`
+      `Found no set of unlocked ${request.instrumentId.id} holdings that covers ${formatDecimalUnits(needed)} within the Daml Numeric 10 range${limited}; nothing was submitted`
     );
   }
   return {
