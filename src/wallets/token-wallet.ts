@@ -85,7 +85,7 @@ export function createTokenWallet(options: TokenWalletOptions): TokenWallet {
       const offer = parseMintOffer(contract);
       return offer !== null &&
         offer.holder === wallet.partyId &&
-        isFromRegistry(offer, contract.signatories, operator, registry.trustedProvidersOf(offer.instrumentId.admin))
+        isFromRegistry(offer, contract.signatories, operator, registry.trustedProvidersOf)
         ? [offer]
         : [];
     });
@@ -113,14 +113,7 @@ export function createTokenWallet(options: TokenWalletOptions): TokenWallet {
         `Mint offer ${mintOfferCid} is for ${offer.holder}, not the wallet party`
       );
     }
-    if (
-      !isFromRegistry(
-        offer,
-        contract.signatories,
-        await registry.operatorParty(),
-        registry.trustedProvidersOf(offer.instrumentId.admin)
-      )
-    ) {
+    if (!isFromRegistry(offer, contract.signatories, await registry.operatorParty(), registry.trustedProvidersOf)) {
       throw new TokenWalletError(
         'unexpected-registrar',
         `Mint offer ${mintOfferCid} was not made under a trusted registry service of its instrument admin`
@@ -227,7 +220,7 @@ export function createTokenWallet(options: TokenWalletOptions): TokenWallet {
       const request = parseBurnRequest(contract);
       return request !== null &&
         request.holder === wallet.partyId &&
-        isFromRegistry(request, contract.signatories, operator, registry.trustedProvidersOf(request.instrumentId.admin))
+        isFromRegistry(request, contract.signatories, operator, registry.trustedProvidersOf)
         ? [request]
         : [];
     });

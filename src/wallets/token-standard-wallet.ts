@@ -5,10 +5,13 @@
  */
 import { cip103Wallet, primaryPartyId, type Cip103Provider, type Cip103Wallet } from './cip103';
 import { transferCommand, transferInstructionCommand } from './commands';
-import { TRANSFER_REASON_META_KEY, type TransferOffer } from './contracts';
+import type { TransferOffer } from './contracts';
 import { RegistryResponseError, TokenWalletError } from './errors';
 import { parseHolding, selectHoldings, type Holding } from './holdings';
-import { TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID } from '../utils/token-standard/v1/constants';
+import {
+  TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID,
+  TOKEN_STANDARD_V1_REASON_META_KEY,
+} from '../utils/token-standard/v1/constants';
 import {
   factoryTemplateError,
   type TokenRegistry,
@@ -203,7 +206,9 @@ export function tokenStandardCore(options: TokenStandardWalletOptions): TokenSta
       inputHoldingCids: selection.inputHoldingCids,
       meta: {
         values:
-          request.memo !== undefined && request.memo.length > 0 ? { [TRANSFER_REASON_META_KEY]: request.memo } : {},
+          request.memo !== undefined && request.memo.length > 0
+            ? { [TOKEN_STANDARD_V1_REASON_META_KEY]: request.memo }
+            : {},
       },
     };
     const factory = await registry.transferFactory({

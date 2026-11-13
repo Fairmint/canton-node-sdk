@@ -68,7 +68,7 @@ export interface BurnRequestContextArgs {
 export interface DaUtilitiesClient extends TokenRegistry {
   readonly baseUrl: string;
   /** The providers trusted for an instrument admin: the `trustedProviders` entry, else the admin itself. */
-  trustedProvidersOf(instrumentAdmin: string): readonly string[];
+  readonly trustedProvidersOf: (instrumentAdmin: string) => readonly string[];
   /** DA's operator party (`GET /api/utilities/v0/operator`), fetched once; a failed lookup is retried next call. */
   operatorParty(): Promise<string>;
   /** Context to exercise `MintOffer_Accept` on the offer. */
@@ -241,8 +241,7 @@ export function createDaUtilitiesClient(
       ]);
       return contracts.flatMap((contract) => {
         const offer = parseTransferOffer(contract);
-        return offer !== null &&
-          isFromRegistry(offer, contract.signatories, operator, trustedProvidersOf(offer.instrumentId.admin))
+        return offer !== null && isFromRegistry(offer, contract.signatories, operator, trustedProvidersOf)
           ? [offer]
           : [];
       });

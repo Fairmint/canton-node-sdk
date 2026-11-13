@@ -2,13 +2,17 @@ import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
 import { TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID } from '../../../src/utils/token-standard/v1/constants';
 import {
   createDaUtilitiesClient,
+  createTokenStandardWallet,
   createTokenWallet,
   RegistryResponseError,
   TokenWalletError,
   type ActiveContract,
   type JsonObject,
+  type TokenRegistry,
+  type TokenStandardWallet,
   type TokenWallet,
   type TransferKind,
+  type TransferOffer,
 } from '../../../src/wallets';
 import {
   INSTRUMENT,
@@ -831,5 +835,102 @@ describe('createTokenWallet: answering transfer offers', () => {
       code: 'not-found',
     });
     expect(wallet.submissions).toEqual([]);
+  });
+});
+
+describe('createTokenStandardWallet with a registry other than DA', () => {
+  // A registry with none of DA's members (no operator, no trusted providers): only the `TokenRegistry` seam.
+  const DSO = 'dso::1220ff';
+  const COIN = { admin: DSO, id: 'Amulet' } as const;
+  const RULES_T = 'Splice.ExternalPartyAmuletRules:ExternalPartyAmuletRules';
+  const INSTRUCTION_KEY = 'coin:Splice.AmuletTransferInstruction:AmuletTransferInstruction';
+  const coinHolding = (
+    cid: string,
+    amount: string,
+    signatories: readonly string[] = [DSO, HOLDER]
+  ): ActiveContract => ({
+    ...holdingView(cid, amount, { instrument: { ...COIN }, signatories }),
+    templateId: 'b1f2:Splice.Amulet:Amulet',
+  });
+  const offer = (contractId: string, sender: string, receiver: string): TransferOffer => ({
+    contractId,
+    operator: DSO,
+    provider: DSO,
+    sender,
+    receiver,
+    instrumentId: COIN,
+    amount: '1.0000000000',
+    memo: null,
+    requestedAt: '2026-11-13T00:00:00Z',
+    executeBefore: '2026-11-14T00:00:00Z',
+  });
+
+  function coinSetup(): { tokens: TokenStandardWallet; wallet: FakeProvider; registryCalls: string[] } {
+    const registryCalls: string[] = [];
+    const context = {
+      choiceContextData: { values: CONTEXT_VALUES },
+      disclosedContracts: [disclosed('00rules', RULES_T)],
+    };
+    const registry: TokenRegistry = {
+      servesHolding: (c) => c.templateId.endsWith(':Splice.Amulet:Amulet') && c.signatories.includes(DSO),
+      async pendingTransfers(read) {
+        const contracts = await read({ templateId: INSTRUCTION_KEY });
+        return contracts.map((c) =>
+          c.contractId === '00coinin' ? offer(c.contractId, OTHER, HOLDER) : offer(c.contractId, HOLDER, OTHER)
+        );
+      },
+      expectedTransferFactoryTemplates: [RULES_T],
+      async transferFactory(args) {
+        registryCalls.push(`transferFactory ${args.expectedAdmin} ${args.transfer.amount}`);
+        return { factoryId: '00rules', transferKind: 'direct', ...context };
+      },
+      async transferInstructionContext(registrar, cid, action) {
+        registryCalls.push(`context ${registrar} ${cid} ${action}`);
+        return context;
+      },
+    };
+    const wallet = fakeProvider({
+      [TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID]: [
+        coinHolding('00c5', '5'),
+        coinHolding('00cforged', '1000', [OTHER, HOLDER]),
+        holdingView('00h10', '10'),
+      ],
+      [INSTRUCTION_KEY]: [contract('00coinin', 'X:Y', null), contract('00coinout', 'X:Y', null)],
+    });
+    const tokens = createTokenStandardWallet({ provider: wallet, registry, now: () => NOW });
+    return { tokens, wallet, registryCalls };
+  }
+
+  it('lists only the holdings the registry serves', async () => {
+    const { tokens } = coinSetup();
+    expect((await tokens.listHoldings()).map((h) => h.contractId)).toEqual(['00c5']);
+  });
+
+  it('transfers through the registry factory', async () => {
+    const { tokens, wallet, registryCalls } = coinSetup();
+    await expect(tokens.transfer({ receiver: OTHER, instrumentId: COIN, amount: '2' })).resolves.toMatchObject({
+      kind: 'direct',
+      updateId: 'update-1',
+    });
+    expect(registryCalls).toEqual([`transferFactory ${DSO} 2.0000000000`]);
+    expect(wallet.submissions).toHaveLength(1);
+    expect(wallet.submissions[0]).toMatchObject({
+      commands: [{ ExerciseCommand: { contractId: '00rules', choice: 'TransferFactory_Transfer' } }],
+      disclosedContracts: [disclosed('00rules', RULES_T)],
+      actAs: [HOLDER],
+    });
+  });
+
+  it('splits the registry pending transfers and accepts an incoming one', async () => {
+    const { tokens, wallet, registryCalls } = coinSetup();
+    const offers = await tokens.listTransferOffers();
+    expect(offers.incoming.map((o) => o.contractId)).toEqual(['00coinin']);
+    expect(offers.outgoing.map((o) => o.contractId)).toEqual(['00coinout']);
+    await tokens.acceptTransferOffer('00coinin');
+    await expect(tokens.acceptTransferOffer('00coinout')).rejects.toMatchObject({ code: 'not-found' });
+    expect(registryCalls).toEqual([`context ${DSO} 00coinin accept`]);
+    expect(wallet.submissions).toMatchObject([
+      { commands: [{ ExerciseCommand: { contractId: '00coinin', choice: 'TransferInstruction_Accept' } }] },
+    ]);
   });
 });

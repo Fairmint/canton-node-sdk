@@ -7,9 +7,7 @@ import { isRecord, nonEmptyString } from './json';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
 import { sameQualifiedName } from './templates';
 import type { ActiveContract, InstrumentId } from './types';
-
-/** The metadata key CIP-56 uses for a transfer's reason (the memo). */
-export const TRANSFER_REASON_META_KEY = 'splice.lfdecentralizedtrust.org/reason';
+import { TOKEN_STANDARD_V1_REASON_META_KEY } from '../utils/token-standard/v1/constants';
 
 interface RegistryParties {
   /** DA's operator party. */
@@ -106,7 +104,7 @@ export function parseTransferOffer(contract: ActiveContract): TransferOffer | nu
   if (!parties || !fields || !instrumentId) return null;
   const { meta } = transfer;
   const values = isRecord(meta) ? meta['values'] : undefined;
-  const memo = isRecord(values) ? text(values[TRANSFER_REASON_META_KEY]) : null;
+  const memo = isRecord(values) ? text(values[TOKEN_STANDARD_V1_REASON_META_KEY]) : null;
   return {
     contractId: contract.contractId,
     ...parties,
@@ -141,19 +139,20 @@ export function parseBurnRequest(contract: ActiveContract): BurnRequest | null {
  * from its own package with any arguments); only the provider's signature does. DA's operator is an observer of these
  * contracts, not a signatory, so it is checked in the create argument only.
  *
- * `trustedProviders` are the providers trusted for this contract's instrument admin (see the registry client's
- * `trustedProviders` option; by default only the instrument admin itself, a registrar that is its own provider). A
- * contract whose provider is not among them is refused, whatever it says.
+ * `trustedProvidersOf` resolves the providers trusted for an instrument admin (the registry client's
+ * `trustedProvidersOf`; by default only the instrument admin itself, a registrar that is its own provider). It is asked
+ * for this contract's own instrument admin, and a contract whose provider is not among them is refused, whatever it
+ * says.
  */
 export function isFromRegistry(
   contract: RegistryParties & { readonly instrumentId: InstrumentId },
   signatories: readonly string[],
   daOperator: string,
-  trustedProviders: readonly string[]
+  trustedProvidersOf: (instrumentAdmin: string) => readonly string[]
 ): boolean {
   return (
     contract.operator === daOperator &&
-    trustedProviders.includes(contract.provider) &&
+    trustedProvidersOf(contract.instrumentId.admin).includes(contract.provider) &&
     signatories.includes(contract.provider)
   );
 }

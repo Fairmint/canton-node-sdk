@@ -6,7 +6,7 @@
  * Steps never cache contract ids between runs, so a network reset or a manual change is picked up on the next `plan`.
  */
 import { type LedgerCommand, type LedgerSubmission, type ActiveContract } from '../../utils/ledger';
-import { type TokenStandardV1Transfer } from '../../utils/token-standard';
+import { TOKEN_STANDARD_V1_REASON_META_KEY, type TokenStandardV1Transfer } from '../../utils/token-standard';
 import { DA_REGISTRY_CONTEXT_KEYS, mintChoiceContext } from '../choice-context';
 import {
   acceptMintOffer,
@@ -1259,7 +1259,7 @@ function deliveriesStep(ctx: DaRegistrySetupContext): DaRegistrySetupStep {
           executeBefore: isoOffset(ctx, 3_600_000),
           inputHoldingCids: inputs.map((h) => h.contractId),
           meta: {
-            values: { 'splice.lfdecentralizedtrust.org/reason': `${DA_REGISTRY_SETUP_MINT_REFERENCE_PREFIX} delivery` },
+            values: { [TOKEN_STANDARD_V1_REASON_META_KEY]: `${DA_REGISTRY_SETUP_MINT_REFERENCE_PREFIX} delivery` },
           },
         };
         let factory: DaRegistryTransferFactoryWithContext;

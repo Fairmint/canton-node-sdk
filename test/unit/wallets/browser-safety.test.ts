@@ -2,7 +2,8 @@
  * The wallets module runs in browsers. At run time it may import only its own files and a short list of the SDK's
  * dependency-free modules (type-only imports are erased), and none of those may touch Node or DOM globals. The source
  * scan follows every runtime import, so an allowed module that later gains a Node import fails here. The emit checks
- * load the compiled entry point in a fresh Node process and confirm it requires nothing but relative files.
+ * load the compiled entry point in a fresh Node process and confirm it requires nothing but relative files. The check
+ * of build/ only sees the last local build; `npm run check:package-artifacts` is the check of the published output.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
@@ -225,8 +226,14 @@ describe('src/wallets compiled entry point', () => {
     }
   });
 
-  // `npm run build` produces the file; `npm run check:package-artifacts` checks it after every publish build too.
-  (existsSync(BUILT_ENTRY) ? it : it.skip)('build/src/wallets/index.js requires only relative files', () => {
-    expectOnlyRelativeRequires(requiresWhileLoading(BUILT_ENTRY));
-  });
+  // A spot check of whatever is in build/: skipped when there is none, and stale output is checked as it is. The
+  // authoritative check of the built entry is `npm run check:package-artifacts`, which CI runs after `npm run build`.
+  (existsSync(BUILT_ENTRY) ? it : it.skip)(
+    existsSync(BUILT_ENTRY)
+      ? 'build/src/wallets/index.js requires only relative files'
+      : 'build/src/wallets/index.js requires only relative files (no build/: run npm run build)',
+    () => {
+      expectOnlyRelativeRequires(requiresWhileLoading(BUILT_ENTRY));
+    }
+  );
 });
