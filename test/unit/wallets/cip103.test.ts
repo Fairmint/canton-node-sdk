@@ -121,6 +121,7 @@ describe('cip103Wallet.listActiveContracts', () => {
         signatories: ['provider::1220bb'],
         createArgument: { operator: 'op' },
         interfaceViews: [{ interfaceId: 'pkg:A:B', viewValue: { x: 1 } }],
+        synchronizerId: 'global-domain::1220ee',
       },
     ]);
     expect(provider.requests).toEqual([

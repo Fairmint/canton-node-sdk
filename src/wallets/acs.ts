@@ -60,6 +60,7 @@ export function parseActiveContractEntry(entry: unknown): ActiveContract | null 
   const { createArgument } = created;
   const createdEventBlob = nonEmptyString(created['createdEventBlob']);
   const packageName = nonEmptyString(created['packageName']);
+  const synchronizerId = isRecord(active) ? nonEmptyString(active['synchronizerId']) : undefined;
   return {
     contractId,
     templateId,
@@ -68,6 +69,7 @@ export function parseActiveContractEntry(entry: unknown): ActiveContract | null 
     createArgument: isJsonObject(createArgument) ? createArgument : null,
     interfaceViews: parseInterfaceViews(created['interfaceViews']),
     ...(createdEventBlob !== undefined && { createdEventBlob }),
+    ...(synchronizerId !== undefined && { synchronizerId }),
   };
 }
 

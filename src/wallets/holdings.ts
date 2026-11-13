@@ -16,6 +16,8 @@ export interface Holding {
   readonly amount: string;
   /** Locked to an allocation, a burn request or a transfer in flight: it cannot be spent. */
   readonly locked: boolean;
+  /** The synchronizer the holding is assigned to, when the ledger reported it. Inputs never mix synchronizers. */
+  readonly synchronizerId?: string;
 }
 
 /**
@@ -30,7 +32,7 @@ function readLocked(value: unknown): boolean | null {
 }
 
 function holding(
-  contractId: string,
+  contract: ActiveContract,
   fields: {
     owner: unknown;
     instrumentId: InstrumentId | null;
@@ -50,11 +52,12 @@ function holding(
     return null;
   }
   return {
-    contractId,
+    contractId: contract.contractId,
     owner,
     instrumentId: fields.instrumentId,
     amount: fields.amount,
     locked,
+    ...(contract.synchronizerId !== undefined && { synchronizerId: contract.synchronizerId }),
   };
 }
 
@@ -69,7 +72,7 @@ export function parseHolding(contract: ActiveContract): Holding | null {
   );
   if (view) {
     const v = view.viewValue;
-    return holding(contract.contractId, {
+    return holding(contract, {
       owner: v['owner'],
       instrumentId: readInstrumentId(v['instrumentId']),
       amount: v['amount'],
@@ -79,7 +82,7 @@ export function parseHolding(contract: ActiveContract): Holding | null {
   const args = contract.createArgument;
   if (args !== null && sameQualifiedName(contract.templateId, DA_REGISTRY_TEMPLATES.holding)) {
     const { instrument } = args;
-    return holding(contract.contractId, {
+    return holding(contract, {
       owner: args['owner'],
       instrumentId: isRecord(instrument)
         ? readInstrumentId({
@@ -190,30 +193,53 @@ export function selectHoldings(
     .filter((h) => !h.locked && h.owner === request.owner && sameInstrument(h.instrumentId, request.instrumentId))
     .flatMap((h) => {
       const units = parseDecimalUnits(h.amount);
-      return units === null || units === 0n ? [] : [{ contractId: h.contractId, units }];
+      return units === null || units === 0n
+        ? []
+        : [{ contractId: h.contractId, units, synchronizerId: h.synchronizerId }];
     })
     .sort((a, b) => {
       if (a.units !== b.units) return a.units > b.units ? -1 : 1;
       return a.contractId < b.contractId ? -1 : a.contractId > b.contractId ? 1 : 0;
     });
 
-  const largestFirst = cover(candidates, needed);
-  if (largestFirst === null) {
-    const total = candidates.reduce((sum, c) => sum + c.units, 0n);
+  // One transaction cannot spend holdings assigned to different synchronizers, so select within one synchronizer:
+  // the group with the largest balance first (ties by synchronizer id), so the choice is deterministic.
+  const groups = new Map<string, typeof candidates>();
+  for (const candidate of candidates) {
+    const key = candidate.synchronizerId ?? '';
+    groups.set(key, [...(groups.get(key) ?? []), candidate]);
+  }
+  const ordered = [...groups.entries()]
+    .map(([key, group]) => ({ key, group, total: group.reduce((sum, c) => sum + c.units, 0n) }))
+    .sort((a, b) => (a.total !== b.total ? (a.total > b.total ? -1 : 1) : a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+
+  const total = candidates.reduce((sum, c) => sum + c.units, 0n);
+  const covering = ordered.filter((g) => g.total >= needed);
+  if (covering.length === 0) {
+    const spread =
+      total >= needed && ordered.length > 1
+        ? ` on any one synchronizer (the ${formatDecimalUnits(total)} is spread across ${ordered.length} synchronizers)`
+        : '';
     throw new TokenWalletError(
       'insufficient-balance',
-      `Insufficient unlocked ${request.instrumentId.id}: need ${formatDecimalUnits(needed)}, have ${formatDecimalUnits(total)}`
+      `Insufficient unlocked ${request.instrumentId.id}: need ${formatDecimalUnits(needed)}, have ${formatDecimalUnits(spread === '' ? total : (ordered[0]?.total ?? 0n))}${spread}`
     );
   }
+
   const fits = (c: { readonly total: bigint } | null): boolean => c !== null && c.total <= MAX_DECIMAL_UNITS;
-  let representable = [largestFirst, cover([...candidates].reverse(), needed)].find(fits) ?? null;
-  const searched = candidates.slice(0, MAX_SKIPPING_COVER_CANDIDATES);
-  representable ??= skippingCover(searched, needed);
+  let representable: { readonly picked: ReadonlyArray<{ readonly contractId: string }>; readonly total: bigint } | null =
+    null;
+  let limited = '';
+  for (const { group } of covering) {
+    const searched = group.slice(0, MAX_SKIPPING_COVER_CANDIDATES);
+    representable =
+      [cover(group, needed), cover([...group].reverse(), needed)].find(fits) ?? skippingCover(searched, needed);
+    if (representable !== null) break;
+    if (searched.length < group.length) {
+      limited = ` (searched the largest ${MAX_SKIPPING_COVER_CANDIDATES} of ${group.length} holdings)`;
+    }
+  }
   if (representable === null) {
-    const limited =
-      searched.length < candidates.length
-        ? ` (searched the largest ${MAX_SKIPPING_COVER_CANDIDATES} of ${candidates.length} holdings)`
-        : '';
     throw new TokenWalletError(
       'amount-out-of-range',
       `Found no set of unlocked ${request.instrumentId.id} holdings that covers ${formatDecimalUnits(needed)} within the Daml Numeric 10 range${limited}; nothing was submitted`

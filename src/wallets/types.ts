@@ -57,6 +57,8 @@ export interface ActiveContract {
   readonly createArgument: JsonObject | null;
   readonly interfaceViews: readonly InterfaceView[];
   readonly createdEventBlob?: string;
+  /** The synchronizer the contract is assigned to, when the ledger reported it. */
+  readonly synchronizerId?: string;
 }
 
 /** Which contracts to read: one template or one interface (package-name `#pkg:Module:Entity` form). */

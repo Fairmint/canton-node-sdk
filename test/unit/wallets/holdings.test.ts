@@ -126,6 +126,33 @@ describe('selectHoldings', () => {
     expect(selectHoldings([...holdings].reverse(), request('12')).inputHoldingCids).toEqual(['00c', '00a']);
   });
 
+  it('never mixes synchronizers: picks within the synchronizer with the largest balance', () => {
+    const holdings = [
+      h('00a', '5', { synchronizerId: 'sync-b' }),
+      h('00b', '4', { synchronizerId: 'sync-a' }),
+      h('00c', '3', { synchronizerId: 'sync-a' }),
+    ];
+    // sync-a holds 7, sync-b holds 5: 6 is covered on sync-a only, even though 00a is the largest holding.
+    expect(selectHoldings(holdings, request('6')).inputHoldingCids).toEqual(['00b', '00c']);
+    // 4 fits on either; the largest-balance synchronizer is tried first.
+    expect(selectHoldings(holdings, request('4')).inputHoldingCids).toEqual(['00b']);
+  });
+
+  it('refuses an amount that only holdings on different synchronizers could cover together', () => {
+    const holdings = [h('00a', '5', { synchronizerId: 'sync-a' }), h('00b', '5', { synchronizerId: 'sync-b' })];
+    const error = (() => {
+      try {
+        selectHoldings(holdings, request('8'));
+        return undefined;
+      } catch (e: unknown) {
+        return e;
+      }
+    })();
+    expect(error).toBeInstanceOf(TokenWalletError);
+    expect((error as TokenWalletError).code).toBe('insufficient-balance');
+    expect((error as TokenWalletError).message).toContain('spread across 2 synchronizers');
+  });
+
   it('stops at an exact cover', () => {
     expect(selectHoldings([h('00a', '5'), h('00b', '5')], request('5')).inputHoldingCids).toEqual(['00a']);
   });
