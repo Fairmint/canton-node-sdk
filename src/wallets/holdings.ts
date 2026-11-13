@@ -207,7 +207,9 @@ export function selectHoldings(
   const groups = new Map<string, typeof candidates>();
   for (const candidate of candidates) {
     const key = candidate.synchronizerId ?? '';
-    groups.set(key, [...(groups.get(key) ?? []), candidate]);
+    const group = groups.get(key);
+    if (group === undefined) groups.set(key, [candidate]);
+    else group.push(candidate);
   }
   const ordered = [...groups.entries()]
     .map(([key, group]) => ({ key, group, total: group.reduce((sum, c) => sum + c.units, 0n) }))
