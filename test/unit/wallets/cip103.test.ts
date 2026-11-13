@@ -296,7 +296,7 @@ describe('cip103Wallet.listActiveContracts', () => {
     );
   });
 
-  it.each([4200, -32601, -32004])(
+  it.each([4200, -32601, -32004, -32603, -32000])(
     'falls back once to the unpaged endpoint when the wallet answers the paged one with %i',
     async (code) => {
       const provider = scriptedProvider({
@@ -323,7 +323,7 @@ describe('cip103Wallet.listActiveContracts', () => {
     }
   );
 
-  it('does not fall back on other paged-read errors, or after the first page', async () => {
+  it('does not fall back when the wallet is refused or disconnected, or after the first page', async () => {
     const failing = (code: number, afterFirst: boolean): Cip103Provider & { requests: Cip103Request[] } =>
       scriptedProvider({
         ledgerApi: (params) => {
@@ -334,7 +334,13 @@ describe('cip103Wallet.listActiveContracts', () => {
           throw rpcError(code, 'nope');
         },
       });
-    for (const provider of [failing(4100, false), failing(-32603, false), failing(4200, true)]) {
+    for (const provider of [
+      failing(4001, false),
+      failing(4100, false),
+      failing(4900, false),
+      failing(4901, false),
+      failing(4200, true),
+    ]) {
       const error = await cip103Wallet(provider, HOLDER)
         .listActiveContracts({ templateId: '#a:B:C' })
         .catch((e: unknown) => e);

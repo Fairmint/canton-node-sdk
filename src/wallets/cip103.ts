@@ -8,9 +8,10 @@
  * - Read: `ledgerApi` to the Ledger JSON API v2: `/v2/state/ledger-end`, then the pages of
  *   `/v2/state/active-contracts-page` at that one offset, filtered to that party only (see {@link ACS_PAGE_SIZE}). It is
  *   sent as POST, as the Ledger JSON API 3.6 OpenAPI, Loop's `ledgerApi` allowlist and
- *   `@canton-network/core-acs-reader` do. A wallet that answers 4200, -32601 or -32004 (it does not offer the paged
- *   endpoint) is read once through the unpaged `/v2/state/active-contracts` instead, which is subject to the
- *   participant's `http-list-max-elements-limit`.
+ *   `@canton-network/core-acs-reader` do. If the first page fails for any reason other than a refused, unauthorized or
+ *   disconnected wallet (for example a wallet without the paged endpoint, or a Canton 3.5 participant that serves it
+ *   only as GET), the snapshot is read once through the unpaged `/v2/state/active-contracts` instead, which is subject
+ *   to the participant's `http-list-max-elements-limit`.
  *
  * Spec: CIP-0103 and the dApp API OpenRPC (`openrpc-dapp-api.json` 0.5.0).
  */
@@ -249,13 +250,17 @@ export const ACS_PAGE_SIZE = 200;
 export const ACS_MAX_PAGES = 500;
 
 /**
- * Codes meaning the wallet does not offer the paged ACS endpoint at all (its `ledgerApi` allowlist lacks it, or it has
- * no such method): the read then falls back, once, to the unpaged `/v2/state/active-contracts`.
+ * Codes after which the first paged ACS call does not fall back to the unpaged endpoint: the user refused, or the
+ * wallet is not connected or not authorized, so a second read would fail the same way. Any other failure of the first
+ * page (no paged endpoint in the wallet's allowlist, or a participant that serves it only as GET-with-body, as Canton
+ * 3.5 does) falls back once to the unpaged `/v2/state/active-contracts`. Reads are side-effect free, so the retry is
+ * safe.
  */
-const PAGED_ACS_UNSUPPORTED_CODES: ReadonlySet<number> = new Set([
-  CIP103_ERROR_CODES.unsupportedMethod,
-  CIP103_ERROR_CODES.methodNotFound,
-  CIP103_ERROR_CODES.methodNotSupported,
+const NO_ACS_FALLBACK_CODES: ReadonlySet<number> = new Set([
+  CIP103_ERROR_CODES.userRejected,
+  CIP103_ERROR_CODES.unauthorized,
+  CIP103_ERROR_CODES.disconnected,
+  CIP103_ERROR_CODES.chainDisconnected,
 ]);
 
 /** One `JsGetActiveContractsPageResponse`: `{activeContracts, activeAtOffset, nextPageToken?}`. */
@@ -366,12 +371,11 @@ export function cip103Wallet(provider: Cip103Provider, partyId: string): Cip103W
             ...(pageToken !== undefined && { pageToken }),
           });
         } catch (error) {
-          // A wallet without the paged endpoint (an older allowlist): read the unpaged snapshot once instead.
+          // The first page failed for a reason other than the connection: read the unpaged snapshot once instead.
           if (
             page === 0 &&
             error instanceof WalletReadError &&
-            error.code !== undefined &&
-            PAGED_ACS_UNSUPPORTED_CODES.has(error.code)
+            (error.code === undefined || !NO_ACS_FALLBACK_CODES.has(error.code))
           ) {
             const all = await ledgerApi('post', '/v2/state/active-contracts', {
               verbose: false,
