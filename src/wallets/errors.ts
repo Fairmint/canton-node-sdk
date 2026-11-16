@@ -114,3 +114,100 @@ export class TokenWalletError extends Error {
     this.code = code;
   }
 }
+
+/**
+ * Any error the wallets module throws, as a sentence a dApp can show (it says whether anything was submitted) and a
+ * `kind` to branch on.
+ */
+export interface WalletErrorDescription {
+  /** A user-facing sentence that says whether anything was submitted. */
+  readonly message: string;
+  /**
+   * - `declined`: the user declined in the wallet (a submission or a signature); nothing was submitted or signed.
+   * - `not-committed`: a submission certainly did not commit (`WalletSubmitError` `failed`).
+   * - `outcome-unknown`: a submission's outcome is unknown; do not resubmit blindly.
+   * - `refused`: the SDK refused the action before submitting anything (`TokenWalletError`; its code is in `code`).
+   * - `rate-limited`: the wallet kept rate-limiting a read after the SDK backed off; offer a retry after a moment.
+   * - `read-failed`: any other failed read.
+   * - `sign-failed`: the wallet did not sign (an invalid challenge, or a wallet failure).
+   * - `registry`: the registry API answered with an error status or a body the SDK refuses.
+   * - `other`: anything else.
+   */
+  readonly kind:
+    | 'declined'
+    | 'not-committed'
+    | 'outcome-unknown'
+    | 'refused'
+    | 'rate-limited'
+    | 'read-failed'
+    | 'sign-failed'
+    | 'registry'
+    | 'other';
+  /**
+   * The `TokenWalletError` code of a `refused` error, the wallet's CIP-0103 code of a wallet error when it gave one, or
+   * the HTTP status of a registry API error.
+   */
+  readonly code?: TokenWalletErrorCode | number;
+}
+
+/** How many characters of a registry error body {@link describeWalletError} shows. */
+const REGISTRY_BODY_CHARS = 300;
+
+function described(
+  kind: WalletErrorDescription['kind'],
+  message: string,
+  code?: TokenWalletErrorCode | number
+): WalletErrorDescription {
+  return code === undefined ? { message, kind } : { message, kind, code };
+}
+
+/** Text for a thrown value that is not an `Error`; never throws (cycles, BigInt, `undefined`). */
+function thrownText(error: unknown): string {
+  try {
+    // Typed as a string, but `undefined` for `undefined`, a function or a symbol.
+    const json = JSON.stringify(error) as string | undefined;
+    return json ?? String(error);
+  } catch {
+    return String(error);
+  }
+}
+
+/** A user-facing sentence and a kind for any error the wallets module throws (or anything else thrown). */
+export function describeWalletError(error: unknown): WalletErrorDescription {
+  if (error instanceof WalletSubmitError) {
+    switch (error.outcome) {
+      case 'rejected-by-user':
+        return described('declined', 'You declined in the wallet. Nothing was submitted.', error.code);
+      case 'failed':
+        return described('not-committed', `Not committed: ${error.message}`, error.code);
+      case 'unknown':
+        // The message already says not to resubmit blindly.
+        return described('outcome-unknown', error.message, error.code);
+    }
+  }
+  if (error instanceof WalletReadError) {
+    return error.rateLimited
+      ? described(
+          'rate-limited',
+          `The wallet is limiting how often this page reads the ledger (CIP-0103 -32005), and it still refused after a few retries. Wait a moment, then retry. Details: ${error.message}`,
+          error.code
+        )
+      : described('read-failed', `The wallet could not read the ledger: ${error.message}`, error.code);
+  }
+  if (error instanceof WalletSignError) {
+    return error.reason === 'rejected-by-user'
+      ? described('declined', 'You declined to sign in the wallet. Nothing was verified.', error.code)
+      : described('sign-failed', `The wallet did not sign: ${error.message}`, error.code);
+  }
+  if (error instanceof RegistryApiError) {
+    return described(
+      'registry',
+      `DA's registry answered ${error.status}: ${error.body.slice(0, REGISTRY_BODY_CHARS)}`,
+      error.status
+    );
+  }
+  if (error instanceof RegistryResponseError) return described('registry', error.message);
+  if (error instanceof TokenWalletError) return described('refused', error.message, error.code);
+  if (error instanceof Error) return described('other', error.message);
+  return described('other', thrownText(error));
+}

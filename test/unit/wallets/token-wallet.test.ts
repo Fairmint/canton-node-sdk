@@ -1,9 +1,12 @@
 import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
 import { TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID } from '../../../src/utils/token-standard/v1/constants';
+import { DA_UTILITIES_BASE_URLS } from '../../../src/wallets/da-utilities/client';
+import { BURN_REFERENCE_PATTERN } from '../../../src/wallets/token-wallet';
 import {
   createDaUtilitiesClient,
   createTokenStandardWallet,
   createTokenWallet,
+  newBurnReference,
   RegistryResponseError,
   TokenWalletError,
   type ActiveContract,
@@ -11,6 +14,7 @@ import {
   type TokenRegistry,
   type TokenStandardWallet,
   type TokenWallet,
+  type TransferInstructionAction,
   type TransferKind,
   type TransferOffer,
 } from '../../../src/wallets';
@@ -321,6 +325,16 @@ describe('createTokenWallet.loadState: one snapshot per refresh', () => {
     expect(state.partyId).toBe(HOLDER);
     expect(state.offset).toBe(4242);
     expect(state.holdings.map((h) => h.contractId)).toEqual(['00h10', '00h3', '00locked']);
+    // The holdings summed per instrument, locked apart.
+    expect(state.balances).toEqual([
+      {
+        key: 'XMPL@registrar::1220bb',
+        instrumentId: INSTRUMENT,
+        unlocked: '13.0000000000',
+        locked: '50.0000000000',
+        holdingCount: 3,
+      },
+    ]);
     expect(state.mintOffers.map((o) => o.contractId)).toEqual(['00mint']);
     expect(state.transferOffers.incoming.map((o) => o.contractId)).toEqual(['00in']);
     expect(state.transferOffers.outgoing.map((o) => o.contractId)).toEqual(['00out']);
@@ -672,11 +686,13 @@ describe('createTokenWallet: registrars served by another provider (trustedProvi
 describe('createTokenWallet.requestBurn', () => {
   it('selects holdings, fetches the burn factory and submits AllocationFactory_RequestBurn', async () => {
     const { tokens, wallet, calls } = setup();
-    await tokens.requestBurn({
-      instrumentId: INSTRUMENT,
-      amount: '12',
-      reference: 'redemption-42',
-    });
+    await expect(
+      tokens.requestBurn({
+        instrumentId: INSTRUMENT,
+        amount: '12',
+        reference: 'redemption-42',
+      })
+    ).resolves.toEqual({ updateId: 'update-1', commandId: expect.stringMatching(UUID), reference: 'redemption-42' });
     expect(postCalls(calls)[0]?.body).toEqual({
       holder: HOLDER,
       holdingContractIds: ['00h10', '00h3'],
@@ -713,6 +729,18 @@ describe('createTokenWallet.requestBurn', () => {
         actAs: [HOLDER],
       },
     ]);
+  });
+
+  it('files a generated reference when none is given, and returns it', async () => {
+    const { tokens, wallet } = setup();
+    const result = await tokens.requestBurn({ instrumentId: INSTRUMENT, amount: '1' });
+    // The wallet's clock (NOW), to the second.
+    expect(result.reference).toMatch(/^holder-burn-20261113T120000Z-[0-9a-z]{6}$/);
+    expect(result.reference).toMatch(BURN_REFERENCE_PATTERN);
+    const command = wallet.submissions[0]?.commands[0];
+    expect(command && 'ExerciseCommand' in command && command.ExerciseCommand.choiceArgument).toMatchObject({
+      burn: { reference: result.reference },
+    });
   });
 
   it('uses a given executeBefore', async () => {
@@ -772,6 +800,68 @@ describe('createTokenWallet.requestBurn', () => {
     await expect(tokens.requestBurn({ instrumentId: INSTRUMENT, amount: '1', reference: 'r' })).rejects.toBeInstanceOf(
       RegistryResponseError
     );
+  });
+});
+
+describe('newBurnReference', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('stamps the UTC second and six random base-36 digits, matching the burn reference pattern', () => {
+    jest.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation((array) => {
+      if (array instanceof Uint32Array) array[0] = 36 ** 6 + 35;
+      return array;
+    });
+    const reference = newBurnReference(new Date('2026-11-13T15:27:05.123Z'));
+    expect(reference).toBe('holder-burn-20261113T152705Z-00000z');
+    expect(reference).toMatch(BURN_REFERENCE_PATTERN);
+    // A transfer agent may reserve `redeem-` for the redemptions it files itself.
+    expect(reference).not.toMatch(/^redeem-/);
+  });
+
+  it('differs between two calls in the same second, and defaults to now', () => {
+    const at = new Date('2026-11-13T15:27:05Z');
+    const references = new Set(Array.from({ length: 20 }, () => newBurnReference(at)));
+    expect(references.size).toBe(20);
+    expect(newBurnReference()).toMatch(/^holder-burn-\d{8}T\d{6}Z-[0-9a-z]{6}$/);
+  });
+
+  it('refuses an invalid date', () => {
+    expect(() => newBurnReference(new Date('soon'))).toThrow(TokenWalletError);
+  });
+});
+
+describe('createTokenWallet({ network })', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it.each(['devnet', 'mainnet'] as const)(
+    'builds the DA registry client of %s with the global fetch',
+    async (network) => {
+      const fetchSpy = jest
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async () =>
+          Promise.resolve(new Response(JSON.stringify({ partyId: OPERATOR }), { status: 200 }))
+        );
+      const tokens = createTokenWallet({ provider: fakeProvider(ledger()), network, now: () => NOW });
+      const state = await tokens.loadState();
+      expect(state.mintOffers.map((o) => o.contractId)).toEqual(['00mint']);
+      expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual([
+        `${DA_UTILITIES_BASE_URLS[network]}/api/utilities/v0/operator`,
+      ]);
+    }
+  );
+
+  it('refuses options with neither a registry nor a known network', () => {
+    const provider = fakeProvider(ledger());
+    expect(() => createTokenWallet({ provider } as unknown as Parameters<typeof createTokenWallet>[0])).toThrow(
+      expect.objectContaining({ name: 'TokenWalletError', code: 'invalid-input' })
+    );
+    expect(() =>
+      createTokenWallet({ provider, network: 'testnet' } as unknown as Parameters<typeof createTokenWallet>[0])
+    ).toThrow(expect.objectContaining({ code: 'invalid-input' }));
   });
 });
 
@@ -883,6 +973,49 @@ describe('createTokenWallet transfers', () => {
   it('expectedKind submits when the registry answers the previewed kind', async () => {
     const { tokens, wallet } = setup({ transferKind: 'direct' });
     await expect(tokens.transfer({ ...request, expectedKind: 'direct' })).resolves.toMatchObject({ kind: 'direct' });
+    expect(wallet.submissions).toHaveLength(1);
+  });
+
+  it('planTransfer previews the kind and submits exactly the planned request with expectedKind', async () => {
+    const { tokens, wallet, calls } = setup({ transferKind: 'direct' });
+    const edited = { receiver: OTHER, instrumentId: { admin: REGISTRAR, id: 'XMPL' }, amount: '4' };
+    const plan = await tokens.planTransfer(edited);
+    expect(plan.kind).toBe('direct');
+    expect(plan.request).toEqual({ receiver: OTHER, instrumentId: INSTRUMENT, amount: '4' });
+    expect(Object.isFrozen(plan.request)).toBe(true);
+    expect(wallet.submissions).toEqual([]);
+    // A later edit of the caller's object does not change what is submitted.
+    edited.amount = '9';
+    edited.instrumentId.id = 'OTHER';
+    await expect(plan.submit({ memo: 'invoice 7', requirePreapproval: true })).resolves.toMatchObject({
+      kind: 'direct',
+      updateId: 'update-1',
+    });
+    expect(wallet.submissions).toHaveLength(1);
+    const factoryBodies = postCalls(calls).filter((c) => c.url.endsWith('/transfer-factory'));
+    expect(factoryBodies).toHaveLength(2);
+    expect(factoryBodies[1]?.body).toMatchObject({
+      choiceArguments: {
+        transfer: {
+          amount: '4.0000000000',
+          instrumentId: INSTRUMENT,
+          meta: { values: { 'splice.lfdecentralizedtrust.org/reason': 'invoice 7' } },
+        },
+      },
+    });
+  });
+
+  it('planTransfer refuses to submit when the kind changed since the plan, or without a preapproval', async () => {
+    const options: { transferKind: TransferKind } = { transferKind: 'direct' };
+    const { tokens, wallet } = setup(options);
+    const plan = await tokens.planTransfer(request);
+    options.transferKind = 'offer';
+    await expect(plan.submit()).rejects.toMatchObject({ code: 'kind-changed' });
+    const offer = await tokens.planTransfer(request);
+    expect(offer.kind).toBe('offer');
+    await expect(offer.submit({ requirePreapproval: true })).rejects.toMatchObject({ code: 'preapproval-required' });
+    expect(wallet.submissions).toEqual([]);
+    await expect(offer.submit()).resolves.toMatchObject({ kind: 'offer' });
     expect(wallet.submissions).toHaveLength(1);
   });
 
@@ -1103,6 +1236,27 @@ describe('createTokenWallet: answering transfer offers', () => {
         actAs: [HOLDER],
       },
     ]);
+  });
+
+  it.each([
+    ['00in', 'accept', 'TransferInstruction_Accept'],
+    ['00in', 'reject', 'TransferInstruction_Reject'],
+    ['00out', 'withdraw', 'TransferInstruction_Withdraw'],
+  ] as const)('answerTransferOffer(%s, %s) exercises %s', async (cid, action, choice) => {
+    const { tokens, wallet } = setup();
+    await expect(tokens.answerTransferOffer(cid, action)).resolves.toMatchObject({ updateId: 'update-1' });
+    expect(wallet.submissions).toMatchObject([{ commands: [{ ExerciseCommand: { contractId: cid, choice } }] }]);
+  });
+
+  it('answerTransferOffer refuses an offer in the wrong direction and an unknown action', async () => {
+    const { tokens, wallet, calls } = setup();
+    await expect(tokens.answerTransferOffer('00out', 'accept')).rejects.toMatchObject({ code: 'not-found' });
+    await expect(tokens.answerTransferOffer('00in', 'withdraw')).rejects.toMatchObject({ code: 'not-found' });
+    await expect(
+      tokens.answerTransferOffer('00in', 'cancel' as unknown as TransferInstructionAction)
+    ).rejects.toMatchObject({ name: 'TokenWalletError', code: 'invalid-input' });
+    expect(postCalls(calls)).toEqual([]);
+    expect(wallet.submissions).toEqual([]);
   });
 
   it.each([

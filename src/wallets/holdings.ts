@@ -255,3 +255,53 @@ export function selectHoldings(
     amount: formatDecimalUnits(needed),
   };
 }
+
+/** One instrument's holdings, summed exactly. */
+export interface InstrumentBalance {
+  /** {@link instrumentKey} of the instrument. */
+  readonly key: string;
+  readonly instrumentId: InstrumentId;
+  /** The spendable (unlocked) total, with 10 decimal places. */
+  readonly unlocked: string;
+  /** The total locked to a burn request, an allocation or a transfer in flight, with 10 decimal places. */
+  readonly locked: string;
+  /** How many holdings (locked ones included) make up the totals. */
+  readonly holdingCount: number;
+}
+
+/** A stable key for an instrument: `<id>@<admin>`. */
+export function instrumentKey({ admin, id }: InstrumentId): string {
+  return `${id}@${admin}`;
+}
+
+const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * The holdings summed per instrument, locked apart, sorted by instrument id then admin (by code unit, so the order does
+ * not depend on the locale). Holdings come from {@link parseHolding}, which refuses an unparseable amount.
+ */
+export function instrumentBalances(holdings: readonly Holding[]): InstrumentBalance[] {
+  const totals = new Map<string, { instrumentId: InstrumentId; unlocked: bigint; locked: bigint; count: number }>();
+  for (const entry of holdings) {
+    const units = parseDecimalUnits(entry.amount);
+    if (units === null) continue;
+    const key = instrumentKey(entry.instrumentId);
+    const total = totals.get(key) ?? { instrumentId: entry.instrumentId, unlocked: 0n, locked: 0n, count: 0 };
+    if (entry.locked) total.locked += units;
+    else total.unlocked += units;
+    total.count += 1;
+    totals.set(key, total);
+  }
+  return [...totals.entries()]
+    .map(([key, total]) => ({
+      key,
+      instrumentId: total.instrumentId,
+      unlocked: formatDecimalUnits(total.unlocked),
+      locked: formatDecimalUnits(total.locked),
+      holdingCount: total.count,
+    }))
+    .sort(
+      (a, b) =>
+        compareText(a.instrumentId.id, b.instrumentId.id) || compareText(a.instrumentId.admin, b.instrumentId.admin)
+    );
+}

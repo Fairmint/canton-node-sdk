@@ -74,12 +74,14 @@ See
 `Wallets` runs token standard (CIP-56) holder actions on Digital Asset Utility Registry instruments
 through any CIP-0103 (Canton dApp API) wallet provider:
 
-- read the wallet's state in one snapshot (`loadState`: holdings, mint offers, transfer offers and
-  burn requests), or each list on its own;
+- read the wallet's state in one snapshot (`loadState`: holdings and their `balances` per
+  instrument, mint offers, transfer offers and burn requests), or each list on its own;
 - accept a mint offer (`acceptMintOffer`);
-- preview and send a transfer, and accept, reject or withdraw a transfer offer
-  (`acceptTransferOffer`, `rejectTransferOffer`, `withdrawTransferOffer`);
-- propose a burn (`requestBurn`: a burn request the registrar accepts or rejects);
+- preview and send a transfer (`planTransfer`, then `submit` once the user confirmed the kind), and
+  accept, reject or withdraw a transfer offer (`answerTransferOffer`, or `acceptTransferOffer`,
+  `rejectTransferOffer`, `withdrawTransferOffer`);
+- propose a burn (`requestBurn`: a burn request the registrar accepts or rejects; without a
+  `reference` it files a generated `holder-burn-…` one and returns it);
 - create a transfer preapproval (experimental);
 - prove that the user controls the wallet's party by signing a message (`proveWalletOwnership`,
   verified on your server with `verifyWalletOwnership`).
@@ -93,19 +95,23 @@ of the SDK's Node dependencies. The package root also exports it as the `Wallets
 
 ```ts
 import {
-  createDaUtilitiesClient,
   createTokenWallet,
+  describeWalletError,
   type Cip103Provider,
 } from '@fairmint/canton-node-sdk/build/src/wallets/index.js';
 
-async function send(provider: Cip103Provider, receiver: string): Promise<void> {
-  const tokens = createTokenWallet({
-    provider, // any connected CIP-0103 provider
-    registry: createDaUtilitiesClient({ network: 'devnet' }),
-  });
+async function send(provider: Cip103Provider, receiver: string): Promise<string> {
+  // Any connected CIP-0103 provider; `network` builds DA's registry client (or pass `registry`).
+  const tokens = createTokenWallet({ provider, network: 'devnet' });
   const instrumentId = { admin: 'registrar::1220...', id: 'XMPL' };
-  const kind = await tokens.previewTransfer({ receiver, instrumentId, amount: '10' });
-  await tokens.transfer({ receiver, instrumentId, amount: '10', expectedKind: kind });
+  try {
+    const plan = await tokens.planTransfer({ receiver, instrumentId, amount: '10' });
+    // Show plan.kind to the user; submit refuses with `kind-changed` if the registry now answers another kind.
+    await plan.submit();
+    return 'Sent.';
+  } catch (error) {
+    return describeWalletError(error).message; // says whether anything was submitted
+  }
 }
 ```
 
@@ -129,6 +135,9 @@ async function send(provider: Cip103Provider, receiver: string): Promise<void> {
   `failed` (-32003, or a request the wallet refused before taking it on) or `unknown` (session
   errors 4100/4900/4901 during a submit, timeouts, anything else): check the wallet before
   resubmitting.
+- `describeWalletError(error)` turns any error into a user-facing `message` that says whether
+  anything was submitted, and a `kind` to branch on (`declined`, `not-committed`, `outcome-unknown`,
+  `refused`, `rate-limited`, `read-failed`, `sign-failed`, `registry`, `other`).
 - One write at a time per token wallet: a write started while another is in progress is refused with
   `busy` before any read, so two writes never pick the same holdings.
 - Holdings count only when their registrar signed them, and offers and requests only when a trusted
@@ -137,7 +146,9 @@ async function send(provider: Cip103Provider, receiver: string): Promise<void> {
   other provider are never listed or acted on.
 - Amounts are exact decimals (at most 10 places, within Daml `Numeric 10`); inputs are picked
   deterministically. `requirePreapproval: true` sends only when the receiver pre-approved the
-  transfer, and `expectedKind` refuses a transfer whose kind changed since the preview.
+  transfer, and `expectedKind` refuses a transfer whose kind changed since the preview. An `offer`
+  keeps the sender's tokens locked until it is accepted, rejected or withdrawn; expiry alone does
+  not unlock them.
 
 ### Proving wallet ownership
 

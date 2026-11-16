@@ -14,7 +14,13 @@ import {
   requestBurnCommand,
 } from './commands';
 import { isFromRegistry, parseBurnRequest, parseMintOffer, type BurnRequest, type MintOffer } from './contracts';
-import { DA_BURN_FACTORY_TEMPLATES, type DaUtilitiesClient } from './da-utilities/client';
+import {
+  createDaUtilitiesClient,
+  DA_BURN_FACTORY_TEMPLATES,
+  DA_UTILITIES_BASE_URLS,
+  type DaNetwork,
+  type DaUtilitiesClient,
+} from './da-utilities/client';
 import { RegistryResponseError, TokenWalletError } from './errors';
 import { selectHoldings } from './holdings';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
@@ -40,15 +46,52 @@ export const BURN_TTL_MS = 7 * DAY_MS;
 /** A burn reference: no personal data (DA's operator and the registrar see it). */
 export const BURN_REFERENCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
 
-export type TokenWalletOptions = TokenStandardWalletOptions<DaUtilitiesClient>;
+/** 36^6: the range of a burn reference's random suffix (six base-36 digits). */
+const BURN_REFERENCE_SUFFIX_RANGE = 36 ** 6;
+
+/** A random integer in [0, `range`), from the Web Crypto API when the runtime has it. Not a secret: only unique. */
+function randomBelow(range: number): number {
+  // Typed as always present, but missing in old runtimes.
+  const { crypto } = globalThis as { crypto?: Partial<Crypto> };
+  if (typeof crypto?.getRandomValues === 'function') {
+    return (crypto.getRandomValues(new Uint32Array(1))[0] ?? 0) % range;
+  }
+  return Math.floor(Math.random() * range);
+}
+
+/**
+ * A burn reference with no personal data: `holder-burn-<UTC yyyymmddThhmmssZ>-<6 random base-36 digits>` (DA's operator
+ * and the registrar see it). Never `redeem-…`, a prefix a transfer agent may reserve for the redemptions it files
+ * itself. `requestBurn` uses one when no `reference` is given.
+ */
+export function newBurnReference(now: Date = new Date()): string {
+  const stamp = new Date(requireTime(now, 'now')).toISOString().replace(/[-:]|\.\d+/g, '');
+  const suffix = randomBelow(BURN_REFERENCE_SUFFIX_RANGE).toString(36).padStart(6, '0');
+  return `holder-burn-${stamp}-${suffix}`;
+}
+
+/**
+ * Like `TokenStandardWalletOptions`, with DA's registry client: pass `registry`, or `network` to get
+ * `createDaUtilitiesClient({ network })` with the global `fetch` and no trusted providers.
+ */
+export type TokenWalletOptions = Omit<TokenStandardWalletOptions<DaUtilitiesClient>, 'registry'> &
+  (
+    | { readonly registry: DaUtilitiesClient; readonly network?: undefined }
+    | { readonly network: DaNetwork; readonly registry?: undefined }
+  );
 
 export interface BurnRequestOptions {
   readonly instrumentId: InstrumentId;
   readonly amount: string;
-  /** Matches {@link BURN_REFERENCE_PATTERN}; never personal data. */
-  readonly reference: string;
+  /** Matches {@link BURN_REFERENCE_PATTERN}; never personal data. Defaults to {@link newBurnReference}. */
+  readonly reference?: string;
   /** Defaults to now + 7 days. */
   readonly executeBefore?: Date;
+}
+
+/** A filed burn request: the submission, and the reference it was filed with (the given one or a generated one). */
+export interface BurnRequestResult extends SubmitResult {
+  readonly reference: string;
 }
 
 /** Everything a token wallet page shows, read as one snapshot of the ledger. */
@@ -70,8 +113,11 @@ export interface TokenWallet extends TokenStandardWallet {
   /** Mint offers to the wallet party, made under their instrument admin's registry service. */
   listMintOffers(): Promise<MintOffer[]>;
   acceptMintOffer(mintOfferCid: string, options?: { expectedRegistrar?: string }): Promise<SubmitResult>;
-  /** File a burn (redemption) request; DA locks the amount until the registrar accepts or rejects it. */
-  requestBurn(options: BurnRequestOptions): Promise<SubmitResult>;
+  /**
+   * File a burn (redemption) request; DA locks the amount until the registrar accepts or rejects it. Resolves with the
+   * reference it was filed with, so a dApp can show it.
+   */
+  requestBurn(options: BurnRequestOptions): Promise<BurnRequestResult>;
   /**
    * Experimental: create the wallet party's DA transfer preapproval for an instrument admin (every instrument of the
    * admin when `instrumentIds` is empty or omitted, else up to 10). No live create has been observed yet.
@@ -84,10 +130,23 @@ export interface TokenWallet extends TokenStandardWallet {
   listBurnRequests(): Promise<BurnRequest[]>;
 }
 
+/** The registry client of `options`: the given one, or DA's client for `options.network`. */
+function registryOf(options: TokenWalletOptions): DaUtilitiesClient {
+  if (options.registry !== undefined) return options.registry;
+  const { network } = options as { network?: unknown };
+  if (typeof network !== 'string' || !Object.prototype.hasOwnProperty.call(DA_UTILITIES_BASE_URLS, network)) {
+    throw new TokenWalletError(
+      'invalid-input',
+      `Pass a registry, or a network (${Object.keys(DA_UTILITIES_BASE_URLS).join(' or ')})`
+    );
+  }
+  return createDaUtilitiesClient({ network: network as DaNetwork });
+}
+
 /** A `TokenWallet` over a CIP-0103 provider, using DA's Utilities API for choice contexts. */
 export function createTokenWallet(options: TokenWalletOptions): TokenWallet {
-  const { registry } = options;
-  const core = tokenStandardCore(options, [MINT_OFFER_FILTER, BURN_REQUEST_FILTER]);
+  const registry = registryOf(options);
+  const core = tokenStandardCore({ ...options, registry }, [MINT_OFFER_FILTER, BURN_REQUEST_FILTER]);
   const { connect, exclusive, now } = core;
 
   function mintOffersIn(party: string, contracts: readonly ActiveContract[], operator: string): MintOffer[] {
@@ -177,15 +236,16 @@ export function createTokenWallet(options: TokenWalletOptions): TokenWallet {
     });
   }
 
-  async function runRequestBurn(burn: BurnRequestOptions): Promise<SubmitResult> {
+  async function runRequestBurn(burn: BurnRequestOptions): Promise<BurnRequestResult> {
     const instrumentId = requireInstrumentId(burn.instrumentId);
-    if (!BURN_REFERENCE_PATTERN.test(burn.reference)) {
+    const at = now();
+    const reference = burn.reference ?? newBurnReference(new Date(at));
+    if (typeof reference !== 'string' || !BURN_REFERENCE_PATTERN.test(reference)) {
       throw new TokenWalletError(
         'invalid-input',
         'reference must be 1-100 characters of letters, digits and . _ : - (starting with a letter or digit), with no personal data'
       );
     }
-    const at = now();
     const deadline =
       burn.executeBefore === undefined ? at + BURN_TTL_MS : requireTime(burn.executeBefore, 'executeBefore');
     if (deadline <= at) {
@@ -206,7 +266,7 @@ export function createTokenWallet(options: TokenWalletOptions): TokenWallet {
     });
     const factoryError = factoryTemplateError(factory, DA_BURN_FACTORY_TEMPLATES);
     if (factoryError !== null) throw new RegistryResponseError(factoryError);
-    return wallet.submit({
+    const result = await wallet.submit({
       commands: [
         requestBurnCommand({
           allocationFactoryCid: factory.factoryId,
@@ -215,7 +275,7 @@ export function createTokenWallet(options: TokenWalletOptions): TokenWallet {
             instrumentId,
             amount: selection.amount,
             holder: wallet.partyId,
-            reference: burn.reference,
+            reference,
             requestedAt,
             executeBefore,
           },
@@ -225,6 +285,7 @@ export function createTokenWallet(options: TokenWalletOptions): TokenWallet {
       ],
       disclosedContracts: factory.disclosedContracts,
     });
+    return { ...result, reference };
   }
 
   async function runCreateTransferPreapproval(preapproval: {

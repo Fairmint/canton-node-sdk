@@ -5,12 +5,15 @@
  *
  * The surface is small on purpose: plug in a CIP-0103 provider (`createTokenWallet`), the registry client, the
  * ownership proof's client side (`proveWalletOwnership` and the message it signs; the server verifies with
- * `verifyWalletOwnership` from the package root, which is Node-only), the read back-off options, the errors and the
- * data types. Command builders, parsers, error-code tables and the CIP-0103 client stay internal.
+ * `verifyWalletOwnership` from the package root, which is Node-only), the read back-off options, the errors and their
+ * user-facing descriptions (`describeWalletError`), and the data types. Command builders, parsers, error-code tables
+ * and the CIP-0103 client stay internal.
  */
 export {
   createTokenWallet,
+  newBurnReference,
   type BurnRequestOptions,
+  type BurnRequestResult,
   type TokenWallet,
   type TokenWalletOptions,
   type TokenWalletState,
@@ -22,10 +25,12 @@ export {
   type TokenStandardWalletOptions,
   type TransferOffers,
   type TransferOptions,
+  type TransferPlan,
   type TransferRequest,
   type TransferResult,
 } from './token-standard-wallet';
 export {
+  cip103NetworkId,
   DEFAULT_READ_RETRY_DELAYS_MS,
   primaryPartyId,
   type Cip103Account,
@@ -67,6 +72,7 @@ export type {
   TransferSpec,
 } from './token-registry';
 export {
+  describeWalletError,
   RegistryApiError,
   RegistryResponseError,
   TokenWalletError,
@@ -74,11 +80,12 @@ export {
   WalletSignError,
   WalletSubmitError,
   type TokenWalletErrorCode,
+  type WalletErrorDescription,
   type WalletSignErrorReason,
   type WalletSubmitOutcome,
 } from './errors';
 export type { BurnRequest, MintOffer, TransferOffer } from './contracts';
-export type { Holding } from './holdings';
+export { instrumentKey, type Holding, type InstrumentBalance } from './holdings';
 export type {
   ActiveContract,
   ContractFilter,
