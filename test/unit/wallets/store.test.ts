@@ -783,6 +783,27 @@ describe('createTokenWalletStore', () => {
     });
   });
 
+  it('drops a queued load when the session is disposed before the store, and settles busy and loading', async () => {
+    const t = setup();
+    await connectAndLoad(t);
+    const write = deferred<string>();
+    const ran = t.store.run('x', async () => write.promise);
+    t.store.refresh();
+    expect(t.store.getSnapshot()).toMatchObject({ running: 'x', busy: true, loading: true });
+    // The session is disposed and publishes nothing; the store is not disposed.
+    t.session.dispose();
+    write.resolve('Sent.');
+    expect(await ran).toBe(false);
+    await flush();
+    expect(t.loads).toHaveLength(0);
+    expect(t.store.getSnapshot()).toMatchObject({
+      running: null,
+      busy: false,
+      loading: false,
+      outcome: { id: 'x', partyId: HOLDER, status: 'interrupted' },
+    });
+  });
+
   it('ignores a refresh() that a session listener ahead of the store asks for a wallet the session left', async () => {
     const session = createCip103Session();
     const provider = new TestProvider();
@@ -930,6 +951,50 @@ describe('createTokenWalletStore', () => {
         expect(sent).toEqual([]);
         expect(fetched).toBe(0);
         expect(provider.submissions).toEqual([]);
+        store.dispose();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it('records no interrupted outcome for a write it refused unsent because the account switched mid-write', async () => {
+      const operator = deferred<Response>();
+      let holdOperator = false;
+      const fetchSpy = jest.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+        const href = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
+        if (holdOperator && href.endsWith('/api/utilities/v0/operator')) return operator.promise;
+        return new Response('down', { status: 503 });
+      });
+      try {
+        const session = createCip103Session();
+        const store = createTokenWalletStore({ session });
+        const account: Record<string, unknown> = { partyId: HOLDER };
+        const provider = fakeProvider({}, { party: HOLDER, account });
+        await session.connected(provider, { network: 'devnet' });
+        await flush();
+        expect(store.getSnapshot().busy).toBe(false);
+        // A write whose registry call is pending when the wallet switches to another account.
+        holdOperator = true;
+        let caught: unknown = null;
+        const ran = store.run('send', async ({ tokens }) => {
+          try {
+            await tokens.createTransferPreapproval({ instrumentAdmin: OTHER });
+          } catch (error) {
+            caught = error;
+            throw error;
+          }
+        });
+        await flush();
+        expect(store.getSnapshot().running).toBe('send');
+        account['partyId'] = OTHER;
+        await session.connected(provider, { network: 'devnet' });
+        expect(connectedWallet(session).partyId).toBe(OTHER);
+        operator.resolve(new Response(JSON.stringify({ partyId: 'op::1' }), { status: 200 }));
+        expect(await ran).toBe(false);
+        // The check before signing refused it: nothing was submitted, so its outcome is known.
+        expect(caught).toBeInstanceOf(TokenWalletError);
+        expect(provider.submissions).toEqual([]);
+        expect(store.getSnapshot()).toMatchObject({ outcome: null, unknownOutcomeParty: null });
         store.dispose();
       } finally {
         fetchSpy.mockRestore();

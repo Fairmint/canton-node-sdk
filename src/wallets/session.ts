@@ -99,10 +99,12 @@ export interface Cip103Session {
    * the session is on (the connected wallet's, and the one a pending `connect()` signs in to; failures are ignored),
    * before the new state is published. A `connect()` to such a provider waits for its disconnects to settle before it
    * sends `connect`, so a disconnect cannot land after the new sign-in, also a `connect()` that sending the disconnect
-   * sets off (then that `connect()` owns the state, and `end()` publishes nothing); it waits at most until three
-   * seconds after the disconnect was sent, so a disconnect that never answers delays only the first such `connect()` (a
-   * later disconnect never waits for it again). `wallet`: the wallet rejected or ended the session; nothing is sent.
-   * Either way `connected()` is ignored until `connect()` runs again.
+   * sets off (then that `connect()` owns the state, and `end()` publishes nothing). It waits for each disconnect at
+   * most until three seconds after that disconnect was sent, also when a later disconnect of the same wallet is chained
+   * to it, so a disconnect that never answers delays no `connect()` past three seconds after it was sent, however many
+   * `connect()` and `end('user')` calls follow it. A nested `end()` or `fail()` that sending the disconnect sets off
+   * does not take the state over: `end('user')` still publishes `endedBy: 'user'`. `wallet`: the wallet rejected or
+   * ended the session; nothing is sent. Either way `connected()` is ignored until `connect()` runs again.
    */
   end(by: 'user' | 'wallet'): void;
   /** The wallet's own setup failed (e.g. Loop's `init`): disconnected with `error`. */
@@ -144,6 +146,12 @@ function lookupError(error: unknown): WalletErrorDescription {
   return describeWalletError(error);
 }
 
+/** `end('user')`'s disconnects of one provider in flight: settled once they all answered (each bounded by its deadline). */
+interface Disconnecting {
+  readonly settled: Promise<void>;
+  readonly deadline: number;
+}
+
 /** The provider's events this session follows while connected. */
 interface Attachment {
   readonly provider: Cip103Provider;
@@ -177,7 +185,7 @@ export function createCip103Session(): Cip103Session {
   // published meanwhile (a failed callback may publish an error while it waits), for end('user')'s disconnect.
   let signingIn: Cip103Provider | null = null;
   // end('user')'s disconnects in flight, per provider: a connect() to that provider waits for them until `deadline`.
-  const disconnecting = new Map<Cip103Provider, { readonly settled: Promise<void>; readonly deadline: number }>();
+  const disconnecting = new Map<Cip103Provider, Disconnecting>();
   let attachment: Attachment | null = null;
 
   function publish(next: Cip103SessionState): void {
@@ -294,6 +302,17 @@ export function createCip103Session(): Cip103Session {
     return providers;
   }
 
+  /** `entry` settled, or its deadline passed: never later than its deadline, however long it goes unanswered. */
+  async function settledOrDue(entry: Disconnecting): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const due = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, entry.deadline - Date.now());
+    });
+    return Promise.race([entry.settled, due]).finally(() => {
+      clearTimeout(timer);
+    });
+  }
+
   /**
    * Record a CIP-0103 `disconnect` of `provider`, so a `connect()` to it waits for it, and return the function that
    * sends it (best-effort). Recorded before anything is sent: a `connect()` that sending sets off (a wallet that calls
@@ -304,12 +323,12 @@ export function createCip103Session(): Cip103Session {
     const sent = new Promise<void>((resolve) => {
       answered = resolve;
     });
-    // An earlier disconnect of the same provider still in flight must settle too, unless its deadline passed: one that
-    // never answers must not delay every later connect().
+    // An earlier disconnect of the same provider still in flight must settle too, but only until its own deadline: one
+    // that never answers must not delay later connect() calls past it, even when chained to this one.
     const found = disconnecting.get(provider);
     const earlier = found !== undefined && found.deadline > Date.now() ? found : undefined;
-    const settled = earlier === undefined ? sent : Promise.all([earlier.settled, sent]).then(() => undefined);
-    const own = { settled, deadline: Date.now() + DISCONNECT_WAIT_MS };
+    const settled = earlier === undefined ? sent : Promise.all([settledOrDue(earlier), sent]).then(() => undefined);
+    const own: Disconnecting = { settled, deadline: Date.now() + DISCONNECT_WAIT_MS };
     disconnecting.set(provider, own);
     void settled.then(() => {
       if (disconnecting.get(provider) === own) disconnecting.delete(provider);
@@ -329,8 +348,10 @@ export function createCip103Session(): Cip103Session {
     // disconnect is recorded before the first is sent, so a connect() that sending sets off waits for each.
     const sends = [...providers].map(recordDisconnect);
     for (const send of sends) send();
-    // A connect() that sending set off (or anything else that changed the session meanwhile) owns the state now.
-    if (epoch !== own) return;
+    // A connect() that sending set off owns the state now (it cleared `closed`, so the session is armed again). A nested
+    // end() or fail() does not (`closed` stays set): this end() still publishes, so a user's disconnect is never
+    // reported as the wallet's. (A nested dispose() leaves nothing to publish.)
+    if (epoch !== own && armed()) return;
     publish({ status: 'disconnected', endedBy: by, error: null });
   }
 
@@ -342,19 +363,12 @@ export function createCip103Session(): Cip103Session {
   function disconnectSettled(provider: Cip103Provider): Promise<void> | null {
     const pending = disconnecting.get(provider);
     if (pending === undefined) return null;
-    const left = pending.deadline - Date.now();
-    if (left <= 0) {
+    if (pending.deadline <= Date.now()) {
       // It never answered in time: never wait for it again.
       disconnecting.delete(provider);
       return null;
     }
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, left);
-    });
-    return Promise.race([pending.settled, timeout]).finally(() => {
-      clearTimeout(timer);
-    });
+    return settledOrDue(pending);
   }
 
   return {

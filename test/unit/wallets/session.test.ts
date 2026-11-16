@@ -915,6 +915,69 @@ describe('createCip103Session', () => {
       }
     });
 
+    it('a disconnect that never answers delays a later connect() only until its own deadline, also when chained', async () => {
+      jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+      try {
+        const { session } = observed();
+        let disconnects = 0;
+        // The first disconnect never answers; later ones answer at once.
+        const provider = new TestProvider(HOLDER, {
+          disconnect: async () => {
+            disconnects += 1;
+            return disconnects === 1 ? new Promise<never>(() => undefined) : null;
+          },
+        });
+        const connects = (): number => provider.requests.filter((m) => m === 'connect').length;
+        await session.connected(provider);
+        // t=0: the first disconnect, and a connect() that waits for it.
+        session.end('user');
+        void session.connect(provider);
+        await jest.advanceTimersByTimeAsync(1000);
+        expect(connects()).toBe(0);
+        // t=1000: the user cancels the pending sign-in (a second disconnect, which answers), then clicks Connect.
+        session.end('user');
+        await flush();
+        expect(disconnects).toBe(2);
+        const connecting = session.connect(provider);
+        await jest.advanceTimersByTimeAsync(1999);
+        expect(connects()).toBe(0);
+        // t=3000: the first disconnect's own deadline. connect is sent then, not at the second one's (t=4000).
+        await jest.advanceTimersByTimeAsync(1);
+        expect(connects()).toBe(1);
+        await connecting;
+        expect(connectedWallet(session).partyId).toBe(HOLDER);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it.each([
+      ["end('wallet')", (session: Cip103Session) => session.end('wallet')],
+      ['fail()', (session: Cip103Session) => session.fail(new Error('wallet gone'))],
+    ])(
+      "end('user') still reports the user's disconnect when the wallet's disconnect synchronously calls %s",
+      async (_case, nested) => {
+        const session = createCip103Session();
+        const provider: TestProvider = new TestProvider(HOLDER, {
+          disconnect: () => {
+            nested(session);
+            return null;
+          },
+        });
+        await session.connected(provider, { network: 'devnet' });
+        expect(session.getSnapshot().status).toBe('connected');
+        const seen = statuses(session);
+        session.end('user');
+        expect(seen[seen.length - 1]).toBe('disconnected:user');
+        expect(session.getSnapshot()).toEqual({ status: 'disconnected', endedBy: 'user', error: null });
+        await flush();
+        expect(provider.requests).toEqual(['getPrimaryAccount', 'disconnect']);
+        // Still ended: a late connect callback is ignored until the user connects again.
+        await session.connected(provider, { network: 'devnet' });
+        expect(session.getSnapshot()).toEqual({ status: 'disconnected', endedBy: 'user', error: null });
+      }
+    );
+
     it.each([
       ['ends the session', (session: Cip103Session) => session.end('wallet')],
       ['disposes the session', (session: Cip103Session) => session.dispose()],

@@ -79,8 +79,8 @@ export interface TokenWalletStore<W extends TokenStandardWallet = TokenWallet> {
    * wallet call in flight or load queued) or disconnected; the check is synchronous, so a double click is refused at
    * once. Afterwards it reloads the snapshot, even when the action failed, because a failed write may have committed,
    * and stays busy until that reload answers. A write that settles after its session ended records `interrupted`, never
-   * `succeeded`. Resolves true when the action succeeded for a session that is still current. `action` resolves with a
-   * message to show, or nothing.
+   * `succeeded` (or nothing when it was refused unsent, below). Resolves true when the action succeeded for a session
+   * that is still current. `action` resolves with a message to show, or nothing.
    *
    * `readOnly: true` marks a call that commits nothing (a preview, `signMessage`): no reload follows, and one that
    * settles after its session ended records no outcome instead of `interrupted`.
@@ -89,7 +89,9 @@ export interface TokenWalletStore<W extends TokenStandardWallet = TokenWallet> {
    * it only in a run of that same `wallet`. A token wallet the store opened (with the default `open`, or a custom one
    * that passes `isActive` on) refuses every write once its `ConnectedWallet` is no longer the session's, with
    * `invalid-input` and before anything is read or signed, so a plan made for one account is never submitted after the
-   * session switched to another; the run records that refusal as a `failed` outcome.
+   * session switched to another. A run that is still current records that refusal as a `failed` outcome. A run whose
+   * session ended while it ran, and whose action rejected with a refusal (`TokenWalletError`, `describeWalletError`
+   * kind `refused`: nothing was submitted), records no outcome rather than `interrupted`.
    */
   run(
     id: string,
@@ -126,6 +128,11 @@ export interface TokenWalletStoreOptions<W extends TokenStandardWallet> {
 /** Whether the outcome leaves open if a write committed: `interrupted`, or a failure the wallet could not confirm. */
 function outcomeUnknown(outcome: ActionOutcome): boolean {
   return outcome.status === 'interrupted' || (outcome.status === 'failed' && outcome.error.kind === 'outcome-unknown');
+}
+
+/** Whether `error` is the SDK's refusal before anything was submitted (`TokenWalletError`). */
+function refusedUnsent(error: unknown): boolean {
+  return describeWalletError(error).kind === 'refused';
 }
 
 /** The default token wallet: DA's registry for the network the wallet connected for, acting as its party only. */
@@ -233,8 +240,11 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
   /** Start the queued load if the latch is free, then publish. Called whenever the latch may have freed. */
   function drain(): void {
     if (disposed) return;
-    // A wallet the session has left gets no load: `onSession` drops the queued load and queues the next wallet's.
-    if (queued && inFlight === 0 && wallet !== null && tokens !== null && session.isCurrent(wallet)) {
+    // A wallet the session has left gets no load: `onSession` drops the queued load and queues the next wallet's. A
+    // session that left it without publishing (`dispose()`) never calls `onSession`, so the queued load is dropped here:
+    // a wallet never becomes current again once the session left it.
+    if (queued && wallet !== null && !session.isCurrent(wallet)) queued = false;
+    if (queued && inFlight === 0 && wallet !== null && tokens !== null) {
       queued = false;
       startLoad(wallet, tokens);
     }
@@ -359,7 +369,10 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
       const live = isCurrent(ranFor);
       const { partyId } = ranFor;
       if (!live) {
-        outcome = readOnly ? null : { id, partyId, status: 'interrupted' };
+        // Whether a write committed is unknown, unless the SDK refused it before submitting anything (the token
+        // wallet's check before signing, once its session ended mid-write).
+        outcome =
+          readOnly || (!settled.ok && refusedUnsent(settled.error)) ? null : { id, partyId, status: 'interrupted' };
       } else if (settled.ok) {
         outcome = { id, partyId, status: 'succeeded', message: settled.message };
       } else {
