@@ -3,7 +3,13 @@
  * the registry's holdings, preview and run a transfer, and answer pending transfers. Registry-specific actions (DA's
  * mint offers, burn requests and preapprovals) build on it in `token-wallet.ts`.
  */
-import { cip103Wallet, primaryPartyId, type Cip103Provider, type Cip103Wallet } from './cip103';
+import {
+  cip103Wallet,
+  primaryPartyId,
+  type Cip103Provider,
+  type Cip103Wallet,
+  type WalletReadRetryOptions,
+} from './cip103';
 import { transferCommand, transferInstructionCommand } from './commands';
 import type { TransferOffer } from './contracts';
 import { RegistryResponseError, TokenWalletError } from './errors';
@@ -12,15 +18,17 @@ import {
   TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID,
   TOKEN_STANDARD_V1_REASON_META_KEY,
 } from '../utils/token-standard/v1/constants';
+import { contractFilterKey, contractMatchesFilter } from './templates';
 import {
   factoryTemplateError,
+  type ReadContracts,
   type TokenRegistry,
   type TransferInstructionAction,
   type TransferFactory,
   type TransferKind,
   type TransferSpec,
 } from './token-registry';
-import type { InstrumentId, SubmitResult } from './types';
+import type { ActiveContract, ContractFilter, InstrumentId, SubmitResult } from './types';
 
 const SECOND_MS = 1000;
 const DAY_MS = 24 * 60 * 60 * SECOND_MS;
@@ -44,6 +52,19 @@ export interface TokenStandardWalletOptions<R extends TokenRegistry = TokenRegis
   readonly registry: R;
   /** Defaults to the system clock. */
   readonly now?: () => Date;
+  /** How reads back off when the wallet rate-limits them (CIP-0103 -32005). Writes are never retried. */
+  readonly readRetry?: WalletReadRetryOptions;
+}
+
+/** The CIP-56 state of the wallet party, read as one snapshot. */
+export interface TokenStandardState {
+  /** The party the snapshot was read for. */
+  readonly partyId: string;
+  /** The ledger offset every list was read at. */
+  readonly offset: number;
+  /** The wallet party's holdings this registry serves, locked ones included. */
+  readonly holdings: Holding[];
+  readonly transferOffers: TransferOffers;
 }
 
 export interface TransferRequest {
@@ -83,10 +104,16 @@ export interface TransferOffers {
  * The CIP-56 actions on one registry's instruments. One write action at a time: a write started while another is in
  * progress (from its first read to its submission's outcome) is refused at once with `busy`, so two writes never pick
  * the same holdings. Reads and previews are not limited.
+ *
+ * Reads: `loadState` and the `list*` methods all read one snapshot (one ledger-end call and one paged ACS stream with
+ * every filter the wallet needs), and calls made while a snapshot is in flight share it instead of reading again,
+ * unless a write settled since it started. Load a page with `loadState`; writes do their own fresh reads.
  */
 export interface TokenStandardWallet {
   /** The party every action reads and acts as. */
   partyId(): Promise<string>;
+  /** Holdings and transfer offers, from one snapshot. */
+  loadState(): Promise<TokenStandardState>;
   /** The wallet party's holdings this registry serves, locked ones included (`locked: true`). */
   listHoldings(): Promise<Holding[]>;
   /** How the registry would run this transfer, without submitting it. */
@@ -126,6 +153,14 @@ export function requireInstrumentId(instrumentId: InstrumentId): InstrumentId {
   };
 }
 
+/** One state snapshot of the wallet party. */
+export interface StateSnapshot {
+  readonly wallet: Cip103Wallet;
+  readonly offset: number;
+  /** Serves the snapshot's own filters from the snapshot; any other filter is read from the wallet. */
+  readonly read: ReadContracts;
+}
+
 /** What a registry-specific extension builds on: the wallet as the current party, its holdings, the write guard. */
 export interface TokenStandardCore {
   readonly api: TokenStandardWallet;
@@ -133,8 +168,15 @@ export interface TokenStandardCore {
   readonly now: () => number;
   /** The wallet as the current party: resolved per action, so an account switch in the wallet is followed. */
   readonly connect: () => Promise<Cip103Wallet>;
-  /** The party's unlocked and locked holdings that the registry serves. */
+  /** The party's unlocked and locked holdings that the registry serves, freshly read (for writes). */
   readonly holdingsOf: (wallet: Cip103Wallet) => Promise<Holding[]>;
+  /**
+   * One snapshot of every state filter (holdings, the registry's pending transfers and the extension's own filters).
+   * Concurrent calls share the snapshot in flight unless a write settled since it started.
+   */
+  readonly snapshot: () => Promise<StateSnapshot>;
+  /** The CIP-56 state in a snapshot. */
+  readonly stateOf: (snapshot: StateSnapshot) => Promise<TokenStandardState>;
   /**
    * Run a write action alone: refused with `busy` (before `action` starts) while another write of this token wallet is
    * in progress, and released when `action` settles, whether it succeeded or failed.
@@ -142,8 +184,16 @@ export interface TokenStandardCore {
   readonly exclusive: <T>(action: () => Promise<T>) => Promise<T>;
 }
 
-/** The generic CIP-56 core; `createTokenWallet` adds DA's actions on top of it. */
-export function tokenStandardCore(options: TokenStandardWalletOptions): TokenStandardCore {
+const HOLDING_FILTER: ContractFilter = { interfaceId: TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID };
+
+/**
+ * The generic CIP-56 core; `createTokenWallet` adds DA's actions on top of it, and its own filters to the state
+ * snapshot through `extraStateFilters`.
+ */
+export function tokenStandardCore(
+  options: TokenStandardWalletOptions,
+  extraStateFilters: readonly ContractFilter[] = []
+): TokenStandardCore {
   const { provider, registry } = options;
   const clock = options.now ?? (() => new Date());
   const now = (): number => requireTime(clock(), 'now()');
@@ -153,13 +203,16 @@ export function tokenStandardCore(options: TokenStandardWalletOptions): TokenSta
     return options.partyId ?? primaryPartyId(provider);
   }
 
+  const walletOptions = options.readRetry !== undefined ? { readRetry: options.readRetry } : {};
   async function connect(): Promise<Cip103Wallet> {
-    return cip103Wallet(provider, await partyId());
+    return cip103Wallet(provider, await partyId(), walletOptions);
   }
 
   // Checked and taken synchronously (before the first await), so a second write started in the same tick is refused
   // and two writes never select the same holdings.
   let busy = false;
+  // Bumped when a write settles: a snapshot started before then may predate the write, so later reads do not join it.
+  let writesSettled = 0;
   async function exclusive<T>(action: () => Promise<T>): Promise<T> {
     if (busy) {
       throw new TokenWalletError('busy', 'Another wallet action is in progress; nothing was submitted');
@@ -169,18 +222,60 @@ export function tokenStandardCore(options: TokenStandardWalletOptions): TokenSta
       return await action();
     } finally {
       busy = false;
+      writesSettled += 1;
     }
   }
 
-  async function holdingsOf(wallet: Cip103Wallet): Promise<Holding[]> {
-    const contracts = await wallet.listActiveContracts({
-      interfaceId: TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID,
-    });
+  function holdingsIn(owner: string, contracts: readonly ActiveContract[]): Holding[] {
     return contracts.flatMap((contract) => {
       if (!registry.servesHolding(contract)) return [];
       const holding = parseHolding(contract);
-      return holding !== null && holding.owner === wallet.partyId ? [holding] : [];
+      return holding !== null && holding.owner === owner ? [holding] : [];
     });
+  }
+
+  async function holdingsOf(wallet: Cip103Wallet): Promise<Holding[]> {
+    return holdingsIn(wallet.partyId, await wallet.listActiveContracts(HOLDING_FILTER));
+  }
+
+  const stateFilters: readonly ContractFilter[] = [
+    HOLDING_FILTER,
+    ...(registry.pendingTransferFilters ?? []),
+    ...extraStateFilters,
+  ];
+  const stateFilterKeys = new Set(stateFilters.map(contractFilterKey));
+
+  async function takeSnapshot(): Promise<StateSnapshot> {
+    const wallet = await connect();
+    const { offset, contracts } = await wallet.readActiveContracts(stateFilters);
+    const read: ReadContracts = async (filter) =>
+      stateFilterKeys.has(contractFilterKey(filter))
+        ? contracts.filter((contract) => contractMatchesFilter(contract, filter))
+        : wallet.listActiveContracts(filter);
+    return { wallet, offset, read };
+  }
+
+  let inFlight: { readonly writesSettled: number; readonly promise: Promise<StateSnapshot> } | undefined;
+  async function snapshot(): Promise<StateSnapshot> {
+    if (inFlight?.writesSettled === writesSettled) return inFlight.promise;
+    const promise: Promise<StateSnapshot> = takeSnapshot().finally(() => {
+      if (inFlight?.promise === promise) inFlight = undefined;
+    });
+    inFlight = { writesSettled, promise };
+    return promise;
+  }
+
+  async function stateOf(taken: StateSnapshot): Promise<TokenStandardState> {
+    const [holdingContracts, transferOffers] = await Promise.all([
+      taken.read(HOLDING_FILTER),
+      transferOffersOf(taken.wallet.partyId, taken.read),
+    ]);
+    return {
+      partyId: taken.wallet.partyId,
+      offset: taken.offset,
+      holdings: holdingsIn(taken.wallet.partyId, holdingContracts),
+      transferOffers,
+    };
   }
 
   /** Select inputs and ask the registry for the factory; the factory must be an expected, disclosed template. */
@@ -250,11 +345,11 @@ export function tokenStandardCore(options: TokenStandardWalletOptions): TokenSta
     return { kind, ...result };
   }
 
-  async function transferOffersOf(wallet: Cip103Wallet): Promise<TransferOffers> {
-    const offers = await registry.pendingTransfers(async (filter) => wallet.listActiveContracts(filter));
+  async function transferOffersOf(party: string, read: ReadContracts): Promise<TransferOffers> {
+    const offers = await registry.pendingTransfers(read);
     return {
-      incoming: offers.filter((o) => o.receiver === wallet.partyId && o.sender !== wallet.partyId),
-      outgoing: offers.filter((o) => o.sender === wallet.partyId),
+      incoming: offers.filter((o) => o.receiver === party && o.sender !== party),
+      outgoing: offers.filter((o) => o.sender === party),
     };
   }
 
@@ -263,7 +358,9 @@ export function tokenStandardCore(options: TokenStandardWalletOptions): TokenSta
     action: TransferInstructionAction
   ): Promise<SubmitResult> {
     const wallet = await connect();
-    const { incoming, outgoing } = await transferOffersOf(wallet);
+    const { incoming, outgoing } = await transferOffersOf(wallet.partyId, async (filter) =>
+      wallet.listActiveContracts(filter)
+    );
     const offer = (action === 'withdraw' ? outgoing : incoming).find((o) => o.contractId === transferOfferCid);
     if (!offer) {
       throw new TokenWalletError(
@@ -283,12 +380,21 @@ export function tokenStandardCore(options: TokenStandardWalletOptions): TokenSta
     connect,
     holdingsOf,
     exclusive,
+    snapshot,
+    stateOf,
     api: {
       partyId,
-      listHoldings: async () => holdingsOf(await connect()),
+      loadState: async () => stateOf(await snapshot()),
+      listHoldings: async () => {
+        const taken = await snapshot();
+        return holdingsIn(taken.wallet.partyId, await taken.read(HOLDING_FILTER));
+      },
       previewTransfer: async (request) => (await prepareTransfer(await connect(), request)).factory.transferKind,
       transfer: async (request) => exclusive(async () => runTransfer(request)),
-      listTransferOffers: async () => transferOffersOf(await connect()),
+      listTransferOffers: async () => {
+        const taken = await snapshot();
+        return transferOffersOf(taken.wallet.partyId, taken.read);
+      },
       acceptTransferOffer: async (cid) => exclusive(async () => runAnswerTransferOffer(cid, 'accept')),
       rejectTransferOffer: async (cid) => exclusive(async () => runAnswerTransferOffer(cid, 'reject')),
       withdrawTransferOffer: async (cid) => exclusive(async () => runAnswerTransferOffer(cid, 'withdraw')),

@@ -29,6 +29,7 @@ import {
   OPERATOR,
   OTHER,
   REGISTRAR,
+  RpcError,
   type FakeProvider,
   type FetchCall,
 } from './helpers';
@@ -189,6 +190,14 @@ function setup(
 
 const UUID = /^[0-9a-f-]{36}$/;
 
+/** The filters of a token wallet's state snapshot, in the order it sends them. */
+const STATE_FILTERS = [
+  { interfaceId: TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID },
+  { templateId: DA_REGISTRY_TEMPLATES.transferOffer },
+  { templateId: DA_REGISTRY_TEMPLATES.mintOffer },
+  { templateId: DA_REGISTRY_TEMPLATES.burnRequest },
+];
+
 const postCalls = (calls: FetchCall[]): FetchCall[] => calls.filter((c) => c.method === 'POST');
 
 describe('createTokenWallet: holdings and listings', () => {
@@ -200,7 +209,8 @@ describe('createTokenWallet: holdings and listings', () => {
       ['00h3', false],
       ['00locked', true],
     ]);
-    expect(wallet.reads).toEqual([{ interfaceId: TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID }]);
+    // The one state snapshot: holdings, transfer offers, mint offers and burn requests in one read.
+    expect(wallet.reads).toEqual([STATE_FILTERS]);
   });
 
   it('lists and spends only holdings of the registry it was given', async () => {
@@ -287,6 +297,201 @@ describe('createTokenWallet: holdings and listings', () => {
     expect(requests.map((r) => [r.contractId, r.lockedHoldingCid, r.amount])).toEqual([
       ['00burn', '00locked', '5.0000000000'],
     ]);
+  });
+});
+
+describe('createTokenWallet.loadState: one snapshot per refresh', () => {
+  it('reads everything with one ledger-end call and one paged ACS stream', async () => {
+    const { tokens, wallet, calls } = setup();
+    const state = await tokens.loadState();
+    expect(wallet.ledgerCalls()).toEqual(['GET /v2/state/ledger-end', 'POST /v2/state/active-contracts-page']);
+    expect(wallet.reads).toEqual([STATE_FILTERS]);
+    expect(state.partyId).toBe(HOLDER);
+    expect(state.offset).toBe(4242);
+    expect(state.holdings.map((h) => h.contractId)).toEqual(['00h10', '00h3', '00locked']);
+    expect(state.mintOffers.map((o) => o.contractId)).toEqual(['00mint']);
+    expect(state.transferOffers.incoming.map((o) => o.contractId)).toEqual(['00in']);
+    expect(state.transferOffers.outgoing.map((o) => o.contractId)).toEqual(['00out']);
+    expect(state.burnRequests.map((r) => r.contractId)).toEqual(['00burn']);
+    // The registry is asked only for its operator party.
+    expect(calls.map((c) => c.url)).toEqual([`${DEVNET}/api/utilities/v0/operator`]);
+    // The same as the list methods give.
+    expect(state.mintOffers).toEqual(await tokens.listMintOffers());
+    expect(state.burnRequests).toEqual(await tokens.listBurnRequests());
+    expect(state.transferOffers).toEqual(await tokens.listTransferOffers());
+    expect(state.holdings).toEqual(await tokens.listHoldings());
+  });
+
+  it('shares one in-flight snapshot between concurrent loadState and list calls', async () => {
+    const { tokens, wallet } = setup();
+    const [state, holdings, mints, offers, burns] = await Promise.all([
+      tokens.loadState(),
+      tokens.listHoldings(),
+      tokens.listMintOffers(),
+      tokens.listTransferOffers(),
+      tokens.listBurnRequests(),
+    ]);
+    expect(wallet.ledgerCalls()).toEqual(['GET /v2/state/ledger-end', 'POST /v2/state/active-contracts-page']);
+    expect(wallet.requests.filter((r) => r.method === 'getPrimaryAccount')).toHaveLength(1);
+    expect([holdings, mints, offers, burns]).toEqual([
+      state.holdings,
+      state.mintOffers,
+      state.transferOffers,
+      state.burnRequests,
+    ]);
+    // Once settled, the next call reads again.
+    await tokens.loadState();
+    expect(wallet.reads).toHaveLength(2);
+  });
+
+  it('does not share a snapshot that started before a write settled', async () => {
+    const { tokens, wallet } = setup({ partyId: HOLDER });
+    let releaseRead: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const { request } = wallet;
+    let gated = true;
+    wallet.request = async (args) => {
+      if (gated && args.method === 'ledgerApi' && args.params.resource === '/v2/state/ledger-end') {
+        gated = false;
+        await gate;
+      }
+      return request(args);
+    };
+    const before = tokens.loadState();
+    await tokens.acceptMintOffer('00mint');
+    const after = tokens.loadState();
+    releaseRead();
+    await Promise.all([before, after]);
+    // The write's own fresh read, the early snapshot, and a new snapshot after the write (not the early one).
+    expect(wallet.reads).toHaveLength(3);
+    expect(wallet.reads).toContainEqual([{ templateId: DA_REGISTRY_TEMPLATES.mintOffer }]);
+    expect(wallet.reads.filter((filters) => filters.length === STATE_FILTERS.length)).toEqual([
+      STATE_FILTERS,
+      STATE_FILTERS,
+    ]);
+  });
+
+  it('shares a failed snapshot with the calls that joined it, and reads again afterwards', async () => {
+    let fail = true;
+    const { tokens, wallet } = setup({ partyId: HOLDER });
+    const { request } = wallet;
+    let failed = 0;
+    wallet.request = async (args) => {
+      if (fail && args.method === 'ledgerApi') {
+        failed += 1;
+        throw new RpcError(-32002, 'Ledger access unavailable');
+      }
+      return request(args);
+    };
+    const results = await Promise.allSettled([tokens.loadState(), tokens.listHoldings()]);
+    expect(results.map((r) => r.status)).toEqual(['rejected', 'rejected']);
+    // One shared ledger-end call; -32002 is not retried.
+    expect(failed).toBe(1);
+    fail = false;
+    await expect(tokens.loadState()).resolves.toMatchObject({ partyId: HOLDER });
+  });
+
+  it('backs off and retries a rate-limited snapshot, then loads', async () => {
+    let limited = 2;
+    const waits: number[] = [];
+    const registryFetch = fakeFetch(() => ({ json: { partyId: OPERATOR } }));
+    const wallet = fakeProvider(ledger(), {
+      beforeLedgerApi: () => {
+        if (limited > 0) {
+          limited -= 1;
+          throw new RpcError(-32005, 'Ledger access unavailable');
+        }
+      },
+    });
+    const tokens = createTokenWallet({
+      provider: wallet,
+      registry: createDaUtilitiesClient({ network: 'devnet' }, { fetch: registryFetch.fetch }),
+      readRetry: {
+        sleep: async (ms) => {
+          waits.push(ms);
+        },
+        random: () => 0,
+      },
+    });
+    const state = await tokens.loadState();
+    expect(state.mintOffers.map((o) => o.contractId)).toEqual(['00mint']);
+    expect(waits).toEqual([250, 500]);
+    expect(wallet.ledgerCalls()).toEqual([
+      'GET /v2/state/ledger-end',
+      'GET /v2/state/ledger-end',
+      'GET /v2/state/ledger-end',
+      'POST /v2/state/active-contracts-page',
+    ]);
+    // Retries are ledger reads only: the registry is asked once.
+    expect(registryFetch.calls).toHaveLength(1);
+  });
+
+  it('fails with a rate-limited WalletReadError, without the unpaged fallback, when the wallet keeps refusing', async () => {
+    const wallet = fakeProvider(ledger(), {
+      beforeLedgerApi: (resource) => {
+        if (resource === '/v2/state/active-contracts-page') {
+          throw new RpcError(-32005, 'Ledger access unavailable');
+        }
+      },
+    });
+    const tokens = createTokenWallet({
+      provider: wallet,
+      registry: createDaUtilitiesClient(
+        { network: 'devnet' },
+        { fetch: fakeFetch(() => ({ json: { partyId: OPERATOR } })).fetch }
+      ),
+      readRetry: { sleep: async () => undefined },
+    });
+    await expect(tokens.loadState()).rejects.toMatchObject({
+      name: 'WalletReadError',
+      code: -32005,
+      rateLimited: true,
+    });
+    expect(wallet.ledgerCalls()).toEqual([
+      'GET /v2/state/ledger-end',
+      ...Array<string>(5).fill('POST /v2/state/active-contracts-page'),
+    ]);
+  });
+
+  it('falls back to one unpaged read of every filter when the paged endpoint is not offered', async () => {
+    const wallet = fakeProvider(ledger(), {
+      beforeLedgerApi: (resource) => {
+        if (resource === '/v2/state/active-contracts-page') throw new RpcError(4200, 'not allowed');
+      },
+    });
+    const tokens = createTokenWallet({
+      provider: wallet,
+      registry: createDaUtilitiesClient(
+        { network: 'devnet' },
+        { fetch: fakeFetch(() => ({ json: { partyId: OPERATOR } })).fetch }
+      ),
+    });
+    const state = await tokens.loadState();
+    expect(state.holdings).toHaveLength(3);
+    expect(state.burnRequests.map((r) => r.contractId)).toEqual(['00burn']);
+    expect(wallet.ledgerCalls()).toEqual([
+      'GET /v2/state/ledger-end',
+      'POST /v2/state/active-contracts-page',
+      'POST /v2/state/active-contracts',
+    ]);
+    expect(wallet.reads).toEqual([STATE_FILTERS]);
+  });
+
+  it('keeps a contract of another package out of the template lists', async () => {
+    const { tokens } = setup({
+      extraHoldings: [
+        {
+          ...contract('00evilmint', MINT, mintArgs()),
+          packageName: 'evil-package',
+          // Implements HoldingV1, so the holding filter returns it.
+          interfaceViews: holdingView('x', '1').interfaceViews,
+        },
+      ],
+    });
+    const state = await tokens.loadState();
+    expect(state.mintOffers.map((o) => o.contractId)).toEqual(['00mint']);
   });
 });
 

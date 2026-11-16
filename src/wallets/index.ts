@@ -3,12 +3,21 @@
  * wallet provider. In a browser bundle import `@fairmint/canton-node-sdk/build/src/wallets/index.js`, which loads none
  * of the SDK's Node dependencies; the package root also exports it as the `Wallets` namespace (for Node).
  *
- * The surface is small on purpose: plug in a CIP-0103 provider (`createTokenWallet`), the registry client, the errors
- * and the data types. Command builders, parsers and the CIP-0103 client stay internal.
+ * The surface is small on purpose: plug in a CIP-0103 provider (`createTokenWallet`), the registry client, the
+ * ownership proof's client side (`proveWalletOwnership`; the server verifies with `verifyWalletOwnership` from the
+ * package root, which is Node-only), the errors and the data types. Command builders, parsers and the CIP-0103 client
+ * stay internal.
  */
-export { createTokenWallet, type BurnRequestOptions, type TokenWallet, type TokenWalletOptions } from './token-wallet';
+export {
+  createTokenWallet,
+  type BurnRequestOptions,
+  type TokenWallet,
+  type TokenWalletOptions,
+  type TokenWalletState,
+} from './token-wallet';
 export {
   createTokenStandardWallet,
+  type TokenStandardState,
   type TokenStandardWallet,
   type TokenStandardWalletOptions,
   type TransferOffers,
@@ -17,13 +26,31 @@ export {
   type TransferResult,
 } from './token-standard-wallet';
 export {
+  ACS_FALLBACK_CODES,
+  CIP103_ERROR_CODES,
+  DEFAULT_READ_RETRY_DELAYS_MS,
+  primaryAccount,
   primaryPartyId,
+  type Cip103Account,
   type Cip103EventListener,
   type Cip103LedgerApiParams,
   type Cip103PrepareExecuteParams,
   type Cip103Provider,
   type Cip103Request,
+  type Cip103SignMessageParams,
+  type WalletReadRetryOptions,
 } from './cip103';
+export {
+  buildWalletOwnershipMessage,
+  parseWalletOwnershipMessage,
+  proveWalletOwnership,
+  WALLET_OWNERSHIP_TITLE,
+  WALLET_OWNERSHIP_VERSION,
+  type ProveWalletOwnershipOptions,
+  type WalletOwnershipChallenge,
+  type WalletOwnershipMessageFields,
+  type WalletOwnershipProof,
+} from './ownership';
 export {
   createDaUtilitiesClient,
   type BurnRequestContextArgs,
@@ -50,8 +77,10 @@ export {
   RegistryResponseError,
   TokenWalletError,
   WalletReadError,
+  WalletSignError,
   WalletSubmitError,
   type TokenWalletErrorCode,
+  type WalletSignErrorReason,
   type WalletSubmitOutcome,
 } from './errors';
 export type { BurnRequest, MintOffer, TransferOffer } from './contracts';

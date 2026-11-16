@@ -4,20 +4,27 @@
  * provider type is structural, so no wallet SDK is imported.
  *
  * - Party: the `partyId` the dApp gives, else the wallet's primary account (`getPrimaryAccount`).
- * - Submit: `prepareExecuteAndWait` acting as that party only; resolves with `tx.payload.updateId`.
- * - Read: `ledgerApi` to the Ledger JSON API v2: `/v2/state/ledger-end`, then the pages of
- *   `/v2/state/active-contracts-page` at that one offset, filtered to that party only (see {@link ACS_PAGE_SIZE}). It is
- *   sent as POST, as the Ledger JSON API 3.6 OpenAPI, Loop's `ledgerApi` allowlist and
- *   `@canton-network/core-acs-reader` do. If the first page fails for any reason other than a refused, unauthorized or
- *   disconnected wallet (for example a wallet without the paged endpoint, or a Canton 3.5 participant that serves it
- *   only as GET), the snapshot is read once through the unpaged `/v2/state/active-contracts` instead, which is subject
- *   to the participant's `http-list-max-elements-limit`.
+ * - Submit: `prepareExecuteAndWait` acting as that party only; resolves with `tx.payload.updateId`. Never retried.
+ * - Read: `ledgerApi` to the Ledger JSON API v2: one `/v2/state/ledger-end`, then the pages of
+ *   `/v2/state/active-contracts-page` at that one offset, filtered to that party only, with every template and
+ *   interface filter of the read in one cumulative filter (see {@link ACS_PAGE_SIZE}). It is sent as POST, as the Ledger
+ *   JSON API 3.6 OpenAPI, Loop's `ledgerApi` allowlist and `@canton-network/core-acs-reader` do.
+ * - Rate limits: wallets rate-limit `ledgerApi` (Loop answers -32005 for an HTTP 429). A read answered -32005 is retried
+ *   after an exponential, jittered back-off ({@link DEFAULT_READ_RETRY_DELAYS_MS}); when the wallet still refuses, the
+ *   read fails with a `WalletReadError` whose `rateLimited` is true. Never for submissions.
+ * - Fallback: only when the wallet says the paged endpoint is not offered or its request shape is refused
+ *   ({@link ACS_FALLBACK_CODES}: 4200, -32601, -32004, -32602; for example a wallet without the paged endpoint in its
+ *   allowlist, or a Canton 3.5 participant that serves it only as GET) is the snapshot read once through the unpaged
+ *   `/v2/state/active-contracts`, which is subject to the participant's `http-list-max-elements-limit`. A rate limit
+ *   (-32005), a timeout or unavailable ledger (-32002) or any other failure never falls back: a second request would
+ *   only add load. When the fallback fails too, the error names both failures.
  *
  * Spec: CIP-0103 and the dApp API OpenRPC (`openrpc-dapp-api.json` 0.5.0).
  */
 import { parseActiveContractEntries } from './acs';
 import { WalletReadError, WalletSubmitError } from './errors';
 import { isRecord, nonEmptyString } from './json';
+import { contractFilterKey } from './templates';
 import type {
   ActiveContract,
   ContractFilter,
@@ -48,11 +55,20 @@ export type Cip103LedgerApiParams = {
   body?: Record<string, unknown>;
 };
 
+// A type alias, not an interface: providers declare `params` as `Record<string, unknown>`, which only an alias's
+// implicit index signature satisfies.
+/** `signMessage` params (the OpenRPC's `SignMessageRequest`). */
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+export type Cip103SignMessageParams = {
+  message: string;
+};
+
 /** The dApp API requests this SDK makes, each in CIP-0103's `{ method, params }` form. */
 export type Cip103Request =
   | { method: 'getPrimaryAccount' }
   | { method: 'ledgerApi'; params: Cip103LedgerApiParams }
-  | { method: 'prepareExecuteAndWait'; params: Cip103PrepareExecuteParams };
+  | { method: 'prepareExecuteAndWait'; params: Cip103PrepareExecuteParams }
+  | { method: 'signMessage'; params: Cip103SignMessageParams };
 
 /** An event listener of CIP-0103's Provider API. */
 export type Cip103EventListener = (...args: unknown[]) => void;
@@ -115,7 +131,7 @@ export function cip103ErrorCode(error: unknown): number | undefined {
 }
 
 /** `message (CIP-0103 4200 Unsupported Method)`, so a UI can show what the wallet answered. */
-function describeError(error: unknown): string {
+export function describeError(error: unknown): string {
   const raw = isRecord(error) ? error['message'] : undefined;
   const message = typeof raw === 'string' && raw.length > 0 ? raw : String(error);
   const code = cip103ErrorCode(error);
@@ -217,10 +233,22 @@ function newCommandId(): string | undefined {
 }
 
 /**
- * The wallet party: the primary account's `partyId` (`getPrimaryAccount`). The dApp runs its wallet's own connect flow
- * first; a provider that is not connected answers 4100.
+ * The fields of the CIP-0103 `Wallet` (account) this SDK reads. `publicKey` and `namespace` are as the wallet reports
+ * them (their encoding is not specified by CIP-0103); absent when the wallet did not send them.
  */
-export async function primaryPartyId(provider: Cip103Provider): Promise<string> {
+export interface Cip103Account {
+  readonly partyId: string;
+  readonly publicKey?: string;
+  readonly namespace?: string;
+  readonly networkId?: string;
+  readonly signingProviderId?: string;
+}
+
+/**
+ * The wallet's primary account (`getPrimaryAccount`). The dApp runs its wallet's own connect flow first; a provider
+ * that is not connected answers 4100.
+ */
+export async function primaryAccount(provider: Cip103Provider): Promise<Cip103Account> {
   let account: unknown;
   try {
     account = await provider.request({ method: 'getPrimaryAccount' });
@@ -231,10 +259,25 @@ export async function primaryPartyId(provider: Cip103Provider): Promise<string> 
     );
   }
   const partyId = isRecord(account) ? nonEmptyString(account['partyId']) : undefined;
-  if (partyId === undefined) {
+  if (!isRecord(account) || partyId === undefined) {
     throw new WalletReadError('The wallet returned a primary account without partyId');
   }
-  return partyId;
+  const publicKey = nonEmptyString(account['publicKey']);
+  const namespace = nonEmptyString(account['namespace']);
+  const networkId = nonEmptyString(account['networkId']);
+  const signingProviderId = nonEmptyString(account['signingProviderId']);
+  return {
+    partyId,
+    ...(publicKey !== undefined && { publicKey }),
+    ...(namespace !== undefined && { namespace }),
+    ...(networkId !== undefined && { networkId }),
+    ...(signingProviderId !== undefined && { signingProviderId }),
+  };
+}
+
+/** The wallet party: the primary account's `partyId` (`getPrimaryAccount`). */
+export async function primaryPartyId(provider: Cip103Provider): Promise<string> {
+  return (await primaryAccount(provider)).partyId;
 }
 
 /**
@@ -250,18 +293,45 @@ export const ACS_PAGE_SIZE = 200;
 export const ACS_MAX_PAGES = 500;
 
 /**
- * Codes after which the first paged ACS call does not fall back to the unpaged endpoint: the user refused, or the
- * wallet is not connected or not authorized, so a second read would fail the same way. Any other failure of the first
- * page (no paged endpoint in the wallet's allowlist, or a participant that serves it only as GET-with-body, as Canton
- * 3.5 does) falls back once to the unpaged `/v2/state/active-contracts`. Reads are side-effect free, so the retry is
- * safe.
+ * Codes of a first paged ACS call after which the snapshot is read once through the unpaged
+ * `/v2/state/active-contracts` instead: the wallet does not offer the paged endpoint (4200, -32601, -32004), or refused
+ * the paged request's shape (-32602; for example a participant that serves the endpoint only as GET-with-body, as
+ * Canton 3.5 does). Any other failure (a rate limit, a timeout, an unavailable ledger, a refused or disconnected
+ * session) is reported as it is: a second read would fail the same way and only add load.
  */
-const NO_ACS_FALLBACK_CODES: ReadonlySet<number> = new Set([
-  CIP103_ERROR_CODES.userRejected,
-  CIP103_ERROR_CODES.unauthorized,
-  CIP103_ERROR_CODES.disconnected,
-  CIP103_ERROR_CODES.chainDisconnected,
+export const ACS_FALLBACK_CODES: ReadonlySet<number> = new Set([
+  CIP103_ERROR_CODES.unsupportedMethod,
+  CIP103_ERROR_CODES.methodNotFound,
+  CIP103_ERROR_CODES.methodNotSupported,
+  CIP103_ERROR_CODES.invalidParams,
 ]);
+
+/**
+ * Waits before each retry of a read the wallet rate-limited (-32005): 0.5 s, 1 s, 2 s, 4 s, so at most five attempts
+ * over about 7.5 s. Each wait is jittered to between half and all of its value, so parallel readers spread out.
+ */
+export const DEFAULT_READ_RETRY_DELAYS_MS: readonly number[] = [500, 1000, 2000, 4000];
+
+/** How reads back off when the wallet rate-limits them (-32005). Never applied to submissions. */
+export interface WalletReadRetryOptions {
+  /** The wait before each retry, in milliseconds; defaults to {@link DEFAULT_READ_RETRY_DELAYS_MS}. Empty: no retry. */
+  readonly delaysMs?: readonly number[];
+  /** Defaults to `setTimeout`. */
+  readonly sleep?: (ms: number) => Promise<void>;
+  /** A number in [0, 1) for the jitter; defaults to `Math.random`. */
+  readonly random?: () => number;
+}
+
+const defaultSleep = async (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+/** Contracts of one ACS snapshot, read at one ledger offset. */
+export interface AcsSnapshot {
+  readonly offset: number;
+  readonly contracts: ActiveContract[];
+}
 
 /** One `JsGetActiveContractsPageResponse`: `{activeContracts, activeAtOffset, nextPageToken?}`. */
 function readAcsPage(raw: unknown, offset: number): { entries: unknown[]; nextPageToken: string | undefined } {
@@ -289,116 +359,187 @@ export interface Cip103Wallet {
   readonly partyId: string;
   /** Active contracts of `partyId` matching the filter, as one snapshot at the ledger end. */
   listActiveContracts(filter: ContractFilter): Promise<ActiveContract[]>;
+  /**
+   * Active contracts of `partyId` matching any of the filters, as one snapshot at the ledger end: one ledger-end call
+   * and one paged ACS stream whose cumulative filter carries every filter. A contract matching several is returned
+   * once.
+   */
+  readActiveContracts(filters: readonly ContractFilter[]): Promise<AcsSnapshot>;
   /** Sign and submit as `partyId`; resolves once committed, else throws `WalletSubmitError`. Never retries. */
   submit(submission: WalletSubmission): Promise<SubmitResult>;
 }
 
+export interface Cip103WalletOptions {
+  /** How reads back off when the wallet rate-limits them. */
+  readonly readRetry?: WalletReadRetryOptions;
+}
+
+/** A Ledger JSON API v2 `CumulativeFilter` for one template or interface. */
+function cumulativeFilter(filter: ContractFilter): Record<string, unknown> {
+  return {
+    identifierFilter:
+      'templateId' in filter
+        ? {
+            TemplateFilter: {
+              value: {
+                templateId: filter.templateId,
+                includeCreatedEventBlob: false,
+              },
+            },
+          }
+        : {
+            InterfaceFilter: {
+              value: {
+                interfaceId: filter.interfaceId,
+                includeInterfaceView: true,
+                includeCreatedEventBlob: false,
+              },
+            },
+          },
+  };
+}
+
 /** The SDK's CIP-0103 client acting as `partyId` through `provider`. */
-export function cip103Wallet(provider: Cip103Provider, partyId: string): Cip103Wallet {
+export function cip103Wallet(
+  provider: Cip103Provider,
+  partyId: string,
+  options: Cip103WalletOptions = {}
+): Cip103Wallet {
+  const delays = options.readRetry?.delaysMs ?? DEFAULT_READ_RETRY_DELAYS_MS;
+  const sleep = options.readRetry?.sleep ?? defaultSleep;
+  const random = options.readRetry?.random ?? Math.random;
+
+  /** A read through `ledgerApi`, retried with back-off while the wallet answers -32005. */
   async function ledgerApi(
     requestMethod: 'get' | 'post',
     resource: string,
     body?: Record<string, unknown>
   ): Promise<unknown> {
+    const call = `ledgerApi ${requestMethod.toUpperCase()} ${resource}`;
+    let waitedMs = 0;
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await provider.request({
+          method: 'ledgerApi',
+          params: {
+            requestMethod,
+            resource,
+            ...(body !== undefined && { body }),
+          },
+        });
+      } catch (error) {
+        const code = cip103ErrorCode(error);
+        if (code !== CIP103_ERROR_CODES.limitExceeded) {
+          throw new WalletReadError(`The wallet's ${call} failed: ${describeError(error)}`, code);
+        }
+        const delay = delays[attempt];
+        if (delay === undefined) {
+          const tries =
+            attempt === 0
+              ? ''
+              : ` on all ${attempt + 1} attempts, backing off ${(waitedMs / 1000).toFixed(1)} s in total`;
+          throw new WalletReadError(
+            `The wallet rate-limited its ledger reads: ${call} answered ${describeError(error)}${tries}. Wait a moment, then retry.`,
+            code
+          );
+        }
+        const wait = Math.round(delay / 2 + (delay / 2) * Math.min(Math.max(random(), 0), 1));
+        waitedMs += wait;
+        await sleep(wait);
+      }
+    }
+  }
+
+  async function readActiveContracts(filters: readonly ContractFilter[]): Promise<AcsSnapshot> {
+    // A template or an interface should not appear twice in a cumulative filter.
+    const unique = [...new Map(filters.map((filter) => [contractFilterKey(filter), filter])).values()];
+    if (unique.length === 0) throw new TypeError('readActiveContracts needs at least one filter');
+    const end = await ledgerApi('get', '/v2/state/ledger-end');
+    const offset = isRecord(end) ? end['offset'] : undefined;
+    if (typeof offset !== 'number' || !Number.isSafeInteger(offset)) {
+      throw new WalletReadError('The wallet returned no ledger end offset');
+    }
+    const eventFormat = {
+      verbose: false,
+      filtersByParty: {
+        [partyId]: { cumulative: unique.map(cumulativeFilter) },
+      },
+    };
+
+    // Pages at the one offset read above, so every page belongs to the same snapshot. The unpaged endpoint fails once
+    // the matches exceed the participant's `http-list-max-elements-limit`; this one does not.
+    const entries: unknown[] = [];
+    let pageToken: string | undefined;
+    for (let page = 0; ; page += 1) {
+      if (page === ACS_MAX_PAGES) {
+        throw new WalletReadError(
+          `The wallet's active contracts did not end within ${ACS_MAX_PAGES} pages of ${ACS_PAGE_SIZE}; nothing was read`
+        );
+      }
+      let raw: unknown;
+      try {
+        raw = await ledgerApi('post', '/v2/state/active-contracts-page', {
+          activeAtOffset: offset,
+          eventFormat,
+          maxPageSize: ACS_PAGE_SIZE,
+          ...(pageToken !== undefined && { pageToken }),
+        });
+      } catch (error) {
+        if (
+          page === 0 &&
+          error instanceof WalletReadError &&
+          error.code !== undefined &&
+          ACS_FALLBACK_CODES.has(error.code)
+        ) {
+          return { offset, contracts: await readUnpaged(offset, eventFormat, error) };
+        }
+        throw error;
+      }
+      const next = readAcsPage(raw, offset);
+      entries.push(...next.entries);
+      if (next.nextPageToken === undefined) break;
+      if (next.nextPageToken === pageToken) {
+        throw new WalletReadError('The wallet returned the same active-contracts page token twice');
+      }
+      pageToken = next.nextPageToken;
+    }
+    return { offset, contracts: parseActiveContractEntries(entries) };
+  }
+
+  /** The unpaged snapshot after the paged endpoint was refused; a failure names both. */
+  async function readUnpaged(
+    offset: number,
+    eventFormat: Record<string, unknown>,
+    pagedError: WalletReadError
+  ): Promise<ActiveContract[]> {
+    let all: unknown;
     try {
-      return await provider.request({
-        method: 'ledgerApi',
-        params: {
-          requestMethod,
-          resource,
-          ...(body !== undefined && { body }),
-        },
+      all = await ledgerApi('post', '/v2/state/active-contracts', {
+        verbose: false,
+        activeAtOffset: offset,
+        eventFormat,
       });
+      if (!Array.isArray(all)) {
+        throw new WalletReadError('The wallet returned active contracts that are not a list');
+      }
     } catch (error) {
+      if (!(error instanceof WalletReadError)) throw error;
       throw new WalletReadError(
-        `The wallet's ledgerApi ${requestMethod.toUpperCase()} ${resource} failed: ${describeError(error)}`,
-        cip103ErrorCode(error)
+        `${pagedError.message}; the unpaged fallback failed too: ${error.message}`,
+        error.code ?? pagedError.code
       );
     }
+    return parseActiveContractEntries(all);
   }
 
   return {
     partyId,
 
     async listActiveContracts(filter) {
-      const end = await ledgerApi('get', '/v2/state/ledger-end');
-      const offset = isRecord(end) ? end['offset'] : undefined;
-      if (typeof offset !== 'number' || !Number.isSafeInteger(offset)) {
-        throw new WalletReadError('The wallet returned no ledger end offset');
-      }
-      const identifierFilter =
-        'templateId' in filter
-          ? {
-              TemplateFilter: {
-                value: {
-                  templateId: filter.templateId,
-                  includeCreatedEventBlob: false,
-                },
-              },
-            }
-          : {
-              InterfaceFilter: {
-                value: {
-                  interfaceId: filter.interfaceId,
-                  includeInterfaceView: true,
-                  includeCreatedEventBlob: false,
-                },
-              },
-            };
-      const eventFormat = {
-        verbose: false,
-        filtersByParty: {
-          [partyId]: { cumulative: [{ identifierFilter }] },
-        },
-      };
-
-      // Pages at the one offset read above, so every page belongs to the same snapshot. The unpaged endpoint fails once
-      // the matches exceed the participant's `http-list-max-elements-limit`; this one does not.
-      const entries: unknown[] = [];
-      let pageToken: string | undefined;
-      for (let page = 0; ; page += 1) {
-        if (page === ACS_MAX_PAGES) {
-          throw new WalletReadError(
-            `The wallet's active contracts did not end within ${ACS_MAX_PAGES} pages of ${ACS_PAGE_SIZE}; nothing was read`
-          );
-        }
-        let raw: unknown;
-        try {
-          raw = await ledgerApi('post', '/v2/state/active-contracts-page', {
-            activeAtOffset: offset,
-            eventFormat,
-            maxPageSize: ACS_PAGE_SIZE,
-            ...(pageToken !== undefined && { pageToken }),
-          });
-        } catch (error) {
-          // The first page failed for a reason other than the connection: read the unpaged snapshot once instead.
-          if (
-            page === 0 &&
-            error instanceof WalletReadError &&
-            (error.code === undefined || !NO_ACS_FALLBACK_CODES.has(error.code))
-          ) {
-            const all = await ledgerApi('post', '/v2/state/active-contracts', {
-              verbose: false,
-              activeAtOffset: offset,
-              eventFormat,
-            });
-            if (!Array.isArray(all)) {
-              throw new WalletReadError('The wallet returned active contracts that are not a list');
-            }
-            return parseActiveContractEntries(all);
-          }
-          throw error;
-        }
-        const next = readAcsPage(raw, offset);
-        entries.push(...next.entries);
-        if (next.nextPageToken === undefined) break;
-        if (next.nextPageToken === pageToken) {
-          throw new WalletReadError('The wallet returned the same active-contracts page token twice');
-        }
-        pageToken = next.nextPageToken;
-      }
-      return parseActiveContractEntries(entries);
+      return (await readActiveContracts([filter])).contracts;
     },
+
+    readActiveContracts,
 
     async submit(submission) {
       const commandId = submission.commandId ?? newCommandId();

@@ -229,6 +229,7 @@ export function createDaUtilitiesClient(
   return {
     baseUrl,
     expectedTransferFactoryTemplates: DA_TRANSFER_FACTORY_TEMPLATES,
+    pendingTransferFilters: [{ templateId: DA_REGISTRY_TEMPLATES.transferOffer }],
     operatorParty,
     trustedProvidersOf,
 

@@ -7,6 +7,7 @@
  * interface ids (`utils/token-standard/v1/constants`). Both modules are dependency-free, so this module can import them
  * and stay browser-safe.
  */
+import type { ActiveContract, ContractFilter } from './types';
 
 /**
  * `Module:Entity` of a template or interface id in either form (`#pkg-name:M:E` or `pkgId:M:E`), or null when the id is
@@ -37,4 +38,23 @@ export function requireQualifiedName(id: string): string {
   const name = qualifiedName(id);
   if (name === null) throw new TypeError(`Malformed template id ${id}`);
   return name;
+}
+
+/** A stable key of a filter: `t:<templateId>` or `i:<interfaceId>`. */
+export function contractFilterKey(filter: ContractFilter): string {
+  return 'templateId' in filter ? `t:${filter.templateId}` : `i:${filter.interfaceId}`;
+}
+
+/**
+ * Whether a contract of a snapshot read with several filters at once is one the given filter would have returned on its
+ * own: of the template (same `Module:Entity`, and of the filter's package when both name one), or carrying a view of
+ * the interface (the ledger computes views only for the interfaces the read asked for).
+ */
+export function contractMatchesFilter(contract: ActiveContract, filter: ContractFilter): boolean {
+  if ('templateId' in filter) {
+    if (!sameQualifiedName(contract.templateId, filter.templateId)) return false;
+    const filterPackage = packageNameOf(filter.templateId);
+    return contract.packageName === undefined || filterPackage === null || contract.packageName === filterPackage;
+  }
+  return contract.interfaceViews.some((view) => sameQualifiedName(view.interfaceId, filter.interfaceId));
 }

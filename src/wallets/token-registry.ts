@@ -78,6 +78,11 @@ export interface TokenRegistry {
    */
   pendingTransfers(read: ReadContracts): Promise<TransferOffer[]>;
   /**
+   * The filters `pendingTransfers` reads. A token wallet adds them to its one state snapshot, so listing pending
+   * transfers costs no ledger read of its own; a read of any other filter goes to the wallet separately.
+   */
+  readonly pendingTransferFilters?: readonly ContractFilter[];
+  /**
    * `Module:Entity` names of the templates this registry's transfer factory may have. A factory of any other template
    * is refused before anything is signed.
    */
