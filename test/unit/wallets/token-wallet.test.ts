@@ -810,7 +810,10 @@ describe('newBurnReference', () => {
 
   it('stamps the UTC second and six random base-36 digits, matching the burn reference pattern', () => {
     jest.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation((array) => {
-      if (array instanceof Uint32Array) array[0] = 36 ** 6 + 35;
+      if (array instanceof Uint8Array) {
+        array.fill(0);
+        array[5] = 36 + 35; // 71 % 36 = 35: 'z'
+      }
       return array;
     });
     const reference = newBurnReference(new Date('2026-11-13T15:27:05.123Z'));
@@ -820,15 +823,17 @@ describe('newBurnReference', () => {
     expect(reference).not.toMatch(/^redeem-/);
   });
 
-  it('draws again rather than bias the suffix when a value falls in the incomplete last range', () => {
-    const limit = 2 ** 32 - (2 ** 32 % 36 ** 6);
-    const values = [limit, 2 ** 32 - 1, 7];
+  it('skips bytes that would bias a digit, drawing again when a whole draw is skipped', () => {
+    const draws = [new Array<number>(16).fill(255), [252, 7, 255, 1, 2, 3, 4, 5, 6]];
     const getRandomValues = jest.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation((array) => {
-      if (array instanceof Uint32Array) array[0] = values.shift() ?? 0;
+      if (array instanceof Uint8Array) {
+        array.fill(0);
+        array.set(draws.shift() ?? []);
+      }
       return array;
     });
-    expect(newBurnReference(new Date('2026-11-13T15:27:05Z'))).toBe('holder-burn-20261113T152705Z-000007');
-    expect(getRandomValues).toHaveBeenCalledTimes(3);
+    expect(newBurnReference(new Date('2026-11-13T15:27:05Z'))).toBe('holder-burn-20261113T152705Z-712345');
+    expect(getRandomValues).toHaveBeenCalledTimes(2);
   });
 
   it('differs between two calls in the same second, and defaults to now', () => {

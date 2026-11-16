@@ -46,28 +46,30 @@ export const BURN_TTL_MS = 7 * DAY_MS;
 /** A burn reference: no personal data (DA's operator and the registrar see it). */
 export const BURN_REFERENCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
 
-/** 36^6: the range of a burn reference's random suffix (six base-36 digits). */
-const BURN_REFERENCE_SUFFIX_RANGE = 36 ** 6;
-
-/** 2^32: the number of values a `Uint32Array` entry can take. */
-const UINT32_RANGE = 2 ** 32;
+/** The number of random base-36 digits that end a burn reference. */
+const BURN_REFERENCE_SUFFIX_DIGITS = 6;
+/** 7 × 36: random bytes at or above it are drawn again, so every base-36 digit is equally likely. */
+const UNBIASED_BYTE_LIMIT = 252;
 
 /**
- * A uniformly distributed integer in [0, `range`), from the Web Crypto API when the runtime has it. Not a secret: only
- * unique. Values at or above the largest multiple of `range` below 2^32 are drawn again, so the modulo is not biased.
+ * `count` uniformly distributed base-36 digits, from the Web Crypto API when the runtime has it (one byte per digit,
+ * bytes in the incomplete last range drawn again). Not a secret: only unique.
  */
-function randomBelow(range: number): number {
+function randomBase36(count: number): string {
   // Typed as always present, but missing in old runtimes.
   const { crypto } = globalThis as { crypto?: Partial<Crypto> };
+  let digits = '';
   if (typeof crypto?.getRandomValues === 'function') {
-    const limit = UINT32_RANGE - (UINT32_RANGE % range);
-    const sample = new Uint32Array(1);
-    for (;;) {
-      const value = crypto.getRandomValues(sample)[0] ?? 0;
-      if (value < limit) return value % range;
+    const bytes = new Uint8Array(16);
+    while (digits.length < count) {
+      for (const byte of crypto.getRandomValues(bytes)) {
+        if (byte < UNBIASED_BYTE_LIMIT && digits.length < count) digits += (byte % 36).toString(36);
+      }
     }
+    return digits;
   }
-  return Math.floor(Math.random() * range);
+  while (digits.length < count) digits += Math.floor(Math.random() * 36).toString(36);
+  return digits;
 }
 
 /**
@@ -77,7 +79,7 @@ function randomBelow(range: number): number {
  */
 export function newBurnReference(now: Date = new Date()): string {
   const stamp = new Date(requireTime(now, 'now')).toISOString().replace(/[-:]|\.\d+/g, '');
-  const suffix = randomBelow(BURN_REFERENCE_SUFFIX_RANGE).toString(36).padStart(6, '0');
+  const suffix = randomBase36(BURN_REFERENCE_SUFFIX_DIGITS);
   return `holder-burn-${stamp}-${suffix}`;
 }
 
