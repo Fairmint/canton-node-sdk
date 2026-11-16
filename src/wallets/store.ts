@@ -261,7 +261,9 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
     const attempt = ++generation;
     inFlight += 1;
     loadInFlight = true;
-    const current = (): boolean => !disposed && attempt === generation && forWallet === wallet;
+    // A reply counts only for the wallet the session still shows (a disposed session shows none).
+    const current = (): boolean =>
+      !disposed && attempt === generation && forWallet === wallet && session.isCurrent(forWallet);
     void (async () => {
       let next: { readonly ok: true; readonly snapshot: S } | { readonly ok: false; readonly error: unknown };
       try {
@@ -271,8 +273,9 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
       }
       inFlight -= 1;
       if (disposed) return;
+      // No newer load of this wallet runs, so this one no longer counts as loading, whether its reply is kept or not.
+      if (attempt === generation) loadInFlight = false;
       if (current()) {
-        loadInFlight = false;
         if (next.ok) {
           state = next.snapshot;
           loadError = null;

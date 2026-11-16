@@ -840,6 +840,28 @@ describe('createTokenWalletStore', () => {
     });
   });
 
+  it('drops a load that answers after the session was disposed, and settles loading', async () => {
+    const t = setup();
+    await connectAndLoad(t);
+    const before = t.store.getSnapshot().state;
+    t.store.refresh();
+    expect(t.store.getSnapshot()).toMatchObject({ loading: true, busy: true });
+    t.session.dispose();
+    t.answer(99);
+    await flush();
+    expect(t.store.getSnapshot().state).toBe(before);
+    expect(t.store.getSnapshot()).toMatchObject({ loading: false, busy: false, loadError: null });
+    // A failure that answers late is dropped too.
+    const u = setup();
+    await connectAndLoad(u);
+    u.store.refresh();
+    u.session.dispose();
+    u.fail(new Error('late failure'));
+    await flush();
+    expect(u.store.getSnapshot()).toMatchObject({ loading: false, busy: false, loadError: null });
+    expect(u.store.getSnapshot().state).not.toBeNull();
+  });
+
   it('ignores a refresh() that a session listener ahead of the store asks for a wallet the session left', async () => {
     const session = createCip103Session();
     const provider = new TestProvider();
