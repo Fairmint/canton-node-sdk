@@ -86,7 +86,13 @@ function fieldProblem(fields: WalletOwnershipMessageFields): string | null {
   }
   for (const key of ['issuedAt', 'expiresAt'] as const) {
     const value = fields[key];
-    if (typeof value !== 'string' || !ISO_PATTERN.test(value) || new Date(value).toISOString() !== value) {
+    // An out-of-range date (month 13) is an Invalid Date, whose toISOString() throws: check it first.
+    if (
+      typeof value !== 'string' ||
+      !ISO_PATTERN.test(value) ||
+      Number.isNaN(Date.parse(value)) ||
+      new Date(value).toISOString() !== value
+    ) {
       return `${key} must be an ISO-8601 UTC time with milliseconds (Date.toISOString())`;
     }
   }

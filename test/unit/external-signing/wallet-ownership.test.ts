@@ -121,6 +121,17 @@ describe('verifyWalletOwnership', () => {
     ['not an object', () => 'proof', 'malformed-proof'],
     ['a field that is not a string', () => ({ ...loopProof(), signature: 7 }), 'malformed-proof'],
     ['a non-canonical message', () => ({ ...loopProof(), message: `${loopProof().message}\n` }), 'malformed-message'],
+    [
+      'an out-of-range date (month 13) instead of throwing',
+      () => {
+        const proof = loopProof();
+        return {
+          ...proof,
+          message: proof.message.replace(/Expiration Time: \d{4}-\d{2}/, (m) => `${m.slice(0, -2)}13`),
+        };
+      },
+      'malformed-message',
+    ],
     ['another domain', () => loopProof({ domain: 'evil.example.com' }), 'domain-mismatch'],
     ['another nonce', () => loopProof({ nonce: 'other-nonce-0123456789' }), 'nonce-mismatch'],
     ['another network', () => loopProof({ network: 'canton:mainnet' }), 'network-mismatch'],
