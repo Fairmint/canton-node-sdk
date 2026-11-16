@@ -112,7 +112,10 @@ export interface WalletOwnershipVerifyArgs {
 export interface WalletOwnershipHandlerArgs {
   /** Your signed-in user's stable id. Authenticate the request before calling a handler. */
   readonly subject: string;
-  /** Origins besides the request's own (`request.url`) whose host the message may name. */
+  /**
+   * Origins besides the request's own (`request.url`) whose host the message may name, as absolute URLs
+   * (`https://app.example.com`). A malformed entry makes the handler throw `TypeError` instead of answering 400.
+   */
   readonly trustedOrigins?: readonly string[];
 }
 
@@ -163,18 +166,32 @@ const CLAIM_KEYS = ['domain', 'nonce', 'issuedAt', 'expiresAt', 'network', 'part
  * The host the ownership message is bound to: the host of the browser's `Origin`, when it is the request's own host
  * (`request.url`) or the host of one of `trustedOrigins`. Null without an `Origin` (a non-browser caller), with an
  * opaque (`null`) one, or for any other host. `x-forwarded-host` is never read: a non-browser caller can set it, and
- * `Origin` too, so only hosts the server itself names are accepted.
+ * `Origin` too, so only hosts the server itself names are accepted. Throws `TypeError` when a `trustedOrigins` entry is
+ * not an absolute URL: one bad entry must not silently refuse every caller.
  */
 export function walletOwnershipDomain(request: Request, trustedOrigins: readonly string[] = []): string | null {
+  // A server misconfiguration, not a caller's fault: fail loudly instead of refusing every request with a 400.
+  const trusted = new Set(trustedOrigins.map(trustedHost));
   const origin = request.headers.get('origin');
   if (origin === null || origin === '' || origin === 'null') return null;
   try {
     const host = new URL(origin).host.toLowerCase();
-    const trusted = new Set([request.url, ...trustedOrigins].map((url) => new URL(url).host.toLowerCase()));
+    trusted.add(new URL(request.url).host.toLowerCase());
     return isWalletOwnershipDomain(host) && trusted.has(host) ? host : null;
   } catch {
     return null;
   }
+}
+
+/** The host of a configured trusted origin. Throws `TypeError` naming an entry that is not an absolute URL. */
+function trustedHost(origin: string): string {
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    throw new TypeError(`trustedOrigins entry ${JSON.stringify(origin)} is not an absolute URL (https://host)`);
+  }
+  return url.host.toLowerCase();
 }
 
 function jsonResponse(status: number, body: unknown): Response {

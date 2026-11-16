@@ -385,6 +385,24 @@ describe('createCip103Session', () => {
     expect(state.status === 'disconnected' && state.error?.message).toMatch(/^The wallet is on canton:mainnet/);
   });
 
+  it.each([
+    ['cannot read its account', async () => Promise.reject(new RpcError(4100, 'No authorized account'))],
+    ['reports the other network', () => ({ primary: true, partyId: HOLDER, networkId: 'canton:mainnet' })],
+  ])('a callback that %s while connect() is pending leaves connect() to decide', async (_case, failingRead) => {
+    const { session } = observed();
+    const approval = deferred<unknown>();
+    const provider = new TestProvider(HOLDER, { connect: async () => approval.promise });
+    const connecting = session.connect(provider, { network: 'devnet' });
+    provider.answers.getPrimaryAccount = async () => failingRead();
+    await session.connected(provider, { network: 'devnet' });
+    expect(session.getSnapshot()).toEqual({ status: 'connecting' });
+    // The wallet's own sign-in completes and its account reads normally: connect() connects.
+    provider.setParty(HOLDER);
+    approval.resolve({ isConnected: true });
+    await connecting;
+    expect(connectedWallet(session)).toMatchObject({ partyId: HOLDER, network: 'devnet' });
+  });
+
   it('ends the session when statusChanged says the wallet disconnected', async () => {
     const { session } = observed();
     const provider = new TestProvider();
@@ -652,7 +670,7 @@ describe('createCip103Session', () => {
       expect(session.getSnapshot()).toEqual({ status: 'disconnected', endedBy: 'user', error: null });
     });
 
-    it("end('user') disconnects the wallet a pending connect() signs in to, also after a failed callback published an error", async () => {
+    it("end('user') disconnects the wallet a pending connect() signs in to, also after a callback's account read failed", async () => {
       const { session } = observed();
       const approval = deferred<unknown>();
       const provider = new TestProvider(HOLDER, {
@@ -660,9 +678,9 @@ describe('createCip103Session', () => {
         getPrimaryAccount: async () => Promise.reject(new RpcError(4100, 'No authorized account')),
       });
       const connecting = session.connect(provider);
-      // The wallet's accept callback fires first, and its account read fails.
+      // The wallet's accept callback fires first, and its account read fails: ignored, connect() still decides.
       await session.connected(provider);
-      expect(session.getSnapshot()).toMatchObject({ status: 'disconnected', error: { code: 4100 } });
+      expect(session.getSnapshot()).toEqual({ status: 'connecting' });
       session.end('user');
       approval.resolve({ isConnected: true });
       await connecting;

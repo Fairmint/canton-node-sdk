@@ -29,7 +29,7 @@ import { fakeProvider, type FakeProvider } from '../wallets/helpers';
 
 const SECRET = 'wallet-ownership-unit-test-secret';
 const PURPOSE = 'canton-explorer:wallet-ownership-challenge:v1';
-const DOMAIN = 'cantonops.fairmint.com';
+const DOMAIN = 'dapp.example.com';
 const ORIGIN = `https://${DOMAIN}`;
 const SUB = 'staff-sub-1';
 const NOW = new Date('2026-11-16T12:00:00.000Z');
@@ -311,7 +311,7 @@ describe('walletOwnershipDomain', () => {
 
   it('takes the Origin host only when the server names it, never a forwarded host', () => {
     expect(at({ origin: 'http://localhost:3000' })).toBe('localhost:3000');
-    expect(at({ origin: 'https://CantonOps.Fairmint.com' })).toBe(DOMAIN);
+    expect(at({ origin: 'https://DApp.Example.com' })).toBe(DOMAIN);
     // No Origin (a non-browser caller), an opaque one, or a host this server does not serve.
     expect(at({})).toBeNull();
     expect(at({ 'x-forwarded-host': 'localhost:3000' })).toBeNull();
@@ -321,6 +321,15 @@ describe('walletOwnershipDomain', () => {
     expect(at({ origin: 'not a url' })).toBeNull();
     // Without trusted origins, only the request's own host.
     expect(walletOwnershipDomain(new Request(url, { headers: { origin: ORIGIN } }))).toBeNull();
+  });
+
+  it('throws on a trusted origin that is not an absolute URL instead of refusing every caller', () => {
+    const request = new Request(url, { headers: { origin: 'http://localhost:3000' } });
+    expect(() => walletOwnershipDomain(request, ['dapp.example.com'])).toThrow(
+      new TypeError('trustedOrigins entry "dapp.example.com" is not an absolute URL (https://host)')
+    );
+    // Also without an Origin: the misconfiguration shows on the first request, whoever sends it.
+    expect(() => walletOwnershipDomain(new Request(url), [ORIGIN, 'nope'])).toThrow(TypeError);
   });
 });
 
@@ -496,7 +505,7 @@ describe('requestWalletOwnershipVerdict through the handlers', () => {
     const signed = provider.requests.flatMap((r) => (r.method === 'signMessage' ? [r.params.message] : []));
     expect(signed).toHaveLength(1);
     expect(signed[0]).toMatch(/^Canton wallet ownership proof\n/);
-    expect(signed[0]).toMatch(/\nDomain: cantonops\.fairmint\.com\n/);
+    expect(signed[0]).toMatch(/\nDomain: dapp\.example\.com\n/);
     expect(signed[0]).toMatch(/\nNetwork: canton:devnet\n/);
   });
 

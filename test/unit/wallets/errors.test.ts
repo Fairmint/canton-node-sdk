@@ -77,9 +77,9 @@ describe('describeWalletError', () => {
   });
 
   it('keeps the message and code of an action the SDK refused', () => {
-    expect(describeWalletError(new TokenWalletError('insufficient-balance', 'Only 1 CNTN'))).toEqual({
+    expect(describeWalletError(new TokenWalletError('insufficient-balance', 'Only 1 TOKEN'))).toEqual({
       kind: 'refused',
-      message: 'Only 1 CNTN',
+      message: 'Only 1 TOKEN',
       code: 'insufficient-balance',
     });
     const busy = describeWalletError(

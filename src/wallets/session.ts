@@ -80,7 +80,8 @@ export interface Cip103Session {
    *   `connect()` recovers from it. While a wallet is connected, such a failure is ignored instead: a stale callback,
    *   or another wallet that cannot be read, never drops a healthy session. The exception is the connected wallet's own
    *   provider answering with an account on the other DA network: the wallet switched networks, so the session ends
-   *   with `error`.
+   *   with `error`. While a `connect()` is pending (`connecting`), every such failure is ignored: that `connect()`
+   *   reads the account itself and reports the outcome.
    */
   connected(
     provider: Cip103Provider,
@@ -215,7 +216,8 @@ export function createCip103Session(): Cip103Session {
   /**
    * Read the primary account and connect as its party, unless a newer lookup or session change superseded it.
    * `passive`: a wallet callback (`connected()`). It supersedes pending lookups only once it acts on its answer, and
-   * its failure leaves an already connected session alone (unless that wallet itself reports the other network).
+   * its failure leaves an already connected session alone (unless that wallet itself reports the other network), and
+   * never interrupts a pending connect().
    */
   async function lookup(provider: Cip103Provider, context: Cip103ConnectContext, passive = false): Promise<void> {
     const attempt = ++lookups;
@@ -224,7 +226,10 @@ export function createCip103Session(): Cip103Session {
     const failed = (error: WalletErrorDescription, otherNetwork: boolean): void => {
       // A stale callback, or another wallet that cannot be read, does not drop a healthy session, nor does it cancel a
       // pending lookup. The connected wallet reporting the other network is no stale callback: the session ends.
+      // While a connect() is pending, its own lookup decides (it always reads the account again), so a callback's
+      // failure must not flash an error over `connecting`.
       const ownWallet = state.status === 'connected' && state.wallet.provider === provider;
+      if (passive && state.status === 'connecting') return;
       if (passive && state.status === 'connected' && !(otherNetwork && ownWallet)) return;
       floor = attempt;
       detach();
