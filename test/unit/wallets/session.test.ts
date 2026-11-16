@@ -322,6 +322,69 @@ describe('createCip103Session', () => {
     expect(unreadable.listenerCount() + onMainnet.listenerCount()).toBe(0);
   });
 
+  it('ends the session when the connected wallet itself answers a callback with an account on the other network', async () => {
+    const { session } = observed();
+    const live = new TestProvider(HOLDER);
+    await session.connected(live, { network: 'devnet' });
+    // The user switched the same wallet to MainNet, and it repeats its connect callback.
+    live.answers.getPrimaryAccount = () => ({ primary: true, partyId: HOLDER, networkId: 'canton:mainnet' });
+    await session.connected(live, { network: 'devnet' });
+    expect(session.getSnapshot()).toEqual({
+      status: 'disconnected',
+      endedBy: null,
+      error: {
+        kind: 'other',
+        message:
+          'The wallet is on canton:mainnet, not canton:devnet: switch networks in the wallet, then connect again.',
+      },
+    });
+    expect(live.listenerCount()).toBe(0);
+  });
+
+  it.each([
+    ['another wallet that cannot be read', 'other'],
+    ['a stale callback of the same wallet that fails its read', 'same'],
+    ['a restore of the same wallet whose read fails', 'restore'],
+  ] as const)('a pending accountsChanged lookup still decides after %s while connected', async (_name, callback) => {
+    const { session } = observed();
+    const live = new TestProvider(HOLDER);
+    await session.connected(live, { network: 'devnet' });
+    const switched = deferred<unknown>();
+    live.answers.getPrimaryAccount = async () => switched.promise;
+    live.emit('accountsChanged', []);
+    if (callback === 'other') {
+      const unreadable = new TestProvider(OTHER, {
+        getPrimaryAccount: async () => Promise.reject(new RpcError(4100, 'No authorized account')),
+      });
+      await session.connected(unreadable, { network: 'devnet' });
+    } else {
+      live.answers.getPrimaryAccount = async () => Promise.reject(new RpcError(-32603, 'busy'));
+      await session.connected(live, { network: 'devnet', ifConnected: callback === 'restore' });
+    }
+    expect(connectedWallet(session).partyId).toBe(HOLDER);
+    // The account switch the wallet announced first still lands.
+    switched.resolve({ primary: true, partyId: OTHER });
+    await flush();
+    expect(connectedWallet(session)).toMatchObject({ provider: live, partyId: OTHER, network: 'devnet' });
+  });
+
+  it('a pending accountsChanged lookup that finds the other network still ends the session after an ignored callback', async () => {
+    const { session } = observed();
+    const live = new TestProvider(HOLDER);
+    await session.connected(live, { network: 'devnet' });
+    const switched = deferred<unknown>();
+    live.answers.getPrimaryAccount = async () => switched.promise;
+    live.emit('accountsChanged', []);
+    const unreadable = new TestProvider(OTHER, {
+      getPrimaryAccount: async () => Promise.reject(new RpcError(4100, 'No authorized account')),
+    });
+    await session.connected(unreadable, { network: 'devnet' });
+    switched.resolve({ primary: true, partyId: HOLDER, networkId: 'canton:mainnet' });
+    await flush();
+    const state = session.getSnapshot();
+    expect(state.status === 'disconnected' && state.error?.message).toMatch(/^The wallet is on canton:mainnet/);
+  });
+
   it('ends the session when statusChanged says the wallet disconnected', async () => {
     const { session } = observed();
     const provider = new TestProvider();
@@ -589,6 +652,64 @@ describe('createCip103Session', () => {
       expect(session.getSnapshot()).toEqual({ status: 'disconnected', endedBy: 'user', error: null });
     });
 
+    it("end('user') disconnects the wallet a pending connect() signs in to, also after a failed callback published an error", async () => {
+      const { session } = observed();
+      const approval = deferred<unknown>();
+      const provider = new TestProvider(HOLDER, {
+        connect: async () => approval.promise,
+        getPrimaryAccount: async () => Promise.reject(new RpcError(4100, 'No authorized account')),
+      });
+      const connecting = session.connect(provider);
+      // The wallet's accept callback fires first, and its account read fails.
+      await session.connected(provider);
+      expect(session.getSnapshot()).toMatchObject({ status: 'disconnected', error: { code: 4100 } });
+      session.end('user');
+      approval.resolve({ isConnected: true });
+      await connecting;
+      expect(provider.requests).toEqual(['connect', 'getPrimaryAccount', 'disconnect']);
+      expect(session.getSnapshot()).toEqual({ status: 'disconnected', endedBy: 'user', error: null });
+    });
+
+    it("end('user') sends the disconnect before it publishes, so a listener that connects again waits for it", async () => {
+      const { session } = observed();
+      const disconnected = deferred<unknown>();
+      const provider = new TestProvider(HOLDER, { disconnect: async () => disconnected.promise });
+      await session.connected(provider);
+      const reconnecting: Array<Promise<void>> = [];
+      session.subscribe(() => {
+        const state = session.getSnapshot();
+        if (reconnecting.length === 0 && state.status === 'disconnected' && state.endedBy === 'user') {
+          reconnecting.push(session.connect(provider));
+        }
+      });
+      session.end('user');
+      expect(provider.requests).toEqual(['getPrimaryAccount', 'disconnect']);
+      disconnected.resolve(null);
+      expect(reconnecting).toHaveLength(1);
+      await Promise.all(reconnecting);
+      expect(provider.requests).toEqual(['getPrimaryAccount', 'disconnect', 'connect', 'getPrimaryAccount']);
+      expect(connectedWallet(session).partyId).toBe(HOLDER);
+    });
+
+    it('connect() waits for each wallet its own disconnect, not only the most recent one', async () => {
+      const { session } = observed();
+      const disconnected = deferred<unknown>();
+      const first = new TestProvider(HOLDER, { disconnect: async () => disconnected.promise });
+      const second = new TestProvider(OTHER);
+      await session.connected(first);
+      session.end('user');
+      await session.connect(second);
+      session.end('user');
+      await flush();
+      const connecting = session.connect(first);
+      // first's disconnect is still in flight: no connect in the same tick.
+      expect(first.requests).toEqual(['getPrimaryAccount', 'disconnect']);
+      disconnected.resolve(null);
+      await connecting;
+      expect(first.requests).toEqual(['getPrimaryAccount', 'disconnect', 'connect', 'getPrimaryAccount']);
+      expect(connectedWallet(session).provider).toBe(first);
+    });
+
     it("connect() waits for an end('user') disconnect of the same wallet before it signs in again", async () => {
       const { session } = observed();
       const disconnected = deferred<unknown>();
@@ -628,6 +749,34 @@ describe('createCip103Session', () => {
         await jest.advanceTimersByTimeAsync(1);
         await connecting;
         expect(connectedWallet(session).partyId).toBe(HOLDER);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('waits for a disconnect that never answers only once: a later connect() signs in at once', async () => {
+      jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+      try {
+        const { session } = observed();
+        const provider = new TestProvider(HOLDER, { disconnect: async () => new Promise<never>(() => undefined) });
+        await session.connected(provider);
+        session.end('user');
+        const connecting = session.connect(provider);
+        await jest.advanceTimersByTimeAsync(3000);
+        await connecting;
+        expect(connectedWallet(session).partyId).toBe(HOLDER);
+        // The wallet ends the session, and the user clicks Connect again: connect is sent inside the click.
+        session.end('wallet');
+        const again = session.connect(provider);
+        expect(provider.requests.filter((m) => m === 'connect')).toHaveLength(2);
+        await again;
+        expect(connectedWallet(session).partyId).toBe(HOLDER);
+        // A connect() that comes after the deadline, with no wait before, does not wait either.
+        session.end('user');
+        await jest.advanceTimersByTimeAsync(3000);
+        session.end('wallet');
+        void session.connect(provider);
+        expect(provider.requests.filter((m) => m === 'connect')).toHaveLength(3);
       } finally {
         jest.useRealTimers();
       }

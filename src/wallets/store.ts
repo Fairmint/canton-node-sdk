@@ -31,8 +31,8 @@ export interface TokenWalletView<S = TokenWalletState> {
    */
   readonly state: S | null;
   /**
-   * A load for the current wallet is in flight, or queued behind the wallet call in flight (the previous wallet's
-   * action or load, or the load before a Retry).
+   * A load for the current wallet is in flight, or queued behind the wallet call in flight (an action of this wallet or
+   * a previous one, the previous wallet's load, or the load before a Retry).
    */
   readonly loading: boolean;
   /** The last load's failure. A rate limit has kind `rate-limited`, so offer `refresh()` after a moment. */

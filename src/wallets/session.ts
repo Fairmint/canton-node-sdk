@@ -63,7 +63,10 @@ export interface Cip103Session {
    * The wallet reports a live session (its accept callback, or a session it restored): reads the primary account
    * (`getPrimaryAccount`) and connects as its party.
    *
-   * - A reply that a newer call, `end()`, `fail()` or `dispose()` superseded is dropped.
+   * - A reply that a newer call, `end()`, `fail()` or `dispose()` superseded is dropped. Of overlapping party lookups the
+   *   most recently started one decides. A `connected()` lookup supersedes older ones only once it has an answer it
+   *   acts on, so one whose failure is ignored (below) leaves a pending `connect()` or `accountsChanged` lookup to
+   *   decide.
    * - The same provider, party and network keep the same `ConnectedWallet` object, so a repeated callback changes
    *   nothing.
    * - Ignored after `end()` until `connect()` runs again (wallets can repeat a connect callback after a disconnect).
@@ -75,7 +78,9 @@ export interface Cip103Session {
    *   restore that finds no session never cancels a pending `connect()` or `accountsChanged` lookup.
    * - A failed account read, or an account on the other DA network, leaves the session disconnected with `error`;
    *   `connect()` recovers from it. While a wallet is connected, such a failure is ignored instead: a stale callback,
-   *   or another wallet that cannot be read, never drops a healthy session.
+   *   or another wallet that cannot be read, never drops a healthy session. The exception is the connected wallet's own
+   *   provider answering with an account on the other DA network: the wallet switched networks, so the session ends
+   *   with `error`.
    */
   connected(
     provider: Cip103Provider,
@@ -89,11 +94,13 @@ export interface Cip103Session {
    */
   connect(provider: Cip103Provider, context?: Cip103ConnectContext): Promise<void>;
   /**
-   * The session ended. `user`: the dApp disconnected, and CIP-0103 `disconnect` is sent best-effort to the provider the
-   * session is on (the connected wallet's, or the one a pending `connect()` signs in to; failures are ignored). A
-   * `connect()` to that provider waits for the disconnect to settle (at most three seconds) before it sends `connect`,
-   * so the disconnect cannot land after the new sign-in. `wallet`: the wallet rejected or ended the session; nothing is
-   * sent. Either way `connected()` is ignored until `connect()` runs again.
+   * The session ended. `user`: the dApp disconnected, and CIP-0103 `disconnect` is sent best-effort to the providers
+   * the session is on (the connected wallet's, and the one a pending `connect()` signs in to; failures are ignored),
+   * before the new state is published. A `connect()` to such a provider waits for its disconnects to settle before it
+   * sends `connect`, so a disconnect cannot land after the new sign-in; it waits at most until three seconds after the
+   * disconnect was sent, so a disconnect that never answers delays only the first such `connect()`. `wallet`: the
+   * wallet rejected or ended the session; nothing is sent. Either way `connected()` is ignored until `connect()` runs
+   * again.
    */
   end(by: 'user' | 'wallet'): void;
   /** The wallet's own setup failed (e.g. Loop's `init`): disconnected with `error`. */
@@ -104,7 +111,7 @@ export interface Cip103Session {
   dispose(): void;
 }
 
-/** How long a `connect()` waits for an earlier `end('user')` disconnect of the same provider to settle. */
+/** How long after an `end('user')` disconnect was sent a `connect()` to the same provider still waits for it. */
 const DISCONNECT_WAIT_MS = 3000;
 
 const NEVER_CONNECTED: Cip103SessionState = { status: 'disconnected', endedBy: null, error: null };
@@ -150,8 +157,11 @@ interface Attachment {
 export function createCip103Session(): Cip103Session {
   const listeners = new Set<() => void>();
   let state: Cip103SessionState = NEVER_CONNECTED;
-  // Every party lookup takes a new generation; a reply counts only while its generation is still the latest.
-  let generation = 0;
+  // Every party lookup, and every interrupt(), takes the next number. A reply counts only while its number is at least
+  // `floor`: an interrupt() or a connect() or accountsChanged lookup raises the floor when it starts, a connected()
+  // lookup only when it acts on its answer, so a callback whose failure is ignored supersedes nothing.
+  let lookups = 0;
+  let floor = 0;
   // Every connected(..., { ifConnected: true }) takes a new number: only the latest restore may start its lookup.
   let restores = 0;
   // Bumped by connect(), end(), fail() and dispose(): a connect() whose epoch is no longer current stops.
@@ -161,10 +171,11 @@ export function createCip103Session(): Cip103Session {
   let disposed = false;
   // Numbers each ConnectedWallet's `key`.
   let connections = 0;
-  // The provider the pending connect() signs in to (while `connecting`), for end('user')'s disconnect.
-  let connectingProvider: Cip103Provider | null = null;
-  // end('user')'s disconnect while it is in flight: a connect() to the same provider waits for it.
-  let disconnecting: { readonly provider: Cip103Provider; readonly settled: Promise<void> } | null = null;
+  // The provider the pending connect() signs in to, until that connect() settles or is superseded, whatever state is
+  // published meanwhile (a failed callback may publish an error while it waits), for end('user')'s disconnect.
+  let signingIn: Cip103Provider | null = null;
+  // end('user')'s disconnects in flight, per provider: a connect() to that provider waits for them until `deadline`.
+  const disconnecting = new Map<Cip103Provider, { readonly settled: Promise<void>; readonly deadline: number }>();
   let attachment: Attachment | null = null;
 
   function publish(next: Cip103SessionState): void {
@@ -203,13 +214,19 @@ export function createCip103Session(): Cip103Session {
 
   /**
    * Read the primary account and connect as its party, unless a newer lookup or session change superseded it.
-   * `passive`: a wallet callback (`connected()`), whose failure leaves an already connected session alone.
+   * `passive`: a wallet callback (`connected()`). It supersedes pending lookups only once it acts on its answer, and
+   * its failure leaves an already connected session alone (unless that wallet itself reports the other network).
    */
   async function lookup(provider: Cip103Provider, context: Cip103ConnectContext, passive = false): Promise<void> {
-    const attempt = ++generation;
-    const failed = (error: WalletErrorDescription): void => {
-      // A stale callback, or another wallet that cannot be read, does not drop a healthy session.
-      if (passive && state.status === 'connected') return;
+    const attempt = ++lookups;
+    if (!passive) floor = attempt;
+    const current = (): boolean => attempt >= floor && !disposed;
+    const failed = (error: WalletErrorDescription, otherNetwork: boolean): void => {
+      // A stale callback, or another wallet that cannot be read, does not drop a healthy session, nor does it cancel a
+      // pending lookup. The connected wallet reporting the other network is no stale callback: the session ends.
+      const ownWallet = state.status === 'connected' && state.wallet.provider === provider;
+      if (passive && state.status === 'connected' && !(otherNetwork && ownWallet)) return;
+      floor = attempt;
       detach();
       publish({ status: 'disconnected', endedBy: null, error });
     };
@@ -217,19 +234,19 @@ export function createCip103Session(): Cip103Session {
     try {
       account = await primaryAccount(provider);
     } catch (error) {
-      if (attempt !== generation || disposed) return;
-      failed(lookupError(error));
+      if (current()) failed(lookupError(error), false);
       return;
     }
-    if (attempt !== generation || disposed) return;
+    if (!current()) return;
     const { network } = context;
     const { partyId, networkId } = account;
     if (network !== undefined && networkId !== undefined && reportsOtherNetwork(networkId, network)) {
       // DA's registry and ledger for `network` would refuse every call of a wallet on another network.
       const message = `The wallet is on ${networkId}, not ${cip103NetworkId(network)}: switch networks in the wallet, then connect again.`;
-      failed({ kind: 'other', message });
+      failed({ kind: 'other', message }, true);
       return;
     }
+    floor = attempt;
     if (
       state.status === 'connected' &&
       state.wallet.provider === provider &&
@@ -249,49 +266,65 @@ export function createCip103Session(): Cip103Session {
     return !disposed && !closed;
   }
 
-  /** Supersede every pending reply and stop following the provider. */
+  /** Supersede every pending reply and pending connect(), and stop following the provider. */
   function interrupt(): void {
     epoch += 1;
-    generation += 1;
+    floor = ++lookups;
+    signingIn = null;
     detach();
   }
 
-  /** The provider the session is on: the connected wallet's, or the one a pending connect() signs in to. */
-  function sessionProvider(): Cip103Provider | null {
-    if (state.status === 'connected') return state.wallet.provider;
-    return state.status === 'connecting' ? connectingProvider : null;
+  /** The providers the session is on: the connected wallet's, and the one a pending connect() signs in to. */
+  function sessionProviders(): Set<Cip103Provider> {
+    const providers = new Set<Cip103Provider>();
+    if (state.status === 'connected') providers.add(state.wallet.provider);
+    if (signingIn !== null) providers.add(signingIn);
+    return providers;
+  }
+
+  /** Send CIP-0103 `disconnect` best-effort, and record it so a `connect()` to `provider` waits for it. */
+  function disconnect(provider: Cip103Provider): void {
+    const sent = (async () => provider.request({ method: 'disconnect' }))().then(
+      () => undefined,
+      () => undefined
+    );
+    // An earlier disconnect of the same provider still in flight must settle too.
+    const earlier = disconnecting.get(provider);
+    const settled = earlier === undefined ? sent : Promise.all([earlier.settled, sent]).then(() => undefined);
+    const own = { settled, deadline: Date.now() + DISCONNECT_WAIT_MS };
+    disconnecting.set(provider, own);
+    void settled.then(() => {
+      if (disconnecting.get(provider) === own) disconnecting.delete(provider);
+    });
   }
 
   function end(by: 'user' | 'wallet'): void {
     if (disposed) return;
-    const provider = by === 'user' ? sessionProvider() : null;
+    const providers = by === 'user' ? sessionProviders() : new Set<Cip103Provider>();
     interrupt();
     closed = true;
+    // Before publishing: a listener that connects again in response must find the disconnect in flight.
+    for (const provider of providers) disconnect(provider);
     publish({ status: 'disconnected', endedBy: by, error: null });
-    if (provider !== null) {
-      // Best-effort: the session has ended whatever the wallet answers (or throws).
-      const settled = (async () => provider.request({ method: 'disconnect' }))().then(
-        () => undefined,
-        () => undefined
-      );
-      const own = { provider, settled };
-      disconnecting = own;
-      void settled.then(() => {
-        if (disconnecting === own) disconnecting = null;
-      });
-    }
   }
 
   /**
-   * An in-flight disconnect of `provider`, settled or timed out after `DISCONNECT_WAIT_MS`; `null` when there is none,
-   * so `connect()` then sends `connect` in the same tick (inside the user's click, where a wallet may open a popup).
+   * An in-flight disconnect of `provider`, settled or past its deadline; `null` when there is none (or its deadline
+   * passed), so `connect()` then sends `connect` in the same tick (inside the user's click, where a wallet may open a
+   * popup).
    */
   function disconnectSettled(provider: Cip103Provider): Promise<void> | null {
-    const pending = disconnecting;
-    if (pending?.provider !== provider) return null;
+    const pending = disconnecting.get(provider);
+    if (pending === undefined) return null;
+    const left = pending.deadline - Date.now();
+    if (left <= 0) {
+      // It never answered in time: never wait for it again.
+      disconnecting.delete(provider);
+      return null;
+    }
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, DISCONNECT_WAIT_MS);
+      timer = setTimeout(resolve, left);
     });
     return Promise.race([pending.settled, timeout]).finally(() => {
       clearTimeout(timer);
@@ -313,17 +346,17 @@ export function createCip103Session(): Cip103Session {
       const { network } = context;
       if (context.ifConnected === true) {
         // Dropped when a newer restore started, or anything started a lookup or changed the session meanwhile (that
-        // newer call decides). Taking a restore number rather than a generation supersedes no pending lookup while
+        // newer call decides). Taking a restore number rather than a lookup number supersedes no pending lookup while
         // `isConnected` is in flight, so a restore that finds no session cannot strand a `connect()` in `connecting`.
         const restore = ++restores;
-        const seen = generation;
+        const seen = lookups;
         let answer: unknown = null;
         try {
           answer = await provider.request({ method: 'isConnected' });
         } catch {
           // 4200 or any other failure: not connected.
         }
-        if (restore !== restores || seen !== generation || !armed() || connectionFlag(answer) !== true) return;
+        if (restore !== restores || seen !== lookups || !armed() || connectionFlag(answer) !== true) return;
       }
       await lookup(provider, network === undefined ? {} : { network }, true);
     },
@@ -334,27 +367,31 @@ export function createCip103Session(): Cip103Session {
       const own = epoch;
       const current = (): boolean => own === epoch && !disposed;
       closed = false;
-      connectingProvider = provider;
+      signingIn = provider;
       publish(CONNECTING);
       try {
-        // A disconnect the user sent this wallet just before must not land after the new sign-in.
-        const disconnect = disconnectSettled(provider);
-        if (disconnect !== null) {
-          await disconnect;
-          if (!current()) return;
+        try {
+          // A disconnect the user sent this wallet just before must not land after the new sign-in.
+          const disconnected = disconnectSettled(provider);
+          if (disconnected !== null) {
+            await disconnected;
+            if (!current()) return;
+          }
+          await provider.request({ method: 'connect' });
+        } catch (error) {
+          if (current()) {
+            // The wallet's accept callback may have connected meanwhile: drop its pending lookup and stop following it.
+            interrupt();
+            publish({ status: 'disconnected', endedBy: null, error: connectError(error) });
+          }
+          return;
         }
-        await provider.request({ method: 'connect' });
-      } catch (error) {
-        if (current()) {
-          // The wallet's accept callback may have connected meanwhile: drop its pending lookup and stop following it.
-          interrupt();
-          publish({ status: 'disconnected', endedBy: null, error: connectError(error) });
-        }
-        return;
+        if (!current()) return;
+        // Always read the account again, even when the wallet was already connected and sends no new accept callback.
+        await lookup(provider, context.network === undefined ? {} : { network: context.network });
+      } finally {
+        if (own === epoch) signingIn = null;
       }
-      if (!current()) return;
-      // Always read the account again, even when the wallet was already connected and sends no new accept callback.
-      await lookup(provider, context.network === undefined ? {} : { network: context.network });
     },
 
     end,
