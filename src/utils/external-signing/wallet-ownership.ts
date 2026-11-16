@@ -16,7 +16,13 @@
  * them), which this function does not read.
  *
  * The caller must issue the nonce, store it, pass it as `expectedNonce`, and accept it once: this function cannot tell
- * a replayed proof from a fresh one.
+ * a replayed proof from a fresh one. Passing the issued times as `expectedIssuedAt` and `expectedExpiresAt` makes the
+ * signed text exactly the issued challenge.
+ *
+ * The message's `Network:` line (`expectedNetwork`, the result's `network`) is checked as text only. A party id is
+ * derived from its key and is the same on every network, so a verified proof does not show the party exists or is
+ * hosted on that network; a caller that needs that must look the party up on the network (Scan, or the ledger's party
+ * and topology APIs).
  */
 import {
   assertEd25519Signature,
@@ -38,9 +44,11 @@ export type WalletOwnershipFailure =
   /** The message, the proof and the expected party do not all name the same party, or the namespace differs. */
   | 'party-mismatch'
   | 'network-mismatch'
+  /** The message's `Issued At` or `Expiration Time` is not the one the server issued. */
+  | 'window-mismatch'
   /** Issued in the future (beyond the allowed clock skew). */
   | 'not-yet-valid'
-  /** Past its expiration time, or older than `maxAgeMs`. */
+  /** Past its expiration time. */
   | 'expired'
   /** The message allows a longer validity window than `maxAgeMs`. */
   | 'lifetime-too-long'
@@ -61,6 +69,7 @@ export type WalletOwnershipVerification =
       readonly publicKeyFingerprint: string;
       readonly domain: string;
       readonly nonce: string;
+      /** The message's network label, as text; not proof that the party is on that network (see the module comment). */
       readonly network?: string;
       readonly issuedAt: string;
       readonly expiresAt: string;
@@ -77,13 +86,17 @@ export interface VerifyWalletOwnershipOptions {
   readonly expectedNonce: string;
   /** The server's own host, as the challenge named it. */
   readonly expectedDomain: string;
-  /** Required in the message when given. */
+  /** Required in the message when given. A label compared as text, not proof (see the module comment). */
   readonly expectedNetwork?: string;
+  /** The `issuedAt` the server issued; the message must repeat it exactly when given. */
+  readonly expectedIssuedAt?: string;
+  /** The `expiresAt` the server issued; the message must repeat it exactly when given. */
+  readonly expectedExpiresAt?: string;
   /** The party the user claims; the proof must be for it. */
   readonly expectedPartyId?: string;
   /** Defaults to the system clock. */
   readonly now?: Date;
-  /** The longest validity window and age accepted. Defaults to 10 minutes. */
+  /** The longest validity window accepted (`expiresAt - issuedAt`). Defaults to 10 minutes. */
   readonly maxAgeMs?: number;
   /** How far in the future `issuedAt` may be. Defaults to 60 seconds. */
   readonly clockSkewMs?: number;
@@ -192,13 +205,21 @@ export function verifyWalletOwnership(
     );
   }
 
+  if (
+    (options.expectedIssuedAt !== undefined && fields.issuedAt !== options.expectedIssuedAt) ||
+    (options.expectedExpiresAt !== undefined && fields.expiresAt !== options.expectedExpiresAt)
+  ) {
+    return fail('window-mismatch', 'The message names another validity window than the server issued');
+  }
+
   const issuedAt = Date.parse(fields.issuedAt);
   const expiresAt = Date.parse(fields.expiresAt);
   if (issuedAt > now + skewMs) return fail('not-yet-valid', 'The message was issued in the future');
   if (expiresAt - issuedAt > maxAgeMs) {
     return fail('lifetime-too-long', `The message is valid for longer than ${maxAgeMs} ms`);
   }
-  if (now >= expiresAt || now - issuedAt > maxAgeMs) return fail('expired', 'The message has expired');
+  // With the lifetime bounded above, this also bounds the message's age by maxAgeMs.
+  if (now >= expiresAt) return fail('expired', 'The message has expired');
 
   let fingerprint: string;
   let keyBase64: string;

@@ -332,7 +332,8 @@ describe('createTokenWallet.loadState: one snapshot per refresh', () => {
       tokens.listBurnRequests(),
     ]);
     expect(wallet.ledgerCalls()).toEqual(['GET /v2/state/ledger-end', 'POST /v2/state/active-contracts-page']);
-    expect(wallet.requests.filter((r) => r.method === 'getPrimaryAccount')).toHaveLength(1);
+    // The party is resolved per call (an account switch is followed), but the ledger is read once.
+    expect(wallet.requests.filter((r) => r.method === 'getPrimaryAccount')).toHaveLength(5);
     expect([holdings, mints, offers, burns]).toEqual([
       state.holdings,
       state.mintOffers,
@@ -342,6 +343,25 @@ describe('createTokenWallet.loadState: one snapshot per refresh', () => {
     // Once settled, the next call reads again.
     await tokens.loadState();
     expect(wallet.reads).toHaveLength(2);
+  });
+
+  it('does not share a snapshot of the previous party after an account switch', async () => {
+    const { tokens, wallet } = setup();
+    const { request } = wallet;
+    const parties = [HOLDER, OTHER];
+    wallet.request = async (args) => {
+      const answer = await request(args);
+      if (args.method !== 'getPrimaryAccount') return answer;
+      return { ...(answer as Record<string, unknown>), partyId: parties.shift() ?? OTHER };
+    };
+    const [first, second] = await Promise.all([tokens.loadState(), tokens.loadState()]);
+    expect([first.partyId, second.partyId]).toEqual([HOLDER, OTHER]);
+    const readParties = wallet.requests.flatMap((r) =>
+      r.method === 'ledgerApi' && r.params.resource === '/v2/state/active-contracts-page'
+        ? [Object.keys((r.params.body?.['eventFormat'] as { filtersByParty: object }).filtersByParty)]
+        : []
+    );
+    expect(readParties).toEqual([[HOLDER], [OTHER]]);
   });
 
   it('does not share a snapshot that started before a write settled', async () => {

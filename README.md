@@ -113,12 +113,18 @@ async function send(provider: Cip103Provider, receiver: string): Promise<void> {
   `/v2/state/active-contracts-page` stream whose cumulative filter carries every template and
   interface. Concurrent `loadState` and `list*` calls on one token wallet share the snapshot in
   flight (unless a write settled since it started). Writes do their own fresh reads.
-- Wallets rate-limit `ledgerApi` (Loop answers CIP-0103 -32005 for an HTTP 429). Reads answered
-  -32005 are retried after 0.5, 1, 2 and 4 s (jittered; `readRetry` changes it); then they fail with
-  a `WalletReadError` whose `rateLimited` is true, so a UI can offer a retry. Only a wallet that
-  does not offer the paged endpoint or refuses its request (4200, -32601, -32004, -32602) gets one
-  unpaged `/v2/state/active-contracts` read instead, and if that fails too the error names both
-  failures. A rate limit or a timeout never falls back.
+- Wallets rate-limit `ledgerApi` (Loop answers CIP-0103 -32005 for an HTTP 429). Loop also makes a
+  session check and a provider status check before every `ledgerApi` call, so each call is three
+  HTTP requests against Loop's limit; a 429 of the session check arrives as -32603 "Session
+  verification failed with status 429." and counts as a rate limit too. Rate-limited reads are
+  retried after 0.5, 1, 2 and 4 s (jittered; `readRetry` changes it); then they fail with a
+  `WalletReadError` whose `rateLimited` is true, so a UI can offer a retry.
+- The unpaged `/v2/state/active-contracts` is read once instead only when the first paged call is
+  refused as not offered or malformed (4200, -32601, -32004, -32602), or when Loop answers -32002
+  "Ledger access unavailable", which is how Loop reports any non-429 HTTP failure of its ledger
+  proxy (an endpoint not in its allowlist, a Canton 3.5 participant serving the paged endpoint only
+  as GET, but also a server error). If the fallback fails too, the error names both failures. A rate
+  limit or a timeout never falls back.
 - Writes never retry. A `WalletSubmitError` has `outcome` `rejected-by-user` (CIP-0103 4001),
   `failed` (-32003, or a request the wallet refused before taking it on) or `unknown` (session
   errors 4100/4900/4901 during a submit, timeouts, anything else): check the wallet before

@@ -354,6 +354,38 @@ describe('cip103Wallet.listActiveContracts', () => {
     ]);
   });
 
+  it("falls back once when Loop answers the paged call -32002 'Ledger access unavailable' (a non-429 HTTP refusal)", async () => {
+    const provider = scriptedProvider({
+      ledgerApi: (params) => {
+        const { resource } = params as { resource: string };
+        if (resource === '/v2/state/ledger-end') return { offset: 9 };
+        if (resource === '/v2/state/active-contracts-page') throw rpcError(-32002, 'Ledger access unavailable');
+        return [acsEntry(createdEvent)];
+      },
+    });
+    const contracts = await cip103Wallet(provider, HOLDER).listActiveContracts({ templateId: '#a:B:C' });
+    expect(contracts.map((c) => c.contractId)).toEqual(['00c']);
+    expect(provider.requests.map((r) => (r.method === 'ledgerApi' ? r.params.resource : r.method))).toEqual([
+      '/v2/state/ledger-end',
+      '/v2/state/active-contracts-page',
+      '/v2/state/active-contracts',
+    ]);
+  });
+
+  it("does not fall back on Loop's -32002 timeout", async () => {
+    const provider = scriptedProvider({
+      ledgerApi: (params) => {
+        if ((params as { resource: string }).resource === '/v2/state/ledger-end') return { offset: 9 };
+        throw rpcError(-32002, 'Ledger request failed or timed out');
+      },
+    });
+    await expect(cip103Wallet(provider, HOLDER).listActiveContracts({ templateId: '#a:B:C' })).rejects.toMatchObject({
+      code: -32002,
+      rateLimited: false,
+    });
+    expect(provider.requests).toHaveLength(2);
+  });
+
   it('does not fall back on an error without a code', async () => {
     const provider = scriptedProvider({
       ledgerApi: (params) => {
@@ -597,6 +629,49 @@ describe('cip103Wallet reads under a wallet rate limit (CIP-0103 -32005)', () =>
       'The wallet rate-limited its ledger reads: ledgerApi GET /v2/state/ledger-end answered Ledger access unavailable (CIP-0103 -32005 Limit exceeded). Wait a moment, then retry.'
     );
     expect(provider.requests).toHaveLength(1);
+  });
+
+  it("backs off when Loop's session check is rate-limited (-32603 'status 429'), and reports it as -32005", async () => {
+    let calls = 0;
+    const provider = scriptedProvider({
+      ledgerApi: (params) => {
+        calls += 1;
+        if (calls <= 2) throw rpcError(-32603, 'Session verification failed with status 429.');
+        return (params as { resource: string }).resource === '/v2/state/ledger-end' ? { offset: 3 } : acsPage([], 3);
+      },
+    });
+    const { sleep, waits } = clock();
+    await expect(
+      cip103Wallet(provider, HOLDER, { readRetry: { sleep, random: () => 0 } }).listActiveContracts({
+        templateId: '#a:B:C',
+      })
+    ).resolves.toEqual([]);
+    expect(waits).toEqual([250, 500]);
+    expect(provider.requests).toHaveLength(4);
+
+    const limited = scriptedProvider({
+      ledgerApi: () => {
+        throw rpcError(-32603, 'Session verification failed with status 429.');
+      },
+    });
+    const error = await cip103Wallet(limited, HOLDER, { readRetry: { delaysMs: [] } })
+      .listActiveContracts({ templateId: '#a:B:C' })
+      .catch((e: unknown) => e);
+    expect(error).toMatchObject({ name: 'WalletReadError', code: -32005, rateLimited: true });
+    expect((error as Error).message).toContain('Session verification failed with status 429. (CIP-0103 -32603');
+  });
+
+  it('does not retry another internal error', async () => {
+    const provider = scriptedProvider({
+      ledgerApi: () => {
+        throw rpcError(-32603, 'Session verification failed with status 500.');
+      },
+    });
+    const { sleep, waits } = clock();
+    await expect(
+      cip103Wallet(provider, HOLDER, { readRetry: { sleep } }).listActiveContracts({ templateId: '#a:B:C' })
+    ).rejects.toMatchObject({ code: -32603, rateLimited: false });
+    expect(waits).toEqual([]);
   });
 
   it('never retries a submission the wallet rate-limited', async () => {

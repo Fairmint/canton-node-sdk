@@ -9,15 +9,21 @@
  *   `/v2/state/active-contracts-page` at that one offset, filtered to that party only, with every template and
  *   interface filter of the read in one cumulative filter (see {@link ACS_PAGE_SIZE}). It is sent as POST, as the Ledger
  *   JSON API 3.6 OpenAPI, Loop's `ledgerApi` allowlist and `@canton-network/core-acs-reader` do.
- * - Rate limits: wallets rate-limit `ledgerApi` (Loop answers -32005 for an HTTP 429). A read answered -32005 is retried
- *   after an exponential, jittered back-off ({@link DEFAULT_READ_RETRY_DELAYS_MS}); when the wallet still refuses, the
- *   read fails with a `WalletReadError` whose `rateLimited` is true. Never for submissions.
- * - Fallback: only when the wallet says the paged endpoint is not offered or its request shape is refused
- *   ({@link ACS_FALLBACK_CODES}: 4200, -32601, -32004, -32602; for example a wallet without the paged endpoint in its
- *   allowlist, or a Canton 3.5 participant that serves it only as GET) is the snapshot read once through the unpaged
- *   `/v2/state/active-contracts`, which is subject to the participant's `http-list-max-elements-limit`. A rate limit
- *   (-32005), a timeout or unavailable ledger (-32002) or any other failure never falls back: a second request would
- *   only add load. When the fallback fails too, the error names both failures.
+ * - Rate limits: wallets rate-limit `ledgerApi` (Loop answers -32005 for an HTTP 429 of its ledger proxy). Loop also
+ *   sends two more HTTP requests to its backend before every `ledgerApi` call (a session check, `pair/account`, and a
+ *   provider status check), so one `ledgerApi` call is three requests against Loop's limit; a 429 of the session check
+ *   reaches the SDK as -32603 "Session verification failed with status 429." Both count as a rate limit
+ *   ({@link isRateLimited}): the read is retried after an exponential, jittered back-off
+ *   ({@link DEFAULT_READ_RETRY_DELAYS_MS}); when the wallet still refuses, the read fails with a `WalletReadError` whose
+ *   `rateLimited` is true (code -32005). Never for submissions.
+ * - Fallback: the snapshot is read once through the unpaged `/v2/state/active-contracts` (subject to the participant's
+ *   `http-list-max-elements-limit`) only when the first paged call is refused as not offered or malformed
+ *   ({@link ACS_FALLBACK_CODES}: 4200, -32601, -32004, -32602), or when Loop answers -32002 with exactly "Ledger access
+ *   unavailable". Loop reports every non-429 HTTP failure of its ledger proxy that way (an endpoint missing from its
+ *   allowlist, a Canton 3.5 participant that serves the paged endpoint only as GET, a refused `maxPageSize`, but also a
+ *   5xx), so that case gets the one fallback request too. A rate limit, a timeout (Loop: -32002 "Ledger request failed
+ *   or timed out") or any other failure never falls back: a second request would only add load. When the fallback fails
+ *   too, the error names both failures.
  *
  * Spec: CIP-0103 and the dApp API OpenRPC (`openrpc-dapp-api.json` 0.5.0).
  */
@@ -295,9 +301,9 @@ export const ACS_MAX_PAGES = 500;
 /**
  * Codes of a first paged ACS call after which the snapshot is read once through the unpaged
  * `/v2/state/active-contracts` instead: the wallet does not offer the paged endpoint (4200, -32601, -32004), or refused
- * the paged request's shape (-32602; for example a participant that serves the endpoint only as GET-with-body, as
- * Canton 3.5 does). Any other failure (a rate limit, a timeout, an unavailable ledger, a refused or disconnected
- * session) is reported as it is: a second read would fail the same way and only add load.
+ * the paged request's shape (-32602). Loop reports those cases differently (see {@link LOOP_HTTP_REFUSED_MESSAGE}). Any
+ * other failure (a rate limit, a timeout, a refused or disconnected session) is reported as it is: a second read would
+ * fail the same way and only add load.
  */
 export const ACS_FALLBACK_CODES: ReadonlySet<number> = new Set([
   CIP103_ERROR_CODES.unsupportedMethod,
@@ -305,6 +311,34 @@ export const ACS_FALLBACK_CODES: ReadonlySet<number> = new Set([
   CIP103_ERROR_CODES.methodNotSupported,
   CIP103_ERROR_CODES.invalidParams,
 ]);
+
+/**
+ * Loop's message, with code -32002, for any non-OK HTTP reply of its ledger proxy other than 429 that carries no
+ * structured error (`@fivenorth/loop-sdk` `Connection.ledgerApi`): an endpoint its allowlist does not offer, a
+ * participant that serves the paged endpoint only as GET (Canton 3.5) or refuses its `maxPageSize`, or a server error.
+ * Loop's timeout or network failure is another message ("Ledger request failed or timed out") and does not fall back.
+ */
+export const LOOP_HTTP_REFUSED_MESSAGE = 'Ledger access unavailable';
+
+/**
+ * Whether a provider error is a rate limit: -32005, or -32603 whose message says HTTP status 429 (Loop's session check,
+ * which runs before every `ledgerApi` call, throws a plain `Error` that Loop's CIP-0103 adapter maps to -32603).
+ */
+export function isRateLimited(error: unknown): boolean {
+  const code = cip103ErrorCode(error);
+  if (code === CIP103_ERROR_CODES.limitExceeded) return true;
+  const message = isRecord(error) && typeof error['message'] === 'string' ? error['message'] : '';
+  return code === CIP103_ERROR_CODES.internalError && /\bstatus 429\b/.test(message);
+}
+
+/** Read errors whose provider error was Loop's {@link LOOP_HTTP_REFUSED_MESSAGE} with -32002. */
+const loopHttpRefusals = new WeakSet<WalletReadError>();
+
+/** Whether a first paged ACS call's failure means the paged endpoint is not usable, so the unpaged one is tried once. */
+function pagedEndpointRefused(error: unknown): boolean {
+  if (!(error instanceof WalletReadError) || error.code === undefined) return false;
+  return ACS_FALLBACK_CODES.has(error.code) || loopHttpRefusals.has(error);
+}
 
 /**
  * Waits before each retry of a read the wallet rate-limited (-32005): 0.5 s, 1 s, 2 s, 4 s, so at most five attempts
@@ -429,8 +463,16 @@ export function cip103Wallet(
         });
       } catch (error) {
         const code = cip103ErrorCode(error);
-        if (code !== CIP103_ERROR_CODES.limitExceeded) {
-          throw new WalletReadError(`The wallet's ${call} failed: ${describeError(error)}`, code);
+        if (!isRateLimited(error)) {
+          const failed = new WalletReadError(`The wallet's ${call} failed: ${describeError(error)}`, code);
+          if (
+            code === CIP103_ERROR_CODES.resourceUnavailable &&
+            isRecord(error) &&
+            error['message'] === LOOP_HTTP_REFUSED_MESSAGE
+          ) {
+            loopHttpRefusals.add(failed);
+          }
+          throw failed;
         }
         const delay = delays[attempt];
         if (delay === undefined) {
@@ -440,7 +482,7 @@ export function cip103Wallet(
               : ` on all ${attempt + 1} attempts, backing off ${(waitedMs / 1000).toFixed(1)} s in total`;
           throw new WalletReadError(
             `The wallet rate-limited its ledger reads: ${call} answered ${describeError(error)}${tries}. Wait a moment, then retry.`,
-            code
+            CIP103_ERROR_CODES.limitExceeded
           );
         }
         const wait = Math.round(delay / 2 + (delay / 2) * Math.min(Math.max(random(), 0), 1));
@@ -485,12 +527,7 @@ export function cip103Wallet(
           ...(pageToken !== undefined && { pageToken }),
         });
       } catch (error) {
-        if (
-          page === 0 &&
-          error instanceof WalletReadError &&
-          error.code !== undefined &&
-          ACS_FALLBACK_CODES.has(error.code)
-        ) {
+        if (page === 0 && error instanceof WalletReadError && pagedEndpointRefused(error)) {
           return { offset, contracts: await readUnpaged(offset, eventFormat, error) };
         }
         throw error;

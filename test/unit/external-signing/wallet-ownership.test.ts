@@ -194,6 +194,17 @@ describe('verifyWalletOwnership', () => {
       'bad-signature',
     ],
   ];
+  it('refuses a message whose validity window is not the one the server issued', () => {
+    const issued = { expectedIssuedAt: CHALLENGE.issuedAt, expectedExpiresAt: CHALLENGE.expiresAt };
+    expect(verifyWalletOwnership(loopProof(), { ...OPTIONS, ...issued }).verified).toBe(true);
+    for (const fields of [{ issuedAt: '2026-11-16T12:00:30.000Z' }, { expiresAt: '2026-11-16T12:04:00.000Z' }]) {
+      expect(verifyWalletOwnership(loopProof(fields), { ...OPTIONS, ...issued })).toMatchObject({
+        verified: false,
+        reason: 'window-mismatch',
+      });
+    }
+  });
+
   it.each(refusals)('refuses %s', (_label, proof, reason) => {
     const result = verifyWalletOwnership(proof(), OPTIONS);
     expect(result).toMatchObject({ verified: false, reason });

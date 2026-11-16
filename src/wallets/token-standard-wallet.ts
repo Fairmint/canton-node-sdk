@@ -172,7 +172,7 @@ export interface TokenStandardCore {
   readonly holdingsOf: (wallet: Cip103Wallet) => Promise<Holding[]>;
   /**
    * One snapshot of every state filter (holdings, the registry's pending transfers and the extension's own filters).
-   * Concurrent calls share the snapshot in flight unless a write settled since it started.
+   * Concurrent calls for the same party share the snapshot in flight unless a write settled since it started.
    */
   readonly snapshot: () => Promise<StateSnapshot>;
   /** The CIP-56 state in a snapshot. */
@@ -245,8 +245,8 @@ export function tokenStandardCore(
   ];
   const stateFilterKeys = new Set(stateFilters.map(contractFilterKey));
 
-  async function takeSnapshot(): Promise<StateSnapshot> {
-    const wallet = await connect();
+  async function takeSnapshot(party: string): Promise<StateSnapshot> {
+    const wallet = cip103Wallet(provider, party, walletOptions);
     const { offset, contracts } = await wallet.readActiveContracts(stateFilters);
     const read: ReadContracts = async (filter) =>
       stateFilterKeys.has(contractFilterKey(filter))
@@ -255,13 +255,18 @@ export function tokenStandardCore(
     return { wallet, offset, read };
   }
 
-  let inFlight: { readonly writesSettled: number; readonly promise: Promise<StateSnapshot> } | undefined;
+  // Keyed by party as well: without a pinned `partyId`, a read after an account switch must not join the previous
+  // party's snapshot.
+  let inFlight:
+    { readonly writesSettled: number; readonly party: string; readonly promise: Promise<StateSnapshot> } | undefined;
   async function snapshot(): Promise<StateSnapshot> {
-    if (inFlight?.writesSettled === writesSettled) return inFlight.promise;
-    const promise: Promise<StateSnapshot> = takeSnapshot().finally(() => {
+    const party = await partyId();
+    const settled = writesSettled;
+    if (inFlight?.writesSettled === settled && inFlight.party === party) return inFlight.promise;
+    const promise: Promise<StateSnapshot> = takeSnapshot(party).finally(() => {
       if (inFlight?.promise === promise) inFlight = undefined;
     });
-    inFlight = { writesSettled, promise };
+    inFlight = { writesSettled: settled, party, promise };
     return promise;
   }
 

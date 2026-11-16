@@ -1,11 +1,11 @@
 import {
   buildWalletOwnershipMessage,
-  parseWalletOwnershipMessage,
   proveWalletOwnership,
   WalletReadError,
   WalletSignError,
   type WalletOwnershipChallenge,
 } from '../../../src/wallets';
+import { parseWalletOwnershipMessage } from '../../../src/wallets/ownership';
 import { fakeProvider, HOLDER, RpcError } from './helpers';
 
 const CHALLENGE: WalletOwnershipChallenge = {
@@ -115,6 +115,7 @@ describe('proveWalletOwnership', () => {
     ['another primary account', { partyId: 'other::1220dd' }, 'invalid-challenge'],
     ['an expired challenge', { now: () => new Date('2026-11-16T12:05:00.000Z') }, 'invalid-challenge'],
     ['a malformed challenge', { challenge: { ...CHALLENGE, nonce: 'x' } }, 'invalid-challenge'],
+    ['a wallet on another network', { challenge: { ...CHALLENGE, network: 'canton:mainnet' } }, 'invalid-challenge'],
   ] as const)('refuses %s before asking the wallet to sign', async (_label, change, reason) => {
     const provider = fakeProvider({}, { signMessage: () => ({ signature: 'sig' }) });
     const error = await proveWalletOwnership(provider, { challenge: CHALLENGE, now: NOW, ...change }).catch(

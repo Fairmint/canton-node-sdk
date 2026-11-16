@@ -8,6 +8,11 @@
  * it to get a transaction hash (34 binary bytes) signed. Wallets sign the raw message bytes with the party's key (Loop:
  * Ed25519 over the UTF-8 bytes; the CIP-0103 reference wallet: the same), so the text form is the only protection. The
  * nonce must come from the server, be random, and be accepted once.
+ *
+ * The `Network:` line is a label, not proof: a party id is derived from its key and is the same on every network, so a
+ * verified proof says nothing about the party existing or being hosted on that network. `proveWalletOwnership` refuses
+ * a wallet that reports another network as a guard against mistakes; a server that needs the network proven must look
+ * the party up on that network (its Scan or ledger party and topology APIs).
  */
 import { CIP103_ERROR_CODES, cip103ErrorCode, describeError, primaryAccount, type Cip103Provider } from './cip103';
 import { WalletReadError, WalletSignError } from './errors';
@@ -26,7 +31,10 @@ export interface WalletOwnershipChallenge {
   readonly nonce: string;
   readonly issuedAt: string;
   readonly expiresAt: string;
-  /** The Canton network the party must be on (for example the wallet's CIP-0103 `networkId`, `canton:devnet`). */
+  /**
+   * The Canton network the dApp expects the wallet on (for example the wallet's CIP-0103 `networkId`, `canton:devnet`).
+   * A label in the message: signing it does not prove the party is on that network (see the module comment).
+   */
   readonly network?: string;
 }
 
@@ -195,6 +203,13 @@ export async function proveWalletOwnership(
     throw new WalletReadError('The wallet returned a primary account without publicKey, so ownership cannot be proven');
   }
   const { challenge } = options;
+  // A guard against signing for the wrong network, not proof: the wallet reports its network itself.
+  if (challenge.network !== undefined && account.networkId !== undefined && account.networkId !== challenge.network) {
+    throw new WalletSignError(
+      'invalid-challenge',
+      `The wallet is on ${account.networkId}, not ${challenge.network}; switch networks in the wallet first`
+    );
+  }
   let message: string;
   try {
     message = buildWalletOwnershipMessage({

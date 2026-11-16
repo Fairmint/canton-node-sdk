@@ -4,9 +4,9 @@
  * of the SDK's Node dependencies; the package root also exports it as the `Wallets` namespace (for Node).
  *
  * The surface is small on purpose: plug in a CIP-0103 provider (`createTokenWallet`), the registry client, the
- * ownership proof's client side (`proveWalletOwnership`; the server verifies with `verifyWalletOwnership` from the
- * package root, which is Node-only), the errors and the data types. Command builders, parsers and the CIP-0103 client
- * stay internal.
+ * ownership proof's client side (`proveWalletOwnership` and the message it signs; the server verifies with
+ * `verifyWalletOwnership` from the package root, which is Node-only), the read back-off options, the errors and the
+ * data types. Command builders, parsers, error-code tables and the CIP-0103 client stay internal.
  */
 export {
   createTokenWallet,
@@ -26,10 +26,7 @@ export {
   type TransferResult,
 } from './token-standard-wallet';
 export {
-  ACS_FALLBACK_CODES,
-  CIP103_ERROR_CODES,
   DEFAULT_READ_RETRY_DELAYS_MS,
-  primaryAccount,
   primaryPartyId,
   type Cip103Account,
   type Cip103EventListener,
@@ -42,10 +39,7 @@ export {
 } from './cip103';
 export {
   buildWalletOwnershipMessage,
-  parseWalletOwnershipMessage,
   proveWalletOwnership,
-  WALLET_OWNERSHIP_TITLE,
-  WALLET_OWNERSHIP_VERSION,
   type ProveWalletOwnershipOptions,
   type WalletOwnershipChallenge,
   type WalletOwnershipMessageFields,
