@@ -211,8 +211,11 @@ export function fakeProvider(
     async request(args) {
       requests.push(args);
       switch (args.method) {
+        case 'connect':
         case 'isConnected':
           return { isConnected: true, isNetworkConnected: true };
+        case 'disconnect':
+          return null;
         case 'getPrimaryAccount':
           return {
             primary: true,

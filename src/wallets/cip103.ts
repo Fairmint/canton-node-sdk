@@ -72,10 +72,13 @@ export type Cip103SignMessageParams = {
 };
 
 /**
- * The dApp API requests this SDK makes, each in CIP-0103's `{ method, params }` form. `isConnected` answers `{
- * isConnected: boolean, … }`; a wallet without it answers 4200.
+ * The dApp API requests this SDK makes, each in CIP-0103's `{ method, params }` form. `connect` runs the wallet's own
+ * sign-in and `disconnect` ends its session (`createCip103Session` sends both). `isConnected` answers `{ isConnected:
+ * boolean, … }`; a wallet without it answers 4200.
  */
 export type Cip103Request =
+  | { method: 'connect' }
+  | { method: 'disconnect' }
   | { method: 'isConnected' }
   | { method: 'getPrimaryAccount' }
   | { method: 'ledgerApi'; params: Cip103LedgerApiParams }

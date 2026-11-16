@@ -3,7 +3,8 @@
  * wallet provider. In a browser bundle import `@fairmint/canton-node-sdk/build/src/wallets/index.js`, which loads none
  * of the SDK's Node dependencies; the package root also exports it as the `Wallets` namespace (for Node).
  *
- * The surface is small on purpose: plug in a CIP-0103 provider (`createTokenWallet`), the registry client, the
+ * The surface is small on purpose: plug in a CIP-0103 provider (`createTokenWallet`), a page's wallet session and
+ * observable state (`createCip103Session`, `createTokenWalletStore`; framework-agnostic), the registry client, the
  * ownership proof's client side (`proveWalletOwnership` and the message it signs; the server verifies with
  * `verifyWalletOwnership` from the package root, which is Node-only), the read back-off options, the errors and their
  * user-facing descriptions (`describeWalletError`), and the data types. Command builders, parsers, error-code tables
@@ -42,6 +43,21 @@ export {
   type Cip103SignMessageParams,
   type WalletReadRetryOptions,
 } from './cip103';
+export {
+  createCip103Session,
+  type ConnectedWallet,
+  type Cip103ConnectContext,
+  type Cip103Session,
+  type Cip103SessionState,
+} from './session';
+export {
+  createTokenWalletStore,
+  type ActionOutcome,
+  type TokenWalletStore,
+  type TokenWalletStoreOptions,
+  type TokenWalletView,
+  type WalletActionContext,
+} from './store';
 export {
   buildWalletOwnershipMessage,
   proveWalletOwnership,

@@ -88,7 +88,8 @@ through any CIP-0103 (Canton dApp API) wallet provider:
 
 It reads choice contexts from DA's public Utilities API with an injectable `fetch`, and talks to the
 wallet only through CIP-0103 (`getPrimaryAccount`, `ledgerApi`, `prepareExecuteAndWait`,
-`signMessage`), so no wallet SDK is involved.
+`signMessage`, and for the session `connect`, `disconnect` and `isConnected`), so no wallet SDK is
+involved.
 
 It is browser-safe: import `@fairmint/canton-node-sdk/build/src/wallets/index.js`, which loads none
 of the SDK's Node dependencies. The package root also exports it as the `Wallets` namespace.
@@ -149,6 +150,52 @@ async function send(provider: Cip103Provider, receiver: string): Promise<string>
   transfer, and `expectedKind` refuses a transfer whose kind changed since the preview. An `offer`
   keeps the sender's tokens locked until it is accepted, rejected or withdrawn; expiry alone does
   not unlock them.
+
+### A wallet page: session and store
+
+`createCip103Session()` tracks which wallet is connected, as which party, and drops replies from
+sessions that have since ended. `createTokenWalletStore({ session })` builds on it: one token wallet
+per connected wallet, its `loadState` snapshot, one wallet call at a time, a reload after every
+write attempt (failed ones too: a failed write may have committed), and outcomes tagged with the
+session they ran for. Both are framework-agnostic (`subscribe`/`getSnapshot`); in React,
+`useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)`.
+
+```ts
+import {
+  createCip103Session,
+  createTokenWalletStore,
+  type Cip103Provider,
+} from '@fairmint/canton-node-sdk/build/src/wallets/index.js';
+
+const session = createCip103Session(); // one per tab, at module level
+const store = createTokenWalletStore({ session }); // createTokenWallet({ provider, partyId, network })
+
+// Wire the wallet's own callbacks (Loop: onAccept, onReject) and buttons:
+const onAccept = (provider: Cip103Provider) => session.connected(provider, { network: 'devnet' });
+const restore = (provider: Cip103Provider) =>
+  session.connected(provider, { network: 'devnet', ifConnected: true });
+const connect = (provider: Cip103Provider) => session.connect(provider, { network: 'devnet' }); // CIP-0103 connect
+const onReject = () => session.end('wallet');
+const disconnect = () => session.end('user'); // CIP-0103 disconnect
+
+// An action: refused (false) while another runs or the reload after it is pending.
+const accept = (cid: string) =>
+  store.run(`accept:${cid}`, async ({ tokens }) => {
+    await tokens.acceptMintOffer(cid);
+    return 'Mint offer accepted.';
+  });
+// Render store.getSnapshot(): state, loadError (kind 'rate-limited': offer store.refresh()), busy,
+// outcome, and unknownOutcomeParty (an action whose session ended before it settled).
+```
+
+- `connect()` always reads the primary account again after CIP-0103 `connect` resolves, also when
+  the wallet was already connected, so a failed party lookup recovers without a reload.
+- While connected the session follows the provider's `accountsChanged` (another party is a new
+  `ConnectedWallet`) and `statusChanged` (disconnected ends the session); wallets that never emit
+  them lose nothing.
+- An action that settles after its session ended (disconnect, wallet end, account switch) records
+  `interrupted`, never `succeeded`. A new wallet clears `succeeded` and `failed` outcomes.
+- Wallet discovery (finding the providers a browser offers) is future work: its CIP is a draft.
 
 ### Proving wallet ownership
 
