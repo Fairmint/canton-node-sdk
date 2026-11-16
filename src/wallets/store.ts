@@ -6,6 +6,7 @@
  * Observable for any UI framework: `subscribe` and `getSnapshot` (React: `useSyncExternalStore(store.subscribe,
  * store.getSnapshot, store.getSnapshot)`).
  */
+import { notifyListeners } from './notify';
 import { describeWalletError, TokenWalletError, type WalletErrorDescription } from './errors';
 import type { Cip103Session, Cip103SessionState, ConnectedWallet } from './session';
 import type { TokenStandardWallet } from './token-standard-wallet';
@@ -217,7 +218,7 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
   function publish(): void {
     if (disposed) return;
     view = buildView();
-    for (const listener of [...listeners]) listener();
+    notifyListeners(listeners);
   }
 
   /** Whether `candidate` is still the wallet this store and its session show. Read after an await. */

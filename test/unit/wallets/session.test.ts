@@ -991,6 +991,34 @@ describe('createCip103Session', () => {
       expect(provider.requests).toEqual([]);
     });
 
+    it('notifies every listener and finishes connecting when one listener throws', async () => {
+      const rethrown: unknown[] = [];
+      const timer = jest.spyOn(globalThis, 'setTimeout').mockImplementation(((callback: () => void) => {
+        try {
+          callback();
+        } catch (error) {
+          rethrown.push(error);
+        }
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+      }) as typeof setTimeout);
+      try {
+        const session = createCip103Session();
+        const boom = new Error('listener bug');
+        session.subscribe(() => {
+          throw boom;
+        });
+        const seen: string[] = [];
+        session.subscribe(() => seen.push(session.getSnapshot().status));
+        const provider = new TestProvider();
+        await session.connect(provider);
+        expect(seen).toEqual(['connecting', 'connected']);
+        expect(provider.requests).toEqual(['connect', 'getPrimaryAccount']);
+        expect(rethrown).toEqual([boom, boom]);
+      } finally {
+        timer.mockRestore();
+      }
+    });
+
     it("end('user') before any wallet sends nothing", () => {
       const { session } = observed();
       session.end('user');

@@ -193,6 +193,42 @@ describe('createTokenWalletStore', () => {
     expect(calls).toBe(1);
   });
 
+  it('keeps its latch and other listeners working when a listener throws, and reports the error asynchronously', async () => {
+    const t = setup();
+    await connectAndLoad(t);
+    const rethrown: unknown[] = [];
+    const timer = jest.spyOn(globalThis, 'setTimeout').mockImplementation(((callback: () => void) => {
+      try {
+        callback();
+      } catch (error) {
+        rethrown.push(error);
+      }
+      return 0 as unknown as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout);
+    try {
+      const boom = new Error('listener bug');
+      t.store.subscribe(() => {
+        if (t.store.getSnapshot().running === 'send') throw boom;
+      });
+      let seen = 0;
+      t.store.subscribe(() => {
+        seen += 1;
+      });
+      const write = t.store.run('send', async () => 'Sent.');
+      await flush();
+      t.answer();
+      expect(await write).toBe(true);
+      expect(rethrown).toContain(boom);
+      expect(seen).toBeGreaterThan(0);
+      // The reload after the write (answered above) settles and frees the latch.
+      await flush();
+      expect(t.active()).toBe(0);
+      expect(t.store.getSnapshot()).toMatchObject({ busy: false, running: null, outcome: { status: 'succeeded' } });
+    } finally {
+      timer.mockRestore();
+    }
+  });
+
   it('is busy and refuses to run while any load is pending: the first one and a Retry', async () => {
     const t = setup();
     await t.session.connected(t.provider, { network: 'devnet' });

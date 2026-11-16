@@ -5,6 +5,7 @@
  *
  * Observable for any UI framework: `subscribe` and `getSnapshot` (React: `useSyncExternalStore`).
  */
+import { notifyListeners } from './notify';
 import {
   cip103ErrorCode,
   cip103NetworkId,
@@ -191,7 +192,7 @@ export function createCip103Session(): Cip103Session {
   function publish(next: Cip103SessionState): void {
     if (disposed || next === state) return;
     state = next;
-    for (const listener of [...listeners]) listener();
+    notifyListeners(listeners);
   }
 
   function detach(): void {
