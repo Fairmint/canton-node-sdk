@@ -83,8 +83,9 @@ through any CIP-0103 (Canton dApp API) wallet provider:
 - propose a burn (`requestBurn`: a burn request the registrar accepts or rejects; without a
   `reference` it files a generated `holder-burn-…` one and returns it);
 - create a transfer preapproval (experimental);
-- prove that the user controls the wallet's party by signing a message (`proveWalletOwnership`,
-  verified on your server with `verifyWalletOwnership`).
+- prove that the user controls the wallet's party by signing a message
+  (`requestWalletOwnershipVerdict`, or `proveWalletOwnership` alone), verified on your server with
+  `createWalletOwnershipChallenger` (or `verifyWalletOwnership` alone).
 
 It reads choice contexts from DA's public Utilities API with an injectable `fetch`, and talks to the
 wallet only through CIP-0103 (`getPrimaryAccount`, `ledgerApi`, `prepareExecuteAndWait`,
@@ -151,41 +152,74 @@ async function send(provider: Cip103Provider, receiver: string): Promise<string>
   keeps the sender's tokens locked until it is accepted, rejected or withdrawn; expiry alone does
   not unlock them.
 
-### A wallet page: session and store
+### A whole dApp: session, store and the ownership routes
 
 `createCip103Session()` tracks which wallet is connected, as which party, and drops replies from
 sessions that have since ended. `createTokenWalletStore({ session })` builds on it: one token wallet
 per connected wallet, its `loadState` snapshot, one wallet call at a time, a reload after every
 write attempt (failed ones too: a failed write may have committed), and outcomes tagged with the
-session they ran for. Both are framework-agnostic (`subscribe`/`getSnapshot`); in React,
-`useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)`.
+session they ran for. Both are framework-agnostic (`subscribe`/`getSnapshot`). The ownership check
+has two halves: `requestWalletOwnershipVerdict` in the page, and `createWalletOwnershipChallenger`
+(Node only, from the package root) behind two routes.
 
 ```ts
+// wallet.ts (browser): one session and one store per tab, at module level.
+import { useSyncExternalStore } from 'react';
 import {
   createCip103Session,
   createTokenWalletStore,
+  requestWalletOwnershipVerdict,
   type Cip103Provider,
 } from '@fairmint/canton-node-sdk/build/src/wallets/index.js';
 
-const session = createCip103Session(); // one per tab, at module level
+const network = 'devnet';
+const session = createCip103Session();
 const store = createTokenWalletStore({ session }); // createTokenWallet({ provider, partyId, network })
 
-// Wire the wallet's own callbacks (Loop: onAccept, onReject) and buttons:
-const onAccept = (provider: Cip103Provider) => session.connected(provider, { network: 'devnet' });
-const restore = (provider: Cip103Provider) =>
-  session.connected(provider, { network: 'devnet', ifConnected: true });
-const connect = (provider: Cip103Provider) => session.connect(provider, { network: 'devnet' }); // CIP-0103 connect
-const onReject = () => session.end('wallet');
-const disconnect = () => session.end('user'); // CIP-0103 disconnect
+// The wallet's own callbacks (Loop: onAccept, onReject) and the buttons.
+export const onAccept = (provider: Cip103Provider) => session.connected(provider, { network });
+export const connect = (provider: Cip103Provider) => session.connect(provider, { network });
+export const onReject = () => session.end('wallet');
+export const disconnect = () => session.end('user'); // CIP-0103 disconnect
 
-// An action: refused (false) while another runs or the reload after it is pending.
-const accept = (cid: string) =>
-  store.run(`accept:${cid}`, async ({ tokens }) => {
-    await tokens.acceptMintOffer(cid);
-    return 'Mint offer accepted.';
-  });
-// Render store.getSnapshot(): state, loadError (kind 'rate-limited': offer store.refresh()), busy,
-// outcome, and unknownOutcomeParty (an action whose session ended before it settled).
+// state, loadError (kind 'rate-limited': offer store.refresh()), busy, outcome, unknownOutcomeParty
+export const useWallet = () =>
+  useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+
+// Actions: refused (false) while another runs or the reload after it is pending.
+export const accept = (cid: string) =>
+  store.run(`accept:${cid}`, ({ tokens }) => tokens.acceptMintOffer(cid).then(() => 'Accepted.'));
+const urls = { challengeUrl: '/api/ownership/challenge', verifyUrl: '/api/ownership/verify' };
+export const prove = () =>
+  store.run(
+    'ownership',
+    async ({ wallet: { provider, partyId } }) => {
+      const verdict = await requestWalletOwnershipVerdict(provider, {
+        partyId,
+        network,
+        fetch,
+        ...urls,
+      });
+      return verdict.verified ? 'Verified.' : `Not verified: ${verdict.message}`;
+    },
+    { refresh: false }
+  );
+```
+
+```ts
+// app/api/ownership/challenge/route.ts and verify/route.ts (Node). Authenticate first.
+import { createWalletOwnershipChallenger } from '@fairmint/canton-node-sdk';
+
+const challenger = createWalletOwnershipChallenger({
+  secret,
+  purpose: 'my-dapp:wallet-ownership:v1',
+});
+
+export async function POST(request: Request): Promise<Response> {
+  const user = await requireUser(request); // yours: session, CSRF
+  return challenger.handleChallenge(request, { subject: user.id });
+  // verify/route.ts: challenger.handleVerify(request, { subject: user.id, onVerdict: (verdict, partyId) => log(...) })
+}
 ```
 
 - `connect()` always reads the primary account again after CIP-0103 `connect` resolves, also when
@@ -213,6 +247,22 @@ signature. A check in the browser proves nothing.
 3. The server calls
    `verifyWalletOwnership(proof, { expectedNonce, expectedDomain, expectedNetwork })` (Node only,
    from the package root, not the browser entry), then marks the nonce used.
+
+`createWalletOwnershipChallenger({ secret, purpose })` does the server's part, and
+`requestWalletOwnershipVerdict` the browser's (both shown above):
+
+- The challenge is stateless: a token `v1.<claims>.<MAC>`, HMAC-SHA256 under the key
+  `HMAC-SHA256(secret, purpose)`, binds it to the subject (your signed-in user), the host and the
+  party for 5 minutes (`ttlMs`), compared in constant time.
+- The nonce is spent before the signature is checked, so each challenge gets exactly one verdict.
+  `createMemoryNonceStore()` (the default) enforces that on one server instance only; pass a shared
+  `nonceStore` for more.
+- The host is the browser's `Origin` host only when it is the request's own host or one of
+  `trustedOrigins` (`walletOwnershipDomain`); `x-forwarded-host` is never read.
+- `handleChallenge` and `handleVerify` take a Fetch API `Request` and answer `{ data }`, or 400
+  `{ error }` for bad JSON, a bad body or an untrusted `Origin`, always `no-store`. Check the
+  caller's session and your CSRF rules before calling them. `issue` and `verify` serve callers that
+  do their own HTTP. The verdict reports the signed network only as `claimedNetwork`.
 
 `verified: true` means: the message is exactly canonical, for this domain, nonce and network, and
 within its window; the Ed25519 signature over its UTF-8 bytes verifies; and the key's Canton

@@ -11,3 +11,4 @@ export * from './generate-external-party';
 export * from './prepare-external-transaction';
 export * from './stellar-utils';
 export * from './wallet-ownership';
+export * from './wallet-ownership-challenger';

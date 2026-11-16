@@ -14,7 +14,15 @@
  * a wallet that reports another network as a guard against mistakes; a server that needs the network proven must look
  * the party up on that network (its Scan or ledger party and topology APIs).
  */
-import { CIP103_ERROR_CODES, cip103ErrorCode, describeError, primaryAccount, type Cip103Provider } from './cip103';
+import {
+  CIP103_ERROR_CODES,
+  cip103ErrorCode,
+  cip103NetworkId,
+  describeError,
+  primaryAccount,
+  type Cip103Provider,
+} from './cip103';
+import type { DaNetwork, FetchLike } from './da-utilities/client';
 import { WalletReadError, WalletSignError } from './errors';
 import { isRecord, nonEmptyString } from './json';
 
@@ -62,20 +70,27 @@ const NONCE_PATTERN = /^[A-Za-z0-9._~-]{16,512}$/;
 const TOKEN_PATTERN = /^[!-~]+$/;
 const ISO_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
+/** Whether `value` may be a message's domain: a host name, optionally with a port. */
+export function isWalletOwnershipDomain(value: unknown): value is string {
+  return typeof value === 'string' && DOMAIN_PATTERN.test(value);
+}
+
+/** Whether `value` may be a message's party: a Canton party id (`hint::namespace`) of printable ASCII. */
+export function isWalletOwnershipPartyId(value: unknown): value is string {
+  return (
+    typeof value === 'string' && value.length <= 512 && TOKEN_PATTERN.test(value) && value.split('::').length === 2
+  );
+}
+
 /** The reason a field is not valid in a message, or null. */
 function fieldProblem(fields: WalletOwnershipMessageFields): string | null {
-  if (typeof fields.domain !== 'string' || !DOMAIN_PATTERN.test(fields.domain)) {
+  if (!isWalletOwnershipDomain(fields.domain)) {
     return 'domain must be a host name, optionally with a port';
   }
   if (typeof fields.nonce !== 'string' || !NONCE_PATTERN.test(fields.nonce)) {
     return 'nonce must be 16-512 characters of letters, digits and . _ ~ -';
   }
-  if (
-    typeof fields.partyId !== 'string' ||
-    fields.partyId.length > 512 ||
-    !TOKEN_PATTERN.test(fields.partyId) ||
-    fields.partyId.split('::').length !== 2
-  ) {
+  if (!isWalletOwnershipPartyId(fields.partyId)) {
     return 'partyId must be a Canton party id (hint::namespace)';
   }
   if (
@@ -259,4 +274,132 @@ export async function proveWalletOwnership(
     message,
     signature,
   };
+}
+
+/** Why a proof did not verify (`verifyWalletOwnership`, Node only). */
+export type WalletOwnershipFailure =
+  /** The proof is not an object of string fields. */
+  | 'malformed-proof'
+  /** The message is not exactly a canonical ownership message. */
+  | 'malformed-message'
+  | 'domain-mismatch'
+  | 'nonce-mismatch'
+  /** The message, the proof and the expected party do not all name the same party, or the namespace differs. */
+  | 'party-mismatch'
+  | 'network-mismatch'
+  /** The message's `Issued At` or `Expiration Time` is not the one the server issued. */
+  | 'window-mismatch'
+  /** Issued in the future (beyond the allowed clock skew). */
+  | 'not-yet-valid'
+  /** Past its expiration time. */
+  | 'expired'
+  /** The message allows a longer validity window than `maxAgeMs`. */
+  | 'lifetime-too-long'
+  /** The public key is not an Ed25519 key in an encoding this verifier accepts. */
+  | 'unsupported-public-key'
+  /** The key's fingerprint is not the party's namespace (see `verifyWalletOwnership`). */
+  | 'key-not-bound-to-party'
+  /** The signature is not 64 bytes of hex or base64. */
+  | 'malformed-signature'
+  /** The signature does not verify. */
+  | 'bad-signature';
+
+/** Why a challenger refused a challenge token before looking at the signature (`createWalletOwnershipChallenger`). */
+export type WalletOwnershipChallengeFailure =
+  /** The token was not issued by this server (another key or purpose, or altered). */
+  | 'challenge-invalid'
+  | 'challenge-expired'
+  /** Each challenge gets one verdict. */
+  | 'challenge-used'
+  /** Issued to another subject (signed-in user) or for another host. */
+  | 'challenge-not-yours';
+
+/** A challenger's answer to a challenge request: what the wallet signs, and the token to send back with the proof. */
+export interface WalletOwnershipChallengeResponse {
+  readonly challenge: WalletOwnershipChallenge;
+  /** Opaque to the browser: the server's MACed record of the challenge. */
+  readonly token: string;
+}
+
+/** The server's verdict on a proof. */
+export type WalletOwnershipVerdict =
+  | {
+      readonly verified: true;
+      readonly partyId: string;
+      /** The party's namespace, which is the key's Canton fingerprint. */
+      readonly publicKeyFingerprint: string;
+      /** The message's network label as signed; not proof that the party exists on that network. */
+      readonly claimedNetwork: string | null;
+      readonly verifiedAt: string;
+    }
+  | {
+      readonly verified: false;
+      readonly reason: WalletOwnershipChallengeFailure | WalletOwnershipFailure;
+      /** A sentence for logs or the user. */
+      readonly message: string;
+    };
+
+export interface RequestWalletOwnershipVerdictOptions {
+  /** The party to prove; the wallet's primary account must be this party. */
+  readonly partyId: string;
+  readonly network: DaNetwork;
+  /** Sends the requests (for example a `fetch` that carries the user's session cookie). */
+  readonly fetch: FetchLike;
+  /** Answers `POST { network, partyId }` with `{ data: WalletOwnershipChallengeResponse }`. */
+  readonly challengeUrl: string;
+  /** Answers `POST { token, proof }` with `{ data: WalletOwnershipVerdict }`. */
+  readonly verifyUrl: string;
+}
+
+/** POST `body` as JSON and return the response's `data`; throws on a non-2xx answer or one without `data`. */
+async function postForData(fetch: FetchLike, url: string, body: unknown): Promise<unknown> {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  let json: unknown;
+  try {
+    json = JSON.parse(await response.text());
+  } catch {
+    json = undefined;
+  }
+  const record = isRecord(json) ? json : {};
+  if (!response.ok || !('data' in record)) {
+    const error = nonEmptyString(record['error']) ?? `HTTP ${response.status}`;
+    throw new Error(`The server refused the ownership check: ${error}`);
+  }
+  return record['data'];
+}
+
+/**
+ * The browser half of an ownership check, against a server that uses the SDK's challenger (or the same wire format: a
+ * 2xx answer is `{ data }`, any other `{ error: string }`): POST `challengeUrl` with `{ network, partyId }`, have the
+ * wallet sign the challenge (`proveWalletOwnership`), POST `verifyUrl` with `{ token, proof }`, and return the server's
+ * verdict. Throws when no verdict was reached: the server refused (a non-2xx answer, or one without `data`), or the
+ * wallet did not sign (`WalletSignError`).
+ */
+export async function requestWalletOwnershipVerdict(
+  provider: Cip103Provider,
+  options: RequestWalletOwnershipVerdictOptions
+): Promise<WalletOwnershipVerdict> {
+  const { partyId, network } = options;
+  const issued = await postForData(options.fetch, options.challengeUrl, { network, partyId });
+  if (!isRecord(issued) || !isRecord(issued['challenge']) || typeof issued['token'] !== 'string') {
+    throw new Error('The server answered the ownership challenge request without { challenge, token }');
+  }
+  // proveWalletOwnership checks every field before anything is signed.
+  const challenge = issued['challenge'] as unknown as WalletOwnershipChallenge;
+  if (challenge.network !== cip103NetworkId(network)) {
+    throw new WalletSignError(
+      'invalid-challenge',
+      `The server issued a challenge for ${String(challenge.network)}, not ${cip103NetworkId(network)}`
+    );
+  }
+  const proof = await proveWalletOwnership(provider, { challenge, partyId });
+  const verdict = await postForData(options.fetch, options.verifyUrl, { token: issued['token'], proof });
+  if (!isRecord(verdict) || typeof verdict['verified'] !== 'boolean') {
+    throw new Error('The server answered the ownership proof without a verdict');
+  }
+  return verdict as unknown as WalletOwnershipVerdict;
 }

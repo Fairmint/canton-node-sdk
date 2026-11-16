@@ -5,10 +5,10 @@
  *
  * The surface is small on purpose: plug in a CIP-0103 provider (`createTokenWallet`), a page's wallet session and
  * observable state (`createCip103Session`, `createTokenWalletStore`; framework-agnostic), the registry client, the
- * ownership proof's client side (`proveWalletOwnership` and the message it signs; the server verifies with
- * `verifyWalletOwnership` from the package root, which is Node-only), the read back-off options, the errors and their
- * user-facing descriptions (`describeWalletError`), and the data types. Command builders, parsers, error-code tables
- * and the CIP-0103 client stay internal.
+ * ownership proof's client side (`requestWalletOwnershipVerdict`, `proveWalletOwnership` and the message it signs; the
+ * server side, `createWalletOwnershipChallenger` and `verifyWalletOwnership`, is Node-only and exported from the
+ * package root), the read back-off options, the errors and their user-facing descriptions (`describeWalletError`), and
+ * the data types. Command builders, parsers, error-code tables and the CIP-0103 client stay internal.
  */
 export {
   createTokenWallet,
@@ -61,10 +61,16 @@ export {
 export {
   buildWalletOwnershipMessage,
   proveWalletOwnership,
+  requestWalletOwnershipVerdict,
   type ProveWalletOwnershipOptions,
+  type RequestWalletOwnershipVerdictOptions,
   type WalletOwnershipChallenge,
+  type WalletOwnershipChallengeFailure,
+  type WalletOwnershipChallengeResponse,
+  type WalletOwnershipFailure,
   type WalletOwnershipMessageFields,
   type WalletOwnershipProof,
+  type WalletOwnershipVerdict,
 } from './ownership';
 export {
   createDaUtilitiesClient,
