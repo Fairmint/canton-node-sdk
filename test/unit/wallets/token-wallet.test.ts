@@ -9,6 +9,7 @@ import {
   newBurnReference,
   RegistryResponseError,
   TokenWalletError,
+  WalletSubmitError,
   type ActiveContract,
   type JsonObject,
   type TokenRegistry,
@@ -741,6 +742,29 @@ describe('createTokenWallet.requestBurn', () => {
     expect(command && 'ExerciseCommand' in command && command.ExerciseCommand.choiceArgument).toMatchObject({
       burn: { reference: result.reference },
     });
+  });
+
+  it.each([
+    ['unknown', new RpcError(4900, 'Disconnected')],
+    ['failed', new RpcError(-32003, 'Transaction rejected')],
+  ])('puts the generated reference on a %s submission error', async (outcome, rpcError) => {
+    const { tokens, wallet } = setup();
+    const original = wallet.request.bind(wallet);
+    wallet.request = async (args) => {
+      if (args.method === 'prepareExecuteAndWait') throw rpcError;
+      return original(args);
+    };
+    const error = await tokens.requestBurn({ instrumentId: INSTRUMENT, amount: '1' }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(WalletSubmitError);
+    const submitError = error as WalletSubmitError;
+    expect(submitError.outcome).toBe(outcome);
+    expect(submitError.burnReference).toMatch(/^holder-burn-20261113T120000Z-[0-9a-z]{6}$/);
+    expect(submitError.message).toContain(`Burn reference: ${String(submitError.burnReference)}.`);
+    // A caller's own reference is carried the same way.
+    const own = await tokens
+      .requestBurn({ instrumentId: INSTRUMENT, amount: '1', reference: 'redemption-7' })
+      .catch((e: unknown) => e);
+    expect(own).toMatchObject({ outcome, burnReference: 'redemption-7' });
   });
 
   it('uses a given executeBefore', async () => {

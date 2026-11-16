@@ -15,13 +15,23 @@ export class WalletSubmitError extends Error {
   /** The wallet's CIP-0103 error code, when it gave one. */
   readonly code?: number;
   readonly commandId?: string;
+  /**
+   * The reference of the burn request this submission filed (`requestBurn`), also when the SDK generated it: after an
+   * `unknown` outcome, look the burn request up by it before filing another.
+   */
+  readonly burnReference?: string;
 
-  constructor(outcome: WalletSubmitOutcome, message: string, details: { code?: number; commandId?: string } = {}) {
+  constructor(
+    outcome: WalletSubmitOutcome,
+    message: string,
+    details: { code?: number; commandId?: string; burnReference?: string } = {}
+  ) {
     super(outcome === 'unknown' && !message.includes(UNKNOWN_HINT) ? `${message} ${UNKNOWN_HINT}` : message);
     this.name = 'WalletSubmitError';
     this.outcome = outcome;
     if (details.code !== undefined) this.code = details.code;
     if (details.commandId !== undefined) this.commandId = details.commandId;
+    if (details.burnReference !== undefined) this.burnReference = details.burnReference;
   }
 }
 

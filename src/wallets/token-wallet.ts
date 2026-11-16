@@ -21,7 +21,7 @@ import {
   type DaNetwork,
   type DaUtilitiesClient,
 } from './da-utilities/client';
-import { RegistryResponseError, TokenWalletError } from './errors';
+import { RegistryResponseError, TokenWalletError, WalletSubmitError } from './errors';
 import { selectHoldings } from './holdings';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
 import { factoryTemplateError } from './token-registry';
@@ -128,7 +128,9 @@ export interface TokenWallet extends TokenStandardWallet {
   acceptMintOffer(mintOfferCid: string, options?: { expectedRegistrar?: string }): Promise<SubmitResult>;
   /**
    * File a burn (redemption) request; DA locks the amount until the registrar accepts or rejects it. Resolves with the
-   * reference it was filed with, so a dApp can show it.
+   * reference it was filed with, so a dApp can show it. If the submission fails, the `WalletSubmitError` carries that
+   * reference too (`burnReference`, and in its message): after an `unknown` outcome, find the burn request by it before
+   * filing another, or the amount may be locked twice.
    */
   requestBurn(options: BurnRequestOptions): Promise<BurnRequestResult>;
   /**
@@ -279,7 +281,7 @@ export function createTokenWallet(options: TokenWalletOptions): TokenWallet {
     });
     const factoryError = factoryTemplateError(factory, DA_BURN_FACTORY_TEMPLATES);
     if (factoryError !== null) throw new RegistryResponseError(factoryError);
-    const result = await wallet.submit({
+    const submitted = wallet.submit({
       commands: [
         requestBurnCommand({
           allocationFactoryCid: factory.factoryId,
@@ -298,6 +300,24 @@ export function createTokenWallet(options: TokenWalletOptions): TokenWallet {
       ],
       disclosedContracts: factory.disclosedContracts,
     });
+    let result: SubmitResult;
+    try {
+      result = await submitted;
+    } catch (error) {
+      // The reference may have been generated here: the caller needs it to look the burn request up before a retry,
+      // above all after an unknown outcome, when the request may have been filed.
+      if (error instanceof WalletSubmitError) {
+        const message = error.message.includes(reference)
+          ? error.message
+          : `${error.message} Burn reference: ${reference}.`;
+        throw new WalletSubmitError(error.outcome, message, {
+          ...(error.code !== undefined && { code: error.code }),
+          ...(error.commandId !== undefined && { commandId: error.commandId }),
+          burnReference: reference,
+        });
+      }
+      throw error;
+    }
     return { ...result, reference };
   }
 
