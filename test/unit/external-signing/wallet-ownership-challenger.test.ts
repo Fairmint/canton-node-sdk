@@ -524,6 +524,43 @@ describe('requestWalletOwnershipVerdict through the handlers', () => {
     expect(provider.requests.some((r) => r.method === 'signMessage')).toBe(false);
   });
 
+  it('throws on a malformed verdict, or a verified one for another party', async () => {
+    const challenger = createWalletOwnershipChallenger({ secret: SECRET, purpose: PURPOSE });
+    const answering =
+      (verdict: unknown): FetchLike =>
+      async (url) => {
+        const data =
+          url === CHALLENGE_URL
+            ? challenger.issue({ subject: SUB, domain: DOMAIN, partyId: party.partyId, network: 'devnet' })
+            : verdict;
+        return { ok: true, status: 200, text: async () => JSON.stringify({ data }) };
+      };
+    const malformed = [
+      { verified: false },
+      { verified: false, reason: 'bad-signature' },
+      { verified: true, partyId: party.partyId },
+      {
+        verified: true,
+        partyId: 'mallory::1220ff',
+        publicKeyFingerprint: party.namespace,
+        claimedNetwork: 'canton:devnet',
+        verifiedAt: '2026-11-16T00:00:00.000Z',
+      },
+      'yes',
+    ];
+    for (const verdict of malformed) {
+      await expect(requestWalletOwnershipVerdict(loopProvider(), options(answering(verdict)))).rejects.toThrow(
+        'The server answered the ownership proof without a well-formed verdict for the party'
+      );
+    }
+    await expect(
+      requestWalletOwnershipVerdict(
+        loopProvider(),
+        options(answering({ verified: false, reason: 'bad-signature', message: 'The signature does not verify.' }))
+      )
+    ).resolves.toEqual({ verified: false, reason: 'bad-signature', message: 'The signature does not verify.' });
+  });
+
   it('refuses to sign a challenge for another network than it asked for', async () => {
     const challenger = createWalletOwnershipChallenger({ secret: SECRET, purpose: PURPOSE });
     const mainnet: FetchLike = async () => {

@@ -351,6 +351,21 @@ export interface RequestWalletOwnershipVerdictOptions {
   readonly verifyUrl: string;
 }
 
+/** Whether `value` is a whole verdict: a verified one names `partyId`, a refused one gives its reason and message. */
+function isWalletOwnershipVerdict(value: unknown, partyId: string): value is WalletOwnershipVerdict {
+  if (!isRecord(value)) return false;
+  if (value['verified'] === true) {
+    const { claimedNetwork } = value;
+    return (
+      value['partyId'] === partyId &&
+      typeof value['publicKeyFingerprint'] === 'string' &&
+      typeof value['verifiedAt'] === 'string' &&
+      (claimedNetwork === null || typeof claimedNetwork === 'string')
+    );
+  }
+  return value['verified'] === false && typeof value['reason'] === 'string' && typeof value['message'] === 'string';
+}
+
 /** POST `body` as JSON and return the response's `data`; throws on a non-2xx answer or one without `data`. */
 async function postForData(fetch: FetchLike, url: string, body: unknown): Promise<unknown> {
   const response = await fetch(url, {
@@ -398,8 +413,8 @@ export async function requestWalletOwnershipVerdict(
   }
   const proof = await proveWalletOwnership(provider, { challenge, partyId });
   const verdict = await postForData(options.fetch, options.verifyUrl, { token: issued['token'], proof });
-  if (!isRecord(verdict) || typeof verdict['verified'] !== 'boolean') {
-    throw new Error('The server answered the ownership proof without a verdict');
+  if (!isWalletOwnershipVerdict(verdict, partyId)) {
+    throw new Error('The server answered the ownership proof without a well-formed verdict for the party');
   }
-  return verdict as unknown as WalletOwnershipVerdict;
+  return verdict;
 }

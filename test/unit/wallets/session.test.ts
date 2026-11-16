@@ -20,7 +20,7 @@ describe('createCip103Session', () => {
     const provider = new TestProvider();
     await session.connected(provider, { network: 'devnet' });
     const wallet = connectedWallet(session);
-    expect(wallet).toEqual({ provider, partyId: HOLDER, network: 'devnet' });
+    expect(wallet).toEqual({ provider, partyId: HOLDER, key: expect.any(String), network: 'devnet' });
     expect(session.isCurrent(wallet)).toBe(true);
     expect(changes()).toBe(1);
     // It follows the provider's events while connected.
@@ -162,7 +162,9 @@ describe('createCip103Session', () => {
     await flush();
     const switched = connectedWallet(session);
     expect(switched).not.toBe(wallet);
-    expect(switched).toEqual({ provider, partyId: OTHER, network: 'devnet' });
+    expect(switched).toEqual({ provider, partyId: OTHER, key: expect.any(String), network: 'devnet' });
+    // A UI key per session: the new wallet's differs, the kept one's stays.
+    expect(switched.key).not.toBe(wallet.key);
     expect(session.isCurrent(wallet)).toBe(false);
     // Still one set of listeners on the same provider.
     expect(provider.listenerCount()).toBe(2);
@@ -182,10 +184,33 @@ describe('createCip103Session', () => {
         kind: 'read-failed',
         code: 4100,
         message:
-          'The wallet could not read the ledger: The wallet did not return its primary account: No authorized account (CIP-0103 4100 Unauthorized)',
+          'The wallet has no signed-in account: connect again. Details: The wallet did not return its primary account: No authorized account (CIP-0103 4100 Unauthorized)',
       },
     });
     expect(provider.listenerCount()).toBe(0);
+  });
+
+  it('refuses a wallet whose account reports another network than the dApp connects for', async () => {
+    const { session } = observed();
+    const onMainnet = new TestProvider(HOLDER, {
+      getPrimaryAccount: () => ({ primary: true, partyId: HOLDER, networkId: 'canton:mainnet' }),
+    });
+    await session.connected(onMainnet, { network: 'devnet' });
+    expect(session.getSnapshot()).toEqual({
+      status: 'disconnected',
+      endedBy: null,
+      error: {
+        kind: 'other',
+        message:
+          'The wallet is on canton:mainnet, not canton:devnet: switch networks in the wallet, then connect again.',
+      },
+    });
+    expect(onMainnet.listenerCount()).toBe(0);
+    // The same network connects, and so does a wallet that reports none.
+    await session.connected(onMainnet, { network: 'mainnet' });
+    expect(connectedWallet(session)).toMatchObject({ partyId: HOLDER, network: 'mainnet' });
+    await session.connected(new TestProvider(), { network: 'devnet' });
+    expect(connectedWallet(session)).toMatchObject({ partyId: HOLDER, network: 'devnet' });
   });
 
   it('ends the session when statusChanged says the wallet disconnected', async () => {
@@ -261,7 +286,12 @@ describe('createCip103Session', () => {
       approval.resolve({ isConnected: true });
       await connecting;
       expect(provider.requests).toEqual(['connect', 'getPrimaryAccount']);
-      expect(connectedWallet(session)).toEqual({ provider, partyId: HOLDER, network: 'mainnet' });
+      expect(connectedWallet(session)).toEqual({
+        provider,
+        partyId: HOLDER,
+        key: expect.any(String),
+        network: 'mainnet',
+      });
     });
 
     it('recovers a failed party lookup while the wallet stayed connected (no new accept callback)', async () => {
@@ -281,7 +311,12 @@ describe('createCip103Session', () => {
       provider.setParty(HOLDER);
       await session.connect(provider, { network: 'devnet' });
       expect(provider.requests).toEqual(['isConnected', 'getPrimaryAccount', 'connect', 'getPrimaryAccount']);
-      expect(connectedWallet(session)).toEqual({ provider, partyId: HOLDER, network: 'devnet' });
+      expect(connectedWallet(session)).toEqual({
+        provider,
+        partyId: HOLDER,
+        key: expect.any(String),
+        network: 'devnet',
+      });
     });
 
     it('recovers a party lookup that never answered, and drops its late reply', async () => {
@@ -366,6 +401,38 @@ describe('createCip103Session', () => {
       await first;
       expect(connectedWallet(session).partyId).toBe(HOLDER);
       expect(older.requests).toEqual(['connect']);
+    });
+
+    it('a connect that fails after the accept callback connected leaves the session disconnected and detached', async () => {
+      const { session } = observed();
+      const approval = deferred<unknown>();
+      const provider = new TestProvider(HOLDER, { connect: async () => approval.promise });
+      const connecting = session.connect(provider, { network: 'devnet' });
+      // The wallet's accept callback connects first.
+      await session.connected(provider, { network: 'devnet' });
+      expect(connectedWallet(session).partyId).toBe(HOLDER);
+      expect(provider.listenerCount()).toBe(2);
+      // An account read (accountsChanged) is still pending when connect fails.
+      const lookup = deferred<unknown>();
+      provider.answers.getPrimaryAccount = async () => lookup.promise;
+      provider.emit('accountsChanged', []);
+      approval.reject(new RpcError(-32603, 'timeout'));
+      await connecting;
+      const failed = {
+        status: 'disconnected',
+        endedBy: null,
+        error: {
+          kind: 'other',
+          code: -32603,
+          message: 'The wallet did not connect: timeout (CIP-0103 -32603 Internal error)',
+        },
+      };
+      expect(session.getSnapshot()).toEqual(failed);
+      expect(provider.listenerCount()).toBe(0);
+      // The late account read does not reconnect over the error.
+      lookup.resolve({ primary: true, partyId: OTHER });
+      await flush();
+      expect(session.getSnapshot()).toEqual(failed);
     });
   });
 

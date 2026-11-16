@@ -36,12 +36,12 @@ describe('describeWalletError', () => {
     });
     expect(describeWalletError(new WalletReadError('not connected', 4100))).toEqual({
       kind: 'read-failed',
-      message: 'The wallet could not read the ledger: not connected',
+      message: 'The wallet did not answer a read: not connected',
       code: 4100,
     });
     expect(describeWalletError(new WalletReadError('no partyId'))).toEqual({
       kind: 'read-failed',
-      message: 'The wallet could not read the ledger: no partyId',
+      message: 'The wallet did not answer a read: no partyId',
     });
     // Only the SDK's own rate-limited read counts, not any error that says so.
     expect(describeWalletError(new Error('Limit exceeded')).kind).toBe('other');

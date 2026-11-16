@@ -186,7 +186,7 @@ export const disconnect = () => session.end('user'); // CIP-0103 disconnect
 export const useWallet = () =>
   useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 
-// Actions: refused (false) while another runs or the reload after it is pending.
+// Actions: refused (false) while another runs or any load is pending (one wallet call at a time).
 export const accept = (cid: string) =>
   store.run(`accept:${cid}`, ({ tokens }) => tokens.acceptMintOffer(cid).then(() => 'Accepted.'));
 const urls = { challengeUrl: '/api/ownership/challenge', verifyUrl: '/api/ownership/verify' };
@@ -202,7 +202,7 @@ export const prove = () =>
       });
       return verdict.verified ? 'Verified.' : `Not verified: ${verdict.message}`;
     },
-    { refresh: false }
+    { readOnly: true } // signs a message, commits nothing: no reload
   );
 ```
 
@@ -227,8 +227,13 @@ export async function POST(request: Request): Promise<Response> {
 - While connected the session follows the provider's `accountsChanged` (another party is a new
   `ConnectedWallet`) and `statusChanged` (disconnected ends the session); wallets that never emit
   them lose nothing.
-- An action that settles after its session ended (disconnect, wallet end, account switch) records
-  `interrupted`, never `succeeded`. A new wallet clears `succeeded` and `failed` outcomes.
+- A write that settles after its session ended (disconnect, wallet end, account switch) records
+  `interrupted`, never `succeeded`. A new wallet clears other outcomes, but keeps a write whose
+  outcome is unknown (`interrupted`, or `failed` with kind `outcome-unknown`) and names its party in
+  `unknownOutcomeParty`. Run previews and `signMessage` with `{ readOnly: true }`: no reload, and no
+  unknown outcome when the session ends first.
+- A wallet whose account reports another network than `{ network }` is refused, and each
+  `ConnectedWallet` has a `key` for UI keys (a new session remounts what the old one rendered).
 - Wallet discovery (finding the providers a browser offers) is future work: its CIP is a draft.
 
 ### Proving wallet ownership

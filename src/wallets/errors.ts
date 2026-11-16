@@ -192,7 +192,7 @@ export function describeWalletError(error: unknown): WalletErrorDescription {
           `The wallet is limiting how often this page reads the ledger (CIP-0103 -32005), and it still refused after a few retries. Wait a moment, then retry. Details: ${error.message}`,
           error.code
         )
-      : described('read-failed', `The wallet could not read the ledger: ${error.message}`, error.code);
+      : described('read-failed', `The wallet did not answer a read: ${error.message}`, error.code);
   }
   if (error instanceof WalletSignError) {
     return error.reason === 'rejected-by-user'

@@ -5,15 +5,28 @@
  *
  * Observable for any UI framework: `subscribe` and `getSnapshot` (React: `useSyncExternalStore`).
  */
-import { cip103ErrorCode, describeError, primaryPartyId, CIP103_ERROR_CODES, type Cip103Provider } from './cip103';
+import {
+  cip103ErrorCode,
+  cip103NetworkId,
+  describeError,
+  primaryAccount,
+  CIP103_ERROR_CODES,
+  type Cip103Account,
+  type Cip103Provider,
+} from './cip103';
 import type { DaNetwork } from './da-utilities/client';
-import { describeWalletError, type WalletErrorDescription } from './errors';
+import { describeWalletError, WalletReadError, type WalletErrorDescription } from './errors';
 import { isRecord } from './json';
 
 /** A connected wallet. Each session is one object: compare by identity to tell a live session from an ended one. */
 export interface ConnectedWallet {
   readonly provider: Cip103Provider;
   readonly partyId: string;
+  /**
+   * Unique per `ConnectedWallet` object within its session: use it as a UI key (React `key`), so a new session of the
+   * same party (another provider or network) remounts what the previous one rendered.
+   */
+  readonly key: string;
   /** What the dApp connected for; lets `createTokenWalletStore` build DA's registry client itself. */
   readonly network?: DaNetwork;
 }
@@ -33,7 +46,10 @@ export type Cip103SessionState =
   | { readonly status: 'connected'; readonly wallet: ConnectedWallet };
 
 export interface Cip103ConnectContext {
-  /** The network the dApp connects for, carried on the `ConnectedWallet`. */
+  /**
+   * The network the dApp connects for, carried on the `ConnectedWallet`. A wallet whose primary account reports another
+   * CIP-0103 `networkId` (`canton:<network>`) is refused: the session stays disconnected with an error.
+   */
   readonly network?: DaNetwork;
 }
 
@@ -97,6 +113,15 @@ function connectError(error: unknown): WalletErrorDescription {
   return code === undefined ? { kind: 'other', message } : { kind: 'other', message, code };
 }
 
+/** A failed primary-account read, for the user. */
+function lookupError(error: unknown): WalletErrorDescription {
+  if (error instanceof WalletReadError && error.code === CIP103_ERROR_CODES.unauthorized) {
+    const message = `The wallet has no signed-in account: connect again. Details: ${error.message}`;
+    return { kind: 'read-failed', message, code: error.code };
+  }
+  return describeWalletError(error);
+}
+
 /** The provider's events this session follows while connected. */
 interface Attachment {
   readonly provider: Cip103Provider;
@@ -119,6 +144,8 @@ export function createCip103Session(): Cip103Session {
   // Set by end(): connected() is ignored until the user connects again.
   let closed = false;
   let disposed = false;
+  // Numbers each ConnectedWallet's `key`.
+  let connections = 0;
   // The provider of the latest connected() or connect(), for end('user')'s disconnect.
   let lastProvider: Cip103Provider | null = null;
   let attachment: Attachment | null = null;
@@ -160,17 +187,25 @@ export function createCip103Session(): Cip103Session {
   /** Read the primary account and connect as its party, unless a newer lookup or session change superseded it. */
   async function lookup(provider: Cip103Provider, context: Cip103ConnectContext): Promise<void> {
     const attempt = ++generation;
-    let partyId: string;
+    let account: Cip103Account;
     try {
-      partyId = await primaryPartyId(provider);
+      account = await primaryAccount(provider);
     } catch (error) {
       if (attempt !== generation || disposed) return;
       detach();
-      publish({ status: 'disconnected', endedBy: null, error: describeWalletError(error) });
+      publish({ status: 'disconnected', endedBy: null, error: lookupError(error) });
       return;
     }
     if (attempt !== generation || disposed) return;
     const { network } = context;
+    const { partyId, networkId } = account;
+    if (network !== undefined && networkId !== undefined && networkId !== cip103NetworkId(network)) {
+      // DA's registry and ledger for `network` would refuse every call of a wallet on another network.
+      detach();
+      const message = `The wallet is on ${networkId}, not ${cip103NetworkId(network)}: switch networks in the wallet, then connect again.`;
+      publish({ status: 'disconnected', endedBy: null, error: { kind: 'other', message } });
+      return;
+    }
     if (
       state.status === 'connected' &&
       state.wallet.provider === provider &&
@@ -179,7 +214,8 @@ export function createCip103Session(): Cip103Session {
     ) {
       return; // the same session: keep its object
     }
-    const wallet: ConnectedWallet = network === undefined ? { provider, partyId } : { provider, partyId, network };
+    const key = String(++connections);
+    const wallet: ConnectedWallet = { provider, partyId, key, ...(network !== undefined && { network }) };
     attach(provider);
     publish({ status: 'connected', wallet });
   }
@@ -248,6 +284,8 @@ export function createCip103Session(): Cip103Session {
         await provider.request({ method: 'connect' });
       } catch (error) {
         if (current()) {
+          // The wallet's accept callback may have connected meanwhile: drop its pending lookup and stop following it.
+          interrupt();
           publish({ status: 'disconnected', endedBy: null, error: connectError(error) });
         }
         return;

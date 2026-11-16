@@ -146,6 +146,29 @@ describe('createTokenWalletStore', () => {
     expect(await first).toBe(true);
   });
 
+  it('is busy and refuses to run while any load is pending: the first one and a Retry', async () => {
+    const t = setup();
+    await t.session.connected(t.provider, { network: 'devnet' });
+    expect(t.store.getSnapshot()).toMatchObject({ loading: true, busy: true, running: null });
+    let calls = 0;
+    const action = async (): Promise<string> => {
+      calls += 1;
+      return 'x';
+    };
+    expect(await t.store.run('receive', action)).toBe(false);
+    t.answer();
+    await flush();
+    expect(t.store.getSnapshot()).toMatchObject({ loading: false, busy: false });
+    t.store.refresh();
+    expect(t.store.getSnapshot()).toMatchObject({ loading: true, busy: true });
+    expect(await t.store.run('ownership', action, { readOnly: true })).toBe(false);
+    expect(calls).toBe(0);
+    t.answer();
+    await flush();
+    expect(await t.store.run('ownership', action, { readOnly: true })).toBe(true);
+    expect(calls).toBe(1);
+  });
+
   it('refuses to run while disconnected', async () => {
     const t = setup();
     let called = false;
@@ -178,7 +201,7 @@ describe('createTokenWalletStore', () => {
       message: 'Mint offer accepted.',
     });
     // An action that resolves with nothing has no message.
-    const silent = t.store.run('preview', async () => undefined, { refresh: false });
+    const silent = t.store.run('preview', async () => undefined, { readOnly: true });
     expect(await silent).toBe(true);
     expect(t.store.getSnapshot().outcome).toEqual({
       id: 'preview',
@@ -211,7 +234,7 @@ describe('createTokenWalletStore', () => {
     t.answer(2);
     await flush();
     expect(t.store.getSnapshot()).toMatchObject({ busy: false, loading: false, state: { offset: 2 } });
-    expect(await t.store.run('send', async () => 'again', { refresh: false })).toBe(true);
+    expect(await t.store.run('send', async () => 'again', { readOnly: true })).toBe(true);
   });
 
   it('stays busy after a write until a reload answers, and a failed reload clears the state', async () => {
@@ -232,7 +255,7 @@ describe('createTokenWalletStore', () => {
   it('does not reload after an action run with refresh: false', async () => {
     const t = setup();
     await connectAndLoad(t);
-    expect(await t.store.run('ownership', async () => 'Verified.', { refresh: false })).toBe(true);
+    expect(await t.store.run('ownership', async () => 'Verified.', { readOnly: true })).toBe(true);
     expect(t.loads).toHaveLength(0);
     expect(t.store.getSnapshot()).toMatchObject({ busy: false, loading: false });
   });
@@ -270,7 +293,7 @@ describe('createTokenWalletStore', () => {
     expect(t.store.getSnapshot()).toMatchObject({
       state: null,
       loading: false,
-      loadError: { kind: 'read-failed', message: 'The wallet could not read the ledger: not connected', code: 4100 },
+      loadError: { kind: 'read-failed', message: 'The wallet did not answer a read: not connected', code: 4100 },
     });
     t.store.refresh();
     t.answer(3);
@@ -364,7 +387,8 @@ describe('createTokenWalletStore', () => {
     expect(await ran).toBe(false);
     expect(t.store.getSnapshot()).toMatchObject({
       wallet: bob,
-      busy: false,
+      running: null,
+      busy: true, // Bob's first load is still pending
       outcome: { id: 'send', partyId: HOLDER, status: 'interrupted' },
       unknownOutcomeParty: HOLDER,
     });
@@ -375,7 +399,7 @@ describe('createTokenWalletStore', () => {
   it('clears succeeded and failed outcomes on a wallet change, and keeps interrupted ones', async () => {
     const t = setup();
     await connectAndLoad(t);
-    expect(await t.store.run('send', async () => 'Sent.', { refresh: false })).toBe(true);
+    expect(await t.store.run('send', async () => 'Sent.', { readOnly: true })).toBe(true);
     expect(t.store.getSnapshot().outcome?.status).toBe('succeeded');
     // Another wallet never sees Alice's success.
     await connectAndLoad(t, OTHER);
@@ -391,7 +415,7 @@ describe('createTokenWalletStore', () => {
         async () => {
           throw new TokenWalletError('insufficient-balance', 'not enough');
         },
-        { refresh: false }
+        { readOnly: true }
       )
     ).toBe(false);
     expect(t.store.getSnapshot().outcome).toMatchObject({ status: 'failed', error: { kind: 'refused' } });
@@ -411,11 +435,47 @@ describe('createTokenWalletStore', () => {
       unknownOutcomeParty: HOLDER,
     });
     // The next action clears it.
-    expect(await t.store.run('preview', async () => 'direct', { refresh: false })).toBe(true);
+    expect(await t.store.run('preview', async () => 'direct', { readOnly: true })).toBe(true);
     expect(t.store.getSnapshot()).toMatchObject({
       outcome: { status: 'succeeded', partyId: OTHER },
       unknownOutcomeParty: null,
     });
+  });
+
+  it('keeps an outcome-unknown failure when the session ends right after it, naming its party', async () => {
+    const t = setup();
+    await connectAndLoad(t);
+    const ran = t.store.run('send', async () => {
+      throw new WalletSubmitError('unknown', 'Session changed during request', { code: 4100 });
+    });
+    expect(await ran).toBe(false);
+    // The wallet ends the session while the reload is pending.
+    t.session.end('wallet');
+    const unknown = { id: 'send', partyId: HOLDER, status: 'failed', error: { kind: 'outcome-unknown' } };
+    expect(t.store.getSnapshot()).toMatchObject({ wallet: null, outcome: unknown, unknownOutcomeParty: HOLDER });
+    // Another party still sees it as unknown.
+    await connectAndLoad(t, OTHER);
+    expect(t.store.getSnapshot()).toMatchObject({ outcome: unknown, unknownOutcomeParty: HOLDER });
+    // The same party sees it as its own failure, which says not to resubmit blindly.
+    await connectAndLoad(t);
+    expect(t.store.getSnapshot()).toMatchObject({ outcome: unknown, unknownOutcomeParty: null });
+  });
+
+  it('records no unknown outcome for a read-only call whose session ended before it settled', async () => {
+    const t = setup();
+    await connectAndLoad(t);
+    const signing = deferred<string>();
+    const ran = t.store.run('ownership', async () => signing.promise, { readOnly: true });
+    t.provider.setParty(OTHER);
+    t.provider.emit('accountsChanged', [{ partyId: OTHER, primary: true }]);
+    await flush();
+    // Still running, so still busy, but nothing it does can commit.
+    expect(t.store.getSnapshot()).toMatchObject({ running: 'ownership', busy: true, unknownOutcomeParty: null });
+    signing.resolve('Verified.');
+    expect(await ran).toBe(false);
+    expect(t.store.getSnapshot()).toMatchObject({ running: null, outcome: null, unknownOutcomeParty: null });
+    // No reload for it: only Bob's own first load.
+    expect(t.loads.map((load) => load.partyId)).toEqual([OTHER]);
   });
 
   it('stops publishing after dispose and drops pending replies', async () => {
@@ -476,7 +536,7 @@ describe('createTokenWalletStore', () => {
           async ({ tokens }) => {
             partyId = await tokens.partyId();
           },
-          { refresh: false }
+          { readOnly: true }
         )
       ).toBe(true);
       expect(partyId).toBe(HOLDER);

@@ -36,11 +36,20 @@ export interface TokenWalletView<S = TokenWalletState> {
   readonly loadError: WalletErrorDescription | null;
   /** The running action's id. */
   readonly running: string | null;
-  /** True while an action runs or the reload after it is pending: disable every action button (and disconnect). */
+  /**
+   * True while an action runs or any load (the first one, a Retry, the reload after an action) is pending: disable
+   * every action button. `run()` refuses meanwhile, so only one wallet call is ever in flight.
+   */
   readonly busy: boolean;
-  /** The last action's outcome. A wallet change clears `succeeded` and `failed` outcomes; `interrupted` stays. */
+  /**
+   * The last action's outcome. A wallet change clears it, except when whether it committed is unknown (`interrupted`,
+   * or `failed` with kind `outcome-unknown`).
+   */
   readonly outcome: ActionOutcome | null;
-  /** The party of an action whose outcome is unknown: still running for an ended session, or `interrupted`. */
+  /**
+   * The party of a write whose outcome is unknown and is not shown as the current wallet's failure: still running for
+   * an ended session, `interrupted`, or an `outcome-unknown` failure of a wallet that is no longer connected.
+   */
   readonly unknownOutcomeParty: string | null;
 }
 
@@ -62,16 +71,18 @@ export interface TokenWalletStore<W extends TokenStandardWallet = TokenWallet> {
   refresh(): void;
   /**
    * Run one wallet call (a write, a preview, `signMessage`). Resolves false without calling `action` while busy or
-   * disconnected; the check is synchronous, so a double click is refused at once. Afterwards it reloads the snapshot
-   * (unless `refresh: false`), even when the action failed, because a failed write may have committed, and stays busy
-   * until that reload answers. An action that settles after its session ended records `interrupted`, never `succeeded`.
-   * Resolves true when the action succeeded for a session that is still current. `action` resolves with a message to
-   * show, or nothing.
+   * disconnected; the check is synchronous, so a double click is refused at once. Afterwards it reloads the snapshot,
+   * even when the action failed, because a failed write may have committed, and stays busy until that reload answers. A
+   * write that settles after its session ended records `interrupted`, never `succeeded`. Resolves true when the action
+   * succeeded for a session that is still current. `action` resolves with a message to show, or nothing.
+   *
+   * `readOnly: true` marks a call that commits nothing (a preview, `signMessage`): no reload follows, and one that
+   * settles after its session ended records no outcome instead of `interrupted`.
    */
   run(
     id: string,
     action: (context: WalletActionContext<W>) => Promise<string | void>,
-    options?: { readonly refresh?: boolean }
+    options?: { readonly readOnly?: boolean }
   ): Promise<boolean>;
   /** Stop following the session; pending replies are dropped and no further view is published. */
   dispose(): void;
@@ -84,6 +95,11 @@ export interface TokenWalletStoreOptions<W extends TokenStandardWallet> {
    * which needs `wallet.network` (a wallet without one gets a `refused` load error).
    */
   readonly open?: (wallet: ConnectedWallet) => W;
+}
+
+/** Whether the outcome leaves open if a write committed: `interrupted`, or a failure the wallet could not confirm. */
+function outcomeUnknown(outcome: ActionOutcome): boolean {
+  return outcome.status === 'interrupted' || (outcome.status === 'failed' && outcome.error.kind === 'outcome-unknown');
 }
 
 /** The default token wallet: DA's registry for the network the wallet connected for, acting as its party only. */
@@ -101,8 +117,8 @@ function openTokenWallet(wallet: ConnectedWallet): TokenWallet {
 /**
  * The observable state and actions of a token wallet page over `session`. The store follows the session: each new
  * `ConnectedWallet` gets its own token wallet (from `open`) and a fresh load, and its state is cleared. Its latch
- * covers every wallet call run through it plus the reload after it; the token wallet's own write latch (`busy`) stays
- * as the inner guard.
+ * covers every wallet call run through it and every load (the reload after an action included), so one wallet call is
+ * in flight at a time; the token wallet's own write latch (`busy`) stays as the inner guard.
  */
 export function createTokenWalletStore(options: TokenWalletStoreOptions<TokenWallet>): TokenWalletStore<TokenWallet>;
 export function createTokenWalletStore<W extends TokenStandardWallet>(
@@ -125,20 +141,19 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
   let loadError: WalletErrorDescription | null = null;
   // Every load takes a new number; a reply counts only while its number is the latest and its wallet still current.
   let loads = 0;
-  let running: { readonly id: string; readonly wallet: ConnectedWallet } | null = null;
-  // The reload after an action is pending: busy until a load for the current wallet answers.
-  let reloading = false;
+  let running: { readonly id: string; readonly wallet: ConnectedWallet; readonly readOnly: boolean } | null = null;
   let outcome: ActionOutcome | null = null;
   let disposed = false;
   let view = buildView();
 
+  function unknownOutcomeParty(): string | null {
+    if (running !== null && !running.readOnly && running.wallet !== wallet) return running.wallet.partyId;
+    if (outcome === null || !outcomeUnknown(outcome)) return null;
+    // The current wallet's own `outcome-unknown` failure is shown as the outcome itself.
+    return outcome.status === 'interrupted' || outcome.partyId !== wallet?.partyId ? outcome.partyId : null;
+  }
+
   function buildView(): TokenWalletView<S> {
-    const unknownOutcomeParty =
-      running !== null && running.wallet !== wallet
-        ? running.wallet.partyId
-        : outcome?.status === 'interrupted'
-          ? outcome.partyId
-          : null;
     return {
       session: sessionState,
       wallet,
@@ -146,9 +161,9 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
       loading,
       loadError,
       running: running?.id ?? null,
-      busy: running !== null || reloading,
+      busy: running !== null || loading,
       outcome,
-      unknownOutcomeParty,
+      unknownOutcomeParty: unknownOutcomeParty(),
     };
   }
 
@@ -181,7 +196,6 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
         state = null; // nothing is offered from a stale snapshot
         loadError = describeWalletError(error);
         loading = false;
-        reloading = false;
         publish();
         return;
       }
@@ -189,7 +203,6 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
       state = next;
       loadError = null;
       loading = false;
-      reloading = false;
       publish();
     })();
   }
@@ -208,9 +221,9 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
     state = null;
     loading = false;
     loadError = null;
-    reloading = false;
     tokens = null;
-    if (outcome !== null && outcome.status !== 'interrupted') outcome = null;
+    // Another wallet never sees this one's result, but a write whose outcome is unknown stays reported.
+    if (outcome !== null && !outcomeUnknown(outcome)) outcome = null;
     if (next === null) {
       publish();
       return;
@@ -247,8 +260,9 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
       // Synchronous, before the first await: a second call in the same tick is refused.
       const ranFor = wallet;
       const ranTokens = tokens;
-      if (disposed || running !== null || reloading || ranFor === null || ranTokens === null) return false;
-      running = { id, wallet: ranFor };
+      if (disposed || running !== null || loading || ranFor === null || ranTokens === null) return false;
+      const readOnly = runOptions.readOnly === true;
+      running = { id, wallet: ranFor, readOnly };
       outcome = null;
       publish();
 
@@ -265,16 +279,15 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
       const live = isCurrent(ranFor);
       const { partyId } = ranFor;
       if (!live) {
-        outcome = { id, partyId, status: 'interrupted' };
+        outcome = readOnly ? null : { id, partyId, status: 'interrupted' };
       } else if (settled.ok) {
         outcome = { id, partyId, status: 'succeeded', message: settled.message };
       } else {
         outcome = { id, partyId, status: 'failed', error: describeWalletError(settled.error) };
       }
       // A failed write may still have committed, so reload after failures too. This only reads; nothing is retried.
-      if (live && runOptions.refresh !== false) {
-        reloading = true;
-        load(); // publishes
+      if (live && !readOnly) {
+        load(); // publishes, and stays busy until the reload answers
       } else {
         publish();
       }
