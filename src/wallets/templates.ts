@@ -64,5 +64,12 @@ export function contractMatchesFilter(contract: ActiveContract, filter: Contract
       ? contract.templateId === filter.templateId
       : contract.packageName !== undefined && contract.packageName === filterPackage;
   }
-  return contract.interfaceViews.some((view) => sameQualifiedName(view.interfaceId, filter.interfaceId));
+  // Same rule for interfaces: a package-id filter (`pkgId:M:E`) matches only that exact interface id, so two
+  // same-named interfaces from different packages in one cumulative read are never mixed up; a package-name filter
+  // (`#pkg:M:E`) matches by name (the ledger reports a view's interface id with the package id it resolved).
+  return contract.interfaceViews.some((view) =>
+    packageNameOf(filter.interfaceId) === null
+      ? view.interfaceId === filter.interfaceId
+      : sameQualifiedName(view.interfaceId, filter.interfaceId)
+  );
 }

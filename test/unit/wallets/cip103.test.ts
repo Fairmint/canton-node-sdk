@@ -434,6 +434,21 @@ describe('cip103Wallet.listActiveContracts', () => {
     });
   });
 
+  it('reports both failures when the unpaged fallback answers malformed entries', async () => {
+    const provider = scriptedProvider({
+      ledgerApi: (params) => {
+        const { resource } = params as { resource: string };
+        if (resource === '/v2/state/ledger-end') return { offset: 9 };
+        if (resource === '/v2/state/active-contracts-page') throw rpcError(-32601, 'no such method');
+        return [{}];
+      },
+    });
+    await expect(cip103Wallet(provider, HOLDER).listActiveContracts({ templateId: '#a:B:C' })).rejects.toMatchObject({
+      code: -32601,
+      message: expect.stringMatching(/no such method .*; the unpaged fallback failed too: .*contractEntry/),
+    });
+  });
+
   it('does not fall back when the wallet is refused or disconnected, or after the first page', async () => {
     const failing = (code: number, afterFirst: boolean): Cip103Provider & { requests: Cip103Request[] } =>
       scriptedProvider({

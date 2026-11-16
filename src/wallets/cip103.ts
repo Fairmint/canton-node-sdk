@@ -570,9 +570,8 @@ export function cip103Wallet(
     eventFormat: Record<string, unknown>,
     pagedError: WalletReadError
   ): Promise<ActiveContract[]> {
-    let all: unknown;
     try {
-      all = await ledgerApi('post', '/v2/state/active-contracts', {
+      const all: unknown = await ledgerApi('post', '/v2/state/active-contracts', {
         verbose: false,
         activeAtOffset: offset,
         eventFormat,
@@ -580,6 +579,8 @@ export function cip103Wallet(
       if (!Array.isArray(all)) {
         throw new WalletReadError('The wallet returned active contracts that are not a list');
       }
+      // Parsed inside the try, so malformed fallback entries also report the original paged failure.
+      return parseActiveContractEntries(all);
     } catch (error) {
       if (!(error instanceof WalletReadError)) throw error;
       throw new WalletReadError(
@@ -587,7 +588,6 @@ export function cip103Wallet(
         error.code ?? pagedError.code
       );
     }
-    return parseActiveContractEntries(all);
   }
 
   return {
