@@ -156,6 +156,22 @@ describe('createCip103Session', () => {
     expect(connectedWallet(session).network).toBe('devnet');
   });
 
+  it('drops an older restore whose party lookup is pending once a newer restore finds no session', async () => {
+    const { session } = observed();
+    const account = deferred<unknown>();
+    const provider = new TestProvider(HOLDER, { getPrimaryAccount: async () => account.promise });
+    const older = session.connected(provider, { ifConnected: true });
+    await flush();
+    expect(provider.requests).toEqual(['isConnected', 'getPrimaryAccount']);
+    // The wallet has since signed out: the newer restore finds no session.
+    provider.answers.isConnected = () => ({ isConnected: false });
+    await session.connected(provider, { ifConnected: true });
+    account.resolve({ primary: true, partyId: HOLDER });
+    await older;
+    expect(session.getSnapshot()).toEqual({ status: 'disconnected', endedBy: null, error: null });
+    expect(provider.listenerCount()).toBe(0);
+  });
+
   it('drops an isConnected answer that arrives after the session changed', async () => {
     const { session } = observed();
     const answer = deferred<unknown>();

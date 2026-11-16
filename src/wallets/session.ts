@@ -73,8 +73,9 @@ export interface Cip103Session {
    * - Ignored after `end()` until `connect()` runs again (wallets can repeat a connect callback after a disconnect).
    * - With `ifConnected: true` it first asks CIP-0103 `isConnected` and does nothing unless the wallet answers `{
    *   isConnected: true }` (4200, any other failure or another answer count as not connected). Of overlapping restores,
-   *   the most recently started one decides, whichever answers first: an older one is dropped. A restore is also
-   *   dropped when anything else started a party lookup or changed the session while it waited. While it waits it
+   *   the most recently started one decides, whichever answers first: an older one is dropped, also once its party
+   *   lookup has started (a newer restore that finds no session drops it, so it cannot connect after it). A restore is
+   *   also dropped when anything else started a party lookup or changed the session while it waited. While it waits it
    *   supersedes nothing: only an `isConnected: true` answer starts its lookup, which then supersedes older ones, so a
    *   restore that finds no session never cancels a pending `connect()` or `accountsChanged` lookup.
    * - A failed account read, or an account on the other DA network, leaves the session disconnected with `error`;
@@ -230,12 +231,18 @@ export function createCip103Session(): Cip103Session {
    * Read the primary account and connect as its party, unless a newer lookup or session change superseded it.
    * `passive`: a wallet callback (`connected()`). It supersedes pending lookups only once it acts on its answer, and
    * its failure leaves an already connected session alone (unless that wallet itself reports the other network), and
-   * never interrupts a pending connect().
+   * never interrupts a pending connect(). `stillWanted`: false once whatever started it no longer wants its answer (a
+   * restore's lookup, once a newer restore started).
    */
-  async function lookup(provider: Cip103Provider, context: Cip103ConnectContext, passive = false): Promise<void> {
+  async function lookup(
+    provider: Cip103Provider,
+    context: Cip103ConnectContext,
+    passive = false,
+    stillWanted: () => boolean = () => true
+  ): Promise<void> {
     const attempt = ++lookups;
     if (!passive) floor = attempt;
-    const current = (): boolean => attempt >= floor && !disposed;
+    const current = (): boolean => attempt >= floor && !disposed && stillWanted();
     const failed = (error: WalletErrorDescription, otherNetwork: boolean): void => {
       // A stale callback, or another wallet that cannot be read, does not drop a healthy session, nor does it cancel a
       // pending lookup. The connected wallet reporting the other network is no stale callback: the session ends.
@@ -398,6 +405,9 @@ export function createCip103Session(): Cip103Session {
           // 4200 or any other failure: not connected.
         }
         if (restore !== restores || seen !== lookups || !armed() || connectionFlag(answer) !== true) return;
+        // The lookup stays the latest restore's: a newer restore (one that finds no session included) drops it.
+        await lookup(provider, network === undefined ? {} : { network }, true, () => restore === restores);
+        return;
       }
       await lookup(provider, network === undefined ? {} : { network }, true);
     },
