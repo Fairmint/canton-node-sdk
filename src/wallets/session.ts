@@ -374,6 +374,8 @@ export function createCip103Session(): Cip103Session {
       closed = false;
       signingIn = provider;
       publish(CONNECTING);
+      // A listener of that publish may have ended, superseded or disposed the session: send nothing to the wallet then.
+      if (!current()) return;
       try {
         try {
           // A disconnect the user sent this wallet just before must not land after the new sign-in.

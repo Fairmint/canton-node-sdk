@@ -310,6 +310,14 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
       running = { id, wallet: ranFor, readOnly };
       outcome = null;
       publish();
+      // A listener of that publish may have ended the session, switched the wallet or disposed the store: then the
+      // action must not start (nothing was sent, so no outcome is recorded), and queued work runs instead.
+      if (!isCurrent(ranFor)) {
+        inFlight -= 1;
+        running = null;
+        drain();
+        return false;
+      }
 
       let settled:
         { readonly ok: true; readonly message: string | null } | { readonly ok: false; readonly error: unknown };

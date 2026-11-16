@@ -800,6 +800,19 @@ describe('createCip103Session', () => {
       }
     });
 
+    it.each([
+      ['ends the session', (session: Cip103Session) => session.end('wallet')],
+      ['disposes the session', (session: Cip103Session) => session.dispose()],
+    ])('sends no connect when a listener of the connecting state %s', async (_case, cancel) => {
+      const session = createCip103Session();
+      session.subscribe(() => {
+        if (session.getSnapshot().status === 'connecting') cancel(session);
+      });
+      const provider = new TestProvider();
+      await session.connect(provider);
+      expect(provider.requests).toEqual([]);
+    });
+
     it("end('user') before any wallet sends nothing", () => {
       const { session } = observed();
       session.end('user');

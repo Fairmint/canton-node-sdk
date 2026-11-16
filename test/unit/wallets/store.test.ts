@@ -155,6 +155,44 @@ describe('createTokenWalletStore', () => {
     expect(await first).toBe(true);
   });
 
+  it.each([
+    ['ends the session', (t: ReturnType<typeof setup>) => t.session.end('wallet')],
+    ['fails the session', (t: ReturnType<typeof setup>) => t.session.fail(new Error('wallet setup failed'))],
+    ['disposes the store', (t: ReturnType<typeof setup>) => t.store.dispose()],
+  ])('does not start an action when a listener of its running state %s', async (_case, cancel) => {
+    const t = setup();
+    await connectAndLoad(t);
+    let cancelled = false;
+    t.store.subscribe(() => {
+      if (!cancelled && t.store.getSnapshot().running === 'send') {
+        cancelled = true;
+        cancel(t);
+      }
+    });
+    let calls = 0;
+    const action = async (): Promise<string> => {
+      calls += 1;
+      return 'Sent.';
+    };
+    expect(await t.store.run('send', action)).toBe(false);
+    expect(calls).toBe(0);
+    expect(t.loads).toHaveLength(0);
+    if (_case === 'disposes the store') return; // a disposed store publishes nothing more
+    expect(t.store.getSnapshot()).toMatchObject({
+      running: null,
+      busy: false,
+      outcome: null,
+      unknownOutcomeParty: null,
+    });
+    // The latch is free: after connecting again, an action runs.
+    await connectAndLoad(t);
+    const write = t.store.run('send', action);
+    await flush();
+    t.answer();
+    expect(await write).toBe(true);
+    expect(calls).toBe(1);
+  });
+
   it('is busy and refuses to run while any load is pending: the first one and a Retry', async () => {
     const t = setup();
     await t.session.connected(t.provider, { network: 'devnet' });
