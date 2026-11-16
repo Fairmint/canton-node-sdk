@@ -255,3 +255,62 @@ export function selectHoldings(
     amount: formatDecimalUnits(needed),
   };
 }
+
+/** One instrument's holdings, summed exactly. */
+export interface InstrumentBalance {
+  /** {@link instrumentKey} of the instrument. */
+  readonly key: string;
+  readonly instrumentId: InstrumentId;
+  /** The spendable (unlocked) total, with 10 decimal places. */
+  readonly unlocked: string;
+  /** The total locked to a burn request, an allocation or a transfer in flight, with 10 decimal places. */
+  readonly locked: string;
+  /** How many holdings (locked ones included) make up the totals. */
+  readonly holdingCount: number;
+}
+
+/** Escapes `%` and `@` in one key component, so the component holds no bare `@` and the escape itself is unambiguous. */
+const escapeKeyComponent = (text: string): string => text.replace(/%/g, '%25').replace(/@/g, '%40');
+
+/**
+ * A stable, unambiguous key for an instrument: `<id>@<admin>`, with `%` and `@` in each component percent-escaped
+ * (`%25`, `%40`), so the one bare `@` always separates id from admin and distinct instruments never share a key
+ * (`USD@issuer` at `registrar::1220bb` is `USD%40issuer@registrar::1220bb`; `USD` at `issuer@registrar::1220bb` is
+ * `USD@issuer%40registrar::1220bb`). An id and admin without `%` or `@`, as usual, read unchanged. Treat the key as
+ * opaque: compare it, do not parse it.
+ */
+export function instrumentKey({ admin, id }: InstrumentId): string {
+  return `${escapeKeyComponent(id)}@${escapeKeyComponent(admin)}`;
+}
+
+const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * The holdings summed per instrument, locked apart, sorted by instrument id then admin (by code unit, so the order does
+ * not depend on the locale). Holdings come from {@link parseHolding}, which refuses an unparseable amount.
+ */
+export function instrumentBalances(holdings: readonly Holding[]): InstrumentBalance[] {
+  const totals = new Map<string, { instrumentId: InstrumentId; unlocked: bigint; locked: bigint; count: number }>();
+  for (const entry of holdings) {
+    const units = parseDecimalUnits(entry.amount);
+    if (units === null) continue;
+    const key = instrumentKey(entry.instrumentId);
+    const total = totals.get(key) ?? { instrumentId: entry.instrumentId, unlocked: 0n, locked: 0n, count: 0 };
+    if (entry.locked) total.locked += units;
+    else total.unlocked += units;
+    total.count += 1;
+    totals.set(key, total);
+  }
+  return [...totals.entries()]
+    .map(([key, total]) => ({
+      key,
+      instrumentId: total.instrumentId,
+      unlocked: formatDecimalUnits(total.unlocked),
+      locked: formatDecimalUnits(total.locked),
+      holdingCount: total.count,
+    }))
+    .sort(
+      (a, b) =>
+        compareText(a.instrumentId.id, b.instrumentId.id) || compareText(a.instrumentId.admin, b.instrumentId.admin)
+    );
+}

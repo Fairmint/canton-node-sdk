@@ -13,7 +13,7 @@ import {
 import { transferCommand, transferInstructionCommand } from './commands';
 import type { TransferOffer } from './contracts';
 import { RegistryResponseError, TokenWalletError } from './errors';
-import { parseHolding, selectHoldings, type Holding } from './holdings';
+import { instrumentBalances, parseHolding, selectHoldings, type Holding, type InstrumentBalance } from './holdings';
 import {
   TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID,
   TOKEN_STANDARD_V1_REASON_META_KEY,
@@ -47,13 +47,24 @@ export interface TokenStandardWalletOptions<R extends TokenRegistry = TokenRegis
    * `@canton-network/dapp-sdk` provider, `window.canton`, …
    */
   readonly provider: Cip103Provider;
-  /** Act as this party. Defaults to the wallet's primary account, read on every action. */
+  /**
+   * Act as this party. Defaults to the wallet's primary account, read on every action (a `TransferPlan` keeps the party
+   * it was previewed for, and refuses to submit as another).
+   */
   readonly partyId?: string;
   readonly registry: R;
   /** Defaults to the system clock. */
   readonly now?: () => Date;
   /** How reads back off when the wallet rate-limits them (CIP-0103 -32005). Writes are never retried. */
   readonly readRetry?: WalletReadRetryOptions;
+  /**
+   * Whether the wallet session this token wallet belongs to is still live. Once it answers false, every write (a
+   * transfer, a `TransferPlan`'s `submit`, an offer answer, a mint accept, a burn request, a preapproval) is refused
+   * with `invalid-input` before its first read, and again right before the wallet signs, so nothing is submitted: the
+   * provider may now be signed in to another account. Reads are not limited. `createTokenWalletStore` passes its
+   * session's `isCurrent(wallet)`. Default: always live.
+   */
+  readonly isActive?: () => boolean;
 }
 
 /** The CIP-56 state of the wallet party, read as one snapshot. */
@@ -64,6 +75,8 @@ export interface TokenStandardState {
   readonly offset: number;
   /** The wallet party's holdings this registry serves, locked ones included. */
   readonly holdings: Holding[];
+  /** `holdings` summed per instrument (unlocked and locked apart), sorted by instrument id then admin. */
+  readonly balances: InstrumentBalance[];
   readonly transferOffers: TransferOffers;
 }
 
@@ -93,6 +106,27 @@ export interface TransferResult extends SubmitResult {
   readonly kind: TransferKind;
 }
 
+/**
+ * A previewed transfer, for a dApp that shows the user how the registry will run it before they confirm. `submit` sends
+ * exactly the planned request through the token wallet that planned it, as the party it was previewed for and with
+ * `expectedKind: kind`: a transfer whose kind changed in between is refused with `kind-changed`, and one whose wallet
+ * now acts as another party (an account switch, without a pinned `partyId`) with `invalid-input`, both before signing.
+ *
+ * A plan is bound to the wallet session that made it: when that token wallet's `isActive` answers false (the token
+ * wallets `createTokenWalletStore` opens: their `ConnectedWallet` is no longer the session's), `submit` is refused with
+ * `invalid-input` and nothing is submitted, also when its `partyId` is pinned. Plan again in the current session.
+ */
+export interface TransferPlan {
+  /** How the registry would run the transfer when it was planned. */
+  readonly kind: TransferKind;
+  /** The party the transfer was previewed for, and the only one `submit` sends it as. */
+  readonly partyId: string;
+  /** The request as planned (a frozen copy). */
+  readonly request: Readonly<TransferRequest>;
+  /** Run the transfer (a write: one at a time, see `TokenStandardWallet`). */
+  submit(options?: { readonly memo?: string; readonly requirePreapproval?: boolean }): Promise<TransferResult>;
+}
+
 export interface TransferOffers {
   /** Offers to the wallet party, which it can accept or reject. */
   readonly incoming: TransferOffer[];
@@ -119,11 +153,18 @@ export interface TokenStandardWallet {
   listHoldings(): Promise<Holding[]>;
   /** How the registry would run this transfer, without submitting it. */
   previewTransfer(request: TransferRequest): Promise<TransferKind>;
+  /** Preview a transfer and keep it to submit once the user confirmed the kind (see {@link TransferPlan}). */
+  planTransfer(request: TransferRequest): Promise<TransferPlan>;
   transfer(options: TransferOptions): Promise<TransferResult>;
   listTransferOffers(): Promise<TransferOffers>;
   acceptTransferOffer(transferOfferCid: string): Promise<SubmitResult>;
   rejectTransferOffer(transferOfferCid: string): Promise<SubmitResult>;
   withdrawTransferOffer(transferOfferCid: string): Promise<SubmitResult>;
+  /**
+   * Answer a transfer offer: `accept` or `reject` an incoming one, `withdraw` an outgoing one (the same as the three
+   * methods above). Any other action is refused with `invalid-input`.
+   */
+  answerTransferOffer(transferOfferCid: string, action: TransferInstructionAction): Promise<SubmitResult>;
 }
 
 export function requireNonEmpty(value: string, field: string): string {
@@ -185,12 +226,14 @@ export interface TokenStandardCore {
   readonly stateOf: (snapshot: StateSnapshot) => Promise<TokenStandardState>;
   /**
    * Run a write action alone: refused with `busy` (before `action` starts) while another write of this token wallet is
-   * in progress, and released when `action` settles, whether it succeeded or failed.
+   * in progress, and released when `action` settles, whether it succeeded or failed. Refused with `invalid-input`
+   * (before `action` starts) once `isActive` answers false; a wallet from `connect` checks it again before it submits.
    */
   readonly exclusive: <T>(action: () => Promise<T>) => Promise<T>;
 }
 
 const HOLDING_FILTER: ContractFilter = { interfaceId: TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID };
+const TRANSFER_INSTRUCTION_ACTIONS: readonly TransferInstructionAction[] = ['accept', 'reject', 'withdraw'];
 
 /**
  * The generic CIP-56 core; `createTokenWallet` adds DA's actions on top of it, and its own filters to the state
@@ -209,9 +252,33 @@ export function tokenStandardCore(
     return options.partyId ?? primaryPartyId(provider);
   }
 
+  const { isActive } = options;
+  /** Refuse a write once the wallet session this token wallet belongs to ended (`isActive`). */
+  function requireActive(): void {
+    if (isActive !== undefined && !isActive()) {
+      throw new TokenWalletError(
+        'invalid-input',
+        'The wallet session this action was prepared in has ended (the wallet disconnected or switched accounts); nothing was submitted. Start the action again.'
+      );
+    }
+  }
+
   const walletOptions = options.readRetry !== undefined ? { readRetry: options.readRetry } : {};
+  function walletOf(party: string): Cip103Wallet {
+    const wallet = cip103Wallet(provider, party, walletOptions);
+    if (isActive === undefined) return wallet;
+    // Checked again right before the wallet signs: a write's reads and registry calls await, and the session may end
+    // meanwhile.
+    return {
+      ...wallet,
+      submit: async (submission) => {
+        requireActive();
+        return wallet.submit(submission);
+      },
+    };
+  }
   async function connect(): Promise<Cip103Wallet> {
-    return cip103Wallet(provider, await partyId(), walletOptions);
+    return walletOf(await partyId());
   }
 
   // Checked and taken synchronously (before the first await), so a second write started in the same tick is refused
@@ -223,6 +290,7 @@ export function tokenStandardCore(
     if (busy) {
       throw new TokenWalletError('busy', 'Another wallet action is in progress; nothing was submitted');
     }
+    requireActive();
     busy = true;
     try {
       return await action();
@@ -261,7 +329,7 @@ export function tokenStandardCore(
   const stateFilterKeys = new Set(stateFilters.map(contractFilterKey));
 
   async function takeSnapshot(party: string): Promise<StateSnapshot> {
-    const wallet = cip103Wallet(provider, party, walletOptions);
+    const wallet = walletOf(party);
     const { offset, contracts } = await wallet.readActiveContracts(stateFilters);
     // A filter the snapshot did not carry (a registry without `pendingTransferFilters`) is read at the snapshot's
     // offset, not at a new ledger end, and once per snapshot however many lists ask for it.
@@ -303,6 +371,7 @@ export function tokenStandardCore(
       partyId: taken.wallet.partyId,
       offset: taken.offset,
       holdings: [...taken.holdings],
+      balances: instrumentBalances(taken.holdings),
       transferOffers: await transferOffersOf(taken.wallet.partyId, taken.read),
     };
   }
@@ -344,8 +413,7 @@ export function tokenStandardCore(
     return { transfer, factory };
   }
 
-  async function runTransfer(request: TransferOptions): Promise<TransferResult> {
-    const wallet = await connect();
+  async function runTransfer(wallet: Cip103Wallet, request: TransferOptions): Promise<TransferResult> {
     const { transfer: spec, factory } = await prepareTransfer(wallet, request);
     const kind = factory.transferKind;
     if (request.requirePreapproval === true && kind !== 'direct') {
@@ -386,6 +454,9 @@ export function tokenStandardCore(
     transferOfferCid: string,
     action: TransferInstructionAction
   ): Promise<SubmitResult> {
+    if (!TRANSFER_INSTRUCTION_ACTIONS.includes(action)) {
+      throw new TokenWalletError('invalid-input', `action must be one of ${TRANSFER_INSTRUCTION_ACTIONS.join(', ')}`);
+    }
     const wallet = await connect();
     const { incoming, outgoing } = await transferOffersOf(wallet.partyId, async (filter) =>
       wallet.listActiveContracts(filter)
@@ -404,6 +475,51 @@ export function tokenStandardCore(
     });
   }
 
+  async function previewTransfer(request: TransferRequest): Promise<TransferKind> {
+    return (await prepareTransfer(await connect(), request)).factory.transferKind;
+  }
+
+  const transfer = async (request: TransferOptions): Promise<TransferResult> =>
+    exclusive(async () => runTransfer(await connect(), request));
+
+  async function planTransfer(request: TransferRequest): Promise<TransferPlan> {
+    // A copy, so a later change to the caller's object cannot change what is submitted.
+    const planned: Readonly<TransferRequest> = Object.freeze({
+      receiver: request.receiver,
+      instrumentId: Object.freeze({ admin: request.instrumentId.admin, id: request.instrumentId.id }),
+      amount: request.amount,
+    });
+    // Resolved once: the preview and the submission both act as this party, never as an account resolved later.
+    const plannedParty = await partyId();
+    const wallet = walletOf(plannedParty);
+    const kind = (await prepareTransfer(wallet, planned)).factory.transferKind;
+    return Object.freeze({
+      kind,
+      partyId: plannedParty,
+      request: planned,
+      submit: async (submitOptions: { readonly memo?: string; readonly requirePreapproval?: boolean } = {}) =>
+        exclusive(async () => {
+          // The user confirmed a transfer from `plannedParty`: refuse it if the wallet has switched accounts since, so
+          // it never debits a party the preview did not show.
+          const current = await partyId();
+          if (current !== plannedParty) {
+            throw new TokenWalletError(
+              'invalid-input',
+              `The wallet now acts as ${current}, not ${plannedParty}, the party this transfer was previewed for; nothing was submitted. Preview the transfer again.`
+            );
+          }
+          return runTransfer(wallet, {
+            ...planned,
+            ...(submitOptions.memo !== undefined && { memo: submitOptions.memo }),
+            ...(submitOptions.requirePreapproval !== undefined && {
+              requirePreapproval: submitOptions.requirePreapproval,
+            }),
+            expectedKind: kind,
+          });
+        }),
+    });
+  }
+
   return {
     now,
     connect,
@@ -415,8 +531,9 @@ export function tokenStandardCore(
       partyId,
       loadState: async () => stateOf(await snapshot()),
       listHoldings: async () => [...(await snapshot()).holdings],
-      previewTransfer: async (request) => (await prepareTransfer(await connect(), request)).factory.transferKind,
-      transfer: async (request) => exclusive(async () => runTransfer(request)),
+      previewTransfer,
+      planTransfer,
+      transfer,
       listTransferOffers: async () => {
         const taken = await snapshot();
         return transferOffersOf(taken.wallet.partyId, taken.read);
@@ -424,6 +541,7 @@ export function tokenStandardCore(
       acceptTransferOffer: async (cid) => exclusive(async () => runAnswerTransferOffer(cid, 'accept')),
       rejectTransferOffer: async (cid) => exclusive(async () => runAnswerTransferOffer(cid, 'reject')),
       withdrawTransferOffer: async (cid) => exclusive(async () => runAnswerTransferOffer(cid, 'withdraw')),
+      answerTransferOffer: async (cid, action) => exclusive(async () => runAnswerTransferOffer(cid, action)),
     },
   };
 }

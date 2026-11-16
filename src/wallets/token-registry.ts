@@ -27,9 +27,11 @@ export interface FactoryWithChoiceContext extends ChoiceContext {
 /**
  * How the registry will run a transfer:
  *
- * - `offer`: a pending transfer the receiver must accept;
+ * - `offer`: a pending transfer the receiver must accept before it expires. The sender's tokens stay locked until the
+ *   offer is accepted, rejected by the receiver or withdrawn by the sender; expiry alone only stops acceptance and does
+ *   not unlock them (withdraw an expired offer to get them back);
  * - `direct`: the receiver pre-approved transfers, so the holdings move at once;
- * - `self`: sender and receiver are the same party.
+ * - `self`: sender and receiver are the same party (the holdings are merged or split).
  */
 export type TransferKind = 'offer' | 'direct' | 'self';
 

@@ -31,35 +31,10 @@ import {
 } from './canton-protocol';
 import { normalizeCantonEd25519Signature } from './canton-ed25519-signer';
 import { parseWalletOwnershipMessage } from '../../wallets/ownership';
-import type { WalletOwnershipProof } from '../../wallets/ownership';
+import type { WalletOwnershipFailure, WalletOwnershipProof } from '../../wallets/ownership';
 
-/** Why a proof did not verify. */
-export type WalletOwnershipFailure =
-  /** The proof is not an object of string fields. */
-  | 'malformed-proof'
-  /** The message is not exactly a canonical ownership message. */
-  | 'malformed-message'
-  | 'domain-mismatch'
-  | 'nonce-mismatch'
-  /** The message, the proof and the expected party do not all name the same party, or the namespace differs. */
-  | 'party-mismatch'
-  | 'network-mismatch'
-  /** The message's `Issued At` or `Expiration Time` is not the one the server issued. */
-  | 'window-mismatch'
-  /** Issued in the future (beyond the allowed clock skew). */
-  | 'not-yet-valid'
-  /** Past its expiration time. */
-  | 'expired'
-  /** The message allows a longer validity window than `maxAgeMs`. */
-  | 'lifetime-too-long'
-  /** The public key is not an Ed25519 key in an encoding this verifier accepts. */
-  | 'unsupported-public-key'
-  /** The key's fingerprint is not the party's namespace (see the module comment). */
-  | 'key-not-bound-to-party'
-  /** The signature is not 64 bytes of hex or base64. */
-  | 'malformed-signature'
-  /** The signature does not verify. */
-  | 'bad-signature';
+/** Why a proof did not verify. Defined in the browser-safe wallets module, which shares it; re-exported here. */
+export type { WalletOwnershipFailure };
 
 export type WalletOwnershipVerification =
   | {

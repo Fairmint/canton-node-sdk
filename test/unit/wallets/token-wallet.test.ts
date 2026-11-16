@@ -1,18 +1,27 @@
 import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
 import { TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID } from '../../../src/utils/token-standard/v1/constants';
+import { DA_UTILITIES_BASE_URLS, type DaUtilitiesClient } from '../../../src/wallets/da-utilities/client';
+import { BURN_REFERENCE_PATTERN } from '../../../src/wallets/token-wallet';
 import {
+  createCip103Session,
   createDaUtilitiesClient,
   createTokenStandardWallet,
   createTokenWallet,
+  createTokenWalletStore,
+  describeWalletError,
+  newBurnReference,
   RegistryResponseError,
   TokenWalletError,
+  WalletSubmitError,
   type ActiveContract,
   type JsonObject,
   type TokenRegistry,
   type TokenStandardWallet,
   type TokenWallet,
+  type TransferInstructionAction,
   type TransferKind,
   type TransferOffer,
+  type TransferPlan,
 } from '../../../src/wallets';
 import {
   INSTRUMENT,
@@ -33,6 +42,7 @@ import {
   type FakeProvider,
   type FetchCall,
 } from './helpers';
+import { flush } from './session-helpers';
 
 const FACTORY_T = 'Utility.Registry.App.V0.Service.AllocationFactory:AllocationFactory';
 const PREAPPROVAL_T = 'Utility.Registry.App.V0.Model.TransferPreapproval:TransferPreapproval';
@@ -139,8 +149,9 @@ function setup(
     /** Contracts the DA Holding template filter returns. */
     daHoldings?: ActiveContract[];
     trustedProviders?: Record<string, string[]>;
+    isActive?: () => boolean;
   } = {}
-): { tokens: TokenWallet; wallet: FakeProvider; calls: FetchCall[] } {
+): { tokens: TokenWallet; wallet: FakeProvider; calls: FetchCall[]; registry: DaUtilitiesClient } {
   const { fetch, calls } = fakeFetch((call: FetchCall) => {
     if (call.url.endsWith('/api/utilities/v0/operator')) {
       return { json: { partyId: OPERATOR } };
@@ -182,16 +193,18 @@ function setup(
   const wallet = fakeProvider(ledger(options.extraHoldings, options.daHoldings), {
     party: options.party ?? HOLDER,
   });
+  const registry = createDaUtilitiesClient(
+    { network: 'devnet' },
+    { fetch, ...(options.trustedProviders !== undefined && { trustedProviders: options.trustedProviders }) }
+  );
   const tokens = createTokenWallet({
     provider: wallet,
     ...(options.partyId !== undefined && { partyId: options.partyId }),
-    registry: createDaUtilitiesClient(
-      { network: 'devnet' },
-      { fetch, ...(options.trustedProviders !== undefined && { trustedProviders: options.trustedProviders }) }
-    ),
+    registry,
     now: () => NOW,
+    ...(options.isActive !== undefined && { isActive: options.isActive }),
   });
-  return { tokens, wallet, calls };
+  return { tokens, wallet, calls, registry };
 }
 
 const UUID = /^[0-9a-f-]{36}$/;
@@ -321,6 +334,16 @@ describe('createTokenWallet.loadState: one snapshot per refresh', () => {
     expect(state.partyId).toBe(HOLDER);
     expect(state.offset).toBe(4242);
     expect(state.holdings.map((h) => h.contractId)).toEqual(['00h10', '00h3', '00locked']);
+    // The holdings summed per instrument, locked apart.
+    expect(state.balances).toEqual([
+      {
+        key: 'XMPL@registrar::1220bb',
+        instrumentId: INSTRUMENT,
+        unlocked: '13.0000000000',
+        locked: '50.0000000000',
+        holdingCount: 3,
+      },
+    ]);
     expect(state.mintOffers.map((o) => o.contractId)).toEqual(['00mint']);
     expect(state.transferOffers.incoming.map((o) => o.contractId)).toEqual(['00in']);
     expect(state.transferOffers.outgoing.map((o) => o.contractId)).toEqual(['00out']);
@@ -672,11 +695,13 @@ describe('createTokenWallet: registrars served by another provider (trustedProvi
 describe('createTokenWallet.requestBurn', () => {
   it('selects holdings, fetches the burn factory and submits AllocationFactory_RequestBurn', async () => {
     const { tokens, wallet, calls } = setup();
-    await tokens.requestBurn({
-      instrumentId: INSTRUMENT,
-      amount: '12',
-      reference: 'redemption-42',
-    });
+    await expect(
+      tokens.requestBurn({
+        instrumentId: INSTRUMENT,
+        amount: '12',
+        reference: 'redemption-42',
+      })
+    ).resolves.toEqual({ updateId: 'update-1', commandId: expect.stringMatching(UUID), reference: 'redemption-42' });
     expect(postCalls(calls)[0]?.body).toEqual({
       holder: HOLDER,
       holdingContractIds: ['00h10', '00h3'],
@@ -713,6 +738,47 @@ describe('createTokenWallet.requestBurn', () => {
         actAs: [HOLDER],
       },
     ]);
+  });
+
+  it('files a generated reference when none is given, and returns it', async () => {
+    const { tokens, wallet } = setup();
+    const result = await tokens.requestBurn({ instrumentId: INSTRUMENT, amount: '1' });
+    // The wallet's clock (NOW), to the second.
+    expect(result.reference).toMatch(/^holder-burn-20261113T120000Z-[0-9a-z]{6}$/);
+    expect(result.reference).toMatch(BURN_REFERENCE_PATTERN);
+    const command = wallet.submissions[0]?.commands[0];
+    expect(command && 'ExerciseCommand' in command && command.ExerciseCommand.choiceArgument).toMatchObject({
+      burn: { reference: result.reference },
+    });
+  });
+
+  it.each([
+    ['unknown', new RpcError(4900, 'Disconnected')],
+    ['failed', new RpcError(-32003, 'Transaction rejected')],
+  ])('puts the generated reference on a %s submission error', async (outcome, rpcError) => {
+    const { tokens, wallet } = setup();
+    const original = wallet.request.bind(wallet);
+    wallet.request = async (args) => {
+      if (args.method === 'prepareExecuteAndWait') throw rpcError;
+      return original(args);
+    };
+    const error = await tokens.requestBurn({ instrumentId: INSTRUMENT, amount: '1' }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(WalletSubmitError);
+    const submitError = error as WalletSubmitError;
+    expect(submitError.outcome).toBe(outcome);
+    expect(submitError.burnReference).toMatch(/^holder-burn-20261113T120000Z-[0-9a-z]{6}$/);
+    expect(submitError.message).toContain(`Burn reference: ${String(submitError.burnReference)}.`);
+    // A caller's own reference is carried the same way.
+    const own = await tokens
+      .requestBurn({ instrumentId: INSTRUMENT, amount: '1', reference: 'redemption-7' })
+      .catch((e: unknown) => e);
+    expect(own).toMatchObject({ outcome, burnReference: 'redemption-7' });
+    // A reference that also occurs in the wallet's own text still gets the suffix.
+    const common = await tokens
+      .requestBurn({ instrumentId: INSTRUMENT, amount: '1', reference: 'wallet' })
+      .catch((e: unknown) => e);
+    expect(common).toMatchObject({ outcome, burnReference: 'wallet' });
+    expect((common as WalletSubmitError).message).toMatch(/ Burn reference: wallet\.$/);
   });
 
   it('uses a given executeBefore', async () => {
@@ -772,6 +838,84 @@ describe('createTokenWallet.requestBurn', () => {
     await expect(tokens.requestBurn({ instrumentId: INSTRUMENT, amount: '1', reference: 'r' })).rejects.toBeInstanceOf(
       RegistryResponseError
     );
+  });
+});
+
+describe('newBurnReference', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('stamps the UTC second and six random base-36 digits, matching the burn reference pattern', () => {
+    jest.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation((array) => {
+      if (array instanceof Uint8Array) {
+        array.fill(0);
+        array[5] = 36 + 35; // 71 % 36 = 35: 'z'
+      }
+      return array;
+    });
+    const reference = newBurnReference(new Date('2026-11-13T15:27:05.123Z'));
+    expect(reference).toBe('holder-burn-20261113T152705Z-00000z');
+    expect(reference).toMatch(BURN_REFERENCE_PATTERN);
+    // A transfer agent may reserve `redeem-` for the redemptions it files itself.
+    expect(reference).not.toMatch(/^redeem-/);
+  });
+
+  it('skips bytes that would bias a digit, drawing again when a whole draw is skipped', () => {
+    const draws = [new Array<number>(16).fill(255), [252, 7, 255, 1, 2, 3, 4, 5, 6]];
+    const getRandomValues = jest.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation((array) => {
+      if (array instanceof Uint8Array) {
+        array.fill(0);
+        array.set(draws.shift() ?? []);
+      }
+      return array;
+    });
+    expect(newBurnReference(new Date('2026-11-13T15:27:05Z'))).toBe('holder-burn-20261113T152705Z-712345');
+    expect(getRandomValues).toHaveBeenCalledTimes(2);
+  });
+
+  it('differs between two calls in the same second, and defaults to now', () => {
+    const at = new Date('2026-11-13T15:27:05Z');
+    const references = new Set(Array.from({ length: 20 }, () => newBurnReference(at)));
+    expect(references.size).toBe(20);
+    expect(newBurnReference()).toMatch(/^holder-burn-\d{8}T\d{6}Z-[0-9a-z]{6}$/);
+  });
+
+  it('refuses an invalid date', () => {
+    expect(() => newBurnReference(new Date('soon'))).toThrow(TokenWalletError);
+  });
+});
+
+describe('createTokenWallet({ network })', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it.each(['devnet', 'mainnet'] as const)(
+    'builds the DA registry client of %s with the global fetch',
+    async (network) => {
+      const fetchSpy = jest
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async () =>
+          Promise.resolve(new Response(JSON.stringify({ partyId: OPERATOR }), { status: 200 }))
+        );
+      const tokens = createTokenWallet({ provider: fakeProvider(ledger()), network, now: () => NOW });
+      const state = await tokens.loadState();
+      expect(state.mintOffers.map((o) => o.contractId)).toEqual(['00mint']);
+      expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual([
+        `${DA_UTILITIES_BASE_URLS[network]}/api/utilities/v0/operator`,
+      ]);
+    }
+  );
+
+  it('refuses options with neither a registry nor a known network', () => {
+    const provider = fakeProvider(ledger());
+    expect(() => createTokenWallet({ provider } as unknown as Parameters<typeof createTokenWallet>[0])).toThrow(
+      expect.objectContaining({ name: 'TokenWalletError', code: 'invalid-input' })
+    );
+    expect(() =>
+      createTokenWallet({ provider, network: 'testnet' } as unknown as Parameters<typeof createTokenWallet>[0])
+    ).toThrow(expect.objectContaining({ code: 'invalid-input' }));
   });
 });
 
@@ -884,6 +1028,221 @@ describe('createTokenWallet transfers', () => {
     const { tokens, wallet } = setup({ transferKind: 'direct' });
     await expect(tokens.transfer({ ...request, expectedKind: 'direct' })).resolves.toMatchObject({ kind: 'direct' });
     expect(wallet.submissions).toHaveLength(1);
+  });
+
+  it('planTransfer previews the kind and submits exactly the planned request with expectedKind', async () => {
+    const { tokens, wallet, calls } = setup({ transferKind: 'direct' });
+    const edited = { receiver: OTHER, instrumentId: { admin: REGISTRAR, id: 'XMPL' }, amount: '4' };
+    const plan = await tokens.planTransfer(edited);
+    expect(plan.kind).toBe('direct');
+    expect(plan.request).toEqual({ receiver: OTHER, instrumentId: INSTRUMENT, amount: '4' });
+    expect(Object.isFrozen(plan.request)).toBe(true);
+    expect(wallet.submissions).toEqual([]);
+    // A later edit of the caller's object does not change what is submitted.
+    edited.amount = '9';
+    edited.instrumentId.id = 'OTHER';
+    await expect(plan.submit({ memo: 'invoice 7', requirePreapproval: true })).resolves.toMatchObject({
+      kind: 'direct',
+      updateId: 'update-1',
+    });
+    expect(wallet.submissions).toHaveLength(1);
+    const factoryBodies = postCalls(calls).filter((c) => c.url.endsWith('/transfer-factory'));
+    expect(factoryBodies).toHaveLength(2);
+    expect(factoryBodies[1]?.body).toMatchObject({
+      choiceArguments: {
+        transfer: {
+          amount: '4.0000000000',
+          instrumentId: INSTRUMENT,
+          meta: { values: { 'splice.lfdecentralizedtrust.org/reason': 'invoice 7' } },
+        },
+      },
+    });
+  });
+
+  it('planTransfer refuses to submit when the kind changed since the plan, or without a preapproval', async () => {
+    const options: { transferKind: TransferKind } = { transferKind: 'direct' };
+    const { tokens, wallet } = setup(options);
+    const plan = await tokens.planTransfer(request);
+    options.transferKind = 'offer';
+    await expect(plan.submit()).rejects.toMatchObject({ code: 'kind-changed' });
+    const offer = await tokens.planTransfer(request);
+    expect(offer.kind).toBe('offer');
+    await expect(offer.submit({ requirePreapproval: true })).rejects.toMatchObject({ code: 'preapproval-required' });
+    expect(wallet.submissions).toEqual([]);
+    await expect(offer.submit()).resolves.toMatchObject({ kind: 'offer' });
+    expect(wallet.submissions).toHaveLength(1);
+  });
+
+  /** Make the fake wallet's primary account whatever `account.party` says at the time of each `getPrimaryAccount`. */
+  function switchableAccount(wallet: FakeProvider): { party: string } {
+    const account = { party: HOLDER };
+    const { request: original } = wallet;
+    wallet.request = async (args) => {
+      const answer = await original(args);
+      if (args.method !== 'getPrimaryAccount') return answer;
+      return { ...(answer as Record<string, unknown>), partyId: account.party };
+    };
+    return account;
+  }
+
+  const factorySenders = (calls: FetchCall[]): unknown[] =>
+    postCalls(calls)
+      .filter((c) => c.url.endsWith('/transfer-factory'))
+      .map((c) => (c.body as { choiceArguments: { transfer: { sender: string } } }).choiceArguments.transfer.sender);
+
+  it('planTransfer refuses to submit after an account switch, and submits nothing as either party', async () => {
+    const { tokens, wallet, calls } = setup({ transferKind: 'offer' });
+    const account = switchableAccount(wallet);
+    const plan = await tokens.planTransfer(request);
+    expect(plan.partyId).toBe(HOLDER);
+    // OTHER holds enough to cover the amount, so without the check the same kind would be submitted as OTHER.
+    account.party = OTHER;
+    const error = await plan.submit().catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(TokenWalletError);
+    expect(error).toMatchObject({ code: 'invalid-input' });
+    expect((error as Error).message).toMatch(/nothing was submitted/);
+    expect((error as Error).message).toContain(HOLDER);
+    expect((error as Error).message).toContain(OTHER);
+    expect(wallet.submissions).toEqual([]);
+    // Refused before any read or registry call for the submission.
+    expect(factorySenders(calls)).toEqual([HOLDER]);
+    // The refusal released the write guard: back on the previewed party, the plan submits as it.
+    account.party = HOLDER;
+    await expect(plan.submit()).resolves.toMatchObject({ kind: 'offer' });
+    expect(wallet.submissions.map((s) => s.actAs)).toEqual([[HOLDER]]);
+  });
+
+  it('planTransfer submits as the previewed party when the account did not change', async () => {
+    const { tokens, wallet, calls } = setup({ transferKind: 'offer' });
+    switchableAccount(wallet);
+    const plan = await tokens.planTransfer(request);
+    expect(plan.partyId).toBe(HOLDER);
+    await expect(plan.submit({ memo: 'invoice 7' })).resolves.toMatchObject({ kind: 'offer' });
+    expect(wallet.submissions.map((s) => s.actAs)).toEqual([[HOLDER]]);
+    expect(factorySenders(calls)).toEqual([HOLDER, HOLDER]);
+    // The submission resolved the account once, to check it, and read and signed as the planned party.
+    expect(wallet.requests.filter((r) => r.method === 'getPrimaryAccount')).toHaveLength(2);
+  });
+
+  it('planTransfer with a pinned partyId acts as that party whatever the primary account', async () => {
+    const { tokens, wallet, calls } = setup({ transferKind: 'offer', partyId: HOLDER, party: OTHER });
+    const plan = await tokens.planTransfer(request);
+    expect(plan.partyId).toBe(HOLDER);
+    await expect(plan.submit()).resolves.toMatchObject({ kind: 'offer' });
+    expect(wallet.submissions.map((s) => s.actAs)).toEqual([[HOLDER]]);
+    expect(factorySenders(calls)).toEqual([HOLDER, HOLDER]);
+    expect(wallet.requests.filter((r) => r.method === 'getPrimaryAccount')).toHaveLength(0);
+  });
+
+  it('refuses every write once isActive answers false, before any read, registry call or signature', async () => {
+    let active = false;
+    const { tokens, wallet, calls } = setup({ transferKind: 'offer', partyId: HOLDER, isActive: () => active });
+    const writes: Array<() => Promise<unknown>> = [
+      async () => tokens.transfer(request),
+      async () => tokens.requestBurn({ instrumentId: INSTRUMENT, amount: '1', reference: 'r' }),
+      async () => tokens.acceptMintOffer('00mint'),
+      async () => tokens.createTransferPreapproval({ instrumentAdmin: REGISTRAR }),
+      async () => tokens.acceptTransferOffer('00in'),
+      async () => tokens.rejectTransferOffer('00in'),
+      async () => tokens.withdrawTransferOffer('00out'),
+      async () => tokens.answerTransferOffer('00in', 'accept'),
+    ];
+    for (const write of writes) {
+      const error = await write().catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(TokenWalletError);
+      expect(error).toMatchObject({ code: 'invalid-input' });
+      expect(describeWalletError(error)).toEqual({
+        kind: 'refused',
+        code: 'invalid-input',
+        message:
+          'The wallet session this action was prepared in has ended (the wallet disconnected or switched accounts); nothing was submitted. Start the action again.',
+      });
+    }
+    expect(wallet.requests).toEqual([]);
+    expect(calls).toEqual([]);
+    // Reads are not limited.
+    await expect(tokens.listHoldings()).resolves.toHaveLength(3);
+    // A plan made while active is refused once the session ended, though its party is pinned.
+    active = true;
+    const plan = await tokens.planTransfer(request);
+    active = false;
+    const requests = wallet.requests.length;
+    const fetches = calls.length;
+    await expect(plan.submit()).rejects.toMatchObject({ code: 'invalid-input' });
+    expect(wallet.requests.slice(requests)).toEqual([]);
+    expect(calls.slice(fetches)).toEqual([]);
+    // The refusal released the write guard.
+    active = true;
+    await expect(plan.submit()).resolves.toMatchObject({ kind: 'offer' });
+    expect(wallet.submissions.map((s) => s.actAs)).toEqual([[HOLDER]]);
+  });
+
+  it('checks isActive again right before signing: a session that ended during the registry call submits nothing', async () => {
+    let active = true;
+    const { tokens, wallet, calls } = setup({ transferKind: 'offer', partyId: HOLDER, isActive: () => active });
+    const plan = await tokens.planTransfer(request);
+    const { request: original } = wallet;
+    // The session ends while the submission reads its holdings.
+    wallet.request = async (args) => {
+      if (args.method === 'ledgerApi') active = false;
+      return original(args);
+    };
+    await expect(plan.submit()).rejects.toMatchObject({ code: 'invalid-input' });
+    active = true;
+    await expect(tokens.requestBurn({ instrumentId: INSTRUMENT, amount: '1', reference: 'r' })).rejects.toMatchObject({
+      code: 'invalid-input',
+    });
+    expect(wallet.submissions).toEqual([]);
+    expect(wallet.requests.map((r) => r.method)).not.toContain('prepareExecuteAndWait');
+    // It got as far as the registry: the check before signing refused it.
+    expect(factorySenders(calls)).toEqual([HOLDER, HOLDER]);
+  });
+
+  it('through createTokenWalletStore, a plan made for one account is refused after the session switched to another', async () => {
+    const { wallet: provider, registry, calls } = setup({ transferKind: 'offer' });
+    const account = switchableAccount(provider);
+    const session = createCip103Session();
+    const store = createTokenWalletStore({
+      session,
+      open: (connected, { isActive }) =>
+        createTokenWallet({
+          provider: connected.provider,
+          partyId: connected.partyId,
+          registry,
+          now: () => NOW,
+          isActive,
+        }),
+    });
+    await session.connected(provider, { network: 'devnet' });
+    await flush();
+    let plan: TransferPlan | null = null;
+    expect(
+      await store.run(
+        'plan',
+        async ({ tokens }) => {
+          plan = await tokens.planTransfer(request);
+        },
+        { readOnly: true }
+      )
+    ).toBe(true);
+    // The wallet switches to OTHER (who holds enough too): a new ConnectedWallet.
+    account.party = OTHER;
+    await session.connected(provider, { network: 'devnet' });
+    await flush();
+    expect(store.getSnapshot()).toMatchObject({ wallet: { partyId: OTHER }, busy: false });
+    // The user confirms the plan shown for HOLDER.
+    const confirmed = plan as unknown as TransferPlan;
+    expect(confirmed.partyId).toBe(HOLDER);
+    expect(await store.run('send', async () => confirmed.submit().then(() => 'Sent.'))).toBe(false);
+    expect(store.getSnapshot().outcome).toMatchObject({
+      status: 'failed',
+      partyId: OTHER,
+      error: { kind: 'refused', code: 'invalid-input' },
+    });
+    expect(provider.submissions).toEqual([]);
+    // Only the plan's own registry call: the submission was refused before it read anything.
+    expect(factorySenders(calls)).toEqual([HOLDER]);
+    store.dispose();
   });
 
   it('refuses a second submission while the first awaits the wallet', async () => {
@@ -1103,6 +1462,27 @@ describe('createTokenWallet: answering transfer offers', () => {
         actAs: [HOLDER],
       },
     ]);
+  });
+
+  it.each([
+    ['00in', 'accept', 'TransferInstruction_Accept'],
+    ['00in', 'reject', 'TransferInstruction_Reject'],
+    ['00out', 'withdraw', 'TransferInstruction_Withdraw'],
+  ] as const)('answerTransferOffer(%s, %s) exercises %s', async (cid, action, choice) => {
+    const { tokens, wallet } = setup();
+    await expect(tokens.answerTransferOffer(cid, action)).resolves.toMatchObject({ updateId: 'update-1' });
+    expect(wallet.submissions).toMatchObject([{ commands: [{ ExerciseCommand: { contractId: cid, choice } }] }]);
+  });
+
+  it('answerTransferOffer refuses an offer in the wrong direction and an unknown action', async () => {
+    const { tokens, wallet, calls } = setup();
+    await expect(tokens.answerTransferOffer('00out', 'accept')).rejects.toMatchObject({ code: 'not-found' });
+    await expect(tokens.answerTransferOffer('00in', 'withdraw')).rejects.toMatchObject({ code: 'not-found' });
+    await expect(
+      tokens.answerTransferOffer('00in', 'cancel' as unknown as TransferInstructionAction)
+    ).rejects.toMatchObject({ name: 'TokenWalletError', code: 'invalid-input' });
+    expect(postCalls(calls)).toEqual([]);
+    expect(wallet.submissions).toEqual([]);
   });
 
   it.each([

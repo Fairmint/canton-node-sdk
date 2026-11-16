@@ -1,11 +1,13 @@
 import {
   formatDecimalUnits,
+  instrumentKey,
   parseDecimalUnits,
   TokenWalletError,
   type Holding,
   type InstrumentId,
 } from '../../../src/wallets';
 import {
+  instrumentBalances,
   MAX_SKIPPING_COVER_CANDIDATES,
   parseHolding,
   requirePositiveAmount,
@@ -291,5 +293,87 @@ describe('selectHoldings', () => {
   it('refuses a non-positive or over-precise amount', () => {
     expect(() => selectHoldings([h('00a', '5')], request('0'))).toThrow(/positive decimal/);
     expect(() => selectHoldings([h('00a', '5')], request('0.00000000001'))).toThrow(/at most 10 decimal places/);
+  });
+});
+
+describe('instrumentBalances', () => {
+  const h = (contractId: string, amount: string, extra: Partial<Holding> = {}): Holding => ({
+    contractId,
+    owner: HOLDER,
+    instrumentId: INSTRUMENT,
+    amount,
+    locked: false,
+    ...extra,
+  });
+
+  it('sums exactly per instrument, locked apart, sorted by id then admin', () => {
+    const balances = instrumentBalances([
+      h('00a', '0.1'),
+      h('00b', '0.2'),
+      h('00c', '99999999999999999.0000000001'),
+      h('00d', '5.5000000000', { locked: true }),
+      h('00e', '1', { instrumentId: { admin: REGISTRAR, id: 'ABC' } }),
+      h('00f', '2', { instrumentId: { admin: OTHER, id: 'XMPL' } }),
+    ]);
+    expect(balances).toEqual([
+      {
+        key: 'ABC@registrar::1220bb',
+        instrumentId: { admin: REGISTRAR, id: 'ABC' },
+        unlocked: '1.0000000000',
+        locked: '0.0000000000',
+        holdingCount: 1,
+      },
+      {
+        key: instrumentKey({ admin: OTHER, id: 'XMPL' }),
+        instrumentId: { admin: OTHER, id: 'XMPL' },
+        unlocked: '2.0000000000',
+        locked: '0.0000000000',
+        holdingCount: 1,
+      },
+      {
+        key: instrumentKey(INSTRUMENT),
+        instrumentId: INSTRUMENT,
+        // No float rounding: 0.1 + 0.2 + a 17-digit amount stays exact.
+        unlocked: '99999999999999999.3000000001',
+        locked: '5.5000000000',
+        holdingCount: 4,
+      },
+    ]);
+    expect(instrumentBalances([])).toEqual([]);
+  });
+
+  it('keys an instrument by id and admin', () => {
+    expect(instrumentKey({ admin: 'registrar::1220bb', id: 'XMPL' })).toBe('XMPL@registrar::1220bb');
+  });
+
+  it('escapes % and @ in each key component, so distinct instruments never share a key', () => {
+    const atInId = { admin: 'registrar::1220bb', id: 'USD@issuer' };
+    const atInAdmin = { admin: 'issuer@registrar::1220bb', id: 'USD' };
+    expect(instrumentKey(atInId)).toBe('USD%40issuer@registrar::1220bb');
+    expect(instrumentKey(atInAdmin)).toBe('USD@issuer%40registrar::1220bb');
+    // The escape character is escaped too: a literal "%40" in an id is not an escaped "@".
+    expect(instrumentKey({ admin: 'registrar::1220bb', id: 'USD%40issuer' })).toBe('USD%2540issuer@registrar::1220bb');
+    expect(instrumentKey({ admin: 'registrar::1220bb', id: 'USD%40issuer' })).not.toBe(instrumentKey(atInId));
+
+    const balances = instrumentBalances([
+      h('00a', '1', { instrumentId: atInId }),
+      h('00b', '2', { instrumentId: atInAdmin }),
+    ]);
+    expect(balances).toEqual([
+      {
+        key: 'USD@issuer%40registrar::1220bb',
+        instrumentId: atInAdmin,
+        unlocked: '2.0000000000',
+        locked: '0.0000000000',
+        holdingCount: 1,
+      },
+      {
+        key: 'USD%40issuer@registrar::1220bb',
+        instrumentId: atInId,
+        unlocked: '1.0000000000',
+        locked: '0.0000000000',
+        holdingCount: 1,
+      },
+    ]);
   });
 });

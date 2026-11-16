@@ -12,7 +12,7 @@ import {
   cip103ErrorCode,
   DEFAULT_READ_RETRY_DELAYS_MS,
 } from '../../../src/wallets/cip103';
-import { WalletReadError, WalletSubmitError, type WalletSubmission } from '../../../src/wallets';
+import { cip103NetworkId, WalletReadError, WalletSubmitError, type WalletSubmission } from '../../../src/wallets';
 import { acsEntry, disclosed, HOLDER, RpcError } from './helpers';
 
 /** A CIP-0103 provider answering each method from `answers` (an answer may throw); others are 4200. */
@@ -870,5 +870,12 @@ describe('cip103Wallet.submit', () => {
     });
     await expect(cip103Wallet(provider, HOLDER).submit(submission)).rejects.toThrow();
     expect(provider.requests).toHaveLength(1);
+  });
+});
+
+describe('cip103NetworkId', () => {
+  it('names the network as a wallet reports it in networkId', () => {
+    expect(cip103NetworkId('devnet')).toBe('canton:devnet');
+    expect(cip103NetworkId('mainnet')).toBe('canton:mainnet');
   });
 });

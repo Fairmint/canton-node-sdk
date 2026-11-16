@@ -158,7 +158,8 @@ describe('src/wallets browser safety', () => {
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/\/\/.*$/gm, '');
     for (const forbidden of [
-      /\bwindow\b/,
+      // Not the `window-mismatch` reason code of a wallet ownership verdict.
+      /\bwindow\b(?!-mismatch)/,
       /\bdocument\b/,
       /\blocalStorage\b/,
       /\bsessionStorage\b/,

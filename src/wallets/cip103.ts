@@ -31,6 +31,7 @@
 import { parseActiveContractEntries } from './acs';
 import { WalletReadError, WalletSubmitError } from './errors';
 import { isRecord, nonEmptyString } from './json';
+import type { DaNetwork } from './da-utilities/client';
 import { contractFilterKey } from './templates';
 import type {
   ActiveContract,
@@ -70,8 +71,15 @@ export type Cip103SignMessageParams = {
   message: string;
 };
 
-/** The dApp API requests this SDK makes, each in CIP-0103's `{ method, params }` form. */
+/**
+ * The dApp API requests this SDK makes, each in CIP-0103's `{ method, params }` form. `connect` runs the wallet's own
+ * sign-in and `disconnect` ends its session (`createCip103Session` sends both). `isConnected` answers `{ isConnected:
+ * boolean, … }`; a wallet without it answers 4200.
+ */
 export type Cip103Request =
+  | { method: 'connect' }
+  | { method: 'disconnect' }
+  | { method: 'isConnected' }
   | { method: 'getPrimaryAccount' }
   | { method: 'ledgerApi'; params: Cip103LedgerApiParams }
   | { method: 'prepareExecuteAndWait'; params: Cip103PrepareExecuteParams }
@@ -285,6 +293,14 @@ export async function primaryAccount(provider: Cip103Provider): Promise<Cip103Ac
 /** The wallet party: the primary account's `partyId` (`getPrimaryAccount`). */
 export async function primaryPartyId(provider: Cip103Provider): Promise<string> {
   return (await primaryAccount(provider)).partyId;
+}
+
+/**
+ * The CIP-0103 network id of a Canton network (`canton:devnet`), as a wallet reports it in its account's `networkId`
+ * and as a wallet ownership message names it.
+ */
+export function cip103NetworkId(network: DaNetwork): string {
+  return `canton:${network}`;
 }
 
 /**
