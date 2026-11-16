@@ -146,6 +146,86 @@ describe('createCip103Session', () => {
     expect(provider.requests).toEqual(['isConnected']);
   });
 
+  it.each([
+    ['the older answers first', true],
+    ['the newer answers first', false],
+  ])('with ifConnected, the most recently started restore decides (%s)', async (_name, olderFirst) => {
+    const { session } = observed();
+    const olderAnswer = deferred<unknown>();
+    const newerAnswer = deferred<unknown>();
+    const older = new TestProvider(OTHER, { isConnected: async () => olderAnswer.promise });
+    const newer = new TestProvider(HOLDER, { isConnected: async () => newerAnswer.promise });
+    const restoringOlder = session.connected(older, { ifConnected: true });
+    const restoringNewer = session.connected(newer, { ifConnected: true });
+    if (olderFirst) {
+      olderAnswer.resolve({ isConnected: true });
+      await flush();
+      newerAnswer.resolve({ isConnected: true });
+    } else {
+      newerAnswer.resolve({ isConnected: true });
+      await flush();
+      olderAnswer.resolve({ isConnected: true });
+    }
+    await Promise.all([restoringOlder, restoringNewer]);
+    expect(connectedWallet(session).provider).toBe(newer);
+    expect(connectedWallet(session).partyId).toBe(HOLDER);
+    expect(older.requests).toEqual(['isConnected']);
+    expect(older.listenerCount()).toBe(0);
+  });
+
+  it('with ifConnected, a newer restore that finds no session drops an older one that answers late', async () => {
+    const { session, changes } = observed();
+    const olderAnswer = deferred<unknown>();
+    const older = new TestProvider(OTHER, { isConnected: async () => olderAnswer.promise });
+    const newer = new TestProvider(HOLDER, { isConnected: () => ({ isConnected: false }) });
+    const restoringOlder = session.connected(older, { ifConnected: true });
+    await session.connected(newer, { ifConnected: true });
+    olderAnswer.resolve({ isConnected: true });
+    await restoringOlder;
+    expect(session.getSnapshot()).toEqual({ status: 'disconnected', endedBy: null, error: null });
+    expect(older.requests).toEqual(['isConnected']);
+    expect(changes()).toBe(0);
+  });
+
+  it('a restore that finds no session does not cancel a pending connect() or accountsChanged lookup', async () => {
+    const { session } = observed();
+    // connect(): the wallet signed in, its party lookup is still pending when a restore of another wallet starts.
+    const lookup = deferred<unknown>();
+    const provider = new TestProvider(HOLDER, { getPrimaryAccount: async () => lookup.promise });
+    const connecting = session.connect(provider, { network: 'devnet' });
+    await flush();
+    expect(provider.requests).toEqual(['connect', 'getPrimaryAccount']);
+    const notConnected = new TestProvider(OTHER, { isConnected: () => ({ isConnected: false }) });
+    await session.connected(notConnected, { ifConnected: true });
+    lookup.resolve({ primary: true, partyId: HOLDER });
+    await connecting;
+    // Not left in 'connecting'.
+    expect(connectedWallet(session)).toMatchObject({ provider, partyId: HOLDER, network: 'devnet' });
+
+    // accountsChanged: the new party's read is pending when the restore starts.
+    const switched = deferred<unknown>();
+    provider.answers.getPrimaryAccount = async () => switched.promise;
+    provider.emit('accountsChanged', []);
+    await session.connected(notConnected, { ifConnected: true });
+    switched.resolve({ primary: true, partyId: OTHER });
+    await flush();
+    expect(connectedWallet(session)).toMatchObject({ provider, partyId: OTHER, network: 'devnet' });
+  });
+
+  it('a restore that finds a session while connect() reads the party connects; the session is not left connecting', async () => {
+    const { session } = observed();
+    const lookup = deferred<unknown>();
+    const provider = new TestProvider(HOLDER, { getPrimaryAccount: async () => lookup.promise });
+    const connecting = session.connect(provider, { network: 'devnet' });
+    await flush();
+    const restored = new TestProvider(OTHER);
+    await session.connected(restored, { network: 'devnet', ifConnected: true });
+    // The restore started last, so it decides; connect()'s late party reply is dropped.
+    lookup.resolve({ primary: true, partyId: HOLDER });
+    await connecting;
+    expect(connectedWallet(session)).toMatchObject({ provider: restored, partyId: OTHER });
+  });
+
   it('reads the account again on accountsChanged: the same party keeps its object, another is a new wallet', async () => {
     const { session, changes } = observed();
     const provider = new TestProvider();

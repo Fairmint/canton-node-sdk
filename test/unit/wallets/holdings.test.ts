@@ -345,4 +345,35 @@ describe('instrumentBalances', () => {
   it('keys an instrument by id and admin', () => {
     expect(instrumentKey({ admin: 'registrar::1220bb', id: 'XMPL' })).toBe('XMPL@registrar::1220bb');
   });
+
+  it('escapes % and @ in each key component, so distinct instruments never share a key', () => {
+    const atInId = { admin: 'registrar::1220bb', id: 'USD@issuer' };
+    const atInAdmin = { admin: 'issuer@registrar::1220bb', id: 'USD' };
+    expect(instrumentKey(atInId)).toBe('USD%40issuer@registrar::1220bb');
+    expect(instrumentKey(atInAdmin)).toBe('USD@issuer%40registrar::1220bb');
+    // The escape character is escaped too: a literal "%40" in an id is not an escaped "@".
+    expect(instrumentKey({ admin: 'registrar::1220bb', id: 'USD%40issuer' })).toBe('USD%2540issuer@registrar::1220bb');
+    expect(instrumentKey({ admin: 'registrar::1220bb', id: 'USD%40issuer' })).not.toBe(instrumentKey(atInId));
+
+    const balances = instrumentBalances([
+      h('00a', '1', { instrumentId: atInId }),
+      h('00b', '2', { instrumentId: atInAdmin }),
+    ]);
+    expect(balances).toEqual([
+      {
+        key: 'USD@issuer%40registrar::1220bb',
+        instrumentId: atInAdmin,
+        unlocked: '2.0000000000',
+        locked: '0.0000000000',
+        holdingCount: 1,
+      },
+      {
+        key: 'USD%40issuer@registrar::1220bb',
+        instrumentId: atInId,
+        unlocked: '1.0000000000',
+        locked: '0.0000000000',
+        holdingCount: 1,
+      },
+    ]);
+  });
 });

@@ -68,7 +68,11 @@ export interface Cip103Session {
    *   nothing.
    * - Ignored after `end()` until `connect()` runs again (wallets can repeat a connect callback after a disconnect).
    * - With `ifConnected: true` it first asks CIP-0103 `isConnected` and does nothing unless the wallet answers `{
-   *   isConnected: true }` (4200, any other failure or another answer count as not connected).
+   *   isConnected: true }` (4200, any other failure or another answer count as not connected). Of overlapping restores,
+   *   the most recently started one decides, whichever answers first: an older one is dropped. A restore is also
+   *   dropped when anything else started a party lookup or changed the session while it waited. While it waits it
+   *   supersedes nothing: only an `isConnected: true` answer starts its lookup, which then supersedes older ones, so a
+   *   restore that finds no session never cancels a pending `connect()` or `accountsChanged` lookup.
    * - A failed account read, or an account on the other DA network, leaves the session disconnected with `error`;
    *   `connect()` recovers from it. While a wallet is connected, such a failure is ignored instead: a stale callback,
    *   or another wallet that cannot be read, never drops a healthy session.
@@ -148,6 +152,8 @@ export function createCip103Session(): Cip103Session {
   let state: Cip103SessionState = NEVER_CONNECTED;
   // Every party lookup takes a new generation; a reply counts only while its generation is still the latest.
   let generation = 0;
+  // Every connected(..., { ifConnected: true }) takes a new number: only the latest restore may start its lookup.
+  let restores = 0;
   // Bumped by connect(), end(), fail() and dispose(): a connect() whose epoch is no longer current stops.
   let epoch = 0;
   // Set by end(): connected() is ignored until the user connects again.
@@ -306,7 +312,10 @@ export function createCip103Session(): Cip103Session {
       if (disposed || closed) return;
       const { network } = context;
       if (context.ifConnected === true) {
-        // Dropped when anything started a lookup or changed the session meanwhile (that newer call decides).
+        // Dropped when a newer restore started, or anything started a lookup or changed the session meanwhile (that
+        // newer call decides). Taking a restore number rather than a generation supersedes no pending lookup while
+        // `isConnected` is in flight, so a restore that finds no session cannot strand a `connect()` in `connecting`.
+        const restore = ++restores;
         const seen = generation;
         let answer: unknown = null;
         try {
@@ -314,7 +323,7 @@ export function createCip103Session(): Cip103Session {
         } catch {
           // 4200 or any other failure: not connected.
         }
-        if (seen !== generation || !armed() || connectionFlag(answer) !== true) return;
+        if (restore !== restores || seen !== generation || !armed() || connectionFlag(answer) !== true) return;
       }
       await lookup(provider, network === undefined ? {} : { network }, true);
     },

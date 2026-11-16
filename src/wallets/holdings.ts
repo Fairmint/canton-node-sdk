@@ -269,9 +269,18 @@ export interface InstrumentBalance {
   readonly holdingCount: number;
 }
 
-/** A stable key for an instrument: `<id>@<admin>`. */
+/** Escapes `%` and `@` in one key component, so the component holds no bare `@` and the escape itself is unambiguous. */
+const escapeKeyComponent = (text: string): string => text.replace(/%/g, '%25').replace(/@/g, '%40');
+
+/**
+ * A stable, unambiguous key for an instrument: `<id>@<admin>`, with `%` and `@` in each component percent-escaped
+ * (`%25`, `%40`), so the one bare `@` always separates id from admin and distinct instruments never share a key
+ * (`USD@issuer` at `registrar::1220bb` is `USD%40issuer@registrar::1220bb`; `USD` at `issuer@registrar::1220bb` is
+ * `USD@issuer%40registrar::1220bb`). An id and admin without `%` or `@`, as usual, read unchanged. Treat the key as
+ * opaque: compare it, do not parse it.
+ */
 export function instrumentKey({ admin, id }: InstrumentId): string {
-  return `${id}@${admin}`;
+  return `${escapeKeyComponent(id)}@${escapeKeyComponent(admin)}`;
 }
 
 const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);

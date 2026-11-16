@@ -48,11 +48,14 @@ function setup(): {
   answer: (offset?: number) => void;
   fail: (error: unknown) => void;
   published: () => number;
+  /** How many `loadState` calls are in flight (asked and not yet settled). */
+  active: () => number;
 } {
   const session = createCip103Session();
   const provider = new TestProvider();
   const opened: ConnectedWallet[] = [];
   const loads: PendingLoad[] = [];
+  let active = 0;
   const store = createTokenWalletStore({
     session,
     open: (wallet) => {
@@ -61,7 +64,12 @@ function setup(): {
         loadState: async () => {
           const reply = deferred<TokenWalletState>();
           loads.push({ partyId: wallet.partyId, resolve: reply.resolve, reject: reply.reject });
-          return reply.promise;
+          active += 1;
+          try {
+            return await reply.promise;
+          } finally {
+            active -= 1;
+          }
         },
       };
       return tokens as TokenWallet;
@@ -88,6 +96,7 @@ function setup(): {
     },
     fail: (error) => next().reject(error),
     published: () => published,
+    active: () => active,
   };
 }
 
@@ -260,29 +269,6 @@ describe('createTokenWalletStore', () => {
     expect(t.store.getSnapshot()).toMatchObject({ busy: false, loading: false });
   });
 
-  it('drops a stale load reply', async () => {
-    const t = setup();
-    await connectAndLoad(t);
-    t.store.refresh();
-    t.store.refresh();
-    expect(t.loads).toHaveLength(2);
-    const [older, newer] = t.loads.splice(0);
-    newer?.resolve(snapshot(HOLDER, 20));
-    await flush();
-    older?.resolve(snapshot(HOLDER, 10));
-    await flush();
-    expect(t.store.getSnapshot().state).toMatchObject({ offset: 20 });
-    // A stale failure is dropped too.
-    t.store.refresh();
-    t.store.refresh();
-    const [stale, fresh] = t.loads.splice(0);
-    fresh?.resolve(snapshot(HOLDER, 30));
-    await flush();
-    stale?.reject(new Error('late'));
-    await flush();
-    expect(t.store.getSnapshot()).toMatchObject({ state: { offset: 30 }, loadError: null });
-  });
-
   it('clears the state when a load fails, and refresh() loads again', async () => {
     const t = setup();
     await connectAndLoad(t);
@@ -301,7 +287,7 @@ describe('createTokenWalletStore', () => {
     expect(t.store.getSnapshot()).toMatchObject({ state: { offset: 3 }, loadError: null });
   });
 
-  it('ignores refresh() while an action runs or while disconnected', async () => {
+  it('folds a refresh() during a write into the reload after it, and ignores it while disconnected', async () => {
     const t = setup();
     t.store.refresh();
     expect(t.loads).toHaveLength(0);
@@ -490,6 +476,237 @@ describe('createTokenWalletStore', () => {
     expect(t.published()).toBe(before);
     expect(t.store.getSnapshot()).toBe(view);
     expect(await t.store.run('send', async () => 'x')).toBe(false);
+  });
+
+  describe('one wallet call at a time', () => {
+    it('runs a refresh asked during a load once after it, and stays busy until both answer', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      t.store.refresh();
+      t.store.refresh(); // coalesced with the first queued refresh
+      t.store.refresh();
+      // Only the first load is asked; the rest wait for it.
+      expect(t.loads).toHaveLength(1);
+      expect(t.active()).toBe(1);
+      let calls = 0;
+      const action = async (): Promise<string> => {
+        calls += 1;
+        return 'x';
+      };
+      expect(await t.store.run('ownership', action, { readOnly: true })).toBe(false);
+      t.answer(10);
+      await flush();
+      // The first reply is shown, and the queued refresh is now the one call in flight.
+      expect(t.loads).toHaveLength(1);
+      expect(t.active()).toBe(1);
+      expect(t.store.getSnapshot()).toMatchObject({ state: { offset: 10 }, loading: true, busy: true });
+      expect(await t.store.run('ownership', action, { readOnly: true })).toBe(false);
+      t.answer(20);
+      await flush();
+      expect(t.loads).toHaveLength(0);
+      expect(t.store.getSnapshot()).toMatchObject({ state: { offset: 20 }, loading: false, busy: false });
+      expect(await t.store.run('ownership', action, { readOnly: true })).toBe(true);
+      expect(calls).toBe(1);
+    });
+
+    it('queues the new wallet’s first load behind the previous wallet’s action, and starts it when it is interrupted', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const write = deferred<string>();
+      let actionActive = true;
+      const ran = t.store.run('send', async () => {
+        try {
+          return await write.promise;
+        } finally {
+          actionActive = false;
+        }
+      });
+      t.provider.setParty(OTHER);
+      t.provider.emit('accountsChanged', [{ partyId: OTHER, primary: true }]);
+      await flush();
+      const bob = connectedWallet(t.session);
+      // Bob's load waits: Alice's write is still the one call in flight.
+      expect(t.loads).toHaveLength(0);
+      expect(t.store.getSnapshot()).toMatchObject({
+        wallet: bob,
+        state: null,
+        loading: true,
+        running: 'send',
+        busy: true,
+      });
+      write.resolve('Sent.');
+      expect(await ran).toBe(false);
+      expect(actionActive).toBe(false);
+      // The interrupted branch starts it.
+      expect(t.loads.map((load) => load.partyId)).toEqual([OTHER]);
+      expect(t.store.getSnapshot()).toMatchObject({
+        running: null,
+        loading: true,
+        busy: true,
+        outcome: { status: 'interrupted', partyId: HOLDER },
+      });
+      t.answer(4);
+      await flush();
+      expect(t.store.getSnapshot()).toMatchObject({
+        wallet: bob,
+        state: { partyId: OTHER, offset: 4 },
+        loading: false,
+        busy: false,
+      });
+    });
+
+    it('queues the new wallet’s first load behind the previous wallet’s load, and drops that load’s reply', async () => {
+      const t = setup();
+      await t.session.connected(t.provider, { network: 'devnet' });
+      expect(t.active()).toBe(1);
+      t.provider.setParty(OTHER);
+      t.provider.emit('accountsChanged', [{ partyId: OTHER, primary: true }]);
+      await flush();
+      // Alice's load is still asking the wallet: Bob's waits, and nothing runs meanwhile.
+      expect(t.loads.map((load) => load.partyId)).toEqual([HOLDER]);
+      expect(t.store.getSnapshot()).toMatchObject({ wallet: { partyId: OTHER }, loading: true, busy: true });
+      expect(await t.store.run('ownership', async () => 'x', { readOnly: true })).toBe(false);
+      // Alice's late failure is dropped, and frees the latch for Bob's load.
+      t.fail(new Error('late'));
+      await flush();
+      expect(t.store.getSnapshot()).toMatchObject({ state: null, loadError: null, loading: true, busy: true });
+      expect(t.loads.map((load) => load.partyId)).toEqual([OTHER]);
+      expect(t.active()).toBe(1);
+      t.answer(6);
+      await flush();
+      expect(t.store.getSnapshot()).toMatchObject({ state: { partyId: OTHER, offset: 6 }, busy: false });
+    });
+
+    it('never has two wallet calls in flight across switches, refreshes, actions and reloads', async () => {
+      const t = setup();
+      let actions = 0;
+      let peak = 0;
+      const probe = (): void => {
+        peak = Math.max(peak, t.active() + actions);
+      };
+      const tracked = (reply: Promise<string>) => async (): Promise<string> => {
+        actions += 1;
+        probe();
+        try {
+          return await reply;
+        } finally {
+          actions -= 1;
+        }
+      };
+      await t.session.connected(t.provider, { network: 'devnet' });
+      probe();
+      t.store.refresh();
+      probe();
+      t.provider.setParty(OTHER);
+      t.provider.emit('accountsChanged', [{ partyId: OTHER, primary: true }]);
+      await flush();
+      probe();
+      while (t.loads.length > 0) {
+        t.answer();
+        await flush();
+        probe();
+      }
+      const write = deferred<string>();
+      const ran = t.store.run('send', tracked(write.promise));
+      t.store.refresh();
+      t.provider.setParty(HOLDER);
+      t.provider.emit('accountsChanged', [{ partyId: HOLDER, primary: true }]);
+      await flush();
+      probe();
+      write.resolve('Sent.');
+      await ran;
+      probe();
+      while (t.loads.length > 0) {
+        t.answer();
+        await flush();
+        probe();
+      }
+      expect(peak).toBe(1);
+      expect(t.store.getSnapshot()).toMatchObject({ wallet: { partyId: HOLDER }, busy: false, loading: false });
+    });
+
+    it('coalesces wallet changes during an action into one load, for the newest wallet', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const write = deferred<string>();
+      const ran = t.store.run('send', async () => write.promise);
+      t.provider.setParty(OTHER);
+      t.provider.emit('accountsChanged', [{ partyId: OTHER, primary: true }]);
+      await flush();
+      t.provider.setParty(HOLDER);
+      t.provider.emit('accountsChanged', [{ partyId: HOLDER, primary: true }]);
+      await flush();
+      t.store.refresh();
+      expect(t.loads).toHaveLength(0);
+      write.resolve('Sent.');
+      expect(await ran).toBe(false);
+      expect(t.opened.map((wallet) => wallet.partyId)).toEqual([HOLDER, OTHER, HOLDER]);
+      expect(t.loads.map((load) => load.partyId)).toEqual([HOLDER]);
+      t.answer(8);
+      await flush();
+      expect(t.loads).toHaveLength(0);
+      expect(t.store.getSnapshot()).toMatchObject({
+        wallet: t.opened[2],
+        state: { partyId: HOLDER, offset: 8 },
+        busy: false,
+      });
+    });
+
+    it('starts a queued load when the call before it fails, and runs a refresh asked during a read-only call', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const failing = deferred<string>();
+      const ran = t.store.run('send', async () => failing.promise);
+      t.provider.setParty(OTHER);
+      t.provider.emit('accountsChanged', [{ partyId: OTHER, primary: true }]);
+      await flush();
+      failing.reject(new WalletSubmitError('failed', 'ledger said no'));
+      expect(await ran).toBe(false);
+      expect(t.loads.map((load) => load.partyId)).toEqual([OTHER]);
+      t.answer();
+      await flush();
+      expect(t.store.getSnapshot()).toMatchObject({ busy: false });
+
+      const signing = deferred<string>();
+      const signed = t.store.run('ownership', async () => signing.promise, { readOnly: true });
+      t.store.refresh();
+      expect(t.loads).toHaveLength(0);
+      expect(t.store.getSnapshot()).toMatchObject({ running: 'ownership', loading: true, busy: true });
+      signing.reject(new Error('declined'));
+      expect(await signed).toBe(false);
+      expect(t.loads.map((load) => load.partyId)).toEqual([OTHER]);
+      t.answer(9);
+      await flush();
+      expect(t.store.getSnapshot()).toMatchObject({ state: { offset: 9 }, busy: false, loading: false });
+    });
+
+    it('drops a queued load when the session ends, and starts nothing after dispose', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const write = deferred<string>();
+      const ran = t.store.run('send', async () => write.promise);
+      t.provider.setParty(OTHER);
+      t.provider.emit('accountsChanged', [{ partyId: OTHER, primary: true }]);
+      await flush();
+      t.session.end('user');
+      expect(t.store.getSnapshot()).toMatchObject({ wallet: null, loading: false, busy: true });
+      write.resolve('Sent.');
+      expect(await ran).toBe(false);
+      expect(t.loads).toHaveLength(0);
+      expect(t.store.getSnapshot()).toMatchObject({ wallet: null, loading: false, busy: false });
+
+      await connectAndLoad(t, OTHER);
+      const again = deferred<string>();
+      const second = t.store.run('send', async () => again.promise);
+      t.store.refresh();
+      t.store.dispose();
+      const before = t.published();
+      again.resolve('Sent.');
+      expect(await second).toBe(false);
+      await flush();
+      expect(t.loads).toHaveLength(0);
+      expect(t.published()).toBe(before);
+    });
   });
 
   describe('default token wallet', () => {

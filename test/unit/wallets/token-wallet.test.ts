@@ -1035,6 +1035,67 @@ describe('createTokenWallet transfers', () => {
     expect(wallet.submissions).toHaveLength(1);
   });
 
+  /** Make the fake wallet's primary account whatever `account.party` says at the time of each `getPrimaryAccount`. */
+  function switchableAccount(wallet: FakeProvider): { party: string } {
+    const account = { party: HOLDER };
+    const { request: original } = wallet;
+    wallet.request = async (args) => {
+      const answer = await original(args);
+      if (args.method !== 'getPrimaryAccount') return answer;
+      return { ...(answer as Record<string, unknown>), partyId: account.party };
+    };
+    return account;
+  }
+
+  const factorySenders = (calls: FetchCall[]): unknown[] =>
+    postCalls(calls)
+      .filter((c) => c.url.endsWith('/transfer-factory'))
+      .map((c) => (c.body as { choiceArguments: { transfer: { sender: string } } }).choiceArguments.transfer.sender);
+
+  it('planTransfer refuses to submit after an account switch, and submits nothing as either party', async () => {
+    const { tokens, wallet, calls } = setup({ transferKind: 'offer' });
+    const account = switchableAccount(wallet);
+    const plan = await tokens.planTransfer(request);
+    expect(plan.partyId).toBe(HOLDER);
+    // OTHER holds enough to cover the amount, so without the check the same kind would be submitted as OTHER.
+    account.party = OTHER;
+    const error = await plan.submit().catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(TokenWalletError);
+    expect(error).toMatchObject({ code: 'invalid-input' });
+    expect((error as Error).message).toMatch(/nothing was submitted/);
+    expect((error as Error).message).toContain(HOLDER);
+    expect((error as Error).message).toContain(OTHER);
+    expect(wallet.submissions).toEqual([]);
+    // Refused before any read or registry call for the submission.
+    expect(factorySenders(calls)).toEqual([HOLDER]);
+    // The refusal released the write guard: back on the previewed party, the plan submits as it.
+    account.party = HOLDER;
+    await expect(plan.submit()).resolves.toMatchObject({ kind: 'offer' });
+    expect(wallet.submissions.map((s) => s.actAs)).toEqual([[HOLDER]]);
+  });
+
+  it('planTransfer submits as the previewed party when the account did not change', async () => {
+    const { tokens, wallet, calls } = setup({ transferKind: 'offer' });
+    switchableAccount(wallet);
+    const plan = await tokens.planTransfer(request);
+    expect(plan.partyId).toBe(HOLDER);
+    await expect(plan.submit({ memo: 'invoice 7' })).resolves.toMatchObject({ kind: 'offer' });
+    expect(wallet.submissions.map((s) => s.actAs)).toEqual([[HOLDER]]);
+    expect(factorySenders(calls)).toEqual([HOLDER, HOLDER]);
+    // The submission resolved the account once, to check it, and read and signed as the planned party.
+    expect(wallet.requests.filter((r) => r.method === 'getPrimaryAccount')).toHaveLength(2);
+  });
+
+  it('planTransfer with a pinned partyId acts as that party whatever the primary account', async () => {
+    const { tokens, wallet, calls } = setup({ transferKind: 'offer', partyId: HOLDER, party: OTHER });
+    const plan = await tokens.planTransfer(request);
+    expect(plan.partyId).toBe(HOLDER);
+    await expect(plan.submit()).resolves.toMatchObject({ kind: 'offer' });
+    expect(wallet.submissions.map((s) => s.actAs)).toEqual([[HOLDER]]);
+    expect(factorySenders(calls)).toEqual([HOLDER, HOLDER]);
+    expect(wallet.requests.filter((r) => r.method === 'getPrimaryAccount')).toHaveLength(0);
+  });
+
   it('refuses a second submission while the first awaits the wallet', async () => {
     const { tokens, wallet } = setup();
     let release: () => void = () => undefined;

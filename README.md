@@ -108,7 +108,8 @@ async function send(provider: Cip103Provider, receiver: string): Promise<string>
   const instrumentId = { admin: 'registrar::1220...', id: 'XMPL' };
   try {
     const plan = await tokens.planTransfer({ receiver, instrumentId, amount: '10' });
-    // Show plan.kind to the user; submit refuses with `kind-changed` if the registry now answers another kind.
+    // Show plan.kind and the sender plan.partyId; submit refuses with `kind-changed` if the registry now answers
+    // another kind, and with `invalid-input` if the wallet has switched to another account since.
     await plan.submit();
     return 'Sent.';
   } catch (error) {

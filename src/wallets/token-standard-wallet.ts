@@ -47,7 +47,10 @@ export interface TokenStandardWalletOptions<R extends TokenRegistry = TokenRegis
    * `@canton-network/dapp-sdk` provider, `window.canton`, …
    */
   readonly provider: Cip103Provider;
-  /** Act as this party. Defaults to the wallet's primary account, read on every action. */
+  /**
+   * Act as this party. Defaults to the wallet's primary account, read on every action (a `TransferPlan` keeps the party
+   * it was previewed for, and refuses to submit as another).
+   */
   readonly partyId?: string;
   readonly registry: R;
   /** Defaults to the system clock. */
@@ -97,12 +100,15 @@ export interface TransferResult extends SubmitResult {
 
 /**
  * A previewed transfer, for a dApp that shows the user how the registry will run it before they confirm. `submit` sends
- * exactly the planned request through the token wallet that planned it, with `expectedKind: kind`, so a transfer whose
- * kind changed in between is refused with `kind-changed` before signing.
+ * exactly the planned request through the token wallet that planned it, as the party it was previewed for and with
+ * `expectedKind: kind`: a transfer whose kind changed in between is refused with `kind-changed`, and one whose wallet
+ * now acts as another party (an account switch, without a pinned `partyId`) with `invalid-input`, both before signing.
  */
 export interface TransferPlan {
   /** How the registry would run the transfer when it was planned. */
   readonly kind: TransferKind;
+  /** The party the transfer was previewed for, and the only one `submit` sends it as. */
+  readonly partyId: string;
   /** The request as planned (a frozen copy). */
   readonly request: Readonly<TransferRequest>;
   /** Run the transfer (a write: one at a time, see `TokenStandardWallet`). */
@@ -234,8 +240,11 @@ export function tokenStandardCore(
   }
 
   const walletOptions = options.readRetry !== undefined ? { readRetry: options.readRetry } : {};
+  function walletOf(party: string): Cip103Wallet {
+    return cip103Wallet(provider, party, walletOptions);
+  }
   async function connect(): Promise<Cip103Wallet> {
-    return cip103Wallet(provider, await partyId(), walletOptions);
+    return walletOf(await partyId());
   }
 
   // Checked and taken synchronously (before the first await), so a second write started in the same tick is refused
@@ -285,7 +294,7 @@ export function tokenStandardCore(
   const stateFilterKeys = new Set(stateFilters.map(contractFilterKey));
 
   async function takeSnapshot(party: string): Promise<StateSnapshot> {
-    const wallet = cip103Wallet(provider, party, walletOptions);
+    const wallet = walletOf(party);
     const { offset, contracts } = await wallet.readActiveContracts(stateFilters);
     // A filter the snapshot did not carry (a registry without `pendingTransferFilters`) is read at the snapshot's
     // offset, not at a new ledger end, and once per snapshot however many lists ask for it.
@@ -369,8 +378,7 @@ export function tokenStandardCore(
     return { transfer, factory };
   }
 
-  async function runTransfer(request: TransferOptions): Promise<TransferResult> {
-    const wallet = await connect();
+  async function runTransfer(wallet: Cip103Wallet, request: TransferOptions): Promise<TransferResult> {
     const { transfer: spec, factory } = await prepareTransfer(wallet, request);
     const kind = factory.transferKind;
     if (request.requirePreapproval === true && kind !== 'direct') {
@@ -437,7 +445,7 @@ export function tokenStandardCore(
   }
 
   const transfer = async (request: TransferOptions): Promise<TransferResult> =>
-    exclusive(async () => runTransfer(request));
+    exclusive(async () => runTransfer(await connect(), request));
 
   async function planTransfer(request: TransferRequest): Promise<TransferPlan> {
     // A copy, so a later change to the caller's object cannot change what is submitted.
@@ -446,18 +454,33 @@ export function tokenStandardCore(
       instrumentId: Object.freeze({ admin: request.instrumentId.admin, id: request.instrumentId.id }),
       amount: request.amount,
     });
-    const kind = await previewTransfer(planned);
+    // Resolved once: the preview and the submission both act as this party, never as an account resolved later.
+    const plannedParty = await partyId();
+    const wallet = walletOf(plannedParty);
+    const kind = (await prepareTransfer(wallet, planned)).factory.transferKind;
     return Object.freeze({
       kind,
+      partyId: plannedParty,
       request: planned,
       submit: async (submitOptions: { readonly memo?: string; readonly requirePreapproval?: boolean } = {}) =>
-        transfer({
-          ...planned,
-          ...(submitOptions.memo !== undefined && { memo: submitOptions.memo }),
-          ...(submitOptions.requirePreapproval !== undefined && {
-            requirePreapproval: submitOptions.requirePreapproval,
-          }),
-          expectedKind: kind,
+        exclusive(async () => {
+          // The user confirmed a transfer from `plannedParty`: refuse it if the wallet has switched accounts since, so
+          // it never debits a party the preview did not show.
+          const current = await partyId();
+          if (current !== plannedParty) {
+            throw new TokenWalletError(
+              'invalid-input',
+              `The wallet now acts as ${current}, not ${plannedParty}, the party this transfer was previewed for; nothing was submitted. Preview the transfer again.`
+            );
+          }
+          return runTransfer(wallet, {
+            ...planned,
+            ...(submitOptions.memo !== undefined && { memo: submitOptions.memo }),
+            ...(submitOptions.requirePreapproval !== undefined && {
+              requirePreapproval: submitOptions.requirePreapproval,
+            }),
+            expectedKind: kind,
+          });
         }),
     });
   }

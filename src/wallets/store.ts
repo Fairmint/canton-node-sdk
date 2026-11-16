@@ -30,15 +30,19 @@ export interface TokenWalletView<S = TokenWalletState> {
    * changes.
    */
   readonly state: S | null;
-  /** A load for the current wallet is in flight. */
+  /**
+   * A load for the current wallet is in flight, or queued behind the wallet call in flight (the previous wallet's
+   * action or load, or the load before a Retry).
+   */
   readonly loading: boolean;
   /** The last load's failure. A rate limit has kind `rate-limited`, so offer `refresh()` after a moment. */
   readonly loadError: WalletErrorDescription | null;
   /** The running action's id. */
   readonly running: string | null;
   /**
-   * True while an action runs or any load (the first one, a Retry, the reload after an action) is pending: disable
-   * every action button. `run()` refuses meanwhile, so only one wallet call is ever in flight.
+   * True while any wallet call is in flight or a load is queued: an action, or a load (the first one, a Retry, the
+   * reload after an action), for the current wallet or a previous one. Disable every action button. `run()` refuses
+   * meanwhile, so only one wallet call is ever in flight.
    */
   readonly busy: boolean;
   /**
@@ -65,16 +69,18 @@ export interface TokenWalletStore<W extends TokenStandardWallet = TokenWallet> {
   /** The current view; the same object until it changes (for `useSyncExternalStore`). */
   getSnapshot(): TokenWalletView<Awaited<ReturnType<W['loadState']>>>;
   /**
-   * Reload the snapshot (the Retry button). A reply that a newer load or wallet superseded is dropped. Ignored while an
-   * action runs (the reload after it follows) or while disconnected.
+   * Reload the snapshot (the Retry button). Starts at once when no wallet call is in flight; otherwise it is queued and
+   * runs once that call settles (the load in flight may have read before what prompted the refresh). Queued loads are
+   * coalesced into one, so a refresh during a write is the reload after it. Ignored while disconnected.
    */
   refresh(): void;
   /**
-   * Run one wallet call (a write, a preview, `signMessage`). Resolves false without calling `action` while busy or
-   * disconnected; the check is synchronous, so a double click is refused at once. Afterwards it reloads the snapshot,
-   * even when the action failed, because a failed write may have committed, and stays busy until that reload answers. A
-   * write that settles after its session ended records `interrupted`, never `succeeded`. Resolves true when the action
-   * succeeded for a session that is still current. `action` resolves with a message to show, or nothing.
+   * Run one wallet call (a write, a preview, `signMessage`). Resolves false without calling `action` while busy (any
+   * wallet call in flight or load queued) or disconnected; the check is synchronous, so a double click is refused at
+   * once. Afterwards it reloads the snapshot, even when the action failed, because a failed write may have committed,
+   * and stays busy until that reload answers. A write that settles after its session ended records `interrupted`, never
+   * `succeeded`. Resolves true when the action succeeded for a session that is still current. `action` resolves with a
+   * message to show, or nothing.
    *
    * `readOnly: true` marks a call that commits nothing (a preview, `signMessage`): no reload follows, and one that
    * settles after its session ended records no outcome instead of `interrupted`.
@@ -84,7 +90,10 @@ export interface TokenWalletStore<W extends TokenStandardWallet = TokenWallet> {
     action: (context: WalletActionContext<W>) => Promise<string | void>,
     options?: { readonly readOnly?: boolean }
   ): Promise<boolean>;
-  /** Stop following the session; pending replies are dropped and no further view is published. */
+  /**
+   * Stop following the session; pending replies are dropped, a queued load never starts and no further view is
+   * published.
+   */
   dispose(): void;
 }
 
@@ -116,9 +125,14 @@ function openTokenWallet(wallet: ConnectedWallet): TokenWallet {
 
 /**
  * The observable state and actions of a token wallet page over `session`. The store follows the session: each new
- * `ConnectedWallet` gets its own token wallet (from `open`) and a fresh load, and its state is cleared. Its latch
- * covers every wallet call run through it and every load (the reload after an action included), so one wallet call is
- * in flight at a time; the token wallet's own write latch (`busy`) stays as the inner guard.
+ * `ConnectedWallet` gets its own token wallet (from `open`) and a fresh load, and its state is cleared.
+ *
+ * One wallet call at a time: an execution latch counts every call in flight (actions and loads, of the current wallet
+ * or a previous one, since a dropped reply does not cancel its request). `run()` refuses while it is held. A load asked
+ * for meanwhile (a new wallet's first load, a Retry, the reload after a write) is queued; queued loads coalesce into
+ * one, which runs for the wallet current when the latch frees. Ending the session drops the queued load, and so does
+ * `dispose()`. A wallet call that never settles holds the latch, since it cannot be cancelled. The token wallet's own
+ * write latch (`busy`) stays as the inner guard.
  */
 export function createTokenWalletStore(options: TokenWalletStoreOptions<TokenWallet>): TokenWalletStore<TokenWallet>;
 export function createTokenWalletStore<W extends TokenStandardWallet>(
@@ -137,10 +151,16 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
   let wallet: ConnectedWallet | null = null;
   let tokens: W | null = null;
   let state: S | null = null;
-  let loading = false;
   let loadError: WalletErrorDescription | null = null;
-  // Every load takes a new number; a reply counts only while its number is the latest and its wallet still current.
-  let loads = 0;
+  // Stale replies: every load and wallet change takes a new number; a load's reply counts only while its number is the
+  // latest and its wallet still current. This drops replies; it does not free the latch.
+  let generation = 0;
+  // Execution latch: wallet calls (actions and loads, of any wallet) asked and not yet settled.
+  let inFlight = 0;
+  // A load for the current wallet waits for the latch (one at most: queued loads coalesce).
+  let queued = false;
+  // A load for the current wallet is in flight.
+  let loadInFlight = false;
   let running: { readonly id: string; readonly wallet: ConnectedWallet; readonly readOnly: boolean } | null = null;
   let outcome: ActionOutcome | null = null;
   let disposed = false;
@@ -158,10 +178,10 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
       session: sessionState,
       wallet,
       state,
-      loading,
+      loading: loadInFlight || queued,
       loadError,
       running: running?.id ?? null,
-      busy: running !== null || loading,
+      busy: inFlight > 0 || queued,
       outcome,
       unknownOutcomeParty: unknownOutcomeParty(),
     };
@@ -178,32 +198,56 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
     return !disposed && candidate === wallet && session.isCurrent(candidate);
   }
 
-  /** Load the current wallet's snapshot; the reply is dropped when a newer load or another wallet superseded it. */
-  function load(): void {
-    const forWallet = wallet;
-    const forTokens = tokens;
-    if (forWallet === null || forTokens === null) return;
-    const attempt = ++loads;
-    loading = true;
+  /**
+   * Ask for a load of the current wallet's snapshot: it starts now when no wallet call is in flight, and otherwise
+   * waits for the latch (`drain`). Publishes.
+   */
+  function requestLoad(): void {
+    if (disposed || wallet === null || tokens === null) return;
+    queued = true;
+    drain();
+  }
+
+  /** Start the queued load if the latch is free, then publish. Called whenever the latch may have freed. */
+  function drain(): void {
+    if (disposed) return;
+    if (queued && inFlight === 0 && wallet !== null && tokens !== null) {
+      queued = false;
+      startLoad(wallet, tokens);
+    }
     publish();
-    const current = (): boolean => !disposed && attempt === loads && forWallet === wallet;
+  }
+
+  /**
+   * Load `forWallet`'s snapshot, holding the latch until the wallet answers. The reply is dropped when another wallet
+   * superseded it (loads never overlap, so a newer load of the same wallet cannot); the latch frees either way, and the
+   * queued load, if any, starts.
+   */
+  function startLoad(forWallet: ConnectedWallet, forTokens: W): void {
+    const attempt = ++generation;
+    inFlight += 1;
+    loadInFlight = true;
+    const current = (): boolean => !disposed && attempt === generation && forWallet === wallet;
     void (async () => {
-      let next: S;
+      let next: { readonly ok: true; readonly snapshot: S } | { readonly ok: false; readonly error: unknown };
       try {
-        next = (await forTokens.loadState()) as S;
+        next = { ok: true, snapshot: (await forTokens.loadState()) as S };
       } catch (error) {
-        if (!current()) return;
-        state = null; // nothing is offered from a stale snapshot
-        loadError = describeWalletError(error);
-        loading = false;
-        publish();
-        return;
+        next = { ok: false, error };
       }
-      if (!current()) return;
-      state = next;
-      loadError = null;
-      loading = false;
-      publish();
+      inFlight -= 1;
+      if (disposed) return;
+      if (current()) {
+        loadInFlight = false;
+        if (next.ok) {
+          state = next.snapshot;
+          loadError = null;
+        } else {
+          state = null; // nothing is offered from a stale snapshot
+          loadError = describeWalletError(next.error);
+        }
+      }
+      drain();
     })();
   }
 
@@ -217,9 +261,10 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
       return;
     }
     wallet = next;
-    loads += 1; // drop the previous wallet's load
+    generation += 1; // drop the previous wallet's load reply (its call still holds the latch until it settles)
+    queued = false; // a queued load was for the previous wallet
+    loadInFlight = false;
     state = null;
-    loading = false;
     loadError = null;
     tokens = null;
     // Another wallet never sees this one's result, but a write whose outcome is unknown stays reported.
@@ -235,7 +280,7 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
       publish();
       return;
     }
-    load();
+    requestLoad(); // queued while the previous wallet's call is in flight
   }
 
   const unsubscribe = session.subscribe(onSession);
@@ -252,16 +297,16 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
     getSnapshot: () => view,
 
     refresh() {
-      if (disposed || running !== null) return;
-      load();
+      requestLoad();
     },
 
     async run(id, action, runOptions = {}) {
       // Synchronous, before the first await: a second call in the same tick is refused.
       const ranFor = wallet;
       const ranTokens = tokens;
-      if (disposed || running !== null || loading || ranFor === null || ranTokens === null) return false;
+      if (disposed || inFlight > 0 || queued || ranFor === null || ranTokens === null) return false;
       const readOnly = runOptions.readOnly === true;
+      inFlight += 1;
       running = { id, wallet: ranFor, readOnly };
       outcome = null;
       publish();
@@ -275,6 +320,7 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
         settled = { ok: false, error };
       }
 
+      inFlight -= 1;
       running = null;
       const live = isCurrent(ranFor);
       const { partyId } = ranFor;
@@ -286,17 +332,17 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
         outcome = { id, partyId, status: 'failed', error: describeWalletError(settled.error) };
       }
       // A failed write may still have committed, so reload after failures too. This only reads; nothing is retried.
-      if (live && !readOnly) {
-        load(); // publishes, and stays busy until the reload answers
-      } else {
-        publish();
-      }
+      if (live && !readOnly) queued = true;
+      // Start the queued load: this write's reload, a refresh asked meanwhile, or the first load of a wallet that
+      // replaced this action's one. Busy until it answers.
+      drain();
       return live && settled.ok;
     },
 
     dispose() {
       if (disposed) return;
       disposed = true;
+      queued = false;
       unsubscribe();
       listeners.clear();
     },
