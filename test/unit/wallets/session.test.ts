@@ -669,7 +669,8 @@ describe('createCip103Session', () => {
       slow.resolve({ isConnected: true });
       await first;
       expect(connectedWallet(session).partyId).toBe(HOLDER);
-      expect(older.requests).toEqual(['connect']);
+      // The superseded sign-in is signed out.
+      expect(older.requests).toEqual(['connect', 'disconnect']);
     });
 
     it('a connect that fails after the accept callback connected leaves the session disconnected and detached', async () => {
@@ -950,14 +951,15 @@ describe('createCip103Session', () => {
         void session.connect(provider);
         await jest.advanceTimersByTimeAsync(1000);
         expect(connects()).toBe(0);
-        // t=1000: the user cancels the pending sign-in (a second disconnect, which answers), then clicks Connect.
+        // t=1000: the user cancels the pending sign-in, then clicks Connect. That sign-in never sent `connect`, so there
+        // is nothing to sign out of: no second disconnect.
         session.end('user');
         await flush();
-        expect(disconnects).toBe(2);
+        expect(disconnects).toBe(1);
         const connecting = session.connect(provider);
         await jest.advanceTimersByTimeAsync(1999);
         expect(connects()).toBe(0);
-        // t=3000: the first disconnect's own deadline. connect is sent then, not at the second one's (t=4000).
+        // t=3000: the first disconnect's own deadline: connect is sent then.
         await jest.advanceTimersByTimeAsync(1);
         expect(connects()).toBe(1);
         await connecting;
@@ -1033,6 +1035,49 @@ describe('createCip103Session', () => {
       } finally {
         timer.mockRestore();
       }
+    });
+
+    it('signs the previous wallet out when the user connects another one, and not when they connect the same one', async () => {
+      const { session } = observed();
+      const first = new TestProvider(HOLDER);
+      await session.connected(first);
+      await session.connect(first);
+      expect(first.requests).not.toContain('disconnect');
+      const second = new TestProvider(OTHER);
+      await session.connect(second);
+      await flush();
+      expect(first.requests.filter((method) => method === 'disconnect')).toHaveLength(1);
+      expect(second.requests).toEqual(['connect', 'getPrimaryAccount']);
+      expect(connectedWallet(session).partyId).toBe(OTHER);
+      // A wallet still signing in is signed out too when the user picks another.
+      const slow = deferred<unknown>();
+      const third = new TestProvider(HOLDER, { connect: async () => slow.promise });
+      const signingIn = session.connect(third);
+      await session.connect(first);
+      await flush();
+      expect(third.requests).toEqual(['connect', 'disconnect']);
+      expect(second.requests).toContain('disconnect');
+      slow.resolve({ isConnected: true });
+      await signingIn;
+      expect(connectedWallet(session).provider).toBe(first);
+    });
+
+    it('ignores wallet callbacks while connect() waits for an earlier disconnect of that wallet', async () => {
+      const { session } = observed();
+      const disconnected = deferred<unknown>();
+      const provider = new TestProvider(HOLDER, { disconnect: async () => disconnected.promise });
+      await session.connected(provider);
+      session.end('user');
+      const connecting = session.connect(provider);
+      // A stale accept callback arrives while connect() waits: it must not connect before `connect` is sent.
+      await session.connected(provider);
+      await flush();
+      expect(session.getSnapshot()).toEqual({ status: 'connecting' });
+      expect(provider.requests).toEqual(['getPrimaryAccount', 'disconnect']);
+      disconnected.resolve(null);
+      await connecting;
+      expect(provider.requests).toEqual(['getPrimaryAccount', 'disconnect', 'connect', 'getPrimaryAccount']);
+      expect(connectedWallet(session).partyId).toBe(HOLDER);
     });
 
     it("end('user') before any wallet sends nothing", () => {
