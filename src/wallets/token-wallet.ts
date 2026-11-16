@@ -26,10 +26,12 @@ import {
   requireNonEmpty,
   requireTime,
   tokenStandardCore,
+  type StateSnapshot,
+  type TokenStandardState,
   type TokenStandardWallet,
   type TokenStandardWalletOptions,
 } from './token-standard-wallet';
-import type { InstrumentId, SubmitResult } from './types';
+import type { ActiveContract, ContractFilter, InstrumentId, SubmitResult } from './types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -49,7 +51,22 @@ export interface BurnRequestOptions {
   readonly executeBefore?: Date;
 }
 
+/** Everything a token wallet page shows, read as one snapshot of the ledger. */
+export interface TokenWalletState extends TokenStandardState {
+  readonly mintOffers: MintOffer[];
+  readonly burnRequests: BurnRequest[];
+}
+
+const MINT_OFFER_FILTER: ContractFilter = { templateId: DA_REGISTRY_TEMPLATES.mintOffer };
+const BURN_REQUEST_FILTER: ContractFilter = { templateId: DA_REGISTRY_TEMPLATES.burnRequest };
+
 export interface TokenWallet extends TokenStandardWallet {
+  /**
+   * Holdings, transfer offers, mint offers and burn requests from one snapshot: one ledger-end call and one paged ACS
+   * stream for all four. Load a page with this rather than the four `list*` calls (which share one snapshot when called
+   * together, but each still filters it).
+   */
+  loadState(): Promise<TokenWalletState>;
   /** Mint offers to the wallet party, made under their instrument admin's registry service. */
   listMintOffers(): Promise<MintOffer[]>;
   acceptMintOffer(mintOfferCid: string, options?: { expectedRegistrar?: string }): Promise<SubmitResult>;
@@ -70,25 +87,55 @@ export interface TokenWallet extends TokenStandardWallet {
 /** A `TokenWallet` over a CIP-0103 provider, using DA's Utilities API for choice contexts. */
 export function createTokenWallet(options: TokenWalletOptions): TokenWallet {
   const { registry } = options;
-  const core = tokenStandardCore(options);
+  const core = tokenStandardCore(options, [MINT_OFFER_FILTER, BURN_REQUEST_FILTER]);
   const { connect, exclusive, now } = core;
 
-  async function listMintOffers(): Promise<MintOffer[]> {
-    const wallet = await connect();
-    const [contracts, operator] = await Promise.all([
-      wallet.listActiveContracts({
-        templateId: DA_REGISTRY_TEMPLATES.mintOffer,
-      }),
-      registry.operatorParty(),
-    ]);
+  function mintOffersIn(party: string, contracts: readonly ActiveContract[], operator: string): MintOffer[] {
     return contracts.flatMap((contract) => {
       const offer = parseMintOffer(contract);
       return offer !== null &&
-        offer.holder === wallet.partyId &&
+        offer.holder === party &&
         isFromRegistry(offer, contract.signatories, operator, registry.trustedProvidersOf)
         ? [offer]
         : [];
     });
+  }
+
+  function burnRequestsIn(party: string, contracts: readonly ActiveContract[], operator: string): BurnRequest[] {
+    return contracts.flatMap((contract) => {
+      const request = parseBurnRequest(contract);
+      return request !== null &&
+        request.holder === party &&
+        isFromRegistry(request, contract.signatories, operator, registry.trustedProvidersOf)
+        ? [request]
+        : [];
+    });
+  }
+
+  async function listMintOffers(): Promise<MintOffer[]> {
+    const taken = await core.snapshot();
+    const [contracts, operator] = await Promise.all([taken.read(MINT_OFFER_FILTER), registry.operatorParty()]);
+    return mintOffersIn(taken.wallet.partyId, contracts, operator);
+  }
+
+  async function listBurnRequests(): Promise<BurnRequest[]> {
+    const taken = await core.snapshot();
+    const [contracts, operator] = await Promise.all([taken.read(BURN_REQUEST_FILTER), registry.operatorParty()]);
+    return burnRequestsIn(taken.wallet.partyId, contracts, operator);
+  }
+
+  async function stateOf(taken: StateSnapshot): Promise<TokenWalletState> {
+    const [base, mintContracts, burnContracts, operator] = await Promise.all([
+      core.stateOf(taken),
+      taken.read(MINT_OFFER_FILTER),
+      taken.read(BURN_REQUEST_FILTER),
+      registry.operatorParty(),
+    ]);
+    return {
+      ...base,
+      mintOffers: mintOffersIn(taken.wallet.partyId, mintContracts, operator),
+      burnRequests: burnRequestsIn(taken.wallet.partyId, burnContracts, operator),
+    };
   }
 
   async function runAcceptMintOffer(
@@ -96,9 +143,7 @@ export function createTokenWallet(options: TokenWalletOptions): TokenWallet {
     acceptOptions: { expectedRegistrar?: string } = {}
   ): Promise<SubmitResult> {
     const wallet = await connect();
-    const contracts = await wallet.listActiveContracts({
-      templateId: DA_REGISTRY_TEMPLATES.mintOffer,
-    });
+    const contracts = await wallet.listActiveContracts(MINT_OFFER_FILTER);
     const contract = contracts.find((c) => c.contractId === mintOfferCid);
     const offer = contract ? parseMintOffer(contract) : null;
     if (contract === undefined || offer === null) {
@@ -208,26 +253,9 @@ export function createTokenWallet(options: TokenWalletOptions): TokenWallet {
     });
   }
 
-  async function listBurnRequests(): Promise<BurnRequest[]> {
-    const wallet = await connect();
-    const [contracts, operator] = await Promise.all([
-      wallet.listActiveContracts({
-        templateId: DA_REGISTRY_TEMPLATES.burnRequest,
-      }),
-      registry.operatorParty(),
-    ]);
-    return contracts.flatMap((contract) => {
-      const request = parseBurnRequest(contract);
-      return request !== null &&
-        request.holder === wallet.partyId &&
-        isFromRegistry(request, contract.signatories, operator, registry.trustedProvidersOf)
-        ? [request]
-        : [];
-    });
-  }
-
   return {
     ...core.api,
+    loadState: async () => stateOf(await core.snapshot()),
     listMintOffers,
     acceptMintOffer: async (mintOfferCid, acceptOptions) =>
       exclusive(async () => runAcceptMintOffer(mintOfferCid, acceptOptions)),

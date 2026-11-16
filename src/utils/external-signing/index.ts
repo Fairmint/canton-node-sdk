@@ -10,3 +10,4 @@ export * from './external-signing-client';
 export * from './generate-external-party';
 export * from './prepare-external-transaction';
 export * from './stellar-utils';
+export * from './wallet-ownership';

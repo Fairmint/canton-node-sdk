@@ -9,6 +9,7 @@ import type {
   FetchLike,
   JsonObject,
 } from '../../../src/wallets';
+import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
 
 export const HOLDER = 'holder::1220aa';
 export const OTHER = 'other::1220dd';
@@ -117,10 +118,10 @@ function createdEvent(active: ActiveContract): Record<string, unknown> {
   };
 }
 
-/** The template or interface id a `/v2/state/active-contracts(-page)` body filters on (and the party it filters for). */
+/** The template and interface ids a `/v2/state/active-contracts(-page)` body filters on (and the party it filters for). */
 export function acsFilter(body: unknown): {
   party: string;
-  filter: ContractFilter;
+  filters: ContractFilter[];
 } {
   const byParty = (
     body as {
@@ -139,23 +140,49 @@ export function acsFilter(body: unknown): {
       };
     }
   ).eventFormat.filtersByParty;
-  const [party, filters] = Object.entries(byParty)[0] ?? [];
-  const identifier = filters?.cumulative[0]?.identifierFilter;
-  if (party === undefined || identifier === undefined) {
+  const [party, partyFilters] = Object.entries(byParty)[0] ?? [];
+  if (party === undefined || partyFilters === undefined || partyFilters.cumulative.length === 0) {
     throw new Error('no party filter');
   }
-  const filter: ContractFilter = identifier.TemplateFilter
-    ? { templateId: identifier.TemplateFilter.value.templateId }
-    : { interfaceId: identifier.InterfaceFilter?.value.interfaceId ?? '' };
-  return { party, filter };
+  const filters = partyFilters.cumulative.map(({ identifierFilter: identifier }): ContractFilter =>
+    identifier.TemplateFilter
+      ? { templateId: identifier.TemplateFilter.value.templateId }
+      : { interfaceId: identifier.InterfaceFilter?.value.interfaceId ?? '' }
+  );
+  return { party, filters };
+}
+
+/** The ledger entries matching any of the filters (the union a cumulative filter asks for), each contract once. */
+function matching(contracts: Record<string, ActiveContract[]>, filters: readonly ContractFilter[]): unknown[] {
+  const seen = new Set<string>();
+  return filters.flatMap((filter) =>
+    (contracts['templateId' in filter ? filter.templateId : filter.interfaceId] ?? []).flatMap((c) => {
+      if (seen.has(c.contractId)) return [];
+      seen.add(c.contractId);
+      return [acsEntry(createdEvent(c))];
+    })
+  );
 }
 
 export interface FakeProvider extends Cip103Provider {
   readonly requests: Cip103Request[];
   /** `prepareExecuteAndWait` params, in order. */
   readonly submissions: Cip103PrepareExecuteParams[];
-  /** ACS filters read, in order. */
-  readonly reads: ContractFilter[];
+  /** The filters of each ACS read (its first page, or its unpaged request), in order. */
+  readonly reads: ContractFilter[][];
+  /** The `ledgerApi` resources requested, in order (`GET /v2/state/ledger-end`, …). */
+  readonly ledgerCalls: () => string[];
+}
+
+export interface FakeProviderOptions {
+  party?: string;
+  submitError?: unknown;
+  /** Called before each `ledgerApi` request is answered: throw from it to fail the request. */
+  beforeLedgerApi?: (resource: string, body: unknown) => void;
+  /** Answers `signMessage`; without it the method is 4200. */
+  signMessage?: (message: string) => unknown;
+  /** Extra fields of the primary account. */
+  account?: Record<string, unknown>;
 }
 
 /**
@@ -165,16 +192,20 @@ export interface FakeProvider extends Cip103Provider {
  */
 export function fakeProvider(
   contracts: Record<string, ActiveContract[]>,
-  options: { party?: string; submitError?: unknown } = {}
+  options: FakeProviderOptions = {}
 ): FakeProvider {
   const requests: Cip103Request[] = [];
   const submissions: Cip103PrepareExecuteParams[] = [];
-  const reads: ContractFilter[] = [];
+  const reads: ContractFilter[][] = [];
   const party = options.party ?? HOLDER;
   return {
     requests,
     submissions,
     reads,
+    ledgerCalls: () =>
+      requests.flatMap((r) =>
+        r.method === 'ledgerApi' ? [`${r.params.requestMethod.toUpperCase()} ${r.params.resource}`] : []
+      ),
     on: () => undefined,
     removeListener: () => undefined,
     async request(args) {
@@ -190,25 +221,25 @@ export function fakeProvider(
             namespace: '1220aa',
             networkId: 'canton:devnet',
             signingProviderId: 'loop',
+            ...options.account,
           };
         case 'ledgerApi': {
           const { requestMethod, resource, body } = args.params;
+          options.beforeLedgerApi?.(resource, body);
           if (requestMethod === 'get' && resource === '/v2/state/ledger-end') {
             return { offset: LEDGER_END };
           }
           if (requestMethod === 'post' && resource === '/v2/state/active-contracts') {
-            const { filter } = acsFilter(body);
-            reads.push(filter);
-            const key = 'templateId' in filter ? filter.templateId : filter.interfaceId;
-            return (contracts[key] ?? []).map((c) => acsEntry(createdEvent(c)));
+            const { filters } = acsFilter(body);
+            reads.push(filters);
+            return matching(contracts, filters);
           }
           if (requestMethod === 'post' && resource === '/v2/state/active-contracts-page') {
             // Pages of `maxPageSize`; the page token is the index of the page's first entry.
-            const { filter } = acsFilter(body);
+            const { filters } = acsFilter(body);
             const { maxPageSize, pageToken } = body as { maxPageSize: number; pageToken?: string };
-            if (pageToken === undefined) reads.push(filter);
-            const key = 'templateId' in filter ? filter.templateId : filter.interfaceId;
-            const all = (contracts[key] ?? []).map((c) => acsEntry(createdEvent(c)));
+            if (pageToken === undefined) reads.push(filters);
+            const all = matching(contracts, filters);
             const from = pageToken === undefined ? 0 : Number(pageToken);
             const to = from + maxPageSize;
             return {
@@ -229,6 +260,10 @@ export function fakeProvider(
               payload: { updateId: 'update-1', completionOffset: 4243 },
             },
           };
+        }
+        case 'signMessage': {
+          if (options.signMessage === undefined) throw new RpcError(4200, 'signMessage is not supported');
+          return options.signMessage(args.params.message);
         }
       }
     },
@@ -303,7 +338,16 @@ export class FakeLoopCip103Provider {
   }
 }
 
-/** An active contract; the registrar signs it unless `signatories` says otherwise. */
+/** The package name of the DA Registry template of a `Module:Entity`, as the ledger reports it with the contract. */
+function daPackageName(qualified: string): string | undefined {
+  const id = Object.values(DA_REGISTRY_TEMPLATES).find((t) => t.endsWith(`:${qualified}`));
+  return id === undefined ? undefined : id.slice(1, id.indexOf(':'));
+}
+
+/**
+ * An active contract; the registrar signs it unless `signatories` says otherwise. A DA Registry template gets its
+ * package name, as the Ledger JSON API v2 always reports one (destructure it away to model a response without one).
+ */
 export function contract(
   contractId: string,
   qualified: string,
@@ -311,9 +355,11 @@ export function contract(
   interfaceViews: ActiveContract['interfaceViews'] = [],
   signatories: readonly string[] = [REGISTRAR]
 ): ActiveContract {
+  const packageName = daPackageName(qualified);
   return {
     contractId,
     templateId: pkgId('1eddd268', qualified),
+    ...(packageName !== undefined && { packageName }),
     signatories,
     createArgument,
     interfaceViews,

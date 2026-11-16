@@ -25,14 +25,44 @@ export class WalletSubmitError extends Error {
   }
 }
 
+/** CIP-0103 -32005 (Limit exceeded): the wallet rate-limited the request. */
+const LIMIT_EXCEEDED = -32005;
+
 /** The wallet could not read the ledger or its account, or answered in a shape this module does not understand. */
 export class WalletReadError extends Error {
   /** The wallet's CIP-0103 error code, when it gave one (4100: not connected; 4200: method not supported). */
   readonly code?: number;
+  /**
+   * The wallet rate-limited the read (CIP-0103 -32005) and kept refusing after the SDK backed off. Nothing is wrong
+   * with the request: offer the user a retry after a moment.
+   */
+  readonly rateLimited: boolean;
 
   constructor(message: string, code?: number) {
     super(message);
     this.name = 'WalletReadError';
+    if (code !== undefined) this.code = code;
+    this.rateLimited = code === LIMIT_EXCEEDED;
+  }
+}
+
+/**
+ * - `invalid-challenge`: the challenge is malformed or expired; nothing was sent to the wallet.
+ * - `rejected-by-user`: the user declined to sign (CIP-0103 4001).
+ * - `failed`: the wallet could not sign, or answered without a signature.
+ */
+export type WalletSignErrorReason = 'invalid-challenge' | 'rejected-by-user' | 'failed';
+
+/** The wallet did not sign the ownership message. */
+export class WalletSignError extends Error {
+  readonly reason: WalletSignErrorReason;
+  /** The wallet's CIP-0103 error code, when it gave one. */
+  readonly code?: number;
+
+  constructor(reason: WalletSignErrorReason, message: string, code?: number) {
+    super(message);
+    this.name = 'WalletSignError';
+    this.reason = reason;
     if (code !== undefined) this.code = code;
   }
 }
