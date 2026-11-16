@@ -211,6 +211,12 @@ describe('createCip103Session', () => {
     expect(connectedWallet(session)).toMatchObject({ partyId: HOLDER, network: 'mainnet' });
     await session.connected(new TestProvider(), { network: 'devnet' });
     expect(connectedWallet(session)).toMatchObject({ partyId: HOLDER, network: 'devnet' });
+    // A spelling the session does not recognise is not proof of another network.
+    const otherSpelling = new TestProvider(HOLDER, {
+      getPrimaryAccount: () => ({ primary: true, partyId: HOLDER, networkId: 'canton:dev-net' }),
+    });
+    await session.connected(otherSpelling, { network: 'devnet' });
+    expect(connectedWallet(session)).toMatchObject({ partyId: HOLDER, network: 'devnet' });
   });
 
   it('ends the session when statusChanged says the wallet disconnected', async () => {

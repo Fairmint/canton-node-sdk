@@ -47,8 +47,10 @@ export type Cip103SessionState =
 
 export interface Cip103ConnectContext {
   /**
-   * The network the dApp connects for, carried on the `ConnectedWallet`. A wallet whose primary account reports another
-   * CIP-0103 `networkId` (`canton:<network>`) is refused: the session stays disconnected with an error.
+   * The network the dApp connects for, carried on the `ConnectedWallet`. A wallet whose primary account reports the
+   * CIP-0103 `networkId` of another DA network (`canton:mainnet` when connecting for `devnet`, and the reverse) is
+   * refused: the session stays disconnected with an error. CIP-0103 does not fix how a wallet spells its network id, so
+   * an id the session does not recognise, or none, is accepted rather than locking every user out.
    */
   readonly network?: DaNetwork;
 }
@@ -199,7 +201,7 @@ export function createCip103Session(): Cip103Session {
     if (attempt !== generation || disposed) return;
     const { network } = context;
     const { partyId, networkId } = account;
-    if (network !== undefined && networkId !== undefined && networkId !== cip103NetworkId(network)) {
+    if (network !== undefined && networkId !== undefined && reportsOtherNetwork(networkId, network)) {
       // DA's registry and ledger for `network` would refuse every call of a wallet on another network.
       detach();
       const message = `The wallet is on ${networkId}, not ${cip103NetworkId(network)}: switch networks in the wallet, then connect again.`;
@@ -312,4 +314,11 @@ export function createCip103Session(): Cip103Session {
       listeners.clear();
     },
   };
+}
+
+const DA_NETWORKS: readonly DaNetwork[] = ['devnet', 'mainnet'];
+
+/** Whether `networkId` is the CIP-0103 id of a DA network other than `network`. */
+function reportsOtherNetwork(networkId: string, network: DaNetwork): boolean {
+  return DA_NETWORKS.some((other) => other !== network && networkId === cip103NetworkId(other));
 }
