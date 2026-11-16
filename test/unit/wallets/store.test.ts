@@ -10,8 +10,8 @@ import {
   WalletSubmitError,
   type ConnectedWallet,
   type Cip103Session,
-  type TokenWallet,
-  type TokenWalletState,
+  type Wallet,
+  type WalletState,
   type TokenWalletStore,
 } from '../../../src/wallets';
 import { DEVNET, fakeProvider, HOLDER, OTHER } from './helpers';
@@ -20,12 +20,12 @@ import { connectedWallet, deferred, flush, TestProvider } from './session-helper
 /** A load the test answers: the party it was asked for, and its settle functions. */
 interface PendingLoad {
   readonly partyId: string;
-  readonly resolve: (state: TokenWalletState) => void;
+  readonly resolve: (state: WalletState) => void;
   readonly reject: (error: unknown) => void;
 }
 
 /** A snapshot that names its party and the load it answered. */
-const snapshot = (partyId: string, offset: number): TokenWalletState => ({
+const snapshot = (partyId: string, offset: number): WalletState => ({
   partyId,
   offset,
   holdings: [],
@@ -60,9 +60,9 @@ function setup(): {
     session,
     open: (wallet) => {
       opened.push(wallet);
-      const tokens: Pick<TokenWallet, 'loadState'> = {
+      const tokens: Pick<Wallet, 'loadState'> = {
         loadState: async () => {
-          const reply = deferred<TokenWalletState>();
+          const reply = deferred<WalletState>();
           loads.push({ partyId: wallet.partyId, resolve: reply.resolve, reject: reply.reject });
           active += 1;
           try {
@@ -72,7 +72,7 @@ function setup(): {
           }
         },
       };
-      return tokens as TokenWallet;
+      return tokens as Wallet;
     },
   });
   let published = 0;
@@ -874,13 +874,13 @@ describe('createTokenWalletStore', () => {
     store = createTokenWalletStore({
       session,
       open: (wallet) => {
-        const tokens: Pick<TokenWallet, 'loadState'> = {
+        const tokens: Pick<Wallet, 'loadState'> = {
           loadState: async () => {
             loads.push(wallet.key);
             return snapshot(wallet.partyId, 1);
           },
         };
-        return tokens as TokenWallet;
+        return tokens as Wallet;
       },
     });
     await session.connect(provider, { network: 'devnet' });
@@ -923,7 +923,7 @@ describe('createTokenWalletStore', () => {
       expect(await store.run('send', async () => 'x')).toBe(false);
     });
 
-    it("acts as the connected party through createTokenWallet with DA's registry for its network", async () => {
+    it("acts as the connected party through createWallet with DA's registry for its network", async () => {
       // DA's registry is down: the load reaches it on DevNet and fails as a registry error.
       const fetched: string[] = [];
       const fetchSpy = jest.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
@@ -969,7 +969,7 @@ describe('createTokenWalletStore', () => {
         const provider = fakeProvider({}, { party: HOLDER, account });
         await session.connected(provider, { network: 'devnet' });
         await flush();
-        let kept: TokenWallet | null = null;
+        let kept: Wallet | null = null;
         expect(
           await store.run(
             'keep',
@@ -985,7 +985,7 @@ describe('createTokenWalletStore', () => {
         await flush();
         expect(connectedWallet(session).partyId).toBe(OTHER);
         // A dApp that kept HOLDER's token wallet submits through it in OTHER's run.
-        const stale = kept as unknown as TokenWallet;
+        const stale = kept as unknown as Wallet;
         let sent: string[] = [];
         let fetched = -1;
         expect(

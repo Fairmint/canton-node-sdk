@@ -71,18 +71,22 @@ See
 
 ## Token actions through a CIP-0103 wallet
 
-`Wallets` runs token standard (CIP-56) holder actions on Digital Asset Utility Registry instruments
-through any CIP-0103 (Canton dApp API) wallet provider:
+`Wallets` runs token standard (CIP-56) holder actions through any CIP-0103 (Canton dApp API) wallet
+provider. One wallet, `createWallet`, does it all:
 
-- read the wallet's state in one snapshot (`loadState`: holdings and their `balances` per
-  instrument, mint offers, transfer offers and burn requests), or each list on its own;
-- accept a mint offer (`acceptMintOffer`);
-- preview and send a transfer (`planTransfer`, then `submit` once the user confirmed the kind), and
-  accept, reject or withdraw a transfer offer (`answerTransferOffer`, or `acceptTransferOffer`,
-  `rejectTransferOffer`, `withdrawTransferOffer`);
-- propose a burn (`requestBurn`: a burn request the registrar accepts or rejects; without a
-  `reference` it files a generated `holder-burn-…` one and returns it);
-- create a transfer preapproval (experimental);
+- with any `TokenRegistry`, the CIP-56 actions: read the wallet's state in one snapshot
+  (`loadState`: holdings and their `balances` per instrument, and transfer offers), or each list on
+  its own; preview and send a transfer (`planTransfer`, then `submit` once the user confirmed the
+  kind); accept, reject or withdraw a transfer offer (`answerTransferOffer`, or
+  `acceptTransferOffer`, `rejectTransferOffer`, `withdrawTransferOffer`);
+- with Digital Asset's Utility Registry client (`network`, or
+  `registry: createDaUtilitiesClient(...)`), DA's actions as well: mint offers and burn requests in
+  `loadState`, accept a mint offer (`acceptMintOffer`), propose a burn (`requestBurn`: a burn
+  request the registrar accepts or rejects; without a `reference` it files a generated
+  `holder-burn-…` one and returns it), and create a transfer preapproval (experimental). With
+  another registry, `loadState`'s mint offers and burn requests are empty and DA's actions are
+  refused with `unsupported-by-registry` before anything is read or signed;
+  `isDaUtilitiesClient(registry)` tells which you have;
 - prove that the user controls the wallet's party by signing a message
   (`requestWalletOwnershipVerdict`, or `proveWalletOwnership` alone), verified on your server with
   `createWalletOwnershipChallenger` (or `verifyWalletOwnership` alone).
@@ -97,14 +101,14 @@ of the SDK's Node dependencies. The package root also exports it as the `Wallets
 
 ```ts
 import {
-  createTokenWallet,
+  createWallet,
   describeWalletError,
   type Cip103Provider,
 } from '@fairmint/canton-node-sdk/build/src/wallets/index.js';
 
 async function send(provider: Cip103Provider, receiver: string): Promise<string> {
   // Any connected CIP-0103 provider; `network` builds DA's registry client (or pass `registry`).
-  const tokens = createTokenWallet({ provider, network: 'devnet' });
+  const tokens = createWallet({ provider, network: 'devnet' });
   const instrumentId = { admin: 'registrar::1220...', id: 'XMPL' };
   try {
     const plan = await tokens.planTransfer({ receiver, instrumentId, amount: '10' });
@@ -175,7 +179,7 @@ import {
 
 const network = 'devnet';
 const session = createCip103Session();
-// Default open: createTokenWallet({ provider, partyId, network, isActive: () => session.isCurrent(wallet) })
+// Default open: createWallet({ provider, partyId, network, isActive: () => session.isCurrent(wallet) })
 const store = createTokenWalletStore({ session });
 
 // The wallet's own callbacks (Loop: onAccept, onReject) and the buttons.
@@ -238,7 +242,7 @@ export async function POST(request: Request): Promise<Response> {
   that made it. The store's token wallets refuse every write once their `ConnectedWallet` is no
   longer the session's, with `invalid-input` before anything is read or signed, so a plan made for
   one account is never submitted after the wallet switched to another: plan again. A custom `open`
-  gets this as its second argument (`{ isActive }`) and passes it on to `createTokenWallet`.
+  gets this as its second argument (`{ isActive }`) and passes it on to `createWallet`.
 - A wallet whose account reports another network than `{ network }` is refused, and each
   `ConnectedWallet` has a `key` for UI keys (a new session remounts what the old one rendered).
 - Wallet discovery (finding the providers a browser offers) is future work: its CIP is a draft.

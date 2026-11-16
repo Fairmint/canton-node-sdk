@@ -1,17 +1,17 @@
 /**
- * `createTokenWallet` takes any CIP-0103 provider: the party it acts as, and how a Loop-shaped provider
+ * `createWallet` takes any CIP-0103 provider: the party it acts as, and how a Loop-shaped provider
  * (`loop.getCip103Provider()`) plugs in with its CIP-0103 errors surfaced unchanged.
  */
 import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
 import { TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID } from '../../../src/utils/token-standard/v1/constants';
 import {
   createDaUtilitiesClient,
-  createTokenWallet,
+  createWallet,
   TokenWalletError,
   WalletReadError,
   WalletSubmitError,
   type ActiveContract,
-  type TokenWallet,
+  type Wallet,
 } from '../../../src/wallets';
 import {
   acsFilter,
@@ -81,7 +81,7 @@ const MINT_ACCEPT = {
   },
 };
 
-describe('createTokenWallet: the wallet party', () => {
+describe('createWallet: the wallet party', () => {
   it('acts as the primary account, read on every action', async () => {
     let party = HOLDER;
     const provider = fakeProvider(ledger());
@@ -90,7 +90,7 @@ describe('createTokenWallet: the wallet party', () => {
       request: async (args: Parameters<typeof provider.request>[0]) =>
         args.method === 'getPrimaryAccount' ? { partyId: party, primary: true } : provider.request(args),
     };
-    const tokens = createTokenWallet({
+    const tokens = createWallet({
       provider: switching,
       registry: createDaUtilitiesClient({ network: 'devnet' }, { fetch: registry().fetch }),
     });
@@ -107,7 +107,7 @@ describe('createTokenWallet: the wallet party', () => {
 
   it('acts as a given partyId without asking the wallet', async () => {
     const provider = fakeProvider(ledger());
-    const tokens = createTokenWallet({
+    const tokens = createWallet({
       provider,
       partyId: HOLDER,
       registry: createDaUtilitiesClient({ network: 'devnet' }, { fetch: registry().fetch }),
@@ -120,7 +120,7 @@ describe('createTokenWallet: the wallet party', () => {
 
   it('refuses an empty partyId', () => {
     expect(() =>
-      createTokenWallet({
+      createWallet({
         provider: fakeProvider({}),
         partyId: ' ',
         registry: createDaUtilitiesClient({ network: 'devnet' }),
@@ -129,11 +129,11 @@ describe('createTokenWallet: the wallet party', () => {
   });
 });
 
-describe('createTokenWallet over a Loop-shaped CIP-0103 provider (loop.getCip103Provider())', () => {
-  function setup(submitError?: RpcError): { provider: FakeLoopCip103Provider; tokens: TokenWallet } {
+describe('createWallet over a Loop-shaped CIP-0103 provider (loop.getCip103Provider())', () => {
+  function setup(submitError?: RpcError): { provider: FakeLoopCip103Provider; tokens: Wallet } {
     const provider = new FakeLoopCip103Provider(ledger(), submitError);
     const { fetch } = registry();
-    const tokens = createTokenWallet({
+    const tokens = createWallet({
       provider,
       registry: createDaUtilitiesClient({ network: 'devnet' }, { fetch }),
       now: () => NOW,

@@ -9,8 +9,7 @@
 import { notifyListeners } from './notify';
 import { describeWalletError, TokenWalletError, type WalletErrorDescription } from './errors';
 import type { Cip103Session, Cip103SessionState, ConnectedWallet } from './session';
-import type { TokenStandardWallet } from './token-standard-wallet';
-import { createTokenWallet, type TokenWallet, type TokenWalletState } from './token-wallet';
+import { createWallet, type Wallet, type WalletState } from './wallet';
 
 /** How the last action ended, for the party it ran as. */
 export type ActionOutcome =
@@ -22,7 +21,7 @@ export type ActionOutcome =
    */
   | { readonly id: string; readonly partyId: string; readonly status: 'interrupted' };
 
-export interface TokenWalletView<S = TokenWalletState> {
+export interface TokenWalletView {
   readonly session: Cip103SessionState;
   /** The connected wallet the state belongs to (null when disconnected). */
   readonly wallet: ConnectedWallet | null;
@@ -30,7 +29,7 @@ export interface TokenWalletView<S = TokenWalletState> {
    * Ledger state from one snapshot. Null until the first load answers, and cleared when a load fails or the wallet
    * changes.
    */
-  readonly state: S | null;
+  readonly state: WalletState | null;
   /**
    * A load for the current wallet is in flight, or queued behind the wallet call in flight (an action of this wallet or
    * a previous one, the previous wallet's load, or the load before a Retry).
@@ -58,17 +57,17 @@ export interface TokenWalletView<S = TokenWalletState> {
   readonly unknownOutcomeParty: string | null;
 }
 
-export interface WalletActionContext<W> {
+export interface WalletActionContext {
   /** The token wallet of `wallet`. */
-  readonly tokens: W;
+  readonly tokens: Wallet;
   /** The connected wallet the action runs for. */
   readonly wallet: ConnectedWallet;
 }
 
-export interface TokenWalletStore<W extends TokenStandardWallet = TokenWallet> {
+export interface TokenWalletStore {
   subscribe(listener: () => void): () => void;
   /** The current view; the same object until it changes (for `useSyncExternalStore`). */
-  getSnapshot(): TokenWalletView<Awaited<ReturnType<W['loadState']>>>;
+  getSnapshot(): TokenWalletView;
   /**
    * Reload the snapshot (the Retry button). Starts at once when no wallet call is in flight; otherwise it is queued and
    * runs once that call settles (the load in flight may have read before what prompted the refresh). Queued loads are
@@ -96,7 +95,7 @@ export interface TokenWalletStore<W extends TokenStandardWallet = TokenWallet> {
    */
   run(
     id: string,
-    action: (context: WalletActionContext<W>) => Promise<string | void>,
+    action: (context: WalletActionContext) => Promise<string | void>,
     options?: { readonly readOnly?: boolean }
   ): Promise<boolean>;
   /**
@@ -115,15 +114,16 @@ export interface OpenTokenWalletContext {
   readonly isActive: () => boolean;
 }
 
-export interface TokenWalletStoreOptions<W extends TokenStandardWallet> {
+export interface TokenWalletStoreOptions {
   readonly session: Cip103Session;
   /**
-   * Builds the token wallet of each connected wallet. Default: `createTokenWallet({ provider, partyId, network,
-   * isActive })`, which needs `wallet.network` (a wallet without one gets a `refused` load error). Pass
-   * `context.isActive` on as the token wallet's `isActive`, as the default does, or a plan made for one wallet can
-   * still be submitted after the session switched to another.
+   * Builds the token wallet of each connected wallet. Default: `createWallet({ provider, partyId, network, isActive })`
+   * (DA's registry for the wallet's network), which needs `wallet.network` (a wallet without one gets a `refused` load
+   * error). For another registry, return `createWallet({ provider: wallet.provider, partyId: wallet.partyId, registry,
+   * isActive: context.isActive })`. Pass `context.isActive` on as the token wallet's `isActive`, as the default does,
+   * or a plan made for one wallet can still be submitted after the session switched to another.
    */
-  readonly open?: (wallet: ConnectedWallet, context: OpenTokenWalletContext) => W;
+  readonly open?: (wallet: ConnectedWallet, context: OpenTokenWalletContext) => Wallet;
 }
 
 /** Whether the outcome leaves open if a write committed: `interrupted`, or a failure the wallet could not confirm. */
@@ -137,7 +137,7 @@ function refusedUnsent(error: unknown): boolean {
 }
 
 /** The default token wallet: DA's registry for the network the wallet connected for, acting as its party only. */
-function openTokenWallet(wallet: ConnectedWallet, context: OpenTokenWalletContext): TokenWallet {
+function openWallet(wallet: ConnectedWallet, context: OpenTokenWalletContext): Wallet {
   const { provider, partyId, network } = wallet;
   if (network === undefined) {
     throw new TokenWalletError(
@@ -145,7 +145,7 @@ function openTokenWallet(wallet: ConnectedWallet, context: OpenTokenWalletContex
       'The connected wallet names no network: connect with { network }, or pass open to createTokenWalletStore'
     );
   }
-  return createTokenWallet({ provider, partyId, network, isActive: context.isActive });
+  return createWallet({ provider, partyId, network, isActive: context.isActive });
 }
 
 /**
@@ -159,26 +159,15 @@ function openTokenWallet(wallet: ConnectedWallet, context: OpenTokenWalletContex
  * `dispose()`. A wallet call that never settles holds the latch, since it cannot be cancelled. The token wallet's own
  * write latch (`busy`) stays as the inner guard.
  */
-export function createTokenWalletStore(options: TokenWalletStoreOptions<TokenWallet>): TokenWalletStore<TokenWallet>;
-export function createTokenWalletStore<W extends TokenStandardWallet>(
-  options: TokenWalletStoreOptions<W> & {
-    readonly open: (wallet: ConnectedWallet, context: OpenTokenWalletContext) => W;
-  }
-): TokenWalletStore<W>;
-export function createTokenWalletStore<W extends TokenStandardWallet>(
-  options: TokenWalletStoreOptions<W>
-): TokenWalletStore<W> {
-  type S = Awaited<ReturnType<W['loadState']>>;
+export function createTokenWalletStore(options: TokenWalletStoreOptions): TokenWalletStore {
   const { session } = options;
-  // Without `open`, the first overload fixes W to TokenWallet.
-  const open =
-    options.open ?? (openTokenWallet as unknown as (wallet: ConnectedWallet, context: OpenTokenWalletContext) => W);
+  const open = options.open ?? openWallet;
   const listeners = new Set<() => void>();
 
   let sessionState = session.getSnapshot();
   let wallet: ConnectedWallet | null = null;
-  let tokens: W | null = null;
-  let state: S | null = null;
+  let tokens: Wallet | null = null;
+  let state: WalletState | null = null;
   let loadError: WalletErrorDescription | null = null;
   // Stale replies: every load and wallet change takes a new number; a load's reply counts only while its number is the
   // latest and its wallet still current. This drops replies; it does not free the latch.
@@ -201,7 +190,7 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
     return outcome.status === 'interrupted' || outcome.partyId !== wallet?.partyId ? outcome.partyId : null;
   }
 
-  function buildView(): TokenWalletView<S> {
+  function buildView(): TokenWalletView {
     return {
       session: sessionState,
       wallet,
@@ -257,7 +246,7 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
    * superseded it (loads never overlap, so a newer load of the same wallet cannot); the latch frees either way, and the
    * queued load, if any, starts.
    */
-  function startLoad(forWallet: ConnectedWallet, forTokens: W): void {
+  function startLoad(forWallet: ConnectedWallet, forTokens: Wallet): void {
     const attempt = ++generation;
     inFlight += 1;
     loadInFlight = true;
@@ -265,9 +254,9 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
     const current = (): boolean =>
       !disposed && attempt === generation && forWallet === wallet && session.isCurrent(forWallet);
     void (async () => {
-      let next: { readonly ok: true; readonly snapshot: S } | { readonly ok: false; readonly error: unknown };
+      let next: { readonly ok: true; readonly snapshot: WalletState } | { readonly ok: false; readonly error: unknown };
       try {
-        next = { ok: true, snapshot: (await forTokens.loadState()) as S };
+        next = { ok: true, snapshot: await forTokens.loadState() };
       } catch (error) {
         next = { ok: false, error };
       }

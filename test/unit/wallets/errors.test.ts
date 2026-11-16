@@ -89,6 +89,17 @@ describe('describeWalletError', () => {
     expect(busy.message).toMatch(/nothing was submitted/);
   });
 
+  it('describes an action the registry does not offer as refused', () => {
+    const unsupported = describeWalletError(
+      new TokenWalletError('unsupported-by-registry', "requestBurn needs DA's Utility Registry client")
+    );
+    expect(unsupported).toEqual({
+      kind: 'refused',
+      message: "requestBurn needs DA's Utility Registry client",
+      code: 'unsupported-by-registry',
+    });
+  });
+
   it('describes anything else thrown without throwing itself', () => {
     expect(describeWalletError(new TypeError('boom'))).toEqual({ kind: 'other', message: 'boom' });
     expect(describeWalletError({ code: 1 })).toEqual({ kind: 'other', message: '{"code":1}' });

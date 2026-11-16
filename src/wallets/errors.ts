@@ -112,7 +112,12 @@ export type TokenWalletErrorCode =
   /** The registry would now run the transfer as another kind than the caller previewed (`expectedKind`). */
   | 'kind-changed'
   /** Another write action of the same token wallet is still in progress. */
-  | 'busy';
+  | 'busy'
+  /**
+   * The wallet's registry does not offer this action (DA's mint, burn and preapproval actions need DA's Utility
+   * Registry client).
+   */
+  | 'unsupported-by-registry';
 
 /** A token action refused before anything was submitted. */
 export class TokenWalletError extends Error {

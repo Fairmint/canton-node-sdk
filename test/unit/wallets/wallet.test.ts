@@ -1,14 +1,14 @@
 import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
 import { TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID } from '../../../src/utils/token-standard/v1/constants';
 import { DA_UTILITIES_BASE_URLS, type DaUtilitiesClient } from '../../../src/wallets/da-utilities/client';
-import { BURN_REFERENCE_PATTERN } from '../../../src/wallets/token-wallet';
+import { BURN_REFERENCE_PATTERN } from '../../../src/wallets/wallet';
 import {
   createCip103Session,
   createDaUtilitiesClient,
-  createTokenStandardWallet,
-  createTokenWallet,
+  createWallet,
   createTokenWalletStore,
   describeWalletError,
+  isDaUtilitiesClient,
   newBurnReference,
   RegistryResponseError,
   TokenWalletError,
@@ -16,8 +16,7 @@ import {
   type ActiveContract,
   type JsonObject,
   type TokenRegistry,
-  type TokenStandardWallet,
-  type TokenWallet,
+  type Wallet,
   type TransferInstructionAction,
   type TransferKind,
   type TransferOffer,
@@ -151,7 +150,7 @@ function setup(
     trustedProviders?: Record<string, string[]>;
     isActive?: () => boolean;
   } = {}
-): { tokens: TokenWallet; wallet: FakeProvider; calls: FetchCall[]; registry: DaUtilitiesClient } {
+): { tokens: Wallet; wallet: FakeProvider; calls: FetchCall[]; registry: DaUtilitiesClient } {
   const { fetch, calls } = fakeFetch((call: FetchCall) => {
     if (call.url.endsWith('/api/utilities/v0/operator')) {
       return { json: { partyId: OPERATOR } };
@@ -197,7 +196,7 @@ function setup(
     { network: 'devnet' },
     { fetch, ...(options.trustedProviders !== undefined && { trustedProviders: options.trustedProviders }) }
   );
-  const tokens = createTokenWallet({
+  const tokens = createWallet({
     provider: wallet,
     ...(options.partyId !== undefined && { partyId: options.partyId }),
     registry,
@@ -225,7 +224,7 @@ const STATE_FILTERS = [
 
 const postCalls = (calls: FetchCall[]): FetchCall[] => calls.filter((c) => c.method === 'POST');
 
-describe('createTokenWallet: holdings and listings', () => {
+describe('createWallet: holdings and listings', () => {
   it('lists the party holdings through the HoldingV1 interface', async () => {
     const { tokens, wallet } = setup();
     const holdings = await tokens.listHoldings();
@@ -325,7 +324,7 @@ describe('createTokenWallet: holdings and listings', () => {
   });
 });
 
-describe('createTokenWallet.loadState: one snapshot per refresh', () => {
+describe('createWallet.loadState: one snapshot per refresh', () => {
   it('reads everything with one ledger-end call and one paged ACS stream', async () => {
     const { tokens, wallet, calls } = setup();
     const state = await tokens.loadState();
@@ -460,7 +459,7 @@ describe('createTokenWallet.loadState: one snapshot per refresh', () => {
         }
       },
     });
-    const tokens = createTokenWallet({
+    const tokens = createWallet({
       provider: wallet,
       registry: createDaUtilitiesClient({ network: 'devnet' }, { fetch: registryFetch.fetch }),
       readRetry: {
@@ -491,7 +490,7 @@ describe('createTokenWallet.loadState: one snapshot per refresh', () => {
         }
       },
     });
-    const tokens = createTokenWallet({
+    const tokens = createWallet({
       provider: wallet,
       registry: createDaUtilitiesClient(
         { network: 'devnet' },
@@ -516,7 +515,7 @@ describe('createTokenWallet.loadState: one snapshot per refresh', () => {
         if (resource === '/v2/state/active-contracts-page') throw new RpcError(4200, 'not allowed');
       },
     });
-    const tokens = createTokenWallet({
+    const tokens = createWallet({
       provider: wallet,
       registry: createDaUtilitiesClient(
         { network: 'devnet' },
@@ -595,7 +594,7 @@ describe('createTokenWallet.loadState: one snapshot per refresh', () => {
   });
 });
 
-describe('createTokenWallet.acceptMintOffer', () => {
+describe('createWallet.acceptMintOffer', () => {
   it('fetches the accept context and submits MintOffer_Accept', async () => {
     const { tokens, wallet, calls } = setup();
     await expect(tokens.acceptMintOffer('00mint', { expectedRegistrar: REGISTRAR })).resolves.toEqual({
@@ -658,7 +657,7 @@ describe('createTokenWallet.acceptMintOffer', () => {
   });
 });
 
-describe('createTokenWallet: registrars served by another provider (trustedProviders)', () => {
+describe('createWallet: registrars served by another provider (trustedProviders)', () => {
   it('by default trusts only a registrar that is its own provider', async () => {
     const { tokens, wallet } = setup();
     expect((await tokens.listMintOffers()).map((o) => o.contractId)).toEqual(['00mint']);
@@ -692,7 +691,7 @@ describe('createTokenWallet: registrars served by another provider (trustedProvi
   });
 });
 
-describe('createTokenWallet.requestBurn', () => {
+describe('createWallet.requestBurn', () => {
   it('selects holdings, fetches the burn factory and submits AllocationFactory_RequestBurn', async () => {
     const { tokens, wallet, calls } = setup();
     await expect(
@@ -886,7 +885,7 @@ describe('newBurnReference', () => {
   });
 });
 
-describe('createTokenWallet({ network })', () => {
+describe('createWallet({ network })', () => {
   afterEach(() => {
     jest.restoreAllMocks();
   });
@@ -899,7 +898,7 @@ describe('createTokenWallet({ network })', () => {
         .mockImplementation(async () =>
           Promise.resolve(new Response(JSON.stringify({ partyId: OPERATOR }), { status: 200 }))
         );
-      const tokens = createTokenWallet({ provider: fakeProvider(ledger()), network, now: () => NOW });
+      const tokens = createWallet({ provider: fakeProvider(ledger()), network, now: () => NOW });
       const state = await tokens.loadState();
       expect(state.mintOffers.map((o) => o.contractId)).toEqual(['00mint']);
       expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual([
@@ -910,16 +909,16 @@ describe('createTokenWallet({ network })', () => {
 
   it('refuses options with neither a registry nor a known network', () => {
     const provider = fakeProvider(ledger());
-    expect(() => createTokenWallet({ provider } as unknown as Parameters<typeof createTokenWallet>[0])).toThrow(
+    expect(() => createWallet({ provider } as unknown as Parameters<typeof createWallet>[0])).toThrow(
       expect.objectContaining({ name: 'TokenWalletError', code: 'invalid-input' })
     );
     expect(() =>
-      createTokenWallet({ provider, network: 'testnet' } as unknown as Parameters<typeof createTokenWallet>[0])
+      createWallet({ provider, network: 'testnet' } as unknown as Parameters<typeof createWallet>[0])
     ).toThrow(expect.objectContaining({ code: 'invalid-input' }));
   });
 });
 
-describe('createTokenWallet transfers', () => {
+describe('createWallet transfers', () => {
   const request = {
     receiver: OTHER,
     instrumentId: INSTRUMENT,
@@ -1205,7 +1204,7 @@ describe('createTokenWallet transfers', () => {
     const store = createTokenWalletStore({
       session,
       open: (connected, { isActive }) =>
-        createTokenWallet({
+        createWallet({
           provider: connected.provider,
           partyId: connected.partyId,
           registry,
@@ -1328,7 +1327,7 @@ describe('createTokenWallet transfers', () => {
 
   it('refuses a clock that gives an invalid time before submitting', async () => {
     const wallet = fakeProvider(ledger());
-    const tokens = createTokenWallet({
+    const tokens = createWallet({
       provider: wallet,
       registry: createDaUtilitiesClient({ network: 'devnet' }, { fetch: fakeFetch(() => ({ json: {} })).fetch }),
       now: () => new Date(Number.NaN),
@@ -1375,7 +1374,7 @@ describe('createTokenWallet transfers', () => {
   });
 });
 
-describe('createTokenWallet.createTransferPreapproval', () => {
+describe('createWallet.createTransferPreapproval', () => {
   it('creates the DA preapproval with the operator from the registry', async () => {
     const { tokens, wallet } = setup();
     await tokens.createTransferPreapproval({
@@ -1428,7 +1427,7 @@ describe('createTokenWallet.createTransferPreapproval', () => {
   });
 });
 
-describe('createTokenWallet: answering transfer offers', () => {
+describe('createWallet: answering transfer offers', () => {
   it.each([
     ['acceptTransferOffer', '00in', 'accept', 'TransferInstruction_Accept'],
     ['rejectTransferOffer', '00in', 'reject', 'TransferInstruction_Reject'],
@@ -1500,7 +1499,7 @@ describe('createTokenWallet: answering transfer offers', () => {
   });
 });
 
-describe('createTokenStandardWallet with a registry other than DA', () => {
+describe('createWallet with a registry other than DA', () => {
   // A registry with none of DA's members (no operator, no trusted providers): only the `TokenRegistry` seam.
   const DSO = 'dso::1220ff';
   const COIN = { admin: DSO, id: 'Amulet' } as const;
@@ -1527,13 +1526,12 @@ describe('createTokenStandardWallet with a registry other than DA', () => {
     executeBefore: '2026-11-14T00:00:00Z',
   });
 
-  function coinSetup(): { tokens: TokenStandardWallet; wallet: FakeProvider; registryCalls: string[] } {
-    const registryCalls: string[] = [];
+  function coinRegistry(registryCalls: string[]): TokenRegistry {
     const context = {
       choiceContextData: { values: CONTEXT_VALUES },
       disclosedContracts: [disclosed('00rules', RULES_T)],
     };
-    const registry: TokenRegistry = {
+    return {
       servesHolding: (c) => c.templateId.endsWith(':Splice.Amulet:Amulet') && c.signatories.includes(DSO),
       async pendingTransfers(read) {
         const contracts = await read({ templateId: INSTRUCTION_KEY });
@@ -1551,6 +1549,16 @@ describe('createTokenStandardWallet with a registry other than DA', () => {
         return context;
       },
     };
+  }
+
+  function coinSetup(): {
+    tokens: Wallet;
+    wallet: FakeProvider;
+    registry: TokenRegistry;
+    registryCalls: string[];
+  } {
+    const registryCalls: string[] = [];
+    const registry = coinRegistry(registryCalls);
     const wallet = fakeProvider({
       [TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID]: [
         coinHolding('00c5', '5'),
@@ -1559,8 +1567,8 @@ describe('createTokenStandardWallet with a registry other than DA', () => {
       ],
       [INSTRUCTION_KEY]: [contract('00coinin', 'X:Y', null), contract('00coinout', 'X:Y', null)],
     });
-    const tokens = createTokenStandardWallet({ provider: wallet, registry, now: () => NOW });
-    return { tokens, wallet, registryCalls };
+    const tokens = createWallet({ provider: wallet, registry, now: () => NOW });
+    return { tokens, wallet, registry, registryCalls };
   }
 
   it('reads a registry filter the snapshot does not carry at the snapshot offset, once', async () => {
@@ -1582,6 +1590,61 @@ describe('createTokenStandardWallet with a registry other than DA', () => {
     );
     expect(offsets).toEqual([state.offset, state.offset]);
     expect(wallet.reads[1]).toEqual([{ templateId: INSTRUCTION_KEY }]);
+  });
+
+  it("reads none of DA's templates and gives empty DA lists", async () => {
+    const { tokens, wallet } = coinSetup();
+    const state = await tokens.loadState();
+    expect(state.mintOffers).toEqual([]);
+    expect(state.burnRequests).toEqual([]);
+    // The snapshot carries the holding filters only, and the one extra read is the registry's own filter.
+    expect(wallet.reads).toEqual([
+      [{ interfaceId: TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID }],
+      [{ templateId: INSTRUCTION_KEY }],
+    ]);
+    const daTemplates: readonly string[] = [DA_REGISTRY_TEMPLATES.mintOffer, DA_REGISTRY_TEMPLATES.burnRequest];
+    expect(wallet.reads.flat().some((f) => 'templateId' in f && daTemplates.includes(f.templateId))).toBe(false);
+  });
+
+  it("refuses DA's actions with unsupported-by-registry before any wallet call, and never takes the latch", async () => {
+    const { tokens, wallet, registryCalls } = coinSetup();
+    const refusals: ReadonlyArray<[string, () => Promise<unknown>]> = [
+      ['listMintOffers', async () => tokens.listMintOffers()],
+      ['listBurnRequests', async () => tokens.listBurnRequests()],
+      ['acceptMintOffer', async () => tokens.acceptMintOffer('00mint')],
+      ['requestBurn', async () => tokens.requestBurn({ instrumentId: COIN, amount: '1' })],
+      ['createTransferPreapproval', async () => tokens.createTransferPreapproval({ instrumentAdmin: DSO })],
+    ];
+    for (const [name, call] of refusals) {
+      const error: unknown = await call().catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(TokenWalletError);
+      expect(error).toMatchObject({ code: 'unsupported-by-registry' });
+      expect((error as Error).message).toContain(name);
+    }
+    expect(wallet.requests).toEqual([]);
+    expect(registryCalls).toEqual([]);
+    // No refusal held the write latch: a transfer still runs.
+    await expect(tokens.transfer({ receiver: OTHER, instrumentId: COIN, amount: '2' })).resolves.toMatchObject({
+      kind: 'direct',
+    });
+    expect(wallet.submissions).toHaveLength(1);
+  });
+
+  it("treats a registry with only some of DA's members as a plain CIP-56 registry", async () => {
+    const { wallet, registry } = coinSetup();
+    const partial = { ...registry, operatorParty: async () => 'operator::1' };
+    expect(isDaUtilitiesClient(partial)).toBe(false);
+    const tokens = createWallet({ provider: wallet, registry: partial });
+    await expect(tokens.listMintOffers()).rejects.toMatchObject({ code: 'unsupported-by-registry' });
+    expect(wallet.requests).toEqual([]);
+    expect((await tokens.listHoldings()).map((h) => h.contractId)).toEqual(['00c5']);
+    await expect(tokens.loadState()).resolves.toMatchObject({ mintOffers: [], burnRequests: [] });
+  });
+
+  it("tells DA's client from another registry", () => {
+    const { registry } = coinSetup();
+    expect(isDaUtilitiesClient(createDaUtilitiesClient({ network: 'devnet' }))).toBe(true);
+    expect(isDaUtilitiesClient(registry)).toBe(false);
   });
 
   it('lists only the holdings the registry serves', async () => {
