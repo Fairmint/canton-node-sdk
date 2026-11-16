@@ -49,12 +49,23 @@ export const BURN_REFERENCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
 /** 36^6: the range of a burn reference's random suffix (six base-36 digits). */
 const BURN_REFERENCE_SUFFIX_RANGE = 36 ** 6;
 
-/** A random integer in [0, `range`), from the Web Crypto API when the runtime has it. Not a secret: only unique. */
+/** 2^32: the number of values a `Uint32Array` entry can take. */
+const UINT32_RANGE = 2 ** 32;
+
+/**
+ * A uniformly distributed integer in [0, `range`), from the Web Crypto API when the runtime has it. Not a secret: only
+ * unique. Values at or above the largest multiple of `range` below 2^32 are drawn again, so the modulo is not biased.
+ */
 function randomBelow(range: number): number {
   // Typed as always present, but missing in old runtimes.
   const { crypto } = globalThis as { crypto?: Partial<Crypto> };
   if (typeof crypto?.getRandomValues === 'function') {
-    return (crypto.getRandomValues(new Uint32Array(1))[0] ?? 0) % range;
+    const limit = UINT32_RANGE - (UINT32_RANGE % range);
+    const sample = new Uint32Array(1);
+    for (;;) {
+      const value = crypto.getRandomValues(sample)[0] ?? 0;
+      if (value < limit) return value % range;
+    }
   }
   return Math.floor(Math.random() * range);
 }

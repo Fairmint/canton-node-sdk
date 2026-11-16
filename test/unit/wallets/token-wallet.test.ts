@@ -820,6 +820,17 @@ describe('newBurnReference', () => {
     expect(reference).not.toMatch(/^redeem-/);
   });
 
+  it('draws again rather than bias the suffix when a value falls in the incomplete last range', () => {
+    const limit = 2 ** 32 - (2 ** 32 % 36 ** 6);
+    const values = [limit, 2 ** 32 - 1, 7];
+    const getRandomValues = jest.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation((array) => {
+      if (array instanceof Uint32Array) array[0] = values.shift() ?? 0;
+      return array;
+    });
+    expect(newBurnReference(new Date('2026-11-13T15:27:05Z'))).toBe('holder-burn-20261113T152705Z-000007');
+    expect(getRandomValues).toHaveBeenCalledTimes(3);
+  });
+
   it('differs between two calls in the same second, and defaults to now', () => {
     const at = new Date('2026-11-13T15:27:05Z');
     const references = new Set(Array.from({ length: 20 }, () => newBurnReference(at)));
