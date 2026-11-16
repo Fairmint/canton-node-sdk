@@ -53,6 +53,7 @@ export {
 export {
   createTokenWalletStore,
   type ActionOutcome,
+  type OpenTokenWalletContext,
   type TokenWalletStore,
   type TokenWalletStoreOptions,
   type TokenWalletView,

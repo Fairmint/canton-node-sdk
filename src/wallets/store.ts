@@ -84,6 +84,12 @@ export interface TokenWalletStore<W extends TokenStandardWallet = TokenWallet> {
    *
    * `readOnly: true` marks a call that commits nothing (a preview, `signMessage`): no reload follows, and one that
    * settles after its session ended records no outcome instead of `interrupted`.
+   *
+   * A `TransferPlan`, or any token wallet kept from an earlier run, is bound to the wallet session that made it: submit
+   * it only in a run of that same `wallet`. A token wallet the store opened (with the default `open`, or a custom one
+   * that passes `isActive` on) refuses every write once its `ConnectedWallet` is no longer the session's, with
+   * `invalid-input` and before anything is read or signed, so a plan made for one account is never submitted after the
+   * session switched to another; the run records that refusal as a `failed` outcome.
    */
   run(
     id: string,
@@ -97,13 +103,24 @@ export interface TokenWalletStore<W extends TokenStandardWallet = TokenWallet> {
   dispose(): void;
 }
 
+/** What `open` gets besides the connected wallet. */
+export interface OpenTokenWalletContext {
+  /**
+   * Whether `wallet` is still the session's connected wallet (`session.isCurrent(wallet)`). Pass it as the token
+   * wallet's `isActive`, so its writes, and the `TransferPlan`s it made, are refused once the session left `wallet`.
+   */
+  readonly isActive: () => boolean;
+}
+
 export interface TokenWalletStoreOptions<W extends TokenStandardWallet> {
   readonly session: Cip103Session;
   /**
-   * Builds the token wallet of each connected wallet. Default: `createTokenWallet({ provider, partyId, network })`,
-   * which needs `wallet.network` (a wallet without one gets a `refused` load error).
+   * Builds the token wallet of each connected wallet. Default: `createTokenWallet({ provider, partyId, network,
+   * isActive })`, which needs `wallet.network` (a wallet without one gets a `refused` load error). Pass
+   * `context.isActive` on as the token wallet's `isActive`, as the default does, or a plan made for one wallet can
+   * still be submitted after the session switched to another.
    */
-  readonly open?: (wallet: ConnectedWallet) => W;
+  readonly open?: (wallet: ConnectedWallet, context: OpenTokenWalletContext) => W;
 }
 
 /** Whether the outcome leaves open if a write committed: `interrupted`, or a failure the wallet could not confirm. */
@@ -112,7 +129,7 @@ function outcomeUnknown(outcome: ActionOutcome): boolean {
 }
 
 /** The default token wallet: DA's registry for the network the wallet connected for, acting as its party only. */
-function openTokenWallet(wallet: ConnectedWallet): TokenWallet {
+function openTokenWallet(wallet: ConnectedWallet, context: OpenTokenWalletContext): TokenWallet {
   const { provider, partyId, network } = wallet;
   if (network === undefined) {
     throw new TokenWalletError(
@@ -120,7 +137,7 @@ function openTokenWallet(wallet: ConnectedWallet): TokenWallet {
       'The connected wallet names no network: connect with { network }, or pass open to createTokenWalletStore'
     );
   }
-  return createTokenWallet({ provider, partyId, network });
+  return createTokenWallet({ provider, partyId, network, isActive: context.isActive });
 }
 
 /**
@@ -136,7 +153,9 @@ function openTokenWallet(wallet: ConnectedWallet): TokenWallet {
  */
 export function createTokenWalletStore(options: TokenWalletStoreOptions<TokenWallet>): TokenWalletStore<TokenWallet>;
 export function createTokenWalletStore<W extends TokenStandardWallet>(
-  options: TokenWalletStoreOptions<W> & { readonly open: (wallet: ConnectedWallet) => W }
+  options: TokenWalletStoreOptions<W> & {
+    readonly open: (wallet: ConnectedWallet, context: OpenTokenWalletContext) => W;
+  }
 ): TokenWalletStore<W>;
 export function createTokenWalletStore<W extends TokenStandardWallet>(
   options: TokenWalletStoreOptions<W>
@@ -144,7 +163,8 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
   type S = Awaited<ReturnType<W['loadState']>>;
   const { session } = options;
   // Without `open`, the first overload fixes W to TokenWallet.
-  const open = options.open ?? (openTokenWallet as unknown as (wallet: ConnectedWallet) => W);
+  const open =
+    options.open ?? (openTokenWallet as unknown as (wallet: ConnectedWallet, context: OpenTokenWalletContext) => W);
   const listeners = new Set<() => void>();
 
   let sessionState = session.getSnapshot();
@@ -203,7 +223,9 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
    * waits for the latch (`drain`). Publishes.
    */
   function requestLoad(): void {
-    if (disposed || wallet === null || tokens === null) return;
+    // A session listener that runs before this store's own may ask after the session left `wallet`: the store's
+    // pending `onSession` then resets it, and no load goes to a wallet whose session ended.
+    if (disposed || wallet === null || tokens === null || !session.isCurrent(wallet)) return;
     queued = true;
     drain();
   }
@@ -211,7 +233,8 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
   /** Start the queued load if the latch is free, then publish. Called whenever the latch may have freed. */
   function drain(): void {
     if (disposed) return;
-    if (queued && inFlight === 0 && wallet !== null && tokens !== null) {
+    // A wallet the session has left gets no load: `onSession` drops the queued load and queues the next wallet's.
+    if (queued && inFlight === 0 && wallet !== null && tokens !== null && session.isCurrent(wallet)) {
       queued = false;
       startLoad(wallet, tokens);
     }
@@ -274,7 +297,7 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
       return;
     }
     try {
-      tokens = open(next);
+      tokens = open(next, { isActive: () => session.isCurrent(next) });
     } catch (error) {
       loadError = describeWalletError(error);
       publish();
@@ -306,15 +329,18 @@ export function createTokenWalletStore<W extends TokenStandardWallet>(
       const ranTokens = tokens;
       if (disposed || inFlight > 0 || queued || ranFor === null || ranTokens === null) return false;
       const readOnly = runOptions.readOnly === true;
+      const previous = outcome;
       inFlight += 1;
       running = { id, wallet: ranFor, readOnly };
       outcome = null;
       publish();
       // A listener of that publish may have ended the session, switched the wallet or disposed the store: then the
-      // action must not start (nothing was sent, so no outcome is recorded), and queued work runs instead.
+      // action must not start (nothing was sent, so no outcome is recorded), and queued work runs instead. A previous
+      // write whose outcome is unknown stays reported, as it does across a wallet change.
       if (!isCurrent(ranFor)) {
         inFlight -= 1;
         running = null;
+        if (previous !== null && outcomeUnknown(previous)) outcome = previous;
         drain();
         return false;
       }

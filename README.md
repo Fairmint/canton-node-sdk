@@ -175,7 +175,8 @@ import {
 
 const network = 'devnet';
 const session = createCip103Session();
-const store = createTokenWalletStore({ session }); // createTokenWallet({ provider, partyId, network })
+// Default open: createTokenWallet({ provider, partyId, network, isActive: () => session.isCurrent(wallet) })
+const store = createTokenWalletStore({ session });
 
 // The wallet's own callbacks (Loop: onAccept, onReject) and the buttons.
 export const onAccept = (provider: Cip103Provider) => session.connected(provider, { network });
@@ -233,6 +234,11 @@ export async function POST(request: Request): Promise<Response> {
   outcome is unknown (`interrupted`, or `failed` with kind `outcome-unknown`) and names its party in
   `unknownOutcomeParty`. Run previews and `signMessage` with `{ readOnly: true }`: no reload, and no
   unknown outcome when the session ends first.
+- A `TransferPlan` (and any token wallet kept from an earlier run) is bound to the wallet session
+  that made it. The store's token wallets refuse every write once their `ConnectedWallet` is no
+  longer the session's, with `invalid-input` before anything is read or signed, so a plan made for
+  one account is never submitted after the wallet switched to another: plan again. A custom `open`
+  gets this as its second argument (`{ isActive }`) and passes it on to `createTokenWallet`.
 - A wallet whose account reports another network than `{ network }` is refused, and each
   `ConnectedWallet` has a `key` for UI keys (a new session remounts what the old one rendered).
 - Wallet discovery (finding the providers a browser offers) is future work: its CIP is a draft.

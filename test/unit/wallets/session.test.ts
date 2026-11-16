@@ -3,6 +3,28 @@ import { createCip103Session, type Cip103Session } from '../../../src/wallets';
 import { HOLDER, OTHER, RpcError } from './helpers';
 import { connectedWallet, deferred, flush, TestProvider } from './session-helpers';
 
+/** A provider that answers each new listener at once, inside `on()`, with the event set in `sticky` (a sticky event). */
+class StickyProvider extends TestProvider {
+  readonly sticky: Partial<Record<string, readonly unknown[]>> = {};
+
+  override on(event: string, listener: (...args: unknown[]) => void): this {
+    super.on(event, listener);
+    const args = this.sticky[event];
+    if (args !== undefined) listener(...args);
+    return this;
+  }
+}
+
+/** The session's states as short labels, in the order it published them. */
+function statuses(session: Cip103Session): string[] {
+  const seen: string[] = [];
+  session.subscribe(() => {
+    const state = session.getSnapshot();
+    seen.push(state.status === 'disconnected' ? `disconnected:${String(state.endedBy)}` : state.status);
+  });
+  return seen;
+}
+
 /** A session, and how many times it published a new state. */
 function observed(): { session: Cip103Session; changes: () => number } {
   const session = createCip103Session();
@@ -422,6 +444,47 @@ describe('createCip103Session', () => {
     expect(provider.requests).not.toContain('disconnect');
   });
 
+  it.each(['connected', 'connect'] as const)(
+    'a provider that answers its new statusChanged listener at once with disconnected ends the session; %s() does not publish connected over it',
+    async (how) => {
+      const session = createCip103Session();
+      const seen = statuses(session);
+      const provider = new StickyProvider();
+      provider.sticky['statusChanged'] = [{ connection: { isConnected: false } }];
+      if (how === 'connected') await session.connected(provider, { network: 'devnet' });
+      else await session.connect(provider, { network: 'devnet' });
+      expect(session.getSnapshot()).toEqual({ status: 'disconnected', endedBy: 'wallet', error: null });
+      expect(seen).toEqual(how === 'connected' ? ['disconnected:wallet'] : ['connecting', 'disconnected:wallet']);
+      expect(provider.listenerCount()).toBe(0);
+      // The wallet ended it: a repeated callback is ignored until the user connects again.
+      await session.connected(provider, { network: 'devnet' });
+      expect(session.getSnapshot().status).toBe('disconnected');
+    }
+  );
+
+  it("a provider that answers its new accountsChanged listener at once is read for its own network, not the previous wallet's", async () => {
+    const { session } = observed();
+    const first = new TestProvider(HOLDER);
+    await session.connected(first, { network: 'devnet' });
+    const second = new StickyProvider(OTHER, {
+      getPrimaryAccount: () => ({ primary: true, partyId: OTHER, networkId: 'canton:mainnet' }),
+    });
+    second.sticky['accountsChanged'] = [[{ partyId: OTHER, primary: true }]];
+    await session.connected(second, { network: 'mainnet' });
+    await flush();
+    const wallet = connectedWallet(session);
+    expect(wallet).toEqual({ provider: second, partyId: OTHER, key: expect.any(String), network: 'mainnet' });
+    // The sticky event came before its wallet was published: it started no lookup for devnet.
+    expect(second.requests).toEqual(['getPrimaryAccount']);
+    expect(first.listenerCount()).toBe(0);
+    expect(second.listenerCount()).toBe(2);
+    // A later accountsChanged reads the account again for the wallet's own network.
+    second.emit('accountsChanged', [{ partyId: OTHER, primary: true }]);
+    await flush();
+    expect(connectedWallet(session)).toBe(wallet);
+    expect(second.requests).toEqual(['getPrimaryAccount', 'getPrimaryAccount']);
+  });
+
   it('removes its listeners on end and on dispose, and ignores events sent after', async () => {
     const provider = new TestProvider();
     const ended = createCip103Session();
@@ -709,6 +772,29 @@ describe('createCip103Session', () => {
       expect(connectedWallet(session).partyId).toBe(HOLDER);
     });
 
+    it('a connect() that the disconnect request itself sets off waits for that disconnect, and end() does not publish over it', async () => {
+      const { session } = observed();
+      const disconnected = deferred<unknown>();
+      const reconnecting: Array<Promise<void>> = [];
+      // A wallet whose disconnect synchronously runs the dApp's own handler, which signs in again.
+      const provider: TestProvider = new TestProvider(HOLDER, {
+        disconnect: async () => {
+          reconnecting.push(session.connect(provider));
+          return disconnected.promise;
+        },
+      });
+      await session.connected(provider);
+      session.end('user');
+      expect(reconnecting).toHaveLength(1);
+      // The disconnect is unanswered: no connect yet, and the pending connect() owns the state.
+      expect(provider.requests).toEqual(['getPrimaryAccount', 'disconnect']);
+      expect(session.getSnapshot()).toEqual({ status: 'connecting' });
+      disconnected.resolve(null);
+      await Promise.all(reconnecting);
+      expect(provider.requests).toEqual(['getPrimaryAccount', 'disconnect', 'connect', 'getPrimaryAccount']);
+      expect(connectedWallet(session).partyId).toBe(HOLDER);
+    });
+
     it('connect() waits for each wallet its own disconnect, not only the most recent one', async () => {
       const { session } = observed();
       const disconnected = deferred<unknown>();
@@ -795,6 +881,35 @@ describe('createCip103Session', () => {
         session.end('wallet');
         void session.connect(provider);
         expect(provider.requests.filter((m) => m === 'connect')).toHaveLength(3);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('a disconnect that never answered is not waited for again once its deadline passed, also after a later disconnect', async () => {
+      jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+      try {
+        const { session } = observed();
+        let disconnects = 0;
+        // The first disconnect never answers; later ones answer at once.
+        const provider = new TestProvider(HOLDER, {
+          disconnect: async () => {
+            disconnects += 1;
+            return disconnects === 1 ? new Promise<never>(() => undefined) : null;
+          },
+        });
+        await session.connected(provider);
+        session.end('user');
+        const connecting = session.connect(provider);
+        await jest.advanceTimersByTimeAsync(3000);
+        await connecting;
+        expect(connectedWallet(session).partyId).toBe(HOLDER);
+        // A second disconnect, which answers, and the user clicks Connect again: connect is sent inside the click.
+        session.end('user');
+        await flush();
+        expect(disconnects).toBe(2);
+        void session.connect(provider);
+        expect(provider.requests.filter((m) => m === 'connect')).toHaveLength(2);
       } finally {
         jest.useRealTimers();
       }

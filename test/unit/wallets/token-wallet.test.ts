@@ -1,11 +1,14 @@
 import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
 import { TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID } from '../../../src/utils/token-standard/v1/constants';
-import { DA_UTILITIES_BASE_URLS } from '../../../src/wallets/da-utilities/client';
+import { DA_UTILITIES_BASE_URLS, type DaUtilitiesClient } from '../../../src/wallets/da-utilities/client';
 import { BURN_REFERENCE_PATTERN } from '../../../src/wallets/token-wallet';
 import {
+  createCip103Session,
   createDaUtilitiesClient,
   createTokenStandardWallet,
   createTokenWallet,
+  createTokenWalletStore,
+  describeWalletError,
   newBurnReference,
   RegistryResponseError,
   TokenWalletError,
@@ -18,6 +21,7 @@ import {
   type TransferInstructionAction,
   type TransferKind,
   type TransferOffer,
+  type TransferPlan,
 } from '../../../src/wallets';
 import {
   INSTRUMENT,
@@ -38,6 +42,7 @@ import {
   type FakeProvider,
   type FetchCall,
 } from './helpers';
+import { flush } from './session-helpers';
 
 const FACTORY_T = 'Utility.Registry.App.V0.Service.AllocationFactory:AllocationFactory';
 const PREAPPROVAL_T = 'Utility.Registry.App.V0.Model.TransferPreapproval:TransferPreapproval';
@@ -144,8 +149,9 @@ function setup(
     /** Contracts the DA Holding template filter returns. */
     daHoldings?: ActiveContract[];
     trustedProviders?: Record<string, string[]>;
+    isActive?: () => boolean;
   } = {}
-): { tokens: TokenWallet; wallet: FakeProvider; calls: FetchCall[] } {
+): { tokens: TokenWallet; wallet: FakeProvider; calls: FetchCall[]; registry: DaUtilitiesClient } {
   const { fetch, calls } = fakeFetch((call: FetchCall) => {
     if (call.url.endsWith('/api/utilities/v0/operator')) {
       return { json: { partyId: OPERATOR } };
@@ -187,16 +193,18 @@ function setup(
   const wallet = fakeProvider(ledger(options.extraHoldings, options.daHoldings), {
     party: options.party ?? HOLDER,
   });
+  const registry = createDaUtilitiesClient(
+    { network: 'devnet' },
+    { fetch, ...(options.trustedProviders !== undefined && { trustedProviders: options.trustedProviders }) }
+  );
   const tokens = createTokenWallet({
     provider: wallet,
     ...(options.partyId !== undefined && { partyId: options.partyId }),
-    registry: createDaUtilitiesClient(
-      { network: 'devnet' },
-      { fetch, ...(options.trustedProviders !== undefined && { trustedProviders: options.trustedProviders }) }
-    ),
+    registry,
     now: () => NOW,
+    ...(options.isActive !== undefined && { isActive: options.isActive }),
   });
-  return { tokens, wallet, calls };
+  return { tokens, wallet, calls, registry };
 }
 
 const UUID = /^[0-9a-f-]{36}$/;
@@ -1118,6 +1126,117 @@ describe('createTokenWallet transfers', () => {
     expect(wallet.submissions.map((s) => s.actAs)).toEqual([[HOLDER]]);
     expect(factorySenders(calls)).toEqual([HOLDER, HOLDER]);
     expect(wallet.requests.filter((r) => r.method === 'getPrimaryAccount')).toHaveLength(0);
+  });
+
+  it('refuses every write once isActive answers false, before any read, registry call or signature', async () => {
+    let active = false;
+    const { tokens, wallet, calls } = setup({ transferKind: 'offer', partyId: HOLDER, isActive: () => active });
+    const writes: Array<() => Promise<unknown>> = [
+      async () => tokens.transfer(request),
+      async () => tokens.requestBurn({ instrumentId: INSTRUMENT, amount: '1', reference: 'r' }),
+      async () => tokens.acceptMintOffer('00mint'),
+      async () => tokens.createTransferPreapproval({ instrumentAdmin: REGISTRAR }),
+      async () => tokens.acceptTransferOffer('00in'),
+      async () => tokens.rejectTransferOffer('00in'),
+      async () => tokens.withdrawTransferOffer('00out'),
+      async () => tokens.answerTransferOffer('00in', 'accept'),
+    ];
+    for (const write of writes) {
+      const error = await write().catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(TokenWalletError);
+      expect(error).toMatchObject({ code: 'invalid-input' });
+      expect(describeWalletError(error)).toEqual({
+        kind: 'refused',
+        code: 'invalid-input',
+        message:
+          'The wallet session this action was prepared in has ended (the wallet disconnected or switched accounts); nothing was submitted. Start the action again.',
+      });
+    }
+    expect(wallet.requests).toEqual([]);
+    expect(calls).toEqual([]);
+    // Reads are not limited.
+    await expect(tokens.listHoldings()).resolves.toHaveLength(3);
+    // A plan made while active is refused once the session ended, though its party is pinned.
+    active = true;
+    const plan = await tokens.planTransfer(request);
+    active = false;
+    const requests = wallet.requests.length;
+    const fetches = calls.length;
+    await expect(plan.submit()).rejects.toMatchObject({ code: 'invalid-input' });
+    expect(wallet.requests.slice(requests)).toEqual([]);
+    expect(calls.slice(fetches)).toEqual([]);
+    // The refusal released the write guard.
+    active = true;
+    await expect(plan.submit()).resolves.toMatchObject({ kind: 'offer' });
+    expect(wallet.submissions.map((s) => s.actAs)).toEqual([[HOLDER]]);
+  });
+
+  it('checks isActive again right before signing: a session that ended during the registry call submits nothing', async () => {
+    let active = true;
+    const { tokens, wallet, calls } = setup({ transferKind: 'offer', partyId: HOLDER, isActive: () => active });
+    const plan = await tokens.planTransfer(request);
+    const { request: original } = wallet;
+    // The session ends while the submission reads its holdings.
+    wallet.request = async (args) => {
+      if (args.method === 'ledgerApi') active = false;
+      return original(args);
+    };
+    await expect(plan.submit()).rejects.toMatchObject({ code: 'invalid-input' });
+    active = true;
+    await expect(tokens.requestBurn({ instrumentId: INSTRUMENT, amount: '1', reference: 'r' })).rejects.toMatchObject({
+      code: 'invalid-input',
+    });
+    expect(wallet.submissions).toEqual([]);
+    expect(wallet.requests.map((r) => r.method)).not.toContain('prepareExecuteAndWait');
+    // It got as far as the registry: the check before signing refused it.
+    expect(factorySenders(calls)).toEqual([HOLDER, HOLDER]);
+  });
+
+  it('through createTokenWalletStore, a plan made for one account is refused after the session switched to another', async () => {
+    const { wallet: provider, registry, calls } = setup({ transferKind: 'offer' });
+    const account = switchableAccount(provider);
+    const session = createCip103Session();
+    const store = createTokenWalletStore({
+      session,
+      open: (connected, { isActive }) =>
+        createTokenWallet({
+          provider: connected.provider,
+          partyId: connected.partyId,
+          registry,
+          now: () => NOW,
+          isActive,
+        }),
+    });
+    await session.connected(provider, { network: 'devnet' });
+    await flush();
+    let plan: TransferPlan | null = null;
+    expect(
+      await store.run(
+        'plan',
+        async ({ tokens }) => {
+          plan = await tokens.planTransfer(request);
+        },
+        { readOnly: true }
+      )
+    ).toBe(true);
+    // The wallet switches to OTHER (who holds enough too): a new ConnectedWallet.
+    account.party = OTHER;
+    await session.connected(provider, { network: 'devnet' });
+    await flush();
+    expect(store.getSnapshot()).toMatchObject({ wallet: { partyId: OTHER }, busy: false });
+    // The user confirms the plan shown for HOLDER.
+    const confirmed = plan as unknown as TransferPlan;
+    expect(confirmed.partyId).toBe(HOLDER);
+    expect(await store.run('send', async () => confirmed.submit().then(() => 'Sent.'))).toBe(false);
+    expect(store.getSnapshot().outcome).toMatchObject({
+      status: 'failed',
+      partyId: OTHER,
+      error: { kind: 'refused', code: 'invalid-input' },
+    });
+    expect(provider.submissions).toEqual([]);
+    // Only the plan's own registry call: the submission was refused before it read anything.
+    expect(factorySenders(calls)).toEqual([HOLDER]);
+    store.dispose();
   });
 
   it('refuses a second submission while the first awaits the wallet', async () => {

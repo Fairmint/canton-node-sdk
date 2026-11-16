@@ -485,6 +485,42 @@ describe('createTokenWalletStore', () => {
     expect(t.store.getSnapshot()).toMatchObject({ outcome: unknown, unknownOutcomeParty: null });
   });
 
+  it('keeps a previous outcome-unknown warning when a listener ends the session before the next run starts', async () => {
+    const t = setup();
+    await connectAndLoad(t);
+    const failed = t.store.run('send', async () => {
+      throw new WalletSubmitError('unknown', 'Session changed during request', { code: 4100 });
+    });
+    expect(await failed).toBe(false);
+    t.answer();
+    await flush();
+    const unknown = { id: 'send', partyId: HOLDER, status: 'failed', error: { kind: 'outcome-unknown' } };
+    expect(t.store.getSnapshot()).toMatchObject({ busy: false, outcome: unknown });
+    // A store listener ends the session as soon as the next action shows as running.
+    let ended = false;
+    t.store.subscribe(() => {
+      if (!ended && t.store.getSnapshot().running === 'other') {
+        ended = true;
+        t.session.end('wallet');
+      }
+    });
+    let called = false;
+    expect(
+      await t.store.run('other', async () => {
+        called = true;
+      })
+    ).toBe(false);
+    expect(called).toBe(false);
+    // Nothing was sent: the unknown outcome of HOLDER's write is still reported, as across any session end.
+    expect(t.store.getSnapshot()).toMatchObject({
+      wallet: null,
+      running: null,
+      busy: false,
+      outcome: unknown,
+      unknownOutcomeParty: HOLDER,
+    });
+  });
+
   it('records no unknown outcome for a read-only call whose session ended before it settled', async () => {
     const t = setup();
     await connectAndLoad(t);
@@ -747,6 +783,49 @@ describe('createTokenWalletStore', () => {
     });
   });
 
+  it('ignores a refresh() that a session listener ahead of the store asks for a wallet the session left', async () => {
+    const session = createCip103Session();
+    const provider = new TestProvider();
+    // Subscribed before the store: it runs before the store follows the session.
+    let store: TokenWalletStore | null = null;
+    session.subscribe(() => {
+      store?.refresh();
+    });
+    const loads: string[] = [];
+    store = createTokenWalletStore({
+      session,
+      open: (wallet) => {
+        const tokens: Pick<TokenWallet, 'loadState'> = {
+          loadState: async () => {
+            loads.push(wallet.key);
+            return snapshot(wallet.partyId, 1);
+          },
+        };
+        return tokens as TokenWallet;
+      },
+    });
+    await session.connect(provider, { network: 'devnet' });
+    await flush();
+    const first = connectedWallet(session);
+    expect(loads).toEqual([first.key]);
+    // The session ends: no load goes to the wallet it left.
+    session.end('user');
+    await flush();
+    expect(loads).toEqual([first.key]);
+    expect(store.getSnapshot()).toMatchObject({ wallet: null, loading: false, busy: false });
+    // An account switch loads the new wallet only.
+    await session.connect(provider, { network: 'devnet' });
+    await flush();
+    const second = connectedWallet(session);
+    provider.setParty(OTHER);
+    provider.emit('accountsChanged', [{ partyId: OTHER, primary: true }]);
+    await flush();
+    const third = connectedWallet(session);
+    expect(third.partyId).toBe(OTHER);
+    expect(loads).toEqual([first.key, second.key, third.key]);
+    expect(store.getSnapshot()).toMatchObject({ wallet: third, state: { partyId: OTHER }, busy: false });
+  });
+
   describe('default token wallet', () => {
     it('refuses a connected wallet without a network as a load error', async () => {
       const session = createCip103Session();
@@ -798,6 +877,63 @@ describe('createTokenWalletStore', () => {
       // The token wallet is bound to that party: it does not read the primary account again.
       expect(provider.requests.filter((r) => r.method === 'getPrimaryAccount')).toHaveLength(1);
       store.dispose();
+    });
+
+    it('is bound to its session: once the session switched to another account, its writes are refused unsent', async () => {
+      const fetchSpy = jest
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async () => new Response('down', { status: 503 }));
+      try {
+        const session = createCip103Session();
+        const store = createTokenWalletStore({ session });
+        const account: Record<string, unknown> = { partyId: HOLDER };
+        const provider = fakeProvider({}, { party: HOLDER, account });
+        await session.connected(provider, { network: 'devnet' });
+        await flush();
+        let kept: TokenWallet | null = null;
+        expect(
+          await store.run(
+            'keep',
+            async ({ tokens }) => {
+              kept = tokens;
+            },
+            { readOnly: true }
+          )
+        ).toBe(true);
+        // The wallet now signs in as another party: a new ConnectedWallet, with its own token wallet.
+        account['partyId'] = OTHER;
+        await session.connected(provider, { network: 'devnet' });
+        await flush();
+        expect(connectedWallet(session).partyId).toBe(OTHER);
+        // A dApp that kept HOLDER's token wallet submits through it in OTHER's run.
+        const stale = kept as unknown as TokenWallet;
+        let sent: string[] = [];
+        let fetched = -1;
+        expect(
+          await store.run('send', async () => {
+            const requests = provider.requests.length;
+            const fetches = fetchSpy.mock.calls.length;
+            try {
+              await stale.createTransferPreapproval({ instrumentAdmin: OTHER });
+            } finally {
+              sent = provider.requests.slice(requests).map((r) => r.method);
+              fetched = fetchSpy.mock.calls.length - fetches;
+            }
+          })
+        ).toBe(false);
+        expect(store.getSnapshot().outcome).toMatchObject({
+          status: 'failed',
+          partyId: OTHER,
+          error: { kind: 'refused', code: 'invalid-input', message: expect.stringMatching(/nothing was submitted/) },
+        });
+        // Refused before any read, registry call or signature.
+        expect(sent).toEqual([]);
+        expect(fetched).toBe(0);
+        expect(provider.submissions).toEqual([]);
+        store.dispose();
+      } finally {
+        fetchSpy.mockRestore();
+      }
     });
   });
 });

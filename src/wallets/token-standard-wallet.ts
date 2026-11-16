@@ -57,6 +57,14 @@ export interface TokenStandardWalletOptions<R extends TokenRegistry = TokenRegis
   readonly now?: () => Date;
   /** How reads back off when the wallet rate-limits them (CIP-0103 -32005). Writes are never retried. */
   readonly readRetry?: WalletReadRetryOptions;
+  /**
+   * Whether the wallet session this token wallet belongs to is still live. Once it answers false, every write (a
+   * transfer, a `TransferPlan`'s `submit`, an offer answer, a mint accept, a burn request, a preapproval) is refused
+   * with `invalid-input` before its first read, and again right before the wallet signs, so nothing is submitted: the
+   * provider may now be signed in to another account. Reads are not limited. `createTokenWalletStore` passes its
+   * session's `isCurrent(wallet)`. Default: always live.
+   */
+  readonly isActive?: () => boolean;
 }
 
 /** The CIP-56 state of the wallet party, read as one snapshot. */
@@ -103,6 +111,10 @@ export interface TransferResult extends SubmitResult {
  * exactly the planned request through the token wallet that planned it, as the party it was previewed for and with
  * `expectedKind: kind`: a transfer whose kind changed in between is refused with `kind-changed`, and one whose wallet
  * now acts as another party (an account switch, without a pinned `partyId`) with `invalid-input`, both before signing.
+ *
+ * A plan is bound to the wallet session that made it: when that token wallet's `isActive` answers false (the token
+ * wallets `createTokenWalletStore` opens: their `ConnectedWallet` is no longer the session's), `submit` is refused with
+ * `invalid-input` and nothing is submitted, also when its `partyId` is pinned. Plan again in the current session.
  */
 export interface TransferPlan {
   /** How the registry would run the transfer when it was planned. */
@@ -214,7 +226,8 @@ export interface TokenStandardCore {
   readonly stateOf: (snapshot: StateSnapshot) => Promise<TokenStandardState>;
   /**
    * Run a write action alone: refused with `busy` (before `action` starts) while another write of this token wallet is
-   * in progress, and released when `action` settles, whether it succeeded or failed.
+   * in progress, and released when `action` settles, whether it succeeded or failed. Refused with `invalid-input`
+   * (before `action` starts) once `isActive` answers false; a wallet from `connect` checks it again before it submits.
    */
   readonly exclusive: <T>(action: () => Promise<T>) => Promise<T>;
 }
@@ -239,9 +252,30 @@ export function tokenStandardCore(
     return options.partyId ?? primaryPartyId(provider);
   }
 
+  const { isActive } = options;
+  /** Refuse a write once the wallet session this token wallet belongs to ended (`isActive`). */
+  function requireActive(): void {
+    if (isActive !== undefined && !isActive()) {
+      throw new TokenWalletError(
+        'invalid-input',
+        'The wallet session this action was prepared in has ended (the wallet disconnected or switched accounts); nothing was submitted. Start the action again.'
+      );
+    }
+  }
+
   const walletOptions = options.readRetry !== undefined ? { readRetry: options.readRetry } : {};
   function walletOf(party: string): Cip103Wallet {
-    return cip103Wallet(provider, party, walletOptions);
+    const wallet = cip103Wallet(provider, party, walletOptions);
+    if (isActive === undefined) return wallet;
+    // Checked again right before the wallet signs: a write's reads and registry calls await, and the session may end
+    // meanwhile.
+    return {
+      ...wallet,
+      submit: async (submission) => {
+        requireActive();
+        return wallet.submit(submission);
+      },
+    };
   }
   async function connect(): Promise<Cip103Wallet> {
     return walletOf(await partyId());
@@ -256,6 +290,7 @@ export function tokenStandardCore(
     if (busy) {
       throw new TokenWalletError('busy', 'Another wallet action is in progress; nothing was submitted');
     }
+    requireActive();
     busy = true;
     try {
       return await action();
