@@ -773,6 +773,12 @@ describe('createTokenWallet.requestBurn', () => {
       .requestBurn({ instrumentId: INSTRUMENT, amount: '1', reference: 'redemption-7' })
       .catch((e: unknown) => e);
     expect(own).toMatchObject({ outcome, burnReference: 'redemption-7' });
+    // A reference that also occurs in the wallet's own text still gets the suffix.
+    const common = await tokens
+      .requestBurn({ instrumentId: INSTRUMENT, amount: '1', reference: 'wallet' })
+      .catch((e: unknown) => e);
+    expect(common).toMatchObject({ outcome, burnReference: 'wallet' });
+    expect((common as WalletSubmitError).message).toMatch(/ Burn reference: wallet\.$/);
   });
 
   it('uses a given executeBefore', async () => {

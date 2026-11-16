@@ -307,9 +307,9 @@ export function createTokenWallet(options: TokenWalletOptions): TokenWallet {
       // The reference may have been generated here: the caller needs it to look the burn request up before a retry,
       // above all after an unknown outcome, when the request may have been filed.
       if (error instanceof WalletSubmitError) {
-        const message = error.message.includes(reference)
-          ? error.message
-          : `${error.message} Burn reference: ${reference}.`;
+        // Matched on the whole suffix, not the bare reference: a short reference ('wallet') can occur in any message.
+        const suffix = `Burn reference: ${reference}.`;
+        const message = error.message.endsWith(suffix) ? error.message : `${error.message} ${suffix}`;
         throw new WalletSubmitError(error.outcome, message, {
           ...(error.code !== undefined && { code: error.code }),
           ...(error.commandId !== undefined && { commandId: error.commandId }),
