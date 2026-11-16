@@ -9,6 +9,7 @@ import type {
   FetchLike,
   JsonObject,
 } from '../../../src/wallets';
+import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
 
 export const HOLDER = 'holder::1220aa';
 export const OTHER = 'other::1220dd';
@@ -337,7 +338,16 @@ export class FakeLoopCip103Provider {
   }
 }
 
-/** An active contract; the registrar signs it unless `signatories` says otherwise. */
+/** The package name of the DA Registry template of a `Module:Entity`, as the ledger reports it with the contract. */
+function daPackageName(qualified: string): string | undefined {
+  const id = Object.values(DA_REGISTRY_TEMPLATES).find((t) => t.endsWith(`:${qualified}`));
+  return id === undefined ? undefined : id.slice(1, id.indexOf(':'));
+}
+
+/**
+ * An active contract; the registrar signs it unless `signatories` says otherwise. A DA Registry template gets its
+ * package name, as the Ledger JSON API v2 always reports one (destructure it away to model a response without one).
+ */
 export function contract(
   contractId: string,
   qualified: string,
@@ -345,9 +355,11 @@ export function contract(
   interfaceViews: ActiveContract['interfaceViews'] = [],
   signatories: readonly string[] = [REGISTRAR]
 ): ActiveContract {
+  const packageName = daPackageName(qualified);
   return {
     contractId,
     templateId: pkgId('1eddd268', qualified),
+    ...(packageName !== undefined && { packageName }),
     signatories,
     createArgument,
     interfaceViews,

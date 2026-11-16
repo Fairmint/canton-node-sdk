@@ -540,6 +540,38 @@ describe('cip103Wallet.readActiveContracts', () => {
     await expect(cip103Wallet(provider, HOLDER).readActiveContracts([])).rejects.toBeInstanceOf(TypeError);
     expect(provider.requests).toEqual([]);
   });
+
+  it('reads at a given activeAtOffset without reading the ledger end', async () => {
+    const provider = scriptedProvider({
+      ledgerApi: (params) => {
+        const { resource, body } = params as { resource: string; body?: { activeAtOffset: number } };
+        if (resource === '/v2/state/ledger-end') throw new Error('the ledger end must not be read');
+        return acsPage([acsEntry(event('00a', 'p:M:A'))], body?.activeAtOffset ?? -1);
+      },
+    });
+    const wallet = cip103Wallet(provider, HOLDER);
+    const snapshot = await wallet.readActiveContracts([{ templateId: '#p:M:A' }], { activeAtOffset: 5 });
+    expect(snapshot).toMatchObject({ offset: 5, contracts: [{ contractId: '00a' }] });
+    await expect(wallet.listActiveContracts({ templateId: '#p:M:A' }, { activeAtOffset: 5 })).resolves.toHaveLength(1);
+    expect(
+      provider.requests.map((r) =>
+        r.method === 'ledgerApi' ? [r.params.resource, r.params.body?.['activeAtOffset']] : []
+      )
+    ).toEqual([
+      ['/v2/state/active-contracts-page', 5],
+      ['/v2/state/active-contracts-page', 5],
+    ]);
+  });
+
+  it('refuses an activeAtOffset that is not a non-negative integer without asking the wallet', async () => {
+    const provider = scriptedProvider({});
+    for (const activeAtOffset of [-1, 1.5, Number.NaN]) {
+      await expect(
+        cip103Wallet(provider, HOLDER).readActiveContracts([{ templateId: '#p:M:A' }], { activeAtOffset })
+      ).rejects.toBeInstanceOf(TypeError);
+    }
+    expect(provider.requests).toEqual([]);
+  });
 });
 
 describe('cip103Wallet reads under a wallet rate limit (CIP-0103 -32005)', () => {

@@ -7,7 +7,8 @@
  * - Submit: `prepareExecuteAndWait` acting as that party only; resolves with `tx.payload.updateId`. Never retried.
  * - Read: `ledgerApi` to the Ledger JSON API v2: one `/v2/state/ledger-end`, then the pages of
  *   `/v2/state/active-contracts-page` at that one offset, filtered to that party only, with every template and
- *   interface filter of the read in one cumulative filter (see {@link ACS_PAGE_SIZE}). It is sent as POST, as the Ledger
+ *   interface filter of the read in one cumulative filter (see {@link ACS_PAGE_SIZE}); a read that joins an earlier
+ *   snapshot passes that snapshot's `activeAtOffset` and skips the ledger-end call. It is sent as POST, as the Ledger
  *   JSON API 3.6 OpenAPI, Loop's `ledgerApi` allowlist and `@canton-network/core-acs-reader` do.
  * - Rate limits: wallets rate-limit `ledgerApi` (Loop answers -32005 for an HTTP 429 of its ledger proxy). Loop also
  *   sends two more HTTP requests to its backend before every `ledgerApi` call (a session check, `pair/account`, and a
@@ -388,17 +389,25 @@ function readAcsPage(raw: unknown, offset: number): { entries: unknown[]; nextPa
   };
 }
 
+export interface AcsReadOptions {
+  /**
+   * Read at this ledger offset (one an earlier read reported) instead of the current ledger end, so a later read joins
+   * an earlier snapshot.
+   */
+  readonly activeAtOffset?: number;
+}
+
 /** What the token actions need from a wallet: one party, its contracts, and a submit that waits for the commit. */
 export interface Cip103Wallet {
   readonly partyId: string;
-  /** Active contracts of `partyId` matching the filter, as one snapshot at the ledger end. */
-  listActiveContracts(filter: ContractFilter): Promise<ActiveContract[]>;
+  /** Active contracts of `partyId` matching the filter, as one snapshot at the ledger end (or at `activeAtOffset`). */
+  listActiveContracts(filter: ContractFilter, options?: AcsReadOptions): Promise<ActiveContract[]>;
   /**
    * Active contracts of `partyId` matching any of the filters, as one snapshot at the ledger end: one ledger-end call
    * and one paged ACS stream whose cumulative filter carries every filter. A contract matching several is returned
-   * once.
+   * once. With `activeAtOffset`, the snapshot is read at that offset and the ledger end is not read.
    */
-  readActiveContracts(filters: readonly ContractFilter[]): Promise<AcsSnapshot>;
+  readActiveContracts(filters: readonly ContractFilter[], options?: AcsReadOptions): Promise<AcsSnapshot>;
   /** Sign and submit as `partyId`; resolves once committed, else throws `WalletSubmitError`. Never retries. */
   submit(submission: WalletSubmission): Promise<SubmitResult>;
 }
@@ -492,15 +501,27 @@ export function cip103Wallet(
     }
   }
 
-  async function readActiveContracts(filters: readonly ContractFilter[]): Promise<AcsSnapshot> {
-    // A template or an interface should not appear twice in a cumulative filter.
-    const unique = [...new Map(filters.map((filter) => [contractFilterKey(filter), filter])).values()];
-    if (unique.length === 0) throw new TypeError('readActiveContracts needs at least one filter');
+  async function ledgerEnd(): Promise<number> {
     const end = await ledgerApi('get', '/v2/state/ledger-end');
     const offset = isRecord(end) ? end['offset'] : undefined;
     if (typeof offset !== 'number' || !Number.isSafeInteger(offset)) {
       throw new WalletReadError('The wallet returned no ledger end offset');
     }
+    return offset;
+  }
+
+  async function readActiveContracts(
+    filters: readonly ContractFilter[],
+    readOptions: AcsReadOptions = {}
+  ): Promise<AcsSnapshot> {
+    // A template or an interface should not appear twice in a cumulative filter.
+    const unique = [...new Map(filters.map((filter) => [contractFilterKey(filter), filter])).values()];
+    if (unique.length === 0) throw new TypeError('readActiveContracts needs at least one filter');
+    const at = readOptions.activeAtOffset;
+    if (at !== undefined && (!Number.isSafeInteger(at) || at < 0)) {
+      throw new TypeError(`activeAtOffset must be a non-negative integer, not ${String(at)}`);
+    }
+    const offset = at ?? (await ledgerEnd());
     const eventFormat = {
       verbose: false,
       filtersByParty: {
@@ -572,8 +593,8 @@ export function cip103Wallet(
   return {
     partyId,
 
-    async listActiveContracts(filter) {
-      return (await readActiveContracts([filter])).contracts;
+    async listActiveContracts(filter, readOptions) {
+      return (await readActiveContracts([filter], readOptions)).contracts;
     },
 
     readActiveContracts,

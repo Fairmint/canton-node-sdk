@@ -106,8 +106,9 @@ export interface TransferOffers {
  * the same holdings. Reads and previews are not limited.
  *
  * Reads: `loadState` and the `list*` methods all read one snapshot (one ledger-end call and one paged ACS stream with
- * every filter the wallet needs), and calls made while a snapshot is in flight share it instead of reading again,
- * unless a write settled since it started. Load a page with `loadState`; writes do their own fresh reads.
+ * every filter the wallet needs; a registry that declares no `pendingTransferFilters` costs one more ACS stream, read
+ * at the same offset), and calls made while a snapshot is in flight share it instead of reading again, unless a write
+ * settled since it started. Load a page with `loadState`; writes do their own fresh reads.
  */
 export interface TokenStandardWallet {
   /** The party every action reads and acts as. */
@@ -157,7 +158,12 @@ export function requireInstrumentId(instrumentId: InstrumentId): InstrumentId {
 export interface StateSnapshot {
   readonly wallet: Cip103Wallet;
   readonly offset: number;
-  /** Serves the snapshot's own filters from the snapshot; any other filter is read from the wallet. */
+  /** The wallet party's holdings the registry serves, selected from the snapshot as a write's fresh read selects them. */
+  readonly holdings: Holding[];
+  /**
+   * Serves the snapshot's own filters from the snapshot; any other filter is read from the wallet at the snapshot's
+   * offset (once per filter), so every list read through it belongs to the same snapshot.
+   */
   readonly read: ReadContracts;
 }
 
@@ -226,6 +232,13 @@ export function tokenStandardCore(
     }
   }
 
+  /**
+   * The validated holdings among `contracts`: of the registry (`servesHolding`, which checks template and signatories),
+   * readable by `parseHolding` (HoldingV1 view, else the create argument) and owned by `owner`. Writes and the snapshot
+   * both select holdings with this alone, over the same holding filters, so they see the same holdings: whatever passes
+   * implements HoldingV1 or is of one of the registry's holding templates, so a holding-filter read returns it too.
+   * (Matching the snapshot by filter instead would drop a holding whose HoldingV1 view the ledger failed to compute.)
+   */
   function holdingsIn(owner: string, contracts: readonly ActiveContract[]): Holding[] {
     return contracts.flatMap((contract) => {
       if (!registry.servesHolding(contract)) return [];
@@ -234,12 +247,14 @@ export function tokenStandardCore(
     });
   }
 
+  const holdingFilters: readonly ContractFilter[] = [HOLDING_FILTER, ...(registry.holdingFilters ?? [])];
+
   async function holdingsOf(wallet: Cip103Wallet): Promise<Holding[]> {
-    return holdingsIn(wallet.partyId, await wallet.listActiveContracts(HOLDING_FILTER));
+    return holdingsIn(wallet.partyId, (await wallet.readActiveContracts(holdingFilters)).contracts);
   }
 
   const stateFilters: readonly ContractFilter[] = [
-    HOLDING_FILTER,
+    ...holdingFilters,
     ...(registry.pendingTransferFilters ?? []),
     ...extraStateFilters,
   ];
@@ -248,11 +263,24 @@ export function tokenStandardCore(
   async function takeSnapshot(party: string): Promise<StateSnapshot> {
     const wallet = cip103Wallet(provider, party, walletOptions);
     const { offset, contracts } = await wallet.readActiveContracts(stateFilters);
-    const read: ReadContracts = async (filter) =>
-      stateFilterKeys.has(contractFilterKey(filter))
-        ? contracts.filter((contract) => contractMatchesFilter(contract, filter))
-        : wallet.listActiveContracts(filter);
-    return { wallet, offset, read };
+    // A filter the snapshot did not carry (a registry without `pendingTransferFilters`) is read at the snapshot's
+    // offset, not at a new ledger end, and once per snapshot however many lists ask for it.
+    const extraReads = new Map<string, Promise<ActiveContract[]>>();
+    const read: ReadContracts = async (filter) => {
+      const key = contractFilterKey(filter);
+      if (stateFilterKeys.has(key)) return contracts.filter((contract) => contractMatchesFilter(contract, filter));
+      let pending = extraReads.get(key);
+      if (pending === undefined) {
+        pending = wallet.listActiveContracts(filter, { activeAtOffset: offset });
+        extraReads.set(key, pending);
+        // A failed read is not kept, so a later list of the same snapshot tries again.
+        pending.catch(() => {
+          if (extraReads.get(key) === pending) extraReads.delete(key);
+        });
+      }
+      return [...(await pending)];
+    };
+    return { wallet, offset, holdings: holdingsIn(party, contracts), read };
   }
 
   // Keyed by party as well: without a pinned `partyId`, a read after an account switch must not join the previous
@@ -271,15 +299,11 @@ export function tokenStandardCore(
   }
 
   async function stateOf(taken: StateSnapshot): Promise<TokenStandardState> {
-    const [holdingContracts, transferOffers] = await Promise.all([
-      taken.read(HOLDING_FILTER),
-      transferOffersOf(taken.wallet.partyId, taken.read),
-    ]);
     return {
       partyId: taken.wallet.partyId,
       offset: taken.offset,
-      holdings: holdingsIn(taken.wallet.partyId, holdingContracts),
-      transferOffers,
+      holdings: [...taken.holdings],
+      transferOffers: await transferOffersOf(taken.wallet.partyId, taken.read),
     };
   }
 
@@ -390,10 +414,7 @@ export function tokenStandardCore(
     api: {
       partyId,
       loadState: async () => stateOf(await snapshot()),
-      listHoldings: async () => {
-        const taken = await snapshot();
-        return holdingsIn(taken.wallet.partyId, await taken.read(HOLDING_FILTER));
-      },
+      listHoldings: async () => [...(await snapshot()).holdings],
       previewTransfer: async (request) => (await prepareTransfer(await connect(), request)).factory.transferKind,
       transfer: async (request) => exclusive(async () => runTransfer(request)),
       listTransferOffers: async () => {

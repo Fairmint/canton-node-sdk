@@ -89,8 +89,12 @@ const BURN = 'Utility.Registry.App.V0.Model.Burn:BurnRequest';
 /** A registry provider serving REGISTRAR that is not REGISTRAR itself. */
 const PROVIDER = 'provider::1220ab';
 
-function ledger(extraHoldings: ActiveContract[] = []): Record<string, ActiveContract[]> {
+function ledger(
+  extraHoldings: ActiveContract[] = [],
+  daHoldings: ActiveContract[] = []
+): Record<string, ActiveContract[]> {
   return {
+    [DA_REGISTRY_TEMPLATES.holding]: daHoldings,
     [DA_REGISTRY_TEMPLATES.mintOffer]: [
       contract('00mint', MINT, mintArgs()),
       contract('00forged', MINT, mintArgs({ provider: OTHER })),
@@ -132,6 +136,8 @@ function setup(
     party?: string;
     partyId?: string;
     extraHoldings?: ActiveContract[];
+    /** Contracts the DA Holding template filter returns. */
+    daHoldings?: ActiveContract[];
     trustedProviders?: Record<string, string[]>;
   } = {}
 ): { tokens: TokenWallet; wallet: FakeProvider; calls: FetchCall[] } {
@@ -173,7 +179,7 @@ function setup(
       },
     };
   });
-  const wallet = fakeProvider(ledger(options.extraHoldings), {
+  const wallet = fakeProvider(ledger(options.extraHoldings, options.daHoldings), {
     party: options.party ?? HOLDER,
   });
   const tokens = createTokenWallet({
@@ -190,9 +196,15 @@ function setup(
 
 const UUID = /^[0-9a-f-]{36}$/;
 
+/** What every read of holdings asks for: the HoldingV1 interface and DA's holding template. */
+const HOLDING_FILTERS = [
+  { interfaceId: TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID },
+  { templateId: DA_REGISTRY_TEMPLATES.holding },
+];
+
 /** The filters of a token wallet's state snapshot, in the order it sends them. */
 const STATE_FILTERS = [
-  { interfaceId: TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID },
+  ...HOLDING_FILTERS,
   { templateId: DA_REGISTRY_TEMPLATES.transferOffer },
   { templateId: DA_REGISTRY_TEMPLATES.mintOffer },
   { templateId: DA_REGISTRY_TEMPLATES.burnRequest },
@@ -512,6 +524,51 @@ describe('createTokenWallet.loadState: one snapshot per refresh', () => {
     });
     const state = await tokens.loadState();
     expect(state.mintOffers.map((o) => o.contractId)).toEqual(['00mint']);
+  });
+
+  it('does not classify a same-name contract without a package name into the template lists', async () => {
+    // Returned only by the HoldingV1 interface filter, with a MintOffer's `Module:Entity`, valid arguments and the
+    // registrar's signature, but no `packageName` to prove it is DA's MintOffer: it is not listed (fail closed).
+    const { packageName: _dropped, ...unproven } = contract('00nopkgmint', MINT, mintArgs());
+    const { tokens } = setup({
+      extraHoldings: [{ ...unproven, interfaceViews: holdingView('x', '1').interfaceViews }],
+    });
+    expect(unproven).not.toHaveProperty('packageName');
+    const state = await tokens.loadState();
+    expect(state.mintOffers.map((o) => o.contractId)).toEqual(['00mint']);
+    expect((await tokens.listMintOffers()).map((o) => o.contractId)).toEqual(['00mint']);
+  });
+
+  it('lists the same holdings that a write spends, including a DA holding without a HoldingV1 view', async () => {
+    const daHolding = (contractId: string, amount: string, signatories: readonly string[]): ActiveContract => ({
+      ...contract(
+        contractId,
+        'Utility.Registry.Holding.V0.Holding:Holding',
+        { owner: HOLDER, instrument: { source: REGISTRAR, id: 'XMPL' }, amount, lock: null },
+        [],
+        signatories
+      ),
+      packageName: 'utility-registry-holding-v0',
+    });
+    // The ledger could not compute their HoldingV1 view; only the DA Holding template filter's create argument reads.
+    const { tokens, wallet } = setup({
+      daHoldings: [daHolding('00noview', '100', [REGISTRAR, HOLDER]), daHolding('00noviewforged', '900', [OTHER])],
+    });
+    const state = await tokens.loadState();
+    expect(state.holdings.map((h) => h.contractId)).toEqual(['00h10', '00h3', '00locked', '00noview']);
+    expect((await tokens.listHoldings()).map((h) => h.contractId)).toEqual(state.holdings.map((h) => h.contractId));
+    // The write's fresh read sees exactly these: 10 + 3 + 100 unlocked, all of it spendable, and not one unit more.
+    await expect(
+      tokens.transfer({ receiver: OTHER, instrumentId: INSTRUMENT, amount: '113.0000000001' })
+    ).rejects.toMatchObject({ code: 'insufficient-balance' });
+    await tokens.transfer({ receiver: OTHER, instrumentId: INSTRUMENT, amount: '113' });
+    expect(wallet.submissions).toHaveLength(1);
+    expect(wallet.reads).toEqual([STATE_FILTERS, STATE_FILTERS, HOLDING_FILTERS, HOLDING_FILTERS]);
+    expect(wallet.submissions[0]).toMatchObject({
+      commands: [
+        { ExerciseCommand: { choiceArgument: { transfer: { inputHoldingCids: ['00noview', '00h10', '00h3'] } } } },
+      ],
+    });
   });
 });
 
@@ -1125,6 +1182,27 @@ describe('createTokenStandardWallet with a registry other than DA', () => {
     const tokens = createTokenStandardWallet({ provider: wallet, registry, now: () => NOW });
     return { tokens, wallet, registryCalls };
   }
+
+  it('reads a registry filter the snapshot does not carry at the snapshot offset, once', async () => {
+    const { tokens, wallet } = coinSetup();
+    const [state, offers] = await Promise.all([tokens.loadState(), tokens.listTransferOffers()]);
+    expect(state.holdings.map((h) => h.contractId)).toEqual(['00c5']);
+    expect(state.transferOffers).toEqual(offers);
+    expect(state.transferOffers.incoming.map((o) => o.contractId)).toEqual(['00coinin']);
+    // One ledger end; the registry's undeclared filter is read at that offset (not a newer one), and only once.
+    expect(wallet.ledgerCalls()).toEqual([
+      'GET /v2/state/ledger-end',
+      'POST /v2/state/active-contracts-page',
+      'POST /v2/state/active-contracts-page',
+    ]);
+    const offsets = wallet.requests.flatMap((r) =>
+      r.method === 'ledgerApi' && r.params.resource === '/v2/state/active-contracts-page'
+        ? [r.params.body?.['activeAtOffset']]
+        : []
+    );
+    expect(offsets).toEqual([state.offset, state.offset]);
+    expect(wallet.reads[1]).toEqual([{ templateId: INSTRUCTION_KEY }]);
+  });
 
   it('lists only the holdings the registry serves', async () => {
     const { tokens } = coinSetup();

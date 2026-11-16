@@ -72,6 +72,12 @@ export interface TokenRegistry {
    */
   servesHolding(contract: ActiveContract): boolean;
   /**
+   * Filters a token wallet reads holdings with besides the CIP-56 HoldingV1 interface, for example the registry's own
+   * holding template, whose create argument still reads when the ledger could not compute a HoldingV1 view. Every read
+   * of holdings (a write's fresh read and the state snapshot) uses the same filters, and the same `servesHolding`.
+   */
+  readonly holdingFilters?: readonly ContractFilter[];
+  /**
    * This registry's pending transfers (CIP-56 TransferInstructions) visible to the wallet, read through `read` and
    * checked to be genuine (made by the registry, not a look-alike any party could create). Both directions: the caller
    * splits them by sender and receiver.

@@ -230,6 +230,8 @@ export function createDaUtilitiesClient(
     baseUrl,
     expectedTransferFactoryTemplates: DA_TRANSFER_FACTORY_TEMPLATES,
     pendingTransferFilters: [{ templateId: DA_REGISTRY_TEMPLATES.transferOffer }],
+    // The template filter carries the create argument, which `parseHolding` reads when there is no HoldingV1 view.
+    holdingFilters: [{ templateId: DA_REGISTRY_TEMPLATES.holding }],
     operatorParty,
     trustedProvidersOf,
 
