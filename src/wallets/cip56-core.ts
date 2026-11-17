@@ -12,7 +12,7 @@ import {
 } from './cip103';
 import { transferCommand, transferInstructionCommand } from './commands';
 import type { TransferOffer } from './contracts';
-import { RegistryResponseError, TokenWalletError } from './errors';
+import { RegistryResponseError, WalletError } from './errors';
 import { instrumentBalances, parseHolding, selectHoldings, type Holding, type InstrumentBalance } from './holdings';
 import {
   TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID,
@@ -62,8 +62,8 @@ export interface CoreOptions {
    * Whether the wallet session this token wallet belongs to is still live. Once it answers false, every write (a
    * transfer, a `TransferPlan`'s `submit`, an offer answer, a mint accept, a burn request, a preapproval) is refused
    * with `invalid-input` before its first read, and again right before the wallet signs, so nothing is submitted: the
-   * provider may now be signed in to another account. Reads are not limited. `createTokenWalletStore` passes its
-   * session's `isCurrent(wallet)`. Default: always live.
+   * provider may now be signed in to another account. Reads are not limited. `createWalletStore` passes its session's
+   * `isCurrent(wallet)`. Default: always live.
    */
   readonly isActive?: () => boolean;
 }
@@ -114,7 +114,7 @@ export interface TransferResult extends SubmitResult {
  * now acts as another party (an account switch, without a pinned `partyId`) with `invalid-input`, both before signing.
  *
  * A plan is bound to the wallet session that made it: when that token wallet's `isActive` answers false (the token
- * wallets `createTokenWalletStore` opens: their `ConnectedWallet` is no longer the session's), `submit` is refused with
+ * wallets `createWalletStore` opens: their `ConnectedWallet` is no longer the session's), `submit` is refused with
  * `invalid-input` and nothing is submitted, also when its `partyId` is pinned. Plan again in the current session.
  */
 export interface TransferPlan {
@@ -159,7 +159,7 @@ export interface TransferActions {
 
 export function requireNonEmpty(value: string, field: string): string {
   if (value.trim().length === 0) {
-    throw new TokenWalletError('invalid-input', `${field} is required`);
+    throw new WalletError('invalid-input', `${field} is required`);
   }
   return value;
 }
@@ -168,7 +168,7 @@ export function requireNonEmpty(value: string, field: string): string {
 export function requireTime(date: Date, field: string): number {
   const ms = date instanceof Date ? date.getTime() : Number.NaN;
   if (!Number.isFinite(ms)) {
-    throw new TokenWalletError('invalid-input', `${field} is not a valid time`);
+    throw new WalletError('invalid-input', `${field} is not a valid time`);
   }
   return ms;
 }
@@ -243,7 +243,7 @@ export function cip56Core(options: CoreOptions, extraStateFilters: readonly Cont
   /** Refuse a write once the wallet session this token wallet belongs to ended (`isActive`). */
   function requireActive(): void {
     if (isActive !== undefined && !isActive()) {
-      throw new TokenWalletError(
+      throw new WalletError(
         'invalid-input',
         'The wallet session this action was prepared in has ended (the wallet disconnected or switched accounts); nothing was submitted. Start the action again.'
       );
@@ -275,7 +275,7 @@ export function cip56Core(options: CoreOptions, extraStateFilters: readonly Cont
   let writesSettled = 0;
   async function exclusive<T>(action: () => Promise<T>): Promise<T> {
     if (busy) {
-      throw new TokenWalletError('busy', 'Another wallet action is in progress; nothing was submitted');
+      throw new WalletError('busy', 'Another wallet action is in progress; nothing was submitted');
     }
     requireActive();
     busy = true;
@@ -404,13 +404,13 @@ export function cip56Core(options: CoreOptions, extraStateFilters: readonly Cont
     const { transfer: spec, factory } = await prepareTransfer(wallet, request);
     const kind = factory.transferKind;
     if (request.requirePreapproval === true && kind !== 'direct') {
-      throw new TokenWalletError(
+      throw new WalletError(
         'preapproval-required',
         `The receiver has no matching transfer preapproval (the registry would make a${kind === 'offer' ? 'n offer' : ` ${kind} transfer`}); nothing was submitted`
       );
     }
     if (request.expectedKind !== undefined && kind !== request.expectedKind) {
-      throw new TokenWalletError(
+      throw new WalletError(
         'kind-changed',
         `The registry would now make a${kind === 'offer' ? 'n' : ''} ${kind} transfer, not the previewed ${request.expectedKind}; nothing was submitted`
       );
@@ -442,7 +442,7 @@ export function cip56Core(options: CoreOptions, extraStateFilters: readonly Cont
     action: TransferInstructionAction
   ): Promise<SubmitResult> {
     if (!TRANSFER_INSTRUCTION_ACTIONS.includes(action)) {
-      throw new TokenWalletError('invalid-input', `action must be one of ${TRANSFER_INSTRUCTION_ACTIONS.join(', ')}`);
+      throw new WalletError('invalid-input', `action must be one of ${TRANSFER_INSTRUCTION_ACTIONS.join(', ')}`);
     }
     const wallet = await connect();
     const { incoming, outgoing } = await transferOffersOf(wallet.partyId, async (filter) =>
@@ -450,7 +450,7 @@ export function cip56Core(options: CoreOptions, extraStateFilters: readonly Cont
     );
     const offer = (action === 'withdraw' ? outgoing : incoming).find((o) => o.contractId === transferOfferCid);
     if (!offer) {
-      throw new TokenWalletError(
+      throw new WalletError(
         'not-found',
         `Transfer offer ${transferOfferCid} is not among the wallet's ${action === 'withdraw' ? 'outgoing' : 'incoming'} offers`
       );
@@ -490,7 +490,7 @@ export function cip56Core(options: CoreOptions, extraStateFilters: readonly Cont
           // it never debits a party the preview did not show.
           const current = await partyId();
           if (current !== plannedParty) {
-            throw new TokenWalletError(
+            throw new WalletError(
               'invalid-input',
               `The wallet now acts as ${current}, not ${plannedParty}, the party this transfer was previewed for; nothing was submitted. Preview the transfer again.`
             );

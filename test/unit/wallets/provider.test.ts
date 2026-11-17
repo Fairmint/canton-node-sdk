@@ -7,7 +7,7 @@ import { TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID } from '../../../src/utils/token
 import {
   createDaUtilitiesClient,
   createWallet,
-  TokenWalletError,
+  WalletError,
   WalletReadError,
   WalletSubmitError,
   type ActiveContract,
@@ -125,7 +125,7 @@ describe('createWallet: the wallet party', () => {
         partyId: ' ',
         registry: createDaUtilitiesClient({ network: 'devnet' }),
       })
-    ).toThrow(TokenWalletError);
+    ).toThrow(WalletError);
   });
 });
 

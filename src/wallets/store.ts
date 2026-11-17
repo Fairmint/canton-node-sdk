@@ -7,7 +7,7 @@
  * store.getSnapshot, store.getSnapshot)`).
  */
 import { notifyListeners } from './notify';
-import { describeWalletError, TokenWalletError, type WalletErrorDescription } from './errors';
+import { describeWalletError, WalletError, type WalletErrorDescription } from './errors';
 import type { Cip103Session, Cip103SessionState, ConnectedWallet } from './session';
 import { createWallet, type Wallet, type WalletState } from './wallet';
 
@@ -21,7 +21,7 @@ export type ActionOutcome =
    */
   | { readonly id: string; readonly partyId: string; readonly status: 'interrupted' };
 
-export interface TokenWalletView {
+export interface WalletView {
   readonly session: Cip103SessionState;
   /** The connected wallet the state belongs to (null when disconnected). */
   readonly wallet: ConnectedWallet | null;
@@ -64,10 +64,10 @@ export interface WalletActionContext {
   readonly wallet: ConnectedWallet;
 }
 
-export interface TokenWalletStore {
+export interface WalletStore {
   subscribe(listener: () => void): () => void;
   /** The current view; the same object until it changes (for `useSyncExternalStore`). */
-  getSnapshot(): TokenWalletView;
+  getSnapshot(): WalletView;
   /**
    * Reload the snapshot (the Retry button). Starts at once when no wallet call is in flight; otherwise it is queued and
    * runs once that call settles (the load in flight may have read before what prompted the refresh). Queued loads are
@@ -90,8 +90,8 @@ export interface TokenWalletStore {
    * that passes `isActive` on) refuses every write once its `ConnectedWallet` is no longer the session's, with
    * `invalid-input` and before anything is read or signed, so a plan made for one account is never submitted after the
    * session switched to another. A run that is still current records that refusal as a `failed` outcome. A run whose
-   * session ended while it ran, and whose action rejected with a refusal (`TokenWalletError`, `describeWalletError`
-   * kind `refused`: nothing was submitted), records no outcome rather than `interrupted`.
+   * session ended while it ran, and whose action rejected with a refusal (`WalletError`, `describeWalletError` kind
+   * `refused`: nothing was submitted), records no outcome rather than `interrupted`.
    */
   run(
     id: string,
@@ -106,7 +106,7 @@ export interface TokenWalletStore {
 }
 
 /** What `open` gets besides the connected wallet. */
-export interface OpenTokenWalletContext {
+export interface OpenWalletContext {
   /**
    * Whether `wallet` is still the session's connected wallet (`session.isCurrent(wallet)`). Pass it as the token
    * wallet's `isActive`, so its writes, and the `TransferPlan`s it made, are refused once the session left `wallet`.
@@ -114,7 +114,7 @@ export interface OpenTokenWalletContext {
   readonly isActive: () => boolean;
 }
 
-export interface TokenWalletStoreOptions {
+export interface WalletStoreOptions {
   readonly session: Cip103Session;
   /**
    * Builds the token wallet of each connected wallet. Default: `createWallet({ provider, partyId, network, isActive })`
@@ -123,7 +123,7 @@ export interface TokenWalletStoreOptions {
    * isActive: context.isActive })`. Pass `context.isActive` on as the token wallet's `isActive`, as the default does,
    * or a plan made for one wallet can still be submitted after the session switched to another.
    */
-  readonly open?: (wallet: ConnectedWallet, context: OpenTokenWalletContext) => Wallet;
+  readonly open?: (wallet: ConnectedWallet, context: OpenWalletContext) => Wallet;
 }
 
 /** Whether the outcome leaves open if a write committed: `interrupted`, or a failure the wallet could not confirm. */
@@ -131,18 +131,18 @@ function outcomeUnknown(outcome: ActionOutcome): boolean {
   return outcome.status === 'interrupted' || (outcome.status === 'failed' && outcome.error.kind === 'outcome-unknown');
 }
 
-/** Whether `error` is the SDK's refusal before anything was submitted (`TokenWalletError`). */
+/** Whether `error` is the SDK's refusal before anything was submitted (`WalletError`). */
 function refusedUnsent(error: unknown): boolean {
   return describeWalletError(error).kind === 'refused';
 }
 
 /** The default token wallet: DA's registry for the network the wallet connected for, acting as its party only. */
-function openWallet(wallet: ConnectedWallet, context: OpenTokenWalletContext): Wallet {
+function openWallet(wallet: ConnectedWallet, context: OpenWalletContext): Wallet {
   const { provider, partyId, network } = wallet;
   if (network === undefined) {
-    throw new TokenWalletError(
+    throw new WalletError(
       'invalid-input',
-      'The connected wallet names no network: connect with { network }, or pass open to createTokenWalletStore'
+      'The connected wallet names no network: connect with { network }, or pass open to createWalletStore'
     );
   }
   return createWallet({ provider, partyId, network, isActive: context.isActive });
@@ -159,7 +159,7 @@ function openWallet(wallet: ConnectedWallet, context: OpenTokenWalletContext): W
  * `dispose()`. A wallet call that never settles holds the latch, since it cannot be cancelled. The token wallet's own
  * write latch (`busy`) stays as the inner guard.
  */
-export function createTokenWalletStore(options: TokenWalletStoreOptions): TokenWalletStore {
+export function createWalletStore(options: WalletStoreOptions): WalletStore {
   const { session } = options;
   const open = options.open ?? openWallet;
   const listeners = new Set<() => void>();
@@ -190,7 +190,7 @@ export function createTokenWalletStore(options: TokenWalletStoreOptions): TokenW
     return outcome.status === 'interrupted' || outcome.partyId !== wallet?.partyId ? outcome.partyId : null;
   }
 
-  function buildView(): TokenWalletView {
+  function buildView(): WalletView {
     return {
       session: sessionState,
       wallet,

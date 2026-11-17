@@ -160,19 +160,19 @@ async function send(provider: Cip103Provider, receiver: string): Promise<string>
 ### A whole dApp: session, store and the ownership routes
 
 `createCip103Session()` tracks which wallet is connected, as which party, and drops replies from
-sessions that have since ended. `createTokenWalletStore({ session })` builds on it: one token wallet
-per connected wallet, its `loadState` snapshot, one wallet call at a time, a reload after every
-write attempt (failed ones too: a failed write may have committed), and outcomes tagged with the
-session they ran for. Both are framework-agnostic (`subscribe`/`getSnapshot`). The ownership check
-has two halves: `requestWalletOwnershipVerdict` in the page, and `createWalletOwnershipChallenger`
-(Node only, from the package root) behind two routes.
+sessions that have since ended. `createWalletStore({ session })` builds on it: one token wallet per
+connected wallet, its `loadState` snapshot, one wallet call at a time, a reload after every write
+attempt (failed ones too: a failed write may have committed), and outcomes tagged with the session
+they ran for. Both are framework-agnostic (`subscribe`/`getSnapshot`). The ownership check has two
+halves: `requestWalletOwnershipVerdict` in the page, and `createWalletOwnershipChallenger` (Node
+only, from the package root) behind two routes.
 
 ```ts
 // wallet.ts (browser): one session and one store per tab, at module level.
 import { useSyncExternalStore } from 'react';
 import {
   createCip103Session,
-  createTokenWalletStore,
+  createWalletStore,
   requestWalletOwnershipVerdict,
   type Cip103Provider,
 } from '@fairmint/canton-node-sdk/build/src/wallets/index.js';
@@ -180,7 +180,7 @@ import {
 const network = 'devnet';
 const session = createCip103Session();
 // Default open: createWallet({ provider, partyId, network, isActive: () => session.isCurrent(wallet) })
-const store = createTokenWalletStore({ session });
+const store = createWalletStore({ session });
 
 // The wallet's own callbacks (Loop: onAccept, onReject) and the buttons.
 export const onAccept = (provider: Cip103Provider) => session.connected(provider, { network });

@@ -6,12 +6,12 @@ import {
   createCip103Session,
   createDaUtilitiesClient,
   createWallet,
-  createTokenWalletStore,
+  createWalletStore,
   describeWalletError,
   isDaUtilitiesClient,
   newBurnReference,
   RegistryResponseError,
-  TokenWalletError,
+  WalletError,
   WalletSubmitError,
   type ActiveContract,
   type JsonObject,
@@ -827,7 +827,7 @@ describe('createWallet.requestBurn', () => {
           executeBefore,
         })
       ).rejects.toMatchObject({
-        name: 'TokenWalletError',
+        name: 'WalletError',
         code: 'invalid-input',
       });
       expect(postCalls(calls)).toEqual([]);
@@ -881,7 +881,7 @@ describe('newBurnReference', () => {
   });
 
   it('refuses an invalid date', () => {
-    expect(() => newBurnReference(new Date('soon'))).toThrow(TokenWalletError);
+    expect(() => newBurnReference(new Date('soon'))).toThrow(WalletError);
   });
 });
 
@@ -910,7 +910,7 @@ describe('createWallet({ network })', () => {
   it('refuses options with neither a registry nor a known network', () => {
     const provider = fakeProvider(ledger());
     expect(() => createWallet({ provider } as unknown as Parameters<typeof createWallet>[0])).toThrow(
-      expect.objectContaining({ name: 'TokenWalletError', code: 'invalid-input' })
+      expect.objectContaining({ name: 'WalletError', code: 'invalid-input' })
     );
     expect(() =>
       createWallet({ provider, network: 'testnet' } as unknown as Parameters<typeof createWallet>[0])
@@ -1001,7 +1001,7 @@ describe('createWallet transfers', () => {
     async (transferKind) => {
       const { tokens, wallet } = setup({ transferKind });
       const error = await tokens.transfer({ ...request, requirePreapproval: true }).catch((e: unknown) => e);
-      expect(error).toBeInstanceOf(TokenWalletError);
+      expect(error).toBeInstanceOf(WalletError);
       expect(error).toMatchObject({ code: 'preapproval-required' });
       expect((error as Error).message).toMatch(/nothing was submitted/);
       expect(wallet.submissions).toEqual([]);
@@ -1016,7 +1016,7 @@ describe('createWallet transfers', () => {
     async (transferKind, expectedKind) => {
       const { tokens, wallet } = setup({ transferKind });
       const error = await tokens.transfer({ ...request, expectedKind }).catch((e: unknown) => e);
-      expect(error).toBeInstanceOf(TokenWalletError);
+      expect(error).toBeInstanceOf(WalletError);
       expect(error).toMatchObject({ code: 'kind-changed' });
       expect((error as Error).message).toMatch(/nothing was submitted/);
       expect(wallet.submissions).toEqual([]);
@@ -1097,7 +1097,7 @@ describe('createWallet transfers', () => {
     // OTHER holds enough to cover the amount, so without the check the same kind would be submitted as OTHER.
     account.party = OTHER;
     const error = await plan.submit().catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(TokenWalletError);
+    expect(error).toBeInstanceOf(WalletError);
     expect(error).toMatchObject({ code: 'invalid-input' });
     expect((error as Error).message).toMatch(/nothing was submitted/);
     expect((error as Error).message).toContain(HOLDER);
@@ -1148,7 +1148,7 @@ describe('createWallet transfers', () => {
     ];
     for (const write of writes) {
       const error = await write().catch((e: unknown) => e);
-      expect(error).toBeInstanceOf(TokenWalletError);
+      expect(error).toBeInstanceOf(WalletError);
       expect(error).toMatchObject({ code: 'invalid-input' });
       expect(describeWalletError(error)).toEqual({
         kind: 'refused',
@@ -1197,11 +1197,11 @@ describe('createWallet transfers', () => {
     expect(factorySenders(calls)).toEqual([HOLDER, HOLDER]);
   });
 
-  it('through createTokenWalletStore, a plan made for one account is refused after the session switched to another', async () => {
+  it('through createWalletStore, a plan made for one account is refused after the session switched to another', async () => {
     const { wallet: provider, registry, calls } = setup({ transferKind: 'offer' });
     const account = switchableAccount(provider);
     const session = createCip103Session();
-    const store = createTokenWalletStore({
+    const store = createWalletStore({
       session,
       open: (connected, { isActive }) =>
         createWallet({
@@ -1479,7 +1479,7 @@ describe('createWallet: answering transfer offers', () => {
     await expect(tokens.answerTransferOffer('00in', 'withdraw')).rejects.toMatchObject({ code: 'not-found' });
     await expect(
       tokens.answerTransferOffer('00in', 'cancel' as unknown as TransferInstructionAction)
-    ).rejects.toMatchObject({ name: 'TokenWalletError', code: 'invalid-input' });
+    ).rejects.toMatchObject({ name: 'WalletError', code: 'invalid-input' });
     expect(postCalls(calls)).toEqual([]);
     expect(wallet.submissions).toEqual([]);
   });
@@ -1617,7 +1617,7 @@ describe('createWallet with a registry other than DA', () => {
     ];
     for (const [name, call] of refusals) {
       const error: unknown = await call().catch((e: unknown) => e);
-      expect(error).toBeInstanceOf(TokenWalletError);
+      expect(error).toBeInstanceOf(WalletError);
       expect(error).toMatchObject({ code: 'unsupported-by-registry' });
       expect((error as Error).message).toContain(name);
     }
@@ -1645,6 +1645,22 @@ describe('createWallet with a registry other than DA', () => {
     const { registry } = coinSetup();
     expect(isDaUtilitiesClient(createDaUtilitiesClient({ network: 'devnet' }))).toBe(true);
     expect(isDaUtilitiesClient(registry)).toBe(false);
+  });
+
+  it("does not take DA's four functions without a baseUrl for DA's client", () => {
+    const { registry } = coinSetup();
+    const da = createDaUtilitiesClient({ network: 'devnet' });
+    const functionsOnly = {
+      ...registry,
+      operatorParty: da.operatorParty,
+      trustedProvidersOf: da.trustedProvidersOf,
+      mintOfferAcceptContext: da.mintOfferAcceptContext,
+      burnRequestContext: da.burnRequestContext,
+    };
+    expect(isDaUtilitiesClient(functionsOnly)).toBe(false);
+    const withBaseUrl = (baseUrl: string): TokenRegistry => ({ ...functionsOnly, baseUrl }) as TokenRegistry;
+    expect(isDaUtilitiesClient(withBaseUrl(''))).toBe(false);
+    expect(isDaUtilitiesClient(withBaseUrl(da.baseUrl))).toBe(true);
   });
 
   it('lists only the holdings the registry serves', async () => {

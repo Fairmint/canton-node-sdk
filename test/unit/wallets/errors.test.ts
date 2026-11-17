@@ -3,7 +3,7 @@ import {
   describeWalletError,
   RegistryApiError,
   RegistryResponseError,
-  TokenWalletError,
+  WalletError,
   WalletReadError,
   WalletSignError,
   WalletSubmitError,
@@ -77,13 +77,13 @@ describe('describeWalletError', () => {
   });
 
   it('keeps the message and code of an action the SDK refused', () => {
-    expect(describeWalletError(new TokenWalletError('insufficient-balance', 'Only 1 TOKEN'))).toEqual({
+    expect(describeWalletError(new WalletError('insufficient-balance', 'Only 1 TOKEN'))).toEqual({
       kind: 'refused',
       message: 'Only 1 TOKEN',
       code: 'insufficient-balance',
     });
     const busy = describeWalletError(
-      new TokenWalletError('busy', 'Another wallet action is in progress; nothing was submitted')
+      new WalletError('busy', 'Another wallet action is in progress; nothing was submitted')
     );
     expect(busy).toMatchObject({ kind: 'refused', code: 'busy' });
     expect(busy.message).toMatch(/nothing was submitted/);
@@ -91,7 +91,7 @@ describe('describeWalletError', () => {
 
   it('describes an action the registry does not offer as refused', () => {
     const unsupported = describeWalletError(
-      new TokenWalletError('unsupported-by-registry', "requestBurn needs DA's Utility Registry client")
+      new WalletError('unsupported-by-registry', "requestBurn needs DA's Utility Registry client")
     );
     expect(unsupported).toEqual({
       kind: 'refused',

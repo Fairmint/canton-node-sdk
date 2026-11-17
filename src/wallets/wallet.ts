@@ -23,7 +23,7 @@ import {
   type DaNetwork,
   type DaUtilitiesClient,
 } from './da-utilities/client';
-import { RegistryResponseError, TokenWalletError, WalletSubmitError } from './errors';
+import { RegistryResponseError, WalletError, WalletSubmitError } from './errors';
 import { selectHoldings } from './holdings';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
 import { factoryTemplateError, type TokenRegistry } from './token-registry';
@@ -183,7 +183,7 @@ function registryOf(options: WalletOptions): TokenRegistry {
   if (options.registry !== undefined) return options.registry;
   const { network } = options as { network?: unknown };
   if (typeof network !== 'string' || !Object.prototype.hasOwnProperty.call(DA_UTILITIES_BASE_URLS, network)) {
-    throw new TokenWalletError(
+    throw new WalletError(
       'invalid-input',
       `Pass a registry, or a network (${Object.keys(DA_UTILITIES_BASE_URLS).join(' or ')})`
     );
@@ -205,7 +205,7 @@ export function createWallet(options: WalletOptions): Wallet {
   /** DA's client, or `unsupported-by-registry` (thrown before any read, latch or signature). */
   function requireDa(action: string): DaUtilitiesClient {
     if (da === null) {
-      throw new TokenWalletError(
+      throw new WalletError(
         'unsupported-by-registry',
         `${action} needs DA's Utility Registry client: pass network, or registry: createDaUtilitiesClient(...)`
       );
@@ -282,25 +282,22 @@ export function createWallet(options: WalletOptions): Wallet {
     const contract = contracts.find((c) => c.contractId === mintOfferCid);
     const offer = contract ? parseMintOffer(contract) : null;
     if (contract === undefined || offer === null) {
-      throw new TokenWalletError(
-        'not-found',
-        `Mint offer ${mintOfferCid} is not among the wallet's active mint offers`
-      );
+      throw new WalletError('not-found', `Mint offer ${mintOfferCid} is not among the wallet's active mint offers`);
     }
     if (offer.holder !== wallet.partyId) {
-      throw new TokenWalletError(
+      throw new WalletError(
         'not-addressed-to-wallet',
         `Mint offer ${mintOfferCid} is for ${offer.holder}, not the wallet party`
       );
     }
     if (!isFromRegistry(offer, contract.signatories, await client.operatorParty(), client.trustedProvidersOf)) {
-      throw new TokenWalletError(
+      throw new WalletError(
         'unexpected-registrar',
         `Mint offer ${mintOfferCid} was not made under a trusted registry service of its instrument admin`
       );
     }
     if (acceptOptions.expectedRegistrar !== undefined && offer.instrumentId.admin !== acceptOptions.expectedRegistrar) {
-      throw new TokenWalletError(
+      throw new WalletError(
         'unexpected-registrar',
         `Mint offer ${mintOfferCid} is of ${offer.instrumentId.admin}, not the expected registrar`
       );
@@ -317,7 +314,7 @@ export function createWallet(options: WalletOptions): Wallet {
     const at = now();
     const reference = burn.reference ?? newBurnReference(new Date(at));
     if (typeof reference !== 'string' || !BURN_REFERENCE_PATTERN.test(reference)) {
-      throw new TokenWalletError(
+      throw new WalletError(
         'invalid-input',
         'reference must be 1-100 characters of letters, digits and . _ : - (starting with a letter or digit), with no personal data'
       );
@@ -325,7 +322,7 @@ export function createWallet(options: WalletOptions): Wallet {
     const deadline =
       burn.executeBefore === undefined ? at + BURN_TTL_MS : requireTime(burn.executeBefore, 'executeBefore');
     if (deadline <= at) {
-      throw new TokenWalletError('invalid-input', 'executeBefore must be in the future');
+      throw new WalletError('invalid-input', 'executeBefore must be in the future');
     }
     const requestedAt = isoTime(at - REQUESTED_AT_SKEW_MS, 'requestedAt');
     const executeBefore = isoTime(deadline, 'executeBefore');
@@ -392,7 +389,7 @@ export function createWallet(options: WalletOptions): Wallet {
     const instrumentAdmin = requireNonEmpty(preapproval.instrumentAdmin, 'instrumentAdmin');
     const instrumentIds = [...new Set(preapproval.instrumentIds ?? [])];
     if (instrumentIds.length > MAX_PREAPPROVAL_INSTRUMENTS) {
-      throw new TokenWalletError(
+      throw new WalletError(
         'invalid-input',
         `A preapproval allows at most ${MAX_PREAPPROVAL_INSTRUMENTS} instrument ids`
       );

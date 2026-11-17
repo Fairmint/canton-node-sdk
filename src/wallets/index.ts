@@ -5,11 +5,11 @@
  *
  * The surface is small on purpose: plug in a CIP-0103 provider and a registry (`createWallet`: CIP-56 actions with any
  * `TokenRegistry`, DA's mint, burn and preapproval actions with DA's client), a page's wallet session and observable
- * state (`createCip103Session`, `createTokenWalletStore`; framework-agnostic), the registry client, the ownership
- * proof's client side (`requestWalletOwnershipVerdict`, `proveWalletOwnership` and the message it signs; the server
- * side, `createWalletOwnershipChallenger` and `verifyWalletOwnership`, is Node-only and exported from the package
- * root), the read back-off options, the errors and their user-facing descriptions (`describeWalletError`), and the data
- * types. Command builders, parsers, error-code tables and the CIP-0103 client stay internal.
+ * state (`createCip103Session`, `createWalletStore`; framework-agnostic), the registry client, the ownership proof's
+ * client side (`requestWalletOwnershipVerdict`, `proveWalletOwnership` and the message it signs; the server side,
+ * `createWalletOwnershipChallenger` and `verifyWalletOwnership`, is Node-only and exported from the package root), the
+ * read back-off options, the errors and their user-facing descriptions (`describeWalletError`), and the data types.
+ * Command builders, parsers, error-code tables and the CIP-0103 client stay internal.
  */
 export {
   createWallet,
@@ -42,12 +42,12 @@ export {
   type Cip103SessionState,
 } from './session';
 export {
-  createTokenWalletStore,
+  createWalletStore,
   type ActionOutcome,
-  type OpenTokenWalletContext,
-  type TokenWalletStore,
-  type TokenWalletStoreOptions,
-  type TokenWalletView,
+  type OpenWalletContext,
+  type WalletStore,
+  type WalletStoreOptions,
+  type WalletView,
   type WalletActionContext,
 } from './store';
 export {
@@ -90,11 +90,11 @@ export {
   describeWalletError,
   RegistryApiError,
   RegistryResponseError,
-  TokenWalletError,
+  WalletError,
   WalletReadError,
   WalletSignError,
   WalletSubmitError,
-  type TokenWalletErrorCode,
+  type WalletErrorCode,
   type WalletErrorDescription,
   type WalletSignErrorReason,
   type WalletSubmitOutcome,

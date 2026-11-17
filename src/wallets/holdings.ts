@@ -1,6 +1,6 @@
 /** Read holdings from the ACS and pick the inputs for a transfer or burn, with exact decimal arithmetic. */
 import { formatDecimalUnits, MAX_DECIMAL_UNITS, parseDecimalUnits } from './decimal';
-import { TokenWalletError } from './errors';
+import { WalletError } from './errors';
 import { readInstrumentId, sameInstrument } from './instrument';
 import { isRecord, nonEmptyString } from './json';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
@@ -112,7 +112,7 @@ export interface HoldingSelection {
 export function requirePositiveAmount(amount: string): bigint {
   const units = parseDecimalUnits(amount.trim());
   if (units === null || units === 0n || units > MAX_DECIMAL_UNITS) {
-    throw new TokenWalletError(
+    throw new WalletError(
       'invalid-input',
       `Amount ${JSON.stringify(amount)} must be a positive decimal below 10^28 with at most 10 decimal places`
     );
@@ -222,7 +222,7 @@ export function selectHoldings(
       total >= needed && ordered.length > 1
         ? ` on any one synchronizer (the ${formatDecimalUnits(total)} is spread across ${ordered.length} synchronizers)`
         : '';
-    throw new TokenWalletError(
+    throw new WalletError(
       'insufficient-balance',
       `Insufficient unlocked ${request.instrumentId.id}: need ${formatDecimalUnits(needed)}, have ${formatDecimalUnits(spread === '' ? total : (ordered[0]?.total ?? 0n))}${spread}`
     );
@@ -244,7 +244,7 @@ export function selectHoldings(
     }
   }
   if (representable === null) {
-    throw new TokenWalletError(
+    throw new WalletError(
       'amount-out-of-range',
       `Found no set of unlocked ${request.instrumentId.id} holdings that covers ${formatDecimalUnits(needed)} within the Daml Numeric 10 range${limited}; nothing was submitted`
     );
