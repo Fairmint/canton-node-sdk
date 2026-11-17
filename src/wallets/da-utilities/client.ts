@@ -77,6 +77,30 @@ export interface DaUtilitiesClient extends TokenRegistry {
   burnRequestContext(args: BurnRequestContextArgs): Promise<FactoryWithChoiceContext>;
 }
 
+/** The members DA's actions need beyond `TokenRegistry`. */
+const DA_UTILITIES_CLIENT_MEMBERS = [
+  'operatorParty',
+  'trustedProvidersOf',
+  'mintOfferAcceptContext',
+  'burnRequestContext',
+] as const satisfies ReadonlyArray<keyof DaUtilitiesClient>;
+
+/**
+ * Whether `registry` is DA's Utility Registry client (it has every member of `DaUtilitiesClient`: a non-empty `baseUrl`
+ * and the functions DA's actions need), so a `Wallet` over it offers DA's mint, burn and preapproval actions. A
+ * registry with only some of those members is not: its wallet keeps every CIP-56 action and refuses DA's with
+ * `unsupported-by-registry`.
+ */
+export function isDaUtilitiesClient(registry: TokenRegistry): registry is DaUtilitiesClient {
+  const members = registry as unknown as Readonly<Record<string, unknown>>;
+  const { baseUrl } = members;
+  return (
+    typeof baseUrl === 'string' &&
+    baseUrl.length > 0 &&
+    DA_UTILITIES_CLIENT_MEMBERS.every((member) => typeof members[member] === 'function')
+  );
+}
+
 /** `Module:Entity` of the templates DA names as a transfer factory. */
 export const DA_TRANSFER_FACTORY_TEMPLATES: readonly string[] = (
   ['transferRule', 'transferPreapproval', 'allocationFactory'] as const

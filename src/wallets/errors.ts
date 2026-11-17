@@ -100,7 +100,7 @@ export class RegistryResponseError extends Error {
   }
 }
 
-export type TokenWalletErrorCode =
+export type WalletErrorCode =
   | 'invalid-input'
   | 'not-found'
   | 'not-addressed-to-wallet'
@@ -112,15 +112,20 @@ export type TokenWalletErrorCode =
   /** The registry would now run the transfer as another kind than the caller previewed (`expectedKind`). */
   | 'kind-changed'
   /** Another write action of the same token wallet is still in progress. */
-  | 'busy';
+  | 'busy'
+  /**
+   * The wallet's registry does not offer this action (DA's mint, burn and preapproval actions need DA's Utility
+   * Registry client).
+   */
+  | 'unsupported-by-registry';
 
 /** A token action refused before anything was submitted. */
-export class TokenWalletError extends Error {
-  readonly code: TokenWalletErrorCode;
+export class WalletError extends Error {
+  readonly code: WalletErrorCode;
 
-  constructor(code: TokenWalletErrorCode, message: string) {
+  constructor(code: WalletErrorCode, message: string) {
     super(message);
-    this.name = 'TokenWalletError';
+    this.name = 'WalletError';
     this.code = code;
   }
 }
@@ -136,7 +141,7 @@ export interface WalletErrorDescription {
    * - `declined`: the user declined in the wallet (a submission or a signature); nothing was submitted or signed.
    * - `not-committed`: a submission certainly did not commit (`WalletSubmitError` `failed`).
    * - `outcome-unknown`: a submission's outcome is unknown; do not resubmit blindly.
-   * - `refused`: the SDK refused the action before submitting anything (`TokenWalletError`; its code is in `code`).
+   * - `refused`: the SDK refused the action before submitting anything (`WalletError`; its code is in `code`).
    * - `rate-limited`: the wallet kept rate-limiting a read after the SDK backed off; offer a retry after a moment.
    * - `read-failed`: any other failed read.
    * - `sign-failed`: the wallet did not sign (an invalid challenge, or a wallet failure).
@@ -154,10 +159,10 @@ export interface WalletErrorDescription {
     | 'registry'
     | 'other';
   /**
-   * The `TokenWalletError` code of a `refused` error, the wallet's CIP-0103 code of a wallet error when it gave one, or
-   * the HTTP status of a registry API error.
+   * The `WalletError` code of a `refused` error, the wallet's CIP-0103 code of a wallet error when it gave one, or the
+   * HTTP status of a registry API error.
    */
-  readonly code?: TokenWalletErrorCode | number;
+  readonly code?: WalletErrorCode | number;
 }
 
 /** How many characters of a registry error body {@link describeWalletError} shows. */
@@ -166,7 +171,7 @@ const REGISTRY_BODY_CHARS = 300;
 function described(
   kind: WalletErrorDescription['kind'],
   message: string,
-  code?: TokenWalletErrorCode | number
+  code?: WalletErrorCode | number
 ): WalletErrorDescription {
   return code === undefined ? { message, kind } : { message, kind, code };
 }
@@ -217,7 +222,7 @@ export function describeWalletError(error: unknown): WalletErrorDescription {
     );
   }
   if (error instanceof RegistryResponseError) return described('registry', error.message);
-  if (error instanceof TokenWalletError) return described('refused', error.message, error.code);
+  if (error instanceof WalletError) return described('refused', error.message, error.code);
   if (error instanceof Error) return described('other', error.message);
   return described('other', thrownText(error));
 }

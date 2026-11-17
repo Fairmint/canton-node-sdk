@@ -1,18 +1,18 @@
 /**
- * `createTokenWalletStore`: one token wallet per connected wallet, its snapshot, one wallet call at a time, a reload
- * after every write attempt, and outcomes tagged with the session they ran for.
+ * `createWalletStore`: one token wallet per connected wallet, its snapshot, one wallet call at a time, a reload after
+ * every write attempt, and outcomes tagged with the session they ran for.
  */
 import {
   createCip103Session,
-  createTokenWalletStore,
-  TokenWalletError,
+  createWalletStore,
+  WalletError,
   WalletReadError,
   WalletSubmitError,
   type ConnectedWallet,
   type Cip103Session,
-  type TokenWallet,
-  type TokenWalletState,
-  type TokenWalletStore,
+  type Wallet,
+  type WalletState,
+  type WalletStore,
 } from '../../../src/wallets';
 import { DEVNET, fakeProvider, HOLDER, OTHER } from './helpers';
 import { connectedWallet, deferred, flush, TestProvider } from './session-helpers';
@@ -20,12 +20,12 @@ import { connectedWallet, deferred, flush, TestProvider } from './session-helper
 /** A load the test answers: the party it was asked for, and its settle functions. */
 interface PendingLoad {
   readonly partyId: string;
-  readonly resolve: (state: TokenWalletState) => void;
+  readonly resolve: (state: WalletState) => void;
   readonly reject: (error: unknown) => void;
 }
 
 /** A snapshot that names its party and the load it answered. */
-const snapshot = (partyId: string, offset: number): TokenWalletState => ({
+const snapshot = (partyId: string, offset: number): WalletState => ({
   partyId,
   offset,
   holdings: [],
@@ -42,7 +42,7 @@ const snapshot = (partyId: string, offset: number): TokenWalletState => ({
 function setup(): {
   session: Cip103Session;
   provider: TestProvider;
-  store: TokenWalletStore;
+  store: WalletStore;
   opened: ConnectedWallet[];
   loads: PendingLoad[];
   answer: (offset?: number) => void;
@@ -56,13 +56,13 @@ function setup(): {
   const opened: ConnectedWallet[] = [];
   const loads: PendingLoad[] = [];
   let active = 0;
-  const store = createTokenWalletStore({
+  const store = createWalletStore({
     session,
     open: (wallet) => {
       opened.push(wallet);
-      const tokens: Pick<TokenWallet, 'loadState'> = {
+      const tokens: Pick<Wallet, 'loadState'> = {
         loadState: async () => {
-          const reply = deferred<TokenWalletState>();
+          const reply = deferred<WalletState>();
           loads.push({ partyId: wallet.partyId, resolve: reply.resolve, reject: reply.reject });
           active += 1;
           try {
@@ -72,7 +72,7 @@ function setup(): {
           }
         },
       };
-      return tokens as TokenWallet;
+      return tokens as Wallet;
     },
   });
   let published = 0;
@@ -109,7 +109,7 @@ async function connectAndLoad(t: ReturnType<typeof setup>, party: string = HOLDE
   return connectedWallet(t.session);
 }
 
-describe('createTokenWalletStore', () => {
+describe('createWalletStore', () => {
   it('opens a token wallet for the connected wallet and loads its snapshot', async () => {
     const t = setup();
     expect(t.store.getSnapshot()).toMatchObject({
@@ -473,7 +473,7 @@ describe('createTokenWalletStore', () => {
       await t.store.run(
         'send',
         async () => {
-          throw new TokenWalletError('insufficient-balance', 'not enough');
+          throw new WalletError('insufficient-balance', 'not enough');
         },
         { readOnly: true }
       )
@@ -866,21 +866,21 @@ describe('createTokenWalletStore', () => {
     const session = createCip103Session();
     const provider = new TestProvider();
     // Subscribed before the store: it runs before the store follows the session.
-    let store: TokenWalletStore | null = null;
+    let store: WalletStore | null = null;
     session.subscribe(() => {
       store?.refresh();
     });
     const loads: string[] = [];
-    store = createTokenWalletStore({
+    store = createWalletStore({
       session,
       open: (wallet) => {
-        const tokens: Pick<TokenWallet, 'loadState'> = {
+        const tokens: Pick<Wallet, 'loadState'> = {
           loadState: async () => {
             loads.push(wallet.key);
             return snapshot(wallet.partyId, 1);
           },
         };
-        return tokens as TokenWallet;
+        return tokens as Wallet;
       },
     });
     await session.connect(provider, { network: 'devnet' });
@@ -908,7 +908,7 @@ describe('createTokenWalletStore', () => {
   describe('default token wallet', () => {
     it('refuses a connected wallet without a network as a load error', async () => {
       const session = createCip103Session();
-      const store = createTokenWalletStore({ session });
+      const store = createWalletStore({ session });
       await session.connected(new TestProvider());
       expect(store.getSnapshot()).toMatchObject({
         state: null,
@@ -916,14 +916,13 @@ describe('createTokenWalletStore', () => {
         loadError: {
           kind: 'refused',
           code: 'invalid-input',
-          message:
-            'The connected wallet names no network: connect with { network }, or pass open to createTokenWalletStore',
+          message: 'The connected wallet names no network: connect with { network }, or pass open to createWalletStore',
         },
       });
       expect(await store.run('send', async () => 'x')).toBe(false);
     });
 
-    it("acts as the connected party through createTokenWallet with DA's registry for its network", async () => {
+    it("acts as the connected party through createWallet with DA's registry for its network", async () => {
       // DA's registry is down: the load reaches it on DevNet and fails as a registry error.
       const fetched: string[] = [];
       const fetchSpy = jest.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
@@ -931,7 +930,7 @@ describe('createTokenWalletStore', () => {
         return new Response('down', { status: 503 });
       });
       const session = createCip103Session();
-      const store = createTokenWalletStore({ session });
+      const store = createWalletStore({ session });
       const provider = fakeProvider({}, { party: HOLDER });
       try {
         await session.connected(provider, { network: 'devnet' });
@@ -964,12 +963,12 @@ describe('createTokenWalletStore', () => {
         .mockImplementation(async () => new Response('down', { status: 503 }));
       try {
         const session = createCip103Session();
-        const store = createTokenWalletStore({ session });
+        const store = createWalletStore({ session });
         const account: Record<string, unknown> = { partyId: HOLDER };
         const provider = fakeProvider({}, { party: HOLDER, account });
         await session.connected(provider, { network: 'devnet' });
         await flush();
-        let kept: TokenWallet | null = null;
+        let kept: Wallet | null = null;
         expect(
           await store.run(
             'keep',
@@ -985,7 +984,7 @@ describe('createTokenWalletStore', () => {
         await flush();
         expect(connectedWallet(session).partyId).toBe(OTHER);
         // A dApp that kept HOLDER's token wallet submits through it in OTHER's run.
-        const stale = kept as unknown as TokenWallet;
+        const stale = kept as unknown as Wallet;
         let sent: string[] = [];
         let fetched = -1;
         expect(
@@ -1025,7 +1024,7 @@ describe('createTokenWalletStore', () => {
       });
       try {
         const session = createCip103Session();
-        const store = createTokenWalletStore({ session });
+        const store = createWalletStore({ session });
         const account: Record<string, unknown> = { partyId: HOLDER };
         const provider = fakeProvider({}, { party: HOLDER, account });
         await session.connected(provider, { network: 'devnet' });
@@ -1050,7 +1049,7 @@ describe('createTokenWalletStore', () => {
         operator.resolve(new Response(JSON.stringify({ partyId: 'op::1' }), { status: 200 }));
         expect(await ran).toBe(false);
         // The check before signing refused it: nothing was submitted, so its outcome is known.
-        expect(caught).toBeInstanceOf(TokenWalletError);
+        expect(caught).toBeInstanceOf(WalletError);
         expect(provider.submissions).toEqual([]);
         expect(store.getSnapshot()).toMatchObject({ outcome: null, unknownOutcomeParty: null });
         store.dispose();

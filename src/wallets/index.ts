@@ -3,33 +3,24 @@
  * wallet provider. In a browser bundle import `@fairmint/canton-node-sdk/build/src/wallets/index.js`, which loads none
  * of the SDK's Node dependencies; the package root also exports it as the `Wallets` namespace (for Node).
  *
- * The surface is small on purpose: plug in a CIP-0103 provider (`createTokenWallet`), a page's wallet session and
- * observable state (`createCip103Session`, `createTokenWalletStore`; framework-agnostic), the registry client, the
- * ownership proof's client side (`requestWalletOwnershipVerdict`, `proveWalletOwnership` and the message it signs; the
- * server side, `createWalletOwnershipChallenger` and `verifyWalletOwnership`, is Node-only and exported from the
- * package root), the read back-off options, the errors and their user-facing descriptions (`describeWalletError`), and
- * the data types. Command builders, parsers, error-code tables and the CIP-0103 client stay internal.
+ * The surface is small on purpose: plug in a CIP-0103 provider and a registry (`createWallet`: CIP-56 actions with any
+ * `TokenRegistry`, DA's mint, burn and preapproval actions with DA's client), a page's wallet session and observable
+ * state (`createCip103Session`, `createWalletStore`; framework-agnostic), the registry client, the ownership proof's
+ * client side (`requestWalletOwnershipVerdict`, `proveWalletOwnership` and the message it signs; the server side,
+ * `createWalletOwnershipChallenger` and `verifyWalletOwnership`, is Node-only and exported from the package root), the
+ * read back-off options, the errors and their user-facing descriptions (`describeWalletError`), and the data types.
+ * Command builders, parsers, error-code tables and the CIP-0103 client stay internal.
  */
 export {
-  createTokenWallet,
+  createWallet,
   newBurnReference,
   type BurnRequestOptions,
   type BurnRequestResult,
-  type TokenWallet,
-  type TokenWalletOptions,
-  type TokenWalletState,
-} from './token-wallet';
-export {
-  createTokenStandardWallet,
-  type TokenStandardState,
-  type TokenStandardWallet,
-  type TokenStandardWalletOptions,
-  type TransferOffers,
-  type TransferOptions,
-  type TransferPlan,
-  type TransferRequest,
-  type TransferResult,
-} from './token-standard-wallet';
+  type Wallet,
+  type WalletOptions,
+  type WalletState,
+} from './wallet';
+export type { TransferOffers, TransferOptions, TransferPlan, TransferRequest, TransferResult } from './cip56-core';
 export {
   cip103NetworkId,
   DEFAULT_READ_RETRY_DELAYS_MS,
@@ -51,12 +42,12 @@ export {
   type Cip103SessionState,
 } from './session';
 export {
-  createTokenWalletStore,
+  createWalletStore,
   type ActionOutcome,
-  type OpenTokenWalletContext,
-  type TokenWalletStore,
-  type TokenWalletStoreOptions,
-  type TokenWalletView,
+  type OpenWalletContext,
+  type WalletStore,
+  type WalletStoreOptions,
+  type WalletView,
   type WalletActionContext,
 } from './store';
 export {
@@ -75,6 +66,7 @@ export {
 } from './ownership';
 export {
   createDaUtilitiesClient,
+  isDaUtilitiesClient,
   type BurnRequestContextArgs,
   type DaNetwork,
   type DaUtilitiesClient,
@@ -98,11 +90,11 @@ export {
   describeWalletError,
   RegistryApiError,
   RegistryResponseError,
-  TokenWalletError,
+  WalletError,
   WalletReadError,
   WalletSignError,
   WalletSubmitError,
-  type TokenWalletErrorCode,
+  type WalletErrorCode,
   type WalletErrorDescription,
   type WalletSignErrorReason,
   type WalletSubmitOutcome,

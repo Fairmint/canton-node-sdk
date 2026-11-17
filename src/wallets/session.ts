@@ -28,7 +28,7 @@ export interface ConnectedWallet {
    * same party (another provider or network) remounts what the previous one rendered.
    */
   readonly key: string;
-  /** What the dApp connected for; lets `createTokenWalletStore` build DA's registry client itself. */
+  /** What the dApp connected for; lets `createWalletStore` build DA's registry client itself. */
   readonly network?: DaNetwork;
 }
 

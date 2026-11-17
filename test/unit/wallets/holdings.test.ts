@@ -2,7 +2,7 @@ import {
   formatDecimalUnits,
   instrumentKey,
   parseDecimalUnits,
-  TokenWalletError,
+  WalletError,
   type Holding,
   type InstrumentId,
 } from '../../../src/wallets';
@@ -44,7 +44,7 @@ describe('decimal units', () => {
   it('requires a positive amount', () => {
     expect(requirePositiveAmount(' 2.5 ')).toBe(25_000_000_000n);
     for (const bad of ['0', '0.0', '-1', 'abc', '1.00000000001']) {
-      expect(() => requirePositiveAmount(bad)).toThrow(TokenWalletError);
+      expect(() => requirePositiveAmount(bad)).toThrow(WalletError);
     }
   });
 });
@@ -150,9 +150,9 @@ describe('selectHoldings', () => {
         return e;
       }
     })();
-    expect(error).toBeInstanceOf(TokenWalletError);
-    expect((error as TokenWalletError).code).toBe('insufficient-balance');
-    expect((error as TokenWalletError).message).toContain('spread across 2 synchronizers');
+    expect(error).toBeInstanceOf(WalletError);
+    expect((error as WalletError).code).toBe('insufficient-balance');
+    expect((error as WalletError).message).toContain('spread across 2 synchronizers');
   });
 
   it('stops at an exact cover', () => {
@@ -187,7 +187,7 @@ describe('selectHoldings', () => {
     } catch (error) {
       caught = error;
     }
-    expect(caught).toBeInstanceOf(TokenWalletError);
+    expect(caught).toBeInstanceOf(WalletError);
     expect(caught).toMatchObject({ code: 'insufficient-balance' });
   });
 
@@ -242,7 +242,7 @@ describe('selectHoldings', () => {
       } catch (error) {
         caught = error;
       }
-      expect(caught).toBeInstanceOf(TokenWalletError);
+      expect(caught).toBeInstanceOf(WalletError);
       expect(caught).toMatchObject({ code: 'amount-out-of-range' });
     });
 
