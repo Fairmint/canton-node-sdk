@@ -1,0 +1,7 @@
+# Cursor Bugbot settings: https://cursor.com/docs/bugbot
+# Bugbot reads this file from the pull request's base branch. Whether Bugbot runs on this repository
+# at all is set in the Cursor dashboard, not here.
+version: 1
+triggers:
+  drafts: false
+  frequency: everyPush

@@ -4,8 +4,8 @@
 
 Start with the public [wiki Home](https://github.com/Fairmint/canton-node-sdk/wiki) and
 [Contributing](https://github.com/Fairmint/canton-node-sdk/wiki/Contributing). Follow
-[`CLAUDE.md`](../CLAUDE.md) before substantive work. The public entrypoint, generated-client
-source, runnable examples, and tests are the source of truth for exact behavior.
+[`CLAUDE.md`](../CLAUDE.md) before substantive work. The public entrypoint, generated-client source,
+runnable examples, and tests are the source of truth for exact behavior.
 
 ## Coding Style
 
@@ -32,3 +32,10 @@ Tests should be informal and non-exhaustive:
 Prettier).
 
 **Refer to GitHub Actions scripts** in `.github/workflows/` for setup and test commands available.
+
+## Reviewing pull requests
+
+- Check the change against the guidance above and the code it touches. That guidance names each
+  source of truth; cite the file or rule when a change conflicts with it.
+- Put correctness, security, data loss, and broken migrations or deployments first. Skip formatting
+  and lint nits: CI enforces them.
