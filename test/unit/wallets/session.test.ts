@@ -395,6 +395,20 @@ describe('createCip103Session', () => {
       expect(provider.listenerCount()).toBe(0);
     });
 
+    it('keeps a wallet out of restore() when its first sign-in is cancelled before connect was sent', async () => {
+      const { session } = observed();
+      const provider = new TestProvider(HOLDER);
+      const unsubscribe = session.subscribe(() => {
+        if (session.getSnapshot().status === 'connecting') session.disconnect();
+      });
+      await session.connect(provider);
+      unsubscribe();
+      expect(provider.requests).toEqual([]);
+      await session.restore(provider);
+      expect(provider.requests).toEqual([]);
+      expect(session.getSnapshot()).toEqual(DISCONNECTED);
+    });
+
     it('keeps a wallet signed out when a reconnect to it is cancelled before it signed in', async () => {
       const { session } = observed();
       const firstDisconnect = deferred<unknown>();

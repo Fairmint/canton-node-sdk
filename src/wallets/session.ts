@@ -368,9 +368,12 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     disconnect() {
       if (disposed) return;
       const providers = sessionProviders();
+      // A wallet whose sign-in was cancelled before CIP-0103 `connect` was sent stays out of restore() too.
+      const cancelled = signingIn;
       interrupt();
       const own = epoch;
       for (const provider of providers) signedOut.add(provider);
+      if (cancelled !== null) signedOut.add(cancelled);
       // Every disconnect is recorded before the first is sent, so a connect() that sending sets off waits for each.
       const sends = [...providers].map(recordDisconnect);
       for (const send of sends) send();
