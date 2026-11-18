@@ -10,7 +10,7 @@ truth for LocalNet commands in this repo; lifecycle is owned by
 **`@fairmint/canton-dev-tools` owns LocalNet** (CLI, pins, and shared test helpers). This SDK does
 not ship a LocalNet engine or `canton-localnet` binary.
 
-- Install pin: `devDependency` `@fairmint/canton-dev-tools@0.1.13` (exact).
+- Install pin: `devDependency` `@fairmint/canton-dev-tools@0.1.16` (exact).
 - Repo scripts: `npm run localnet:*` → `canton-dev-tools <command>`.
 - Integration helpers: import from `@fairmint/canton-dev-tools/testing`.
 - Pins / auth defaults: see Dev Tools
@@ -30,8 +30,8 @@ LocalNet runs Canton Network Quickstart in Docker via `@fairmint/canton-dev-tool
 `npm run localnet:start` (= `canton-dev-tools start`, infra-only + OAuth2 by default) is
 self-provisioning on the cloud image: it `apt`-installs Docker, starts a `dockerd` (vfs storage
 driver, iptables-legacy) via passwordless `sudo`, adds
-`scan.localhost`/`sv.localhost`/`wallet.localhost` to `/etc/hosts`, runs cn-quickstart `make setup`,
-brings up the compose stack, and waits for the Validator, Scan, and Ledger JSON APIs.
+`scan.localhost`/`sv.localhost`/`wallet.localhost` to `/etc/hosts`, writes cn-quickstart's
+`.env.local` itself (no `make setup`, so no Java or Gradle), brings up the compose stack, and waits for the Validator, Scan, and Ledger JSON APIs.
 
 Prerequisites (on demand — heavy, not in the dashboard update script):
 

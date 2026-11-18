@@ -16,25 +16,10 @@ jobs:
         with:
           submodules: false
 
-      - name: Compute Quickstart Env Cache Key
-        id: quickstart-env-cache-key
-        run: |
-          set -euo pipefail
-          key="$(git ls-tree HEAD libs/splice libs/cn-quickstart | sha256sum | cut -d' ' -f1)"
-          echo "submodules=$key" >> "$GITHUB_OUTPUT"
-
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: '22.14'
-
-      - name: Setup Java
-        # cn-quickstart's setup runs Gradle 8.8, which cannot run on the runner's default JDK 25
-        # ("What went wrong: 25.0.5"), so pin an LTS JDK it supports.
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '21'
 
       - name: Upgrade npm
         # npm >=11.17 required for .npmrc min-release-age-exclude (@fairmint/*).
@@ -66,13 +51,6 @@ jobs:
             exit 1
           fi
           echo "CANTON_LOCALNET_SPLICE_VERSION=${splice_version}" >> "$GITHUB_ENV"
-
-      - name: Restore Quickstart Env Cache
-        id: quickstart-env-cache-restore
-        uses: actions/cache/restore@v6
-        with:
-          path: ${{ github.workspace }}/libs/cn-quickstart/quickstart/.env.local
-          key: quickstart-env-${{ runner.os }}-${{ hashFiles('.github/workflows/test-cn-quickstart.yml', 'package.json', 'package-lock.json') }}-${{ steps.quickstart-env-cache-key.outputs.submodules }}
 
       - name: Restore Node Dependencies Cache
         id: node-cache-restore
@@ -108,14 +86,6 @@ jobs:
           CANTON_LOCALNET_SPLICE_VERSION="${splice_version}" npm run localnet:start
           echo "✓ CN-Quickstart started"
         timeout-minutes: 15
-
-      - name: Save Quickstart Env Cache
-        if: steps.quickstart-env-cache-restore.outputs.cache-hit != 'true'
-        id: quickstart-env-cache-save
-        uses: actions/cache/save@v6
-        with:
-          path: ${{ github.workspace }}/libs/cn-quickstart/quickstart/.env.local
-          key: ${{ steps.quickstart-env-cache-restore.outputs.cache-primary-key }}
 
       - name: Save Node Dependencies Cache
         if: steps.node-cache-restore.outputs.cache-hit != 'true'
