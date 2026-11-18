@@ -261,11 +261,11 @@ const TRANSFER_SENTENCES: Readonly<Record<TransferResult['kind'], string>> = {
 };
 
 /**
- * The plans stores hand out, each with the connected wallet it was made for and the token wallet's own plan behind it.
- * `submitTransfer` sends only a plan the store made for the wallet it runs for: a plan of another session, network or
- * standalone wallet would submit through that other wallet.
+ * The plans one store handed out, each with the connected wallet it was made for and the token wallet's own plan behind
+ * it. `submitTransfer` sends only a plan this store made for the wallet it runs for: a plan of another store, session,
+ * network or standalone wallet would skip this store's checks or submit through another wallet.
  */
-const storePlans = new WeakMap<TransferPlan, { readonly wallet: ConnectedWallet; readonly plan: TransferPlan }>();
+type StorePlans = WeakMap<TransferPlan, { readonly wallet: ConnectedWallet; readonly plan: TransferPlan }>;
 
 /** Submitting a store's plan directly would skip the store's checks (one call at a time, the unknown-outcome lock). */
 // eslint-disable-next-line @typescript-eslint/require-await -- TransferPlan.submit is async: it rejects, never throws
@@ -274,7 +274,12 @@ async function submitThroughStore(): Promise<never> {
 }
 
 /** Run `action` with `tokens` for `wallet`; throws what the wallet throws. */
-async function perform(tokens: Wallet, wallet: ConnectedWallet, action: WalletAction): Promise<Settled> {
+async function perform(
+  plans: StorePlans,
+  tokens: Wallet,
+  wallet: ConnectedWallet,
+  action: WalletAction
+): Promise<Settled> {
   const written = (result: SubmitResult, sentence: string): Settled => ({
     ok: true,
     result,
@@ -317,11 +322,11 @@ async function perform(tokens: Wallet, wallet: ConnectedWallet, action: WalletAc
       const plan = await tokens.planTransfer(action.request);
       const { kind, description, partyId, request } = plan;
       const handed: TransferPlan = Object.freeze({ kind, description, partyId, request, submit: submitThroughStore });
-      storePlans.set(handed, { wallet, plan });
+      plans.set(handed, { wallet, plan });
       return { ok: true, result: handed, message: null };
     }
     case 'submitTransfer': {
-      const planned = storePlans.get(action.plan);
+      const planned = plans.get(action.plan);
       if (planned?.wallet !== wallet) {
         throw new WalletError(
           'invalid-input',
@@ -379,6 +384,7 @@ function forParty(message: string, partyId: string, current: ConnectedWallet | n
 export function createWalletStore(options: WalletStoreOptions): WalletStore {
   const { session, registry, openWallet = createWallet } = options as WalletStoreInternalOptions;
   const listeners = new Set<() => void>();
+  const plans: StorePlans = new WeakMap();
 
   let sessionState = session.getSnapshot();
   let wallet: ConnectedWallet | null = null;
@@ -610,7 +616,7 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
 
       let settled: Settled;
       try {
-        settled = await perform(ranTokens, ranFor, action);
+        settled = await perform(plans, ranTokens, ranFor, action);
       } catch (error) {
         settled = { ok: false, error: describeWalletError(error) };
       }

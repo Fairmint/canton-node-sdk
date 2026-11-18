@@ -459,6 +459,21 @@ describe('createWalletStore', () => {
       expect(t.loads).toHaveLength(1);
     });
 
+    it('submitTransfer refuses a plan another store on the same session made', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const { plan } = await planThroughStore(t);
+      const other = createWalletStore({ session: t.session });
+      await flush(); // its first load fails at once: the test provider serves no ledgerApi
+      expect(other.getSnapshot()).toMatchObject({ ready: true, busy: false });
+      expect(await other.act({ type: 'submitTransfer', plan })).toBeNull();
+      expect(other.getSnapshot().outcome).toMatchObject({
+        status: 'failed',
+        error: { kind: 'refused', code: 'invalid-input' },
+      });
+      other.dispose();
+    });
+
     it('submitTransfer refuses a plan the store did not make for the current wallet, before submitting', async () => {
       const t = setup();
       await connectAndLoad(t);
