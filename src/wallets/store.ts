@@ -109,11 +109,11 @@ export function walletActionKey(action: WalletAction): string {
 const READ_ONLY: ReadonlySet<WalletAction['type']> = new Set(['planTransfer', 'proveOwnership']);
 
 /**
- * Whether `store.act(action)` would run it now: a wallet is connected, the store is not busy, and, for a write, no
- * outcome is unknown. Use it to enable the action's button.
+ * Whether `store.act(action)` would run it now: the store is `ready`, not busy, and, for a write, no outcome is
+ * unknown. Use it to enable the action's button.
  */
 export function canAct(view: WalletView, action: WalletAction): boolean {
-  return view.wallet !== null && !view.busy && (READ_ONLY.has(action.type) || view.unknownOutcome === null);
+  return view.ready && !view.busy && (READ_ONLY.has(action.type) || view.unknownOutcome === null);
 }
 
 /**
@@ -172,6 +172,11 @@ export interface WalletView {
   readonly session: Cip103SessionState;
   /** The connected wallet the state belongs to (null when disconnected). */
   readonly wallet: ConnectedWallet | null;
+  /**
+   * A token wallet is open for `wallet`, so actions can run. False while disconnected, and when the token wallet could
+   * not be built (an invalid `registry` option; `loadError` says why).
+   */
+  readonly ready: boolean;
   /**
    * Ledger state from one snapshot. Null until the first load answers, and cleared when a load fails or the wallet
    * changes.
@@ -424,6 +429,7 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
     return {
       session: sessionState,
       wallet,
+      ready: tokens !== null,
       state,
       loading: loadInFlight || queued,
       loadError,

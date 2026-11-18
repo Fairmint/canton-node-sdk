@@ -79,7 +79,8 @@ SDK's Node dependencies. The package root also exports it as the `Wallets` names
 
 - `createCip103Session({ network })`: which wallet is connected, as which party. Call
   `connect(provider)` on a click, `restore(provider)` on page load (it connects silently when the
-  wallet says it is still connected, and never shows an error), and `disconnect()`.
+  wallet says it is still connected, and never shows an error; a wallet the user disconnected stays
+  disconnected until the next `connect`), and `disconnect()`.
 - `createWalletStore({ session })`: the page's state and actions. `view.state` is one ledger
   snapshot: holdings, `balances` per instrument (with the registry's `metadata`), transfer offers in
   and out, mint offers, burn requests and transfer preapprovals. `store.act(action)` runs one typed

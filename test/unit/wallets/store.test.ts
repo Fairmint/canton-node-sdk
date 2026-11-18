@@ -193,6 +193,7 @@ describe('createWalletStore', () => {
     expect(t.store.getSnapshot()).toEqual({
       session: { status: 'disconnected', error: null },
       wallet: null,
+      ready: false,
       state: null,
       loading: false,
       loadError: null,
@@ -207,7 +208,7 @@ describe('createWalletStore', () => {
     expect(t.opened).toEqual([
       { provider: t.provider, partyId: HOLDER, network: 'devnet', isActive: expect.any(Function) },
     ]);
-    expect(t.store.getSnapshot()).toMatchObject({ wallet, state: null, loading: true, busy: true });
+    expect(t.store.getSnapshot()).toMatchObject({ wallet, ready: true, state: null, loading: true, busy: true });
     t.answer(7);
     await flush();
     expect(t.store.getSnapshot()).toMatchObject({ wallet, state: { offset: 7 }, loading: false, busy: false });
@@ -241,7 +242,9 @@ describe('createWalletStore', () => {
     await session.connect(fakeProvider({}, { party: HOLDER }));
     await flush();
     const view = store.getSnapshot();
-    expect(view).toMatchObject({ wallet: { partyId: HOLDER }, state: null, loading: false, busy: false });
+    expect(view).toMatchObject({ wallet: { partyId: HOLDER }, ready: false, state: null, loading: false, busy: false });
+    expect(canAct(view, ACCEPT)).toBe(false);
+    expect(canAct(view, PLAN)).toBe(false);
     expect(view.loadError).not.toBeNull();
     expect(view.notices).toEqual([expect.objectContaining({ key: 'load', level: 'error' })]);
     expect(view.notices[0]).not.toHaveProperty('retry');

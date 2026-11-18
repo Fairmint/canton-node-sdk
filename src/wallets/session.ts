@@ -64,8 +64,9 @@ export interface Cip103Session {
   /**
    * On page load: when the session is disconnected and the wallet answers CIP-0103 `isConnected` with `{ isConnected:
    * true }`, reads the primary account and connects silently. It never publishes an error: any failure (4200 included)
-   * leaves the session as it was. Ignored while connecting or connected, and for a wallet the user has just
-   * disconnected; dropped when anything else changed the session meanwhile, or a newer `restore()` started.
+   * leaves the session as it was. Ignored while connecting or connected, and for a wallet the user signed out of
+   * (`disconnect()`, or a switch to another wallet) until `connect()` signs in to it again, also when the wallet still
+   * reports a session; dropped when anything else changed the session meanwhile, or a newer `restore()` started.
    */
   restore(provider: Cip103Provider): Promise<void>;
   /**
@@ -148,6 +149,9 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
   // The provider a pending connect() signs in to, and whether it has sent CIP-0103 `connect` yet.
   let signingIn: Cip103Provider | null = null;
   let signInSent = false;
+  // Wallets the user signed out of (disconnect(), or a switch to another wallet): restore() leaves them alone until
+  // connect() signs in to them again, also when their CIP-0103 disconnect failed and they still report a session.
+  const signedOut = new WeakSet<Cip103Provider>();
   // Disconnects in flight, per provider: a connect() to that provider waits for them until `deadline`.
   const disconnecting = new Map<Cip103Provider, Disconnecting>();
   let attachment: Attachment | null = null;
@@ -309,6 +313,8 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
       const own = epoch;
       const current = (): boolean => own === epoch && !disposed;
       signingIn = provider;
+      signedOut.delete(provider);
+      for (const other of previous) signedOut.add(other);
       const sends = previous.map(recordDisconnect);
       for (const send of sends) send();
       if (!current()) return; // sending set off a disconnect(), fail(), dispose() or another connect()
@@ -343,7 +349,7 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     },
 
     async restore(provider) {
-      if (disposed || state.status !== 'disconnected' || pendingDisconnect(provider) !== undefined) return;
+      if (disposed || state.status !== 'disconnected' || signedOut.has(provider)) return;
       const own = epoch;
       const attempt = ++restores;
       const wanted = (): boolean =>
@@ -363,6 +369,7 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
       const providers = sessionProviders();
       interrupt();
       const own = epoch;
+      for (const provider of providers) signedOut.add(provider);
       // Every disconnect is recorded before the first is sent, so a connect() that sending sets off waits for each.
       const sends = [...providers].map(recordDisconnect);
       for (const send of sends) send();

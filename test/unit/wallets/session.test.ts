@@ -395,20 +395,26 @@ describe('createCip103Session', () => {
       expect(provider.listenerCount()).toBe(0);
     });
 
-    it('does nothing for a wallet whose disconnect is still in flight', async () => {
+    it('does nothing for a wallet the user signed out of, until connect() signs in to it again', async () => {
       const { session } = observed();
       const disconnected = deferred<unknown>();
       const provider = new TestProvider(HOLDER, { disconnect: async () => disconnected.promise });
       await session.connect(provider);
       session.disconnect();
+      // While its disconnect is in flight, and after it failed with the wallet still reporting a session.
+      await session.restore(provider);
+      disconnected.reject(new Error('disconnect failed'));
+      await flush();
       await session.restore(provider);
       expect(provider.requests).toEqual(['connect', 'getPrimaryAccount', 'disconnect']);
       expect(session.getSnapshot()).toEqual(DISCONNECTED);
-      disconnected.resolve(null);
-      await flush();
-      provider.answers.isConnected = () => ({ isConnected: false });
+
+      // Signing in again lifts it: a session that then ends without a sign-out is restored.
+      await session.connect(provider);
+      session.fail(new Error('setup failed'));
       await session.restore(provider);
-      expect(provider.requests).toEqual(['connect', 'getPrimaryAccount', 'disconnect', 'isConnected']);
+      expect(provider.requests.slice(-2)).toEqual(['isConnected', 'getPrimaryAccount']);
+      expect(session.getSnapshot()).toMatchObject({ status: 'connected', wallet: { partyId: HOLDER } });
     });
   });
 
