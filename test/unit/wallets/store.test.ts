@@ -253,6 +253,24 @@ describe('createWalletStore', () => {
     store.dispose();
   });
 
+  it('resolves null when a listener ends the session while the store publishes how an action settled', async () => {
+    const t = setup();
+    await connectAndLoad(t);
+    const ran = t.store.act(ACCEPT);
+    const call = t.call();
+    let ended = false;
+    t.store.subscribe(() => {
+      if (!ended && t.store.getSnapshot().running === null) {
+        ended = true;
+        t.session.disconnect();
+      }
+    });
+    call.resolve(SUBMITTED);
+    expect(await ran).toBeNull();
+    expect(ended).toBe(true);
+    expect(t.session.getSnapshot().status).toBe('disconnected');
+  });
+
   it('refuses a second action in the same tick without calling the wallet', async () => {
     const t = setup();
     await connectAndLoad(t);

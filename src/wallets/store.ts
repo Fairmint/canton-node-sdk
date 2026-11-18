@@ -622,8 +622,9 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
       // A failed write may still have committed, so reload after failures too. This only reads.
       if (live && !READ_ONLY.has(action.type)) queued = true;
       drain();
+      // Asked again: a listener of drain()'s publish may have ended the session or switched the wallet.
       // The result type follows from the action type (`perform`'s switch).
-      return live && settled.ok ? (settled.result as ActionResultOf<A>) : null;
+      return isCurrent(ranFor) && settled.ok ? (settled.result as ActionResultOf<A>) : null;
     },
 
     refresh() {
