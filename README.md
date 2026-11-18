@@ -187,7 +187,8 @@ if (plan !== null && confirm(plan.description)) await store.act({ type: 'submitT
   keeps the sender's tokens locked until it is accepted, rejected or withdrawn; expiry alone does
   not unlock them.
 - A plan, and every write, belongs to the connected wallet that made it: once the session switched
-  account or disconnected, it is refused before anything is read or signed.
+  account or disconnected, it is refused before anything is read or signed. `submitTransfer` sends
+  only a plan the same store planned for its current wallet.
 - A holding counts only when it is DA's and both its registrar and owner signed it; an offer or a
   request only when it names DA's operator and a provider trusted for its registrar signed it. A
   registrar trusts only itself unless `registry.trustedProviders` lists others.

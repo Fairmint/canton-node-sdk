@@ -8,7 +8,7 @@
  */
 import { notifyListeners } from './notify';
 import type { FetchLike, DaRegistryOptions } from './da-utilities/client';
-import { describeWalletError, type WalletErrorDescription } from './errors';
+import { describeWalletError, WalletError, type WalletErrorDescription } from './errors';
 import { instrumentKey } from './holdings';
 import { requestWalletOwnershipVerdict, type WalletOwnershipVerdict } from './ownership';
 import type { Cip103Session, Cip103SessionState, ConnectedWallet } from './session';
@@ -215,8 +215,9 @@ export interface WalletStore {
    *
    * A write that settles after its session ended is recorded by what is known: a result as `succeeded` for its party, a
    * certain failure as `failed`, an unknown outcome as `unknownOutcome`, and a failure before anything was submitted
-   * not at all. A `TransferPlan` belongs to the connected wallet that planned it: once the session left that wallet,
-   * submitting it is refused before anything is read or signed.
+   * not at all. `submitTransfer` sends only a plan this store's `planTransfer` made for the current wallet; any other
+   * plan (another session, network or account, or a standalone wallet's) is refused with `invalid-input` before
+   * anything is signed.
    */
   act<A extends WalletAction>(action: A): Promise<ActionResultOf<A> | null>;
   /** Reload the snapshot (the Retry button); queued behind the wallet call in flight. Ignored while disconnected. */
@@ -252,6 +253,12 @@ const TRANSFER_SENTENCES: Readonly<Record<TransferResult['kind'], string>> = {
   offer: 'Transfer offer sent: the receiver must accept it before it expires',
   self: 'Self-transfer done',
 };
+
+/**
+ * The connected wallet each plan a store made belongs to. `submitTransfer` sends only a plan the store made for the
+ * wallet it runs for: a plan of another session, network or standalone wallet would submit through that other wallet.
+ */
+const planWallets = new WeakMap<TransferPlan, ConnectedWallet>();
 
 /** Run `action` with `tokens` for `wallet`; throws what the wallet throws. */
 async function perform(tokens: Wallet, wallet: ConnectedWallet, action: WalletAction): Promise<Settled> {
@@ -293,9 +300,18 @@ async function perform(tokens: Wallet, wallet: ConnectedWallet, action: WalletAc
         await tokens.cancelBurnRequest(action.burnRequestCid),
         'Redemption cancelled; the amount is unlocked'
       );
-    case 'planTransfer':
-      return { ok: true, result: await tokens.planTransfer(action.request), message: null };
+    case 'planTransfer': {
+      const plan = await tokens.planTransfer(action.request);
+      planWallets.set(plan, wallet);
+      return { ok: true, result: plan, message: null };
+    }
     case 'submitTransfer': {
+      if (planWallets.get(action.plan) !== wallet) {
+        throw new WalletError(
+          'invalid-input',
+          'This transfer was planned for another wallet connection; plan it again before sending'
+        );
+      }
       const result = await action.plan.submit();
       return written(result, TRANSFER_SENTENCES[result.kind]);
     }
@@ -306,7 +322,9 @@ async function perform(tokens: Wallet, wallet: ConnectedWallet, action: WalletAc
           instrumentAdmin,
           ...(instrumentIds !== undefined && { instrumentIds }),
         }),
-        `Transfer preapproval created: transfers of ${instrumentAdmin}'s instruments now complete at once`
+        instrumentIds === undefined || instrumentIds.length === 0
+          ? `Transfer preapproval created: transfers of ${instrumentAdmin}'s instruments now complete at once`
+          : `Transfer preapproval created: transfers of ${instrumentIds.join(', ')} by ${instrumentAdmin} now complete at once`
       );
     }
     case 'removeTransferPreapproval':
@@ -387,7 +405,7 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
         level: rateLimited ? 'warning' : 'error',
         title: rateLimited ? 'The wallet is busy' : 'The wallet could not be read',
         message: loadError.message,
-        retry: true,
+        ...(tokens !== null && { retry: true as const }),
       });
     }
     if (outcome?.status === 'succeeded') {
@@ -494,16 +512,21 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
     state = null;
     loadError = null;
     outcome = null;
-    tokens =
-      next === null
-        ? null
-        : openWallet({
-            provider: next.provider,
-            partyId: next.partyId,
-            network: next.network,
-            ...(registry !== undefined && { registry }),
-            isActive: () => session.isCurrent(next),
-          });
+    tokens = null;
+    if (next !== null) {
+      try {
+        tokens = openWallet({
+          provider: next.provider,
+          partyId: next.partyId,
+          network: next.network,
+          ...(registry !== undefined && { registry }),
+          isActive: () => session.isCurrent(next),
+        });
+      } catch (error) {
+        // An invalid `registry` option: the wallet is connected but cannot act; say why instead of loading forever.
+        loadError = describeWalletError(error);
+      }
+    }
     if (tokens === null) publish();
     else requestLoad(); // queued while the previous wallet's call is in flight
   }

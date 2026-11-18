@@ -178,6 +178,15 @@ function fakePlan(kind: TransferPlan['kind'] = 'offer'): { plan: TransferPlan; s
   return { plan, submit };
 }
 
+/** A plan the store made for its current wallet (the only kind `submitTransfer` sends). */
+async function planThroughStore(t: Setup, kind: TransferPlan['kind'] = 'offer'): Promise<ReturnType<typeof fakePlan>> {
+  const planned = fakePlan(kind);
+  const planning = t.store.act(PLAN);
+  t.call().resolve(planned.plan);
+  expect(await planning).toBe(planned.plan);
+  return planned;
+}
+
 describe('createWalletStore', () => {
   it('opens a token wallet for each connected wallet on the session network, bound to it, and loads its snapshot', async () => {
     const t = setup();
@@ -223,6 +232,20 @@ describe('createWalletStore', () => {
     expect(calls.every((call) => call.url.startsWith('https://registry.example/'))).toBe(true);
     // Bound to the party: it does not read the primary account again.
     expect(provider.requests.filter((r) => r.method === 'getPrimaryAccount')).toHaveLength(1);
+    store.dispose();
+  });
+
+  it('shows why when the token wallet cannot be built (an invalid registry option), without a retry', async () => {
+    const session = createCip103Session({ network: 'devnet' });
+    const store = createWalletStore({ session, registry: { trustedProviders: { [REGISTRAR]: [] } } });
+    await session.connect(fakeProvider({}, { party: HOLDER }));
+    await flush();
+    const view = store.getSnapshot();
+    expect(view).toMatchObject({ wallet: { partyId: HOLDER }, state: null, loading: false, busy: false });
+    expect(view.loadError).not.toBeNull();
+    expect(view.notices).toEqual([expect.objectContaining({ key: 'load', level: 'error' })]);
+    expect(view.notices[0]).not.toHaveProperty('retry');
+    expect(await store.act(ACCEPT)).toBeNull();
     store.dispose();
   });
 
@@ -347,7 +370,7 @@ describe('createWalletStore', () => {
         { type: 'createTransferPreapproval', instrumentAdmin: REGISTRAR, instrumentIds: ['XMPL'] },
         'createTransferPreapproval',
         [{ instrumentAdmin: REGISTRAR, instrumentIds: ['XMPL'] }],
-        `Transfer preapproval created: transfers of ${REGISTRAR}'s instruments now complete at once (update update-1).`,
+        `Transfer preapproval created: transfers of XMPL by ${REGISTRAR} now complete at once (update update-1).`,
       ],
       [
         { type: 'createTransferPreapproval', instrumentAdmin: REGISTRAR },
@@ -406,12 +429,47 @@ describe('createWalletStore', () => {
     ] as const)('submitTransfer runs the plan and says what a %s transfer did', async (kind, message) => {
       const t = setup();
       await connectAndLoad(t);
-      const { plan, submit } = fakePlan(kind);
+      const { plan, submit } = await planThroughStore(t, kind);
       const ran = t.store.act({ type: 'submitTransfer', plan });
       submit.resolve({ ...SUBMITTED, kind });
       expect(await ran).toEqual({ ...SUBMITTED, kind });
       expect(t.store.getSnapshot().outcome).toMatchObject({ status: 'succeeded', message });
       expect(t.loads).toHaveLength(1);
+    });
+
+    it('submitTransfer refuses a plan the store did not make for the current wallet, before submitting', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      // A plan made outside the store (another session, network or a standalone wallet).
+      const foreign = fakePlan();
+      let submitted = false;
+      const outside: TransferPlan = {
+        ...foreign.plan,
+        submit: async () => {
+          submitted = true;
+          return foreign.submit.promise as Promise<never>;
+        },
+      };
+      expect(await t.store.act({ type: 'submitTransfer', plan: outside })).toBeNull();
+      expect(submitted).toBe(false);
+      expect(t.store.getSnapshot().outcome).toMatchObject({
+        status: 'failed',
+        error: { kind: 'refused', code: 'invalid-input' },
+      });
+      t.answer(); // the reload after a write attempt
+      await flush();
+
+      // A plan this store made for the previous account.
+      const { plan } = await planThroughStore(t);
+      await switchAccount(t, OTHER);
+      t.answer();
+      await flush();
+      expect(await t.store.act({ type: 'submitTransfer', plan })).toBeNull();
+      expect(t.store.getSnapshot().outcome).toMatchObject({
+        status: 'failed',
+        partyId: OTHER,
+        error: { kind: 'refused', code: 'invalid-input' },
+      });
     });
 
     it('planTransfer only reads: it returns the plan, leaves the outcome alone, and records a failure', async () => {
