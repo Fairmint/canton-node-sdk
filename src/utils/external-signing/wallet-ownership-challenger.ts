@@ -20,7 +20,7 @@
  */
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { isRecord } from '../../core/utils/type-guards';
-import { cip103NetworkId } from '../../wallets/cip103';
+import { cip103NetworkId, isDaNetwork } from '../../wallets/cip103';
 import type { DaNetwork } from '../../wallets/da-utilities/client';
 import {
   buildWalletOwnershipMessage,
@@ -38,7 +38,6 @@ export type { WalletOwnershipChallengeFailure, WalletOwnershipChallengeResponse,
 /** How long a challenge may be signed and verified, by default. */
 export const DEFAULT_WALLET_OWNERSHIP_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 
-const NETWORKS: ReadonlySet<string> = new Set<DaNetwork>(['devnet', 'mainnet']);
 const TOKEN_VERSION = 'v1';
 const MAX_TOKEN_LENGTH = 4096;
 
@@ -250,7 +249,7 @@ export function createWalletOwnershipChallenger(options: WalletOwnershipChalleng
 
   function issue({ subject, domain, partyId, network }: WalletOwnershipIssueArgs): WalletOwnershipChallengeResponse {
     if (typeof subject !== 'string' || subject.length === 0) throw new TypeError('subject is required');
-    if (!NETWORKS.has(network)) throw new TypeError('network must be devnet or mainnet');
+    if (!isDaNetwork(network)) throw new TypeError('network must be devnet or mainnet');
     const issuedAt = now();
     const challenge = {
       domain,
@@ -323,7 +322,7 @@ export function createWalletOwnershipChallenger(options: WalletOwnershipChalleng
       const read = await readBody(request);
       if (read instanceof Response) return read;
       const { network, partyId } = read.body;
-      if (network !== 'devnet' && network !== 'mainnet') return badRequest('network must be devnet or mainnet.');
+      if (!isDaNetwork(network)) return badRequest('network must be devnet or mainnet.');
       if (!isWalletOwnershipPartyId(partyId)) {
         return badRequest('partyId must be a Canton party id (hint::namespace).');
       }

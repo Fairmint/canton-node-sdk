@@ -1,4 +1,4 @@
-/** CIP-56 instrument ids read from untrusted JSON (interface views, create arguments, registry answers). */
+/** CIP-56 instrument ids read from untrusted JSON (create arguments, registry answers). */
 import { isRecord, nonEmptyString } from './json';
 import type { InstrumentId } from './types';
 

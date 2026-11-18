@@ -1,11 +1,13 @@
-import { createDaUtilitiesClient, RegistryApiError, RegistryResponseError } from '../../../src/wallets';
 import {
+  createDaUtilitiesClient,
   DA_BURN_FACTORY_TEMPLATES,
   DA_TRANSFER_FACTORY_TEMPLATES,
   DA_UTILITIES_BASE_URLS,
+  factoryTemplateError,
+  type FactoryWithChoiceContext,
 } from '../../../src/wallets/da-utilities/client';
+import { RegistryApiError, RegistryResponseError } from '../../../src/wallets/errors';
 import { requireQualifiedName } from '../../../src/wallets/templates';
-import { factoryTemplateError, type FactoryWithChoiceContext } from '../../../src/wallets/token-registry';
 import {
   INSTRUMENT,
   CONTEXT_VALUES,
@@ -28,24 +30,33 @@ const choiceContext = {
 };
 
 describe('createDaUtilitiesClient', () => {
-  it('derives its factory template names from the template ids', () => {
-    expect(DA_TRANSFER_FACTORY_TEMPLATES).toEqual([RULE, PREAPPROVAL, FACTORY]);
+  it('derives its factory template names from the template ids, per transfer kind', () => {
+    expect(DA_TRANSFER_FACTORY_TEMPLATES).toEqual({
+      direct: [PREAPPROVAL],
+      offer: [RULE, FACTORY],
+      self: [RULE, FACTORY],
+    });
     expect(DA_BURN_FACTORY_TEMPLATES).toEqual([FACTORY]);
     expect(() => requireQualifiedName('not-an-id')).toThrow(TypeError);
   });
 
-  it('knows both networks', () => {
+  it("calls DA's URL of the network, or the given base URL without its trailing slashes", async () => {
     expect(DA_UTILITIES_BASE_URLS).toEqual({
       devnet: 'https://api.utilities.digitalasset-dev.com',
       mainnet: 'https://api.utilities.digitalasset.com',
     });
-    expect(createDaUtilitiesClient({ network: 'mainnet' }).baseUrl).toBe('https://api.utilities.digitalasset.com');
-    expect(createDaUtilitiesClient({ baseUrl: 'https://proxy.example/' }).baseUrl).toBe('https://proxy.example');
+    const { fetch, calls } = fakeFetch(() => ({ json: { partyId: 'op::1' } }));
+    await createDaUtilitiesClient('mainnet', { fetch }).operatorParty();
+    await createDaUtilitiesClient('mainnet', { fetch, baseUrl: 'https://proxy.example//' }).operatorParty();
+    expect(calls.map((c) => c.url)).toEqual([
+      'https://api.utilities.digitalasset.com/api/utilities/v0/operator',
+      'https://proxy.example/api/utilities/v0/operator',
+    ]);
   });
 
   it('reads the operator party with a plain GET', async () => {
     const { fetch, calls } = fakeFetch(() => ({ json: { partyId: 'op::1' } }));
-    const client = createDaUtilitiesClient({ network: 'devnet' }, { fetch });
+    const client = createDaUtilitiesClient('devnet', { fetch });
     await expect(client.operatorParty()).resolves.toBe('op::1');
     expect(calls).toEqual([
       {
@@ -59,7 +70,7 @@ describe('createDaUtilitiesClient', () => {
 
   it('fetches the mint offer accept context and strips disclosed contracts', async () => {
     const { fetch, calls } = fakeFetch(() => ({ json: choiceContext }));
-    const client = createDaUtilitiesClient({ network: 'devnet' }, { fetch });
+    const client = createDaUtilitiesClient('devnet', { fetch });
     await expect(client.mintOfferAcceptContext('00of/fer')).resolves.toEqual({
       choiceContextData: { values: CONTEXT_VALUES },
       disclosedContracts: [disclosed('00config', 'X.Y:Config')],
@@ -78,7 +89,7 @@ describe('createDaUtilitiesClient', () => {
     const { fetch, calls } = fakeFetch(() => ({
       json: { factoryId: '00factory', choiceContext },
     }));
-    const client = createDaUtilitiesClient({ network: 'devnet' }, { fetch });
+    const client = createDaUtilitiesClient('devnet', { fetch });
     const factory = await client.burnRequestContext({
       holder: HOLDER,
       holdingContractIds: ['00h1'],
@@ -101,7 +112,7 @@ describe('createDaUtilitiesClient', () => {
     const { fetch, calls } = fakeFetch(() => ({
       json: { factoryId: '00factory', transferKind: 'direct', choiceContext },
     }));
-    const client = createDaUtilitiesClient({ network: 'devnet' }, { fetch });
+    const client = createDaUtilitiesClient('devnet', { fetch });
     const transfer = {
       sender: HOLDER,
       receiver: OTHER,
@@ -112,10 +123,7 @@ describe('createDaUtilitiesClient', () => {
       inputHoldingCids: ['00h1'],
       meta: { values: {} },
     };
-    const factory = await client.transferFactory({
-      expectedAdmin: REGISTRAR,
-      transfer,
-    });
+    const factory = await client.transferFactory(REGISTRAR, transfer);
     expect(factory.transferKind).toBe('direct');
     expect(calls[0]).toEqual({
       url: `${DEVNET}/api/token-standard/v0/registrars/${encodeURIComponent(REGISTRAR)}/registry/transfer-instruction/v1/transfer-factory`,
@@ -137,7 +145,7 @@ describe('createDaUtilitiesClient', () => {
 
   it.each(['accept', 'reject', 'withdraw'] as const)('fetches the transfer instruction %s context', async (action) => {
     const { fetch, calls } = fakeFetch(() => ({ json: choiceContext }));
-    const client = createDaUtilitiesClient({ network: 'devnet' }, { fetch });
+    const client = createDaUtilitiesClient('devnet', { fetch });
     await client.transferInstructionContext(REGISTRAR, '00ti', action);
     expect(calls[0]).toMatchObject({
       url: `${DEVNET}/api/token-standard/v0/registrars/${encodeURIComponent(REGISTRAR)}/registry/transfer-instruction/v1/00ti/choice-contexts/${action}`,
@@ -151,7 +159,7 @@ describe('createDaUtilitiesClient', () => {
       status: 404,
       text: '{"error":"not_found","error_description":"No holdings provided"}',
     }));
-    const client = createDaUtilitiesClient({ network: 'devnet' }, { fetch });
+    const client = createDaUtilitiesClient('devnet', { fetch });
     const error = await client
       .burnRequestContext({
         holder: HOLDER,
@@ -172,7 +180,7 @@ describe('createDaUtilitiesClient', () => {
     ['no partyId', { json: { party: 'x' } }],
   ])('refuses an operator answer with %s', async (_label, answer) => {
     const { fetch } = fakeFetch(() => answer);
-    const client = createDaUtilitiesClient({ network: 'devnet' }, { fetch });
+    const client = createDaUtilitiesClient('devnet', { fetch });
     await expect(client.operatorParty()).rejects.toBeInstanceOf(RegistryResponseError);
   });
 
@@ -189,7 +197,7 @@ describe('createDaUtilitiesClient', () => {
     ['non-JSON context values', { choiceContextData: { values: 'x' }, disclosedContracts: [] }],
   ])('refuses a choice context with %s', async (_label, json) => {
     const { fetch } = fakeFetch(() => ({ json }));
-    const client = createDaUtilitiesClient({ network: 'devnet' }, { fetch });
+    const client = createDaUtilitiesClient('devnet', { fetch });
     await expect(client.mintOfferAcceptContext('00o')).rejects.toBeInstanceOf(RegistryResponseError);
   });
 
@@ -200,7 +208,7 @@ describe('createDaUtilitiesClient', () => {
         disclosedContracts: [{ contractId: 'c', templateId: 't:M:E', createdEventBlob: 'b' }],
       },
     }));
-    const client = createDaUtilitiesClient({ network: 'devnet' }, { fetch });
+    const client = createDaUtilitiesClient('devnet', { fetch });
     await expect(client.mintOfferAcceptContext('00o')).resolves.toEqual({
       choiceContextData: { values: {} },
       disclosedContracts: [{ contractId: 'c', templateId: 't:M:E', createdEventBlob: 'b' }],
@@ -213,23 +221,57 @@ describe('createDaUtilitiesClient', () => {
       { transferKind: 'offer', choiceContext },
     ]) {
       const { fetch } = fakeFetch(() => ({ json }));
-      const client = createDaUtilitiesClient({ network: 'devnet' }, { fetch });
+      const client = createDaUtilitiesClient('devnet', { fetch });
       await expect(
-        client.transferFactory({
-          expectedAdmin: REGISTRAR,
-          transfer: {
-            sender: HOLDER,
-            receiver: OTHER,
-            amount: '1',
-            instrumentId: INSTRUMENT,
-            requestedAt: 'a',
-            executeBefore: 'b',
-            inputHoldingCids: ['00h'],
-            meta: { values: {} },
-          },
+        client.transferFactory(REGISTRAR, {
+          sender: HOLDER,
+          receiver: OTHER,
+          amount: '1',
+          instrumentId: INSTRUMENT,
+          requestedAt: 'a',
+          executeBefore: 'b',
+          inputHoldingCids: ['00h'],
+          meta: { values: {} },
         })
       ).rejects.toBeInstanceOf(RegistryResponseError);
     }
+  });
+
+  it('reads instrument metadata from the registrar, keeps an answer and asks again after a failure', async () => {
+    let status = 503;
+    const { fetch, calls } = fakeFetch(() =>
+      status === 200
+        ? { json: { id: 'X/1', name: 'Example', symbol: 'XMPL', decimals: 0, totalSupply: '5' } }
+        : { status, text: 'down' }
+    );
+    const client = createDaUtilitiesClient('devnet', { fetch });
+    const instrument = { admin: REGISTRAR, id: 'X/1' };
+    await expect(client.instrumentMetadata(instrument)).resolves.toBeUndefined();
+    status = 200;
+    const [a, b] = await Promise.all([client.instrumentMetadata(instrument), client.instrumentMetadata(instrument)]);
+    expect(a).toEqual({ name: 'Example', symbol: 'XMPL', decimals: 0 });
+    expect(b).toEqual(a);
+    await client.instrumentMetadata(instrument);
+    expect(calls.map((c) => [c.method, c.url])).toEqual([
+      [
+        'GET',
+        `${DEVNET}/api/token-standard/v0/registrars/${encodeURIComponent(REGISTRAR)}/registry/metadata/v1/instruments/X%2F1`,
+      ],
+      [
+        'GET',
+        `${DEVNET}/api/token-standard/v0/registrars/${encodeURIComponent(REGISTRAR)}/registry/metadata/v1/instruments/X%2F1`,
+      ],
+    ]);
+  });
+
+  it.each([
+    ['a non-integer decimals', { id: 'XMPL', name: 'n', symbol: 's', decimals: 2.5 }],
+    ['a negative decimals', { id: 'XMPL', name: 'n', symbol: 's', decimals: -1 }],
+    ['no symbol', { id: 'XMPL', name: 'n', decimals: 2 }],
+    ['non-JSON', 'oops'],
+  ])('reads no metadata from an answer with %s', async (_name, answer) => {
+    const { fetch } = fakeFetch(() => (typeof answer === 'string' ? { text: answer } : { json: answer }));
+    await expect(createDaUtilitiesClient('devnet', { fetch }).instrumentMetadata(INSTRUMENT)).resolves.toBeUndefined();
   });
 
   it('uses the global fetch when none is injected', async () => {
@@ -237,7 +279,7 @@ describe('createDaUtilitiesClient', () => {
     const { fetch, calls } = fakeFetch(() => ({ json: { partyId: 'op' } }));
     globalThis.fetch = fetch as typeof globalThis.fetch;
     try {
-      await createDaUtilitiesClient({ network: 'devnet' }).operatorParty();
+      await createDaUtilitiesClient('devnet').operatorParty();
       expect(calls).toHaveLength(1);
     } finally {
       globalThis.fetch = original;
@@ -250,16 +292,16 @@ describe('createDaUtilitiesClient trustedProviders', () => {
   const PROVIDER = 'provider::1220ab';
 
   it('trusts only the instrument admin itself by default', () => {
-    const client = createDaUtilitiesClient({ network: 'devnet' }, { fetch });
+    const client = createDaUtilitiesClient('devnet', { fetch });
     expect(client.trustedProvidersOf(REGISTRAR)).toEqual([REGISTRAR]);
     expect(client.trustedProvidersOf(OTHER)).toEqual([OTHER]);
   });
 
   it('resolves the configured providers per instrument admin, and nothing inherited', () => {
-    const client = createDaUtilitiesClient(
-      { network: 'devnet' },
-      { fetch, trustedProviders: { [REGISTRAR]: [PROVIDER, REGISTRAR] } }
-    );
+    const client = createDaUtilitiesClient('devnet', {
+      fetch,
+      trustedProviders: { [REGISTRAR]: [PROVIDER, REGISTRAR] },
+    });
     expect(client.trustedProvidersOf(REGISTRAR)).toEqual([PROVIDER, REGISTRAR]);
     expect(client.trustedProvidersOf(OTHER)).toEqual([OTHER]);
     expect(client.trustedProvidersOf('constructor')).toEqual(['constructor']);
@@ -268,10 +310,7 @@ describe('createDaUtilitiesClient trustedProviders', () => {
 
   it('keeps its own copy of the configured lists', () => {
     const providers = [PROVIDER];
-    const client = createDaUtilitiesClient(
-      { network: 'devnet' },
-      { fetch, trustedProviders: { [REGISTRAR]: providers } }
-    );
+    const client = createDaUtilitiesClient('devnet', { fetch, trustedProviders: { [REGISTRAR]: providers } });
     providers.push(OTHER);
     expect(client.trustedProvidersOf(REGISTRAR)).toEqual([PROVIDER]);
   });
@@ -282,7 +321,7 @@ describe('createDaUtilitiesClient trustedProviders', () => {
     ['an empty admin', { '': [PROVIDER] }],
     ['a non-list', { [REGISTRAR]: PROVIDER as unknown as string[] }],
   ])('refuses %s', (_name, trustedProviders) => {
-    expect(() => createDaUtilitiesClient({ network: 'devnet' }, { fetch, trustedProviders })).toThrow(TypeError);
+    expect(() => createDaUtilitiesClient('devnet', { fetch, trustedProviders })).toThrow(TypeError);
   });
 });
 

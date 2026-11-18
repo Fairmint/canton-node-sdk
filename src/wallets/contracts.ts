@@ -1,11 +1,12 @@
 /**
- * Readers for the DA Registry contracts a holder acts on: mint offers, transfer offers and burn requests. Each returns
- * null for a contract of another template or one whose create argument does not read.
+ * Readers for the DA Registry contracts a holder acts on: mint offers, transfer offers, burn requests and transfer
+ * preapprovals. Each returns null for a contract of another template or package, or one whose create argument does not
+ * read.
  */
 import { readInstrumentId } from './instrument';
 import { isRecord, nonEmptyString } from './json';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
-import { sameQualifiedName } from './templates';
+import { isTemplate } from './templates';
 import type { ActiveContract, InstrumentId } from './types';
 import { TOKEN_STANDARD_V1_REASON_META_KEY } from '../utils/token-standard/v1/constants';
 
@@ -50,6 +51,17 @@ export interface BurnRequest extends RegistryParties {
   readonly lockedHoldingCid: string;
 }
 
+/** The receiver's standing acceptance of an instrument admin's transfers, so they complete at once. */
+export interface TransferPreapproval {
+  readonly contractId: string;
+  /** DA's operator party. */
+  readonly operator: string;
+  readonly receiver: string;
+  readonly instrumentAdmin: string;
+  /** The instruments it covers; empty: every instrument of `instrumentAdmin`. */
+  readonly instrumentIds: readonly string[];
+}
+
 /** Fields that must all be non-empty strings, or null. */
 function strings<K extends string>(source: Record<string, unknown>, keys: readonly K[]): Record<K, string> | null {
   const result: Partial<Record<K, string>> = {};
@@ -67,8 +79,7 @@ function text(value: unknown): string | null {
 }
 
 function argumentsOf(contract: ActiveContract, templateId: string): Record<string, unknown> | null {
-  if (!sameQualifiedName(contract.templateId, templateId)) return null;
-  return contract.createArgument;
+  return isTemplate(contract, templateId) ? contract.createArgument : null;
 }
 
 /**
@@ -130,6 +141,23 @@ export function parseBurnRequest(contract: ActiveContract): BurnRequest | null {
     ...fields,
     instrumentId,
     reference,
+  };
+}
+
+/** A DA `TransferPreapproval` (`{operator, receiver, instrumentAdmin, instrumentAllowances: [{id}]}`). */
+export function parseTransferPreapproval(contract: ActiveContract): TransferPreapproval | null {
+  const args = argumentsOf(contract, DA_REGISTRY_TEMPLATES.transferPreapproval);
+  const allowances = args?.['instrumentAllowances'];
+  if (args === null || !Array.isArray(allowances)) return null;
+  const parties = strings(args, ['operator', 'receiver', 'instrumentAdmin']);
+  const instrumentIds = allowances.map((allowance: unknown) =>
+    isRecord(allowance) ? nonEmptyString(allowance['id']) : undefined
+  );
+  if (!parties || instrumentIds.includes(undefined)) return null;
+  return {
+    contractId: contract.contractId,
+    ...parties,
+    instrumentIds: instrumentIds.filter((id): id is string => id !== undefined),
   };
 }
 

@@ -35,45 +35,33 @@ export interface DisclosedContract {
   readonly synchronizerId?: string;
 }
 
-/** One interface view of an active contract (only views the ledger computed successfully are kept). */
-export interface InterfaceView {
-  readonly interfaceId: string;
-  readonly viewValue: JsonObject;
-}
-
 /** An active contract read from the wallet party's ACS. */
 export interface ActiveContract {
   readonly contractId: string;
   /** As the ledger reports it: usually the package-id form `pkgId:Module:Entity`. */
   readonly templateId: string;
-  /** The template's package name (`utility-registry-holding-v0`), when the ledger reported it. */
-  readonly packageName?: string;
+  /** The template's package name (`utility-registry-holding-v0`); entries without one are not read. */
+  readonly packageName: string;
   /**
    * The parties that signed the contract. Only these are guaranteed: anyone can create a contract of their own package
-   * with any create argument or interface view, so trust in a contract comes from who signed it.
+   * with any create argument, so trust in a contract comes from who signed it.
    */
   readonly signatories: readonly string[];
-  /** Null when the ledger did not include it (for example for an interface filter). */
+  /** Null when the ledger did not include it. */
   readonly createArgument: JsonObject | null;
-  readonly interfaceViews: readonly InterfaceView[];
-  readonly createdEventBlob?: string;
   /** The synchronizer the contract is assigned to, when the ledger reported it. */
   readonly synchronizerId?: string;
 }
-
-/** Which contracts to read: one template or one interface (package-name `#pkg:Module:Entity` form). */
-export type ContractFilter = { readonly templateId: string } | { readonly interfaceId: string };
 
 /** What the SDK asks the wallet to sign and submit, acting as the wallet party only. */
 export interface WalletSubmission {
   readonly commands: readonly LedgerCommand[];
   readonly disclosedContracts?: readonly DisclosedContract[];
-  /** Deduplication key; a random UUID when omitted. */
-  readonly commandId?: string;
 }
 
 /** A committed submission. */
 export interface SubmitResult {
   readonly updateId: string;
-  readonly commandId?: string;
+  /** The command id the submission was sent with (a random UUID). */
+  readonly commandId: string;
 }

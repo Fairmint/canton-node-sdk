@@ -5,8 +5,12 @@ import {
   type VerifyWalletOwnershipOptions,
   type WalletOwnershipFailure,
 } from '../../../src/utils/external-signing';
-import { buildWalletOwnershipMessage, proveWalletOwnership, type WalletOwnershipChallenge } from '../../../src/wallets';
-import { fakeProvider } from '../wallets/helpers';
+import {
+  buildWalletOwnershipMessage,
+  proveWalletOwnership,
+  type WalletOwnershipChallenge,
+} from '../../../src/wallets/ownership';
+import { accountProvider } from '../wallets/helpers';
 
 /** An Ed25519 key and the external party it namespaces, as Loop creates them. */
 function externalParty(hint = 'alice'): {
@@ -14,7 +18,6 @@ function externalParty(hint = 'alice'): {
   rawHex: string;
   rawBase64: string;
   derBase64: string;
-  pem: string;
   partyId: string;
   namespace: string;
 } {
@@ -27,7 +30,6 @@ function externalParty(hint = 'alice'): {
     rawHex: raw.toString('hex'),
     rawBase64: raw.toString('base64'),
     derBase64: der.toString('base64'),
-    pem: publicKey.export({ format: 'pem', type: 'spki' }).toString().trim(),
     partyId: `${hint}::${namespace}`,
     namespace,
   };
@@ -48,6 +50,10 @@ const OPTIONS: VerifyWalletOwnershipOptions = {
 };
 
 const party = externalParty();
+
+/** The party's key as a PEM SubjectPublicKeyInfo, rebuilt from its DER. */
+const publicKeyPem = (key: { derBase64: string }): string =>
+  `-----BEGIN PUBLIC KEY-----\n${key.derBase64}\n-----END PUBLIC KEY-----`;
 const HOSTED_NS = '1220'.padEnd(68, 'e');
 const HOSTED = `bob::${HOSTED_NS}`;
 
@@ -68,20 +74,20 @@ function loopProof(
 
 describe('verifyWalletOwnership', () => {
   it('verifies a Loop-style proof (hex key, hex signature) end to end through proveWalletOwnership', async () => {
-    const provider = fakeProvider(
-      {},
+    const provider = accountProvider({
+      party: party.partyId,
+      account: { publicKey: party.rawHex, namespace: party.namespace },
+      signMessage: (message) => ({
+        signature: sign(null, Buffer.from(message, 'utf8'), party.privateKey).toString('hex'),
+      }),
+    });
+    const proof = await proveWalletOwnership(
+      { provider, partyId: party.partyId, network: 'devnet' },
       {
-        party: party.partyId,
-        account: { publicKey: party.rawHex, namespace: party.namespace },
-        signMessage: (message) => ({
-          signature: sign(null, Buffer.from(message, 'utf8'), party.privateKey).toString('hex'),
-        }),
+        challenge: CHALLENGE,
+        now: () => new Date('2026-11-16T12:00:30.000Z'),
       }
     );
-    const proof = await proveWalletOwnership(provider, {
-      challenge: CHALLENGE,
-      now: () => new Date('2026-11-16T12:00:30.000Z'),
-    });
     expect(verifyWalletOwnership(proof, { ...OPTIONS, expectedPartyId: party.partyId })).toEqual({
       verified: true,
       partyId: party.partyId,
@@ -95,19 +101,32 @@ describe('verifyWalletOwnership', () => {
   });
 
   it.each([
-    ['raw base64 (the CIP-0103 reference wallet)', party.rawBase64],
+    ['upper-case hex', party.rawHex.toUpperCase()],
+    ['raw base64 (Privy)', party.rawBase64],
     ['DER SubjectPublicKeyInfo base64', party.derBase64],
-    ['PEM', party.pem],
-    ['0x-prefixed upper-case hex', `0x${party.rawHex.toUpperCase()}`],
   ])('accepts a public key as %s', (_label, publicKey) => {
     expect(verifyWalletOwnership({ ...loopProof(), publicKey }, OPTIONS)).toMatchObject({ verified: true });
   });
 
-  it('accepts a base64 and a base64url signature', () => {
+  it.each([
+    ['PEM', () => publicKeyPem(party)],
+    ['DER SubjectPublicKeyInfo hex', () => Buffer.from(party.derBase64, 'base64').toString('hex')],
+    ['0x-prefixed hex', () => `0x${party.rawHex}`],
+  ])('refuses a public key as %s', (_label, publicKey) => {
+    expect(verifyWalletOwnership({ ...loopProof(), publicKey: publicKey() }, OPTIONS)).toMatchObject({
+      verified: false,
+      reason: 'unsupported-public-key',
+    });
+  });
+
+  it('accepts a base64 signature (Privy), and refuses a 0x-prefixed hex one', () => {
     const proof = loopProof();
     const bytes = Buffer.from(proof.signature, 'hex');
     expect(verifyWalletOwnership({ ...proof, signature: bytes.toString('base64') }, OPTIONS).verified).toBe(true);
-    expect(verifyWalletOwnership({ ...proof, signature: bytes.toString('base64url') }, OPTIONS).verified).toBe(true);
+    expect(verifyWalletOwnership({ ...proof, signature: `0x${proof.signature}` }, OPTIONS)).toMatchObject({
+      verified: false,
+      reason: 'malformed-signature',
+    });
   });
 
   it('needs no namespace in the proof', () => {

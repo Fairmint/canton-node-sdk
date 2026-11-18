@@ -1,24 +1,19 @@
 /**
- * Digital Asset's public Utilities API (no auth, CORS open), for the choice contexts the holder-side DA Registry
- * actions need. Browser-safe: it uses an injectable `fetch` and sends only `content-type: application/json`.
+ * Digital Asset's public Utilities API (no auth, CORS open): the choice contexts and factories the holder-side DA
+ * Registry actions need, and the CIP-56 instrument metadata. Browser-safe: it uses an injectable `fetch` and sends only
+ * `content-type: application/json`.
  *
- * Endpoints: DA's Utilities OpenAPI (`utility.yaml` v2.2.0) and token-standard transfer-instruction V1 spec.
+ * Endpoints: DA's Utilities OpenAPI (`utility.yaml` v2.2.0), and the token standard transfer-instruction V1 and
+ * metadata V1 specs under `/api/token-standard/v0/registrars/{admin}`.
  */
-import { isFromRegistry, parseTransferOffer } from '../contracts';
 import { RegistryApiError, RegistryResponseError } from '../errors';
-import { parseHolding } from '../holdings';
-import { isJsonObject, isRecord, nonEmptyString } from '../json';
+import type { InstrumentMetadata } from '../holdings';
+import { instrumentKey } from '../holdings';
+import { isJsonObject, isRecord, nonEmptyString, type JsonObject } from '../json';
 import { DA_REGISTRY_TEMPLATES } from '../../da-registry/templates';
-import { packageNameOf, requireQualifiedName, sameQualifiedName } from '../templates';
-import type {
-  ChoiceContext,
-  FactoryWithChoiceContext,
-  TokenRegistry,
-  TransferFactory,
-  TransferFactoryArgs,
-  TransferInstructionAction,
-} from '../token-registry';
-import type { ActiveContract, DisclosedContract, InstrumentId } from '../types';
+import { qualifiedName, requireQualifiedName } from '../templates';
+import type { TransferInstructionAction, TransferSpec } from '../commands';
+import type { DisclosedContract, InstrumentId } from '../types';
 
 export type DaNetwork = 'devnet' | 'mainnet';
 
@@ -38,11 +33,15 @@ export type FetchLike = (
   }
 ) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>;
 
-export type DaUtilitiesTarget = { network: DaNetwork } | { baseUrl: string };
-
-export interface DaUtilitiesClientOptions {
+/** How a wallet reaches DA's Utilities API. */
+export interface DaRegistryOptions {
+  /**
+   * Defaults to DA's own URL for the wallet's network (`https://api.utilities.digitalasset-dev.com` on DevNet,
+   * `https://api.utilities.digitalasset.com` on MainNet); for example a proxy.
+   */
+  readonly baseUrl?: string;
   /** Defaults to `globalThis.fetch`. */
-  fetch?: FetchLike;
+  readonly fetch?: FetchLike;
   /**
    * The registry providers to trust, per instrument admin (registrar party id → provider party ids). DA's registry lets
    * a registrar be served by another party's provider service; its mint offers, transfer offers and burn requests are
@@ -50,7 +49,38 @@ export interface DaUtilitiesClientOptions {
    * is also its own provider); an admin not listed trusts only itself. Offers and requests of any other provider are
    * never listed or acted on.
    */
-  trustedProviders?: Readonly<Record<string, readonly string[]>>;
+  readonly trustedProviders?: Readonly<Record<string, readonly string[]>>;
+}
+
+/** Splice `ChoiceContext` data: passed through unchanged as `extraArgs.context`. */
+export interface ChoiceContextData {
+  readonly values: JsonObject;
+}
+
+/** What the registry returns for a choice: its context, and the contracts to disclose with the submission. */
+export interface ChoiceContext {
+  readonly choiceContextData: ChoiceContextData;
+  readonly disclosedContracts: readonly DisclosedContract[];
+}
+
+/** A factory to exercise, with its choice context. */
+export interface FactoryWithChoiceContext extends ChoiceContext {
+  readonly factoryId: string;
+}
+
+/**
+ * How the registry will run a transfer:
+ *
+ * - `offer`: a pending transfer the receiver must accept before it expires. The sender's tokens stay locked until the
+ *   offer is accepted, rejected by the receiver or withdrawn by the sender; expiry alone only stops acceptance and does
+ *   not unlock them (withdraw an expired offer to get them back);
+ * - `direct`: the receiver pre-approved transfers, so the holdings move at once;
+ * - `self`: sender and receiver are the same party (the holdings are merged or split).
+ */
+export type TransferKind = 'offer' | 'direct' | 'self';
+
+export interface TransferFactory extends FactoryWithChoiceContext {
+  readonly transferKind: TransferKind;
 }
 
 export interface BurnRequestContextArgs {
@@ -61,73 +91,65 @@ export interface BurnRequestContextArgs {
 }
 
 /**
- * DA's Utilities API: the CIP-56 registry methods plus DA's own mint and burn endpoints. It serves DA Registry
- * `Holding`s only: a holding counts when its registrar signed it, and an offer or request when a provider trusted for
- * its instrument admin signed it and it names DA's operator.
+ * DA's Utilities API for one network. An offer or request counts as DA's when a provider trusted for its instrument
+ * admin signed it and it names DA's operator.
  */
-export interface DaUtilitiesClient extends TokenRegistry {
-  readonly baseUrl: string;
+export interface DaUtilitiesClient {
   /** The providers trusted for an instrument admin: the `trustedProviders` entry, else the admin itself. */
   readonly trustedProvidersOf: (instrumentAdmin: string) => readonly string[];
   /** DA's operator party (`GET /api/utilities/v0/operator`), fetched once; a failed lookup is retried next call. */
   operatorParty(): Promise<string>;
+  /** The transfer factory for a transfer, and how DA will run it. */
+  transferFactory(expectedAdmin: string, transfer: TransferSpec): Promise<TransferFactory>;
+  /** Context to accept, reject or withdraw a pending transfer. */
+  transferInstructionContext(
+    registrar: string,
+    instructionCid: string,
+    action: TransferInstructionAction
+  ): Promise<ChoiceContext>;
   /** Context to exercise `MintOffer_Accept` on the offer. */
   mintOfferAcceptContext(mintOfferCid: string): Promise<ChoiceContext>;
   /** The allocation factory and context to exercise `AllocationFactory_RequestBurn`. */
   burnRequestContext(args: BurnRequestContextArgs): Promise<FactoryWithChoiceContext>;
+  /**
+   * The instrument's CIP-56 metadata, or undefined on any failure (an error status, a malformed answer). An answer is
+   * kept for the client's lifetime; a failure is asked again next call.
+   */
+  instrumentMetadata(instrumentId: InstrumentId): Promise<InstrumentMetadata | undefined>;
 }
 
-/** The members DA's actions need beyond `TokenRegistry`. */
-const DA_UTILITIES_CLIENT_MEMBERS = [
-  'operatorParty',
-  'trustedProvidersOf',
-  'mintOfferAcceptContext',
-  'burnRequestContext',
-] as const satisfies ReadonlyArray<keyof DaUtilitiesClient>;
+const templateNames = (keys: ReadonlyArray<keyof typeof DA_REGISTRY_TEMPLATES>): readonly string[] =>
+  keys.map((key) => requireQualifiedName(DA_REGISTRY_TEMPLATES[key]));
 
 /**
- * Whether `registry` is DA's Utility Registry client (it has every member of `DaUtilitiesClient`: a non-empty `baseUrl`
- * and the functions DA's actions need), so a `Wallet` over it offers DA's mint, burn and preapproval actions. A
- * registry with only some of those members is not: its wallet keeps every CIP-56 action and refuses DA's with
- * `unsupported-by-registry`.
+ * `Module:Entity` of the templates DA names as the transfer factory, per kind: a direct transfer runs through the
+ * receiver's `TransferPreapproval`, an offer or a self-transfer never does.
  */
-export function isDaUtilitiesClient(registry: TokenRegistry): registry is DaUtilitiesClient {
-  const members = registry as unknown as Readonly<Record<string, unknown>>;
-  const { baseUrl } = members;
-  return (
-    typeof baseUrl === 'string' &&
-    baseUrl.length > 0 &&
-    DA_UTILITIES_CLIENT_MEMBERS.every((member) => typeof members[member] === 'function')
-  );
-}
-
-/** `Module:Entity` of the templates DA names as a transfer factory. */
-export const DA_TRANSFER_FACTORY_TEMPLATES: readonly string[] = (
-  ['transferRule', 'transferPreapproval', 'allocationFactory'] as const
-).map((key) => requireQualifiedName(DA_REGISTRY_TEMPLATES[key]));
+export const DA_TRANSFER_FACTORY_TEMPLATES: Readonly<Record<TransferKind, readonly string[]>> = {
+  direct: templateNames(['transferPreapproval']),
+  offer: templateNames(['transferRule', 'allocationFactory']),
+  self: templateNames(['transferRule', 'allocationFactory']),
+};
 
 /** `Module:Entity` of the template DA names as the burn (`AllocationFactory_RequestBurn`) factory. */
-export const DA_BURN_FACTORY_TEMPLATES: readonly string[] = [
-  requireQualifiedName(DA_REGISTRY_TEMPLATES.allocationFactory),
-];
-
-const DA_HOLDING_PACKAGE_NAME = packageNameOf(DA_REGISTRY_TEMPLATES.holding);
+export const DA_BURN_FACTORY_TEMPLATES: readonly string[] = templateNames(['allocationFactory']);
 
 /**
- * Whether a contract is a DA Registry `Holding` its instrument admin signed. The holding's signatories are its
- * registrar (the instrument admin), its owner and any lockers; DA's operator is only an observer. The template name and
- * interface view alone prove nothing: any party can create a look-alike from its own package, with the wallet party as
- * observer, so only the registrar's signature makes a holding real.
+ * Null when `factoryId` is one of the disclosed contracts and its template is expected; otherwise why not. A registry
+ * that names any other contract is refused before anything is signed.
  */
-export function isGenuineDaHolding(contract: ActiveContract): boolean {
-  if (
-    !sameQualifiedName(contract.templateId, DA_REGISTRY_TEMPLATES.holding) ||
-    (contract.packageName !== undefined && contract.packageName !== DA_HOLDING_PACKAGE_NAME)
-  ) {
-    return false;
+export function factoryTemplateError(
+  factory: FactoryWithChoiceContext,
+  expectedTemplates: readonly string[]
+): string | null {
+  const disclosed = factory.disclosedContracts.find((contract) => contract.contractId === factory.factoryId);
+  if (!disclosed) {
+    return 'The registry named a factory it did not disclose.';
   }
-  const holding = parseHolding(contract);
-  return holding !== null && contract.signatories.includes(holding.instrumentId.admin);
+  const name = qualifiedName(disclosed.templateId);
+  return name !== null && expectedTemplates.includes(name)
+    ? null
+    : `The registry named a factory of an unexpected template (${disclosed.templateId}).`;
 }
 
 /**
@@ -193,22 +215,30 @@ function parseTransferFactory(raw: unknown): TransferFactory {
   return { ...factory, transferKind };
 }
 
-/** The global `fetch`, looked up at call time. */
-const globalFetch: FetchLike = async (url, init) => {
-  const { fetch } = globalThis;
-  if (typeof fetch !== 'function') {
-    throw new TypeError('No global fetch: pass { fetch } to createDaUtilitiesClient');
-  }
-  return fetch(url, init);
-};
+/** The global `fetch`, looked up at call time; without one it throws, naming the `option` to pass instead. */
+export function globalFetch(option: string): FetchLike {
+  return async (url, init) => {
+    const { fetch } = globalThis;
+    if (typeof fetch !== 'function') throw new TypeError(`No global fetch: pass ${option}`);
+    return fetch(url, init);
+  };
+}
 
-/** A client for DA's Utilities API on a network (or any base URL, e.g. a proxy). */
-export function createDaUtilitiesClient(
-  target: DaUtilitiesTarget,
-  options: DaUtilitiesClientOptions = {}
-): DaUtilitiesClient {
-  const baseUrl = trimTrailingSlashes('network' in target ? DA_UTILITIES_BASE_URLS[target.network] : target.baseUrl);
-  const fetchFn = options.fetch ?? globalFetch;
+/** CIP-56 `Instrument` metadata of `id`, or undefined when the answer is of another instrument or malformed. */
+function parseInstrumentMetadata(raw: unknown, id: string): InstrumentMetadata | undefined {
+  if (!isRecord(raw) || raw['id'] !== id) return undefined;
+  const { name, symbol } = raw;
+  // The spec's default when the registry leaves it out.
+  const decimals = raw['decimals'] ?? 10;
+  if (typeof name !== 'string' || typeof symbol !== 'string') return undefined;
+  if (typeof decimals !== 'number' || !Number.isInteger(decimals) || decimals < 0 || decimals > 10) return undefined;
+  return { name, symbol, decimals };
+}
+
+/** A client for DA's Utilities API on a network (at `options.baseUrl` when given). */
+export function createDaUtilitiesClient(network: DaNetwork, options: DaRegistryOptions = {}): DaUtilitiesClient {
+  const baseUrl = trimTrailingSlashes(options.baseUrl ?? DA_UTILITIES_BASE_URLS[network]);
+  const fetchFn = options.fetch ?? globalFetch('registry.fetch');
   const trustedProvidersOf = trustedProvidersResolver(options.trustedProviders);
 
   async function call(method: 'GET' | 'POST', path: string, body?: object): Promise<unknown> {
@@ -229,8 +259,8 @@ export function createDaUtilitiesClient(
     }
   }
 
-  const registrarPath = (registrar: string): string =>
-    `/api/token-standard/v0/registrars/${encodeURIComponent(registrar)}/registry/transfer-instruction/v1`;
+  const registryPath = (registrar: string): string =>
+    `/api/token-standard/v0/registrars/${encodeURIComponent(registrar)}/registry`;
 
   async function fetchOperator(): Promise<string> {
     const raw = await call('GET', '/api/utilities/v0/operator');
@@ -250,29 +280,29 @@ export function createDaUtilitiesClient(
     return operatorPromise;
   }
 
+  const metadata = new Map<string, Promise<InstrumentMetadata | undefined>>();
+  async function instrumentMetadata(instrumentId: InstrumentId): Promise<InstrumentMetadata | undefined> {
+    const key = instrumentKey(instrumentId);
+    let pending = metadata.get(key);
+    if (pending === undefined) {
+      pending = call(
+        'GET',
+        `${registryPath(instrumentId.admin)}/metadata/v1/instruments/${encodeURIComponent(instrumentId.id)}`
+      ).then(
+        (raw) => parseInstrumentMetadata(raw, instrumentId.id),
+        () => undefined
+      );
+      metadata.set(key, pending);
+    }
+    const answer = await pending;
+    if (answer === undefined && metadata.get(key) === pending) metadata.delete(key);
+    return answer;
+  }
+
   return {
-    baseUrl,
-    expectedTransferFactoryTemplates: DA_TRANSFER_FACTORY_TEMPLATES,
-    pendingTransferFilters: [{ templateId: DA_REGISTRY_TEMPLATES.transferOffer }],
-    // The template filter carries the create argument, which `parseHolding` reads when there is no HoldingV1 view.
-    holdingFilters: [{ templateId: DA_REGISTRY_TEMPLATES.holding }],
-    operatorParty,
     trustedProvidersOf,
-
-    servesHolding: isGenuineDaHolding,
-
-    async pendingTransfers(read) {
-      const [contracts, operator] = await Promise.all([
-        read({ templateId: DA_REGISTRY_TEMPLATES.transferOffer }),
-        operatorParty(),
-      ]);
-      return contracts.flatMap((contract) => {
-        const offer = parseTransferOffer(contract);
-        return offer !== null && isFromRegistry(offer, contract.signatories, operator, trustedProvidersOf)
-          ? [offer]
-          : [];
-      });
-    },
+    operatorParty,
+    instrumentMetadata,
 
     async mintOfferAcceptContext(mintOfferCid) {
       return parseChoiceContext(
@@ -294,9 +324,9 @@ export function createDaUtilitiesClient(
       );
     },
 
-    async transferFactory({ expectedAdmin, transfer }: TransferFactoryArgs) {
+    async transferFactory(expectedAdmin, transfer) {
       return parseTransferFactory(
-        await call('POST', `${registrarPath(expectedAdmin)}/transfer-factory`, {
+        await call('POST', `${registryPath(expectedAdmin)}/transfer-instruction/v1/transfer-factory`, {
           choiceArguments: {
             expectedAdmin,
             transfer: {
@@ -322,11 +352,11 @@ export function createDaUtilitiesClient(
       );
     },
 
-    async transferInstructionContext(registrar: string, instructionCid: string, action: TransferInstructionAction) {
+    async transferInstructionContext(registrar, instructionCid, action) {
       return parseChoiceContext(
         await call(
           'POST',
-          `${registrarPath(registrar)}/${encodeURIComponent(instructionCid)}/choice-contexts/${action}`,
+          `${registryPath(registrar)}/transfer-instruction/v1/${encodeURIComponent(instructionCid)}/choice-contexts/${action}`,
           { excludeDebugFields: true }
         )
       );

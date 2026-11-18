@@ -1,9 +1,12 @@
 import {
   acceptMintOfferCommand,
+  cancelBurnRequestCommand,
   createDaTransferPreapprovalCommand,
+  rejectMintOfferCommand,
   requestBurnCommand,
   transferCommand,
   transferInstructionCommand,
+  withdrawTransferPreapprovalCommand,
 } from '../../../src/wallets/commands';
 import { acceptMintOffer, createTransferPreapproval } from '../../../src/da-registry/commands';
 import { buildTokenStandardV1TransferCommand } from '../../../src/utils/token-standard/v1/transfer-factory';
@@ -139,6 +142,40 @@ describe('command builders', () => {
           instrumentAdmin: REGISTRAR,
           instrumentAllowances: [{ id: 'XMPL' }, { id: 'USD' }],
         },
+      },
+    });
+  });
+
+  // Choice argument shapes as DA's utility-registry-app-v0 0.9.2 (bundle 0.14.4) declares them.
+  it('rejects a mint offer with a reason and no extra args', () => {
+    expect(rejectMintOfferCommand('00offer', 'Rejected by the holder')).toEqual({
+      ExerciseCommand: {
+        templateId: '#utility-registry-app-v0:Utility.Registry.App.V0.Model.Mint:MintOffer',
+        contractId: '00offer',
+        choice: 'MintOffer_Reject',
+        choiceArgument: { reason: 'Rejected by the holder', extraArgs: null },
+      },
+    });
+  });
+
+  it('cancels a burn request with no extra args', () => {
+    expect(cancelBurnRequestCommand('00burn')).toEqual({
+      ExerciseCommand: {
+        templateId: '#utility-registry-app-v0:Utility.Registry.App.V0.Model.Burn:BurnRequest',
+        contractId: '00burn',
+        choice: 'BurnRequest_Cancel',
+        choiceArgument: { extraArgs: null },
+      },
+    });
+  });
+
+  it('withdraws a transfer preapproval as its actor', () => {
+    expect(withdrawTransferPreapprovalCommand('00pre', HOLDER)).toEqual({
+      ExerciseCommand: {
+        templateId: '#utility-registry-app-v0:Utility.Registry.App.V0.Model.TransferPreapproval:TransferPreapproval',
+        contractId: '00pre',
+        choice: 'TransferPreapproval_Withdraw',
+        choiceArgument: { actor: HOLDER },
       },
     });
   });

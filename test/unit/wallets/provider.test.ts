@@ -1,29 +1,22 @@
 /**
- * `createWallet` takes any CIP-0103 provider: the party it acts as, and how a Loop-shaped provider
+ * `createWallet` takes any CIP-0103 provider: it acts as the party it is given, and a Loop-shaped provider
  * (`loop.getCip103Provider()`) plugs in with its CIP-0103 errors surfaced unchanged.
  */
 import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
-import { TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID } from '../../../src/utils/token-standard/v1/constants';
-import {
-  createDaUtilitiesClient,
-  createWallet,
-  WalletError,
-  WalletReadError,
-  WalletSubmitError,
-  type ActiveContract,
-  type Wallet,
-} from '../../../src/wallets';
+import { WalletReadError, WalletSubmitError } from '../../../src/wallets/errors';
+import type { ActiveContract } from '../../../src/wallets/types';
+import { createWallet, type Wallet, type WalletInternalOptions } from '../../../src/wallets/wallet';
 import {
   acsFilter,
   CONTEXT_VALUES,
   contract,
   daDisclosed,
+  daHolding,
   disclosed,
   fakeFetch,
   FakeLoopCip103Provider,
   fakeProvider,
   HOLDER,
-  holdingView,
   NOW,
   OPERATOR,
   OTHER,
@@ -50,10 +43,7 @@ function ledger(): Record<string, ActiveContract[]> {
         },
       }),
     ],
-    [TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID]: [
-      holdingView('00h10', '10'),
-      holdingView('00theirs', '10', { owner: OTHER }),
-    ],
+    [DA_REGISTRY_TEMPLATES.holding]: [daHolding('00h10', '10'), daHolding('00theirs', '10', { owner: OTHER })],
   };
 }
 
@@ -81,92 +71,58 @@ const MINT_ACCEPT = {
   },
 };
 
+const walletOver = (provider: WalletInternalOptions['provider']): Wallet => {
+  const options: WalletInternalOptions = {
+    provider,
+    partyId: HOLDER,
+    network: 'devnet',
+    registry: { fetch: registry().fetch },
+    now: () => NOW,
+  };
+  return createWallet(options);
+};
+
 describe('createWallet: the wallet party', () => {
-  it('acts as the primary account, read on every action', async () => {
-    let party = HOLDER;
+  it('reads and acts as the given party only, without asking the wallet for its account', async () => {
     const provider = fakeProvider(ledger());
-    const switching = {
-      ...provider,
-      request: async (args: Parameters<typeof provider.request>[0]) =>
-        args.method === 'getPrimaryAccount' ? { partyId: party, primary: true } : provider.request(args),
-    };
-    const tokens = createWallet({
-      provider: switching,
-      registry: createDaUtilitiesClient({ network: 'devnet' }, { fetch: registry().fetch }),
-    });
-    await expect(tokens.partyId()).resolves.toBe(HOLDER);
-    expect((await tokens.listHoldings()).map((h) => h.contractId)).toEqual(['00h10']);
-    party = OTHER;
-    await expect(tokens.partyId()).resolves.toBe(OTHER);
-    expect((await tokens.listHoldings()).map((h) => h.contractId)).toEqual(['00theirs']);
+    const tokens = walletOver(provider);
+    expect((await tokens.loadState()).holdings.map((h) => h.contractId)).toEqual(['00h10']);
+    await tokens.acceptMintOffer('00mint');
+    expect(provider.requests.map((r) => r.method)).toEqual([
+      'ledgerApi',
+      'ledgerApi',
+      'ledgerApi',
+      'ledgerApi',
+      'prepareExecuteAndWait',
+    ]);
     const parties = provider.requests.flatMap((r) =>
       r.method === 'ledgerApi' && r.params.body !== undefined ? [acsFilter(r.params.body).party] : []
     );
-    expect(parties).toEqual([HOLDER, OTHER]);
-  });
-
-  it('acts as a given partyId without asking the wallet', async () => {
-    const provider = fakeProvider(ledger());
-    const tokens = createWallet({
-      provider,
-      partyId: HOLDER,
-      registry: createDaUtilitiesClient({ network: 'devnet' }, { fetch: registry().fetch }),
-      now: () => NOW,
-    });
-    await tokens.acceptMintOffer('00mint');
-    expect(provider.requests.map((r) => r.method)).toEqual(['ledgerApi', 'ledgerApi', 'prepareExecuteAndWait']);
+    expect(parties).toEqual([HOLDER, HOLDER]);
     expect(provider.submissions[0]?.actAs).toEqual([HOLDER]);
-  });
-
-  it('refuses an empty partyId', () => {
-    expect(() =>
-      createWallet({
-        provider: fakeProvider({}),
-        partyId: ' ',
-        registry: createDaUtilitiesClient({ network: 'devnet' }),
-      })
-    ).toThrow(WalletError);
   });
 });
 
 describe('createWallet over a Loop-shaped CIP-0103 provider (loop.getCip103Provider())', () => {
   function setup(submitError?: RpcError): { provider: FakeLoopCip103Provider; tokens: Wallet } {
     const provider = new FakeLoopCip103Provider(ledger(), submitError);
-    const { fetch } = registry();
-    const tokens = createWallet({
-      provider,
-      registry: createDaUtilitiesClient({ network: 'devnet' }, { fetch }),
-      now: () => NOW,
-    });
-    return { provider, tokens };
+    return { provider, tokens: walletOver(provider) };
   }
 
   it('surfaces 4100 before the dApp connects, and submits nothing', async () => {
     const { provider, tokens } = setup();
-    const error = await tokens.listHoldings().catch((e: unknown) => e);
+    const error = await tokens.loadState().catch((e: unknown) => e);
     expect(error).toBeInstanceOf(WalletReadError);
     expect(error).toMatchObject({ code: 4100 });
     expect((error as Error).message).toMatch(/CIP-0103 4100 Unauthorized/);
-    await expect(tokens.acceptMintOffer('00mint')).rejects.toMatchObject({
-      code: 4100,
-    });
+    await expect(tokens.acceptMintOffer('00mint')).rejects.toMatchObject({ code: 4100 });
     expect(provider.submissions).toEqual([]);
   });
 
   it('accepts a mint offer once connected, with the exact prepareExecuteAndWait params', async () => {
     const { provider, tokens } = setup();
-    const statuses: unknown[] = [];
-    const onStatus = (...args: unknown[]): void => {
-      statuses.push(args[0]);
-    };
-    provider.on('statusChanged', onStatus);
     await provider.request({ method: 'connect' });
-    provider.removeListener('statusChanged', onStatus);
-    expect(statuses).toHaveLength(1);
-
-    const result = await tokens.acceptMintOffer('00mint', {
-      expectedRegistrar: REGISTRAR,
-    });
+    const result = await tokens.acceptMintOffer('00mint');
     expect(result.updateId).toBe('update-1');
     expect(provider.submissions).toEqual([
       {

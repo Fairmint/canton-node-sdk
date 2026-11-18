@@ -1,11 +1,10 @@
-/** Read holdings from the ACS and pick the inputs for a transfer or burn, with exact decimal arithmetic. */
+/** Read DA Registry holdings from the ACS and pick the inputs for a transfer or burn, with exact decimal arithmetic. */
 import { formatDecimalUnits, MAX_DECIMAL_UNITS, parseDecimalUnits } from './decimal';
 import { WalletError } from './errors';
 import { readInstrumentId, sameInstrument } from './instrument';
 import { isRecord, nonEmptyString } from './json';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
-import { TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID } from '../utils/token-standard/v1/constants';
-import { sameQualifiedName } from './templates';
+import { isTemplate } from './templates';
 import type { ActiveContract, InstrumentId } from './types';
 
 export interface Holding {
@@ -27,74 +26,43 @@ export interface Holding {
 function readLocked(value: unknown): boolean | null {
   if (value === undefined || value === null) return false;
   if (!isRecord(value)) return null;
-  if (value['tag'] === 'None') return false;
-  return true;
+  return value['tag'] !== 'None';
 }
 
-function holding(
-  contract: ActiveContract,
-  fields: {
-    owner: unknown;
-    instrumentId: InstrumentId | null;
-    amount: unknown;
-    lock: unknown;
-  }
-): Holding | null {
-  const owner = nonEmptyString(fields.owner);
-  const locked = readLocked(fields.lock);
+/**
+ * A genuine DA Registry `Holding`, read from its create argument (`owner`, `instrument {source, id}`, `amount`,
+ * `lock`), or null. Genuine: of DA's holding package, and signed by its registrar (the instrument admin, `source`) and
+ * its owner. Any party can create a look-alike from its own package, with the wallet party as an observer, so only
+ * those signatures make a holding real. An unreadable holding is never spendable.
+ */
+export function parseHolding(contract: ActiveContract): Holding | null {
+  if (!isTemplate(contract, DA_REGISTRY_TEMPLATES.holding)) return null;
+  const args = contract.createArgument;
+  const instrument = args?.['instrument'];
+  if (args === null || !isRecord(instrument)) return null;
+  const owner = nonEmptyString(args['owner']);
+  const instrumentId = readInstrumentId({ admin: instrument['source'], id: instrument['id'] });
+  const { amount } = args;
+  const locked = readLocked(args['lock']);
   if (
     owner === undefined ||
-    fields.instrumentId === null ||
-    typeof fields.amount !== 'string' ||
-    parseDecimalUnits(fields.amount) === null ||
-    locked === null
+    instrumentId === null ||
+    typeof amount !== 'string' ||
+    parseDecimalUnits(amount) === null ||
+    locked === null ||
+    !contract.signatories.includes(instrumentId.admin) ||
+    !contract.signatories.includes(owner)
   ) {
     return null;
   }
   return {
     contractId: contract.contractId,
     owner,
-    instrumentId: fields.instrumentId,
-    amount: fields.amount,
+    instrumentId,
+    amount,
     locked,
     ...(contract.synchronizerId !== undefined && { synchronizerId: contract.synchronizerId }),
   };
-}
-
-/**
- * A holding from its CIP-56 HoldingV1 interface view when the ledger gave one, else from a DA Registry `Holding`'s
- * create argument (`owner`, `instrument {source, id}`, `amount`, `lock`). Null when neither reads: an unreadable
- * holding is never spendable.
- */
-export function parseHolding(contract: ActiveContract): Holding | null {
-  const view = contract.interfaceViews.find((v) =>
-    sameQualifiedName(v.interfaceId, TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID)
-  );
-  if (view) {
-    const v = view.viewValue;
-    return holding(contract, {
-      owner: v['owner'],
-      instrumentId: readInstrumentId(v['instrumentId']),
-      amount: v['amount'],
-      lock: v['lock'],
-    });
-  }
-  const args = contract.createArgument;
-  if (args !== null && sameQualifiedName(contract.templateId, DA_REGISTRY_TEMPLATES.holding)) {
-    const { instrument } = args;
-    return holding(contract, {
-      owner: args['owner'],
-      instrumentId: isRecord(instrument)
-        ? readInstrumentId({
-            admin: instrument['source'],
-            id: instrument['id'],
-          })
-        : null,
-      amount: args['amount'],
-      lock: args['lock'],
-    });
-  }
-  return null;
 }
 
 export interface HoldingSelection {
@@ -256,9 +224,17 @@ export function selectHoldings(
   };
 }
 
+/** An instrument's CIP-56 registry metadata (`/registry/metadata/v1/instruments/{id}`), as its admin recommends it. */
+export interface InstrumentMetadata {
+  readonly name: string;
+  readonly symbol: string;
+  /** Decimal places to show and accept (0-10). */
+  readonly decimals: number;
+}
+
 /** One instrument's holdings, summed exactly. */
 export interface InstrumentBalance {
-  /** {@link instrumentKey} of the instrument. */
+  /** A stable key per instrument, for a React `key` or a lookup. Opaque: compare it, do not parse it. */
   readonly key: string;
   readonly instrumentId: InstrumentId;
   /** The spendable (unlocked) total, with 10 decimal places. */
@@ -267,6 +243,8 @@ export interface InstrumentBalance {
   readonly locked: string;
   /** How many holdings (locked ones included) make up the totals. */
   readonly holdingCount: number;
+  /** The registry's metadata of the instrument; absent when the registry did not answer it. */
+  readonly metadata?: InstrumentMetadata;
 }
 
 /** Escapes `%` and `@` in one key component, so the component holds no bare `@` and the escape itself is unambiguous. */

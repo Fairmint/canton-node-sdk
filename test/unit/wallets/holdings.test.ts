@@ -1,19 +1,16 @@
-import {
-  formatDecimalUnits,
-  instrumentKey,
-  parseDecimalUnits,
-  WalletError,
-  type Holding,
-  type InstrumentId,
-} from '../../../src/wallets';
+import { formatDecimalUnits, parseDecimalUnits } from '../../../src/wallets/decimal';
+import { WalletError } from '../../../src/wallets/errors';
 import {
   instrumentBalances,
+  instrumentKey,
   MAX_SKIPPING_COVER_CANDIDATES,
   parseHolding,
   requirePositiveAmount,
   selectHoldings,
+  type Holding,
 } from '../../../src/wallets/holdings';
-import { INSTRUMENT, contract, HOLDER, holdingView, OTHER, REGISTRAR } from './helpers';
+import type { InstrumentId } from '../../../src/wallets/types';
+import { INSTRUMENT, contract, daHolding, HOLDER, OTHER, REGISTRAR } from './helpers';
 
 describe('decimal units', () => {
   it.each([
@@ -50,8 +47,8 @@ describe('decimal units', () => {
 });
 
 describe('parseHolding', () => {
-  it('reads the HoldingV1 view', () => {
-    expect(parseHolding(holdingView('00h', '5.0000000000'))).toEqual({
+  it('reads a DA Holding create argument (null lock = unlocked)', () => {
+    expect(parseHolding(daHolding('00h', '5.0000000000'))).toEqual({
       contractId: '00h',
       owner: HOLDER,
       instrumentId: INSTRUMENT,
@@ -61,43 +58,32 @@ describe('parseHolding', () => {
   });
 
   it('treats a lock record as locked and Daml None as unlocked', () => {
-    expect(parseHolding(holdingView('00h', '5', { lock: { holders: [REGISTRAR] } }))?.locked).toBe(true);
-    expect(parseHolding(holdingView('00h', '5', { lock: { tag: 'None' } }))?.locked).toBe(false);
+    const lock = { lockers: { map: [[REGISTRAR, {}]] }, context: 'x' };
+    expect(parseHolding(daHolding('00h', '5', { lock }))?.locked).toBe(true);
+    expect(parseHolding(daHolding('00h', '5', { lock: { tag: 'None' } }))?.locked).toBe(false);
   });
 
-  it('falls back to the DA Holding create argument (absent lock = unlocked)', () => {
-    const args = {
-      operator: 'op',
-      provider: REGISTRAR,
-      registrar: REGISTRAR,
-      owner: HOLDER,
-      instrument: {
-        source: REGISTRAR,
-        id: 'XMPL',
-        scheme: 'RegistrarInternalScheme',
-      },
-      label: '',
-      amount: '100000.0000000000',
-    };
-    const daHolding = contract('00da', 'Utility.Registry.Holding.V0.Holding:Holding', args);
-    expect(parseHolding(daHolding)).toEqual({
-      contractId: '00da',
-      owner: HOLDER,
-      instrumentId: INSTRUMENT,
-      amount: '100000.0000000000',
-      locked: false,
-    });
-    const locked = contract('00dl', 'Utility.Registry.Holding.V0.Holding:Holding', {
-      ...args,
-      lock: { lockers: { map: [[REGISTRAR, {}]] }, context: 'x' },
-    });
-    expect(parseHolding(locked)?.locked).toBe(true);
+  it('keeps the synchronizer the ledger reported', () => {
+    const holding = { ...daHolding('00h', '5'), synchronizerId: 'global-domain::1220ee' };
+    expect(parseHolding(holding)?.synchronizerId).toBe('global-domain::1220ee');
+  });
+
+  it('fails closed on a holding its registrar or owner did not sign, or of another package', () => {
+    expect(parseHolding(daHolding('00h', '5', { signatories: [HOLDER] }))).toBeNull();
+    expect(parseHolding(daHolding('00h', '5', { signatories: [REGISTRAR] }))).toBeNull();
+    expect(parseHolding({ ...daHolding('00h', '5'), packageName: 'evil-registry-holding-v0' })).toBeNull();
+    // The owner signs as owner, not as the registrar of someone else's instrument.
+    expect(
+      parseHolding(
+        daHolding('00h', '5', { instrument: { source: OTHER, id: 'XMPL' }, signatories: [HOLDER, REGISTRAR] })
+      )
+    ).toBeNull();
   });
 
   it('fails closed on unreadable holdings and other templates', () => {
-    expect(parseHolding(holdingView('00h', '1.5e3'))).toBeNull();
-    expect(parseHolding(holdingView('00h', '1', { lock: 'oops' as never }))).toBeNull();
-    expect(parseHolding(holdingView('00h', '1', { instrument: { admin: REGISTRAR } }))).toBeNull();
+    expect(parseHolding(daHolding('00h', '1.5e3'))).toBeNull();
+    expect(parseHolding(daHolding('00h', '1', { lock: 'oops' as never }))).toBeNull();
+    expect(parseHolding({ ...daHolding('00h', '1'), createArgument: null })).toBeNull();
     expect(parseHolding(contract('00x', 'Some.Other:Template', { owner: HOLDER, amount: '1' }))).toBeNull();
   });
 });

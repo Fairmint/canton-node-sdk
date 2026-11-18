@@ -80,31 +80,19 @@ export interface VerifyWalletOwnershipOptions {
 export const DEFAULT_WALLET_OWNERSHIP_MAX_AGE_MS = 10 * 60 * 1000;
 export const DEFAULT_WALLET_OWNERSHIP_CLOCK_SKEW_MS = 60 * 1000;
 
-const ED25519_DER_PREFIX_HEX = '302a300506032b6570032100';
-
 /**
- * The key as base64 for the Canton helpers: 64 hex characters (raw, as Loop registers it), 88 hex characters (DER
- * SubjectPublicKeyInfo), a PEM public key, or base64/base64url of the raw or DER key (as the CIP-0103 reference wallet
- * sends it). The helpers then accept only a 32-byte key or the exact Ed25519 DER prefix.
+ * The key as base64 for the Canton helpers: 64 hex characters (the raw key, as Loop reports it), else base64 of the raw
+ * or DER SubjectPublicKeyInfo key (as Privy's provider reports it), which the helpers accept as is.
  */
 function publicKeyBase64(value: string): string {
-  const trimmed = value.trim();
-  const hex = trimmed.replace(/^0x/i, '');
-  if (
-    /^[0-9a-fA-F]+$/.test(hex) &&
-    (hex.length === 64 || (hex.length === 88 && hex.toLowerCase().startsWith(ED25519_DER_PREFIX_HEX)))
-  ) {
-    return Buffer.from(hex, 'hex').toString('base64');
-  }
-  const pem = /^-----BEGIN PUBLIC KEY-----\s*([A-Za-z0-9+/=\s]+?)\s*-----END PUBLIC KEY-----$/.exec(trimmed);
-  return pem?.[1] !== undefined ? pem[1].replace(/\s+/g, '') : trimmed;
+  return /^[0-9a-fA-F]{64}$/.test(value) ? Buffer.from(value, 'hex').toString('base64') : value;
 }
 
-/** The signature as base64: 128 hex characters (Loop) or base64/base64url (the reference wallet), 64 bytes either way. */
+/** The signature as base64: 128 hex characters (Loop), else base64 (Privy); 64 bytes either way. */
 function signatureBase64(value: string): string {
-  const hex = value.trim().replace(/^0x/i, '');
-  if (/^[0-9a-fA-F]{128}$/.test(hex)) return normalizeCantonEd25519Signature({ signatureHex: hex });
-  return normalizeCantonEd25519Signature({ signatureBase64: value });
+  return /^[0-9a-fA-F]{128}$/.test(value)
+    ? normalizeCantonEd25519Signature({ signatureHex: value })
+    : normalizeCantonEd25519Signature({ signatureBase64: value });
 }
 
 function readProof(proof: unknown): WalletOwnershipProof | null {
@@ -204,7 +192,7 @@ export function verifyWalletOwnership(
   } catch {
     return fail(
       'unsupported-public-key',
-      'The public key is not an Ed25519 key in hex, base64 (raw 32 bytes or DER SubjectPublicKeyInfo) or PEM'
+      'The public key is not an Ed25519 key in hex (raw 32 bytes) or base64 (raw 32 bytes or DER SubjectPublicKeyInfo)'
     );
   }
   let partyFingerprint: string;
