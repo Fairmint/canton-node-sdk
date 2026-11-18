@@ -395,6 +395,25 @@ describe('createCip103Session', () => {
       expect(provider.listenerCount()).toBe(0);
     });
 
+    it('keeps a wallet signed out when a reconnect to it is cancelled before it signed in', async () => {
+      const { session } = observed();
+      const firstDisconnect = deferred<unknown>();
+      const provider = new TestProvider(HOLDER, { disconnect: async () => firstDisconnect.promise });
+      await session.connect(provider);
+      session.disconnect();
+      // The reconnect waits for that disconnect, and the user cancels it meanwhile.
+      const reconnect = session.connect(provider);
+      provider.answers.disconnect = () => null;
+      session.disconnect();
+      firstDisconnect.reject(new Error('disconnect failed'));
+      await reconnect;
+      await flush();
+      await session.restore(provider);
+      expect(provider.requests).not.toContain('isConnected');
+      expect(provider.requests.filter((method) => method === 'connect')).toHaveLength(1);
+      expect(session.getSnapshot()).toEqual(DISCONNECTED);
+    });
+
     it('does nothing for a wallet the user signed out of, until connect() signs in to it again', async () => {
       const { session } = observed();
       const disconnected = deferred<unknown>();

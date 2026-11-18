@@ -5,6 +5,7 @@ import {
   DA_UTILITIES_BASE_URLS,
   factoryTemplateError,
   type FactoryWithChoiceContext,
+  type FetchLike,
 } from '../../../src/wallets/da-utilities/client';
 import { RegistryApiError, RegistryResponseError } from '../../../src/wallets/errors';
 import { requireQualifiedName } from '../../../src/wallets/templates';
@@ -262,6 +263,27 @@ describe('createDaUtilitiesClient', () => {
         `${DEVNET}/api/token-standard/v0/registrars/${encodeURIComponent(REGISTRAR)}/registry/metadata/v1/instruments/X%2F1`,
       ],
     ]);
+  });
+
+  it('gives up on a metadata lookup that does not answer within 5 s, and asks again next time', async () => {
+    jest.useFakeTimers();
+    try {
+      let calls = 0;
+      const fetch: FetchLike = async () => {
+        calls += 1;
+        return new Promise(() => undefined); // never answers
+      };
+      const client = createDaUtilitiesClient('devnet', { fetch });
+      const lookup = client.instrumentMetadata(INSTRUMENT);
+      await jest.advanceTimersByTimeAsync(5000);
+      await expect(lookup).resolves.toBeUndefined();
+      const again = client.instrumentMetadata(INSTRUMENT);
+      await jest.advanceTimersByTimeAsync(5000);
+      await expect(again).resolves.toBeUndefined();
+      expect(calls).toBe(2);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it.each([

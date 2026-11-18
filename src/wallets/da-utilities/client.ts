@@ -281,17 +281,24 @@ export function createDaUtilitiesClient(network: DaNetwork, options: DaRegistryO
   }
 
   const metadata = new Map<string, Promise<InstrumentMetadata | undefined>>();
+  /** A lookup still unanswered after this long gives undefined (and is retried next time), so a load never hangs on it. */
+  const METADATA_TIMEOUT_MS = 5000;
   async function instrumentMetadata(instrumentId: InstrumentId): Promise<InstrumentMetadata | undefined> {
     const key = instrumentKey(instrumentId);
     let pending = metadata.get(key);
     if (pending === undefined) {
-      pending = call(
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timedOut = new Promise<undefined>((resolve) => {
+        timer = setTimeout(() => resolve(undefined), METADATA_TIMEOUT_MS);
+      });
+      const lookup = call(
         'GET',
         `${registryPath(instrumentId.admin)}/metadata/v1/instruments/${encodeURIComponent(instrumentId.id)}`
       ).then(
         (raw) => parseInstrumentMetadata(raw, instrumentId.id),
         () => undefined
       );
+      pending = Promise.race([lookup, timedOut]).finally(() => clearTimeout(timer));
       metadata.set(key, pending);
     }
     const answer = await pending;

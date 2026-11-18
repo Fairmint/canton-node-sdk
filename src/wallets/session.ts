@@ -313,7 +313,6 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
       const own = epoch;
       const current = (): boolean => own === epoch && !disposed;
       signingIn = provider;
-      signedOut.delete(provider);
       for (const other of previous) signedOut.add(other);
       const sends = previous.map(recordDisconnect);
       for (const send of sends) send();
@@ -338,6 +337,8 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
           return;
         }
         if (!current()) return;
+        // Signed in again: restore() may reconnect it from now on. A sign-in that failed or was cancelled keeps it out.
+        signedOut.delete(provider);
         // Read the account even when the wallet was already connected.
         await lookup(provider, false);
       } finally {
