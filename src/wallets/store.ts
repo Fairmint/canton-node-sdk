@@ -109,6 +109,14 @@ export function walletActionKey(action: WalletAction): string {
 const READ_ONLY: ReadonlySet<WalletAction['type']> = new Set(['planTransfer', 'proveOwnership']);
 
 /**
+ * Whether `store.act(action)` would run it now: a wallet is connected, the store is not busy, and, for a write, no
+ * outcome is unknown. Use it to enable the action's button.
+ */
+export function canAct(view: WalletView, action: WalletAction): boolean {
+  return view.wallet !== null && !view.busy && (READ_ONLY.has(action.type) || view.unknownOutcome === null);
+}
+
+/**
  * The failures a submission itself reports (`WalletSubmitError`). The wallet throws every other failure before it
  * submits, so nothing was sent.
  */

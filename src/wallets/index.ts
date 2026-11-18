@@ -18,6 +18,7 @@ export {
   type ConnectedWallet,
 } from './session';
 export {
+  canAct,
   createWalletStore,
   walletActionKey,
   type ActionOutcome,

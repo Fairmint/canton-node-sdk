@@ -3,6 +3,7 @@
  * reload after every write attempt, outcomes tagged with their party, and a sticky unknown outcome.
  */
 import {
+  canAct,
   createCip103Session,
   createWalletStore,
   walletActionKey,
@@ -655,6 +656,8 @@ describe('createWalletStore', () => {
       const planning = t.store.act(PLAN);
       t.call().resolve(fakePlan().plan);
       await planning;
+      expect(canAct(t.store.getSnapshot(), ACCEPT)).toBe(false);
+      expect(canAct(t.store.getSnapshot(), PLAN)).toBe(true);
       expect(await t.store.act(ACCEPT)).toBeNull();
       expect(t.calls).toHaveLength(0);
       expect(t.store.getSnapshot()).toMatchObject({ outcome: null, unknownOutcome: unknown, busy: false });
@@ -670,6 +673,7 @@ describe('createWalletStore', () => {
 
       t.store.acknowledgeUnknownOutcome();
       expect(t.store.getSnapshot()).toMatchObject({ unknownOutcome: null });
+      expect(canAct(t.store.getSnapshot(), ACCEPT)).toBe(true);
       expect(t.store.getSnapshot().notices.some((n) => n.key === 'unknown-outcome')).toBe(false);
       await acceptMintOffer(t);
       expect(t.store.getSnapshot()).toMatchObject({ outcome: { status: 'succeeded', partyId: OTHER } });

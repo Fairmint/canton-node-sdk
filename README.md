@@ -119,7 +119,7 @@ export function useWallet(network: DaNetwork, provider: Cip103Provider | null) {
 
 ```tsx
 // page.tsx
-import { walletActionKey } from '@fairmint/canton-node-sdk/build/src/wallets/index.js';
+import { canAct, walletActionKey } from '@fairmint/canton-node-sdk/build/src/wallets/index.js';
 
 function WalletPage({ provider }: { provider: Cip103Provider | null }) {
   const { session, store, view } = useWallet('devnet', provider);
@@ -149,7 +149,7 @@ function WalletPage({ provider }: { provider: Cip103Provider | null }) {
         return (
           <button
             key={offer.contractId}
-            disabled={view.busy}
+            disabled={!canAct(view, accept)}
             onClick={() => void store.act(accept)}
           >
             {running ? 'Accepting…' : `Accept ${offer.amount}`}
