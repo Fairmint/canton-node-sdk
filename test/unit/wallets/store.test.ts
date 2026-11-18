@@ -47,10 +47,10 @@ const snapshot = (offset: number): WalletState => ({
 const SUBMITTED = { updateId: 'update-1', commandId: 'command-1' };
 const INSTRUMENT = { admin: REGISTRAR, id: 'XMPL' };
 const ACCEPT: WalletAction = { type: 'acceptMintOffer', mintOfferCid: 'mint-1' };
-const PLAN: WalletAction = {
+const PLAN = {
   type: 'planTransfer',
   request: { receiver: OTHER, instrumentId: INSTRUMENT, amount: '1' },
-};
+} as const satisfies WalletAction;
 
 /**
  * A session over a scriptable provider, and a store whose token wallets hold every call (loads and actions) until the
@@ -183,8 +183,9 @@ async function planThroughStore(t: Setup, kind: TransferPlan['kind'] = 'offer'):
   const planned = fakePlan(kind);
   const planning = t.store.act(PLAN);
   t.call().resolve(planned.plan);
-  expect(await planning).toBe(planned.plan);
-  return planned;
+  const plan = await planning;
+  if (plan === null) throw new Error('planning was refused');
+  return { plan, submit: planned.submit };
 }
 
 describe('createWalletStore', () => {
@@ -484,7 +485,11 @@ describe('createWalletStore', () => {
       const planning = t.store.act(PLAN);
       expect(t.store.getSnapshot().running).toEqual({ action: PLAN, key: `planTransfer:XMPL@${REGISTRAR}` });
       t.call().resolve(plan);
-      expect(await planning).toBe(plan);
+      const handed = await planning;
+      // The plan's fields, but its submit refuses: only store.act({ type: 'submitTransfer' }) sends it.
+      expect(handed).toMatchObject({ kind: plan.kind, description: plan.description, request: plan.request });
+      expect(handed).not.toBe(plan);
+      await expect(handed?.submit()).rejects.toMatchObject({ code: 'invalid-input' });
       expect(t.loads).toHaveLength(0);
       expect(t.store.getSnapshot()).toMatchObject({ busy: false, outcome: accepted });
 
@@ -715,8 +720,21 @@ describe('createWalletStore', () => {
       // A plan runs and does not clear it; a write is refused before the wallet is asked, so it cannot repeat the
       // write whose outcome is unknown, nor replace its command id and burn reference.
       const planning = t.store.act(PLAN);
-      t.call().resolve(fakePlan().plan);
-      await planning;
+      const behind = fakePlan();
+      let submitted = false;
+      t.call().resolve({
+        ...behind.plan,
+        submit: async () => {
+          submitted = true;
+          return behind.submit.promise as Promise<never>;
+        },
+      });
+      const handed = await planning;
+      if (handed === null) throw new Error('planning was refused');
+      // Neither through the store nor directly can that plan be sent meanwhile.
+      expect(await t.store.act({ type: 'submitTransfer', plan: handed })).toBeNull();
+      await expect(handed.submit()).rejects.toMatchObject({ code: 'invalid-input' });
+      expect(submitted).toBe(false);
       expect(canAct(t.store.getSnapshot(), ACCEPT)).toBe(false);
       expect(canAct(t.store.getSnapshot(), PLAN)).toBe(true);
       expect(await t.store.act(ACCEPT)).toBeNull();

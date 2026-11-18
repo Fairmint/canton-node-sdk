@@ -39,6 +39,7 @@ export type WalletAction =
       readonly executeBefore?: Date;
     }
   | { readonly type: 'cancelBurnRequest'; readonly burnRequestCid: string }
+  /** Read-only; resolves with a plan to show. Send it with `submitTransfer`: its own `submit()` refuses. */
   | { readonly type: 'planTransfer'; readonly request: TransferRequest }
   | { readonly type: 'submitTransfer'; readonly plan: TransferPlan }
   | {
@@ -260,10 +261,17 @@ const TRANSFER_SENTENCES: Readonly<Record<TransferResult['kind'], string>> = {
 };
 
 /**
- * The connected wallet each plan a store made belongs to. `submitTransfer` sends only a plan the store made for the
- * wallet it runs for: a plan of another session, network or standalone wallet would submit through that other wallet.
+ * The plans stores hand out, each with the connected wallet it was made for and the token wallet's own plan behind it.
+ * `submitTransfer` sends only a plan the store made for the wallet it runs for: a plan of another session, network or
+ * standalone wallet would submit through that other wallet.
  */
-const planWallets = new WeakMap<TransferPlan, ConnectedWallet>();
+const storePlans = new WeakMap<TransferPlan, { readonly wallet: ConnectedWallet; readonly plan: TransferPlan }>();
+
+/** Submitting a store's plan directly would skip the store's checks (one call at a time, the unknown-outcome lock). */
+// eslint-disable-next-line @typescript-eslint/require-await -- TransferPlan.submit is async: it rejects, never throws
+async function submitThroughStore(): Promise<never> {
+  throw new WalletError('invalid-input', "Send this plan with store.act({ type: 'submitTransfer', plan })");
+}
 
 /** Run `action` with `tokens` for `wallet`; throws what the wallet throws. */
 async function perform(tokens: Wallet, wallet: ConnectedWallet, action: WalletAction): Promise<Settled> {
@@ -307,17 +315,20 @@ async function perform(tokens: Wallet, wallet: ConnectedWallet, action: WalletAc
       );
     case 'planTransfer': {
       const plan = await tokens.planTransfer(action.request);
-      planWallets.set(plan, wallet);
-      return { ok: true, result: plan, message: null };
+      const { kind, description, partyId, request } = plan;
+      const handed: TransferPlan = Object.freeze({ kind, description, partyId, request, submit: submitThroughStore });
+      storePlans.set(handed, { wallet, plan });
+      return { ok: true, result: handed, message: null };
     }
     case 'submitTransfer': {
-      if (planWallets.get(action.plan) !== wallet) {
+      const planned = storePlans.get(action.plan);
+      if (planned?.wallet !== wallet) {
         throw new WalletError(
           'invalid-input',
           'This transfer was planned for another wallet connection; plan it again before sending'
         );
       }
-      const result = await action.plan.submit();
+      const result = await planned.plan.submit();
       return written(result, TRANSFER_SENTENCES[result.kind]);
     }
     case 'createTransferPreapproval': {
