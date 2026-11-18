@@ -1,67 +1,211 @@
 /**
- * A token wallet page's state and actions over a `Cip103Session`: one token wallet per connected wallet, its ledger
- * snapshot, one wallet call at a time, a reload after every write attempt, and outcomes tagged with the session they
- * ran for, so a reply from an ended session is never shown as a success.
+ * A token wallet page's state and actions over a `Cip103Session`: one DA token wallet per connected wallet, its ledger
+ * snapshot, typed actions run one wallet call at a time, a reload after every write attempt, the outcome of the last
+ * action with a sentence for the user, and a sticky warning for a write whose outcome is unknown.
  *
  * Observable for any UI framework: `subscribe` and `getSnapshot` (React: `useSyncExternalStore(store.subscribe,
  * store.getSnapshot, store.getSnapshot)`).
  */
 import { notifyListeners } from './notify';
+import type { FetchLike, DaRegistryOptions } from './da-utilities/client';
 import { describeWalletError, WalletError, type WalletErrorDescription } from './errors';
+import { instrumentKey } from './holdings';
+import { requestWalletOwnershipVerdict, type WalletOwnershipVerdict } from './ownership';
 import type { Cip103Session, Cip103SessionState, ConnectedWallet } from './session';
-import { createWallet, type Wallet, type WalletState } from './wallet';
+import type { InstrumentId, SubmitResult } from './types';
+import {
+  createWallet,
+  type BurnRequestResult,
+  type TransferPlan,
+  type TransferRequest,
+  type TransferResult,
+  type Wallet,
+  type WalletOptions,
+  type WalletState,
+} from './wallet';
 
-/** How the last action ended, for the party it ran as. */
+/** What a page asks the store to do. `planTransfer` and `proveOwnership` only read; every other action is a write. */
+export type WalletAction =
+  | { readonly type: 'acceptMintOffer' | 'rejectMintOffer'; readonly mintOfferCid: string }
+  | {
+      readonly type: 'acceptTransferOffer' | 'rejectTransferOffer' | 'withdrawTransferOffer';
+      readonly transferOfferCid: string;
+    }
+  | {
+      readonly type: 'requestBurn';
+      readonly instrumentId: InstrumentId;
+      readonly amount: string;
+      readonly reference?: string;
+      readonly executeBefore?: Date;
+    }
+  | { readonly type: 'cancelBurnRequest'; readonly burnRequestCid: string }
+  /** Read-only; resolves with a plan to show. Send it with `submitTransfer`: its own `submit()` refuses. */
+  | { readonly type: 'planTransfer'; readonly request: TransferRequest }
+  | { readonly type: 'submitTransfer'; readonly plan: TransferPlan }
+  | {
+      readonly type: 'createTransferPreapproval';
+      readonly instrumentAdmin: string;
+      readonly instrumentIds?: readonly string[];
+    }
+  | { readonly type: 'removeTransferPreapproval'; readonly preapprovalCid: string }
+  | {
+      readonly type: 'proveOwnership';
+      /** Answers `POST { network, partyId }` with `{ data: WalletOwnershipChallengeResponse }`. */
+      readonly challengeUrl: string;
+      /** Answers `POST { token, proof }` with `{ data: WalletOwnershipVerdict }`. */
+      readonly verifyUrl: string;
+      readonly fetch?: FetchLike;
+    };
+
+/** What each action resolves with. A not-verified ownership verdict is a failure, so only a verified one returns. */
+export interface WalletActionResults {
+  readonly acceptMintOffer: SubmitResult;
+  readonly rejectMintOffer: SubmitResult;
+  readonly acceptTransferOffer: SubmitResult;
+  readonly rejectTransferOffer: SubmitResult;
+  readonly withdrawTransferOffer: SubmitResult;
+  readonly requestBurn: BurnRequestResult;
+  readonly cancelBurnRequest: SubmitResult;
+  readonly planTransfer: TransferPlan;
+  readonly submitTransfer: TransferResult;
+  readonly createTransferPreapproval: SubmitResult;
+  readonly removeTransferPreapproval: SubmitResult;
+  readonly proveOwnership: Extract<WalletOwnershipVerdict, { readonly verified: true }>;
+}
+
+export type ActionResultOf<A extends WalletAction> = WalletActionResults[A['type']];
+
+type ActionResult = WalletActionResults[keyof WalletActionResults];
+
+/**
+ * A stable key for an action: its type and the contract or instrument it acts on. Compare it with `view.running?.key`
+ * to show a button's spinner.
+ */
+export function walletActionKey(action: WalletAction): string {
+  switch (action.type) {
+    case 'acceptMintOffer':
+    case 'rejectMintOffer':
+      return `${action.type}:${action.mintOfferCid}`;
+    case 'acceptTransferOffer':
+    case 'rejectTransferOffer':
+    case 'withdrawTransferOffer':
+      return `${action.type}:${action.transferOfferCid}`;
+    case 'requestBurn':
+      return `${action.type}:${instrumentKey(action.instrumentId)}`;
+    case 'cancelBurnRequest':
+      return `${action.type}:${action.burnRequestCid}`;
+    case 'planTransfer':
+      return `${action.type}:${instrumentKey(action.request.instrumentId)}`;
+    case 'submitTransfer':
+      return `${action.type}:${instrumentKey(action.plan.request.instrumentId)}`;
+    case 'createTransferPreapproval':
+      return `${action.type}:${action.instrumentAdmin}`;
+    case 'removeTransferPreapproval':
+      return `${action.type}:${action.preapprovalCid}`;
+    case 'proveOwnership':
+      return action.type;
+  }
+}
+
+const READ_ONLY: ReadonlySet<WalletAction['type']> = new Set(['planTransfer', 'proveOwnership']);
+
+/**
+ * Whether `store.act(action)` would run it now: the store is `ready`, not busy, and, for a write, no outcome is
+ * unknown. Use it to enable the action's button.
+ */
+export function canAct(view: WalletView, action: WalletAction): boolean {
+  return view.ready && !view.busy && (READ_ONLY.has(action.type) || view.unknownOutcome === null);
+}
+
+/**
+ * The failures a submission itself reports (`WalletSubmitError`). The wallet throws every other failure before it
+ * submits, so nothing was sent.
+ */
+const SUBMISSION_FAILURES: ReadonlySet<WalletErrorDescription['kind']> = new Set([
+  'declined',
+  'not-committed',
+  'outcome-unknown',
+]);
+
+/** How the last action that had something to say ended, for the party it ran as. */
 export type ActionOutcome =
-  | { readonly id: string; readonly partyId: string; readonly status: 'succeeded'; readonly message: string | null }
-  | { readonly id: string; readonly partyId: string; readonly status: 'failed'; readonly error: WalletErrorDescription }
-  /**
-   * The session ended (disconnect, wallet end, account switch) before the action settled: whether it committed is
-   * unknown.
-   */
-  | { readonly id: string; readonly partyId: string; readonly status: 'interrupted' };
+  | {
+      readonly action: WalletAction;
+      readonly key: string;
+      readonly partyId: string;
+      readonly status: 'succeeded';
+      readonly message: string;
+    }
+  | {
+      readonly action: WalletAction;
+      readonly key: string;
+      readonly partyId: string;
+      readonly status: 'failed';
+      readonly error: WalletErrorDescription;
+    };
+
+/** A write whose outcome is unknown (`outcome-unknown`): it may have committed. Check the wallet before trying again. */
+export interface UnknownOutcome {
+  readonly action: WalletAction;
+  readonly key: string;
+  readonly partyId: string;
+  readonly message: string;
+  /** The command id it was submitted with, when the submission reported one. */
+  readonly commandId?: string;
+  /** A redemption's reference, to look the burn request up before filing another. */
+  readonly burnReference?: string;
+}
+
+/** Something to show the user; render `view.notices` in one place. */
+export interface WalletNotice {
+  /** Stable per kind of notice: a React `key`. */
+  readonly key: string;
+  readonly level: 'success' | 'error' | 'warning' | 'info';
+  readonly title?: string;
+  readonly message: string;
+  /** Offer a Retry button that calls `store.refresh()`. */
+  readonly retry?: true;
+  /** Offer a button that calls `store.acknowledgeUnknownOutcome()` once the user checked the wallet. */
+  readonly acknowledge?: true;
+}
 
 export interface WalletView {
   readonly session: Cip103SessionState;
   /** The connected wallet the state belongs to (null when disconnected). */
   readonly wallet: ConnectedWallet | null;
   /**
+   * A token wallet is open for `wallet`, so actions can run. False while disconnected, and when the token wallet could
+   * not be built (an invalid `registry` option; `loadError` says why).
+   */
+  readonly ready: boolean;
+  /**
    * Ledger state from one snapshot. Null until the first load answers, and cleared when a load fails or the wallet
    * changes.
    */
   readonly state: WalletState | null;
-  /**
-   * A load for the current wallet is in flight, or queued behind the wallet call in flight (an action of this wallet or
-   * a previous one, the previous wallet's load, or the load before a Retry).
-   */
+  /** A load for the current wallet is in flight, or queued behind the wallet call in flight. */
   readonly loading: boolean;
   /** The last load's failure. A rate limit has kind `rate-limited`, so offer `refresh()` after a moment. */
   readonly loadError: WalletErrorDescription | null;
-  /** The running action's id. */
-  readonly running: string | null;
+  /** The running action (`key` is its `walletActionKey`). */
+  readonly running: { readonly action: WalletAction; readonly key: string } | null;
   /**
-   * True while any wallet call is in flight or a load is queued: an action, or a load (the first one, a Retry, the
-   * reload after an action), for the current wallet or a previous one. Disable every action button. `run()` refuses
+   * True while any wallet call is in flight or a load is queued: disable every action button. `act()` refuses
    * meanwhile, so only one wallet call is ever in flight.
    */
   readonly busy: boolean;
   /**
-   * The last action's outcome. A wallet change clears it, except when whether it committed is unknown (`interrupted`,
-   * or `failed` with kind `outcome-unknown`).
+   * The last action that had something to say: a write's result or failure, an ownership verdict, a plan that failed. A
+   * plan that succeeded leaves it as it was (its result is the plan). Cleared when the wallet changes.
    */
   readonly outcome: ActionOutcome | null;
   /**
-   * The party of a write whose outcome is unknown and is not shown as the current wallet's failure: still running for
-   * an ended session, `interrupted`, or an `outcome-unknown` failure of a wallet that is no longer connected.
+   * A write whose outcome is unknown. It stays, across later actions and wallet changes, until
+   * `acknowledgeUnknownOutcome()`, and meanwhile `act()` refuses every write: disable write buttons while it is set.
    */
-  readonly unknownOutcomeParty: string | null;
-}
-
-export interface WalletActionContext {
-  /** The token wallet of `wallet`. */
-  readonly tokens: Wallet;
-  /** The connected wallet the action runs for. */
-  readonly wallet: ConnectedWallet;
+  readonly unknownOutcome: UnknownOutcome | null;
+  /** The session error, the unknown outcome, the load error and the last outcome, as sentences to show. */
+  readonly notices: readonly WalletNotice[];
 }
 
 export interface WalletStore {
@@ -69,108 +213,185 @@ export interface WalletStore {
   /** The current view; the same object until it changes (for `useSyncExternalStore`). */
   getSnapshot(): WalletView;
   /**
-   * Reload the snapshot (the Retry button). Starts at once when no wallet call is in flight; otherwise it is queued and
-   * runs once that call settles (the load in flight may have read before what prompted the refresh). Queued loads are
-   * coalesced into one, so a refresh during a write is the reload after it. Ignored while disconnected.
+   * Run one action for the connected wallet. Resolves null without doing anything while busy or disconnected, or for a
+   * write while `view.unknownOutcome` is set (checked synchronously, so a double click is refused at once). A write is
+   * followed by a reload, also when it failed, since a failed write may have committed; the store stays busy until that
+   * reload answers. Resolves with the action's result when it succeeded for a wallet that is still current, else null
+   * (see `view.outcome` and `view.unknownOutcome`).
+   *
+   * A write that settles after its session ended is recorded by what is known: a result as `succeeded` for its party, a
+   * certain failure as `failed`, an unknown outcome as `unknownOutcome`, and a failure before anything was submitted
+   * not at all. `submitTransfer` sends only a plan this store's `planTransfer` made for the current wallet; any other
+   * plan (another session, network or account, or a standalone wallet's) is refused with `invalid-input` before
+   * anything is signed.
    */
+  act<A extends WalletAction>(action: A): Promise<ActionResultOf<A> | null>;
+  /** Reload the snapshot (the Retry button); queued behind the wallet call in flight. Ignored while disconnected. */
   refresh(): void;
-  /**
-   * Run one wallet call (a write, a preview, `signMessage`). Resolves false without calling `action` while busy (any
-   * wallet call in flight or load queued) or disconnected; the check is synchronous, so a double click is refused at
-   * once. Afterwards it reloads the snapshot, even when the action failed, because a failed write may have committed,
-   * and stays busy until that reload answers. A write that settles after its session ended records `interrupted`, never
-   * `succeeded` (or nothing when it was refused unsent, below). Resolves true when the action succeeded for a session
-   * that is still current. `action` resolves with a message to show, or nothing.
-   *
-   * `readOnly: true` marks a call that commits nothing (a preview, `signMessage`): no reload follows, and one that
-   * settles after its session ended records no outcome instead of `interrupted`.
-   *
-   * A `TransferPlan`, or any token wallet kept from an earlier run, is bound to the wallet session that made it: submit
-   * it only in a run of that same `wallet`. A token wallet the store opened (with the default `open`, or a custom one
-   * that passes `isActive` on) refuses every write once its `ConnectedWallet` is no longer the session's, with
-   * `invalid-input` and before anything is read or signed, so a plan made for one account is never submitted after the
-   * session switched to another. A run that is still current records that refusal as a `failed` outcome. A run whose
-   * session ended while it ran, and whose action rejected with a refusal (`WalletError`, `describeWalletError` kind
-   * `refused`: nothing was submitted), records no outcome rather than `interrupted`.
-   */
-  run(
-    id: string,
-    action: (context: WalletActionContext) => Promise<string | void>,
-    options?: { readonly readOnly?: boolean }
-  ): Promise<boolean>;
-  /**
-   * Stop following the session; pending replies are dropped, a queued load never starts and no further view is
-   * published.
-   */
+  /** Clear `unknownOutcome` once the user checked the wallet. */
+  acknowledgeUnknownOutcome(): void;
+  /** Stop following the session; pending replies are dropped and no further view is published. */
   dispose(): void;
-}
-
-/** What `open` gets besides the connected wallet. */
-export interface OpenWalletContext {
-  /**
-   * Whether `wallet` is still the session's connected wallet (`session.isCurrent(wallet)`). Pass it as the token
-   * wallet's `isActive`, so its writes, and the `TransferPlan`s it made, are refused once the session left `wallet`.
-   */
-  readonly isActive: () => boolean;
 }
 
 export interface WalletStoreOptions {
   readonly session: Cip103Session;
-  /**
-   * Builds the token wallet of each connected wallet. Default: `createWallet({ provider, partyId, network, isActive })`
-   * (DA's registry for the wallet's network), which needs `wallet.network` (a wallet without one gets a `refused` load
-   * error). For another registry, return `createWallet({ provider: wallet.provider, partyId: wallet.partyId, registry,
-   * isActive: context.isActive })`. Pass `context.isActive` on as the token wallet's `isActive`, as the default does,
-   * or a plan made for one wallet can still be submitted after the session switched to another.
-   */
-  readonly open?: (wallet: ConnectedWallet, context: OpenWalletContext) => Wallet;
+  /** How each token wallet reaches DA's Utilities API (`createWallet`'s `registry`). */
+  readonly registry?: DaRegistryOptions;
 }
 
-/** Whether the outcome leaves open if a write committed: `interrupted`, or a failure the wallet could not confirm. */
-function outcomeUnknown(outcome: ActionOutcome): boolean {
-  return outcome.status === 'interrupted' || (outcome.status === 'failed' && outcome.error.kind === 'outcome-unknown');
+/** A test hook beside {@link WalletStoreOptions}; not part of the public options. */
+export interface WalletStoreInternalOptions extends WalletStoreOptions {
+  /** Defaults to `createWallet`. */
+  readonly openWallet?: (options: WalletOptions) => Wallet;
 }
 
-/** Whether `error` is the SDK's refusal before anything was submitted (`WalletError`). */
-function refusedUnsent(error: unknown): boolean {
-  return describeWalletError(error).kind === 'refused';
+/** How an action settled: its result and the sentence for the user (null: nothing to say), or why it failed. */
+type Settled =
+  | { readonly ok: true; readonly result: ActionResult; readonly message: string | null }
+  | { readonly ok: false; readonly error: WalletErrorDescription };
+
+const update = (result: SubmitResult): string => `(update ${result.updateId})`;
+
+/** What a transfer of each kind did, for the user. */
+const TRANSFER_SENTENCES: Readonly<Record<TransferResult['kind'], string>> = {
+  direct: 'Sent: the tokens moved to the receiver',
+  offer: 'Transfer offer sent: the receiver must accept it before it expires',
+  self: 'Self-transfer done',
+};
+
+/**
+ * The plans one store handed out, each with the connected wallet it was made for and the token wallet's own plan behind
+ * it. `submitTransfer` sends only a plan this store made for the wallet it runs for: a plan of another store, session,
+ * network or standalone wallet would skip this store's checks or submit through another wallet.
+ */
+type StorePlans = WeakMap<TransferPlan, { readonly wallet: ConnectedWallet; readonly plan: TransferPlan }>;
+
+/** Submitting a store's plan directly would skip the store's checks (one call at a time, the unknown-outcome lock). */
+// eslint-disable-next-line @typescript-eslint/require-await -- TransferPlan.submit is async: it rejects, never throws
+async function submitThroughStore(): Promise<never> {
+  throw new WalletError('invalid-input', "Send this plan with store.act({ type: 'submitTransfer', plan })");
 }
 
-/** The default token wallet: DA's registry for the network the wallet connected for, acting as its party only. */
-function openWallet(wallet: ConnectedWallet, context: OpenWalletContext): Wallet {
-  const { provider, partyId, network } = wallet;
-  if (network === undefined) {
-    throw new WalletError(
-      'invalid-input',
-      'The connected wallet names no network: connect with { network }, or pass open to createWalletStore'
-    );
+/** Run `action` with `tokens` for `wallet`; throws what the wallet throws. */
+async function perform(
+  plans: StorePlans,
+  tokens: Wallet,
+  wallet: ConnectedWallet,
+  action: WalletAction
+): Promise<Settled> {
+  const written = (result: SubmitResult, sentence: string): Settled => ({
+    ok: true,
+    result,
+    message: `${sentence} ${update(result)}.`,
+  });
+  switch (action.type) {
+    case 'acceptMintOffer':
+      return written(await tokens.acceptMintOffer(action.mintOfferCid), 'Mint offer accepted');
+    case 'rejectMintOffer':
+      return written(await tokens.rejectMintOffer(action.mintOfferCid), 'Mint offer rejected');
+    case 'acceptTransferOffer':
+      return written(await tokens.acceptTransferOffer(action.transferOfferCid), 'Transfer accepted');
+    case 'rejectTransferOffer':
+      return written(await tokens.rejectTransferOffer(action.transferOfferCid), 'Transfer offer rejected');
+    case 'withdrawTransferOffer':
+      return written(
+        await tokens.withdrawTransferOffer(action.transferOfferCid),
+        'Transfer offer withdrawn; its tokens are unlocked'
+      );
+    case 'requestBurn': {
+      const { instrumentId, amount, reference, executeBefore } = action;
+      const result = await tokens.requestBurn({
+        instrumentId,
+        amount,
+        ...(reference !== undefined && { reference }),
+        ...(executeBefore !== undefined && { executeBefore }),
+      });
+      return {
+        ok: true,
+        result,
+        message: `Redemption ${result.reference} requested ${update(result)}. The registrar burns the amount or returns it.`,
+      };
+    }
+    case 'cancelBurnRequest':
+      return written(
+        await tokens.cancelBurnRequest(action.burnRequestCid),
+        'Redemption cancelled; the amount is unlocked'
+      );
+    case 'planTransfer': {
+      const plan = await tokens.planTransfer(action.request);
+      const { kind, description, partyId, request } = plan;
+      const handed: TransferPlan = Object.freeze({ kind, description, partyId, request, submit: submitThroughStore });
+      plans.set(handed, { wallet, plan });
+      return { ok: true, result: handed, message: null };
+    }
+    case 'submitTransfer': {
+      const planned = plans.get(action.plan);
+      if (planned?.wallet !== wallet) {
+        throw new WalletError(
+          'invalid-input',
+          'This transfer was planned for another wallet connection; plan it again before sending'
+        );
+      }
+      const result = await planned.plan.submit();
+      return written(result, TRANSFER_SENTENCES[result.kind]);
+    }
+    case 'createTransferPreapproval': {
+      const { instrumentAdmin, instrumentIds } = action;
+      return written(
+        await tokens.createTransferPreapproval({
+          instrumentAdmin,
+          ...(instrumentIds !== undefined && { instrumentIds }),
+        }),
+        instrumentIds === undefined || instrumentIds.length === 0
+          ? `Transfer preapproval created: transfers of ${instrumentAdmin}'s instruments now complete at once`
+          : `Transfer preapproval created: transfers of ${instrumentIds.join(', ')} by ${instrumentAdmin} now complete at once`
+      );
+    }
+    case 'removeTransferPreapproval':
+      return written(await tokens.removeTransferPreapproval(action.preapprovalCid), 'Transfer preapproval removed');
+    case 'proveOwnership': {
+      const { challengeUrl, verifyUrl, fetch } = action;
+      const verdict = await requestWalletOwnershipVerdict(wallet, {
+        challengeUrl,
+        verifyUrl,
+        ...(fetch !== undefined && { fetch }),
+      });
+      if (!verdict.verified) return { ok: false, error: { kind: 'not-verified', message: verdict.message } };
+      return {
+        ok: true,
+        result: verdict,
+        message: `Verified: this wallet holds the key of ${verdict.partyId} (key fingerprint ${verdict.publicKeyFingerprint}).`,
+      };
+    }
   }
-  return createWallet({ provider, partyId, network, isActive: context.isActive });
+}
+
+/** `message`, naming `partyId` when the view shows another wallet (or none). */
+function forParty(message: string, partyId: string, current: ConnectedWallet | null): string {
+  return current?.partyId === partyId ? message : `${message} (party ${partyId})`;
 }
 
 /**
- * The observable state and actions of a token wallet page over `session`. The store follows the session: each new
- * `ConnectedWallet` gets its own token wallet (from `open`) and a fresh load, and its state is cleared.
+ * The observable state and actions of a token wallet page over `session`. Each new `ConnectedWallet` gets its own token
+ * wallet (`createWallet` on the session's network, bound to the session by `isActive`) and a fresh load.
  *
- * One wallet call at a time: an execution latch counts every call in flight (actions and loads, of the current wallet
- * or a previous one, since a dropped reply does not cancel its request). `run()` refuses while it is held. A load asked
- * for meanwhile (a new wallet's first load, a Retry, the reload after a write) is queued; queued loads coalesce into
- * one, which runs for the wallet current when the latch frees. Ending the session drops the queued load, and so does
- * `dispose()`. A wallet call that never settles holds the latch, since it cannot be cancelled. The token wallet's own
- * write latch (`busy`) stays as the inner guard.
+ * One wallet call at a time: a latch counts every call in flight (actions and loads, of the current wallet or a
+ * previous one, since a dropped reply does not cancel its request). `act()` refuses while it is held. A load asked for
+ * meanwhile (a new wallet's first load, a Retry, the reload after a write) is queued; queued loads coalesce into one,
+ * which runs for the wallet current when the latch frees. A wallet call that never settles holds the latch.
  */
 export function createWalletStore(options: WalletStoreOptions): WalletStore {
-  const { session } = options;
-  const open = options.open ?? openWallet;
+  const { session, registry, openWallet = createWallet } = options as WalletStoreInternalOptions;
   const listeners = new Set<() => void>();
+  const plans: StorePlans = new WeakMap();
 
   let sessionState = session.getSnapshot();
   let wallet: ConnectedWallet | null = null;
   let tokens: Wallet | null = null;
   let state: WalletState | null = null;
   let loadError: WalletErrorDescription | null = null;
-  // Stale replies: every load and wallet change takes a new number; a load's reply counts only while its number is the
-  // latest and its wallet still current. This drops replies; it does not free the latch.
+  // Every load and wallet change takes a new number; a load's reply counts only while its number is the latest.
   let generation = 0;
   // Execution latch: wallet calls (actions and loads, of any wallet) asked and not yet settled.
   let inFlight = 0;
@@ -178,29 +399,62 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
   let queued = false;
   // A load for the current wallet is in flight.
   let loadInFlight = false;
-  let running: { readonly id: string; readonly wallet: ConnectedWallet; readonly readOnly: boolean } | null = null;
+  let running: { readonly action: WalletAction; readonly key: string; readonly wallet: ConnectedWallet } | null = null;
   let outcome: ActionOutcome | null = null;
+  let unknownOutcome: UnknownOutcome | null = null;
   let disposed = false;
   let view = buildView();
 
-  function unknownOutcomeParty(): string | null {
-    if (running !== null && !running.readOnly && running.wallet !== wallet) return running.wallet.partyId;
-    if (outcome === null || !outcomeUnknown(outcome)) return null;
-    // The current wallet's own `outcome-unknown` failure is shown as the outcome itself.
-    return outcome.status === 'interrupted' || outcome.partyId !== wallet?.partyId ? outcome.partyId : null;
+  function notices(): WalletNotice[] {
+    const list: WalletNotice[] = [];
+    if (sessionState.status === 'disconnected' && sessionState.error !== null) {
+      const { error } = sessionState;
+      list.push({ key: 'session', level: error.kind === 'declined' ? 'info' : 'error', message: error.message });
+    }
+    if (unknownOutcome !== null) {
+      list.push({
+        key: 'unknown-outcome',
+        level: 'warning',
+        title: 'Outcome unknown',
+        message: forParty(unknownOutcome.message, unknownOutcome.partyId, wallet),
+        acknowledge: true,
+      });
+    }
+    if (loadError !== null) {
+      const rateLimited = loadError.kind === 'rate-limited';
+      list.push({
+        key: 'load',
+        level: rateLimited ? 'warning' : 'error',
+        title: rateLimited ? 'The wallet is busy' : 'The wallet could not be read',
+        message: loadError.message,
+        ...(tokens !== null && { retry: true as const }),
+      });
+    }
+    if (outcome?.status === 'succeeded') {
+      list.push({ key: 'outcome', level: 'success', message: forParty(outcome.message, outcome.partyId, wallet) });
+    } else if (outcome?.status === 'failed') {
+      list.push({
+        key: 'outcome',
+        level: outcome.error.kind === 'declined' ? 'info' : 'error',
+        message: forParty(outcome.error.message, outcome.partyId, wallet),
+      });
+    }
+    return list;
   }
 
   function buildView(): WalletView {
     return {
       session: sessionState,
       wallet,
+      ready: tokens !== null,
       state,
       loading: loadInFlight || queued,
       loadError,
-      running: running?.id ?? null,
+      running: running === null ? null : { action: running.action, key: running.key },
       busy: inFlight > 0 || queued,
       outcome,
-      unknownOutcomeParty: unknownOutcomeParty(),
+      unknownOutcome,
+      notices: notices(),
     };
   }
 
@@ -215,13 +469,9 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
     return !disposed && candidate === wallet && session.isCurrent(candidate);
   }
 
-  /**
-   * Ask for a load of the current wallet's snapshot: it starts now when no wallet call is in flight, and otherwise
-   * waits for the latch (`drain`). Publishes.
-   */
+  /** Ask for a load of the current wallet's snapshot: now when the latch is free, else once it frees. Publishes. */
   function requestLoad(): void {
-    // A session listener that runs before this store's own may ask after the session left `wallet`: the store's
-    // pending `onSession` then resets it, and no load goes to a wallet whose session ended.
+    // A session listener that runs before this store's own may ask after the session left `wallet`.
     if (disposed || wallet === null || tokens === null || !session.isCurrent(wallet)) return;
     queued = true;
     drain();
@@ -230,9 +480,7 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
   /** Start the queued load if the latch is free, then publish. Called whenever the latch may have freed. */
   function drain(): void {
     if (disposed) return;
-    // A wallet the session has left gets no load: `onSession` drops the queued load and queues the next wallet's. A
-    // session that left it without publishing (`dispose()`) never calls `onSession`, so the queued load is dropped here:
-    // a wallet never becomes current again once the session left it.
+    // A wallet the session has left (also a disposed session, which publishes nothing) gets no load.
     if (queued && wallet !== null && !session.isCurrent(wallet)) queued = false;
     if (queued && inFlight === 0 && wallet !== null && tokens !== null) {
       queued = false;
@@ -241,16 +489,11 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
     publish();
   }
 
-  /**
-   * Load `forWallet`'s snapshot, holding the latch until the wallet answers. The reply is dropped when another wallet
-   * superseded it (loads never overlap, so a newer load of the same wallet cannot); the latch frees either way, and the
-   * queued load, if any, starts.
-   */
+  /** Load `forWallet`'s snapshot, holding the latch until the wallet answers; the reply is dropped once superseded. */
   function startLoad(forWallet: ConnectedWallet, forTokens: Wallet): void {
     const attempt = ++generation;
     inFlight += 1;
     loadInFlight = true;
-    // A reply counts only for the wallet the session still shows (a disposed session shows none).
     const current = (): boolean =>
       !disposed && attempt === generation && forWallet === wallet && session.isCurrent(forWallet);
     void (async () => {
@@ -262,7 +505,6 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
       }
       inFlight -= 1;
       if (disposed) return;
-      // No newer load of this wallet runs, so this one no longer counts as loading, whether its reply is kept or not.
       if (attempt === generation) loadInFlight = false;
       if (current()) {
         if (next.ok) {
@@ -288,25 +530,55 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
     }
     wallet = next;
     generation += 1; // drop the previous wallet's load reply (its call still holds the latch until it settles)
-    queued = false; // a queued load was for the previous wallet
+    queued = false;
     loadInFlight = false;
     state = null;
     loadError = null;
+    outcome = null;
     tokens = null;
-    // Another wallet never sees this one's result, but a write whose outcome is unknown stays reported.
-    if (outcome !== null && !outcomeUnknown(outcome)) outcome = null;
-    if (next === null) {
-      publish();
+    if (next !== null) {
+      try {
+        tokens = openWallet({
+          provider: next.provider,
+          partyId: next.partyId,
+          network: next.network,
+          ...(registry !== undefined && { registry }),
+          isActive: () => session.isCurrent(next),
+        });
+      } catch (error) {
+        // An invalid `registry` option: the wallet is connected but cannot act; say why instead of loading forever.
+        loadError = describeWalletError(error);
+      }
+    }
+    if (tokens === null) publish();
+    else requestLoad(); // queued while the previous wallet's call is in flight
+  }
+
+  /** Record how an action settled; `live`: its wallet is still the current one. */
+  function record(ran: NonNullable<typeof running>, settled: Settled, live: boolean): void {
+    const { action, key } = ran;
+    const { partyId } = ran.wallet;
+    const readOnly = READ_ONLY.has(action.type);
+    if (!live && readOnly) return; // nothing it did can commit, and its wallet is gone
+    if (settled.ok) {
+      if (settled.message !== null) outcome = { action, key, partyId, status: 'succeeded', message: settled.message };
       return;
     }
-    try {
-      tokens = open(next, { isActive: () => session.isCurrent(next) });
-    } catch (error) {
-      loadError = describeWalletError(error);
-      publish();
+    const { error } = settled;
+    if (error.kind === 'outcome-unknown') {
+      unknownOutcome = {
+        action,
+        key,
+        partyId,
+        message: error.message,
+        ...(error.commandId !== undefined && { commandId: error.commandId }),
+        ...(error.burnReference !== undefined && { burnReference: error.burnReference }),
+      };
       return;
     }
-    requestLoad(); // queued while the previous wallet's call is in flight
+    // A failure before anything was submitted is nothing to report for a wallet that is gone.
+    if (!live && !SUBMISSION_FAILURES.has(error.kind)) return;
+    outcome = { action, key, partyId, status: 'failed', error };
   }
 
   const unsubscribe = session.subscribe(onSession);
@@ -322,61 +594,53 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
 
     getSnapshot: () => view,
 
-    refresh() {
-      requestLoad();
-    },
-
-    async run(id, action, runOptions = {}) {
+    async act<A extends WalletAction>(action: A): Promise<ActionResultOf<A> | null> {
       // Synchronous, before the first await: a second call in the same tick is refused.
       const ranFor = wallet;
       const ranTokens = tokens;
-      if (disposed || inFlight > 0 || queued || ranFor === null || ranTokens === null) return false;
-      const readOnly = runOptions.readOnly === true;
-      const previous = outcome;
+      if (disposed || inFlight > 0 || queued || ranFor === null || ranTokens === null) return null;
+      // Until the user checked the wallet, a write could repeat the one whose outcome is unknown.
+      if (unknownOutcome !== null && !READ_ONLY.has(action.type)) return null;
+      const ran = { action, key: walletActionKey(action), wallet: ranFor };
       inFlight += 1;
-      running = { id, wallet: ranFor, readOnly };
-      outcome = null;
+      running = ran;
       publish();
       // A listener of that publish may have ended the session, switched the wallet or disposed the store: then the
-      // action must not start (nothing was sent, so no outcome is recorded), and queued work runs instead. A previous
-      // write whose outcome is unknown stays reported, as it does across a wallet change.
+      // action must not start, and queued work runs instead.
       if (!isCurrent(ranFor)) {
         inFlight -= 1;
         running = null;
-        if (previous !== null && outcomeUnknown(previous)) outcome = previous;
         drain();
-        return false;
+        return null;
       }
 
-      let settled:
-        { readonly ok: true; readonly message: string | null } | { readonly ok: false; readonly error: unknown };
+      let settled: Settled;
       try {
-        const message = await action({ tokens: ranTokens, wallet: ranFor });
-        settled = { ok: true, message: typeof message === 'string' ? message : null };
+        settled = await perform(plans, ranTokens, ranFor, action);
       } catch (error) {
-        settled = { ok: false, error };
+        settled = { ok: false, error: describeWalletError(error) };
       }
 
       inFlight -= 1;
       running = null;
       const live = isCurrent(ranFor);
-      const { partyId } = ranFor;
-      if (!live) {
-        // Whether a write committed is unknown, unless the SDK refused it before submitting anything (the token
-        // wallet's check before signing, once its session ended mid-write).
-        outcome =
-          readOnly || (!settled.ok && refusedUnsent(settled.error)) ? null : { id, partyId, status: 'interrupted' };
-      } else if (settled.ok) {
-        outcome = { id, partyId, status: 'succeeded', message: settled.message };
-      } else {
-        outcome = { id, partyId, status: 'failed', error: describeWalletError(settled.error) };
-      }
-      // A failed write may still have committed, so reload after failures too. This only reads; nothing is retried.
-      if (live && !readOnly) queued = true;
-      // Start the queued load: this write's reload, a refresh asked meanwhile, or the first load of a wallet that
-      // replaced this action's one. Busy until it answers.
+      record(ran, settled, live);
+      // A failed write may still have committed, so reload after failures too. This only reads.
+      if (live && !READ_ONLY.has(action.type)) queued = true;
       drain();
-      return live && settled.ok;
+      // Asked again: a listener of drain()'s publish may have ended the session or switched the wallet.
+      // The result type follows from the action type (`perform`'s switch).
+      return isCurrent(ranFor) && settled.ok ? (settled.result as ActionResultOf<A>) : null;
+    },
+
+    refresh() {
+      requestLoad();
+    },
+
+    acknowledgeUnknownOutcome() {
+      if (disposed || unknownOutcome === null) return;
+      unknownOutcome = null;
+      publish();
     },
 
     dispose() {

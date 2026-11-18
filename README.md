@@ -71,146 +71,139 @@ See
 
 ## Token actions through a CIP-0103 wallet
 
-`Wallets` runs token standard (CIP-56) holder actions through any CIP-0103 (Canton dApp API) wallet
-provider. One wallet, `createWallet`, does it all:
+`Wallets` runs Digital Asset Utility Registry holder actions through any CIP-0103 (Canton dApp API)
+wallet provider, on one DA network (`devnet` or `mainnet`). It talks to the wallet only through
+CIP-0103 and to DA's public Utilities API through `fetch`, so no wallet SDK is involved. It is
+browser-safe: import `@fairmint/canton-node-sdk/build/src/wallets/index.js`, which loads none of the
+SDK's Node dependencies. The package root also exports it as the `Wallets` namespace.
 
-- with any `TokenRegistry`, the CIP-56 actions: read the wallet's state in one snapshot
-  (`loadState`: holdings and their `balances` per instrument, and transfer offers), or each list on
-  its own; preview and send a transfer (`planTransfer`, then `submit` once the user confirmed the
-  kind); accept, reject or withdraw a transfer offer (`answerTransferOffer`, or
-  `acceptTransferOffer`, `rejectTransferOffer`, `withdrawTransferOffer`);
-- with Digital Asset's Utility Registry client (`network`, or
-  `registry: createDaUtilitiesClient(...)`), DA's actions as well: mint offers and burn requests in
-  `loadState`, accept a mint offer (`acceptMintOffer`), propose a burn (`requestBurn`: a burn
-  request the registrar accepts or rejects; without a `reference` it files a generated
-  `holder-burn-…` one and returns it), and create a transfer preapproval (experimental). With
-  another registry, `loadState`'s mint offers and burn requests are empty and DA's actions are
-  refused with `unsupported-by-registry` before anything is read or signed;
-  `isDaUtilitiesClient(registry)` tells which you have;
-- prove that the user controls the wallet's party by signing a message
-  (`requestWalletOwnershipVerdict`, or `proveWalletOwnership` alone), verified on your server with
-  `createWalletOwnershipChallenger` (or `verifyWalletOwnership` alone).
+- `createCip103Session({ network })`: which wallet is connected, as which party. Call
+  `connect(provider)` on a click, `restore(provider)` on page load (it connects silently when the
+  wallet says it is still connected, and never shows an error; a wallet the user disconnected stays
+  disconnected until the next `connect`), and `disconnect()`.
+- `createWalletStore({ session })`: the page's state and actions. `view.state` is one ledger
+  snapshot: holdings, `balances` per instrument (with the registry's `metadata`), transfer offers in
+  and out, mint offers, burn requests and transfer preapprovals. `store.act(action)` runs one typed
+  action, and `view.notices` lists what to show.
+- `createWallet({ provider, partyId, network })`: the same actions for one party, without the store.
 
-It reads choice contexts from DA's public Utilities API with an injectable `fetch`, and talks to the
-wallet only through CIP-0103 (`getPrimaryAccount`, `ledgerApi`, `prepareExecuteAndWait`,
-`signMessage`, and for the session `connect`, `disconnect` and `isConnected`), so no wallet SDK is
-involved.
-
-It is browser-safe: import `@fairmint/canton-node-sdk/build/src/wallets/index.js`, which loads none
-of the SDK's Node dependencies. The package root also exports it as the `Wallets` namespace.
+The actions are `acceptMintOffer`, `rejectMintOffer`, `acceptTransferOffer`, `rejectTransferOffer`,
+`withdrawTransferOffer`, `requestBurn`, `cancelBurnRequest`, `planTransfer` then `submitTransfer`,
+`createTransferPreapproval`, `removeTransferPreapproval` and `proveOwnership`.
 
 ```ts
-import {
-  createWallet,
-  describeWalletError,
-  type Cip103Provider,
-} from '@fairmint/canton-node-sdk/build/src/wallets/index.js';
-
-async function send(provider: Cip103Provider, receiver: string): Promise<string> {
-  // Any connected CIP-0103 provider; `network` builds DA's registry client (or pass `registry`).
-  const tokens = createWallet({ provider, network: 'devnet' });
-  const instrumentId = { admin: 'registrar::1220...', id: 'XMPL' };
-  try {
-    const plan = await tokens.planTransfer({ receiver, instrumentId, amount: '10' });
-    // Show plan.kind and the sender plan.partyId; submit refuses with `kind-changed` if the registry now answers
-    // another kind, and with `invalid-input` if the wallet has switched to another account since.
-    await plan.submit();
-    return 'Sent.';
-  } catch (error) {
-    return describeWalletError(error).message; // says whether anything was submitted
-  }
-}
-```
-
-- Load a page with one `loadState()` call: one `/v2/state/ledger-end` call and one paged
-  `/v2/state/active-contracts-page` stream whose cumulative filter carries every template and
-  interface. Concurrent `loadState` and `list*` calls on one token wallet share the snapshot in
-  flight (unless a write settled since it started). Writes do their own fresh reads.
-- Wallets rate-limit `ledgerApi` (Loop answers CIP-0103 -32005 for an HTTP 429). Loop also makes a
-  session check and a provider status check before every `ledgerApi` call, so each call is three
-  HTTP requests against Loop's limit; a 429 of the session check arrives as -32603 "Session
-  verification failed with status 429." and counts as a rate limit too. Rate-limited reads are
-  retried after 0.5, 1, 2 and 4 s (jittered; `readRetry` changes it); then they fail with a
-  `WalletReadError` whose `rateLimited` is true, so a UI can offer a retry.
-- The unpaged `/v2/state/active-contracts` is read once instead only when the first paged call is
-  refused as not offered or malformed (4200, -32601, -32004, -32602), or when Loop answers -32002
-  "Ledger access unavailable", which is how Loop reports any non-429 HTTP failure of its ledger
-  proxy (an endpoint not in its allowlist, a Canton 3.5 participant serving the paged endpoint only
-  as GET, but also a server error). If the fallback fails too, the error names both failures. A rate
-  limit or a timeout never falls back.
-- Writes never retry. A `WalletSubmitError` has `outcome` `rejected-by-user` (CIP-0103 4001),
-  `failed` (-32003, or a request the wallet refused before taking it on) or `unknown` (session
-  errors 4100/4900/4901 during a submit, timeouts, anything else): check the wallet before
-  resubmitting.
-- `describeWalletError(error)` turns any error into a user-facing `message` that says whether
-  anything was submitted, and a `kind` to branch on (`declined`, `not-committed`, `outcome-unknown`,
-  `refused`, `rate-limited`, `read-failed`, `sign-failed`, `registry`, `other`).
-- One write at a time per token wallet: a write started while another is in progress is refused with
-  `busy` before any read, so two writes never pick the same holdings.
-- Holdings count only when their registrar signed them, and offers and requests only when a trusted
-  registry provider signed them. By default a registrar must be its own provider; for a registrar
-  served by another provider pass `trustedProviders` to `createDaUtilitiesClient`. Contracts of any
-  other provider are never listed or acted on.
-- Amounts are exact decimals (at most 10 places, within Daml `Numeric 10`); inputs are picked
-  deterministically. `requirePreapproval: true` sends only when the receiver pre-approved the
-  transfer, and `expectedKind` refuses a transfer whose kind changed since the preview. An `offer`
-  keeps the sender's tokens locked until it is accepted, rejected or withdrawn; expiry alone does
-  not unlock them.
-
-### A whole dApp: session, store and the ownership routes
-
-`createCip103Session()` tracks which wallet is connected, as which party, and drops replies from
-sessions that have since ended. `createWalletStore({ session })` builds on it: one token wallet per
-connected wallet, its `loadState` snapshot, one wallet call at a time, a reload after every write
-attempt (failed ones too: a failed write may have committed), and outcomes tagged with the session
-they ran for. Both are framework-agnostic (`subscribe`/`getSnapshot`). The ownership check has two
-halves: `requestWalletOwnershipVerdict` in the page, and `createWalletOwnershipChallenger` (Node
-only, from the package root) behind two routes.
-
-```ts
-// wallet.ts (browser): one session and one store per tab, at module level.
-import { useSyncExternalStore } from 'react';
+// wallet.ts: one session and one store per network, at module level.
+import { useEffect, useSyncExternalStore } from 'react';
 import {
   createCip103Session,
   createWalletStore,
-  requestWalletOwnershipVerdict,
   type Cip103Provider,
+  type DaNetwork,
 } from '@fairmint/canton-node-sdk/build/src/wallets/index.js';
 
-const network = 'devnet';
-const session = createCip103Session();
-// Default open: createWallet({ provider, partyId, network, isActive: () => session.isCurrent(wallet) })
-const store = createWalletStore({ session });
+function open(network: DaNetwork) {
+  const session = createCip103Session({ network });
+  return { session, store: createWalletStore({ session }) };
+}
+const wallets = { devnet: open('devnet'), mainnet: open('mainnet') };
 
-// The wallet's own callbacks (Loop: onAccept, onReject) and the buttons.
-export const onAccept = (provider: Cip103Provider) => session.connected(provider, { network });
-export const connect = (provider: Cip103Provider) => session.connect(provider, { network });
-export const onReject = () => session.end('wallet');
-export const disconnect = () => session.end('user'); // CIP-0103 disconnect
-
-// state, loadError (kind 'rate-limited': offer store.refresh()), busy, outcome, unknownOutcomeParty
-export const useWallet = () =>
-  useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-
-// Actions: refused (false) while another runs or any load is pending (one wallet call at a time).
-export const accept = (cid: string) =>
-  store.run(`accept:${cid}`, ({ tokens }) => tokens.acceptMintOffer(cid).then(() => 'Accepted.'));
-const urls = { challengeUrl: '/api/ownership/challenge', verifyUrl: '/api/ownership/verify' };
-export const prove = () =>
-  store.run(
-    'ownership',
-    async ({ wallet: { provider, partyId } }) => {
-      const verdict = await requestWalletOwnershipVerdict(provider, {
-        partyId,
-        network,
-        fetch,
-        ...urls,
-      });
-      return verdict.verified ? 'Verified.' : `Not verified: ${verdict.message}`;
-    },
-    { readOnly: true } // signs a message, commits nothing: no reload
-  );
+export function useWallet(network: DaNetwork, provider: Cip103Provider | null) {
+  const { session, store } = wallets[network];
+  // A wallet session saved on an earlier visit reconnects once the provider is ready.
+  useEffect(() => {
+    if (provider !== null) void session.restore(provider);
+  }, [session, provider]);
+  const view = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+  return { session, store, view };
+}
 ```
+
+```tsx
+// page.tsx
+import { canAct, walletActionKey } from '@fairmint/canton-node-sdk/build/src/wallets/index.js';
+
+function WalletPage({ provider }: { provider: Cip103Provider | null }) {
+  const { session, store, view } = useWallet('devnet', provider);
+  const notices = view.notices.map((notice) => (
+    <Alert key={notice.key} level={notice.level} title={notice.title}>
+      {notice.message}
+      {notice.retry && <button onClick={store.refresh}>Retry</button>}
+      {notice.acknowledge && <button onClick={store.acknowledgeUnknownOutcome}>Checked</button>}
+    </Alert>
+  ));
+  if (view.wallet === null) {
+    const connect = () => provider && void session.connect(provider);
+    return (
+      <>
+        {notices}
+        <button onClick={connect}>Connect</button>
+      </>
+    );
+  }
+  return (
+    <section key={view.wallet.key}>
+      {view.wallet.partyId} <button onClick={session.disconnect}>Disconnect</button>
+      {notices}
+      {view.state?.mintOffers.map((offer) => {
+        const accept = { type: 'acceptMintOffer', mintOfferCid: offer.contractId } as const;
+        const running = view.running?.key === walletActionKey(accept);
+        return (
+          <button
+            key={offer.contractId}
+            disabled={!canAct(view, accept)}
+            onClick={() => void store.act(accept)}
+          >
+            {running ? 'Accepting…' : `Accept ${offer.amount}`}
+          </button>
+        );
+      })}
+    </section>
+  );
+}
+
+// Send: plan, show plan.description, then submit what was planned.
+const plan = await store.act({ type: 'planTransfer', request: { receiver, instrumentId, amount } });
+if (plan !== null && confirm(plan.description)) await store.act({ type: 'submitTransfer', plan });
+```
+
+- `act` resolves with the action's result, or null when it was refused (busy, disconnected) or
+  failed; `view.outcome` then holds the SDK's sentence or the error. Only one wallet call runs at a
+  time (`view.busy`), and every write is followed by a reload, also a failed one, since it may have
+  committed.
+- Writes never retry. A write whose outcome is unknown (the wallet did not confirm it, or lost its
+  session during the submission) stays in `view.unknownOutcome`, with its command id and a
+  redemption's reference, until `store.acknowledgeUnknownOutcome()`; until then `act` refuses every
+  write. A write that settles after its session ended is otherwise recorded by what is known: a
+  result as succeeded for its party, a certain failure as failed, a failure before anything was
+  submitted not at all.
+- A snapshot is one `/v2/state/ledger-end` call and one `POST /v2/state/active-contracts` filtered
+  to the five DA templates the wallet reads. A participant refuses a list longer than its
+  `http-list-max-elements-limit` (200 by default); the read then fails with an error that says so. A
+  read the wallet rate-limits is retried after 0.5, 1, 2 and 4 s (jittered), then shown as a warning
+  with Retry.
+- `planTransfer` asks DA's registry how it will run the transfer (`plan.kind`: `direct` through the
+  receiver's preapproval, an `offer` the receiver must accept, or `self`).
+  `requirePreapproval: true` refuses anything but `direct` before anything is signed, and
+  `submitTransfer` refuses with `kind-changed` when the registry now answers another kind. An offer
+  keeps the sender's tokens locked until it is accepted, rejected or withdrawn; expiry alone does
+  not unlock them.
+- A plan, and every write, belongs to the connected wallet that made it: once the session switched
+  account or disconnected, it is refused before anything is read or signed. `submitTransfer` sends
+  only a plan the same store planned for its current wallet.
+- A holding counts only when it is DA's and both its registrar and owner signed it; an offer or a
+  request only when it names DA's operator and a provider trusted for its registrar signed it. A
+  registrar trusts only itself unless `registry.trustedProviders` lists others.
+- Outside the store, `describeWalletError(error)` turns any error into a sentence that says whether
+  anything was submitted, and a `kind` to branch on.
+- Wallet discovery (finding the providers a browser offers) is future work: its CIP is a draft.
+
+### The ownership routes
+
+`store.act({ type: 'proveOwnership', challengeUrl, verifyUrl })` is the browser half of an ownership
+check: it posts the connected `{ network, partyId }` to `challengeUrl`, has the wallet sign the
+challenge, and posts the proof to `verifyUrl`. A verdict that did not verify is a failed outcome
+(`not-verified`). The server half is `createWalletOwnershipChallenger` (Node only, from the package
+root) behind two routes:
 
 ```ts
 // app/api/ownership/challenge/route.ts and verify/route.ts (Node). Authenticate first.
@@ -228,25 +221,6 @@ export async function POST(request: Request): Promise<Response> {
 }
 ```
 
-- `connect()` always reads the primary account again after CIP-0103 `connect` resolves, also when
-  the wallet was already connected, so a failed party lookup recovers without a reload.
-- While connected the session follows the provider's `accountsChanged` (another party is a new
-  `ConnectedWallet`) and `statusChanged` (disconnected ends the session); wallets that never emit
-  them lose nothing.
-- A write that settles after its session ended (disconnect, wallet end, account switch) records
-  `interrupted`, never `succeeded`. A new wallet clears other outcomes, but keeps a write whose
-  outcome is unknown (`interrupted`, or `failed` with kind `outcome-unknown`) and names its party in
-  `unknownOutcomeParty`. Run previews and `signMessage` with `{ readOnly: true }`: no reload, and no
-  unknown outcome when the session ends first.
-- A `TransferPlan` (and any token wallet kept from an earlier run) is bound to the wallet session
-  that made it. The store's token wallets refuse every write once their `ConnectedWallet` is no
-  longer the session's, with `invalid-input` before anything is read or signed, so a plan made for
-  one account is never submitted after the wallet switched to another: plan again. A custom `open`
-  gets this as its second argument (`{ isActive }`) and passes it on to `createWallet`.
-- A wallet whose account reports another network than `{ network }` is refused, and each
-  `ConnectedWallet` has a `key` for UI keys (a new session remounts what the old one rendered).
-- Wallet discovery (finding the providers a browser offers) is future work: its CIP is a draft.
-
 ### Proving wallet ownership
 
 A connected wallet only tells the dApp a party id, which anyone can claim. To know the user controls
@@ -255,17 +229,17 @@ signature. A check in the browser proves nothing.
 
 1. The server issues `{ domain, nonce, issuedAt, expiresAt, network? }`: its own host, a random
    single-use nonce it stores, and a short validity window (at most 10 minutes by default).
-2. The browser calls `proveWalletOwnership(provider, { challenge })`. The wallet signs, as its
-   primary account, a canonical text message: a fixed title, a statement that it is not a
-   transaction and authorizes nothing, then the domain, party, network, nonce and times. Plain text
-   with a fixed prefix can never be a Canton transaction or topology hash (34 binary bytes), which
-   the same key signs.
+2. The browser calls `proveWalletOwnership(wallet, { challenge })` with the session's connected
+   wallet. The wallet signs, as its primary account, a canonical text message: a fixed title, a
+   statement that it is not a transaction and authorizes nothing, then the domain, party, network,
+   nonce and times. Plain text with a fixed prefix can never be a Canton transaction or topology
+   hash (34 binary bytes), which the same key signs.
 3. The server calls
    `verifyWalletOwnership(proof, { expectedNonce, expectedDomain, expectedNetwork })` (Node only,
    from the package root, not the browser entry), then marks the nonce used.
 
 `createWalletOwnershipChallenger({ secret, purpose })` does the server's part, and
-`requestWalletOwnershipVerdict` the browser's (both shown above):
+`requestWalletOwnershipVerdict` (what `proveOwnership` runs) the browser's, both shown above:
 
 - The challenge is stateless: a token `v1.<claims>.<MAC>`, HMAC-SHA256 under the key
   `HMAC-SHA256(secret, purpose)`, binds it to the subject (your signed-in user), the host and the
@@ -297,9 +271,9 @@ refuses anything else:
   `getPrimaryAccount` returns the key in the same hex form.
 - The CIP-0103 reference wallet (splice-wallet-kernel): the same signature scheme, with base64
   signature and key.
-- Keys: 64 hex characters, base64 or base64url of the raw key or of its DER SubjectPublicKeyInfo, 88
-  hex characters of DER, or PEM. Signatures: 128 hex characters, or base64/base64url of 64 bytes.
-  ECDSA keys are refused.
+- Keys: 64 hex characters (the raw key), or base64/base64url of the raw key or of its DER
+  SubjectPublicKeyInfo. Signatures: 128 hex characters, or base64/base64url of 64 bytes. ECDSA keys
+  are refused.
 
 ## Repository setup and checks
 

@@ -4,30 +4,7 @@
  */
 import { WalletReadError } from './errors';
 import { isJsonObject, isRecord, nonEmptyString } from './json';
-import type { ActiveContract, InterfaceView } from './types';
-
-/** A view the ledger computed: no `viewStatus`, or a status code of 0. */
-function viewSucceeded(view: Record<string, unknown>): boolean {
-  const status = view['viewStatus'];
-  if (status === undefined || status === null) return true;
-  if (!isRecord(status)) return false;
-  const { code } = status;
-  return code === undefined || code === 0 || code === '0';
-}
-
-function parseInterfaceViews(value: unknown): InterfaceView[] {
-  if (!Array.isArray(value)) return [];
-  const views: InterfaceView[] = [];
-  for (const view of value) {
-    if (!isRecord(view) || !viewSucceeded(view)) continue;
-    const interfaceId = nonEmptyString(view['interfaceId']);
-    const { viewValue } = view;
-    if (interfaceId !== undefined && isJsonObject(viewValue)) {
-      views.push({ interfaceId, viewValue });
-    }
-  }
-  return views;
-}
+import type { ActiveContract } from './types';
 
 /** A party list; anything else reads as no parties, so a contract without signatories counts as signed by no one. */
 function parseParties(value: unknown): string[] {
@@ -40,7 +17,8 @@ function parseParties(value: unknown): string[] {
 
 /**
  * One ACS entry as an `ActiveContract`, or null for entries that are not active contracts (`JsIncompleteAssigned`,
- * `JsIncompleteUnassigned`, `JsEmpty`). Throws on an entry this parser does not recognise.
+ * `JsIncompleteUnassigned`, `JsEmpty`) and for a contract without `packageName` (which no template filter can match).
+ * Throws on an entry this parser does not recognise.
  */
 export function parseActiveContractEntry(entry: unknown): ActiveContract | null {
   if (!isRecord(entry) || !isRecord(entry['contractEntry'])) {
@@ -57,18 +35,16 @@ export function parseActiveContractEntry(entry: unknown): ActiveContract | null 
   if (contractId === undefined || templateId === undefined) {
     throw new WalletReadError('The wallet returned an active contract without contractId or templateId');
   }
-  const { createArgument } = created;
-  const createdEventBlob = nonEmptyString(created['createdEventBlob']);
   const packageName = nonEmptyString(created['packageName']);
+  if (packageName === undefined) return null;
+  const { createArgument } = created;
   const synchronizerId = isRecord(active) ? nonEmptyString(active['synchronizerId']) : undefined;
   return {
     contractId,
     templateId,
-    ...(packageName !== undefined && { packageName }),
+    packageName,
     signatories: parseParties(created['signatories']),
     createArgument: isJsonObject(createArgument) ? createArgument : null,
-    interfaceViews: parseInterfaceViews(created['interfaceViews']),
-    ...(createdEventBlob !== undefined && { createdEventBlob }),
     ...(synchronizerId !== undefined && { synchronizerId }),
   };
 }

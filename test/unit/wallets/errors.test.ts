@@ -7,7 +7,7 @@ import {
   WalletReadError,
   WalletSignError,
   WalletSubmitError,
-} from '../../../src/wallets';
+} from '../../../src/wallets/errors';
 
 describe('describeWalletError', () => {
   it('tells the user whether a submission was made', () => {
@@ -24,6 +24,35 @@ describe('describeWalletError', () => {
     const unknown = describeWalletError(new WalletSubmitError('unknown', 'timed out', { code: -32002 }));
     expect(unknown).toMatchObject({ kind: 'outcome-unknown', code: -32002 });
     expect(unknown.message).toMatch(/^timed out .*do not resubmit blindly/);
+    expect(unknown).not.toHaveProperty('commandId');
+  });
+
+  it('names the command id and burn reference of an unknown outcome, once each', () => {
+    const error = new WalletSubmitError('unknown', 'The wallet did not confirm the transaction: timed out.', {
+      code: -32002,
+      commandId: 'cmd-1',
+    });
+    expect(error.message).toBe(
+      'The wallet did not confirm the transaction: timed out. The outcome is unknown: do not resubmit blindly; check the wallet for the result first. Command id: cmd-1.'
+    );
+    // Rewrapped with a burn reference (as requestBurn does): the hint and the command id are not repeated.
+    const burn = new WalletSubmitError('unknown', `${error.message} Burn reference: holder-burn-1.`, {
+      code: -32002,
+      commandId: 'cmd-1',
+      burnReference: 'holder-burn-1',
+    });
+    expect(describeWalletError(burn)).toEqual({
+      kind: 'outcome-unknown',
+      message: `${error.message} Burn reference: holder-burn-1.`,
+      code: -32002,
+      commandId: 'cmd-1',
+      burnReference: 'holder-burn-1',
+    });
+    // Only an unknown outcome carries them in its description.
+    expect(describeWalletError(new WalletSubmitError('failed', 'ledger said no', { commandId: 'cmd-1' }))).toEqual({
+      kind: 'not-committed',
+      message: 'Not committed: ledger said no',
+    });
   });
 
   it('asks for a retry when the wallet kept rate-limiting a read', () => {
@@ -89,14 +118,11 @@ describe('describeWalletError', () => {
     expect(busy.message).toMatch(/nothing was submitted/);
   });
 
-  it('describes an action the registry does not offer as refused', () => {
-    const unsupported = describeWalletError(
-      new WalletError('unsupported-by-registry', "requestBurn needs DA's Utility Registry client")
-    );
-    expect(unsupported).toEqual({
+  it('describes something that already exists as refused', () => {
+    expect(describeWalletError(new WalletError('already-exists', 'A preapproval already covers XMPL'))).toEqual({
       kind: 'refused',
-      message: "requestBurn needs DA's Utility Registry client",
-      code: 'unsupported-by-registry',
+      message: 'A preapproval already covers XMPL',
+      code: 'already-exists',
     });
   });
 

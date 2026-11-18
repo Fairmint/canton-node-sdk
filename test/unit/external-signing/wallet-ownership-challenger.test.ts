@@ -16,16 +16,16 @@ import {
   type WalletOwnershipNonceStore,
   type WalletOwnershipVerdict,
 } from '../../../src/utils/external-signing';
+import { cip103NetworkId } from '../../../src/wallets/cip103';
+import type { FetchLike } from '../../../src/wallets/da-utilities/client';
 import {
   buildWalletOwnershipMessage,
   requestWalletOwnershipVerdict,
-  type FetchLike,
   type RequestWalletOwnershipVerdictOptions,
   type WalletOwnershipChallenge,
   type WalletOwnershipChallengeResponse,
-} from '../../../src/wallets';
-import { cip103NetworkId } from '../../../src/wallets/cip103';
-import { fakeProvider, type FakeProvider } from '../wallets/helpers';
+} from '../../../src/wallets/ownership';
+import { accountProvider, type RecordingProvider } from '../wallets/helpers';
 
 const SECRET = 'wallet-ownership-unit-test-secret';
 const PURPOSE = 'canton-explorer:wallet-ownership-challenge:v1';
@@ -472,20 +472,20 @@ describe('requestWalletOwnershipVerdict through the handlers', () => {
     return { fetch, verdicts };
   }
 
-  function loopProvider(key: PartyKey = party, signer: PartyKey = key): FakeProvider {
-    return fakeProvider(
-      {},
-      {
-        party: key.partyId,
-        account: { publicKey: key.publicKeyHex, namespace: key.namespace },
-        signMessage: (message) => ({ signature: signHex(signer.privateKey, message) }),
-      }
-    );
+  /** A devnet connection of `key`'s party whose wallet signs with `signer`, as Loop signs (hex). */
+  function loopWallet(
+    key: PartyKey = party,
+    signer: PartyKey = key
+  ): { provider: RecordingProvider; partyId: string; network: 'devnet' } {
+    const provider = accountProvider({
+      party: key.partyId,
+      account: { publicKey: key.publicKeyHex, namespace: key.namespace },
+      signMessage: (message) => ({ signature: signHex(signer.privateKey, message) }),
+    });
+    return { provider, partyId: key.partyId, network: 'devnet' };
   }
 
   const options = (fetch: FetchLike): RequestWalletOwnershipVerdictOptions => ({
-    partyId: party.partyId,
-    network: 'devnet',
     fetch,
     challengeUrl: CHALLENGE_URL,
     verifyUrl: VERIFY_URL,
@@ -493,8 +493,8 @@ describe('requestWalletOwnershipVerdict through the handlers', () => {
 
   it('proves ownership through both routes', async () => {
     const { fetch, verdicts } = routes();
-    const provider = loopProvider();
-    const verdict = await requestWalletOwnershipVerdict(provider, options(fetch));
+    const wallet = loopWallet();
+    const verdict = await requestWalletOwnershipVerdict(wallet, options(fetch));
     expect(verdict).toMatchObject({
       verified: true,
       partyId: party.partyId,
@@ -502,7 +502,7 @@ describe('requestWalletOwnershipVerdict through the handlers', () => {
       claimedNetwork: 'canton:devnet',
     });
     expect(verdicts).toEqual([[verdict, party.partyId]]);
-    const signed = provider.requests.flatMap((r) => (r.method === 'signMessage' ? [r.params.message] : []));
+    const signed = wallet.provider.requests.flatMap((r) => (r.method === 'signMessage' ? [r.params.message] : []));
     expect(signed).toHaveLength(1);
     expect(signed[0]).toMatch(/^Canton wallet ownership proof\n/);
     expect(signed[0]).toMatch(/\nDomain: dapp\.example\.com\n/);
@@ -512,25 +512,25 @@ describe('requestWalletOwnershipVerdict through the handlers', () => {
   it('returns a not-verified verdict for a wallet signing with another key', async () => {
     const { fetch } = routes();
     await expect(
-      requestWalletOwnershipVerdict(loopProvider(party, externalParty('other')), options(fetch))
+      requestWalletOwnershipVerdict(loopWallet(party, externalParty('other')), options(fetch))
     ).resolves.toMatchObject({ verified: false, reason: 'bad-signature' });
   });
 
   it('throws when the server refuses, naming its error, and signs nothing', async () => {
     const { fetch } = routes(undefined, 'https://evil.example');
-    const provider = loopProvider();
-    await expect(requestWalletOwnershipVerdict(provider, options(fetch))).rejects.toThrow(
+    const wallet = loopWallet();
+    await expect(requestWalletOwnershipVerdict(wallet, options(fetch))).rejects.toThrow(
       "The server refused the ownership check: Ownership checks accept only requests from this site's own pages."
     );
     const unavailable: FetchLike = async () => ({ ok: false, status: 503, text: async () => 'Service Unavailable' });
-    await expect(requestWalletOwnershipVerdict(provider, options(unavailable))).rejects.toThrow(
+    await expect(requestWalletOwnershipVerdict(wallet, options(unavailable))).rejects.toThrow(
       'The server refused the ownership check: HTTP 503'
     );
     const noData: FetchLike = async () => ({ ok: true, status: 200, text: async () => '{}' });
-    await expect(requestWalletOwnershipVerdict(provider, options(noData))).rejects.toThrow(
+    await expect(requestWalletOwnershipVerdict(wallet, options(noData))).rejects.toThrow(
       'The server refused the ownership check: HTTP 200'
     );
-    expect(provider.requests.some((r) => r.method === 'signMessage')).toBe(false);
+    expect(wallet.provider.requests.some((r) => r.method === 'signMessage')).toBe(false);
   });
 
   it('throws on a malformed verdict, or a verified one for another party', async () => {
@@ -558,13 +558,13 @@ describe('requestWalletOwnershipVerdict through the handlers', () => {
       'yes',
     ];
     for (const verdict of malformed) {
-      await expect(requestWalletOwnershipVerdict(loopProvider(), options(answering(verdict)))).rejects.toThrow(
+      await expect(requestWalletOwnershipVerdict(loopWallet(), options(answering(verdict)))).rejects.toThrow(
         'The server answered the ownership proof without a well-formed verdict for the party'
       );
     }
     await expect(
       requestWalletOwnershipVerdict(
-        loopProvider(),
+        loopWallet(),
         options(answering({ verified: false, reason: 'bad-signature', message: 'The signature does not verify.' }))
       )
     ).resolves.toEqual({ verified: false, reason: 'bad-signature', message: 'The signature does not verify.' });
@@ -576,11 +576,11 @@ describe('requestWalletOwnershipVerdict through the handlers', () => {
       const issued = challenger.issue({ subject: SUB, domain: DOMAIN, partyId: party.partyId, network: 'mainnet' });
       return { ok: true, status: 200, text: async () => JSON.stringify({ data: issued }) };
     };
-    const provider = loopProvider();
-    await expect(requestWalletOwnershipVerdict(provider, options(mainnet))).rejects.toMatchObject({
+    const wallet = loopWallet();
+    await expect(requestWalletOwnershipVerdict(wallet, options(mainnet))).rejects.toMatchObject({
       name: 'WalletSignError',
       reason: 'invalid-challenge',
     });
-    expect(provider.requests.some((r) => r.method === 'signMessage')).toBe(false);
+    expect(wallet.provider.requests.some((r) => r.method === 'signMessage')).toBe(false);
   });
 });

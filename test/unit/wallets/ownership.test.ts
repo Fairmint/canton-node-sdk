@@ -1,12 +1,12 @@
+import { WalletReadError, WalletSignError } from '../../../src/wallets/errors';
 import {
   buildWalletOwnershipMessage,
+  parseWalletOwnershipMessage,
   proveWalletOwnership,
-  WalletReadError,
-  WalletSignError,
+  requestWalletOwnershipVerdict,
   type WalletOwnershipChallenge,
-} from '../../../src/wallets';
-import { parseWalletOwnershipMessage } from '../../../src/wallets/ownership';
-import { fakeProvider, HOLDER, RpcError } from './helpers';
+} from '../../../src/wallets/ownership';
+import { accountProvider, HOLDER, RpcError, type RecordingProvider } from './helpers';
 
 const CHALLENGE: WalletOwnershipChallenge = {
   domain: 'explorer.example.com',
@@ -76,20 +76,26 @@ describe('wallet ownership message', () => {
   });
 });
 
+/** The provider as a devnet connection of HOLDER. */
+const connected = (
+  provider: RecordingProvider
+): { provider: RecordingProvider; partyId: string; network: 'devnet' } => ({
+  provider,
+  partyId: HOLDER,
+  network: 'devnet',
+});
+
 describe('proveWalletOwnership', () => {
   it('signs the canonical message as the primary account, and returns what the server verifies', async () => {
     const signed: string[] = [];
-    const provider = fakeProvider(
-      {},
-      {
-        account: { publicKey: 'ab'.repeat(32), namespace: '1220aa' },
-        signMessage: (message) => {
-          signed.push(message);
-          return { signature: 'cd'.repeat(64) };
-        },
-      }
-    );
-    const proof = await proveWalletOwnership(provider, { challenge: CHALLENGE, partyId: HOLDER, now: NOW });
+    const provider = accountProvider({
+      account: { publicKey: 'ab'.repeat(32), namespace: '1220aa' },
+      signMessage: (message) => {
+        signed.push(message);
+        return { signature: 'cd'.repeat(64) };
+      },
+    });
+    const proof = await proveWalletOwnership(connected(provider), { challenge: CHALLENGE, now: NOW });
     expect(signed).toEqual([MESSAGE]);
     expect(proof).toEqual({
       partyId: HOLDER,
@@ -104,31 +110,40 @@ describe('proveWalletOwnership', () => {
     ]);
   });
 
-  it('accepts a wallet that answers a bare signature string', async () => {
-    const provider = fakeProvider({}, { signMessage: () => 'sig' });
-    await expect(proveWalletOwnership(provider, { challenge: CHALLENGE, now: NOW })).resolves.toMatchObject({
+  it.each([
+    ['another primary account', { party: 'other::1220dd' }, {}],
+    ['an expired challenge', {}, { now: () => new Date('2026-11-16T12:05:00.000Z') }],
+    ['a malformed challenge', {}, { challenge: { ...CHALLENGE, nonce: 'x' } }],
+    ['a wallet on the other DA network', { account: { networkId: 'canton:mainnet' } }, {}],
+    ['a challenge for the other DA network', {}, { challenge: { ...CHALLENGE, network: 'canton:mainnet' } }],
+  ] as const)('refuses %s before asking the wallet to sign', async (_label, wallet, change) => {
+    const provider = accountProvider({ ...wallet, signMessage: () => ({ signature: 'sig' }) });
+    const error = await proveWalletOwnership(connected(provider), { challenge: CHALLENGE, now: NOW, ...change }).catch(
+      (e: unknown) => e
+    );
+    expect(error).toBeInstanceOf(WalletSignError);
+    expect(error).toMatchObject({ reason: 'invalid-challenge' });
+    expect(provider.requests.map((r) => r.method)).toEqual(['getPrimaryAccount']);
+  });
+
+  it('names the network a wallet on the other DA network reports', async () => {
+    const provider = accountProvider({ account: { networkId: 'canton:mainnet' } });
+    await expect(proveWalletOwnership(connected(provider), { challenge: CHALLENGE, now: NOW })).rejects.toThrow(
+      'The wallet is on canton:mainnet, not canton:devnet; switch networks in the wallet first'
+    );
+  });
+
+  // The session's rule: CIP-0103 does not fix how a wallet spells its network id.
+  it.each([['canton:dev'], ['canton:main'], [undefined]])('signs for a wallet reporting %p', async (networkId) => {
+    const provider = accountProvider({ account: { networkId }, signMessage: () => ({ signature: 'sig' }) });
+    await expect(proveWalletOwnership(connected(provider), { challenge: CHALLENGE, now: NOW })).resolves.toMatchObject({
       signature: 'sig',
     });
   });
 
-  it.each([
-    ['another primary account', { partyId: 'other::1220dd' }, 'invalid-challenge'],
-    ['an expired challenge', { now: () => new Date('2026-11-16T12:05:00.000Z') }, 'invalid-challenge'],
-    ['a malformed challenge', { challenge: { ...CHALLENGE, nonce: 'x' } }, 'invalid-challenge'],
-    ['a wallet on another network', { challenge: { ...CHALLENGE, network: 'canton:mainnet' } }, 'invalid-challenge'],
-  ] as const)('refuses %s before asking the wallet to sign', async (_label, change, reason) => {
-    const provider = fakeProvider({}, { signMessage: () => ({ signature: 'sig' }) });
-    const error = await proveWalletOwnership(provider, { challenge: CHALLENGE, now: NOW, ...change }).catch(
-      (e: unknown) => e
-    );
-    expect(error).toBeInstanceOf(WalletSignError);
-    expect(error).toMatchObject({ reason });
-    expect(provider.requests.map((r) => r.method)).toEqual(['getPrimaryAccount']);
-  });
-
   it('refuses an account without a public key', async () => {
-    const provider = fakeProvider({}, { account: { publicKey: '' }, signMessage: () => ({ signature: 'sig' }) });
-    await expect(proveWalletOwnership(provider, { challenge: CHALLENGE, now: NOW })).rejects.toBeInstanceOf(
+    const provider = accountProvider({ account: { publicKey: '' }, signMessage: () => ({ signature: 'sig' }) });
+    await expect(proveWalletOwnership(connected(provider), { challenge: CHALLENGE, now: NOW })).rejects.toBeInstanceOf(
       WalletReadError
     );
   });
@@ -138,24 +153,47 @@ describe('proveWalletOwnership', () => {
     [new RpcError(4200, 'signMessage is not supported'), 'failed', 4200],
     [new Error('socket closed'), 'failed', undefined],
   ] as const)('maps a signMessage failure %p to %s', async (failure, reason, code) => {
-    const provider = fakeProvider(
-      {},
-      {
-        signMessage: () => {
-          throw failure;
-        },
-      }
+    const provider = accountProvider({
+      signMessage: () => {
+        throw failure;
+      },
+    });
+    const error = await proveWalletOwnership(connected(provider), { challenge: CHALLENGE, now: NOW }).catch(
+      (e: unknown) => e
     );
-    const error = await proveWalletOwnership(provider, { challenge: CHALLENGE, now: NOW }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(WalletSignError);
     expect(error).toMatchObject({ reason, ...(code !== undefined && { code }) });
   });
 
-  it.each([[{}], [{ signature: '' }], [42], [null]])('refuses an answer without a signature: %p', async (answer) => {
-    const provider = fakeProvider({}, { signMessage: () => answer });
-    await expect(proveWalletOwnership(provider, { challenge: CHALLENGE, now: NOW })).rejects.toMatchObject({
-      name: 'WalletSignError',
-      reason: 'failed',
+  it.each([[{}], [{ signature: '' }], ['sig'], [42], [null]])(
+    'refuses an answer that is not { signature }: %p',
+    async (answer) => {
+      const provider = accountProvider({ signMessage: () => answer });
+      await expect(proveWalletOwnership(connected(provider), { challenge: CHALLENGE, now: NOW })).rejects.toMatchObject(
+        { name: 'WalletSignError', reason: 'failed' }
+      );
+    }
+  );
+});
+
+describe('requestWalletOwnershipVerdict', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('sends its requests with the global fetch when none is given', async () => {
+    const fetch = jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => new Response('{"error":"nope"}', { status: 401 }));
+    const provider = accountProvider();
+    await expect(
+      requestWalletOwnershipVerdict(connected(provider), { challengeUrl: '/challenge', verifyUrl: '/verify' })
+    ).rejects.toThrow('The server refused the ownership check: nope');
+    expect(fetch).toHaveBeenCalledWith('/challenge', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ network: 'devnet', partyId: HOLDER }),
     });
+    expect(provider.requests).toEqual([]);
   });
 });

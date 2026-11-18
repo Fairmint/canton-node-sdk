@@ -13,8 +13,26 @@ import {
   TOKEN_STANDARD_V1_TRANSFER_INSTRUCTION_INTERFACE_ID,
   TokenStandardV1Choice,
 } from '../utils/token-standard/v1/constants';
-import type { ChoiceContextData, TransferInstructionAction, TransferSpec } from './token-registry';
+import type { ChoiceContextData } from './da-utilities/client';
 import type { CreateCommand, ExerciseCommand, InstrumentId } from './types';
+
+/** The CIP-56 `Transfer` record. */
+export interface TransferSpec {
+  readonly sender: string;
+  readonly receiver: string;
+  /** Decimal string. */
+  readonly amount: string;
+  readonly instrumentId: InstrumentId;
+  /** ISO-8601. */
+  readonly requestedAt: string;
+  /** ISO-8601. */
+  readonly executeBefore: string;
+  readonly inputHoldingCids: readonly string[];
+  readonly meta: { readonly values: Readonly<Record<string, string>> };
+}
+
+/** An action on a pending transfer: the receiver accepts or rejects, the sender withdraws. */
+export type TransferInstructionAction = 'accept' | 'reject' | 'withdraw';
 
 /** Splice `ExtraArgs`: the registry's context, unchanged, and empty metadata. */
 export function extraArgs(context: ChoiceContextData): JsonObject {
@@ -33,6 +51,37 @@ export function acceptMintOfferCommand(mintOfferCid: string, context: ChoiceCont
       contractId: mintOfferCid,
       choice: 'MintOffer_Accept',
       choiceArgument: { extraArgs: extraArgs(context) },
+    },
+  };
+}
+
+/**
+ * The holder rejects a DA mint offer (`MintOffer_Reject`: `{reason, extraArgs: Optional ExtraArgs}`). DA needs no
+ * choice context for it.
+ */
+export function rejectMintOfferCommand(mintOfferCid: string, reason: string): ExerciseCommand {
+  return {
+    ExerciseCommand: {
+      templateId: DA_REGISTRY_TEMPLATES.mintOffer,
+      contractId: mintOfferCid,
+      choice: 'MintOffer_Reject',
+      choiceArgument: { reason, extraArgs: null },
+    },
+  };
+}
+
+/**
+ * The holder cancels its burn request, and DA unlocks the amount. `BurnRequest_Cancel` takes `{extraArgs: Optional
+ * ExtraArgs}` and is controlled by the burn's holder (DA's `utility-registry-app-v0` 0.9.2, as embedded in
+ * `Fairmint/canton` `config/third-party-dars/tradecraft/canton-swap-amm-vault-1.3.19.dar`).
+ */
+export function cancelBurnRequestCommand(burnRequestCid: string): ExerciseCommand {
+  return {
+    ExerciseCommand: {
+      templateId: DA_REGISTRY_TEMPLATES.burnRequest,
+      contractId: burnRequestCid,
+      choice: 'BurnRequest_Cancel',
+      choiceArgument: { extraArgs: null },
     },
   };
 }
@@ -139,11 +188,9 @@ export function transferInstructionCommand(
 export const MAX_PREAPPROVAL_INSTRUMENTS = 10;
 
 /**
- * The receiver's DA transfer preapproval (a plain create; signatory the receiver, observer DA's operator). Transfers of
- * the allowed instruments then complete at once instead of waiting for the receiver to accept.
- *
- * Experimental: the same command as `da-registry`'s `createTransferPreapproval`, but no holder-side create of it has
- * been observed on a live network yet.
+ * The receiver's DA transfer preapproval (a plain create; signatory the receiver, observer DA's operator), the same
+ * command as `da-registry`'s `createTransferPreapproval`. Transfers of the allowed instruments then complete at once
+ * instead of waiting for the receiver to accept.
  */
 export function createDaTransferPreapprovalCommand(params: {
   readonly operator: string;
@@ -160,6 +207,22 @@ export function createDaTransferPreapprovalCommand(params: {
         instrumentAdmin: params.instrumentAdmin,
         instrumentAllowances: params.instrumentIds.map((id) => ({ id })),
       },
+    },
+  };
+}
+
+/**
+ * The receiver withdraws its DA transfer preapproval. `TransferPreapproval_Withdraw` takes `{actor: Party}`, is
+ * controlled by `actor` and checks it against the contract's receiver and operator (DA's `utility-registry-app-v0`
+ * 0.9.2, as embedded in `Fairmint/canton` `config/third-party-dars/tradecraft/canton-swap-amm-vault-1.3.19.dar`).
+ */
+export function withdrawTransferPreapprovalCommand(preapprovalCid: string, actor: string): ExerciseCommand {
+  return {
+    ExerciseCommand: {
+      templateId: DA_REGISTRY_TEMPLATES.transferPreapproval,
+      contractId: preapprovalCid,
+      choice: 'TransferPreapproval_Withdraw',
+      choiceArgument: { actor },
     },
   };
 }

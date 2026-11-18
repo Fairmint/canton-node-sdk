@@ -1,15 +1,13 @@
+import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
 import type {
-  ActiveContract,
   Cip103EventListener,
   Cip103PrepareExecuteParams,
   Cip103Provider,
   Cip103Request,
-  ContractFilter,
-  DisclosedContract,
-  FetchLike,
-  JsonObject,
-} from '../../../src/wallets';
-import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
+} from '../../../src/wallets/cip103';
+import type { FetchLike } from '../../../src/wallets/da-utilities/client';
+import type { JsonObject } from '../../../src/wallets/json';
+import type { ActiveContract, DisclosedContract } from '../../../src/wallets/types';
 
 export const HOLDER = 'holder::1220aa';
 export const OTHER = 'other::1220dd';
@@ -84,11 +82,60 @@ export const CONTEXT_VALUES: JsonObject = {
 export class RpcError extends Error {
   constructor(
     readonly code: number,
-    message: string
+    message: string,
+    readonly data?: unknown
   ) {
     super(message);
     this.name = 'ProviderRpcError';
   }
+}
+
+export type RecordingProvider = Cip103Provider & { readonly requests: Cip103Request[] };
+
+/** A provider answering each method from `answers` (an answer may throw), recording every request; others are 4200. */
+export function scriptedProvider(
+  answers: Partial<Record<Cip103Request['method'], (params: unknown) => unknown>>
+): RecordingProvider {
+  const requests: Cip103Request[] = [];
+  return {
+    requests,
+    on: () => undefined,
+    removeListener: () => undefined,
+    async request(args) {
+      requests.push(args);
+      const answer = answers[args.method];
+      if (!answer) throw new RpcError(4200, `unsupported ${args.method}`);
+      return answer('params' in args ? args.params : undefined);
+    },
+  };
+}
+
+/**
+ * A provider whose primary account is `party` (default {@link HOLDER}) on `canton:devnet` (plus `account`'s fields) and
+ * that answers `signMessage` with `signMessage` (4200 without it).
+ */
+export function accountProvider(
+  options: {
+    readonly party?: string;
+    readonly account?: Record<string, unknown>;
+    readonly signMessage?: (message: string) => unknown;
+  } = {}
+): RecordingProvider {
+  const { signMessage } = options;
+  return scriptedProvider({
+    getPrimaryAccount: () => ({
+      primary: true,
+      partyId: options.party ?? HOLDER,
+      status: 'allocated',
+      publicKey: 'pk',
+      namespace: '1220aa',
+      networkId: 'canton:devnet',
+      ...options.account,
+    }),
+    ...(signMessage !== undefined && {
+      signMessage: (params) => signMessage((params as { message: string }).message),
+    }),
+  });
 }
 
 export const LEDGER_END = 4242;
@@ -102,26 +149,18 @@ function createdEvent(active: ActiveContract): Record<string, unknown> {
     templateId: active.templateId,
     contractKey: null,
     createArgument: active.createArgument,
-    createdEventBlob: '',
-    interfaceViews: active.interfaceViews.map((view) => ({
-      interfaceId: view.interfaceId,
-      viewStatus: { code: 0, message: '', details: [] },
-      viewValue: view.viewValue,
-    })),
     witnessParties: [HOLDER],
     signatories: active.signatories,
     observers: [],
     createdAt: '2026-11-13T00:00:00Z',
-    ...(active.packageName !== undefined && {
-      packageName: active.packageName,
-    }),
+    packageName: active.packageName,
   };
 }
 
-/** The template and interface ids a `/v2/state/active-contracts(-page)` body filters on (and the party it filters for). */
+/** The template ids a `/v2/state/active-contracts` body filters on (and the party it filters for). */
 export function acsFilter(body: unknown): {
   party: string;
-  filters: ContractFilter[];
+  templateIds: string[];
 } {
   const byParty = (
     body as {
@@ -130,10 +169,7 @@ export function acsFilter(body: unknown): {
           string,
           {
             cumulative: Array<{
-              identifierFilter: {
-                TemplateFilter?: { value: { templateId: string } };
-                InterfaceFilter?: { value: { interfaceId: string } };
-              };
+              identifierFilter: { TemplateFilter: { value: { templateId: string } } };
             }>;
           }
         >;
@@ -144,32 +180,23 @@ export function acsFilter(body: unknown): {
   if (party === undefined || partyFilters === undefined || partyFilters.cumulative.length === 0) {
     throw new Error('no party filter');
   }
-  const filters = partyFilters.cumulative.map(({ identifierFilter: identifier }): ContractFilter =>
-    identifier.TemplateFilter
-      ? { templateId: identifier.TemplateFilter.value.templateId }
-      : { interfaceId: identifier.InterfaceFilter?.value.interfaceId ?? '' }
+  const templateIds = partyFilters.cumulative.map(
+    ({ identifierFilter }) => identifierFilter.TemplateFilter.value.templateId
   );
-  return { party, filters };
+  return { party, templateIds };
 }
 
-/** The ledger entries matching any of the filters (the union a cumulative filter asks for), each contract once. */
-function matching(contracts: Record<string, ActiveContract[]>, filters: readonly ContractFilter[]): unknown[] {
-  const seen = new Set<string>();
-  return filters.flatMap((filter) =>
-    (contracts['templateId' in filter ? filter.templateId : filter.interfaceId] ?? []).flatMap((c) => {
-      if (seen.has(c.contractId)) return [];
-      seen.add(c.contractId);
-      return [acsEntry(createdEvent(c))];
-    })
-  );
+/** The ledger entries of any of the templates (the union a cumulative filter asks for). */
+function matching(contracts: Record<string, ActiveContract[]>, templateIds: readonly string[]): unknown[] {
+  return templateIds.flatMap((templateId) => (contracts[templateId] ?? []).map((c) => acsEntry(createdEvent(c))));
 }
 
 export interface FakeProvider extends Cip103Provider {
   readonly requests: Cip103Request[];
   /** `prepareExecuteAndWait` params, in order. */
   readonly submissions: Cip103PrepareExecuteParams[];
-  /** The filters of each ACS read (its first page, or its unpaged request), in order. */
-  readonly reads: ContractFilter[][];
+  /** The template ids of each ACS read, in order. */
+  readonly reads: string[][];
   /** The `ledgerApi` resources requested, in order (`GET /v2/state/ledger-end`, …). */
   readonly ledgerCalls: () => string[];
 }
@@ -187,8 +214,8 @@ export interface FakeProviderOptions {
 
 /**
  * A fake CIP-0103 provider over an in-memory ledger: `getPrimaryAccount` answers `party`, `ledgerApi` serves the ledger
- * end and the ACS (paged and unpaged) per template/interface filter, and `prepareExecuteAndWait` records the params and
- * answers an executed transaction (or throws `submitError`).
+ * end and the unpaged ACS per template filter, and `prepareExecuteAndWait` records the params and answers an executed
+ * transaction (or throws `submitError`).
  */
 export function fakeProvider(
   contracts: Record<string, ActiveContract[]>,
@@ -196,7 +223,7 @@ export function fakeProvider(
 ): FakeProvider {
   const requests: Cip103Request[] = [];
   const submissions: Cip103PrepareExecuteParams[] = [];
-  const reads: ContractFilter[][] = [];
+  const reads: string[][] = [];
   const party = options.party ?? HOLDER;
   return {
     requests,
@@ -235,23 +262,9 @@ export function fakeProvider(
             return { offset: LEDGER_END };
           }
           if (requestMethod === 'post' && resource === '/v2/state/active-contracts') {
-            const { filters } = acsFilter(body);
-            reads.push(filters);
-            return matching(contracts, filters);
-          }
-          if (requestMethod === 'post' && resource === '/v2/state/active-contracts-page') {
-            // Pages of `maxPageSize`; the page token is the index of the page's first entry.
-            const { filters } = acsFilter(body);
-            const { maxPageSize, pageToken } = body as { maxPageSize: number; pageToken?: string };
-            if (pageToken === undefined) reads.push(filters);
-            const all = matching(contracts, filters);
-            const from = pageToken === undefined ? 0 : Number(pageToken);
-            const to = from + maxPageSize;
-            return {
-              activeContracts: all.slice(from, to),
-              activeAtOffset: LEDGER_END,
-              ...(to < all.length && { nextPageToken: String(to) }),
-            };
+            const { templateIds } = acsFilter(body);
+            reads.push(templateIds);
+            return matching(contracts, templateIds);
           }
           throw new RpcError(4200, `ledgerApi ${resource} is not allowed`);
         }
@@ -261,7 +274,7 @@ export function fakeProvider(
           return {
             tx: {
               status: 'executed',
-              commandId: args.params.commandId ?? 'wallet-cmd',
+              commandId: args.params.commandId,
               payload: { updateId: 'update-1', completionOffset: 4243 },
             },
           };
@@ -302,11 +315,7 @@ export class FakeLoopCip103Provider {
     if (!this.connected) throw new RpcError(4100, 'No authorized account');
     if (args.method === 'ledgerApi') {
       const params = args.params as { resource: string; body?: unknown };
-      const allowed = [
-        '/v2/state/ledger-end',
-        '/v2/state/active-contracts',
-        '/v2/state/active-contracts-page',
-      ].includes(params.resource);
+      const allowed = ['/v2/state/ledger-end', '/v2/state/active-contracts'].includes(params.resource);
       if (!allowed) {
         throw new RpcError(4200, `Unsupported ledgerApi ${params.resource}`);
       }
@@ -344,66 +353,60 @@ export class FakeLoopCip103Provider {
 }
 
 /** The package name of the DA Registry template of a `Module:Entity`, as the ledger reports it with the contract. */
-function daPackageName(qualified: string): string | undefined {
+function daPackageName(qualified: string): string {
   const id = Object.values(DA_REGISTRY_TEMPLATES).find((t) => t.endsWith(`:${qualified}`));
-  return id === undefined ? undefined : id.slice(1, id.indexOf(':'));
+  return id === undefined ? 'other-package-v0' : id.slice(1, id.indexOf(':'));
 }
 
 /**
  * An active contract; the registrar signs it unless `signatories` says otherwise. A DA Registry template gets its
- * package name, as the Ledger JSON API v2 always reports one (destructure it away to model a response without one).
+ * package name, anything else `other-package-v0`.
  */
 export function contract(
   contractId: string,
   qualified: string,
   createArgument: JsonObject | null,
-  interfaceViews: ActiveContract['interfaceViews'] = [],
   signatories: readonly string[] = [REGISTRAR]
 ): ActiveContract {
-  const packageName = daPackageName(qualified);
   return {
     contractId,
     templateId: pkgId('1eddd268', qualified),
-    ...(packageName !== undefined && { packageName }),
+    packageName: daPackageName(qualified),
     signatories,
     createArgument,
-    interfaceViews,
   };
 }
 
-export const HOLDING_INTERFACE_PKG =
-  '718a0f77e505a8de22f188bd4c87fe74101274e9d4cb1bfac7d09aec7158d35b:Splice.Api.Token.HoldingV1:Holding';
+export const HOLDING_T = 'Utility.Registry.Holding.V0.Holding:Holding';
 
-/** A holding seen through its HoldingV1 view. */
-export function holdingView(
+/** A DA Registry `Holding` as the ledger reports it, signed by its registrar and owner unless `signatories` says not. */
+export function daHolding(
   contractId: string,
   amount: string,
   options: {
     owner?: string;
     lock?: JsonObject | null;
-    instrument?: JsonObject;
+    instrument?: { source: string; id: string };
     signatories?: readonly string[];
   } = {}
 ): ActiveContract {
-  const holding = contract(
+  const owner = options.owner ?? HOLDER;
+  const instrument = options.instrument ?? { source: REGISTRAR, id: 'XMPL' };
+  return contract(
     contractId,
-    'Utility.Registry.Holding.V0.Holding:Holding',
-    null,
-    [
-      {
-        interfaceId: HOLDING_INTERFACE_PKG,
-        viewValue: {
-          owner: options.owner ?? HOLDER,
-          instrumentId: options.instrument ?? { admin: REGISTRAR, id: 'XMPL' },
-          amount,
-          lock: options.lock ?? null,
-          meta: { values: {} },
-        },
-      },
-    ],
-    options.signatories ?? [REGISTRAR, options.owner ?? HOLDER]
+    HOLDING_T,
+    {
+      operator: OPERATOR,
+      provider: REGISTRAR,
+      registrar: instrument.source,
+      owner,
+      instrument: { ...instrument, scheme: 'RegistrarInternalScheme' },
+      label: '',
+      amount,
+      lock: options.lock ?? null,
+    },
+    options.signatories ?? [instrument.source, owner]
   );
-  return { ...holding, packageName: 'utility-registry-holding-v0' };
 }
 
 /** A Ledger JSON API v2 ACS entry. */

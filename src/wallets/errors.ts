@@ -9,11 +9,19 @@ export type WalletSubmitOutcome = 'rejected-by-user' | 'failed' | 'unknown';
 
 const UNKNOWN_HINT = 'The outcome is unknown: do not resubmit blindly; check the wallet for the result first.';
 
+/** An `unknown` outcome's message: it warns against resubmitting and names the command id to look up, once each. */
+function unknownMessage(message: string, commandId: string | undefined): string {
+  const hinted = message.includes(UNKNOWN_HINT) ? message : `${message} ${UNKNOWN_HINT}`;
+  const commandLine = commandId === undefined ? '' : `Command id: ${commandId}.`;
+  return commandLine === '' || hinted.includes(commandLine) ? hinted : `${hinted} ${commandLine}`;
+}
+
 /** A submission did not commit, or its outcome is unknown. The SDK never retries. */
 export class WalletSubmitError extends Error {
   readonly outcome: WalletSubmitOutcome;
   /** The wallet's CIP-0103 error code, when it gave one. */
   readonly code?: number;
+  /** The command id the submission was sent with; an `unknown` outcome's message names it. */
   readonly commandId?: string;
   /**
    * The reference of the burn request this submission filed (`requestBurn`), also when the SDK generated it: after an
@@ -26,7 +34,7 @@ export class WalletSubmitError extends Error {
     message: string,
     details: { code?: number; commandId?: string; burnReference?: string } = {}
   ) {
-    super(outcome === 'unknown' && !message.includes(UNKNOWN_HINT) ? `${message} ${UNKNOWN_HINT}` : message);
+    super(outcome === 'unknown' ? unknownMessage(message, details.commandId) : message);
     this.name = 'WalletSubmitError';
     this.outcome = outcome;
     if (details.code !== undefined) this.code = details.code;
@@ -103,21 +111,16 @@ export class RegistryResponseError extends Error {
 export type WalletErrorCode =
   | 'invalid-input'
   | 'not-found'
-  | 'not-addressed-to-wallet'
-  | 'unexpected-registrar'
   | 'insufficient-balance'
   /** The inputs that would cover the amount add up beyond the Daml `Numeric 10` range (10^28 - 10^-10). */
   | 'amount-out-of-range'
   | 'preapproval-required'
-  /** The registry would now run the transfer as another kind than the caller previewed (`expectedKind`). */
+  /** The registry would now run the transfer as another kind than it was planned as. */
   | 'kind-changed'
   /** Another write action of the same token wallet is still in progress. */
   | 'busy'
-  /**
-   * The wallet's registry does not offer this action (DA's mint, burn and preapproval actions need DA's Utility
-   * Registry client).
-   */
-  | 'unsupported-by-registry';
+  /** What the action would create already exists. */
+  | 'already-exists';
 
 /** A token action refused before anything was submitted. */
 export class WalletError extends Error {
@@ -146,6 +149,7 @@ export interface WalletErrorDescription {
    * - `read-failed`: any other failed read.
    * - `sign-failed`: the wallet did not sign (an invalid challenge, or a wallet failure).
    * - `registry`: the registry API answered with an error status or a body the SDK refuses.
+   * - `not-verified`: the server did not verify a wallet ownership proof (its verdict; never from `describeWalletError`).
    * - `other`: anything else.
    */
   readonly kind:
@@ -157,12 +161,17 @@ export interface WalletErrorDescription {
     | 'read-failed'
     | 'sign-failed'
     | 'registry'
+    | 'not-verified'
     | 'other';
   /**
    * The `WalletError` code of a `refused` error, the wallet's CIP-0103 code of a wallet error when it gave one, or the
    * HTTP status of a registry API error.
    */
   readonly code?: WalletErrorCode | number;
+  /** An `outcome-unknown` submission's command id, to look the transaction up before anything is resubmitted. */
+  readonly commandId?: string;
+  /** An `outcome-unknown` burn request's reference, to look the request up before another is filed. */
+  readonly burnReference?: string;
 }
 
 /** How many characters of a registry error body {@link describeWalletError} shows. */
@@ -196,8 +205,12 @@ export function describeWalletError(error: unknown): WalletErrorDescription {
       case 'failed':
         return described('not-committed', `Not committed: ${error.message}`, error.code);
       case 'unknown':
-        // The message already says not to resubmit blindly.
-        return described('outcome-unknown', error.message, error.code);
+        // The message already says not to resubmit blindly, and names the command id.
+        return {
+          ...described('outcome-unknown', error.message, error.code),
+          ...(error.commandId !== undefined && { commandId: error.commandId }),
+          ...(error.burnReference !== undefined && { burnReference: error.burnReference }),
+        };
     }
   }
   if (error instanceof WalletReadError) {

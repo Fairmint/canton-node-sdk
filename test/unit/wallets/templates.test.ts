@@ -1,30 +1,32 @@
-import { contractMatchesFilter } from '../../../src/wallets/templates';
+import { isTemplate } from '../../../src/wallets/templates';
 import type { ActiveContract } from '../../../src/wallets/types';
 
-function withViews(...interfaceIds: string[]): ActiveContract {
-  return {
-    contractId: '00c',
-    templateId: 'pkgT:M:T',
-    packageName: 'tpl',
-    signatories: [],
-    createArgument: null,
-    interfaceViews: interfaceIds.map((interfaceId) => ({ interfaceId, viewValue: {} })),
-  };
-}
+const HOLDING = '#utility-registry-holding-v0:Utility.Registry.Holding.V0.Holding:Holding';
 
-describe('contractMatchesFilter with interface filters', () => {
-  it('matches a package-id interface filter only on the exact interface id', () => {
-    const onlyB = withViews('pkgB:Api.Holding:Holding');
-    expect(contractMatchesFilter(onlyB, { interfaceId: 'pkgA:Api.Holding:Holding' })).toBe(false);
-    expect(contractMatchesFilter(onlyB, { interfaceId: 'pkgB:Api.Holding:Holding' })).toBe(true);
+const contract = (templateId: string, packageName: string): ActiveContract => ({
+  contractId: '00c',
+  templateId,
+  packageName,
+  signatories: [],
+  createArgument: null,
+});
+
+describe('isTemplate', () => {
+  it('matches the template by Module:Entity and package name, in any package version', () => {
+    expect(
+      isTemplate(contract('pkgA:Utility.Registry.Holding.V0.Holding:Holding', 'utility-registry-holding-v0'), HOLDING)
+    ).toBe(true);
   });
 
-  it('matches a package-name interface filter by Module:Entity', () => {
+  it('refuses the same Module:Entity of another package, and another entity of the package', () => {
+    expect(isTemplate(contract('pkgA:Utility.Registry.Holding.V0.Holding:Holding', 'evil-v0'), HOLDING)).toBe(false);
     expect(
-      contractMatchesFilter(withViews('pkgX:Api.Holding:Holding'), { interfaceId: '#holding-api:Api.Holding:Holding' })
-    ).toBe(true);
-    expect(
-      contractMatchesFilter(withViews('pkgX:Api.Other:Other'), { interfaceId: '#holding-api:Api.Holding:Holding' })
+      isTemplate(contract('pkgA:Utility.Registry.Holding.V0.Holding:Other', 'utility-registry-holding-v0'), HOLDING)
     ).toBe(false);
+  });
+
+  it('matches nothing for an id that is not in package-name form', () => {
+    const id = 'pkgA:Utility.Registry.Holding.V0.Holding:Holding';
+    expect(isTemplate(contract(id, 'utility-registry-holding-v0'), id)).toBe(false);
   });
 });
