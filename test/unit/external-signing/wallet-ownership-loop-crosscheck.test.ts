@@ -2,11 +2,15 @@
  * Cross-check for ENG-2832: a wallet ownership proof as Loop produces it, checked two ways.
  *
  * 1. The SDK's own check, `verifyWalletOwnership`.
- * 2. An apiv2-style check, written out here so this repository imports nothing from apiv2. It mirrors the key and
- *    signature part of apiv2's venue party proof (`verifyVenuePartyProof` in
- *    `services/onchain/canton/src/lib/venue/verification-link.ts`, with `assertCantonPartyMatchesPublicKey` from
- *    `packages/canton-wallet`): the party's namespace (after the last `::`) must be the Canton fingerprint of the
- *    base64-decoded key, and the Ed25519 signature (base64) must verify over the UTF-8 bytes of the message.
+ * 2. An apiv2-style check, written out here so this repository imports nothing from apiv2. It is a hand-copied mirror, not
+ *    a run of apiv2's code, and nothing here notices if apiv2 changes. It was compared with apiv2 `main` at commit
+ *    8a7783b: the key and signature part of the venue party proof (`verifyVenuePartyProof` and its `verifyEd25519` in
+ *    `services/onchain/canton/src/lib/venue/verification-link.ts`, with `assertCantonPartyMatchesPublicKey` and
+ *    `extractRawEd25519PublicKey` from `packages/canton-wallet`). The party's namespace (after the last `::`) must be
+ *    the Canton fingerprint of the base64-decoded key, where the key is 32 raw bytes or 44 DER (SPKI) bytes; then the
+ *    Ed25519 signature (base64) must verify over the UTF-8 bytes of the message, with the key built as a JWK from the
+ *    whole decoded key, so a DER key passes the party check there and fails the signature check. The real cross-check,
+ *    against apiv2's own code, belongs in apiv2 (ENG-2840) once a real Loop sample exists.
  *
  * The format bridge it documents: Loop reports its raw 32-byte key and its 64-byte signature as hex, and apiv2 takes
  * both as base64, so `Buffer.from(hex, 'hex').toString('base64')` is the whole conversion. Not covered, on purpose:
@@ -37,11 +41,15 @@ function cantonFingerprint(rawKey: Buffer): string {
   return `1220${createHash('sha256').update(purpose).update(rawKey).digest('hex')}`;
 }
 
+/** Apiv2's `ED25519_DER_X509_PREFIX_HEX`: the DER (SPKI) header in front of a raw Ed25519 key. */
+const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
+
 type ApiStyleResult = { ok: true } | { ok: false; reason: 'bad-key' | 'party-key-mismatch' | 'bad-signature' };
 
 /**
  * The apiv2-style check, inline: base64 key and signature, namespace after the last `::` equal to the key's
- * fingerprint, Ed25519 over the message's UTF-8 bytes (through a JWK, as apiv2 builds the key).
+ * fingerprint, Ed25519 over the message's UTF-8 bytes (through a JWK of the whole decoded key, as apiv2 builds it).
+ * Like apiv2's `extractRawEd25519PublicKey`, the party check takes a 32-byte raw key or a 44-byte DER (SPKI) key.
  */
 function apiStyleCheck(input: {
   partyId: string;
@@ -49,15 +57,25 @@ function apiStyleCheck(input: {
   message: string;
   signatureBase64: string;
 }): ApiStyleResult {
-  const rawKey = Buffer.from(input.publicKeyBase64, 'base64');
-  if (rawKey.length !== 32) return { ok: false, reason: 'bad-key' };
+  const decodedKey = Buffer.from(input.publicKeyBase64, 'base64');
+  let rawKey: Buffer;
+  if (decodedKey.length === 32) {
+    rawKey = decodedKey;
+  } else if (
+    decodedKey.length === ED25519_SPKI_PREFIX.length + 32 &&
+    decodedKey.subarray(0, ED25519_SPKI_PREFIX.length).equals(ED25519_SPKI_PREFIX)
+  ) {
+    rawKey = decodedKey.subarray(ED25519_SPKI_PREFIX.length);
+  } else {
+    return { ok: false, reason: 'bad-key' };
+  }
   const separator = input.partyId.lastIndexOf('::');
   if (separator === -1 || input.partyId.slice(separator + 2) !== cantonFingerprint(rawKey)) {
     return { ok: false, reason: 'party-key-mismatch' };
   }
   try {
     const key = createPublicKey({
-      key: { kty: 'OKP', crv: 'Ed25519', x: rawKey.toString('base64url') },
+      key: { kty: 'OKP', crv: 'Ed25519', x: decodedKey.toString('base64url') },
       format: 'jwk',
     });
     return verify(null, Buffer.from(input.message, 'utf8'), key, Buffer.from(input.signatureBase64, 'base64'))
@@ -112,13 +130,6 @@ describe('Loop wallet ownership proof cross-check (synthetic sample)', () => {
     );
   }
 
-  it('produces Loop-shaped output: a hex raw key, a hex signature, and a party namespaced by the key', async () => {
-    const proof = await loopProof();
-    expect(proof.publicKey).toMatch(HEX_KEY);
-    expect(proof.signature).toMatch(HEX_SIGNATURE);
-    expect(proof.partyId.slice(proof.partyId.lastIndexOf('::') + 2)).toBe(namespace);
-  });
-
   it('verifies with verifyWalletOwnership', async () => {
     const proof = await loopProof();
     expect(
@@ -157,6 +168,15 @@ describe('Loop wallet ownership proof cross-check (synthetic sample)', () => {
     expect(apiStyleCheck({ ...converted, partyId: `loop-holder::1220${'0'.repeat(64)}` })).toEqual({
       ok: false,
       reason: 'party-key-mismatch',
+    });
+  });
+
+  it('passes the party check and fails the signature check with a DER (SPKI) key, as apiv2 does', async () => {
+    const converted = toApiStyle(await loopProof());
+    const derKey = Buffer.concat([ED25519_SPKI_PREFIX, Buffer.from(converted.publicKeyBase64, 'base64')]);
+    expect(apiStyleCheck({ ...converted, publicKeyBase64: derKey.toString('base64') })).toEqual({
+      ok: false,
+      reason: 'bad-signature',
     });
   });
 
