@@ -157,11 +157,36 @@ export type InteractiveSubmissionHashingSchemeVersion = Exclude<
   'HASHING_SCHEME_VERSION_UNSPECIFIED'
 >;
 
+/**
+ * One re-assignment cost estimate (`ReassignmentCost`). Newer Canton Ledger APIs than the pinned OpenAPI return these
+ * in `CostEstimation.reassignmentCosts`: the cost of moving input contracts from another synchronizer before the
+ * transaction can run.
+ */
+export interface InteractiveSubmissionReassignmentCost {
+  sourceSynchronizerId: string;
+  targetSynchronizerId: string;
+  contractIds: string[];
+  unassignmentRequestTrafficCostEstimation: number;
+  unassignmentResponseTrafficCostEstimation: number;
+  assignmentRequestTrafficCostEstimation: number;
+  assignmentResponseTrafficCostEstimation: number;
+  totalReassignmentCostEstimation: number;
+}
+
+/**
+ * `CostEstimation` as current participants answer it: the pinned contract plus the optional `reassignmentCosts` that
+ * newer Canton releases add (Five North's DevNet participant returns it as of November 2026).
+ */
+export type InteractiveSubmissionCostEstimation = LedgerSchemas['CostEstimation'] & {
+  reassignmentCosts?: InteractiveSubmissionReassignmentCost[];
+};
+
 export type InteractiveSubmissionPrepareResponse = Omit<
   GeneratedInteractiveSubmissionPrepareResponse,
-  'hashingSchemeVersion'
+  'hashingSchemeVersion' | 'costEstimation'
 > & {
   hashingSchemeVersion: InteractiveSubmissionHashingSchemeVersion;
+  costEstimation?: InteractiveSubmissionCostEstimation;
 };
 
 export type InteractiveSubmissionSignature = Omit<LedgerSchemas['Signature'], 'format' | 'signingAlgorithmSpec'> & {
@@ -429,12 +454,29 @@ export const InteractiveSubmissionPrepareRequestSchema = createRequestSchema<Int
   hashingSchemeVersion: HashingSchemeVersionSchema.optional(),
 });
 
-/** Traffic cost estimation for a prepared transaction. */
-export const CostEstimationSchema = createRequestSchema<LedgerSchemas['CostEstimation']>()({
+/** One re-assignment cost estimate (`ReassignmentCost`, newer than the pinned OpenAPI). */
+export const ReassignmentCostSchema = createRequestSchema<InteractiveSubmissionReassignmentCost>()({
+  sourceSynchronizerId: LedgerStringSchema,
+  targetSynchronizerId: LedgerStringSchema,
+  contractIds: z.array(LedgerStringSchema).min(1),
+  unassignmentRequestTrafficCostEstimation: NonNegativeInt64Schema,
+  unassignmentResponseTrafficCostEstimation: NonNegativeInt64Schema,
+  assignmentRequestTrafficCostEstimation: NonNegativeInt64Schema,
+  assignmentResponseTrafficCostEstimation: NonNegativeInt64Schema,
+  totalReassignmentCostEstimation: NonNegativeInt64Schema,
+});
+
+/**
+ * Traffic cost estimation for a prepared transaction. `reassignmentCosts` (optional, can be empty) comes from newer
+ * Canton releases than the pinned OpenAPI; without it here the exact schema refused every prepare response that carried
+ * it.
+ */
+export const CostEstimationSchema = createRequestSchema<InteractiveSubmissionCostEstimation>()({
   estimationTimestamp: LedgerRfc3339TimestampSchema,
   confirmationRequestTrafficCostEstimation: NonNegativeInt64Schema,
   confirmationResponseTrafficCostEstimation: NonNegativeInt64Schema,
   totalTrafficCostEstimation: NonNegativeInt64Schema,
+  reassignmentCosts: z.array(ReassignmentCostSchema).optional(),
 });
 
 /** Exact interactive-submission prepare response from the pinned Ledger OpenAPI. */

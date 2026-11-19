@@ -23,6 +23,16 @@ const config: ClientConfig = {
 
 const PREPARED_TRANSACTION_BASE64 = Buffer.from('prepared-transaction').toString('base64');
 const PREPARED_HASH_BASE64 = Buffer.from(`1220${'11'.repeat(32)}`, 'hex').toString('base64');
+const REASSIGNMENT_COST = {
+  sourceSynchronizerId: 'global-domain::1220source',
+  targetSynchronizerId: 'global-domain::1220target',
+  contractIds: ['00contract'],
+  unassignmentRequestTrafficCostEstimation: 10,
+  unassignmentResponseTrafficCostEstimation: 5,
+  assignmentRequestTrafficCostEstimation: 10,
+  assignmentResponseTrafficCostEstimation: 5,
+  totalReassignmentCostEstimation: 30,
+};
 const SIGNATURE_BASE64 = Buffer.alloc(64, 1).toString('base64');
 const PROTO_VALUE_BASE64 = Buffer.from('encoded-protobuf').toString('base64');
 const EXTERNAL_TRANSACTION_HASH = 'ab'.repeat(32);
@@ -668,6 +678,74 @@ describe('LedgerJsonApiClient interactive submission execution', () => {
       preparedTransactionHash: PREPARED_HASH_BASE64,
       hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V3',
       ...override,
+    });
+
+    await expect(client.interactiveSubmissionPrepare(createPrepareRequest())).rejects.toThrow(
+      'Response validation failed'
+    );
+  });
+
+  it('accepts the reassignmentCosts newer participants return in the cost estimation', async () => {
+    // Five North's DevNet participant answers prepare with costEstimation.reassignmentCosts (November 2026), a
+    // field newer than the pinned OpenAPI; the exact schema used to refuse every such response.
+    const client = createClient();
+    const response = {
+      preparedTransaction: PREPARED_TRANSACTION_BASE64,
+      preparedTransactionHash: PREPARED_HASH_BASE64,
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2' as const,
+      costEstimation: {
+        estimationTimestamp: '2026-11-19T22:15:00Z',
+        confirmationRequestTrafficCostEstimation: 100,
+        confirmationResponseTrafficCostEstimation: 25,
+        totalTrafficCostEstimation: 125,
+        reassignmentCosts: [REASSIGNMENT_COST],
+      },
+    };
+    jest.spyOn(client, 'makePostRequest').mockResolvedValue(response);
+
+    await expect(client.interactiveSubmissionPrepare(createPrepareRequest())).resolves.toEqual(response);
+  });
+
+  it('accepts an empty reassignmentCosts list', async () => {
+    const client = createClient();
+    const response = {
+      preparedTransaction: PREPARED_TRANSACTION_BASE64,
+      preparedTransactionHash: PREPARED_HASH_BASE64,
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2' as const,
+      costEstimation: {
+        estimationTimestamp: '2026-11-19T22:15:00Z',
+        confirmationRequestTrafficCostEstimation: 100,
+        confirmationResponseTrafficCostEstimation: 25,
+        totalTrafficCostEstimation: 125,
+        reassignmentCosts: [],
+      },
+    };
+    jest.spyOn(client, 'makePostRequest').mockResolvedValue(response);
+
+    await expect(client.interactiveSubmissionPrepare(createPrepareRequest())).resolves.toEqual(response);
+  });
+
+  it.each([
+    ['an unknown cost-estimation key', { unknownCost: 1 }],
+    ['a reassignment cost with no contract ids', { reassignmentCosts: [{ ...REASSIGNMENT_COST, contractIds: [] }] }],
+    ['a reassignment cost with an unknown key', { reassignmentCosts: [{ ...REASSIGNMENT_COST, extra: true }] }],
+    [
+      'a reassignment cost missing its total',
+      { reassignmentCosts: [{ ...REASSIGNMENT_COST, totalReassignmentCostEstimation: undefined }] },
+    ],
+  ])('still rejects a cost estimation with %s', async (_description, override) => {
+    const client = createClient();
+    jest.spyOn(client, 'makePostRequest').mockResolvedValue({
+      preparedTransaction: PREPARED_TRANSACTION_BASE64,
+      preparedTransactionHash: PREPARED_HASH_BASE64,
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
+      costEstimation: {
+        estimationTimestamp: '2026-11-19T22:15:00Z',
+        confirmationRequestTrafficCostEstimation: 100,
+        confirmationResponseTrafficCostEstimation: 25,
+        totalTrafficCostEstimation: 125,
+        ...override,
+      },
     });
 
     await expect(client.interactiveSubmissionPrepare(createPrepareRequest())).rejects.toThrow(
