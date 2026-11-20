@@ -28,7 +28,8 @@ function shouldRotateOnError(error: unknown): boolean {
     if (status === undefined) {
       return true;
     }
-    if (status === 429 || status === 408) {
+    // Opt-in 404 rotation: another Scan node may hold what this one lacks (HttpClient itself never retries a 404).
+    if (status === 404 || status === 429 || status === 408) {
       return true;
     }
     if (status >= 500) {

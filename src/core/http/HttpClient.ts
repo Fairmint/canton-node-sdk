@@ -868,7 +868,8 @@ export class HttpClient {
       const data = (error.response?.data ?? {}) as Record<string, unknown>;
       const code = typeof data['code'] === 'string' ? data['code'] : undefined;
 
-      if (status === undefined || status === 404 || (status >= 500 && status < 600)) return true;
+      // A 404 is a definite answer (callers such as getExternalPartyBalance fall back on it), never a transient failure.
+      if (status === undefined || (status >= 500 && status < 600)) return true;
       if (status === 400 && code === 'UNKNOWN_CONTRACT_SYNCHRONIZERS') return true;
       if (status === 409 && code === 'SEQUENCER_BACKPRESSURE') return true;
       return false;
