@@ -26,7 +26,8 @@
  */
 import { newCommandId, type Cip103EventListener, type Cip103Provider, type Cip103Request } from './cip103';
 import type { DaNetwork } from './da-utilities/client';
-import { awaitWithAbort, createAbortError, throwIfAborted } from '../core/http/abort';
+import type { WalletCallOptions } from './wallet';
+import { awaitWithAbort, cancelledBeforeSubmit, throwIfAborted } from './abort';
 
 /** The browser global this module uses; a page's global object satisfies it. Tests pass a fake. */
 export interface Cip103DiscoveryHost {
@@ -50,9 +51,10 @@ export interface DiscoveredWallet {
   readonly icon?: string;
   /**
    * Its CIP-0103 provider for a DA network, the same object on every call. Its `getPrimaryAccount` refuses (4901) an
-   * account the wallet has on another network.
+   * account the wallet has on another network. Making the provider is instant; `options.signal` only rejects the call
+   * with an `AbortError` when it has already aborted.
    */
-  load(network: DaNetwork): Promise<Cip103Provider>;
+  load(network: DaNetwork, options?: WalletCallOptions): Promise<Cip103Provider>;
 }
 
 export interface DiscoverCip103WalletsOptions {
@@ -187,6 +189,11 @@ function adapt(wallet: Cip103Provider, network: DaNetwork, name: string, signsBa
   };
 }
 
+/** Whether `event` is a message posted by `host` itself: another window (a cross-origin iframe) cannot speak for it. */
+function fromHost(host: Cip103DiscoveryHost, event: Event): boolean {
+  return isObject(event) && (event as { source?: unknown }).source === host;
+}
+
 function messageData(event: Event): unknown {
   return isObject(event) ? (event as { data?: unknown }).data : undefined;
 }
@@ -198,6 +205,7 @@ function messageData(event: Event): unknown {
 export function channelProvider(host: Cip103DiscoveryHost, target: string): Cip103Provider {
   const listeners = new Map<string, Set<Cip103EventListener>>();
   const onNotification = (event: Event): void => {
+    if (!fromHost(host, event)) return;
     const data = messageData(event);
     if (!isObject(data) || data['type'] !== REQUEST_MESSAGE || data['target'] !== target) return;
     const { request } = data;
@@ -209,6 +217,7 @@ export function channelProvider(host: Cip103DiscoveryHost, target: string): Cip1
       new Promise((resolve, reject) => {
         const id = newCommandId();
         const onResponse = (event: Event): void => {
+          if (!fromHost(host, event)) return;
           const data = messageData(event);
           const response = isObject(data) && data['type'] === RESPONSE_MESSAGE ? data['response'] : undefined;
           if (!isObject(response) || response['id'] !== id) return;
@@ -269,7 +278,8 @@ function walletOf(identity: Identity, connect: () => Cip103Provider, signsBase64
   return Object.freeze({
     ...identity,
     // Async so a wallet that cannot be reached (another extension holds Console's global) rejects, never throws.
-    load: async (network: DaNetwork) => {
+    load: async (network: DaNetwork, { signal }: WalletCallOptions = {}) => {
+      throwIfAborted(signal);
       let provider = providers.get(network);
       if (provider === undefined) {
         provider = adapt(connect(), network, identity.name, signsBase64);
@@ -363,7 +373,7 @@ export async function discoverCip103Wallets(options: DiscoverCip103WalletsOption
   const waitMs = options.waitMs ?? DEFAULT_WAIT_MS;
   if (!Number.isFinite(waitMs) || waitMs < 0) throw new TypeError('waitMs must be a non-negative number');
   const announced = await announcedWallets(host, waitMs, signal);
-  if (signal?.aborted === true) throw createAbortError(signal);
+  if (signal?.aborted === true) throw cancelledBeforeSubmit(signal);
   if (announced.length > 0) {
     return announced.map((wallet) =>
       rememberedWallet(host, wallet.id, () => {

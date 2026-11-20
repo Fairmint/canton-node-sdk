@@ -23,7 +23,7 @@ import {
   reportsOtherNetwork,
   type Cip103Connection,
 } from './cip103';
-import { awaitWithAbort, throwIfAborted } from '../core/http/abort';
+import { awaitWithAbort, throwIfAborted } from './abort';
 import { globalFetch, type FetchLike } from './da-utilities/client';
 import { WalletReadError, WalletSignError } from './errors';
 import { isRecord, nonEmptyString } from './json';

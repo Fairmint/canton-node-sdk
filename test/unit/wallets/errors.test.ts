@@ -1,6 +1,7 @@
 /** `describeWalletError`: a user-facing sentence that says whether anything was submitted, and a kind to branch on. */
 import { runInNewContext } from 'node:vm';
 
+import { cancelledBeforeSubmit, isCancelledBeforeSubmit } from '../../../src/wallets/abort';
 import {
   describeWalletError,
   isRegistryApiError,
@@ -164,14 +165,27 @@ describe('describeWalletError', () => {
     });
   });
 
-  it('describes a cancelled call', () => {
-    const abort = new Error('The operation was aborted');
-    abort.name = 'AbortError';
-    expect(describeWalletError(abort)).toEqual({ kind: 'cancelled', message: 'Cancelled. Nothing was submitted.' });
+  it('says nothing was submitted only for the cancellation the module throws before submitting', () => {
     const controller = new AbortController();
     controller.abort();
-    expect(describeWalletError(controller.signal.reason).kind).toBe('cancelled');
+    const own = cancelledBeforeSubmit(controller.signal);
+    expect(own.name).toBe('AbortError');
+    expect(describeWalletError(own)).toEqual({ kind: 'cancelled', message: 'Cancelled. Nothing was submitted.' });
+    expect(isCancelledBeforeSubmit(runInNewContext('(e) => e')(own))).toBe(true);
+    expect(isWalletCancellation(own)).toBe(true);
+  });
+
+  it('describes a foreign AbortError or TimeoutError without claiming nothing was submitted', () => {
+    const neutral = { kind: 'cancelled', message: 'Cancelled; this does not say whether anything was submitted.' };
+    const abort = new Error('The operation was aborted');
+    abort.name = 'AbortError';
+    expect(describeWalletError(abort)).toEqual(neutral);
+    const controller = new AbortController();
+    controller.abort();
+    expect(describeWalletError(controller.signal.reason)).toEqual(neutral);
+    expect(describeWalletError(new DOMException('timed out', 'TimeoutError'))).toEqual(neutral);
     expect(isWalletCancellation(new Error('x'))).toBe(false);
+    expect(isCancelledBeforeSubmit(abort)).toBe(false);
   });
 });
 

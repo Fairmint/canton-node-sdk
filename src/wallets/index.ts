@@ -13,7 +13,9 @@
  *   (`createWalletOwnershipChallenger`, `verifyWalletOwnership`) is Node-only and exported from the package root.
  * - The errors, their guards (`isWalletError`, `isWalletSubmitError`, …: they match errors of any copy of this module,
  *   where `instanceof` does not), their user-facing descriptions (`describeWalletError`), and the data types.
- * - Cancellation: every call that reads or fetches takes an optional `signal` (`WalletCallOptions`).
+ * - Cancellation: every call that reads, fetches or acts takes an optional `signal` (`WalletCallOptions`):
+ *   `WalletStore.act`, `Cip103Session.connect` and `restore`, `DiscoveredWallet.load` included. `WalletStore.dispose()`
+ *   cancels the store's own work in flight the same way.
  */
 export {
   createCip103Session,

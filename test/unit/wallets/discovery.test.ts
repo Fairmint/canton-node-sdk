@@ -19,8 +19,8 @@ interface FakeExtension {
 type FakeHost = Cip103DiscoveryHost & {
   canton?: unknown;
   readonly posted: unknown[];
-  /** Post a message to the page, as an extension's content script does. */
-  emit(data: unknown): void;
+  /** Post a message to the page, as an extension's content script does (`source`: the page itself unless given). */
+  emit(data: unknown, ...source: [] | [unknown]): void;
 };
 
 /** A page with `extensions` installed and `canton` injected. */
@@ -28,8 +28,13 @@ function browser(options: { canton?: unknown; extensions?: readonly FakeExtensio
   const target = new EventTarget();
   const extensions = options.extensions ?? [];
   const posted: unknown[] = [];
-  const emit = (data: unknown): void => {
-    setTimeout(() => target.dispatchEvent(new MessageEvent('message', { data })));
+  const emit = (data: unknown, ...sourceArg: [] | [unknown]): void => {
+    setTimeout(() => {
+      const event = new MessageEvent('message', { data });
+      // A browser sets `source` to the posting window; Node's MessageEvent accepts only a port there.
+      Object.defineProperty(event, 'source', { value: sourceArg.length > 0 ? sourceArg[0] : host });
+      target.dispatchEvent(event);
+    });
   };
   target.addEventListener('canton:requestProvider', () => {
     for (const extension of extensions) {
@@ -239,6 +244,55 @@ describe('discoverCip103Wallets', () => {
     host.emit(event('send-ext'));
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect(seen).toHaveLength(1);
+  });
+
+  it('load() rejects with an AbortError when its signal already aborted, and works without one', async () => {
+    const host = browser({ extensions: [standardWallet('send-ext', 'Send Connect')] });
+    const wallet = first(await discover(host));
+    const controller = new AbortController();
+    controller.abort();
+    await expect(wallet.load('devnet', { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(wallet.load('devnet', { signal: new AbortController().signal })).resolves.toBeDefined();
+  });
+
+  it('ignores a notification posted by another window', async () => {
+    const host = browser({ extensions: [standardWallet('send-ext', 'Send Connect')] });
+    const provider = await first(await discover(host)).load('devnet');
+    const seen: unknown[] = [];
+    provider.on('statusChanged', (payload) => {
+      seen.push(payload);
+    });
+    host.emit(
+      {
+        type: 'SPLICE_WALLET_REQUEST',
+        target: 'send-ext',
+        request: { jsonrpc: '2.0', method: 'statusChanged', params: { connection: { isConnected: false } } },
+      },
+      {} // a cross-origin iframe
+    );
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(seen).toEqual([]);
+  });
+
+  it('ignores a response posted by another window', async () => {
+    // The wallet never answers: only a posted response can settle the request.
+    const host = browser({ extensions: [{ announce: { id: 'mute-ext', name: 'Mute', target: 'mute-ext' } }] });
+    const provider = await first(await discover(host)).load('devnet');
+    const pending = provider.request({ method: 'isConnected' });
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    });
+    const { id } = (host.posted[host.posted.length - 1] as { request: { id: string } }).request;
+    const response = {
+      type: 'SPLICE_WALLET_RESPONSE',
+      response: { jsonrpc: '2.0', id, result: { isConnected: false } },
+    };
+    host.emit(response, {}); // a cross-origin iframe
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(settled).toBe(false);
+    host.emit(response); // the page itself
+    await expect(pending).resolves.toEqual({ isConnected: false });
   });
 
   it('refuses an extension on another network than the one loaded', async () => {

@@ -6,6 +6,7 @@
  * other copy's class. Every error class here carries a brand under a global symbol, which the guards check.
  */
 import { isAbortError } from '../core/http/abort';
+import { isCancelledBeforeSubmit } from './abort';
 
 /** The brand every wallets error carries: a non-enumerable property under a global (`Symbol.for`) symbol. */
 const WALLET_ERROR_BRAND: symbol = Symbol.for('@fairmint/canton-node-sdk/wallets.error');
@@ -287,7 +288,8 @@ export interface WalletErrorDescription {
    * - `read-failed`: any other failed read.
    * - `sign-failed`: the wallet did not sign (an invalid challenge, or a wallet failure).
    * - `registry`: the registry API answered with an error status or a body the SDK refuses.
-   * - `cancelled`: the call's `signal` aborted it before anything was submitted or signed.
+   * - `cancelled`: the call's `signal` aborted it. The message says "Nothing was submitted" only for the cancellation
+   *   this module throws before it submits; any other `AbortError` or `TimeoutError` gets a neutral sentence.
    * - `not-verified`: the server did not verify a wallet ownership proof (its verdict; never from `describeWalletError`).
    * - `other`: anything else.
    */
@@ -388,7 +390,11 @@ export function describeWalletError(error: unknown): WalletErrorDescription {
   }
   if (isRegistryResponseError(error)) return described('registry', error.message);
   if (isWalletError(error)) return described('refused', error.message, error.code);
-  if (isWalletCancellation(error)) return described('cancelled', 'Cancelled. Nothing was submitted.');
+  if (isCancelledBeforeSubmit(error)) return described('cancelled', 'Cancelled. Nothing was submitted.');
+  // A foreign `AbortError` or `TimeoutError` (a wallet's, or `fetch`'s) may have been raised after a submission was sent.
+  if (isWalletCancellation(error)) {
+    return described('cancelled', 'Cancelled; this does not say whether anything was submitted.');
+  }
   if (error instanceof Error) return described('other', error.message);
   return described('other', thrownText(error));
 }

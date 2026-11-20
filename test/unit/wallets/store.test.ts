@@ -98,7 +98,7 @@ function setup(): {
     return {
       partyId,
       network,
-      loadState: async () => hold<WalletState>(loads, partyId, 'loadState', []),
+      loadState: async (...args: unknown[]) => hold<WalletState>(loads, partyId, 'loadState', args),
       planTransfer: action('planTransfer'),
       acceptTransferOffer: action('acceptTransferOffer'),
       rejectTransferOffer: action('rejectTransferOffer'),
@@ -413,7 +413,8 @@ describe('createWalletStore', () => {
       await connectAndLoad(t);
       const ran = t.store.act(action);
       const call = t.call();
-      expect([call.method, call.args]).toEqual([method, args]);
+      // Every call also gets the options carrying the store's cancellation signal.
+      expect([call.method, call.args]).toEqual([method, [...args, { signal: expect.any(AbortSignal) }]]);
       call.resolve(SUBMITTED);
       expect(await ran).toEqual(SUBMITTED);
       const key = walletActionKey(action);
@@ -435,7 +436,10 @@ describe('createWalletStore', () => {
       const executeBefore = new Date('2030-01-01T00:00:00.000Z');
       const ran = t.store.act({ type: 'requestBurn', instrumentId: INSTRUMENT, amount: '2', executeBefore });
       const call = t.call();
-      expect(call.args).toEqual([{ instrumentId: INSTRUMENT, amount: '2', executeBefore }]);
+      expect(call.args).toEqual([
+        { instrumentId: INSTRUMENT, amount: '2', executeBefore },
+        { signal: expect.any(AbortSignal) },
+      ]);
       call.resolve({ ...SUBMITTED, reference: 'holder-burn-1' });
       expect(await ran).toEqual({ ...SUBMITTED, reference: 'holder-burn-1' });
       expect(t.store.getSnapshot().outcome).toMatchObject({
@@ -1095,6 +1099,66 @@ describe('createWalletStore', () => {
     await flush();
     expect(loads).toEqual([HOLDER, HOLDER, OTHER]);
     expect(store.getSnapshot()).toMatchObject({ wallet: { partyId: OTHER }, busy: false });
+  });
+
+  describe('cancellation', () => {
+    const signalOf = (pending: PendingCall, index: number): AbortSignal | undefined =>
+      (pending.args[index] as { signal?: AbortSignal } | undefined)?.signal;
+
+    it("passes act()'s signal to the wallet call, combined with the store's own", async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const caller = new AbortController();
+      const ran = t.store.act(ACCEPT, { signal: caller.signal });
+      const call = t.call();
+      const signal = signalOf(call, 1);
+      expect(signal).toBeDefined();
+      expect(signal?.aborted).toBe(false);
+      caller.abort();
+      expect(signal?.aborted).toBe(true);
+      call.reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+      await expect(ran).resolves.toBeNull();
+      expect(t.store.getSnapshot().outcome).toMatchObject({ status: 'failed', error: { kind: 'cancelled' } });
+      t.store.dispose();
+    });
+
+    it('records an action whose signal had already aborted as cancelled, and resolves null', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const controller = new AbortController();
+      controller.abort();
+      const ran = t.store.act(ACCEPT, { signal: controller.signal });
+      const call = t.call();
+      expect(signalOf(call, 1)?.aborted).toBe(true);
+      call.reject(controller.signal.reason);
+      await expect(ran).resolves.toBeNull();
+      t.store.dispose();
+    });
+
+    it('dispose() aborts the action and the load in flight', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const ran = t.store.act(ACCEPT);
+      const call = t.call();
+      const actionSignal = signalOf(call, 1);
+      expect(actionSignal?.aborted).toBe(false);
+      t.store.dispose();
+      expect(actionSignal?.aborted).toBe(true);
+      call.resolve(SUBMITTED);
+      await ran;
+    });
+
+    it('dispose() aborts the signal a load in flight was given', async () => {
+      const t = setup();
+      await t.session.connect(t.provider);
+      await flush();
+      const load = t.loads[0];
+      expect(load).toBeDefined();
+      const signal = signalOf(load as PendingCall, 0);
+      expect(signal?.aborted).toBe(false);
+      t.store.dispose();
+      expect(signal?.aborted).toBe(true);
+    });
   });
 
   it('stops publishing after dispose and drops pending replies', async () => {

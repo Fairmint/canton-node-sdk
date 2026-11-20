@@ -50,7 +50,7 @@ import {
   type TransferFactory,
   type TransferKind,
 } from './da-utilities/client';
-import { awaitWithAbort, throwIfAborted } from '../core/http/abort';
+import { awaitWithAbort, throwIfAborted } from './abort';
 import { isWalletSubmitError, RegistryResponseError, WalletError, WalletSubmitError } from './errors';
 import { instrumentBalances, parseHolding, selectHoldings, type Holding, type InstrumentBalance } from './holdings';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';

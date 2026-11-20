@@ -1,4 +1,5 @@
 import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
+import { isCancelledBeforeSubmit } from '../../../src/wallets/abort';
 import type { TransferKind } from '../../../src/wallets/da-utilities/client';
 import { RegistryResponseError, WalletError, WalletSubmitError } from '../../../src/wallets/errors';
 import type { JsonObject } from '../../../src/wallets/json';
@@ -954,6 +955,8 @@ describe('createWallet: cancellation', () => {
       ].map(async (call) => call.catch((error: unknown) => error))
     );
     expect(results.every(isAbort)).toBe(true);
+    // Thrown before anything was submitted, so `describeWalletError` may say so.
+    expect(results.every(isCancelledBeforeSubmit)).toBe(true);
     expect(wallet.reads).toEqual([]);
     expect(calls).toEqual([]);
     expect(wallet.submissions).toEqual([]);
