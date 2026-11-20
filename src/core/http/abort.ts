@@ -25,9 +25,7 @@ export function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) throw createAbortError(signal);
 }
 
-/**
- * Sleep that rejects with AbortError and clears its timer if `signal` aborts, so cancellation never leaks a handle.
- */
+/** Sleep that rejects with AbortError and clears its timer if `signal` aborts, so cancellation never leaks a handle. */
 export async function abortableSleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
   throwIfAborted(signal);
   await new Promise<void>((resolve, reject) => {
@@ -50,7 +48,11 @@ export async function awaitWithAbort<Value>(
   signal: AbortSignal | undefined
 ): Promise<Value> {
   throwIfAborted(signal);
-  const workPromise = Promise.resolve().then(work);
+  const workPromise = Promise.resolve().then(async () => {
+    // Cancellation may have won before this microtask ran: never start the work (a prompt, a send) then.
+    throwIfAborted(signal);
+    return work();
+  });
   if (!signal) return workPromise;
 
   return new Promise<Value>((resolve, reject) => {

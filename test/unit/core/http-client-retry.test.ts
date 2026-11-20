@@ -32,9 +32,7 @@ jest.mock('axios', () => {
 });
 
 jest.mock('../../../src/core/http/abort', () => {
-  const actual = jest.requireActual<typeof import('../../../src/core/http/abort')>(
-    '../../../src/core/http/abort'
-  );
+  const actual = jest.requireActual<typeof import('../../../src/core/http/abort')>('../../../src/core/http/abort');
   return {
     ...actual,
     abortableSleep: jest.fn(actual.abortableSleep),
@@ -42,9 +40,8 @@ jest.mock('../../../src/core/http/abort', () => {
 });
 
 const mockedAbortableSleep = abortableSleep as jest.MockedFunction<typeof abortableSleep>;
-const actualAbortableSleep = jest.requireActual<typeof import('../../../src/core/http/abort')>(
-  '../../../src/core/http/abort'
-).abortableSleep;
+const actualAbortableSleep =
+  jest.requireActual<typeof import('../../../src/core/http/abort')>('../../../src/core/http/abort').abortableSleep;
 
 interface MockAxiosInstance {
   readonly get: jest.Mock;
@@ -1122,5 +1119,28 @@ describe('HttpClient default semantic-read retry schedule', () => {
 
     expect(axiosInstance.get).toHaveBeenCalledTimes(4);
     expect(mockedAbortableSleep).not.toHaveBeenCalled();
+  });
+
+  it('does not retry a 404 read: it is a definite answer, returned at once', async () => {
+    const { client, axiosInstance } = createClient();
+    axiosInstance.get.mockRejectedValue(createAxiosError(404));
+
+    await expect(
+      client.makeGetRequest('https://validator.example/api/validator/v0/admin/external-party/balance')
+    ).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 404,
+    });
+
+    expect(axiosInstance.get).toHaveBeenCalledTimes(1);
+    expect(mockedAbortableSleep).not.toHaveBeenCalled();
+  });
+
+  it('still retries a 5xx read, so only the 404 default changed', async () => {
+    const { client, axiosInstance } = createClient();
+    client.setRetryConfig({ maxRetries: 1, delayMs: 0 });
+    axiosInstance.get.mockRejectedValue(createAxiosError(502));
+    await expect(client.makeGetRequest('https://ledger.example/v2/version')).rejects.toBeInstanceOf(ApiError);
+    expect(axiosInstance.get).toHaveBeenCalledTimes(2);
   });
 });

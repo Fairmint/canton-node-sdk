@@ -8,6 +8,8 @@
  */
 
 import { spawnSync, type SpawnSyncReturns } from 'child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'fs';
+import os from 'os';
 import path from 'path';
 
 interface NpmPackFile {
@@ -36,7 +38,7 @@ const REQUIRED_RUNTIME_PATHS = [
   'build/src/clients/ledger-json-api/operations/v2/contracts/get-contract-by-id.d.ts',
   'build/src/clients/ledger-json-api/operations/v2/dars/upload-dar.d.ts',
   'build/src/clients/ledger-json-api/operations/v2/dars/validate-dar.d.ts',
-  // The browser-safe wallets entry point, imported by path (the package has no `exports` map).
+  // The browser-safe wallets entry point (`exports` `./wallets`; the deep path keeps working).
   'build/src/wallets/index.js',
   'build/src/wallets/index.d.ts',
 ] as const;
@@ -206,6 +208,61 @@ for (const request of requiresWhileLoading(BROWSER_SAFE_ENTRY)) {
   }
 }
 
+/**
+ * Subpaths consumers import, each resolved by Node through the `exports` map from a package that depends on this one:
+ * the entries, and deep paths written with `.js`, without it, and as a directory.
+ */
+const RESOLVED_SUBPATHS: ReadonlyArray<readonly [subpath: string, file: string]> = [
+  ['', 'build/src/index.js'],
+  ['/wallets', 'build/src/wallets/index.js'],
+  ['/package.json', 'package.json'],
+  ['/build/src/wallets/index.js', 'build/src/wallets/index.js'],
+  ['/build/src/core/errors', 'build/src/core/errors.js'],
+  ['/build/src/utils/transactions', 'build/src/utils/transactions/index.js'],
+  ['/build/src/clients/ledger-json-api/operations', 'build/src/clients/ledger-json-api/operations/index.js'],
+];
+
+/** Where Node resolves each subpath of this package for a consumer, relative to the package root. */
+function resolveAsConsumer(packageName: string, subpaths: readonly string[]): Array<string | null> {
+  const consumer = mkdtempSync(path.join(os.tmpdir(), 'sdk-exports-'));
+  try {
+    const scope = path.join(consumer, 'node_modules', ...packageName.split('/').slice(0, -1));
+    mkdirSync(scope, { recursive: true });
+    symlinkSync(process.cwd(), path.join(consumer, 'node_modules', packageName), 'dir');
+    const script = `
+      const path = require('path');
+      const out = ${JSON.stringify(subpaths)}.map((subpath) => {
+        try { return path.relative(${JSON.stringify(process.cwd())}, require.resolve(${JSON.stringify(packageName)} + subpath)); }
+        catch { return null; }
+      });
+      process.stdout.write(JSON.stringify(out));
+    `;
+    const resolved = spawnSync(process.execPath, ['-e', script], { cwd: consumer, encoding: 'utf8' });
+    throwIfSpawnFailed('node -e require.resolve(exports)', resolved);
+    return JSON.parse(resolved.stdout) as Array<string | null>;
+  } finally {
+    rmSync(consumer, { recursive: true, force: true });
+  }
+}
+
+const exportsMap = (JSON.parse(readFileSync('package.json', 'utf8')) as { exports?: Record<string, unknown> }).exports;
+for (const [subpath, target] of Object.entries(exportsMap ?? {})) {
+  const targets = typeof target === 'string' ? [target] : Object.values(target as Record<string, string>);
+  for (const file of targets.filter((t) => !t.includes('*')).map((t) => t.replace(/^\.\//, ''))) {
+    if (!packagePaths.has(file)) errors.push(`exports ${subpath}: ${file} is not in the package`);
+  }
+}
+const resolvedSubpaths = resolveAsConsumer(
+  result.name,
+  RESOLVED_SUBPATHS.map(([subpath]) => subpath)
+);
+RESOLVED_SUBPATHS.forEach(([subpath, file], index) => {
+  const resolved = resolvedSubpaths[index];
+  if (resolved !== file) {
+    errors.push(`${result.name}${subpath} resolves to ${resolved ?? 'nothing'}, not ${file}`);
+  }
+});
+
 if (errors.length > 0) {
   console.error(`\n${result.name}@${result.version} package artifact check failed:\n`);
   for (const error of errors) {
@@ -219,3 +276,4 @@ console.log(
 );
 console.log('✓ LocalNet engine excluded (owned by @fairmint/canton-dev-tools)');
 console.log(`✓ ${BROWSER_SAFE_ENTRY} requires only relative SDK files`);
+console.log(`✓ every exports target ships, and ${RESOLVED_SUBPATHS.length} entry and deep paths resolve through it`);

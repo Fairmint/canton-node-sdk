@@ -50,11 +50,9 @@ function createSigningFixture(): SigningFixture {
     .subarray(-32)
     .toString('base64');
   const publicKeyFingerprint = deriveCantonEd25519PublicKeyFingerprint(publicKeyBase64);
-  const signCantonPayload = jest.fn(
-    async (request: CantonEd25519SigningRequest): Promise<CantonEd25519Signature> => ({
-      signatureHex: sign(null, Buffer.from(request.payloadHex, 'hex'), privateKey).toString('hex'),
-    })
-  );
+  const signCantonPayload = jest.fn(async (request: CantonEd25519SigningRequest): Promise<CantonEd25519Signature> => ({
+    signatureHex: sign(null, Buffer.from(request.payloadHex, 'hex'), privateKey).toString('hex'),
+  }));
   return {
     privateKey,
     publicKeyBase64,
@@ -797,7 +795,7 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
           submissionId: 'stable-submission',
           hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
           deduplicationPeriod: {
-            DeduplicationDuration: { value: { seconds: 30, nanos: 0 } },
+            DeduplicationDuration: { value: { seconds: 600, nanos: 0 } },
           },
           partySignatures: expect.any(Array) as unknown[],
         },

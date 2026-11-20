@@ -5,6 +5,7 @@
  *
  * Observable for any UI framework: `subscribe` and `getSnapshot` (React: `useSyncExternalStore`).
  */
+import { awaitWithAbort, throwIfAborted } from './abort';
 import { notifyListeners } from './notify';
 import {
   cip103ErrorCode,
@@ -21,6 +22,7 @@ import {
 import type { DaNetwork } from './da-utilities/client';
 import { describeWalletError, WalletReadError, type WalletErrorDescription } from './errors';
 import { isRecord } from './json';
+import type { WalletCallOptions } from './wallet';
 
 /** A connected wallet. Each session is one object: compare by identity to tell a live session from an ended one. */
 export interface ConnectedWallet extends Cip103Connection {
@@ -59,16 +61,23 @@ export interface Cip103Session {
    * `connecting`, waits for a disconnect of this wallet still in flight, sends CIP-0103 `connect` (the wallet's own
    * sign-in), then reads the primary account (`getPrimaryAccount`). A failure becomes `error` (4001: declined).
    * Resolves when it settled; superseded by a newer `connect()`, `disconnect()`, `fail()` or `dispose()`.
+   * `options.signal` cancels it: the call rejects with an `AbortError` and, when it was still the session's pending
+   * connect, the session disconnects as `disconnect()` does (the wallet's own prompt cannot be closed from here). When
+   * the wallet signed in but its account was refused (another network, no account) and nothing newer changed the
+   * session since, the wallet is signed out and kept out of `restore()` all the same, and the session keeps that
+   * error.
    */
-  connect(provider: Cip103Provider): Promise<void>;
+  connect(provider: Cip103Provider, options?: WalletCallOptions): Promise<void>;
   /**
    * On page load: when the session is disconnected and the wallet answers CIP-0103 `isConnected` with `{ isConnected:
    * true }`, reads the primary account and connects silently. It never publishes an error: any failure (4200 included)
    * leaves the session as it was. Ignored while connecting or connected, and for a wallet the user signed out of
    * (`disconnect()`, or a switch to another wallet) until `connect()` signs in to it again, also when the wallet still
    * reports a session; dropped when anything else changed the session meanwhile, or a newer `restore()` started.
+   * `options.signal` cancels it: the call rejects with an `AbortError` and the restore is dropped (the session is not
+   * changed).
    */
-  restore(provider: Cip103Provider): Promise<void>;
+  restore(provider: Cip103Provider, options?: WalletCallOptions): Promise<void>;
   /**
    * The user disconnected: sends CIP-0103 `disconnect` (best-effort) to the wallets the session is on (the connected
    * one, and the one a pending `connect()` signs in to), then publishes `disconnected`. A later `connect()` to such a
@@ -156,6 +165,22 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
   const disconnecting = new Map<Cip103Provider, Disconnecting>();
   let attachment: Attachment | null = null;
 
+  /**
+   * Runs `onAbort` synchronously when `signal` aborts (so a cancellation supersedes pending work at once, not when a
+   * rejection is next observed), and at once when it has already aborted; returns the function that stops watching.
+   */
+  function watchAbort(signal: AbortSignal | undefined, onAbort: () => void): () => void {
+    if (signal === undefined) return () => undefined;
+    if (signal.aborted) {
+      onAbort();
+      return () => undefined;
+    }
+    signal.addEventListener('abort', onAbort, { once: true });
+    return () => {
+      signal.removeEventListener('abort', onAbort);
+    };
+  }
+
   function publish(next: Cip103SessionState): void {
     if (disposed || next === state) return;
     state = next;
@@ -193,34 +218,52 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
       onStatusChanged: (status) => {
         if (attachment !== own || !isRecord(status) || connectionFlag(status['connection']) !== false) return;
         interrupt();
-        publish(DISCONNECTED);
+        // A wallet that ends before anything was published (a sticky event during a quiet restore) leaves the session
+        // as it was, error included: only a connecting or connected session has something to end.
+        if (state.status !== 'disconnected') publish(DISCONNECTED);
       },
     };
     attachment = own;
+    // A provider may answer a new listener inside on() before it stores it, so a detach that answer set off removed
+    // nothing: take both listeners off again once on() returns when the attachment was superseded meanwhile.
+    const superseded = (): boolean => {
+      if (attachment === own) return false;
+      provider.removeListener('accountsChanged', own.onAccountsChanged);
+      provider.removeListener('statusChanged', own.onStatusChanged);
+      return true;
+    };
     provider.on('accountsChanged', own.onAccountsChanged);
+    if (superseded()) return;
     provider.on('statusChanged', own.onStatusChanged);
+    superseded();
   }
 
   /**
    * Read the primary account and connect as its party, unless something newer superseded it. A failure, or an account
    * on the other DA network, leaves the session disconnected with `error`; `quiet` (a restore) publishes nothing then.
+   * `onFailed` runs when this lookup ended the session with its error, after the interrupt and before the publish.
    */
   async function lookup(
     provider: Cip103Provider,
     quiet: boolean,
-    stillWanted: () => boolean = () => true
+    stillWanted: () => boolean = () => true,
+    signal?: AbortSignal,
+    onFailed?: () => void
   ): Promise<void> {
     const attempt = ++lookups;
-    const current = (): boolean => attempt === lookups && !disposed && stillWanted();
+    // Every publish below is guarded by this, checked right before it: superseded, disposed, no longer wanted or cancelled.
+    const current = (): boolean => attempt === lookups && !disposed && stillWanted() && signal?.aborted !== true;
     const failed = (error: WalletErrorDescription): void => {
       if (quiet) return;
       interrupt();
+      onFailed?.();
       publish({ status: 'disconnected', error });
     };
     let account: Cip103Account;
     try {
-      account = await primaryAccount(provider);
+      account = await primaryAccount(provider, { signal });
     } catch (error) {
+      // A cancelled connect()/restore() ends the attempt itself: the abort is not the wallet's failure.
       if (current()) failed(lookupError(error));
       return;
     }
@@ -293,7 +336,82 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     };
   }
 
-  return {
+  async function runConnect(
+    provider: Cip103Provider,
+    started: (epoch: number) => void,
+    signal?: AbortSignal,
+    signedInThenFailed?: (epoch: number) => void
+  ): Promise<void> {
+    if (disposed) return;
+    // Another wallet the session is on is signed out: the user switched wallets.
+    const previous = [...sessionProviders()].filter((other) => other !== provider);
+    interrupt();
+    const own = epoch;
+    started(own);
+    const current = (): boolean => own === epoch && !disposed && signal?.aborted !== true;
+    // From here on every return, early or not, clears `signingIn` (when nothing newer owns the session).
+    try {
+      signingIn = provider;
+      for (const other of previous) signedOut.add(other);
+      const sends = previous.map(recordDisconnect);
+      for (const send of sends) send();
+      if (!current()) return; // sending set off a disconnect(), fail(), dispose(), another connect() or an abort
+      publish(CONNECTING);
+      if (!current()) return; // a listener of that publish changed the session or aborted the signal
+      try {
+        // A disconnect the user sent this wallet just before must not land after the new sign-in.
+        const pending = pendingDisconnect(provider);
+        if (pending !== undefined) {
+          await settledOrDue(pending);
+          if (!current()) return;
+        }
+        signInSent = true;
+        await provider.request({ method: 'connect' }, { signal });
+      } catch (error) {
+        // A cancelled connect() ended the attempt itself, synchronously when the signal aborted (see connect()).
+        if (current()) {
+          interrupt();
+          publish({ status: 'disconnected', error: connectError(error) });
+        }
+        return;
+      }
+      if (!current()) return;
+      // Signed in again: restore() may reconnect it from now on. A sign-in that failed or was cancelled keeps it out.
+      signedOut.delete(provider);
+      // Read the account even when the wallet was already connected.
+      // Its own failure (another network, no account) supersedes `own`: report the epoch it published at, so a
+      // cancellation that follows still signs the wallet out.
+      await lookup(provider, false, undefined, signal, () => signedInThenFailed?.(epoch));
+    } finally {
+      if (own === epoch) {
+        signingIn = null;
+        signInSent = false;
+      }
+    }
+  }
+
+  async function runRestore(
+    provider: Cip103Provider,
+    started: (attempt: number, epochAtStart: number) => void,
+    signal?: AbortSignal
+  ): Promise<void> {
+    if (disposed || state.status !== 'disconnected' || signedOut.has(provider)) return;
+    const own = epoch;
+    const attempt = ++restores;
+    started(attempt, own);
+    const wanted = (): boolean =>
+      !disposed && own === epoch && attempt === restores && state.status === 'disconnected' && signal?.aborted !== true;
+    let answer: unknown = null;
+    try {
+      answer = await provider.request({ method: 'isConnected' }, { signal });
+    } catch {
+      return; // 4200 or any other failure: not connected
+    }
+    if (!wanted() || connectionFlag(answer) !== true) return;
+    await lookup(provider, true, wanted, signal);
+  }
+
+  const api: Cip103Session = {
     network,
 
     subscribe(listener) {
@@ -305,64 +423,91 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
 
     getSnapshot: () => state,
 
-    async connect(provider) {
-      if (disposed) return;
-      // Another wallet the session is on is signed out: the user switched wallets.
-      const previous = [...sessionProviders()].filter((other) => other !== provider);
-      interrupt();
-      const own = epoch;
-      const current = (): boolean => own === epoch && !disposed;
-      signingIn = provider;
-      for (const other of previous) signedOut.add(other);
-      const sends = previous.map(recordDisconnect);
-      for (const send of sends) send();
-      if (!current()) return; // sending set off a disconnect(), fail(), dispose() or another connect()
-      publish(CONNECTING);
-      if (!current()) return; // a listener of that publish changed the session
+    async connect(provider, { signal } = {}) {
+      throwIfAborted(signal);
+      let own: number | undefined;
+      // The epoch at which this run's own account read failed after the wallet signed in (nothing newer since then).
+      let failedAt: number | undefined;
+      // Cancelled while it is still the session's pending connect: the user gave up, as with disconnect(). Done the
+      // moment the signal aborts, so no reply that is already queued can publish first, and the provider (still
+      // recorded as signing in) is signed out and kept out of restore(). Idempotent: once run, `own` is superseded.
+      // Cancelled after the run signed in and then failed on its own (nothing newer owns the session): the wallet is
+      // signed out and kept out of restore() as well, and the session keeps the error it shows.
+      const cancel = (): void => {
+        if (disposed) return;
+        if (own !== undefined && own === epoch) {
+          api.disconnect();
+        } else if (failedAt !== undefined && failedAt === epoch) {
+          failedAt = undefined;
+          signedOut.add(provider);
+          recordDisconnect(provider)();
+        }
+      };
+      // Watching before the run starts: its first steps (the sign-out of another wallet, the `connecting` publish) run
+      // synchronously and may set off the abort.
+      const stopWatching = watchAbort(signal, cancel);
+      const run = runConnect(
+        provider,
+        (epochAtStart) => {
+          own = epochAtStart;
+        },
+        signal,
+        (epochAtFailure) => {
+          failedAt = epochAtFailure;
+        }
+      );
+      void run.catch(() => undefined); // an abort stops waiting only: the run drops itself once superseded
+      // Aborted before the run recorded its epoch (a provider call-out before it started, such as the old wallet's
+      // removeListener, aborted the signal while `cancel` had nothing to cancel): the run returned early without
+      // signing in, so sign the provider out here, also when the run's own cleanup already cleared `signingIn`.
+      if (signal?.aborted === true && own !== undefined && own === epoch && !disposed) {
+        signedOut.add(provider);
+        api.disconnect();
+      }
       try {
-        try {
-          // A disconnect the user sent this wallet just before must not land after the new sign-in.
-          const pending = pendingDisconnect(provider);
-          if (pending !== undefined) {
-            await settledOrDue(pending);
-            if (!current()) return;
-          }
-          signInSent = true;
-          await provider.request({ method: 'connect' });
-        } catch (error) {
-          if (current()) {
-            interrupt();
-            publish({ status: 'disconnected', error: connectError(error) });
-          }
-          return;
-        }
-        if (!current()) return;
-        // Signed in again: restore() may reconnect it from now on. A sign-in that failed or was cancelled keeps it out.
-        signedOut.delete(provider);
-        // Read the account even when the wallet was already connected.
-        await lookup(provider, false);
+        await awaitWithAbort(async () => run, signal);
+        // An abort after the run settled, before the watch stops, still ran `cancel`: the call rejects too.
+        throwIfAborted(signal);
       } finally {
-        if (own === epoch) {
-          signingIn = null;
-          signInSent = false;
-        }
+        stopWatching();
       }
     },
 
-    async restore(provider) {
-      if (disposed || state.status !== 'disconnected' || signedOut.has(provider)) return;
-      const own = epoch;
-      const attempt = ++restores;
-      const wanted = (): boolean =>
-        !disposed && own === epoch && attempt === restores && state.status === 'disconnected';
-      let answer: unknown = null;
+    async restore(provider, { signal } = {}) {
+      throwIfAborted(signal);
+      const before = state;
+      let attempt: number | undefined;
+      let ownEpoch: number | undefined;
+      // Dropped the moment the signal aborts: it may no longer connect (unless a newer restore() has taken over), and
+      // a wallet it already published goes back to the state the session was in before the call. Idempotent: once
+      // run, `attempt` is superseded.
+      const cancel = (): void => {
+        if (attempt === undefined || attempt !== restores) return;
+        restores += 1;
+        if (ownEpoch === epoch && state.status === 'connected' && state.wallet.provider === provider) {
+          interrupt();
+          publish(before);
+        }
+      };
+      // Watching before the run starts, as connect() does: its first request runs synchronously.
+      const stopWatching = watchAbort(signal, cancel);
+      const run = runRestore(
+        provider,
+        (number, epochAtStart) => {
+          attempt = number;
+          ownEpoch = epochAtStart;
+        },
+        signal
+      );
+      void run.catch(() => undefined);
+      if (signal?.aborted === true) cancel();
       try {
-        answer = await provider.request({ method: 'isConnected' });
-      } catch {
-        return; // 4200 or any other failure: not connected
+        await awaitWithAbort(async () => run, signal);
+        // An abort after the run settled, before the watch stops, still ran `cancel`: the call rejects too.
+        throwIfAborted(signal);
+      } finally {
+        stopWatching();
       }
-      if (!wanted() || connectionFlag(answer) !== true) return;
-      await lookup(provider, true, wanted);
     },
 
     disconnect() {
@@ -397,4 +542,5 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
       listeners.clear();
     },
   };
+  return api;
 }

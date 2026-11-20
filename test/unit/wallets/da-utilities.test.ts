@@ -365,3 +365,95 @@ describe('factoryTemplateError', () => {
     expect(factoryTemplateError(factory('Evil.Module:Factory'), expected)).toMatch(/unexpected template/);
   });
 });
+
+describe('createDaUtilitiesClient: cancellation', () => {
+  const isAbort = (error: unknown): boolean => (error as { name?: unknown }).name === 'AbortError';
+
+  it('passes the signal to fetch and rejects with an AbortError once it aborted', async () => {
+    const { fetch, calls } = fakeFetch(() => ({ json: choiceContext }));
+    const client = createDaUtilitiesClient('devnet', { fetch });
+    const { signal } = new AbortController();
+    await client.mintOfferAcceptContext('00offer', signal);
+    expect(calls[0]?.signal).toBe(signal);
+
+    const controller = new AbortController();
+    controller.abort();
+    const error = await client.mintOfferAcceptContext('00offer', controller.signal).catch((e: unknown) => e);
+    expect(isAbort(error)).toBe(true);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('stops waiting for a fetch that ignores the signal', async () => {
+    let answer: () => void = () => undefined;
+    const fetch: FetchLike = async () =>
+      new Promise((resolve) => {
+        answer = () => resolve({ ok: true, status: 200, text: async () => JSON.stringify(choiceContext) });
+      });
+    const client = createDaUtilitiesClient('devnet', { fetch });
+    const controller = new AbortController();
+    const pending = client.mintOfferAcceptContext('00offer', controller.signal).catch((e: unknown) => e);
+    controller.abort();
+    expect(isAbort(await pending)).toBe(true);
+    answer();
+  });
+
+  it("stops one caller waiting for the shared operator and metadata lookups, without failing the others'", async () => {
+    let answer: () => void = () => undefined;
+    const fetch: FetchLike = async (url) =>
+      new Promise((resolve) => {
+        const json = url.endsWith('/operator')
+          ? { partyId: 'op::1' }
+          : { id: 'XMPL', name: 'Example', symbol: 'XMPL', decimals: 2 };
+        const previous = answer;
+        answer = () => {
+          previous();
+          resolve({ ok: true, status: 200, text: async () => JSON.stringify(json) });
+        };
+      });
+    const client = createDaUtilitiesClient('devnet', { fetch });
+    const controller = new AbortController();
+    const cancelledOperator = client.operatorParty(controller.signal).catch((e: unknown) => e);
+    const cancelledMetadata = client.instrumentMetadata(INSTRUMENT, controller.signal).catch((e: unknown) => e);
+    const operator = client.operatorParty();
+    const metadata = client.instrumentMetadata(INSTRUMENT);
+    controller.abort();
+    expect(isAbort(await cancelledOperator)).toBe(true);
+    expect(isAbort(await cancelledMetadata)).toBe(true);
+    answer();
+    await expect(operator).resolves.toBe('op::1');
+    await expect(metadata).resolves.toEqual({ name: 'Example', symbol: 'XMPL', decimals: 2 });
+  });
+
+  it('leaves no unhandled rejection when a caller cancels and the shared lookups then fail', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      let fail: () => void = () => undefined;
+      const fetch: FetchLike = async () =>
+        new Promise((_resolve, reject) => {
+          fail = () => reject(new Error('registry down'));
+        });
+      const client = createDaUtilitiesClient('devnet', { fetch });
+      const controller = new AbortController();
+      const cancelled = client.operatorParty(controller.signal).catch((e: unknown) => e);
+      const other = client.operatorParty().catch((e: unknown) => e);
+      controller.abort();
+      expect(isAbort(await cancelled)).toBe(true);
+      fail();
+      expect(await other).toBeInstanceOf(Error);
+      // Only the cancelled caller: nobody else observes the shared promise.
+      const solo = new AbortController();
+      const soloCancelled = client.operatorParty(solo.signal).catch((e: unknown) => e);
+      solo.abort();
+      expect(isAbort(await soloCancelled)).toBe(true);
+      fail();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+});

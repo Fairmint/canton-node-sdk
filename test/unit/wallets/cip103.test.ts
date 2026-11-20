@@ -2,6 +2,7 @@ import {
   CIP103_ERROR_CODES,
   cip103ErrorCode,
   cip103NetworkId,
+  cantonErrorOf,
   cip103SubmitError,
   cip103Wallet,
   isDaNetwork,
@@ -482,6 +483,126 @@ describe('cip103Wallet.submit', () => {
     expect(cip103SubmitError({ code: 777, message: 'odd' }, 'c').message).toMatch(
       /^The wallet did not confirm the transaction: odd \(CIP-0103 777\)\./
     );
+  });
+
+  it.each([
+    [4001, 'user-rejected'],
+    [4200, 'wallet-refused'],
+    [-32602, 'wallet-refused'],
+    [4100, 'session'],
+    [4900, 'session'],
+    [-32005, 'rate-limited'],
+    [-32003, 'ledger-rejected'],
+    [-32002, 'unavailable'],
+    [-32603, 'internal'],
+    [1234, 'unknown'],
+  ] as const)('gives provider error %i the category %s when it names no Canton error', (code, category) => {
+    const error = cip103SubmitError(rpcError(code, 'nope'), 'c');
+    expect(error.category).toBe(category);
+    expect(error.cantonErrorId).toBeUndefined();
+  });
+
+  it('takes the category and error id of the Canton error a wallet passed on, without changing the outcome', () => {
+    const locked = cip103SubmitError(
+      rpcError(
+        -32003,
+        'LOCAL_VERDICT_LOCKED_CONTRACTS(2,3a9c41f0): Rejected transaction is referring to locked contracts'
+      ),
+      'c'
+    );
+    expect(locked).toMatchObject({
+      outcome: 'failed',
+      category: 'contention',
+      cantonErrorId: 'LOCAL_VERDICT_LOCKED_CONTRACTS',
+    });
+    // A Ledger JSON API error (JsCantonError) in `data`, under an -32603: still `unknown`, but with why.
+    const fromData = Object.assign(rpcError(-32603, 'The ledger could not prepare the command.'), {
+      data: { cause: { code: 'DAML_INTERPRETATION_ERROR', errorCategory: 9, cause: 'Assertion failed' } },
+    });
+    expect(cip103SubmitError(fromData, 'c')).toMatchObject({
+      outcome: 'unknown',
+      category: 'precondition',
+      cantonErrorId: 'DAML_INTERPRETATION_ERROR',
+    });
+    expect(cip103SubmitError(rpcError(-32003, 'CONTRACT_NOT_FOUND(11,abc): gone'), 'c').category).toBe('not-found');
+    expect(cip103SubmitError(rpcError(-32002, 'SUBMISSION_ALREADY_IN_FLIGHT(10,x): dup'), 'c').category).toBe(
+      'duplicate'
+    );
+    // 4001 is the user's answer, whatever else the error says.
+    expect(cip103SubmitError(rpcError(4001, 'CONTRACT_NOT_FOUND(11,abc): gone'), 'c').category).toBe('user-rejected');
+    // An unknown category number keeps the id and falls back to the code.
+    expect(cip103SubmitError(rpcError(-32003, 'NEW_ERROR(99,abc): ?'), 'c')).toMatchObject({
+      category: 'ledger-rejected',
+      cantonErrorId: 'NEW_ERROR',
+    });
+  });
+
+  it('reads at most 32 own keys, and a throwing property does not discard the rest', () => {
+    let reads = 0;
+    const lazy: Record<string, unknown> = {};
+    for (let i = 0; i < 100; i += 1) {
+      Object.defineProperty(lazy, `n${i}`, {
+        enumerable: true,
+        get: () => {
+          reads += 1;
+          return undefined;
+        },
+      });
+    }
+    reads = 0;
+    expect(cantonErrorOf({ data: lazy })).toBeUndefined();
+    expect(reads).toBe(32);
+    const hostile: Record<string, unknown> = {
+      boom: undefined,
+      ok: { code: 'AFTER_GETTER', errorCategory: 8 },
+    };
+    Object.defineProperty(hostile, 'boom', {
+      enumerable: true,
+      get: () => {
+        throw new Error('getter');
+      },
+    });
+    expect(cantonErrorOf({ data: hostile })).toEqual({ id: 'AFTER_GETTER', category: 8 });
+    // A throwing getter beyond key 32 is never read.
+    const late: Record<string, unknown> = { first: { code: 'EARLY_ERROR', errorCategory: 5 } };
+    for (let i = 0; i < 40; i += 1) late[`p${i}`] = null;
+    Object.defineProperty(late, 'poison', {
+      enumerable: true,
+      get: () => {
+        throw new Error('poison');
+      },
+    });
+    expect(cantonErrorOf({ data: late })).toEqual({ id: 'EARLY_ERROR', category: 5 });
+  });
+
+  it('finds a Canton error within bounds, and never throws looking', () => {
+    expect(cantonErrorOf({ message: 'x', data: 'INVALID_ARGUMENT(8,0): bad' })).toEqual({
+      id: 'INVALID_ARGUMENT',
+      category: 8,
+    });
+    expect(cantonErrorOf({ message: 'nothing here', data: { code: 'lowercase', errorCategory: 9 } })).toBeUndefined();
+    expect(cantonErrorOf({ data: { code: 'NO_CATEGORY' } })).toBeUndefined();
+    let deep: Record<string, unknown> = { code: 'TOO_DEEP', errorCategory: 9 };
+    for (let i = 0; i < 10; i += 1) deep = { nested: deep };
+    expect(cantonErrorOf({ data: deep })).toBeUndefined();
+    const cyclic: Record<string, unknown> = {};
+    cyclic['self'] = cyclic;
+    expect(cantonErrorOf({ data: cyclic })).toBeUndefined();
+    const hostile = {
+      get data(): unknown {
+        throw new Error('trap');
+      },
+    };
+    expect(cantonErrorOf(hostile)).toBeUndefined();
+    expect(cantonErrorOf(undefined)).toBeUndefined();
+  });
+
+  it('marks a failed status as a ledger rejection', async () => {
+    const provider = scriptedProvider({ prepareExecuteAndWait: () => ({ tx: { status: 'failed' } }) });
+    const error = await cip103Wallet(provider, HOLDER)
+      .submit(submission)
+      .catch((e: unknown) => e);
+    expect(error).toMatchObject({ outcome: 'failed', category: 'ledger-rejected' });
   });
 
   it('reads codes only from integer code fields', () => {

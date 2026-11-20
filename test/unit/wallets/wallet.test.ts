@@ -1,6 +1,12 @@
 import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
+import { isCancelledBeforeSubmit } from '../../../src/wallets/abort';
 import type { TransferKind } from '../../../src/wallets/da-utilities/client';
-import { RegistryResponseError, WalletError, WalletSubmitError } from '../../../src/wallets/errors';
+import {
+  describeWalletError,
+  RegistryResponseError,
+  WalletError,
+  WalletSubmitError,
+} from '../../../src/wallets/errors';
 import type { JsonObject } from '../../../src/wallets/json';
 import type { ActiveContract } from '../../../src/wallets/types';
 import {
@@ -162,9 +168,11 @@ function setup(
     beforeLedgerApi?: (resource: string, body: unknown) => void;
     submitError?: unknown;
     now?: () => Date;
+    /** A registry request whose URL ends with this never answers, like a request still in flight. */
+    hangOn?: string;
   } = {}
 ): Setup {
-  const { fetch, calls } = fakeFetch((call: FetchCall) => {
+  const { fetch: answering, calls } = fakeFetch((call: FetchCall) => {
     if (call.url.endsWith('/api/utilities/v0/operator')) return { json: { partyId: OPERATOR } };
     if (call.url.includes('/metadata/v1/instruments/')) {
       return options.metadata?.(call) ?? { json: { id: 'XMPL', name: 'Example', symbol: 'XMPL', decimals: 2 } };
@@ -203,6 +211,12 @@ function setup(
       },
     };
   });
+  const fetch: typeof answering = async (url, init) => {
+    if (options.hangOn !== undefined && url.endsWith(options.hangOn)) {
+      await new Promise<never>(() => undefined);
+    }
+    return answering(url, init);
+  };
   const wallet = fakeProvider(ledger(options), {
     ...(options.beforeLedgerApi !== undefined && { beforeLedgerApi: options.beforeLedgerApi }),
     ...(options.submitError !== undefined && { submitError: options.submitError }),
@@ -591,6 +605,39 @@ describe('createWallet: one write at a time, in a live session', () => {
   });
 });
 
+describe('createWallet.loadState cancellation', () => {
+  it('leaves no unhandled rejection when the caller cancels and the shared read then fails, and others still see it', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const { tokens } = setup({
+        beforeLedgerApi: () => {
+          throw new Error('ledger down');
+        },
+      });
+      const controller = new AbortController();
+      const cancelled = tokens.loadState({ signal: controller.signal }).catch((e: unknown) => e);
+      const other = tokens.loadState().catch((e: unknown) => e);
+      controller.abort();
+      expect((await cancelled) as { name?: string }).toMatchObject({ name: 'AbortError' });
+      expect(await other).toBeInstanceOf(Error);
+      expect(((await other) as { name?: string }).name).not.toBe('AbortError');
+      // Only the cancelled caller observes the shared read.
+      const solo = new AbortController();
+      const soloCancelled = tokens.loadState({ signal: solo.signal }).catch((e: unknown) => e);
+      solo.abort();
+      expect((await soloCancelled) as { name?: string }).toMatchObject({ name: 'AbortError' });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+});
+
 describe('createWallet: transfer offers', () => {
   it.each([
     ['acceptTransferOffer', '00in', 'accept', 'TransferInstruction_Accept'],
@@ -924,5 +971,130 @@ describe('newBurnReference', () => {
 
   it('refuses an invalid date', () => {
     expect(() => newBurnReference(new Date('soon'))).toThrow(WalletError);
+  });
+});
+
+describe('createWallet: cancellation', () => {
+  const aborted = (): AbortSignal => {
+    const controller = new AbortController();
+    controller.abort();
+    return controller.signal;
+  };
+  const isAbort = (error: unknown): boolean => (error as { name?: unknown }).name === 'AbortError';
+
+  it('refuses every call with an AbortError once its signal aborted, before any read, registry call or signature', async () => {
+    const { tokens, wallet, calls } = setup();
+    const signal = aborted();
+    const results = await Promise.all(
+      [
+        tokens.loadState({ signal }),
+        tokens.planTransfer(request, { signal }),
+        tokens.acceptTransferOffer('00in', { signal }),
+        tokens.rejectTransferOffer('00in', { signal }),
+        tokens.withdrawTransferOffer('00out', { signal }),
+        tokens.acceptMintOffer('00mint', { signal }),
+        tokens.rejectMintOffer('00mint', { signal }),
+        tokens.requestBurn({ instrumentId: INSTRUMENT, amount: '1' }, { signal }),
+        tokens.cancelBurnRequest('00burn', { signal }),
+        tokens.createTransferPreapproval({ instrumentAdmin: OTHER }, { signal }),
+        tokens.removeTransferPreapproval('00pre', { signal }),
+      ].map(async (call) => call.catch((error: unknown) => error))
+    );
+    expect(results.every(isAbort)).toBe(true);
+    // Thrown before anything was submitted, so `describeWalletError` may say so.
+    expect(results.every(isCancelledBeforeSubmit)).toBe(true);
+    expect(wallet.reads).toEqual([]);
+    expect(calls).toEqual([]);
+    expect(wallet.submissions).toEqual([]);
+    // The write guard was never taken.
+    await expect(tokens.rejectMintOffer('00mint')).resolves.toMatchObject({ updateId: 'update-1' });
+  });
+
+  it('brands a cancellation during a pending registry request: nothing was submitted', async () => {
+    const { tokens, wallet } = setup({ hangOn: '/transfer-factory' });
+    const controller = new AbortController();
+    const transfer = tokens.planTransfer(request, { signal: controller.signal }).catch((error: unknown) => error);
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 20);
+    });
+    controller.abort();
+    const error = await transfer;
+    expect(isAbort(error)).toBe(true);
+    expect(isCancelledBeforeSubmit(error)).toBe(true);
+    expect(describeWalletError(error).message).toContain('Nothing was submitted');
+    expect(wallet.submissions).toEqual([]);
+  });
+
+  it("passes the signal to a write's own registry requests, not to the shared operator lookup", async () => {
+    const { tokens, calls } = setup();
+    const { signal } = new AbortController();
+    await tokens.acceptMintOffer('00mint', { signal });
+    expect(postCalls(calls)).toHaveLength(1);
+    expect(postCalls(calls).every((call) => call.signal === signal)).toBe(true);
+    // Shared with every other call of the wallet, so one caller's abort must not fail it for the rest.
+    expect(calls.filter((call) => call.method === 'GET').map((call) => call.signal)).toEqual([undefined]);
+  });
+
+  it('stops a write that is still reading, submits nothing, and frees the write guard', async () => {
+    const { tokens, wallet } = setup();
+    const controller = new AbortController();
+    const hold = holdNext(wallet, 'ledgerApi');
+    const write = tokens.acceptMintOffer('00mint', { signal: controller.signal }).catch((error: unknown) => error);
+    await hold.entered;
+    controller.abort();
+    expect(isAbort(await write)).toBe(true);
+    hold.release();
+    expect(wallet.submissions).toEqual([]);
+    await expect(tokens.acceptMintOffer('00mint')).resolves.toMatchObject({ updateId: 'update-1' });
+  });
+
+  it('runs a write to its outcome once the wallet has it: a late abort is ignored', async () => {
+    const { tokens, wallet } = setup();
+    const controller = new AbortController();
+    const hold = holdNext(wallet, 'prepareExecuteAndWait');
+    const write = tokens.rejectMintOffer('00mint', { signal: controller.signal });
+    await hold.entered;
+    controller.abort();
+    hold.release();
+    await expect(write).resolves.toMatchObject({ updateId: 'update-1' });
+    expect(wallet.submissions).toHaveLength(1);
+  });
+
+  it('stops one caller waiting for a shared snapshot without failing the others', async () => {
+    const { tokens, wallet } = setup();
+    const controller = new AbortController();
+    const hold = holdNext(wallet, 'ledgerApi');
+    const cancelled = tokens.loadState({ signal: controller.signal }).catch((error: unknown) => error);
+    const kept = tokens.loadState();
+    await hold.entered;
+    controller.abort();
+    expect(isAbort(await cancelled)).toBe(true);
+    hold.release();
+    await expect(kept).resolves.toMatchObject({ offset: expect.any(Number) });
+  });
+
+  it('cancels a planned transfer at submit time', async () => {
+    const { tokens, wallet } = setup();
+    const plan = await tokens.planTransfer(request);
+    const submitted = await plan.submit({ signal: aborted() }).catch((error: unknown) => error);
+    expect(isAbort(submitted)).toBe(true);
+    expect(wallet.submissions).toEqual([]);
+    await expect(plan.submit()).resolves.toMatchObject({ kind: 'offer' });
+  });
+
+  it('keeps the category and Canton error id when it names the burn reference of a failed submission', async () => {
+    const { tokens } = setup({
+      submitError: new RpcError(-32003, 'CONTRACT_NOT_FOUND(11,ab12): Contract could not be found'),
+    });
+    const error = await tokens
+      .requestBurn({ instrumentId: INSTRUMENT, amount: '1', reference: 'holder-burn-x' })
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(WalletSubmitError);
+    expect(error).toMatchObject({
+      outcome: 'failed',
+      category: 'not-found',
+      cantonErrorId: 'CONTRACT_NOT_FOUND',
+      burnReference: 'holder-burn-x',
+    });
   });
 });

@@ -20,6 +20,7 @@ const BUILT_ENTRY = path.resolve(__dirname, '../../../build/src/wallets/index.js
  * other allowed modules (checked below).
  */
 const ALLOWED_OUTSIDE = [
+  'core/http/abort.ts',
   'core/utils/type-guards.ts',
   'da-registry/templates.ts',
   'utils/token-standard/v1/constants.ts',

@@ -50,7 +50,8 @@ import {
   type TransferFactory,
   type TransferKind,
 } from './da-utilities/client';
-import { RegistryResponseError, WalletError, WalletSubmitError } from './errors';
+import { awaitWithAbort, throwIfAborted } from './abort';
+import { isWalletSubmitError, RegistryResponseError, WalletError, WalletSubmitError } from './errors';
 import { instrumentBalances, parseHolding, selectHoldings, type Holding, type InstrumentBalance } from './holdings';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
 import { TOKEN_STANDARD_V1_REASON_META_KEY } from '../utils/token-standard/v1/constants';
@@ -124,6 +125,18 @@ export interface WalletInternalOptions extends WalletOptions {
   readonly readRetry?: WalletReadRetryOptions;
 }
 
+/**
+ * Per-call options of a wallet action.
+ *
+ * `signal` cancels the action: once it aborts, the call rejects with an `AbortError` (`describeWalletError` kind
+ * `cancelled`), its registry requests get the signal, and nothing is submitted. A write checks the signal for the last
+ * time right before it hands the transaction to the wallet; from then on it runs to its outcome (CIP-0103 has no
+ * cancellation, and a submission must never be left half-known), so a late abort is ignored.
+ */
+export interface WalletCallOptions {
+  readonly signal?: AbortSignal;
+}
+
 export interface TransferOffers {
   /** Offers to the wallet party, which it can accept or reject. */
   readonly incoming: TransferOffer[];
@@ -183,7 +196,7 @@ export interface TransferPlan {
   /** The request as planned (a frozen copy). */
   readonly request: Readonly<TransferRequest>;
   /** Run the transfer (a write: one at a time, see `Wallet`). */
-  submit(): Promise<TransferResult>;
+  submit(options?: WalletCallOptions): Promise<TransferResult>;
 }
 
 export interface BurnRequestOptions {
@@ -221,32 +234,35 @@ export interface Wallet {
    * transfer preapprovals (one ledger-end call and one ACS read). Calls made while a snapshot is in flight share it,
    * unless a write settled since it started.
    */
-  loadState(): Promise<WalletState>;
+  loadState(options?: WalletCallOptions): Promise<WalletState>;
   /** How the registry would run a transfer, kept to submit once the user confirmed it (see {@link TransferPlan}). */
-  planTransfer(request: TransferRequest): Promise<TransferPlan>;
-  acceptTransferOffer(transferOfferCid: string): Promise<SubmitResult>;
-  rejectTransferOffer(transferOfferCid: string): Promise<SubmitResult>;
+  planTransfer(request: TransferRequest, options?: WalletCallOptions): Promise<TransferPlan>;
+  acceptTransferOffer(transferOfferCid: string, options?: WalletCallOptions): Promise<SubmitResult>;
+  rejectTransferOffer(transferOfferCid: string, options?: WalletCallOptions): Promise<SubmitResult>;
   /** Withdraw one of the party's own transfer offers, which unlocks its tokens (also after the offer expired). */
-  withdrawTransferOffer(transferOfferCid: string): Promise<SubmitResult>;
-  acceptMintOffer(mintOfferCid: string): Promise<SubmitResult>;
+  withdrawTransferOffer(transferOfferCid: string, options?: WalletCallOptions): Promise<SubmitResult>;
+  acceptMintOffer(mintOfferCid: string, options?: WalletCallOptions): Promise<SubmitResult>;
   /** Reject a mint offer; the registrar sees {@link MINT_OFFER_REJECT_REASON}. */
-  rejectMintOffer(mintOfferCid: string): Promise<SubmitResult>;
+  rejectMintOffer(mintOfferCid: string, options?: WalletCallOptions): Promise<SubmitResult>;
   /**
    * File a burn (redemption) request; DA locks the amount until the registrar accepts or rejects it, or the holder
    * cancels it. Resolves with the reference it was filed with. If the submission fails, the `WalletSubmitError` carries
    * that reference too (`burnReference`, and in its message): after an `unknown` outcome, find the burn request by it
    * before filing another, or the amount may be locked twice.
    */
-  requestBurn(options: BurnRequestOptions): Promise<BurnRequestResult>;
+  requestBurn(burn: BurnRequestOptions, options?: WalletCallOptions): Promise<BurnRequestResult>;
   /** Cancel one of the party's open burn requests; DA unlocks the amount. */
-  cancelBurnRequest(burnRequestCid: string): Promise<SubmitResult>;
+  cancelBurnRequest(burnRequestCid: string, options?: WalletCallOptions): Promise<SubmitResult>;
   /**
    * Create the party's transfer preapproval for an instrument admin, so transfers of those instruments to the party
    * complete at once. Refused with `already-exists` when one of the party's preapprovals already covers them.
    */
-  createTransferPreapproval(options: TransferPreapprovalOptions): Promise<SubmitResult>;
+  createTransferPreapproval(
+    preapproval: TransferPreapprovalOptions,
+    options?: WalletCallOptions
+  ): Promise<SubmitResult>;
   /** Withdraw one of the party's transfer preapprovals. */
-  removeTransferPreapproval(preapprovalCid: string): Promise<SubmitResult>;
+  removeTransferPreapproval(preapprovalCid: string, options?: WalletCallOptions): Promise<SubmitResult>;
 }
 
 /** A sentence explaining how the registry runs a transfer of each kind. */
@@ -322,13 +338,15 @@ export function createWallet(options: WalletOptions): Wallet {
 
   const ledger: Cip103Wallet = cip103Wallet(provider, partyId, readRetry !== undefined ? { readRetry } : {});
 
-  async function read(templateId: string): Promise<ActiveContract[]> {
-    return (await ledger.readActiveContracts([templateId])).contracts;
+  /** A ledger read; an aborted `signal` stops waiting for it (the wallet's read itself cannot be cancelled). */
+  async function read(templateId: string, signal: AbortSignal | undefined): Promise<ActiveContract[]> {
+    return (await awaitWithAbort(async () => ledger.readActiveContracts([templateId]), signal)).contracts;
   }
 
-  async function submit(submission: WalletSubmission): Promise<SubmitResult> {
+  async function submit(submission: WalletSubmission, signal: AbortSignal | undefined): Promise<SubmitResult> {
     // Checked again right before the wallet signs: a write's reads and registry calls await, and the session may end
-    // meanwhile.
+    // (or the caller abort) meanwhile. Never after: a submission handed to the wallet runs to its outcome.
+    throwIfAborted(signal);
     requireActive();
     return ledger.submit(submission);
   }
@@ -338,10 +356,11 @@ export function createWallet(options: WalletOptions): Wallet {
   let busy = false;
   // Bumped when a write settles: a snapshot started before then may predate the write, so later reads do not join it.
   let writesSettled = 0;
-  async function exclusive<T>(action: () => Promise<T>): Promise<T> {
+  async function exclusive<T>(signal: AbortSignal | undefined, action: () => Promise<T>): Promise<T> {
     if (busy) {
       throw new WalletError('busy', 'Another wallet action is in progress; nothing was submitted');
     }
+    throwIfAborted(signal);
     requireActive();
     busy = true;
     try {
@@ -432,13 +451,19 @@ export function createWallet(options: WalletOptions): Wallet {
   }
 
   let inFlight: { readonly writesSettled: number; readonly promise: Promise<WalletState> } | undefined;
-  async function loadState(): Promise<WalletState> {
-    if (inFlight?.writesSettled === writesSettled) return inFlight.promise;
-    const promise: Promise<WalletState> = readState().finally(() => {
-      if (inFlight?.promise === promise) inFlight = undefined;
-    });
-    inFlight = { writesSettled, promise };
-    return promise;
+  /** The snapshot is shared by concurrent callers, so a caller's `signal` only stops that caller waiting for it. */
+  async function loadState({ signal }: WalletCallOptions = {}): Promise<WalletState> {
+    throwIfAborted(signal);
+    if (inFlight?.writesSettled !== writesSettled) {
+      const promise: Promise<WalletState> = readState().finally(() => {
+        if (inFlight?.promise === promise) inFlight = undefined;
+      });
+      inFlight = { writesSettled, promise };
+    }
+    const shared = inFlight.promise;
+    // A cancelled caller may never observe `shared`; other callers still do, so a later failure is never unhandled.
+    void shared.catch(() => undefined);
+    return signal === undefined ? shared : awaitWithAbort(async () => shared, signal);
   }
 
   /** A validated, frozen copy of a transfer request, so a later change to the caller's object changes nothing. */
@@ -459,11 +484,12 @@ export function createWallet(options: WalletOptions): Wallet {
    * for the kind it answered (a direct transfer runs through a `TransferPreapproval`, nothing else does).
    */
   async function prepareTransfer(
-    request: Readonly<TransferRequest>
+    request: Readonly<TransferRequest>,
+    signal: AbortSignal | undefined
   ): Promise<{ transfer: TransferSpec; factory: TransferFactory }> {
     const at = now();
     const executeBefore = deadline(request.executeBefore, at, TRANSFER_TTL_MS);
-    const selection = selectHoldings(holdingsIn(await read(DA_REGISTRY_TEMPLATES.holding)), {
+    const selection = selectHoldings(holdingsIn(await read(DA_REGISTRY_TEMPLATES.holding, signal)), {
       owner: partyId,
       instrumentId: request.instrumentId,
       amount: request.amount,
@@ -478,7 +504,7 @@ export function createWallet(options: WalletOptions): Wallet {
       inputHoldingCids: selection.inputHoldingCids,
       meta: { values: request.memo !== undefined ? { [TOKEN_STANDARD_V1_REASON_META_KEY]: request.memo } : {} },
     };
-    const factory = await registry.transferFactory(request.instrumentId.admin, transfer);
+    const factory = await registry.transferFactory(request.instrumentId.admin, transfer, signal);
     const factoryError = factoryTemplateError(factory, DA_TRANSFER_FACTORY_TEMPLATES[factory.transferKind]);
     if (factoryError !== null) {
       throw new RegistryResponseError(`${factoryError} It answered a ${factory.transferKind} transfer.`);
@@ -486,9 +512,12 @@ export function createWallet(options: WalletOptions): Wallet {
     return { transfer, factory };
   }
 
-  async function planTransfer(request: TransferRequest): Promise<TransferPlan> {
+  async function planTransfer(request: TransferRequest, call: WalletCallOptions = {}): Promise<TransferPlan> {
+    // The plan's own `submit` takes its own signal: this one cancels planning only.
+    const planSignal = call.signal;
+    throwIfAborted(planSignal);
     const planned = plannedRequest(request);
-    const kind = (await prepareTransfer(planned)).factory.transferKind;
+    const kind = (await prepareTransfer(planned, planSignal)).factory.transferKind;
     if (planned.requirePreapproval === true && kind !== 'direct') {
       throw new WalletError(
         'preapproval-required',
@@ -500,26 +529,29 @@ export function createWallet(options: WalletOptions): Wallet {
       description: TRANSFER_KIND_DESCRIPTIONS[kind],
       partyId,
       request: planned,
-      submit: async () =>
-        exclusive(async (): Promise<TransferResult> => {
-          const { transfer, factory } = await prepareTransfer(planned);
+      submit: async ({ signal }: WalletCallOptions = {}) =>
+        exclusive(signal, async (): Promise<TransferResult> => {
+          const { transfer, factory } = await prepareTransfer(planned, signal);
           if (factory.transferKind !== kind) {
             throw new WalletError(
               'kind-changed',
               `The registry would now make a${factory.transferKind === 'offer' ? 'n' : ''} ${factory.transferKind} transfer, not the planned ${kind}; nothing was submitted`
             );
           }
-          const result = await submit({
-            commands: [
-              transferCommand({
-                factoryId: factory.factoryId,
-                expectedAdmin: transfer.instrumentId.admin,
-                transfer,
-                context: factory.choiceContextData,
-              }),
-            ],
-            disclosedContracts: factory.disclosedContracts,
-          });
+          const result = await submit(
+            {
+              commands: [
+                transferCommand({
+                  factoryId: factory.factoryId,
+                  expectedAdmin: transfer.instrumentId.admin,
+                  transfer,
+                  context: factory.choiceContextData,
+                }),
+              ],
+              disclosedContracts: factory.disclosedContracts,
+            },
+            signal
+          );
           return { kind, ...result };
         }),
     });
@@ -527,11 +559,12 @@ export function createWallet(options: WalletOptions): Wallet {
 
   async function answerTransferOffer(
     transferOfferCid: string,
-    action: TransferInstructionAction
+    action: TransferInstructionAction,
+    signal: AbortSignal | undefined
   ): Promise<SubmitResult> {
     const [contracts, operator] = await Promise.all([
-      read(DA_REGISTRY_TEMPLATES.transferOffer),
-      registry.operatorParty(),
+      read(DA_REGISTRY_TEMPLATES.transferOffer, signal),
+      registry.operatorParty(signal),
     ]);
     const { incoming, outgoing } = transferOffers(contracts, operator);
     const offer = find(
@@ -539,19 +572,30 @@ export function createWallet(options: WalletOptions): Wallet {
       transferOfferCid,
       action === 'withdraw' ? 'Outgoing transfer offer' : 'Incoming transfer offer'
     );
-    const context = await registry.transferInstructionContext(offer.instrumentId.admin, transferOfferCid, action);
-    return submit({
-      commands: [transferInstructionCommand(transferOfferCid, action, context.choiceContextData)],
-      disclosedContracts: context.disclosedContracts,
-    });
+    const context = await registry.transferInstructionContext(
+      offer.instrumentId.admin,
+      transferOfferCid,
+      action,
+      signal
+    );
+    return submit(
+      {
+        commands: [transferInstructionCommand(transferOfferCid, action, context.choiceContextData)],
+        disclosedContracts: context.disclosedContracts,
+      },
+      signal
+    );
   }
 
-  async function ownMintOffer(mintOfferCid: string): Promise<MintOffer> {
-    const [contracts, operator] = await Promise.all([read(DA_REGISTRY_TEMPLATES.mintOffer), registry.operatorParty()]);
+  async function ownMintOffer(mintOfferCid: string, signal: AbortSignal | undefined): Promise<MintOffer> {
+    const [contracts, operator] = await Promise.all([
+      read(DA_REGISTRY_TEMPLATES.mintOffer, signal),
+      registry.operatorParty(signal),
+    ]);
     return find(ownMintOffers(contracts, operator), mintOfferCid, 'Mint offer');
   }
 
-  async function runRequestBurn(burn: BurnRequestOptions): Promise<BurnRequestResult> {
+  async function runRequestBurn(burn: BurnRequestOptions, signal: AbortSignal | undefined): Promise<BurnRequestResult> {
     const instrumentId = requireInstrumentId(burn.instrumentId);
     const at = now();
     const reference = burn.reference ?? newBurnReference(new Date(at));
@@ -562,52 +606,63 @@ export function createWallet(options: WalletOptions): Wallet {
       );
     }
     const executeBefore = deadline(burn.executeBefore, at, BURN_TTL_MS);
-    const selection = selectHoldings(holdingsIn(await read(DA_REGISTRY_TEMPLATES.holding)), {
+    const selection = selectHoldings(holdingsIn(await read(DA_REGISTRY_TEMPLATES.holding, signal)), {
       owner: partyId,
       instrumentId,
       amount: burn.amount,
     });
-    const factory = await registry.burnRequestContext({
-      holder: partyId,
-      holdingContractIds: selection.inputHoldingCids,
-      instrumentId,
-    });
+    const factory = await registry.burnRequestContext(
+      {
+        holder: partyId,
+        holdingContractIds: selection.inputHoldingCids,
+        instrumentId,
+      },
+      signal
+    );
     const factoryError = factoryTemplateError(factory, DA_BURN_FACTORY_TEMPLATES);
     if (factoryError !== null) throw new RegistryResponseError(factoryError);
     try {
-      const result = await submit({
-        commands: [
-          requestBurnCommand({
-            allocationFactoryCid: factory.factoryId,
-            expectedAdmin: instrumentId.admin,
-            burn: {
-              instrumentId,
-              amount: selection.amount,
-              holder: partyId,
-              reference,
-              requestedAt: isoTime(at - REQUESTED_AT_SKEW_MS, 'requestedAt'),
-              executeBefore,
-            },
-            holdingCids: selection.inputHoldingCids,
-            context: factory.choiceContextData,
-          }),
-        ],
-        disclosedContracts: factory.disclosedContracts,
-      });
+      const result = await submit(
+        {
+          commands: [
+            requestBurnCommand({
+              allocationFactoryCid: factory.factoryId,
+              expectedAdmin: instrumentId.admin,
+              burn: {
+                instrumentId,
+                amount: selection.amount,
+                holder: partyId,
+                reference,
+                requestedAt: isoTime(at - REQUESTED_AT_SKEW_MS, 'requestedAt'),
+                executeBefore,
+              },
+              holdingCids: selection.inputHoldingCids,
+              context: factory.choiceContextData,
+            }),
+          ],
+          disclosedContracts: factory.disclosedContracts,
+        },
+        signal
+      );
       return { ...result, reference };
     } catch (error) {
       // The reference may have been generated here: the caller needs it to look the burn request up before a retry,
       // above all after an unknown outcome, when the request may have been filed.
-      if (!(error instanceof WalletSubmitError)) throw error;
+      if (!isWalletSubmitError(error)) throw error;
       throw new WalletSubmitError(error.outcome, `${error.message} Burn reference: ${reference}.`, {
         ...(error.code !== undefined && { code: error.code }),
         ...(error.commandId !== undefined && { commandId: error.commandId }),
+        category: error.category,
+        ...(error.cantonErrorId !== undefined && { cantonErrorId: error.cantonErrorId }),
         burnReference: reference,
       });
     }
   }
 
-  async function runCreateTransferPreapproval(preapproval: TransferPreapprovalOptions): Promise<SubmitResult> {
+  async function runCreateTransferPreapproval(
+    preapproval: TransferPreapprovalOptions,
+    signal: AbortSignal | undefined
+  ): Promise<SubmitResult> {
     const instrumentAdmin = requireNonEmpty(preapproval.instrumentAdmin, 'instrumentAdmin');
     const instrumentIds = [...new Set(preapproval.instrumentIds ?? [])];
     if (instrumentIds.length > MAX_PREAPPROVAL_INSTRUMENTS) {
@@ -618,8 +673,8 @@ export function createWallet(options: WalletOptions): Wallet {
     }
     instrumentIds.forEach((id) => requireNonEmpty(id, 'instrumentIds[]'));
     const [contracts, operator] = await Promise.all([
-      read(DA_REGISTRY_TEMPLATES.transferPreapproval),
-      registry.operatorParty(),
+      read(DA_REGISTRY_TEMPLATES.transferPreapproval, signal),
+      registry.operatorParty(signal),
     ]);
     const covering = ownPreapprovals(contracts, operator).find(
       (existing) =>
@@ -633,18 +688,24 @@ export function createWallet(options: WalletOptions): Wallet {
         `Transfer preapproval ${covering.contractId} already covers ${instrumentIds.length === 0 ? 'every instrument' : instrumentIds.join(', ')} of ${instrumentAdmin}; nothing was submitted`
       );
     }
-    return submit({
-      commands: [createDaTransferPreapprovalCommand({ operator, receiver: partyId, instrumentAdmin, instrumentIds })],
-    });
+    return submit(
+      {
+        commands: [createDaTransferPreapprovalCommand({ operator, receiver: partyId, instrumentAdmin, instrumentIds })],
+      },
+      signal
+    );
   }
 
-  async function runRemoveTransferPreapproval(preapprovalCid: string): Promise<SubmitResult> {
+  async function runRemoveTransferPreapproval(
+    preapprovalCid: string,
+    signal: AbortSignal | undefined
+  ): Promise<SubmitResult> {
     const [contracts, operator] = await Promise.all([
-      read(DA_REGISTRY_TEMPLATES.transferPreapproval),
-      registry.operatorParty(),
+      read(DA_REGISTRY_TEMPLATES.transferPreapproval, signal),
+      registry.operatorParty(signal),
     ]);
     find(ownPreapprovals(contracts, operator), preapprovalCid, 'Transfer preapproval');
-    return submit({ commands: [withdrawTransferPreapprovalCommand(preapprovalCid, partyId)] });
+    return submit({ commands: [withdrawTransferPreapprovalCommand(preapprovalCid, partyId)] }, signal);
   }
 
   return {
@@ -652,34 +713,42 @@ export function createWallet(options: WalletOptions): Wallet {
     network,
     loadState,
     planTransfer,
-    acceptTransferOffer: async (cid) => exclusive(async () => answerTransferOffer(cid, 'accept')),
-    rejectTransferOffer: async (cid) => exclusive(async () => answerTransferOffer(cid, 'reject')),
-    withdrawTransferOffer: async (cid) => exclusive(async () => answerTransferOffer(cid, 'withdraw')),
-    acceptMintOffer: async (cid) =>
-      exclusive(async () => {
-        await ownMintOffer(cid);
-        const context = await registry.mintOfferAcceptContext(cid);
-        return submit({
-          commands: [acceptMintOfferCommand(cid, context.choiceContextData)],
-          disclosedContracts: context.disclosedContracts,
-        });
+    acceptTransferOffer: async (cid, { signal } = {}) =>
+      exclusive(signal, async () => answerTransferOffer(cid, 'accept', signal)),
+    rejectTransferOffer: async (cid, { signal } = {}) =>
+      exclusive(signal, async () => answerTransferOffer(cid, 'reject', signal)),
+    withdrawTransferOffer: async (cid, { signal } = {}) =>
+      exclusive(signal, async () => answerTransferOffer(cid, 'withdraw', signal)),
+    acceptMintOffer: async (cid, { signal } = {}) =>
+      exclusive(signal, async () => {
+        await ownMintOffer(cid, signal);
+        const context = await registry.mintOfferAcceptContext(cid, signal);
+        return submit(
+          {
+            commands: [acceptMintOfferCommand(cid, context.choiceContextData)],
+            disclosedContracts: context.disclosedContracts,
+          },
+          signal
+        );
       }),
-    rejectMintOffer: async (cid) =>
-      exclusive(async () => {
-        await ownMintOffer(cid);
-        return submit({ commands: [rejectMintOfferCommand(cid, MINT_OFFER_REJECT_REASON)] });
+    rejectMintOffer: async (cid, { signal } = {}) =>
+      exclusive(signal, async () => {
+        await ownMintOffer(cid, signal);
+        return submit({ commands: [rejectMintOfferCommand(cid, MINT_OFFER_REJECT_REASON)] }, signal);
       }),
-    requestBurn: async (burn) => exclusive(async () => runRequestBurn(burn)),
-    cancelBurnRequest: async (cid) =>
-      exclusive(async () => {
+    requestBurn: async (burn, { signal } = {}) => exclusive(signal, async () => runRequestBurn(burn, signal)),
+    cancelBurnRequest: async (cid, { signal } = {}) =>
+      exclusive(signal, async () => {
         const [contracts, operator] = await Promise.all([
-          read(DA_REGISTRY_TEMPLATES.burnRequest),
-          registry.operatorParty(),
+          read(DA_REGISTRY_TEMPLATES.burnRequest, signal),
+          registry.operatorParty(signal),
         ]);
         find(ownBurnRequests(contracts, operator), cid, 'Burn request');
-        return submit({ commands: [cancelBurnRequestCommand(cid)] });
+        return submit({ commands: [cancelBurnRequestCommand(cid)] }, signal);
       }),
-    createTransferPreapproval: async (preapproval) => exclusive(async () => runCreateTransferPreapproval(preapproval)),
-    removeTransferPreapproval: async (cid) => exclusive(async () => runRemoveTransferPreapproval(cid)),
+    createTransferPreapproval: async (preapproval, { signal } = {}) =>
+      exclusive(signal, async () => runCreateTransferPreapproval(preapproval, signal)),
+    removeTransferPreapproval: async (cid, { signal } = {}) =>
+      exclusive(signal, async () => runRemoveTransferPreapproval(cid, signal)),
   };
 }

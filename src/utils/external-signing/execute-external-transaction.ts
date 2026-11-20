@@ -16,25 +16,63 @@ export type PartySignature = Omit<GeneratedPartySignature, 'signatures'> & {
 export type NonEmptyPartySignatures = NonEmptyReadonlyArray<PartySignature>;
 export type InteractiveSubmissionHashingSchemeVersion = InteractiveSubmissionExecuteRequest['hashingSchemeVersion'];
 
-/** Immutable compatibility value. Use the factory below when building a submission request. */
+/** A deduplication period as a duration, in the Ledger JSON API's `DeduplicationDuration` form. */
+export interface InteractiveSubmissionDeduplicationDuration {
+  DeduplicationDuration: { value: { seconds: number; nanos: number } };
+}
+
+/**
+ * The default deduplication period of an interactive (externally signed) submission: 10 minutes.
+ *
+ * The participant refuses to execute a transaction whose command id (with the same user and acting parties) it already
+ * accepted within this period, so a signed transaction replayed within it (a retried request, a second server instance
+ * holding the same signed payload) is refused as a duplicate instead of running twice. It must cover how long a signed
+ * payload can still be submitted: 10 minutes covers a 5-minute prepared-transaction or approval token plus 5 minutes of
+ * clock skew and retries. Longer-lived payloads need a longer period: pass `deduplicationPeriodFromMs(lifetimeMs +
+ * marginMs)`.
+ *
+ * A longer period only refuses true duplicates (the same command id, accepted before): a rejected submission does not
+ * count, so it can still be retried. The participant does not cap a duration (with no period at all, it applies its
+ * whole `max-deduplication-duration`, 7 days by default); it refuses one only when it pruned within the period
+ * (`DEDUPLICATION_PERIOD_STARTS_TOO_EARLY`), and it does not prune within its `max-deduplication-duration`.
+ */
+export const DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_MS = 10 * 60 * 1000;
+
+const MS_PER_SECOND = 1000;
+const NANOS_PER_MS = 1_000_000;
+
+/**
+ * A deduplication period of `ms` milliseconds, for `deduplicationPeriod`: for example `deduplicationPeriodFromMs(15 *
+ * 60_000)` for a signed payload that lives 10 minutes, plus 5 minutes of margin.
+ *
+ * @throws ValidationError when `ms` is not a finite, non-negative whole number of milliseconds
+ */
+export function deduplicationPeriodFromMs(ms: number): InteractiveSubmissionDeduplicationDuration {
+  if (typeof ms !== 'number' || !Number.isSafeInteger(ms) || ms < 0) {
+    throw new ValidationError(
+      `A deduplication period must be a non-negative whole number of milliseconds, not ${String(ms)}`
+    );
+  }
+  return {
+    DeduplicationDuration: {
+      value: { seconds: Math.floor(ms / MS_PER_SECOND), nanos: (ms % MS_PER_SECOND) * NANOS_PER_MS },
+    },
+  } satisfies NonNullable<InteractiveSubmissionExecuteRequest['deduplicationPeriod']>;
+}
+
+/**
+ * Immutable value of the default deduplication period ({@link DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_MS}). Use the
+ * factory below when building a submission request.
+ */
 export const DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD = Object.freeze({
   DeduplicationDuration: Object.freeze({
-    value: Object.freeze({ seconds: 30, nanos: 0 }),
+    value: Object.freeze({ seconds: DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_MS / MS_PER_SECOND, nanos: 0 }),
   }),
 }) satisfies NonNullable<InteractiveSubmissionExecuteRequest['deduplicationPeriod']>;
 
 /** Returns an isolated default deduplication period for one interactive submission. */
-export function createDefaultInteractiveSubmissionDeduplicationPeriod(): {
-  DeduplicationDuration: { value: { seconds: number; nanos: number } };
-} {
-  return {
-    DeduplicationDuration: {
-      value: {
-        seconds: DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD.DeduplicationDuration.value.seconds,
-        nanos: DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD.DeduplicationDuration.value.nanos,
-      },
-    },
-  } satisfies NonNullable<InteractiveSubmissionExecuteRequest['deduplicationPeriod']>;
+export function createDefaultInteractiveSubmissionDeduplicationPeriod(): InteractiveSubmissionDeduplicationDuration {
+  return deduplicationPeriodFromMs(DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_MS);
 }
 
 export interface ExecuteExternalTransactionOptions {
@@ -44,6 +82,11 @@ export interface ExecuteExternalTransactionOptions {
   readonly submissionId: string;
   readonly partySignatures: NonEmptyPartySignatures;
   readonly hashingSchemeVersion?: InteractiveSubmissionHashingSchemeVersion;
+  /**
+   * How long the participant refuses a second execution of this command id: defaults to 10 minutes
+   * ({@link DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_MS}). Cover the signed payload's whole lifetime, with
+   * {@link deduplicationPeriodFromMs}.
+   */
   readonly deduplicationPeriod?: InteractiveSubmissionExecuteRequest['deduplicationPeriod'];
   readonly minLedgerTime?: InteractiveSubmissionExecuteRequest['minLedgerTime'];
 }

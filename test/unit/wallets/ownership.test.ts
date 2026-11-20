@@ -1,3 +1,4 @@
+import { isCancelledBeforeSubmit } from '../../../src/wallets/abort';
 import { WalletReadError, WalletSignError } from '../../../src/wallets/errors';
 import {
   buildWalletOwnershipMessage,
@@ -6,7 +7,7 @@ import {
   requestWalletOwnershipVerdict,
   type WalletOwnershipChallenge,
 } from '../../../src/wallets/ownership';
-import { accountProvider, HOLDER, RpcError, type RecordingProvider } from './helpers';
+import { accountProvider, fakeFetch, HOLDER, RpcError, type RecordingProvider } from './helpers';
 
 const CHALLENGE: WalletOwnershipChallenge = {
   domain: 'explorer.example.com',
@@ -110,6 +111,24 @@ describe('proveWalletOwnership', () => {
     ]);
   });
 
+  it('hands its signal to the wallet for the account read and the signature, so a cancelled proof frees them', async () => {
+    const base = accountProvider({ signMessage: () => ({ signature: 'cd'.repeat(64) }) });
+    const seen: Array<[string, AbortSignal | undefined]> = [];
+    const provider: RecordingProvider = {
+      ...base,
+      request: async (args, options) => {
+        seen.push([args.method, options?.signal]);
+        return base.request(args, options);
+      },
+    };
+    const { signal } = new AbortController();
+    await proveWalletOwnership(connected(provider), { challenge: CHALLENGE, now: NOW, signal });
+    expect(seen).toEqual([
+      ['getPrimaryAccount', signal],
+      ['signMessage', signal],
+    ]);
+  });
+
   it.each([
     ['another primary account', { party: 'other::1220dd' }, {}],
     ['an expired challenge', {}, { now: () => new Date('2026-11-16T12:05:00.000Z') }],
@@ -194,6 +213,138 @@ describe('requestWalletOwnershipVerdict', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ network: 'devnet', partyId: HOLDER }),
     });
+    expect(provider.requests).toEqual([]);
+  });
+});
+
+describe('ownership checks: cancellation', () => {
+  const isAbort = (error: unknown): boolean => (error as { name?: unknown }).name === 'AbortError';
+  /** A challenge valid for the next five minutes (`requestWalletOwnershipVerdict` uses the system clock). */
+  const liveChallenge = (): WalletOwnershipChallenge => {
+    const issued = new Date(Math.floor(Date.now() / 1000) * 1000);
+    return {
+      ...CHALLENGE,
+      issuedAt: issued.toISOString(),
+      expiresAt: new Date(issued.getTime() + 5 * 60_000).toISOString(),
+    };
+  };
+  const server = (): ReturnType<typeof fakeFetch> =>
+    fakeFetch((call) =>
+      call.url === '/challenge'
+        ? { json: { data: { challenge: liveChallenge(), token: 'tok' } } }
+        : {
+            json: {
+              data: {
+                verified: true,
+                partyId: HOLDER,
+                publicKeyFingerprint: '1220aa',
+                claimedNetwork: 'canton:devnet',
+                verifiedAt: new Date().toISOString(),
+              },
+            },
+          }
+    );
+
+  it('passes the signal to both requests of a check', async () => {
+    const { fetch, calls } = server();
+    const { signal } = new AbortController();
+    const provider = accountProvider({ signMessage: () => ({ signature: 'cd'.repeat(64) }) });
+    await expect(
+      requestWalletOwnershipVerdict(connected(provider), {
+        challengeUrl: '/challenge',
+        verifyUrl: '/verify',
+        fetch,
+        signal,
+      })
+    ).resolves.toMatchObject({ verified: true });
+    expect(calls.map((call) => [call.url, call.signal === signal])).toEqual([
+      ['/challenge', true],
+      ['/verify', true],
+    ]);
+  });
+
+  it('sends nothing and asks the wallet for nothing once the signal aborted', async () => {
+    const { fetch, calls } = server();
+    const controller = new AbortController();
+    controller.abort();
+    const provider = accountProvider({ signMessage: () => ({ signature: 'sig' }) });
+    const error = await requestWalletOwnershipVerdict(connected(provider), {
+      challengeUrl: '/challenge',
+      verifyUrl: '/verify',
+      fetch,
+      signal: controller.signal,
+    }).catch((e: unknown) => e);
+    expect(isAbort(error)).toBe(true);
+    expect(calls).toEqual([]);
+    expect(provider.requests).toEqual([]);
+  });
+
+  it('never sends a proof the wallet signed after the abort', async () => {
+    const { fetch, calls } = server();
+    const controller = new AbortController();
+    let signing: () => void = () => undefined;
+    const entered = new Promise<void>((resolve) => {
+      signing = resolve;
+    });
+    let sign: (answer: unknown) => void = () => undefined;
+    const provider = accountProvider({
+      signMessage: async () => {
+        signing();
+        return new Promise((resolve) => {
+          sign = resolve;
+        });
+      },
+    });
+    const check = requestWalletOwnershipVerdict(connected(provider), {
+      challengeUrl: '/challenge',
+      verifyUrl: '/verify',
+      fetch,
+      signal: controller.signal,
+    }).catch((e: unknown) => e);
+    await entered;
+    controller.abort();
+    sign({ signature: 'cd'.repeat(64) });
+    expect(isAbort(await check)).toBe(true);
+    expect(calls.map((call) => call.url)).toEqual(['/challenge']);
+  });
+
+  it('does not call a cancellation during the verify request "cancelled before submit": the proof was sent', async () => {
+    const controller = new AbortController();
+    const calls: string[] = [];
+    const base = server().fetch;
+    const fetch: typeof base = async (url, init) => {
+      calls.push(url);
+      if (url === '/verify') return new Promise<never>(() => undefined);
+      return base(url, init);
+    };
+    const provider = accountProvider({ signMessage: () => ({ signature: 'cd'.repeat(64) }) });
+    const check = requestWalletOwnershipVerdict(connected(provider), {
+      challengeUrl: '/challenge',
+      verifyUrl: '/verify',
+      fetch,
+      signal: controller.signal,
+    }).catch((e: unknown) => e);
+    while (!calls.includes('/verify')) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 5);
+      });
+    }
+    controller.abort();
+    const error = await check;
+    expect(isAbort(error)).toBe(true);
+    expect(isCancelledBeforeSubmit(error)).toBe(false);
+  });
+
+  it('does not ask the wallet to sign once proveWalletOwnership was cancelled', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const provider = accountProvider({ signMessage: () => ({ signature: 'sig' }) });
+    const error = await proveWalletOwnership(connected(provider), {
+      challenge: CHALLENGE,
+      now: NOW,
+      signal: controller.signal,
+    }).catch((e: unknown) => e);
+    expect(isAbort(error)).toBe(true);
     expect(provider.requests).toEqual([]);
   });
 });

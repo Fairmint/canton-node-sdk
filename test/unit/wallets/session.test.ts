@@ -815,4 +815,426 @@ describe('createCip103Session', () => {
       expect(calls).toBe(0);
     });
   });
+
+  describe('cancellation', () => {
+    it('rejects connect() and restore() at once, sending nothing, when the signal already aborted', async () => {
+      const { session, changes } = observed();
+      const provider = new TestProvider();
+      const controller = new AbortController();
+      controller.abort();
+      await expect(session.connect(provider, { signal: controller.signal })).rejects.toMatchObject({
+        name: 'AbortError',
+      });
+      await expect(session.restore(provider, { signal: controller.signal })).rejects.toMatchObject({
+        name: 'AbortError',
+      });
+      expect(provider.requests).toEqual([]);
+      expect(changes()).toBe(0);
+    });
+
+    it('cancels a pending connect(): it rejects, the session disconnects, and a late answer changes nothing', async () => {
+      const { session } = observed();
+      const reply = deferred<unknown>();
+      const provider = new TestProvider(HOLDER, { connect: async () => reply.promise });
+      const controller = new AbortController();
+      const connecting = session.connect(provider, { signal: controller.signal });
+      await flush();
+      expect(session.getSnapshot().status).toBe('connecting');
+      controller.abort();
+      await expect(connecting).rejects.toMatchObject({ name: 'AbortError' });
+      expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      reply.resolve({ isConnected: true });
+      await flush();
+      expect(session.getSnapshot()).toEqual(DISCONNECTED);
+    });
+
+    it('signs out and keeps out of restore() a provider that rejects connect when the signal aborts', async () => {
+      const { session } = observed();
+      class AbortingProvider extends TestProvider {
+        override async request(
+          args: Parameters<TestProvider['request']>[0],
+          options?: { readonly signal?: AbortSignal | undefined }
+        ): Promise<unknown> {
+          if (args.method === 'connect' && options?.signal !== undefined) {
+            this.requests.push('connect');
+            const { signal } = options;
+            return new Promise((_resolve, reject) => {
+              signal.addEventListener('abort', () => {
+                reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+              });
+            });
+          }
+          return super.request(args);
+        }
+      }
+      const provider = new AbortingProvider(HOLDER);
+      const controller = new AbortController();
+      const connecting = session.connect(provider, { signal: controller.signal });
+      await flush();
+      controller.abort();
+      await expect(connecting).rejects.toMatchObject({ name: 'AbortError' });
+      await flush();
+      expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      expect(provider.requests).toEqual(['connect', 'disconnect']);
+      await session.restore(provider);
+      expect(provider.requests).toEqual(['connect', 'disconnect']);
+      expect(session.getSnapshot()).toEqual(DISCONNECTED);
+    });
+
+    describe('interleavings of an abort with connect() and restore()', () => {
+      // Each case: abort at one point of the call, the replies still pending or queued answer afterwards, and the
+      // call rejected with an AbortError. The session is then what it was before restore(), or disconnected for
+      // connect(), and nothing later publishes over it.
+      const aborted = { name: 'AbortError' };
+
+      it('connect: abort while getPrimaryAccount is pending, a late account does not connect', async () => {
+        const { session } = observed();
+        const account = deferred<unknown>();
+        const provider = new TestProvider(HOLDER, { getPrimaryAccount: async () => account.promise });
+        const controller = new AbortController();
+        const connecting = session.connect(provider, { signal: controller.signal });
+        await flush();
+        expect(provider.requests).toEqual(['connect', 'getPrimaryAccount']);
+        controller.abort();
+        await expect(connecting).rejects.toMatchObject(aborted);
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+        account.resolve({ primary: true, partyId: HOLDER });
+        await flush();
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      });
+
+      it('connect: abort in the same tick as the account reply (already queued) wins', async () => {
+        const { session } = observed();
+        const account = deferred<unknown>();
+        const provider = new TestProvider(HOLDER, { getPrimaryAccount: async () => account.promise });
+        const controller = new AbortController();
+        const connecting = session.connect(provider, { signal: controller.signal });
+        await flush();
+        account.resolve({ primary: true, partyId: HOLDER });
+        controller.abort(); // the reply's continuation is queued, not yet run
+        await expect(connecting).rejects.toMatchObject(aborted);
+        await flush();
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+        expect(provider.requests).toContain('disconnect');
+      });
+
+      it('connect: abort inside the connected notification (before connect() resolves) disconnects', async () => {
+        const { session } = observed();
+        const provider = new TestProvider(HOLDER);
+        const controller = new AbortController();
+        const unsubscribe = session.subscribe(() => {
+          if (session.getSnapshot().status === 'connected') controller.abort();
+        });
+        await expect(session.connect(provider, { signal: controller.signal })).rejects.toMatchObject(aborted);
+        unsubscribe();
+        await flush();
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      });
+
+      it('restore: abort while isConnected is pending, a late true does not connect', async () => {
+        const { session } = observed();
+        const reply = deferred<unknown>();
+        const provider = new TestProvider(HOLDER, { isConnected: async () => reply.promise });
+        const controller = new AbortController();
+        const restoring = session.restore(provider, { signal: controller.signal });
+        await flush();
+        controller.abort();
+        await expect(restoring).rejects.toMatchObject(aborted);
+        reply.resolve({ isConnected: true });
+        await flush();
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+        expect(provider.requests).toEqual(['isConnected']);
+      });
+
+      it('restore: abort while getPrimaryAccount is pending, a late account does not connect', async () => {
+        const { session } = observed();
+        const account = deferred<unknown>();
+        const provider = new TestProvider(HOLDER, { getPrimaryAccount: async () => account.promise });
+        const controller = new AbortController();
+        const restoring = session.restore(provider, { signal: controller.signal });
+        await flush();
+        expect(provider.requests).toEqual(['isConnected', 'getPrimaryAccount']);
+        controller.abort();
+        await expect(restoring).rejects.toMatchObject(aborted);
+        account.resolve({ primary: true, partyId: HOLDER });
+        await flush();
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      });
+
+      it('restore: abort in the same tick as the account reply (already queued) wins', async () => {
+        const { session } = observed();
+        const account = deferred<unknown>();
+        const provider = new TestProvider(HOLDER, { getPrimaryAccount: async () => account.promise });
+        const controller = new AbortController();
+        const restoring = session.restore(provider, { signal: controller.signal });
+        await flush();
+        account.resolve({ primary: true, partyId: HOLDER });
+        controller.abort();
+        await expect(restoring).rejects.toMatchObject(aborted);
+        await flush();
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      });
+
+      it('restore: abort inside the connected notification puts the session back as it was', async () => {
+        const { session } = observed();
+        const provider = new TestProvider(HOLDER);
+        const controller = new AbortController();
+        const unsubscribe = session.subscribe(() => {
+          if (session.getSnapshot().status === 'connected') controller.abort();
+        });
+        await expect(session.restore(provider, { signal: controller.signal })).rejects.toMatchObject(aborted);
+        unsubscribe();
+        await flush();
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      });
+
+      it('restore: aborting an earlier restore does not undo a connect() that has since connected', async () => {
+        const { session } = observed();
+        const reply = deferred<unknown>();
+        const slow = new TestProvider(HOLDER, { isConnected: async () => reply.promise });
+        const controller = new AbortController();
+        const restoring = session.restore(slow, { signal: controller.signal });
+        await flush();
+        await session.connect(slow);
+        expect(session.getSnapshot().status).toBe('connected');
+        controller.abort();
+        await expect(restoring).rejects.toMatchObject(aborted);
+        reply.resolve({ isConnected: true });
+        await flush();
+        expect(session.getSnapshot().status).toBe('connected');
+      });
+    });
+
+    describe('an abort inside the connecting notification', () => {
+      // A listener aborts the signal while the session publishes `connecting`, before connect() has sent anything.
+      const abortOnConnecting = (session: Cip103Session, controller: AbortController): (() => void) =>
+        session.subscribe(() => {
+          if (session.getSnapshot().status === 'connecting') controller.abort();
+        });
+
+      it('connect: the session disconnects, the sign-in is cleared and a later restore() sends nothing', async () => {
+        const { session } = observed();
+        const seen = statuses(session);
+        const provider = new TestProvider(HOLDER);
+        const controller = new AbortController();
+        const unsubscribe = abortOnConnecting(session, controller);
+        await expect(session.connect(provider, { signal: controller.signal })).rejects.toMatchObject({
+          name: 'AbortError',
+        });
+        unsubscribe();
+        await flush();
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+        expect(seen).toEqual(['connecting', 'disconnected']);
+        expect(provider.requests).toEqual([]);
+        // No sign-in is left pending: a disconnect() publishes nothing and sends nothing, and connecting another
+        // wallet signs nothing out.
+        session.disconnect();
+        expect(seen).toEqual(['connecting', 'disconnected']);
+        const other = new TestProvider(OTHER);
+        await session.connect(other);
+        expect(provider.requests).toEqual([]);
+        session.disconnect();
+        await flush();
+        // The cancelled wallet stays signed out, even though it still reports a session.
+        await session.restore(provider);
+        expect(provider.requests).toEqual([]);
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      });
+
+      it('connect and restore on one signal: both stop, nothing connects and a later restore() sends nothing', async () => {
+        const { session } = observed();
+        const reply = deferred<unknown>();
+        const provider = new TestProvider(HOLDER, { isConnected: async () => reply.promise });
+        const controller = new AbortController();
+        const restoring = session.restore(provider, { signal: controller.signal });
+        await flush();
+        expect(provider.requests).toEqual(['isConnected']);
+        const unsubscribe = abortOnConnecting(session, controller);
+        await expect(session.connect(provider, { signal: controller.signal })).rejects.toMatchObject({
+          name: 'AbortError',
+        });
+        await expect(restoring).rejects.toMatchObject({ name: 'AbortError' });
+        unsubscribe();
+        reply.resolve({ isConnected: true });
+        await flush();
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+        expect(provider.requests).toEqual(['isConnected']);
+        provider.answers.isConnected = () => ({ isConnected: true, isNetworkConnected: true });
+        await session.restore(provider);
+        expect(provider.requests).toEqual(['isConnected']);
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      });
+
+      it('restore: a restore aborted by the connecting notification of a connect() leaves that connect() alone', async () => {
+        const { session } = observed();
+        const reply = deferred<unknown>();
+        const restored = new TestProvider(OTHER, { isConnected: async () => reply.promise });
+        const controller = new AbortController();
+        const restoring = session.restore(restored, { signal: controller.signal });
+        await flush();
+        const unsubscribe = abortOnConnecting(session, controller);
+        const provider = new TestProvider(HOLDER);
+        await session.connect(provider);
+        unsubscribe();
+        await expect(restoring).rejects.toMatchObject({ name: 'AbortError' });
+        reply.resolve({ isConnected: true });
+        await flush();
+        expect(session.getSnapshot()).toMatchObject({ status: 'connected', wallet: { partyId: HOLDER } });
+        expect(restored.requests).toEqual(['isConnected']);
+      });
+    });
+
+    it('leaves a connect() that a newer one superseded to the newer one when the older is cancelled', async () => {
+      const { session } = observed();
+      const slow = new TestProvider(HOLDER, { connect: async () => deferred<unknown>().promise });
+      const controller = new AbortController();
+      const first = session.connect(slow, { signal: controller.signal });
+      await flush();
+      await session.connect(new TestProvider(OTHER));
+      expect(session.getSnapshot()).toMatchObject({ status: 'connected', wallet: { partyId: OTHER } });
+      controller.abort();
+      await expect(first).rejects.toMatchObject({ name: 'AbortError' });
+      expect(session.getSnapshot()).toMatchObject({ status: 'connected', wallet: { partyId: OTHER } });
+    });
+
+    it('cancels a restore(): it rejects and the late answer does not connect', async () => {
+      const { session } = observed();
+      const reply = deferred<unknown>();
+      const provider = new TestProvider(HOLDER, { isConnected: async () => reply.promise });
+      const controller = new AbortController();
+      const restoring = session.restore(provider, { signal: controller.signal });
+      await flush();
+      controller.abort();
+      await expect(restoring).rejects.toMatchObject({ name: 'AbortError' });
+      reply.resolve({ isConnected: true });
+      await flush();
+      expect(session.getSnapshot()).toEqual(DISCONNECTED);
+    });
+  });
+
+  describe('re-entrant providers and late aborts', () => {
+    const aborted = { name: 'AbortError' };
+
+    /** A provider that answers each new listener inside on() before it stores it (emit, then push). */
+    class EmitFirstProvider extends TestProvider {
+      readonly sticky: Partial<Record<string, readonly unknown[]>> = {};
+
+      override on(event: string, listener: (...args: unknown[]) => void): this {
+        const args = this.sticky[event];
+        if (args !== undefined) listener(...args);
+        return super.on(event, listener);
+      }
+    }
+
+    /**
+     * Aborts `controller` the first time `signal.removeEventListener` is called once the session is connected, right
+     * after the listener is removed: the window after connect()/restore() stopped racing the signal but before it stops
+     * watching it.
+     */
+    function abortOnceSettled(session: Cip103Session, controller: AbortController): void {
+      const { signal } = controller;
+      const remove = signal.removeEventListener.bind(signal);
+      let fired = false;
+      signal.removeEventListener = ((...args: Parameters<AbortSignal['removeEventListener']>) => {
+        remove(...args);
+        if (!fired && session.getSnapshot().status === 'connected') {
+          fired = true;
+          controller.abort();
+        }
+      }) as AbortSignal['removeEventListener'];
+    }
+
+    it.each([false, true])(
+      'a quiet restore() keeps an earlier error when a sticky statusChanged ends the wallet (listener aborts: %s)',
+      async (abortOnChange) => {
+        const { session } = observed();
+        session.fail(new Error('setup failed'));
+        const before = session.getSnapshot();
+        expect(before).toMatchObject({ status: 'disconnected', error: expect.anything() });
+        const seen = statuses(session);
+        const controller = new AbortController();
+        if (abortOnChange) session.subscribe(() => controller.abort());
+        const provider = new StickyProvider();
+        provider.sticky['statusChanged'] = [{ connection: { isConnected: false } }];
+        await session.restore(provider, { signal: controller.signal });
+        expect(session.getSnapshot()).toBe(before);
+        expect(seen).toEqual([]);
+        expect(controller.signal.aborted).toBe(false);
+        expect(provider.listenerCount()).toBe(0);
+      }
+    );
+
+    it.each(['connect', 'restore'] as const)(
+      'leaves no listener on a provider that answers a new listener before storing it (%s)',
+      async (how) => {
+        const { session } = observed();
+        const provider = new EmitFirstProvider();
+        provider.sticky['statusChanged'] = [{ connection: { isConnected: false } }];
+        await (how === 'connect' ? session.connect(provider) : session.restore(provider));
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+        expect(provider.listenerCount()).toBe(0);
+        // Another run against the same provider adds none either.
+        await session.connect(provider);
+        expect(provider.listenerCount()).toBe(0);
+      }
+    );
+
+    it('connect() rejects when the signal aborts after it connected but before it stopped watching', async () => {
+      const { session } = observed();
+      const provider = new TestProvider();
+      const controller = new AbortController();
+      abortOnceSettled(session, controller);
+      await expect(session.connect(provider, { signal: controller.signal })).rejects.toMatchObject(aborted);
+      expect(controller.signal.aborted).toBe(true);
+      expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      expect(provider.requests).toContain('disconnect');
+    });
+
+    it('restore() rejects when the signal aborts after it connected but before it stopped watching', async () => {
+      const { session } = observed();
+      const provider = new TestProvider();
+      const controller = new AbortController();
+      abortOnceSettled(session, controller);
+      await expect(session.restore(provider, { signal: controller.signal })).rejects.toMatchObject(aborted);
+      expect(controller.signal.aborted).toBe(true);
+      expect(session.getSnapshot()).toEqual(DISCONNECTED);
+    });
+
+    it('signs out a provider whose connect() was cancelled from the previous wallet removeListener', async () => {
+      const { session } = observed();
+      const previous = new TestProvider(OTHER);
+      await session.connect(previous);
+      const controller = new AbortController();
+      const remove = previous.removeListener.bind(previous);
+      previous.removeListener = (event, listener) => {
+        controller.abort();
+        return remove(event, listener);
+      };
+      const provider = new TestProvider();
+      await expect(session.connect(provider, { signal: controller.signal })).rejects.toMatchObject(aborted);
+      expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      // The cancelled sign-in keeps the wallet out of restore(), although it reports a session.
+      await session.restore(provider);
+      expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      expect(provider.requests).not.toContain('isConnected');
+    });
+
+    it('signs out a wallet whose connect() is cancelled after its account was refused for the other network', async () => {
+      const { session } = observed('devnet');
+      const provider = onMainnet();
+      const controller = new AbortController();
+      session.subscribe(() => {
+        if (session.getSnapshot().status === 'disconnected') controller.abort();
+      });
+      await expect(session.connect(provider, { signal: controller.signal })).rejects.toMatchObject(aborted);
+      // The error stays, and the wallet is signed out (CIP-0103 disconnect sent).
+      expect(session.getSnapshot()).toEqual(OTHER_NETWORK_ERROR);
+      expect(provider.requests).toEqual(['connect', 'getPrimaryAccount', 'disconnect']);
+      // The user switches the wallet's network: restore() still leaves it alone.
+      provider.setParty(HOLDER);
+      await session.restore(provider);
+      expect(session.getSnapshot()).toEqual(OTHER_NETWORK_ERROR);
+      expect(provider.requests).not.toContain('isConnected');
+    });
+  });
 });

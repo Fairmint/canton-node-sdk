@@ -6,6 +6,7 @@
  * Observable for any UI framework: `subscribe` and `getSnapshot` (React: `useSyncExternalStore(store.subscribe,
  * store.getSnapshot, store.getSnapshot)`).
  */
+import { anySignal } from './abort';
 import { notifyListeners } from './notify';
 import type { FetchLike, DaRegistryOptions } from './da-utilities/client';
 import { describeWalletError, WalletError, type WalletErrorDescription } from './errors';
@@ -20,6 +21,7 @@ import {
   type TransferRequest,
   type TransferResult,
   type Wallet,
+  type WalletCallOptions,
   type WalletOptions,
   type WalletState,
 } from './wallet';
@@ -224,13 +226,21 @@ export interface WalletStore {
    * not at all. `submitTransfer` sends only a plan this store's `planTransfer` made for the current wallet; any other
    * plan (another session, network or account, or a standalone wallet's) is refused with `invalid-input` before
    * anything is signed.
+   *
+   * `options.signal` cancels the action as `WalletCallOptions.signal` does (nothing is submitted once it fires before
+   * the wallet is asked to sign; a submission already handed to the wallet runs to its outcome). `act()` itself never
+   * rejects: a cancelled action is recorded as a failed `view.outcome` of kind `cancelled` and resolves null.
+   * `dispose()` cancels the same way.
    */
-  act<A extends WalletAction>(action: A): Promise<ActionResultOf<A> | null>;
+  act<A extends WalletAction>(action: A, options?: WalletCallOptions): Promise<ActionResultOf<A> | null>;
   /** Reload the snapshot (the Retry button); queued behind the wallet call in flight. Ignored while disconnected. */
   refresh(): void;
   /** Clear `unknownOutcome` once the user checked the wallet. */
   acknowledgeUnknownOutcome(): void;
-  /** Stop following the session; pending replies are dropped and no further view is published. */
+  /**
+   * Stop following the session; pending replies are dropped and no further view is published. Work in flight (an
+   * action, a load) is cancelled through its `signal`, so nothing more is sent before a signature is requested.
+   */
   dispose(): void;
 }
 
@@ -278,8 +288,10 @@ async function perform(
   plans: StorePlans,
   tokens: Wallet,
   wallet: ConnectedWallet,
-  action: WalletAction
+  action: WalletAction,
+  signal: AbortSignal | undefined
 ): Promise<Settled> {
+  const call: WalletCallOptions = signal === undefined ? {} : { signal };
   const written = (result: SubmitResult, sentence: string): Settled => ({
     ok: true,
     result,
@@ -287,26 +299,29 @@ async function perform(
   });
   switch (action.type) {
     case 'acceptMintOffer':
-      return written(await tokens.acceptMintOffer(action.mintOfferCid), 'Mint offer accepted');
+      return written(await tokens.acceptMintOffer(action.mintOfferCid, call), 'Mint offer accepted');
     case 'rejectMintOffer':
-      return written(await tokens.rejectMintOffer(action.mintOfferCid), 'Mint offer rejected');
+      return written(await tokens.rejectMintOffer(action.mintOfferCid, call), 'Mint offer rejected');
     case 'acceptTransferOffer':
-      return written(await tokens.acceptTransferOffer(action.transferOfferCid), 'Transfer accepted');
+      return written(await tokens.acceptTransferOffer(action.transferOfferCid, call), 'Transfer accepted');
     case 'rejectTransferOffer':
-      return written(await tokens.rejectTransferOffer(action.transferOfferCid), 'Transfer offer rejected');
+      return written(await tokens.rejectTransferOffer(action.transferOfferCid, call), 'Transfer offer rejected');
     case 'withdrawTransferOffer':
       return written(
-        await tokens.withdrawTransferOffer(action.transferOfferCid),
+        await tokens.withdrawTransferOffer(action.transferOfferCid, call),
         'Transfer offer withdrawn; its tokens are unlocked'
       );
     case 'requestBurn': {
       const { instrumentId, amount, reference, executeBefore } = action;
-      const result = await tokens.requestBurn({
-        instrumentId,
-        amount,
-        ...(reference !== undefined && { reference }),
-        ...(executeBefore !== undefined && { executeBefore }),
-      });
+      const result = await tokens.requestBurn(
+        {
+          instrumentId,
+          amount,
+          ...(reference !== undefined && { reference }),
+          ...(executeBefore !== undefined && { executeBefore }),
+        },
+        call
+      );
       return {
         ok: true,
         result,
@@ -315,11 +330,11 @@ async function perform(
     }
     case 'cancelBurnRequest':
       return written(
-        await tokens.cancelBurnRequest(action.burnRequestCid),
+        await tokens.cancelBurnRequest(action.burnRequestCid, call),
         'Redemption cancelled; the amount is unlocked'
       );
     case 'planTransfer': {
-      const plan = await tokens.planTransfer(action.request);
+      const plan = await tokens.planTransfer(action.request, call);
       const { kind, description, partyId, request } = plan;
       const handed: TransferPlan = Object.freeze({ kind, description, partyId, request, submit: submitThroughStore });
       plans.set(handed, { wallet, plan });
@@ -333,29 +348,36 @@ async function perform(
           'This transfer was planned for another wallet connection; plan it again before sending'
         );
       }
-      const result = await planned.plan.submit();
+      const result = await planned.plan.submit(call);
       return written(result, TRANSFER_SENTENCES[result.kind]);
     }
     case 'createTransferPreapproval': {
       const { instrumentAdmin, instrumentIds } = action;
       return written(
-        await tokens.createTransferPreapproval({
-          instrumentAdmin,
-          ...(instrumentIds !== undefined && { instrumentIds }),
-        }),
+        await tokens.createTransferPreapproval(
+          {
+            instrumentAdmin,
+            ...(instrumentIds !== undefined && { instrumentIds }),
+          },
+          call
+        ),
         instrumentIds === undefined || instrumentIds.length === 0
           ? `Transfer preapproval created: transfers of ${instrumentAdmin}'s instruments now complete at once`
           : `Transfer preapproval created: transfers of ${instrumentIds.join(', ')} by ${instrumentAdmin} now complete at once`
       );
     }
     case 'removeTransferPreapproval':
-      return written(await tokens.removeTransferPreapproval(action.preapprovalCid), 'Transfer preapproval removed');
+      return written(
+        await tokens.removeTransferPreapproval(action.preapprovalCid, call),
+        'Transfer preapproval removed'
+      );
     case 'proveOwnership': {
       const { challengeUrl, verifyUrl, fetch } = action;
       const verdict = await requestWalletOwnershipVerdict(wallet, {
         challengeUrl,
         verifyUrl,
         ...(fetch !== undefined && { fetch }),
+        ...(signal !== undefined && { signal }),
       });
       if (!verdict.verified) return { ok: false, error: { kind: 'not-verified', message: verdict.message } };
       return {
@@ -403,6 +425,8 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
   let outcome: ActionOutcome | null = null;
   let unknownOutcome: UnknownOutcome | null = null;
   let disposed = false;
+  // Aborted by dispose(): cancels the store's work in flight (combined with each caller's own signal).
+  const lifetime = new AbortController();
   let view = buildView();
 
   function notices(): WalletNotice[] {
@@ -499,7 +523,7 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
     void (async () => {
       let next: { readonly ok: true; readonly snapshot: WalletState } | { readonly ok: false; readonly error: unknown };
       try {
-        next = { ok: true, snapshot: await forTokens.loadState() };
+        next = { ok: true, snapshot: await forTokens.loadState({ signal: lifetime.signal }) };
       } catch (error) {
         next = { ok: false, error };
       }
@@ -594,7 +618,10 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
 
     getSnapshot: () => view,
 
-    async act<A extends WalletAction>(action: A): Promise<ActionResultOf<A> | null> {
+    async act<A extends WalletAction>(
+      action: A,
+      callOptions: WalletCallOptions = {}
+    ): Promise<ActionResultOf<A> | null> {
       // Synchronous, before the first await: a second call in the same tick is refused.
       const ranFor = wallet;
       const ranTokens = tokens;
@@ -615,10 +642,13 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
       }
 
       let settled: Settled;
+      const { signal, release } = anySignal(callOptions.signal, lifetime.signal);
       try {
-        settled = await perform(plans, ranTokens, ranFor, action);
+        settled = await perform(plans, ranTokens, ranFor, action, signal);
       } catch (error) {
         settled = { ok: false, error: describeWalletError(error) };
+      } finally {
+        release();
       }
 
       inFlight -= 1;
@@ -647,6 +677,7 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
       if (disposed) return;
       disposed = true;
       queued = false;
+      lifetime.abort();
       unsubscribe();
       listeners.clear();
     },
