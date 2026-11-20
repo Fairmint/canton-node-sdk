@@ -537,6 +537,44 @@ describe('cip103Wallet.submit', () => {
     });
   });
 
+  it('reads at most 32 own keys, and a throwing property does not discard the rest', () => {
+    let reads = 0;
+    const lazy: Record<string, unknown> = {};
+    for (let i = 0; i < 100; i += 1) {
+      Object.defineProperty(lazy, `n${i}`, {
+        enumerable: true,
+        get: () => {
+          reads += 1;
+          return undefined;
+        },
+      });
+    }
+    reads = 0;
+    expect(cantonErrorOf({ data: lazy })).toBeUndefined();
+    expect(reads).toBe(32);
+    const hostile: Record<string, unknown> = {
+      boom: undefined,
+      ok: { code: 'AFTER_GETTER', errorCategory: 8 },
+    };
+    Object.defineProperty(hostile, 'boom', {
+      enumerable: true,
+      get: () => {
+        throw new Error('getter');
+      },
+    });
+    expect(cantonErrorOf({ data: hostile })).toEqual({ id: 'AFTER_GETTER', category: 8 });
+    // A throwing getter beyond key 32 is never read.
+    const late: Record<string, unknown> = { first: { code: 'EARLY_ERROR', errorCategory: 5 } };
+    for (let i = 0; i < 40; i += 1) late[`p${i}`] = null;
+    Object.defineProperty(late, 'poison', {
+      enumerable: true,
+      get: () => {
+        throw new Error('poison');
+      },
+    });
+    expect(cantonErrorOf({ data: late })).toEqual({ id: 'EARLY_ERROR', category: 5 });
+  });
+
   it('finds a Canton error within bounds, and never throws looking', () => {
     expect(cantonErrorOf({ message: 'x', data: 'INVALID_ARGUMENT(8,0): bad' })).toEqual({
       id: 'INVALID_ARGUMENT',

@@ -217,7 +217,15 @@ function cantonErrorIn(value: unknown, depth: number): CantonErrorRef | undefine
       return Number.isInteger(errorCategory) ? { id: code, category: errorCategory } : { id: code };
     }
   }
-  for (const nested of Object.values(value).slice(0, CANTON_ERROR_SEARCH.keys)) {
+  const keys = Object.keys(value);
+  const limit = Math.min(keys.length, CANTON_ERROR_SEARCH.keys);
+  for (let index = 0; index < limit; index += 1) {
+    let nested: unknown;
+    try {
+      nested = (value as Record<string, unknown>)[keys[index] as string];
+    } catch {
+      continue;
+    }
     const found = cantonErrorIn(nested, depth + 1);
     if (found !== undefined) return found;
   }

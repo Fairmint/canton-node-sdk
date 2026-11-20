@@ -246,6 +246,31 @@ describe('discoverCip103Wallets', () => {
     expect(seen).toHaveLength(1);
   });
 
+  it('treats a wallet that announced no target as untargeted: no target sent, no target filter on events', async () => {
+    const host = browser({ extensions: [{ announce: { id: 'plain-ext', name: 'Plain' } }] });
+    const provider = await first(await discover(host)).load('devnet');
+    const seen: unknown[] = [];
+    provider.on('accountsChanged', (payload) => {
+      seen.push(payload);
+    });
+    const event = (extra: Record<string, unknown>): unknown => ({
+      type: 'SPLICE_WALLET_REQUEST',
+      ...extra,
+      request: { jsonrpc: '2.0', method: 'accountsChanged', params: [{ partyId: PARTY }] },
+    });
+    host.emit(event({}));
+    host.emit(event({ target: 'plain-ext' }), {});
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    // The untargeted notification arrives; one from another window is still ignored.
+    expect(seen).toEqual([[{ partyId: PARTY }]]);
+    void provider.request({ method: 'getPrimaryAccount' }).catch(() => undefined);
+    const request = host.posted.find(
+      (m) => (m as { request?: { method?: string } }).request?.method === 'getPrimaryAccount'
+    );
+    expect(request).toBeDefined();
+    expect(Object.keys(request as object)).not.toContain('target');
+  });
+
   it('load() rejects with an AbortError when its signal already aborted, and works without one', async () => {
     const host = browser({ extensions: [standardWallet('send-ext', 'Send Connect')] });
     const wallet = first(await discover(host));

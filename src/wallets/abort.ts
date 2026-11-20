@@ -36,7 +36,11 @@ export async function awaitWithAbort<Value>(
   signal: AbortSignal | undefined
 ): Promise<Value> {
   throwIfAborted(signal);
-  const workPromise = Promise.resolve().then(work);
+  const workPromise = Promise.resolve().then(async () => {
+    // Cancellation may have won before this microtask ran: never start the work (a prompt, a send) then.
+    throwIfAborted(signal);
+    return work();
+  });
   if (signal === undefined) return workPromise;
   return new Promise<Value>((resolve, reject) => {
     const onAbort = (): void => {

@@ -200,14 +200,17 @@ function messageData(event: Event): unknown {
 
 /**
  * A CIP-0103 provider over the dApp SDK's message channel to `target`. Requests carry a fresh random id and resolve
- * with the response of that id; requests without an id addressed to `target` are events.
+ * with the response of that id; requests without an id addressed to `target` are events. A wallet that announced no
+ * target is untargeted, as in the dApp SDK's extension adapter: requests carry no `target` and notifications are not
+ * filtered by one.
  */
-export function channelProvider(host: Cip103DiscoveryHost, target: string): Cip103Provider {
+export function channelProvider(host: Cip103DiscoveryHost, target?: string): Cip103Provider {
   const listeners = new Map<string, Set<Cip103EventListener>>();
   const onNotification = (event: Event): void => {
     if (!fromHost(host, event)) return;
     const data = messageData(event);
-    if (!isObject(data) || data['type'] !== REQUEST_MESSAGE || data['target'] !== target) return;
+    if (!isObject(data) || data['type'] !== REQUEST_MESSAGE) return;
+    if (target !== undefined && data['target'] !== target) return;
     const { request } = data;
     if (!isObject(request) || request['id'] != null || typeof request['method'] !== 'string') return;
     listeners.get(request['method'])?.forEach((listener) => listener(request['params']));
@@ -240,7 +243,7 @@ export function channelProvider(host: Cip103DiscoveryHost, target: string): Cip1
         host.postMessage(
           {
             type: REQUEST_MESSAGE,
-            target,
+            ...(target !== undefined && { target }),
             request: {
               jsonrpc: '2.0',
               id,
@@ -384,7 +387,7 @@ export async function discoverCip103Wallets(options: DiscoverCip103WalletsOption
         };
         return wallet.name === CONSOLE_NAME
           ? consoleWallet(host, identity)
-          : walletOf(identity, () => channelProvider(host, wallet.target ?? wallet.id), false);
+          : walletOf(identity, () => channelProvider(host, wallet.target), false);
       })
     );
   }
