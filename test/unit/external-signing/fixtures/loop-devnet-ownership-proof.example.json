@@ -1,0 +1,8 @@
+{
+  "_placeholder": "PLACEHOLDER, not a real sample (ENG-2832). Capture a real Loop DevNet proof (the explorer Loop example's Prove ownership, or proveWalletOwnership with Loop's provider), copy this file to loop-devnet-ownership-proof.json next to it, and replace every field below with the proof exactly as Loop returned it. Drop this _placeholder key. wallet-ownership-loop-crosscheck.test.ts checks the real file only when it exists.",
+  "partyId": "REPLACE_WITH_LOOP_PARTY_ID::1220...",
+  "publicKey": "REPLACE_WITH_LOOP_PUBLIC_KEY_AS_RETURNED",
+  "namespace": "REPLACE_WITH_LOOP_NAMESPACE_OR_DELETE",
+  "message": "REPLACE_WITH_THE_EXACT_SIGNED_MESSAGE",
+  "signature": "REPLACE_WITH_LOOP_SIGNATURE_AS_RETURNED"
+}
