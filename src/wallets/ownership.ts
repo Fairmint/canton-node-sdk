@@ -221,7 +221,7 @@ export async function proveWalletOwnership(
   const { provider, partyId, network } = connection;
   const { challenge, signal } = options;
   throwIfAborted(signal);
-  const account = await awaitBeforeSubmit(async () => primaryAccount(provider), signal);
+  const account = await awaitBeforeSubmit(async () => primaryAccount(provider, { signal }), signal);
   if (account.partyId !== partyId) {
     throw new WalletSignError(
       'invalid-challenge',
@@ -266,7 +266,7 @@ export async function proveWalletOwnership(
   let raw: unknown;
   try {
     raw = await coreAwaitWithAbort(
-      async () => provider.request({ method: 'signMessage', params: { message } }),
+      async () => provider.request({ method: 'signMessage', params: { message } }, { signal }),
       signal
     );
   } catch (error) {

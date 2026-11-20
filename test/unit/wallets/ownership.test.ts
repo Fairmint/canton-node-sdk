@@ -111,6 +111,24 @@ describe('proveWalletOwnership', () => {
     ]);
   });
 
+  it('hands its signal to the wallet for the account read and the signature, so a cancelled proof frees them', async () => {
+    const base = accountProvider({ signMessage: () => ({ signature: 'cd'.repeat(64) }) });
+    const seen: Array<[string, AbortSignal | undefined]> = [];
+    const provider: RecordingProvider = {
+      ...base,
+      request: async (args, options) => {
+        seen.push([args.method, options?.signal]);
+        return base.request(args, options);
+      },
+    };
+    const { signal } = new AbortController();
+    await proveWalletOwnership(connected(provider), { challenge: CHALLENGE, now: NOW, signal });
+    expect(seen).toEqual([
+      ['getPrimaryAccount', signal],
+      ['signMessage', signal],
+    ]);
+  });
+
   it.each([
     ['another primary account', { party: 'other::1220dd' }, {}],
     ['an expired challenge', {}, { now: () => new Date('2026-11-16T12:05:00.000Z') }],

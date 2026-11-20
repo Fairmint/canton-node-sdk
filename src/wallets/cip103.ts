@@ -389,10 +389,13 @@ export interface Cip103Account {
  * The wallet's primary account (`getPrimaryAccount`). The dApp runs its wallet's own connect flow first; a provider
  * that is not connected answers 4100.
  */
-export async function primaryAccount(provider: Cip103Provider): Promise<Cip103Account> {
+export async function primaryAccount(
+  provider: Cip103Provider,
+  options?: { readonly signal?: AbortSignal | undefined }
+): Promise<Cip103Account> {
   let account: unknown;
   try {
-    account = await provider.request({ method: 'getPrimaryAccount' });
+    account = await provider.request({ method: 'getPrimaryAccount' }, options);
   } catch (error) {
     throw new WalletReadError(
       `The wallet did not return its primary account: ${describeError(error)}`,

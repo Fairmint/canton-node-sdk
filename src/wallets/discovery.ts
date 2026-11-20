@@ -27,7 +27,7 @@
 import { newCommandId, type Cip103EventListener, type Cip103Provider, type Cip103Request } from './cip103';
 import type { DaNetwork } from './da-utilities/client';
 import type { WalletCallOptions } from './wallet';
-import { createAbortError } from '../core/http/abort';
+import { abortableSleep, createAbortError } from '../core/http/abort';
 import { awaitWithAbort, cancelledBeforeSubmit, throwIfAborted } from './abort';
 
 /** The browser global this module uses; a page's global object satisfies it. Tests pass a fake. */
@@ -158,9 +158,7 @@ async function readAccount(wallet: Cip103Provider, request: Cip103Request, optio
     } catch (error) {
       const delay = ACCOUNT_READ_RETRY_DELAYS_MS[attempt];
       if (!isObject(error) || error['code'] !== RESOURCE_UNAVAILABLE || delay === undefined) throw error;
-      await new Promise((resolve) => {
-        setTimeout(resolve, delay);
-      });
+      await abortableSleep(delay, options?.signal);
     }
   }
 }

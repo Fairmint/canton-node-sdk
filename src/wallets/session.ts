@@ -214,7 +214,8 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
   async function lookup(
     provider: Cip103Provider,
     quiet: boolean,
-    stillWanted: () => boolean = () => true
+    stillWanted: () => boolean = () => true,
+    signal?: AbortSignal
   ): Promise<void> {
     const attempt = ++lookups;
     const current = (): boolean => attempt === lookups && !disposed && stillWanted();
@@ -225,9 +226,10 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     };
     let account: Cip103Account;
     try {
-      account = await primaryAccount(provider);
+      account = await primaryAccount(provider, { signal });
     } catch (error) {
-      if (current()) failed(lookupError(error));
+      // A cancelled connect()/restore() ends the attempt itself: the abort is not the wallet's failure.
+      if (signal?.aborted !== true && current()) failed(lookupError(error));
       return;
     }
     if (!current()) return;
@@ -346,7 +348,7 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
       // Signed in again: restore() may reconnect it from now on. A sign-in that failed or was cancelled keeps it out.
       signedOut.delete(provider);
       // Read the account even when the wallet was already connected.
-      await lookup(provider, false);
+      await lookup(provider, false, undefined, signal);
     } finally {
       if (own === epoch) {
         signingIn = null;
@@ -372,7 +374,7 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
       return; // 4200 or any other failure: not connected
     }
     if (!wanted() || connectionFlag(answer) !== true) return;
-    await lookup(provider, true, wanted);
+    await lookup(provider, true, wanted, signal);
   }
 
   const api: Cip103Session = {

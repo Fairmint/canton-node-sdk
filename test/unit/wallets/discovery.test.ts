@@ -467,6 +467,31 @@ describe('discoverCip103Wallets', () => {
     );
   });
 
+  it('stops the account read retry back-off when its signal aborts', async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'queueMicrotask'] });
+    try {
+      const unavailable = { code: -32002, message: 'Resource unavailable.' };
+      const slow = consoleFake({ failFirst: [unavailable, unavailable] });
+      const host = browser(consoleInstalled(slow));
+      const found = discoverCip103Wallets({ host, waitMs: 5 });
+      await jest.advanceTimersByTimeAsync(5);
+      const provider = await first(await found).load('devnet');
+      const controller = new AbortController();
+      const read = provider
+        .request({ method: 'getPrimaryAccount' }, { signal: controller.signal })
+        .catch((e: unknown) => e);
+      await jest.advanceTimersByTimeAsync(10);
+      expect(slow.requests).toHaveLength(1);
+      controller.abort();
+      expect(await read).toMatchObject({ name: 'AbortError' });
+      await jest.advanceTimersByTimeAsync(5000);
+      expect(slow.requests).toHaveLength(1);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('retries an account read the wallet timed out (-32002), and nothing else', async () => {
     jest.useFakeTimers({ doNotFake: ['setImmediate', 'queueMicrotask'] });
     try {
