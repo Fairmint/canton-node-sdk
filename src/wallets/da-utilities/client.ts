@@ -294,6 +294,8 @@ export function createDaUtilitiesClient(network: DaNetwork, options: DaRegistryO
       throw error;
     });
     const shared = operatorPromise;
+    // A cancelled caller may never observe `shared`; other callers still do, so a later failure is never unhandled.
+    void shared.catch(() => undefined);
     return signal === undefined ? shared : awaitWithAbort(async () => shared, signal);
   }
 
@@ -323,6 +325,7 @@ export function createDaUtilitiesClient(network: DaNetwork, options: DaRegistryO
       metadata.set(key, pending);
     }
     const shared = pending;
+    void shared.catch(() => undefined);
     const answer = signal === undefined ? await shared : await awaitWithAbort(async () => shared, signal);
     if (answer === undefined && metadata.get(key) === pending) metadata.delete(key);
     return answer;

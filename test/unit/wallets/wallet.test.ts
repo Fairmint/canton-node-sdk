@@ -605,6 +605,39 @@ describe('createWallet: one write at a time, in a live session', () => {
   });
 });
 
+describe('createWallet.loadState cancellation', () => {
+  it('leaves no unhandled rejection when the caller cancels and the shared read then fails, and others still see it', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const { tokens } = setup({
+        beforeLedgerApi: () => {
+          throw new Error('ledger down');
+        },
+      });
+      const controller = new AbortController();
+      const cancelled = tokens.loadState({ signal: controller.signal }).catch((e: unknown) => e);
+      const other = tokens.loadState().catch((e: unknown) => e);
+      controller.abort();
+      expect((await cancelled) as { name?: string }).toMatchObject({ name: 'AbortError' });
+      expect(await other).toBeInstanceOf(Error);
+      expect(((await other) as { name?: string }).name).not.toBe('AbortError');
+      // Only the cancelled caller observes the shared read.
+      const solo = new AbortController();
+      const soloCancelled = tokens.loadState({ signal: solo.signal }).catch((e: unknown) => e);
+      solo.abort();
+      expect((await soloCancelled) as { name?: string }).toMatchObject({ name: 'AbortError' });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+});
+
 describe('createWallet: transfer offers', () => {
   it.each([
     ['acceptTransferOffer', '00in', 'accept', 'TransferInstruction_Accept'],

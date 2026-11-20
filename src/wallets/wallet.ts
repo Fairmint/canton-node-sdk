@@ -461,6 +461,8 @@ export function createWallet(options: WalletOptions): Wallet {
       inFlight = { writesSettled, promise };
     }
     const shared = inFlight.promise;
+    // A cancelled caller may never observe `shared`; other callers still do, so a later failure is never unhandled.
+    void shared.catch(() => undefined);
     return signal === undefined ? shared : awaitWithAbort(async () => shared, signal);
   }
 

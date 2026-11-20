@@ -423,4 +423,37 @@ describe('createDaUtilitiesClient: cancellation', () => {
     await expect(operator).resolves.toBe('op::1');
     await expect(metadata).resolves.toEqual({ name: 'Example', symbol: 'XMPL', decimals: 2 });
   });
+
+  it('leaves no unhandled rejection when a caller cancels and the shared lookups then fail', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      let fail: () => void = () => undefined;
+      const fetch: FetchLike = async () =>
+        new Promise((_resolve, reject) => {
+          fail = () => reject(new Error('registry down'));
+        });
+      const client = createDaUtilitiesClient('devnet', { fetch });
+      const controller = new AbortController();
+      const cancelled = client.operatorParty(controller.signal).catch((e: unknown) => e);
+      const other = client.operatorParty().catch((e: unknown) => e);
+      controller.abort();
+      expect(isAbort(await cancelled)).toBe(true);
+      fail();
+      expect(await other).toBeInstanceOf(Error);
+      // Only the cancelled caller: nobody else observes the shared promise.
+      const solo = new AbortController();
+      const soloCancelled = client.operatorParty(solo.signal).catch((e: unknown) => e);
+      solo.abort();
+      expect(isAbort(await soloCancelled)).toBe(true);
+      fail();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
 });
