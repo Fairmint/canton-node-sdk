@@ -1,7 +1,12 @@
 import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
 import { isCancelledBeforeSubmit } from '../../../src/wallets/abort';
 import type { TransferKind } from '../../../src/wallets/da-utilities/client';
-import { RegistryResponseError, WalletError, WalletSubmitError } from '../../../src/wallets/errors';
+import {
+  describeWalletError,
+  RegistryResponseError,
+  WalletError,
+  WalletSubmitError,
+} from '../../../src/wallets/errors';
 import type { JsonObject } from '../../../src/wallets/json';
 import type { ActiveContract } from '../../../src/wallets/types';
 import {
@@ -163,9 +168,11 @@ function setup(
     beforeLedgerApi?: (resource: string, body: unknown) => void;
     submitError?: unknown;
     now?: () => Date;
+    /** A registry request whose URL ends with this never answers, like a request still in flight. */
+    hangOn?: string;
   } = {}
 ): Setup {
-  const { fetch, calls } = fakeFetch((call: FetchCall) => {
+  const { fetch: answering, calls } = fakeFetch((call: FetchCall) => {
     if (call.url.endsWith('/api/utilities/v0/operator')) return { json: { partyId: OPERATOR } };
     if (call.url.includes('/metadata/v1/instruments/')) {
       return options.metadata?.(call) ?? { json: { id: 'XMPL', name: 'Example', symbol: 'XMPL', decimals: 2 } };
@@ -204,6 +211,12 @@ function setup(
       },
     };
   });
+  const fetch: typeof answering = async (url, init) => {
+    if (options.hangOn !== undefined && url.endsWith(options.hangOn)) {
+      await new Promise<never>(() => undefined);
+    }
+    return answering(url, init);
+  };
   const wallet = fakeProvider(ledger(options), {
     ...(options.beforeLedgerApi !== undefined && { beforeLedgerApi: options.beforeLedgerApi }),
     ...(options.submitError !== undefined && { submitError: options.submitError }),
@@ -962,6 +975,21 @@ describe('createWallet: cancellation', () => {
     expect(wallet.submissions).toEqual([]);
     // The write guard was never taken.
     await expect(tokens.rejectMintOffer('00mint')).resolves.toMatchObject({ updateId: 'update-1' });
+  });
+
+  it('brands a cancellation during a pending registry request: nothing was submitted', async () => {
+    const { tokens, wallet } = setup({ hangOn: '/transfer-factory' });
+    const controller = new AbortController();
+    const transfer = tokens.planTransfer(request, { signal: controller.signal }).catch((error: unknown) => error);
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 20);
+    });
+    controller.abort();
+    const error = await transfer;
+    expect(isAbort(error)).toBe(true);
+    expect(isCancelledBeforeSubmit(error)).toBe(true);
+    expect(describeWalletError(error).message).toContain('Nothing was submitted');
+    expect(wallet.submissions).toEqual([]);
   });
 
   it("passes the signal to a write's own registry requests, not to the shared operator lookup", async () => {

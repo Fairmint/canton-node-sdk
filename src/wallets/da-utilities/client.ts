@@ -6,7 +6,7 @@
  * Endpoints: DA's Utilities OpenAPI (`utility.yaml` v2.2.0), and the token standard transfer-instruction V1 and
  * metadata V1 specs under `/api/token-standard/v0/registrars/{admin}`.
  */
-import { awaitWithAbort, throwIfAborted } from '../../core/http/abort';
+import { awaitWithAbort, throwIfAborted } from '../abort';
 import { RegistryApiError, RegistryResponseError } from '../errors';
 import type { InstrumentMetadata } from '../holdings';
 import { instrumentKey } from '../holdings';

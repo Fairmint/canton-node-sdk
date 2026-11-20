@@ -1,3 +1,4 @@
+import { isCancelledBeforeSubmit } from '../../../src/wallets/abort';
 import { WalletReadError, WalletSignError } from '../../../src/wallets/errors';
 import {
   buildWalletOwnershipMessage,
@@ -287,6 +288,33 @@ describe('ownership checks: cancellation', () => {
     sign({ signature: 'cd'.repeat(64) });
     expect(isAbort(await check)).toBe(true);
     expect(calls.map((call) => call.url)).toEqual(['/challenge']);
+  });
+
+  it('does not call a cancellation during the verify request "cancelled before submit": the proof was sent', async () => {
+    const controller = new AbortController();
+    const calls: string[] = [];
+    const base = server().fetch;
+    const fetch: typeof base = async (url, init) => {
+      calls.push(url);
+      if (url === '/verify') return new Promise<never>(() => undefined);
+      return base(url, init);
+    };
+    const provider = accountProvider({ signMessage: () => ({ signature: 'cd'.repeat(64) }) });
+    const check = requestWalletOwnershipVerdict(connected(provider), {
+      challengeUrl: '/challenge',
+      verifyUrl: '/verify',
+      fetch,
+      signal: controller.signal,
+    }).catch((e: unknown) => e);
+    while (!calls.includes('/verify')) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 5);
+      });
+    }
+    controller.abort();
+    const error = await check;
+    expect(isAbort(error)).toBe(true);
+    expect(isCancelledBeforeSubmit(error)).toBe(false);
   });
 
   it('does not ask the wallet to sign once proveWalletOwnership was cancelled', async () => {

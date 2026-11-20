@@ -23,7 +23,8 @@ import {
   reportsOtherNetwork,
   type Cip103Connection,
 } from './cip103';
-import { awaitWithAbort, throwIfAborted } from './abort';
+import { awaitWithAbort as awaitBeforeSubmit, throwIfAborted } from './abort';
+import { awaitWithAbort as coreAwaitWithAbort } from '../core/http/abort';
 import { globalFetch, type FetchLike } from './da-utilities/client';
 import { WalletReadError, WalletSignError } from './errors';
 import { isRecord, nonEmptyString } from './json';
@@ -220,7 +221,7 @@ export async function proveWalletOwnership(
   const { provider, partyId, network } = connection;
   const { challenge, signal } = options;
   throwIfAborted(signal);
-  const account = await awaitWithAbort(async () => primaryAccount(provider), signal);
+  const account = await awaitBeforeSubmit(async () => primaryAccount(provider), signal);
   if (account.partyId !== partyId) {
     throw new WalletSignError(
       'invalid-challenge',
@@ -264,7 +265,10 @@ export async function proveWalletOwnership(
   throwIfAborted(signal);
   let raw: unknown;
   try {
-    raw = await awaitWithAbort(async () => provider.request({ method: 'signMessage', params: { message } }), signal);
+    raw = await coreAwaitWithAbort(
+      async () => provider.request({ method: 'signMessage', params: { message } }),
+      signal
+    );
   } catch (error) {
     if (signal?.aborted === true) throw error;
     const code = cip103ErrorCode(error);
@@ -384,8 +388,17 @@ function isWalletOwnershipVerdict(value: unknown, partyId: string): value is Wal
 }
 
 /** POST `body` as JSON and return the response's `data`; throws on a non-2xx answer or one without `data`. */
-async function postForData(fetch: FetchLike, url: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
-  const { response, text } = await awaitWithAbort(async () => {
+async function postForData(
+  fetch: FetchLike,
+  url: string,
+  body: unknown,
+  signal: AbortSignal | undefined,
+  /** Whether the request carries the signed proof: an abort after it is sent is not a cancellation before submit. */
+  carriesProof: boolean
+): Promise<unknown> {
+  throwIfAborted(signal);
+  const race = carriesProof ? coreAwaitWithAbort : awaitBeforeSubmit;
+  const { response, text } = await race(async () => {
     const answer = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -423,7 +436,7 @@ export async function requestWalletOwnershipVerdict(
   const send = options.fetch ?? globalFetch('{ fetch } to requestWalletOwnershipVerdict');
   const { signal } = options;
   throwIfAborted(signal);
-  const issued = await postForData(send, options.challengeUrl, { network, partyId }, signal);
+  const issued = await postForData(send, options.challengeUrl, { network, partyId }, signal, false);
   if (!isRecord(issued) || !isRecord(issued['challenge']) || typeof issued['token'] !== 'string') {
     throw new Error('The server answered the ownership challenge request without { challenge, token }');
   }
@@ -436,7 +449,7 @@ export async function requestWalletOwnershipVerdict(
     );
   }
   const proof = await proveWalletOwnership(connection, { challenge, ...(signal !== undefined && { signal }) });
-  const verdict = await postForData(send, options.verifyUrl, { token: issued['token'], proof }, signal);
+  const verdict = await postForData(send, options.verifyUrl, { token: issued['token'], proof }, signal, true);
   if (!isWalletOwnershipVerdict(verdict, partyId)) {
     throw new Error('The server answered the ownership proof without a well-formed verdict for the party');
   }
