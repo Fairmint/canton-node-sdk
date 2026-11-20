@@ -881,6 +881,130 @@ describe('createCip103Session', () => {
       expect(session.getSnapshot()).toEqual(DISCONNECTED);
     });
 
+    describe('interleavings of an abort with connect() and restore()', () => {
+      // Each case: abort at one point of the call, the replies still pending or queued answer afterwards, and the
+      // call rejected with an AbortError. The session is then what it was before restore(), or disconnected for
+      // connect(), and nothing later publishes over it.
+      const aborted = { name: 'AbortError' };
+
+      it('connect: abort while getPrimaryAccount is pending, a late account does not connect', async () => {
+        const { session } = observed();
+        const account = deferred<unknown>();
+        const provider = new TestProvider(HOLDER, { getPrimaryAccount: async () => account.promise });
+        const controller = new AbortController();
+        const connecting = session.connect(provider, { signal: controller.signal });
+        await flush();
+        expect(provider.requests).toEqual(['connect', 'getPrimaryAccount']);
+        controller.abort();
+        await expect(connecting).rejects.toMatchObject(aborted);
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+        account.resolve({ primary: true, partyId: HOLDER });
+        await flush();
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      });
+
+      it('connect: abort in the same tick as the account reply (already queued) wins', async () => {
+        const { session } = observed();
+        const account = deferred<unknown>();
+        const provider = new TestProvider(HOLDER, { getPrimaryAccount: async () => account.promise });
+        const controller = new AbortController();
+        const connecting = session.connect(provider, { signal: controller.signal });
+        await flush();
+        account.resolve({ primary: true, partyId: HOLDER });
+        controller.abort(); // the reply's continuation is queued, not yet run
+        await expect(connecting).rejects.toMatchObject(aborted);
+        await flush();
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+        expect(provider.requests).toContain('disconnect');
+      });
+
+      it('connect: abort inside the connected notification (before connect() resolves) disconnects', async () => {
+        const { session } = observed();
+        const provider = new TestProvider(HOLDER);
+        const controller = new AbortController();
+        const unsubscribe = session.subscribe(() => {
+          if (session.getSnapshot().status === 'connected') controller.abort();
+        });
+        await expect(session.connect(provider, { signal: controller.signal })).rejects.toMatchObject(aborted);
+        unsubscribe();
+        await flush();
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      });
+
+      it('restore: abort while isConnected is pending, a late true does not connect', async () => {
+        const { session } = observed();
+        const reply = deferred<unknown>();
+        const provider = new TestProvider(HOLDER, { isConnected: async () => reply.promise });
+        const controller = new AbortController();
+        const restoring = session.restore(provider, { signal: controller.signal });
+        await flush();
+        controller.abort();
+        await expect(restoring).rejects.toMatchObject(aborted);
+        reply.resolve({ isConnected: true });
+        await flush();
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+        expect(provider.requests).toEqual(['isConnected']);
+      });
+
+      it('restore: abort while getPrimaryAccount is pending, a late account does not connect', async () => {
+        const { session } = observed();
+        const account = deferred<unknown>();
+        const provider = new TestProvider(HOLDER, { getPrimaryAccount: async () => account.promise });
+        const controller = new AbortController();
+        const restoring = session.restore(provider, { signal: controller.signal });
+        await flush();
+        expect(provider.requests).toEqual(['isConnected', 'getPrimaryAccount']);
+        controller.abort();
+        await expect(restoring).rejects.toMatchObject(aborted);
+        account.resolve({ primary: true, partyId: HOLDER });
+        await flush();
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      });
+
+      it('restore: abort in the same tick as the account reply (already queued) wins', async () => {
+        const { session } = observed();
+        const account = deferred<unknown>();
+        const provider = new TestProvider(HOLDER, { getPrimaryAccount: async () => account.promise });
+        const controller = new AbortController();
+        const restoring = session.restore(provider, { signal: controller.signal });
+        await flush();
+        account.resolve({ primary: true, partyId: HOLDER });
+        controller.abort();
+        await expect(restoring).rejects.toMatchObject(aborted);
+        await flush();
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      });
+
+      it('restore: abort inside the connected notification puts the session back as it was', async () => {
+        const { session } = observed();
+        const provider = new TestProvider(HOLDER);
+        const controller = new AbortController();
+        const unsubscribe = session.subscribe(() => {
+          if (session.getSnapshot().status === 'connected') controller.abort();
+        });
+        await expect(session.restore(provider, { signal: controller.signal })).rejects.toMatchObject(aborted);
+        unsubscribe();
+        await flush();
+        expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      });
+
+      it('restore: aborting an earlier restore does not undo a connect() that has since connected', async () => {
+        const { session } = observed();
+        const reply = deferred<unknown>();
+        const slow = new TestProvider(HOLDER, { isConnected: async () => reply.promise });
+        const controller = new AbortController();
+        const restoring = session.restore(slow, { signal: controller.signal });
+        await flush();
+        await session.connect(slow);
+        expect(session.getSnapshot().status).toBe('connected');
+        controller.abort();
+        await expect(restoring).rejects.toMatchObject(aborted);
+        reply.resolve({ isConnected: true });
+        await flush();
+        expect(session.getSnapshot().status).toBe('connected');
+      });
+    });
+
     it('leaves a connect() that a newer one superseded to the newer one when the older is cancelled', async () => {
       const { session } = observed();
       const slow = new TestProvider(HOLDER, { connect: async () => deferred<unknown>().promise });

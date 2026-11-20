@@ -162,6 +162,18 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
   const disconnecting = new Map<Cip103Provider, Disconnecting>();
   let attachment: Attachment | null = null;
 
+  /**
+   * Runs `onAbort` synchronously when `signal` aborts (so a cancellation supersedes pending work at once, not when a
+   * rejection is next observed); returns the function that stops watching.
+   */
+  function watchAbort(signal: AbortSignal | undefined, onAbort: () => void): () => void {
+    if (signal === undefined) return () => undefined;
+    signal.addEventListener('abort', onAbort, { once: true });
+    return () => {
+      signal.removeEventListener('abort', onAbort);
+    };
+  }
+
   function publish(next: Cip103SessionState): void {
     if (disposed || next === state) return;
     state = next;
@@ -218,7 +230,8 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     signal?: AbortSignal
   ): Promise<void> {
     const attempt = ++lookups;
-    const current = (): boolean => attempt === lookups && !disposed && stillWanted();
+    // Every publish below is guarded by this, checked right before it: superseded, disposed, no longer wanted or cancelled.
+    const current = (): boolean => attempt === lookups && !disposed && stillWanted() && signal?.aborted !== true;
     const failed = (error: WalletErrorDescription): void => {
       if (quiet) return;
       interrupt();
@@ -229,7 +242,7 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
       account = await primaryAccount(provider, { signal });
     } catch (error) {
       // A cancelled connect()/restore() ends the attempt itself: the abort is not the wallet's failure.
-      if (signal?.aborted !== true && current()) failed(lookupError(error));
+      if (current()) failed(lookupError(error));
       return;
     }
     if (!current()) return;
@@ -312,7 +325,7 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     interrupt();
     const own = epoch;
     started(own);
-    const current = (): boolean => own === epoch && !disposed;
+    const current = (): boolean => own === epoch && !disposed && signal?.aborted !== true;
     signingIn = provider;
     for (const other of previous) signedOut.add(other);
     const sends = previous.map(recordDisconnect);
@@ -331,16 +344,10 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
         signInSent = true;
         await provider.request({ method: 'connect' }, { signal });
       } catch (error) {
+        // A cancelled connect() ended the attempt itself, synchronously when the signal aborted (see connect()).
         if (current()) {
-          if (signal?.aborted === true) {
-            // Cancelled: the user gave up, as with disconnect(). Done here, while the pending provider is still
-            // recorded in signingIn, so it is signed out and kept out of restore() even though this provider
-            // rejected on abort (connect()'s own handler runs after the finally below has cleared it).
-            api.disconnect();
-          } else {
-            interrupt();
-            publish({ status: 'disconnected', error: connectError(error) });
-          }
+          interrupt();
+          publish({ status: 'disconnected', error: connectError(error) });
         }
         return;
       }
@@ -359,14 +366,15 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
 
   async function runRestore(
     provider: Cip103Provider,
-    started: (attempt: number) => void,
+    started: (attempt: number, epochAtStart: number) => void,
     signal?: AbortSignal
   ): Promise<void> {
     if (disposed || state.status !== 'disconnected' || signedOut.has(provider)) return;
     const own = epoch;
     const attempt = ++restores;
-    started(attempt);
-    const wanted = (): boolean => !disposed && own === epoch && attempt === restores && state.status === 'disconnected';
+    started(attempt, own);
+    const wanted = (): boolean =>
+      !disposed && own === epoch && attempt === restores && state.status === 'disconnected' && signal?.aborted !== true;
     let answer: unknown = null;
     try {
       answer = await provider.request({ method: 'isConnected' }, { signal });
@@ -400,32 +408,47 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
         signal
       );
       void run.catch(() => undefined); // an abort stops waiting only: the run drops itself once superseded
+      // Cancelled while it is still the session's pending connect: the user gave up, as with disconnect(). Done the
+      // moment the signal aborts, so no reply that is already queued can publish first, and the provider (still
+      // recorded as signing in) is signed out and kept out of restore().
+      const stopWatching = watchAbort(signal, () => {
+        if (own !== undefined && own === epoch && !disposed) api.disconnect();
+      });
       try {
         await awaitWithAbort(async () => run, signal);
-      } catch (error) {
-        // Cancelled while it was still the session's pending connect: the user gave up, as with disconnect().
-        if (signal?.aborted === true && own !== undefined && own === epoch && !disposed) api.disconnect();
-        throw error;
+      } finally {
+        stopWatching();
       }
     },
 
     async restore(provider, { signal } = {}) {
       throwIfAborted(signal);
+      const before = state;
       let attempt: number | undefined;
+      let ownEpoch: number | undefined;
       const run = runRestore(
         provider,
-        (number) => {
+        (number, epochAtStart) => {
           attempt = number;
+          ownEpoch = epochAtStart;
         },
         signal
       );
       void run.catch(() => undefined);
+      // Dropped the moment the signal aborts: it may no longer connect (unless a newer restore() has taken over), and
+      // a wallet it already published goes back to the state the session was in before the call.
+      const stopWatching = watchAbort(signal, () => {
+        if (attempt === undefined || attempt !== restores) return;
+        restores += 1;
+        if (ownEpoch === epoch && state.status === 'connected' && state.wallet.provider === provider) {
+          interrupt();
+          publish(before);
+        }
+      });
       try {
         await awaitWithAbort(async () => run, signal);
-      } catch (error) {
-        // Dropped: it may no longer connect, unless a newer restore() has taken over.
-        if (signal?.aborted === true && attempt === restores) restores += 1;
-        throw error;
+      } finally {
+        stopWatching();
       }
     },
 
