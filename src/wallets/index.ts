@@ -4,6 +4,8 @@
  * `@fairmint/canton-node-sdk/build/src/wallets/index.js` still works); the package root also exports it as the
  * `Wallets` namespace (for Node).
  *
+ * - `discoverCip103Wallets()`: the CIP-0103 wallet extensions installed in the browser, each with `load(network)` that
+ *   resolves its provider (the dApp SDK's announce handshake and message channel, no dependency).
  * - `createCip103Session({ network })`: which wallet is connected, as which party (`connect`, `restore`, `disconnect`).
  * - `createWalletStore({ session })`: the page's observable state, typed actions (`act`), notices to show.
  * - `createWallet(...)`: one party's token actions, for code that does not need the store.
@@ -49,6 +51,13 @@ export {
   type WalletState,
 } from './wallet';
 export type { Cip103Connection, Cip103EventListener, Cip103Provider, Cip103Request } from './cip103';
+export {
+  discoverCip103Wallets,
+  INJECTED_WALLET_ID,
+  type Cip103DiscoveryHost,
+  type DiscoverCip103WalletsOptions,
+  type DiscoveredWallet,
+} from './discovery';
 export {
   buildWalletOwnershipMessage,
   proveWalletOwnership,

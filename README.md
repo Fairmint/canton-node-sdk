@@ -78,6 +78,15 @@ browser-safe: import `@fairmint/canton-node-sdk/wallets`, which loads none of th
 dependencies (the older deep path `@fairmint/canton-node-sdk/build/src/wallets/index.js` still
 works). The package root also exports it as the `Wallets` namespace.
 
+- `discoverCip103Wallets()`: the CIP-0103 wallets installed in the browser as extensions, as
+  `{ id, name, icon?, load(network) }`; `load` resolves the wallet's provider for a network. It runs
+  the Canton dApp SDK's handshake (`canton:requestProvider`, 300 ms of `canton:announceProvider`)
+  and talks to each wallet over the dApp SDK's message channel, with no dependency; the page's
+  `canton` global is offered only when no wallet announced itself. It corrects for Console Wallet
+  1.15 (reached through its injected provider, since its channel never answers errors; base64
+  `signMessage`; raw `ledgerApi` bodies; `CANTON_NETWORK_*` network ids), and refuses (4901) an
+  account on another network than the one loaded. Remember `id` to reconnect the same wallet on a
+  later visit.
 - `createCip103Session({ network })`: which wallet is connected, as which party. Call
   `connect(provider)` on a click, `restore(provider)` on page load (it connects silently when the
   wallet says it is still connected, and never shows an error; a wallet the user disconnected stays
@@ -91,6 +100,15 @@ works). The package root also exports it as the `Wallets` namespace.
 The actions are `acceptMintOffer`, `rejectMintOffer`, `acceptTransferOffer`, `rejectTransferOffer`,
 `withdrawTransferOffer`, `requestBurn`, `cancelBurnRequest`, `planTransfer` then `submitTransfer`,
 `createTransferPreapproval`, `removeTransferPreapproval` and `proveOwnership`.
+
+```ts
+// Offer the installed wallets, then connect the one the user picks.
+import { discoverCip103Wallets } from '@fairmint/canton-node-sdk/wallets';
+
+const wallets = await discoverCip103Wallets(); // [{ id, name, icon?, load }]
+const provider = await wallets[0].load('devnet');
+await session.connect(provider);
+```
 
 ```ts
 // wallet.ts: one session and one store per network, at module level.
@@ -211,7 +229,8 @@ if (plan !== null && confirm(plan.description)) await store.act({ type: 'submitT
   custom `fetch` receives it in `init.signal`), and nothing is submitted. A write checks the signal
   for the last time right before it hands the transaction to the wallet; from then on it runs to its
   outcome, since CIP-0103 has no cancellation.
-- Wallet discovery (finding the providers a browser offers) is future work: its CIP is a draft.
+- Wallet discovery follows the Canton dApp SDK's announce handshake; a CIP that standardizes
+  discovery is still a draft, so `discoverCip103Wallets` will follow it once it settles.
 
 ### The ownership routes
 
