@@ -25,6 +25,8 @@ export interface FetchCall {
   method: string;
   headers: Record<string, string> | undefined;
   body: unknown;
+  /** The signal the SDK passed (undefined when the call had none). */
+  signal?: AbortSignal | undefined;
 }
 
 /** A fake `fetch`: `handler` answers each call with a status and a JSON body (or raw text). */
@@ -42,6 +44,7 @@ export function fakeFetch(
       method: init.method,
       headers: init.headers,
       body: init.body === undefined ? undefined : JSON.parse(init.body),
+      signal: init.signal,
     };
     calls.push(call);
     const answer = handler(call);

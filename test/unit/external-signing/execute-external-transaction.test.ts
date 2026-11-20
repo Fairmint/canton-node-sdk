@@ -1,7 +1,9 @@
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
 import {
   createDefaultInteractiveSubmissionDeduplicationPeriod,
+  DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_MS,
   DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD,
+  deduplicationPeriodFromMs,
   executeExternalTransaction,
   executeExternalTransactionAndWait,
   type NonEmptyPartySignatures,
@@ -46,10 +48,45 @@ describe('executeExternalTransaction', () => {
     expect(first).not.toBe(second);
     expect(first.DeduplicationDuration).not.toBe(second.DeduplicationDuration);
     first.DeduplicationDuration.value.seconds = 60;
-    expect(second.DeduplicationDuration.value.seconds).toBe(30);
-    expect(DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD.DeduplicationDuration.value.seconds).toBe(30);
+    expect(second.DeduplicationDuration.value.seconds).toBe(600);
+    expect(DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD.DeduplicationDuration.value.seconds).toBe(600);
     expect(Object.isFrozen(DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD)).toBe(true);
     expect(Object.isFrozen(DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_PERIOD.DeduplicationDuration)).toBe(true);
+  });
+
+  it('defaults to 10 minutes, long enough to cover a 5-minute signed payload plus margin', () => {
+    expect(DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_MS).toBe(10 * 60 * 1000);
+    expect(createDefaultInteractiveSubmissionDeduplicationPeriod()).toEqual(
+      deduplicationPeriodFromMs(DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_MS)
+    );
+  });
+
+  it('builds a deduplication period from milliseconds', () => {
+    expect(deduplicationPeriodFromMs(15 * 60_000)).toEqual({
+      DeduplicationDuration: { value: { seconds: 900, nanos: 0 } },
+    });
+    expect(deduplicationPeriodFromMs(1_234)).toEqual({
+      DeduplicationDuration: { value: { seconds: 1, nanos: 234_000_000 } },
+    });
+    expect(deduplicationPeriodFromMs(0)).toEqual({ DeduplicationDuration: { value: { seconds: 0, nanos: 0 } } });
+    for (const bad of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, '60000' as unknown as number]) {
+      expect(() => deduplicationPeriodFromMs(bad)).toThrow(/non-negative whole number of milliseconds/);
+    }
+  });
+
+  it('passes a caller deduplication period through unchanged', async () => {
+    await executeExternalTransactionAndWait({
+      ledgerClient: mockClient,
+      preparedTransaction: 'prepared-tx-base64',
+      submissionId: 'submission-123',
+      partySignatures: PARTY_SIGNATURES,
+      deduplicationPeriod: deduplicationPeriodFromMs(20 * 60_000),
+    });
+    expect(mockClient.interactiveSubmissionExecuteAndWait).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deduplicationPeriod: { DeduplicationDuration: { value: { seconds: 1200, nanos: 0 } } },
+      })
+    );
   });
 
   it('executes external transaction and returns result', async () => {
@@ -84,7 +121,7 @@ describe('executeExternalTransaction', () => {
       hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
       deduplicationPeriod: {
         DeduplicationDuration: {
-          value: { seconds: 30, nanos: 0 },
+          value: { seconds: 600, nanos: 0 },
         },
       },
       partySignatures: {
@@ -151,7 +188,7 @@ describe('executeExternalTransaction', () => {
     );
   });
 
-  it('defaults deduplicationPeriod to 30s', async () => {
+  it('defaults deduplicationPeriod to 10 minutes', async () => {
     await executeExternalTransaction({
       ledgerClient: mockClient,
       userId: 'user-123',
@@ -165,7 +202,7 @@ describe('executeExternalTransaction', () => {
       expect.objectContaining({
         deduplicationPeriod: {
           DeduplicationDuration: {
-            value: { seconds: 30, nanos: 0 },
+            value: { seconds: 600, nanos: 0 },
           },
         },
       })
@@ -233,7 +270,7 @@ describe('executeExternalTransaction', () => {
       submissionId: 'submission-123',
       deduplicationPeriod: {
         DeduplicationDuration: {
-          value: { seconds: 30, nanos: 0 },
+          value: { seconds: 600, nanos: 0 },
         },
       },
       partySignatures: {

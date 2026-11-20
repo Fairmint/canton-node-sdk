@@ -296,6 +296,10 @@ export interface ExecuteExternalTransactionWithEd25519SignerOptions extends Omit
   readonly signer: CantonEd25519Signer;
   readonly commandId: string;
   readonly submissionId: string;
+  /**
+   * How long the participant refuses a second execution of this command id: defaults to 10 minutes
+   * (`DEFAULT_INTERACTIVE_SUBMISSION_DEDUPLICATION_MS`); build another with `deduplicationPeriodFromMs`.
+   */
   readonly deduplicationPeriod?: ExecuteExternalTransactionOptions['deduplicationPeriod'];
   readonly signingContext?: CantonEd25519SigningContext;
   readonly requestTtlMs?: number;

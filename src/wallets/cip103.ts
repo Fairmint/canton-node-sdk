@@ -18,7 +18,7 @@
  */
 import { parseActiveContractEntries } from './acs';
 import type { DaNetwork } from './da-utilities/client';
-import { WalletReadError, WalletSubmitError } from './errors';
+import { WalletReadError, WalletSubmitError, type WalletSubmitCategory } from './errors';
 import { isRecord, nonEmptyString } from './json';
 import type { ActiveContract, DisclosedContract, LedgerCommand, SubmitResult, WalletSubmission } from './types';
 
@@ -192,6 +192,90 @@ const SESSION_CODES: ReadonlySet<number> = new Set([
   CIP103_ERROR_CODES.chainDisconnected,
 ]);
 
+/** Canton's error text, `ERROR_ID(category,correlation id): cause`, as a wallet may pass it on in a message. */
+const CANTON_ERROR_TEXT = /\b([A-Z][A-Z0-9_]{2,63})\((\d{1,2}),[0-9A-Za-z-]{0,64}\)/;
+/** A Canton error id, as a Ledger JSON API error (`JsCantonError`) names it in `code`. */
+const CANTON_ERROR_ID = /^[A-Z][A-Z0-9_]{2,63}$/;
+/** How much of a string, and how deep and wide into `data`, the Canton error search looks. */
+const CANTON_ERROR_SEARCH = { chars: 8192, depth: 4, keys: 32 } as const;
+
+/** A Canton error a wallet passed on: its id and, when given, its error category (`ErrorCategory.asInt`). */
+export interface CantonErrorRef {
+  readonly id: string;
+  readonly category?: number;
+}
+
+function cantonErrorIn(value: unknown, depth: number): CantonErrorRef | undefined {
+  if (typeof value === 'string') {
+    const match = CANTON_ERROR_TEXT.exec(value.slice(0, CANTON_ERROR_SEARCH.chars));
+    return match?.[1] !== undefined ? { id: match[1], category: Number(match[2]) } : undefined;
+  }
+  if (depth > CANTON_ERROR_SEARCH.depth || typeof value !== 'object' || value === null) return undefined;
+  if (isRecord(value)) {
+    const { code, errorCategory } = value;
+    if (typeof code === 'string' && CANTON_ERROR_ID.test(code) && typeof errorCategory === 'number') {
+      return Number.isInteger(errorCategory) ? { id: code, category: errorCategory } : { id: code };
+    }
+  }
+  for (const nested of Object.values(value).slice(0, CANTON_ERROR_SEARCH.keys)) {
+    const found = cantonErrorIn(nested, depth + 1);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+/**
+ * The Canton error a provider error carries, in its message (`ERROR_ID(category,…)`) or its `data` (a `JsCantonError`
+ * `{ code, errorCategory }`, or that text); undefined when it carries none. Bounded, and never throws.
+ */
+export function cantonErrorOf(error: unknown): CantonErrorRef | undefined {
+  try {
+    return cantonErrorIn(errorMessage(error), 0) ?? (isRecord(error) ? cantonErrorIn(error['data'], 0) : undefined);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Canton's `ErrorCategory.asInt` → the submit category it stands for. */
+const CANTON_CATEGORIES: Readonly<Record<number, WalletSubmitCategory>> = {
+  1: 'unavailable',
+  2: 'contention',
+  3: 'timeout',
+  4: 'internal',
+  5: 'invalid',
+  6: 'permission',
+  7: 'permission',
+  8: 'invalid',
+  9: 'precondition',
+  10: 'duplicate',
+  11: 'not-found',
+  12: 'precondition',
+  13: 'unavailable',
+  14: 'internal',
+};
+
+/** The submit category of a provider error: 4001 first, then the Canton error's category, then the CIP-0103 code. */
+function submitCategory(code: number | undefined, canton: CantonErrorRef | undefined): WalletSubmitCategory {
+  if (code === CIP103_ERROR_CODES.userRejected) return 'user-rejected';
+  const fromCanton = canton?.category !== undefined ? CANTON_CATEGORIES[canton.category] : undefined;
+  if (fromCanton !== undefined) return fromCanton;
+  if (code === undefined) return 'unknown';
+  if (NOT_SUBMITTED_CODES.has(code)) return 'wallet-refused';
+  if (SESSION_CODES.has(code)) return 'session';
+  switch (code) {
+    case CIP103_ERROR_CODES.limitExceeded:
+      return 'rate-limited';
+    case CIP103_ERROR_CODES.transactionRejected:
+      return 'ledger-rejected';
+    case CIP103_ERROR_CODES.resourceUnavailable:
+      return 'unavailable';
+    case CIP103_ERROR_CODES.internalError:
+      return 'internal';
+    default:
+      return 'unknown';
+  }
+}
+
 /**
  * A provider error from `prepareExecuteAndWait` as a `WalletSubmitError`:
  *
@@ -201,11 +285,20 @@ const SESSION_CODES: ReadonlySet<number> = new Set([
  *   take the request on, so nothing was submitted;
  * - 4100, 4900, 4901 → `unknown`: the wallet lost or changed its session, possibly after submitting;
  * - Anything else (-32002 timeouts, -32603, no code) → `unknown`: never resubmit without checking the wallet.
+ *
+ * The outcome follows the CIP-0103 code alone. The error's `category` and `cantonErrorId` add why, from the Canton
+ * error the wallet passed on when it passed one on (see `WalletSubmitCategory`).
  */
 export function cip103SubmitError(error: unknown, commandId: string): WalletSubmitError {
   const code = cip103ErrorCode(error);
   const message = describeError(error);
-  const details = { ...(code !== undefined && { code }), commandId };
+  const canton = cantonErrorOf(error);
+  const details = {
+    ...(code !== undefined && { code }),
+    commandId,
+    category: submitCategory(code, canton),
+    ...(canton !== undefined && { cantonErrorId: canton.id }),
+  };
   if (code === CIP103_ERROR_CODES.userRejected) {
     return new WalletSubmitError(
       'rejected-by-user',
@@ -241,7 +334,10 @@ function readSubmitResult(raw: unknown, commandId: string): SubmitResult {
   const updateId = isRecord(payload) ? nonEmptyString(payload['updateId']) : undefined;
   const details = { commandId: (isRecord(tx) ? nonEmptyString(tx['commandId']) : undefined) ?? commandId };
   if (status === 'failed') {
-    throw new WalletSubmitError('failed', 'The wallet reported the transaction failed', details);
+    throw new WalletSubmitError('failed', 'The wallet reported the transaction failed', {
+      ...details,
+      category: 'ledger-rejected',
+    });
   }
   if (status !== 'executed' || updateId === undefined) {
     throw new WalletSubmitError('unknown', 'The wallet answered without an executed transaction.', details);

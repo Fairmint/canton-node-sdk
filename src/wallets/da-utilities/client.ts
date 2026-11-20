@@ -6,6 +6,7 @@
  * Endpoints: DA's Utilities OpenAPI (`utility.yaml` v2.2.0), and the token standard transfer-instruction V1 and
  * metadata V1 specs under `/api/token-standard/v0/registrars/{admin}`.
  */
+import { awaitWithAbort, throwIfAborted } from '../../core/http/abort';
 import { RegistryApiError, RegistryResponseError } from '../errors';
 import type { InstrumentMetadata } from '../holdings';
 import { instrumentKey } from '../holdings';
@@ -23,13 +24,18 @@ export const DA_UTILITIES_BASE_URLS: Readonly<Record<DaNetwork, string>> = {
   mainnet: 'https://api.utilities.digitalasset.com',
 };
 
-/** The subset of `fetch` this module uses; the global `fetch` satisfies it. */
+/**
+ * The subset of `fetch` this module uses; the global `fetch` satisfies it. `signal` is set when the caller passed one:
+ * forward it so an aborted call stops its request (an implementation that ignores it still works; the SDK then stops
+ * waiting for the answer instead).
+ */
 export type FetchLike = (
   url: string,
   init: {
     method: 'GET' | 'POST';
     headers?: Record<string, string>;
     body?: string;
+    signal?: AbortSignal;
   }
 ) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>;
 
@@ -97,25 +103,30 @@ export interface BurnRequestContextArgs {
 export interface DaUtilitiesClient {
   /** The providers trusted for an instrument admin: the `trustedProviders` entry, else the admin itself. */
   readonly trustedProvidersOf: (instrumentAdmin: string) => readonly string[];
-  /** DA's operator party (`GET /api/utilities/v0/operator`), fetched once; a failed lookup is retried next call. */
-  operatorParty(): Promise<string>;
+  /**
+   * DA's operator party (`GET /api/utilities/v0/operator`), fetched once; a failed lookup is retried next call. The
+   * lookup is shared, so `signal` only stops this call waiting for it.
+   */
+  operatorParty(signal?: AbortSignal): Promise<string>;
   /** The transfer factory for a transfer, and how DA will run it. */
-  transferFactory(expectedAdmin: string, transfer: TransferSpec): Promise<TransferFactory>;
+  transferFactory(expectedAdmin: string, transfer: TransferSpec, signal?: AbortSignal): Promise<TransferFactory>;
   /** Context to accept, reject or withdraw a pending transfer. */
   transferInstructionContext(
     registrar: string,
     instructionCid: string,
-    action: TransferInstructionAction
+    action: TransferInstructionAction,
+    signal?: AbortSignal
   ): Promise<ChoiceContext>;
   /** Context to exercise `MintOffer_Accept` on the offer. */
-  mintOfferAcceptContext(mintOfferCid: string): Promise<ChoiceContext>;
+  mintOfferAcceptContext(mintOfferCid: string, signal?: AbortSignal): Promise<ChoiceContext>;
   /** The allocation factory and context to exercise `AllocationFactory_RequestBurn`. */
-  burnRequestContext(args: BurnRequestContextArgs): Promise<FactoryWithChoiceContext>;
+  burnRequestContext(args: BurnRequestContextArgs, signal?: AbortSignal): Promise<FactoryWithChoiceContext>;
   /**
    * The instrument's CIP-56 metadata, or undefined on any failure (an error status, a malformed answer). An answer is
-   * kept for the client's lifetime; a failure is asked again next call.
+   * kept for the client's lifetime; a failure is asked again next call. The lookup is shared, so `signal` only stops
+   * this call waiting for it: an aborted call throws an `AbortError`.
    */
-  instrumentMetadata(instrumentId: InstrumentId): Promise<InstrumentMetadata | undefined>;
+  instrumentMetadata(instrumentId: InstrumentId, signal?: AbortSignal): Promise<InstrumentMetadata | undefined>;
 }
 
 const templateNames = (keys: ReadonlyArray<keyof typeof DA_REGISTRY_TEMPLATES>): readonly string[] =>
@@ -241,16 +252,20 @@ export function createDaUtilitiesClient(network: DaNetwork, options: DaRegistryO
   const fetchFn = options.fetch ?? globalFetch('registry.fetch');
   const trustedProvidersOf = trustedProvidersResolver(options.trustedProviders);
 
-  async function call(method: 'GET' | 'POST', path: string, body?: object): Promise<unknown> {
+  /** One request; an aborted `signal` rejects it with an `AbortError`, also when `fetch` ignores the signal. */
+  async function call(method: 'GET' | 'POST', path: string, body?: object, signal?: AbortSignal): Promise<unknown> {
     const url = `${baseUrl}${path}`;
-    const response = await fetchFn(url, {
-      method,
-      ...(body !== undefined && {
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-    });
-    const text = await response.text();
+    const { response, text } = await awaitWithAbort(async () => {
+      const answer = await fetchFn(url, {
+        method,
+        ...(body !== undefined && {
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
+        ...(signal !== undefined && { signal }),
+      });
+      return { response: answer, text: await answer.text() };
+    }, signal);
     if (!response.ok) throw new RegistryApiError(response.status, text, url);
     try {
       return JSON.parse(text) as unknown;
@@ -272,18 +287,24 @@ export function createDaUtilitiesClient(network: DaNetwork, options: DaRegistryO
   }
 
   let operatorPromise: Promise<string> | undefined;
-  async function operatorParty(): Promise<string> {
+  async function operatorParty(signal?: AbortSignal): Promise<string> {
+    throwIfAborted(signal);
     operatorPromise ??= fetchOperator().catch((error: unknown) => {
       operatorPromise = undefined;
       throw error;
     });
-    return operatorPromise;
+    const shared = operatorPromise;
+    return signal === undefined ? shared : awaitWithAbort(async () => shared, signal);
   }
 
   const metadata = new Map<string, Promise<InstrumentMetadata | undefined>>();
   /** A lookup still unanswered after this long gives undefined (and is retried next time), so a load never hangs on it. */
   const METADATA_TIMEOUT_MS = 5000;
-  async function instrumentMetadata(instrumentId: InstrumentId): Promise<InstrumentMetadata | undefined> {
+  async function instrumentMetadata(
+    instrumentId: InstrumentId,
+    signal?: AbortSignal
+  ): Promise<InstrumentMetadata | undefined> {
+    throwIfAborted(signal);
     const key = instrumentKey(instrumentId);
     let pending = metadata.get(key);
     if (pending === undefined) {
@@ -301,7 +322,8 @@ export function createDaUtilitiesClient(network: DaNetwork, options: DaRegistryO
       pending = Promise.race([lookup, timedOut]).finally(() => clearTimeout(timer));
       metadata.set(key, pending);
     }
-    const answer = await pending;
+    const shared = pending;
+    const answer = signal === undefined ? await shared : await awaitWithAbort(async () => shared, signal);
     if (answer === undefined && metadata.get(key) === pending) metadata.delete(key);
     return answer;
   }
@@ -311,60 +333,72 @@ export function createDaUtilitiesClient(network: DaNetwork, options: DaRegistryO
     operatorParty,
     instrumentMetadata,
 
-    async mintOfferAcceptContext(mintOfferCid) {
+    async mintOfferAcceptContext(mintOfferCid, signal) {
       return parseChoiceContext(
         await call(
           'POST',
           `/api/utilities/v0/registry/mint/v0/offer/${encodeURIComponent(mintOfferCid)}/choice-contexts/accept`,
-          {}
+          {},
+          signal
         )
       );
     },
 
-    async burnRequestContext({ holder, holdingContractIds, instrumentId }) {
+    async burnRequestContext({ holder, holdingContractIds, instrumentId }, signal) {
       return parseFactoryWithChoiceContext(
-        await call('POST', '/api/utilities/v0/registry/burn/v0/request', {
-          holder,
-          holdingContractIds: [...holdingContractIds],
-          instrumentId: { admin: instrumentId.admin, id: instrumentId.id },
-        })
-      );
-    },
-
-    async transferFactory(expectedAdmin, transfer) {
-      return parseTransferFactory(
-        await call('POST', `${registryPath(expectedAdmin)}/transfer-instruction/v1/transfer-factory`, {
-          choiceArguments: {
-            expectedAdmin,
-            transfer: {
-              sender: transfer.sender,
-              receiver: transfer.receiver,
-              amount: transfer.amount,
-              instrumentId: {
-                admin: transfer.instrumentId.admin,
-                id: transfer.instrumentId.id,
-              },
-              requestedAt: transfer.requestedAt,
-              executeBefore: transfer.executeBefore,
-              inputHoldingCids: [...transfer.inputHoldingCids],
-              meta: { values: { ...transfer.meta.values } },
-            },
-            extraArgs: {
-              context: { values: {} },
-              meta: { values: {} },
-            },
+        await call(
+          'POST',
+          '/api/utilities/v0/registry/burn/v0/request',
+          {
+            holder,
+            holdingContractIds: [...holdingContractIds],
+            instrumentId: { admin: instrumentId.admin, id: instrumentId.id },
           },
-          excludeDebugFields: true,
-        })
+          signal
+        )
       );
     },
 
-    async transferInstructionContext(registrar, instructionCid, action) {
+    async transferFactory(expectedAdmin, transfer, signal) {
+      return parseTransferFactory(
+        await call(
+          'POST',
+          `${registryPath(expectedAdmin)}/transfer-instruction/v1/transfer-factory`,
+          {
+            choiceArguments: {
+              expectedAdmin,
+              transfer: {
+                sender: transfer.sender,
+                receiver: transfer.receiver,
+                amount: transfer.amount,
+                instrumentId: {
+                  admin: transfer.instrumentId.admin,
+                  id: transfer.instrumentId.id,
+                },
+                requestedAt: transfer.requestedAt,
+                executeBefore: transfer.executeBefore,
+                inputHoldingCids: [...transfer.inputHoldingCids],
+                meta: { values: { ...transfer.meta.values } },
+              },
+              extraArgs: {
+                context: { values: {} },
+                meta: { values: {} },
+              },
+            },
+            excludeDebugFields: true,
+          },
+          signal
+        )
+      );
+    },
+
+    async transferInstructionContext(registrar, instructionCid, action, signal) {
       return parseChoiceContext(
         await call(
           'POST',
           `${registryPath(registrar)}/transfer-instruction/v1/${encodeURIComponent(instructionCid)}/choice-contexts/${action}`,
-          { excludeDebugFields: true }
+          { excludeDebugFields: true },
+          signal
         )
       );
     },

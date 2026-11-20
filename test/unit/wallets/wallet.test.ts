@@ -926,3 +926,111 @@ describe('newBurnReference', () => {
     expect(() => newBurnReference(new Date('soon'))).toThrow(WalletError);
   });
 });
+
+describe('createWallet: cancellation', () => {
+  const aborted = (): AbortSignal => {
+    const controller = new AbortController();
+    controller.abort();
+    return controller.signal;
+  };
+  const isAbort = (error: unknown): boolean => (error as { name?: unknown }).name === 'AbortError';
+
+  it('refuses every call with an AbortError once its signal aborted, before any read, registry call or signature', async () => {
+    const { tokens, wallet, calls } = setup();
+    const signal = aborted();
+    const results = await Promise.all(
+      [
+        tokens.loadState({ signal }),
+        tokens.planTransfer(request, { signal }),
+        tokens.acceptTransferOffer('00in', { signal }),
+        tokens.rejectTransferOffer('00in', { signal }),
+        tokens.withdrawTransferOffer('00out', { signal }),
+        tokens.acceptMintOffer('00mint', { signal }),
+        tokens.rejectMintOffer('00mint', { signal }),
+        tokens.requestBurn({ instrumentId: INSTRUMENT, amount: '1' }, { signal }),
+        tokens.cancelBurnRequest('00burn', { signal }),
+        tokens.createTransferPreapproval({ instrumentAdmin: OTHER }, { signal }),
+        tokens.removeTransferPreapproval('00pre', { signal }),
+      ].map(async (call) => call.catch((error: unknown) => error))
+    );
+    expect(results.every(isAbort)).toBe(true);
+    expect(wallet.reads).toEqual([]);
+    expect(calls).toEqual([]);
+    expect(wallet.submissions).toEqual([]);
+    // The write guard was never taken.
+    await expect(tokens.rejectMintOffer('00mint')).resolves.toMatchObject({ updateId: 'update-1' });
+  });
+
+  it("passes the signal to a write's own registry requests, not to the shared operator lookup", async () => {
+    const { tokens, calls } = setup();
+    const { signal } = new AbortController();
+    await tokens.acceptMintOffer('00mint', { signal });
+    expect(postCalls(calls)).toHaveLength(1);
+    expect(postCalls(calls).every((call) => call.signal === signal)).toBe(true);
+    // Shared with every other call of the wallet, so one caller's abort must not fail it for the rest.
+    expect(calls.filter((call) => call.method === 'GET').map((call) => call.signal)).toEqual([undefined]);
+  });
+
+  it('stops a write that is still reading, submits nothing, and frees the write guard', async () => {
+    const { tokens, wallet } = setup();
+    const controller = new AbortController();
+    const hold = holdNext(wallet, 'ledgerApi');
+    const write = tokens.acceptMintOffer('00mint', { signal: controller.signal }).catch((error: unknown) => error);
+    await hold.entered;
+    controller.abort();
+    expect(isAbort(await write)).toBe(true);
+    hold.release();
+    expect(wallet.submissions).toEqual([]);
+    await expect(tokens.acceptMintOffer('00mint')).resolves.toMatchObject({ updateId: 'update-1' });
+  });
+
+  it('runs a write to its outcome once the wallet has it: a late abort is ignored', async () => {
+    const { tokens, wallet } = setup();
+    const controller = new AbortController();
+    const hold = holdNext(wallet, 'prepareExecuteAndWait');
+    const write = tokens.rejectMintOffer('00mint', { signal: controller.signal });
+    await hold.entered;
+    controller.abort();
+    hold.release();
+    await expect(write).resolves.toMatchObject({ updateId: 'update-1' });
+    expect(wallet.submissions).toHaveLength(1);
+  });
+
+  it('stops one caller waiting for a shared snapshot without failing the others', async () => {
+    const { tokens, wallet } = setup();
+    const controller = new AbortController();
+    const hold = holdNext(wallet, 'ledgerApi');
+    const cancelled = tokens.loadState({ signal: controller.signal }).catch((error: unknown) => error);
+    const kept = tokens.loadState();
+    await hold.entered;
+    controller.abort();
+    expect(isAbort(await cancelled)).toBe(true);
+    hold.release();
+    await expect(kept).resolves.toMatchObject({ offset: expect.any(Number) });
+  });
+
+  it('cancels a planned transfer at submit time', async () => {
+    const { tokens, wallet } = setup();
+    const plan = await tokens.planTransfer(request);
+    const submitted = await plan.submit({ signal: aborted() }).catch((error: unknown) => error);
+    expect(isAbort(submitted)).toBe(true);
+    expect(wallet.submissions).toEqual([]);
+    await expect(plan.submit()).resolves.toMatchObject({ kind: 'offer' });
+  });
+
+  it('keeps the category and Canton error id when it names the burn reference of a failed submission', async () => {
+    const { tokens } = setup({
+      submitError: new RpcError(-32003, 'CONTRACT_NOT_FOUND(11,ab12): Contract could not be found'),
+    });
+    const error = await tokens
+      .requestBurn({ instrumentId: INSTRUMENT, amount: '1', reference: 'holder-burn-x' })
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(WalletSubmitError);
+    expect(error).toMatchObject({
+      outcome: 'failed',
+      category: 'not-found',
+      cantonErrorId: 'CONTRACT_NOT_FOUND',
+      burnReference: 'holder-burn-x',
+    });
+  });
+});

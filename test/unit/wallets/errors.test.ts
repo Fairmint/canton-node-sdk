@@ -1,6 +1,15 @@
 /** `describeWalletError`: a user-facing sentence that says whether anything was submitted, and a kind to branch on. */
+import { runInNewContext } from 'node:vm';
+
 import {
   describeWalletError,
+  isRegistryApiError,
+  isRegistryResponseError,
+  isWalletCancellation,
+  isWalletError,
+  isWalletReadError,
+  isWalletSignError,
+  isWalletSubmitError,
   RegistryApiError,
   RegistryResponseError,
   WalletError,
@@ -15,10 +24,12 @@ describe('describeWalletError', () => {
       kind: 'declined',
       message: 'You declined in the wallet. Nothing was submitted.',
       code: 4001,
+      category: 'user-rejected',
     });
     expect(describeWalletError(new WalletSubmitError('failed', 'ledger said no'))).toEqual({
       kind: 'not-committed',
       message: 'Not committed: ledger said no',
+      category: 'unknown',
     });
     // The SDK's unknown outcome already warns against resubmitting.
     const unknown = describeWalletError(new WalletSubmitError('unknown', 'timed out', { code: -32002 }));
@@ -47,11 +58,13 @@ describe('describeWalletError', () => {
       code: -32002,
       commandId: 'cmd-1',
       burnReference: 'holder-burn-1',
+      category: 'unknown',
     });
     // Only an unknown outcome carries them in its description.
     expect(describeWalletError(new WalletSubmitError('failed', 'ledger said no', { commandId: 'cmd-1' }))).toEqual({
       kind: 'not-committed',
       message: 'Not committed: ledger said no',
+      category: 'unknown',
     });
   });
 
@@ -134,5 +147,109 @@ describe('describeWalletError', () => {
     const cyclic: Record<string, unknown> = {};
     cyclic['self'] = cyclic;
     expect(describeWalletError(cyclic)).toEqual({ kind: 'other', message: '[object Object]' });
+  });
+
+  it('carries the category and Canton error id of a failed submission', () => {
+    const error = new WalletSubmitError('failed', 'locked', {
+      code: -32003,
+      category: 'contention',
+      cantonErrorId: 'LOCAL_VERDICT_LOCKED_CONTRACTS',
+    });
+    expect(describeWalletError(error)).toEqual({
+      kind: 'not-committed',
+      message: 'Not committed: locked',
+      code: -32003,
+      category: 'contention',
+      cantonErrorId: 'LOCAL_VERDICT_LOCKED_CONTRACTS',
+    });
+  });
+
+  it('describes a cancelled call', () => {
+    const abort = new Error('The operation was aborted');
+    abort.name = 'AbortError';
+    expect(describeWalletError(abort)).toEqual({ kind: 'cancelled', message: 'Cancelled. Nothing was submitted.' });
+    const controller = new AbortController();
+    controller.abort();
+    expect(describeWalletError(controller.signal.reason).kind).toBe('cancelled');
+    expect(isWalletCancellation(new Error('x'))).toBe(false);
+  });
+});
+
+describe('wallet error guards', () => {
+  const errors = {
+    WalletError: new WalletError('busy', 'busy'),
+    WalletSubmitError: new WalletSubmitError('failed', 'no'),
+    WalletReadError: new WalletReadError('no'),
+    WalletSignError: new WalletSignError('failed', 'no'),
+    RegistryApiError: new RegistryApiError(500, 'x', 'https://da.example'),
+    RegistryResponseError: new RegistryResponseError('x'),
+  };
+  const guards = {
+    WalletError: isWalletError,
+    WalletSubmitError: isWalletSubmitError,
+    WalletReadError: isWalletReadError,
+    WalletSignError: isWalletSignError,
+    RegistryApiError: isRegistryApiError,
+    RegistryResponseError: isRegistryResponseError,
+  };
+
+  it('match each class and no other', () => {
+    for (const [name, guard] of Object.entries(guards)) {
+      for (const [other, error] of Object.entries(errors)) {
+        expect([name, other, guard(error)]).toEqual([name, other, name === other]);
+      }
+    }
+  });
+
+  it('match an error of another copy of the module by its brand, where instanceof does not', () => {
+    // Another copy of the module: a fresh load of the same file (as a page that bundles the SDK twice would have).
+    let copy: typeof import('../../../src/wallets/errors') | undefined;
+    jest.isolateModules(() => {
+      copy = jest.requireActual<typeof import('../../../src/wallets/errors')>('../../../src/wallets/errors');
+    });
+    if (copy === undefined) throw new Error('no copy');
+    expect(copy.WalletError).not.toBe(WalletError);
+    const foreign = new copy.WalletError('not-found', 'gone');
+    expect(foreign instanceof WalletError).toBe(false);
+    expect(isWalletError(foreign)).toBe(true);
+    expect(isWalletSubmitError(foreign)).toBe(false);
+    expect(describeWalletError(foreign)).toEqual({ kind: 'refused', message: 'gone', code: 'not-found' });
+    const submit = new copy.WalletSubmitError('unknown', 'timed out', { commandId: 'cmd-9', category: 'timeout' });
+    expect(isWalletSubmitError(submit)).toBe(true);
+    expect(describeWalletError(submit)).toMatchObject({
+      kind: 'outcome-unknown',
+      commandId: 'cmd-9',
+      category: 'timeout',
+    });
+  });
+
+  it('do not match look-alikes, and never throw', () => {
+    const lookAlike = Object.assign(new Error('x'), { name: 'WalletError', code: 'busy' });
+    expect(isWalletError(lookAlike)).toBe(false);
+    expect(isWalletError({ name: 'WalletError' })).toBe(false);
+    expect(isWalletError(null)).toBe(false);
+    expect(isWalletError('WalletError')).toBe(false);
+    const hostile = new Proxy(
+      {},
+      {
+        get() {
+          throw new Error('trap');
+        },
+      }
+    );
+    expect(isWalletError(hostile)).toBe(false);
+    // The brand is a global symbol, so it holds across realms too.
+    const otherRealm: unknown = runInNewContext(
+      "const e = new Error('x'); Object.defineProperty(e, Symbol.for('@fairmint/canton-node-sdk/wallets.error'), { value: 'WalletSubmitError' }); e"
+    );
+    expect(isWalletSubmitError(otherRealm)).toBe(true);
+  });
+
+  it('keep the brand out of enumeration and JSON', () => {
+    const error = new WalletError('busy', 'busy');
+    expect(Object.keys(error)).not.toContain('brand');
+    expect(
+      Object.getOwnPropertySymbols(error).map((symbol) => Object.getOwnPropertyDescriptor(error, symbol)?.enumerable)
+    ).toEqual([false]);
   });
 });

@@ -420,7 +420,7 @@ describe('external-party transfer-offer helpers', () => {
       submissionId: 'submission-123',
       deduplicationPeriod: {
         DeduplicationDuration: {
-          value: { seconds: 30, nanos: 0 },
+          value: { seconds: 600, nanos: 0 },
         },
       },
       partySignatures: {

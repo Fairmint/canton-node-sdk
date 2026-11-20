@@ -1,14 +1,17 @@
 /**
  * Browser-safe DA Utility Registry holder actions through any CIP-0103 (Canton dApp API) wallet provider. In a browser
- * bundle import `@fairmint/canton-node-sdk/build/src/wallets/index.js`, which loads none of the SDK's Node
- * dependencies; the package root also exports it as the `Wallets` namespace (for Node).
+ * bundle import `@fairmint/canton-node-sdk/wallets`, which loads none of the SDK's Node dependencies (the deep path
+ * `@fairmint/canton-node-sdk/build/src/wallets/index.js` still works); the package root also exports it as the
+ * `Wallets` namespace (for Node).
  *
  * - `createCip103Session({ network })`: which wallet is connected, as which party (`connect`, `restore`, `disconnect`).
  * - `createWalletStore({ session })`: the page's observable state, typed actions (`act`), notices to show.
  * - `createWallet(...)`: one party's token actions, for code that does not need the store.
  * - The ownership proof's browser half (`requestWalletOwnershipVerdict`); the server half
  *   (`createWalletOwnershipChallenger`, `verifyWalletOwnership`) is Node-only and exported from the package root.
- * - The errors, their user-facing descriptions (`describeWalletError`), and the data types.
+ * - The errors, their guards (`isWalletError`, `isWalletSubmitError`, …: they match errors of any copy of this module,
+ *   where `instanceof` does not), their user-facing descriptions (`describeWalletError`), and the data types.
+ * - Cancellation: every call that reads or fetches takes an optional `signal` (`WalletCallOptions`).
  */
 export {
   createCip103Session,
@@ -41,6 +44,7 @@ export {
   type TransferRequest,
   type TransferResult,
   type Wallet,
+  type WalletCallOptions,
   type WalletOptions,
   type WalletState,
 } from './wallet';
@@ -62,6 +66,13 @@ export {
 export type { DaNetwork, DaRegistryOptions, FetchLike, TransferKind } from './da-utilities/client';
 export {
   describeWalletError,
+  isRegistryApiError,
+  isRegistryResponseError,
+  isWalletCancellation,
+  isWalletError,
+  isWalletReadError,
+  isWalletSignError,
+  isWalletSubmitError,
   RegistryApiError,
   RegistryResponseError,
   WalletError,
@@ -71,6 +82,8 @@ export {
   type WalletErrorCode,
   type WalletErrorDescription,
   type WalletSignErrorReason,
+  type WalletSubmitCategory,
+  type WalletSubmitErrorDetails,
   type WalletSubmitOutcome,
 } from './errors';
 export type { BurnRequest, MintOffer, TransferOffer, TransferPreapproval } from './contracts';

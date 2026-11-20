@@ -9,7 +9,8 @@ repository / CI-only. Repeatable enforcement lives in `npm run check:package-art
 | Surface | Path / field | Notes |
 | --- | --- | --- |
 | Runtime SDK | `build/src/**` | Ledger / Validator / Scan clients and helpers from `src/` |
-| Browser-safe wallets entry | `build/src/wallets/index.js` | CIP-0103 token actions; requires only dependency-free SDK files (checked) |
+| Browser-safe wallets entry | `exports` `./wallets` → `build/src/wallets/index.js` | CIP-0103 token actions; requires only dependency-free SDK files (checked) |
+| Deep paths | `exports` `./build/...` | Every `build/` path that resolved before the `exports` map: `.js`, extensionless and directory imports (resolution checked) |
 | Package metadata | `package.json`, `LICENSE`, `README.md` | Always included by npm |
 
 LocalNet CLI and shared integration-test helpers are **not** published here. They live in
@@ -29,6 +30,9 @@ LocalNet CLI and shared integration-test helpers are **not** published here. The
 | `examples/**`, `build/examples/**` | Demo sources (see wiki / repo tree) |
 | `build/scripts/**` | Compiled lint/codegen helpers |
 | `node_modules/**`, crash dumps (`core*`) | Accidental local artifacts |
+
+The `exports` map is generated from `src/` by `npm run exports:sync` (one entry per directory with an
+`index.ts`, since `exports` finds no `index.js` by itself); a unit test fails while it is out of step.
 
 `prepack` runs `clean` + `build:core` so a normal publish only emits `build/src/**`. The `files`
 field is narrowed to `build/src/**` so a dirty workspace that still contains `build/test` cannot

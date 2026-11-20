@@ -74,8 +74,9 @@ See
 `Wallets` runs Digital Asset Utility Registry holder actions through any CIP-0103 (Canton dApp API)
 wallet provider, on one DA network (`devnet` or `mainnet`). It talks to the wallet only through
 CIP-0103 and to DA's public Utilities API through `fetch`, so no wallet SDK is involved. It is
-browser-safe: import `@fairmint/canton-node-sdk/build/src/wallets/index.js`, which loads none of the
-SDK's Node dependencies. The package root also exports it as the `Wallets` namespace.
+browser-safe: import `@fairmint/canton-node-sdk/wallets`, which loads none of the SDK's Node
+dependencies (the older deep path `@fairmint/canton-node-sdk/build/src/wallets/index.js` still
+works). The package root also exports it as the `Wallets` namespace.
 
 - `createCip103Session({ network })`: which wallet is connected, as which party. Call
   `connect(provider)` on a click, `restore(provider)` on page load (it connects silently when the
@@ -99,7 +100,7 @@ import {
   createWalletStore,
   type Cip103Provider,
   type DaNetwork,
-} from '@fairmint/canton-node-sdk/build/src/wallets/index.js';
+} from '@fairmint/canton-node-sdk/wallets';
 
 function open(network: DaNetwork) {
   const session = createCip103Session({ network });
@@ -120,7 +121,7 @@ export function useWallet(network: DaNetwork, provider: Cip103Provider | null) {
 
 ```tsx
 // page.tsx
-import { canAct, walletActionKey } from '@fairmint/canton-node-sdk/build/src/wallets/index.js';
+import { canAct, walletActionKey } from '@fairmint/canton-node-sdk/wallets';
 
 function WalletPage({ provider }: { provider: Cip103Provider | null }) {
   const { session, store, view } = useWallet('devnet', provider);
@@ -194,7 +195,22 @@ if (plan !== null && confirm(plan.description)) await store.act({ type: 'submitT
   request only when it names DA's operator and a provider trusted for its registrar signed it. A
   registrar trusts only itself unless `registry.trustedProviders` lists others.
 - Outside the store, `describeWalletError(error)` turns any error into a sentence that says whether
-  anything was submitted, and a `kind` to branch on.
+  anything was submitted, and a `kind` to branch on. Match errors with the guards (`isWalletError`,
+  `isWalletSubmitError`, `isWalletReadError`, `isWalletSignError`, …), not `instanceof`: they check
+  a brand, so they also match errors of another copy of the module (a page that bundles the SDK
+  twice, or two SDK versions).
+- A `WalletSubmitError` says whether a retry is safe (`outcome`) and why it failed: `category`
+  (`contention`, `not-found`, `precondition`, `duplicate`, `permission`, `timeout`, …, from the
+  Canton error the wallet passed on, else from its CIP-0103 code) and, when the wallet passed one
+  on, `cantonErrorId` (for example `LOCAL_VERDICT_LOCKED_CONTRACTS`). The category never changes the
+  outcome.
+- Every call that reads or fetches takes an optional `signal`: `wallet.loadState({ signal })`,
+  `wallet.acceptMintOffer(cid, { signal })`, `plan.submit({ signal })`,
+  `requestWalletOwnershipVerdict(connection, { ..., signal })`. Once it aborts, the call rejects
+  with an `AbortError` (`describeWalletError` kind `cancelled`), its requests get the signal (a
+  custom `fetch` receives it in `init.signal`), and nothing is submitted. A write checks the signal
+  for the last time right before it hands the transaction to the wallet; from then on it runs to its
+  outcome, since CIP-0103 has no cancellation.
 - Wallet discovery (finding the providers a browser offers) is future work: its CIP is a draft.
 
 ### The ownership routes
