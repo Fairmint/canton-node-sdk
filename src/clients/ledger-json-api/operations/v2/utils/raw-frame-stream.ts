@@ -93,9 +93,28 @@ export type RawStreamErrorReason =
   /** The socket closed with a code other than 1000 before the stream ended. */
   | 'abnormal-close';
 
+/** The offsets of an `out-of-order` frame. */
+export interface RawStreamOutOfOrderOffsets {
+  /** Offset the late frame carries. */
+  readonly offset: number;
+  /** Highest offset received before the late frame (the `beginExclusive` passed in, if no frame carried one). */
+  readonly previousOffset: number;
+}
+
 /** A raw stream ended because of the ledger or the connection rather than the consumer. */
 export class RawStreamError extends ApiError {
   public override readonly name: string;
+  /**
+   * For an `out-of-order` error, the offset the late frame carries; `undefined` for every other reason. It is at most
+   * `previousOffset`.
+   */
+  public readonly offset: number | undefined;
+  /**
+   * For an `out-of-order` error, the highest offset received before the late frame (the `beginExclusive` passed in, if
+   * no frame carried one); `undefined` for every other reason. It can be above `lastOffset`: frames received are not
+   * yet all handled.
+   */
+  public readonly previousOffset: number | undefined;
 
   constructor(
     message: string,
@@ -105,10 +124,20 @@ export class RawStreamError extends ApiError {
     public readonly ledgerCode?: string,
     /** The WebSocket close code of an abnormal close. */
     public readonly closeCode?: number,
-    context?: ErrorContext
+    context?: ErrorContext,
+    /** The offsets of an `out-of-order` frame; ignored for every other reason. */
+    outOfOrder?: RawStreamOutOfOrderOffsets
   ) {
-    super(message, undefined, undefined, { reason, ...(ledgerCode !== undefined && { code: ledgerCode }), ...context });
+    const offsets = reason === 'out-of-order' ? outOfOrder : undefined;
+    super(message, undefined, undefined, {
+      reason,
+      ...(ledgerCode !== undefined && { code: ledgerCode }),
+      ...(offsets !== undefined && { offset: offsets.offset, previousOffset: offsets.previousOffset }),
+      ...context,
+    });
     this.name = 'RawStreamError';
+    this.offset = offsets?.offset;
+    this.previousOffset = offsets?.previousOffset;
   }
 }
 
@@ -322,7 +351,11 @@ class RawFrameStream<Known extends string> {
         return {
           error: new RawStreamError(
             `Out-of-order ${name} frame: ${kind} at offset ${offset} after offset ${this.lastReceived}`,
-            'out-of-order'
+            'out-of-order',
+            undefined,
+            undefined,
+            undefined,
+            { offset, previousOffset: this.lastReceived }
           ),
         };
       }

@@ -287,7 +287,15 @@ describe('SubscribeToRawUpdates', () => {
 
     const error = await stream.done.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(RawStreamError);
-    expect((error as RawStreamError).reason).toBe('out-of-order');
+    expect(error).toMatchObject({ reason: 'out-of-order', offset: 108, previousOffset: 108 });
+    expect((error as RawStreamError).message).toBe(
+      'Out-of-order updates frame: Transaction at offset 108 after offset 108'
+    );
+    expect((error as RawStreamError).context).toMatchObject({
+      reason: 'out-of-order',
+      offset: 108,
+      previousOffset: 108,
+    });
     expect(onFrame).toHaveBeenCalledTimes(2);
     expect(stream.lastOffset).toBe(108);
     expect(subscription.close).toHaveBeenCalled();
@@ -298,7 +306,27 @@ describe('SubscribeToRawUpdates', () => {
     const stream = open({ beginExclusive: 100, onFrame: jest.fn() });
     (await connection).send(transactionText(100));
 
-    await expect(stream.done).rejects.toMatchObject({ reason: 'out-of-order' });
+    await expect(stream.done).rejects.toMatchObject({ reason: 'out-of-order', offset: 100, previousOffset: 100 });
+  });
+
+  it('reports the late offset and the highest offset received before it, not the last one handled', async () => {
+    const connection = captureConnection();
+    const gate = deferred();
+    const stream = open({ onFrame: async () => gate.promise });
+    const { send } = await connection;
+
+    send(transactionText(110));
+    send(checkpointText(90));
+    send(reassignmentText(104));
+    gate.resolve();
+
+    const error = await stream.done.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RawStreamError);
+    expect(error).toMatchObject({ reason: 'out-of-order', offset: 104, previousOffset: 110 });
+    expect((error as RawStreamError).message).toBe(
+      'Out-of-order updates frame: Reassignment at offset 104 after offset 110'
+    );
+    expect(stream.lastOffset).toBe(110);
   });
 
   it('rejects an error frame with its Canton code, after handling the frames before it', async () => {
@@ -318,6 +346,8 @@ describe('SubscribeToRawUpdates', () => {
     const error = await stream.done.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(RawStreamError);
     expect(error).toMatchObject({ reason: 'error-frame', ledgerCode: 'PARTICIPANT_PRUNED_DATA_ACCESSED' });
+    expect((error as RawStreamError).offset).toBeUndefined();
+    expect((error as RawStreamError).previousOffset).toBeUndefined();
     expect((error as RawStreamError).message).toContain('pruned up to 150');
     expect((error as RawStreamError).context).toMatchObject({ code: 'PARTICIPANT_PRUNED_DATA_ACCESSED' });
     expect(onFrame).toHaveBeenCalledTimes(1);
@@ -339,7 +369,8 @@ describe('SubscribeToRawUpdates', () => {
     const stream = open({ onFrame });
     (await connection).send(transactionText(101).replace('"paidTrafficCost":0', '"paidTrafficCost":9007199254740993'));
 
-    await expect(stream.done).rejects.toMatchObject({ reason: 'lossy-json' });
+    const error = await stream.done.catch((e: unknown) => e);
+    expect(error).toMatchObject({ reason: 'lossy-json', offset: undefined, previousOffset: undefined });
     expect(onFrame).not.toHaveBeenCalled();
   });
 
@@ -357,7 +388,11 @@ describe('SubscribeToRawUpdates', () => {
     const stream = open({ onFrame: jest.fn() });
     (await connection).send(text);
 
-    await expect(stream.done).rejects.toMatchObject({ reason: 'unexpected-frame' });
+    await expect(stream.done).rejects.toMatchObject({
+      reason: 'unexpected-frame',
+      offset: undefined,
+      previousOffset: undefined,
+    });
   });
 
   it('rejects an abnormal close with its code, after handling the frames before it', async () => {
@@ -371,6 +406,9 @@ describe('SubscribeToRawUpdates', () => {
     const error = await stream.done.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(RawStreamError);
     expect(error).toMatchObject({ reason: 'abnormal-close', closeCode: 1006 });
+    expect((error as RawStreamError).offset).toBeUndefined();
+    expect((error as RawStreamError).previousOffset).toBeUndefined();
+    expect((error as RawStreamError).context).not.toHaveProperty('offset');
     expect(stream.lastOffset).toBe(101);
   });
 
@@ -615,5 +653,26 @@ describe('SubscribeToRawUpdates', () => {
       ValidationError
     );
     expect(mockConnect).not.toHaveBeenCalled();
+  });
+});
+
+describe('RawStreamError', () => {
+  it('keeps the positional constructor: reason, ledgerCode, closeCode and context', () => {
+    const error = new RawStreamError('closed', 'abnormal-close', undefined, 1006, { extra: 1 });
+
+    expect(error).toMatchObject({ reason: 'abnormal-close', ledgerCode: undefined, closeCode: 1006 });
+    expect(error.offset).toBeUndefined();
+    expect(error.previousOffset).toBeUndefined();
+    expect(error.context).toEqual({ reason: 'abnormal-close', extra: 1 });
+  });
+
+  it('sets offset and previousOffset only for an out-of-order error', () => {
+    const offsets = { offset: 5, previousOffset: 7 };
+
+    expect(new RawStreamError('late', 'out-of-order', undefined, undefined, undefined, offsets)).toMatchObject(offsets);
+    const other = new RawStreamError('bad', 'unexpected-frame', undefined, undefined, undefined, offsets);
+    expect(other.offset).toBeUndefined();
+    expect(other.previousOffset).toBeUndefined();
+    expect(other.context).toEqual({ reason: 'unexpected-frame' });
   });
 });
