@@ -51,6 +51,7 @@ export {
   type RawStreamEnd,
   type RawStreamEndReason,
   type RawStreamErrorReason,
+  type RawStreamOutOfOrderOffsets,
   type RawStreamSubscription,
 } from './operations/v2/utils/raw-frame-stream';
 export {

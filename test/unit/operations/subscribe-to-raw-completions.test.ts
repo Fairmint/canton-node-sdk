@@ -3,6 +3,7 @@ import {
   type RawCompletionFrame,
   type SubscribeToRawCompletionsParams,
 } from '../../../src/clients/ledger-json-api/operations/v2/commands/subscribe-to-raw-completions';
+import { RawStreamError } from '../../../src/clients/ledger-json-api/operations/v2/utils/raw-frame-stream';
 import { ValidationError } from '../../../src/core/errors';
 
 const mockConnect = jest.fn();
@@ -92,6 +93,31 @@ describe('SubscribeToRawCompletions', () => {
     await expect(
       new SubscribeToRawCompletions({} as never).connect({ ...PARAMS, onFrame: jest.fn() }).done
     ).rejects.toMatchObject({ reason: 'unexpected-frame' });
+  });
+
+  it('rejects a completion whose offset does not follow the previous frame, with both offsets', async () => {
+    respondWith([REJECTED, ACCEPTED]);
+    const onFrame = jest.fn();
+
+    const stream = new SubscribeToRawCompletions({} as never).connect({ ...PARAMS, onFrame });
+
+    const error = await stream.done.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RawStreamError);
+    expect(error).toMatchObject({ reason: 'out-of-order', offset: 11, previousOffset: 12 });
+    expect((error as RawStreamError).message).toBe(
+      'Out-of-order completions frame: Completion at offset 11 after offset 12'
+    );
+    expect(onFrame).toHaveBeenCalledTimes(1);
+    expect(stream.lastOffset).toBe(12);
+  });
+
+  it('leaves the offsets undefined for a completion without an offset', async () => {
+    respondWith(['{"completionResponse":{"Completion":{"value":{"commandId":"c1"}}}}']);
+
+    const error = await new SubscribeToRawCompletions({} as never)
+      .connect({ ...PARAMS, onFrame: jest.fn() })
+      .done.catch((e: unknown) => e);
+    expect(error).toMatchObject({ reason: 'unexpected-frame', offset: undefined, previousOffset: undefined });
   });
 
   it.each([
