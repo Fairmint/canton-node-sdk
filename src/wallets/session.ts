@@ -164,10 +164,14 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
 
   /**
    * Runs `onAbort` synchronously when `signal` aborts (so a cancellation supersedes pending work at once, not when a
-   * rejection is next observed); returns the function that stops watching.
+   * rejection is next observed), and at once when it has already aborted; returns the function that stops watching.
    */
   function watchAbort(signal: AbortSignal | undefined, onAbort: () => void): () => void {
     if (signal === undefined) return () => undefined;
+    if (signal.aborted) {
+      onAbort();
+      return () => undefined;
+    }
     signal.addEventListener('abort', onAbort, { once: true });
     return () => {
       signal.removeEventListener('abort', onAbort);
@@ -326,14 +330,15 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     const own = epoch;
     started(own);
     const current = (): boolean => own === epoch && !disposed && signal?.aborted !== true;
-    signingIn = provider;
-    for (const other of previous) signedOut.add(other);
-    const sends = previous.map(recordDisconnect);
-    for (const send of sends) send();
-    if (!current()) return; // sending set off a disconnect(), fail(), dispose() or another connect()
-    publish(CONNECTING);
-    if (!current()) return; // a listener of that publish changed the session
+    // From here on every return, early or not, clears `signingIn` (when nothing newer owns the session).
     try {
+      signingIn = provider;
+      for (const other of previous) signedOut.add(other);
+      const sends = previous.map(recordDisconnect);
+      for (const send of sends) send();
+      if (!current()) return; // sending set off a disconnect(), fail(), dispose(), another connect() or an abort
+      publish(CONNECTING);
+      if (!current()) return; // a listener of that publish changed the session or aborted the signal
       try {
         // A disconnect the user sent this wallet just before must not land after the new sign-in.
         const pending = pendingDisconnect(provider);
@@ -400,6 +405,15 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     async connect(provider, { signal } = {}) {
       throwIfAborted(signal);
       let own: number | undefined;
+      // Cancelled while it is still the session's pending connect: the user gave up, as with disconnect(). Done the
+      // moment the signal aborts, so no reply that is already queued can publish first, and the provider (still
+      // recorded as signing in) is signed out and kept out of restore(). Idempotent: once run, `own` is superseded.
+      const cancel = (): void => {
+        if (own !== undefined && own === epoch && !disposed) api.disconnect();
+      };
+      // Watching before the run starts: its first steps (the sign-out of another wallet, the `connecting` publish) run
+      // synchronously and may set off the abort.
+      const stopWatching = watchAbort(signal, cancel);
       const run = runConnect(
         provider,
         (epochAtStart) => {
@@ -408,12 +422,8 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
         signal
       );
       void run.catch(() => undefined); // an abort stops waiting only: the run drops itself once superseded
-      // Cancelled while it is still the session's pending connect: the user gave up, as with disconnect(). Done the
-      // moment the signal aborts, so no reply that is already queued can publish first, and the provider (still
-      // recorded as signing in) is signed out and kept out of restore().
-      const stopWatching = watchAbort(signal, () => {
-        if (own !== undefined && own === epoch && !disposed) api.disconnect();
-      });
+      // Aborted before the run recorded its epoch (nothing to cancel then): cancel it now.
+      if (signal?.aborted === true) cancel();
       try {
         await awaitWithAbort(async () => run, signal);
       } finally {
@@ -426,6 +436,19 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
       const before = state;
       let attempt: number | undefined;
       let ownEpoch: number | undefined;
+      // Dropped the moment the signal aborts: it may no longer connect (unless a newer restore() has taken over), and
+      // a wallet it already published goes back to the state the session was in before the call. Idempotent: once
+      // run, `attempt` is superseded.
+      const cancel = (): void => {
+        if (attempt === undefined || attempt !== restores) return;
+        restores += 1;
+        if (ownEpoch === epoch && state.status === 'connected' && state.wallet.provider === provider) {
+          interrupt();
+          publish(before);
+        }
+      };
+      // Watching before the run starts, as connect() does: its first request runs synchronously.
+      const stopWatching = watchAbort(signal, cancel);
       const run = runRestore(
         provider,
         (number, epochAtStart) => {
@@ -435,16 +458,7 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
         signal
       );
       void run.catch(() => undefined);
-      // Dropped the moment the signal aborts: it may no longer connect (unless a newer restore() has taken over), and
-      // a wallet it already published goes back to the state the session was in before the call.
-      const stopWatching = watchAbort(signal, () => {
-        if (attempt === undefined || attempt !== restores) return;
-        restores += 1;
-        if (ownEpoch === epoch && state.status === 'connected' && state.wallet.provider === provider) {
-          interrupt();
-          publish(before);
-        }
-      });
+      if (signal?.aborted === true) cancel();
       try {
         await awaitWithAbort(async () => run, signal);
       } finally {
