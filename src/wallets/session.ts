@@ -299,7 +299,11 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     };
   }
 
-  async function runConnect(provider: Cip103Provider, started: (epoch: number) => void): Promise<void> {
+  async function runConnect(
+    provider: Cip103Provider,
+    started: (epoch: number) => void,
+    signal?: AbortSignal
+  ): Promise<void> {
     if (disposed) return;
     // Another wallet the session is on is signed out: the user switched wallets.
     const previous = [...sessionProviders()].filter((other) => other !== provider);
@@ -323,9 +327,10 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
           if (!current()) return;
         }
         signInSent = true;
-        await provider.request({ method: 'connect' });
+        await provider.request({ method: 'connect' }, { signal });
       } catch (error) {
-        if (current()) {
+        // A cancelled connect() ends the attempt itself (see connect()): the abort is not the wallet's failure.
+        if (current() && signal?.aborted !== true) {
           interrupt();
           publish({ status: 'disconnected', error: connectError(error) });
         }
@@ -344,7 +349,11 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     }
   }
 
-  async function runRestore(provider: Cip103Provider, started: (attempt: number) => void): Promise<void> {
+  async function runRestore(
+    provider: Cip103Provider,
+    started: (attempt: number) => void,
+    signal?: AbortSignal
+  ): Promise<void> {
     if (disposed || state.status !== 'disconnected' || signedOut.has(provider)) return;
     const own = epoch;
     const attempt = ++restores;
@@ -352,7 +361,7 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     const wanted = (): boolean => !disposed && own === epoch && attempt === restores && state.status === 'disconnected';
     let answer: unknown = null;
     try {
-      answer = await provider.request({ method: 'isConnected' });
+      answer = await provider.request({ method: 'isConnected' }, { signal });
     } catch {
       return; // 4200 or any other failure: not connected
     }
@@ -375,9 +384,13 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     async connect(provider, { signal } = {}) {
       throwIfAborted(signal);
       let own: number | undefined;
-      const run = runConnect(provider, (epochAtStart) => {
-        own = epochAtStart;
-      });
+      const run = runConnect(
+        provider,
+        (epochAtStart) => {
+          own = epochAtStart;
+        },
+        signal
+      );
       void run.catch(() => undefined); // an abort stops waiting only: the run drops itself once superseded
       try {
         await awaitWithAbort(async () => run, signal);
@@ -391,9 +404,13 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     async restore(provider, { signal } = {}) {
       throwIfAborted(signal);
       let attempt: number | undefined;
-      const run = runRestore(provider, (number) => {
-        attempt = number;
-      });
+      const run = runRestore(
+        provider,
+        (number) => {
+          attempt = number;
+        },
+        signal
+      );
       void run.catch(() => undefined);
       try {
         await awaitWithAbort(async () => run, signal);

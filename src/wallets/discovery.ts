@@ -27,6 +27,7 @@
 import { newCommandId, type Cip103EventListener, type Cip103Provider, type Cip103Request } from './cip103';
 import type { DaNetwork } from './da-utilities/client';
 import type { WalletCallOptions } from './wallet';
+import { createAbortError } from '../core/http/abort';
 import { awaitWithAbort, cancelledBeforeSubmit, throwIfAborted } from './abort';
 
 /** The browser global this module uses; a page's global object satisfies it. Tests pass a fake. */
@@ -150,10 +151,10 @@ function accountOn(account: unknown, network: DaNetwork, name: string): unknown 
   return { ...account, networkId };
 }
 
-async function readAccount(wallet: Cip103Provider, request: Cip103Request): Promise<unknown> {
+async function readAccount(wallet: Cip103Provider, request: Cip103Request, options?: RequestOptions): Promise<unknown> {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      return await wallet.request(request);
+      return await wallet.request(request, options);
     } catch (error) {
       const delay = ACCOUNT_READ_RETRY_DELAYS_MS[attempt];
       if (!isObject(error) || error['code'] !== RESOURCE_UNAVAILABLE || delay === undefined) throw error;
@@ -164,24 +165,29 @@ async function readAccount(wallet: Cip103Provider, request: Cip103Request): Prom
   }
 }
 
+type RequestOptions = Parameters<Cip103Provider['request']>[1];
+
 /** `wallet` with the corrections above; `signsBase64` for Console's `signMessage`. */
 function adapt(wallet: Cip103Provider, network: DaNetwork, name: string, signsBase64: boolean): Cip103Provider {
   return {
-    async request(request) {
+    async request(request, options) {
       switch (request.method) {
         case 'ledgerApi':
-          return ledgerApiBody(await wallet.request(request));
+          return ledgerApiBody(await wallet.request(request, options));
         case 'signMessage':
           return wallet.request(
-            signsBase64 ? { method: 'signMessage', params: { message: utf8ToBase64(request.params.message) } } : request
+            signsBase64
+              ? { method: 'signMessage', params: { message: utf8ToBase64(request.params.message) } }
+              : request,
+            options
           );
         case 'getPrimaryAccount':
-          return accountOn(await readAccount(wallet, request), network, name);
+          return accountOn(await readAccount(wallet, request, options), network, name);
         case 'connect':
         case 'disconnect':
         case 'isConnected':
         case 'prepareExecuteAndWait':
-          return wallet.request(request);
+          return wallet.request(request, options);
       }
     },
     on: (event, listener) => wallet.on(event, listener),
@@ -197,6 +203,15 @@ function fromHost(host: Cip103DiscoveryHost, event: Event): boolean {
 function messageData(event: Event): unknown {
   return isObject(event) ? (event as { data?: unknown }).data : undefined;
 }
+
+/** How long a request that submits nothing waits for an answer before its pending state is freed. */
+const UNANSWERED_TIMEOUT_MS = 5 * 60 * 1000;
+const UNANSWERED_TIMEOUT_METHODS: ReadonlySet<string> = new Set([
+  'connect',
+  'disconnect',
+  'isConnected',
+  'getPrimaryAccount',
+]);
 
 /**
  * A CIP-0103 provider over the dApp SDK's message channel to `target`. Requests carry a fresh random id and resolve
@@ -216,15 +231,31 @@ export function channelProvider(host: Cip103DiscoveryHost, target?: string): Cip
     listeners.get(request['method'])?.forEach((listener) => listener(request['params']));
   };
   return {
-    request: async (request) =>
+    request: async (request, options) =>
       new Promise((resolve, reject) => {
+        const signal = options?.signal;
+        if (signal?.aborted === true) {
+          reject(createAbortError(signal));
+          return;
+        }
         const id = newCommandId();
-        const onResponse = (event: Event): void => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        // Frees the pending request: its listeners and timer. Safe to run twice.
+        const settle = (): void => {
+          host.removeEventListener('message', onResponse);
+          signal?.removeEventListener('abort', onAbort);
+          if (timer !== undefined) clearTimeout(timer);
+        };
+        function onAbort(): void {
+          settle();
+          reject(createAbortError(signal));
+        }
+        function onResponse(event: Event): void {
           if (!fromHost(host, event)) return;
           const data = messageData(event);
           const response = isObject(data) && data['type'] === RESPONSE_MESSAGE ? data['response'] : undefined;
           if (!isObject(response) || response['id'] !== id) return;
-          host.removeEventListener('message', onResponse);
+          settle();
           const { error } = response;
           if (error === undefined) {
             resolve(response['result']);
@@ -238,8 +269,24 @@ export function channelProvider(host: Cip103DiscoveryHost, target?: string): Cip
               details
             )
           );
-        };
+        }
         host.addEventListener('message', onResponse);
+        signal?.addEventListener('abort', onAbort, { once: true });
+        // A wallet that never answers must not hold a listener for good. Only requests that submit nothing time out:
+        // a submission may still be completed by the wallet after any deadline.
+        if (UNANSWERED_TIMEOUT_METHODS.has(request.method)) {
+          timer = setTimeout(() => {
+            settle();
+            reject(
+              providerError(
+                -32603,
+                `The wallet did not answer ${request.method} within ${UNANSWERED_TIMEOUT_MS / 1000}s`
+              )
+            );
+          }, UNANSWERED_TIMEOUT_MS);
+          // Never keeps a Node process alive (a browser's timer id has no unref).
+          (timer as { unref?: () => void }).unref?.();
+        }
         host.postMessage(
           {
             type: REQUEST_MESSAGE,

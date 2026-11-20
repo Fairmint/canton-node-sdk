@@ -1,3 +1,4 @@
+import { createCip103Session } from '../../../src/wallets';
 /**
  * `discoverCip103Wallets`: the dApp SDK's announce handshake (each announcing extension, several at once; the `canton`
  * global only when none announces), its message channel for a standard wallet, and Console Wallet reached through its
@@ -269,6 +270,81 @@ describe('discoverCip103Wallets', () => {
     );
     expect(request).toBeDefined();
     expect(Object.keys(request as object)).not.toContain('target');
+  });
+
+  describe('a request the wallet never answers', () => {
+    /** The page's `message` listeners still attached, counted through its add/removeEventListener. */
+    const countMessageListeners = (host: FakeHost): (() => number) => {
+      const live = new Set<unknown>();
+      const { addEventListener, removeEventListener } = host;
+      host.addEventListener = (type, listener) => {
+        if (type === 'message') live.add(listener);
+        addEventListener(type, listener);
+      };
+      host.removeEventListener = (type, listener) => {
+        if (type === 'message') live.delete(listener);
+        removeEventListener(type, listener);
+      };
+      return () => live.size;
+    };
+    const mute = { announce: { id: 'mute-ext', name: 'Mute', target: 'mute-ext' } };
+
+    it('is freed, and rejects with an AbortError, when its signal aborts', async () => {
+      const host = browser({ extensions: [mute] });
+      const listeners = countMessageListeners(host);
+      const provider = await first(await discover(host)).load('devnet');
+      const controller = new AbortController();
+      const pending = provider.request({ method: 'connect' }, { signal: controller.signal }).catch((e: unknown) => e);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      expect(listeners()).toBe(1);
+      controller.abort();
+      expect(await pending).toMatchObject({ name: 'AbortError' });
+      expect(listeners()).toBe(0);
+      // Already aborted: nothing is attached or posted.
+      const posted = host.posted.length;
+      await expect(provider.request({ method: 'connect' }, { signal: controller.signal })).rejects.toMatchObject({
+        name: 'AbortError',
+      });
+      expect(listeners()).toBe(0);
+      expect(host.posted).toHaveLength(posted);
+    });
+
+    it('is freed when a session connect is cancelled', async () => {
+      const host = browser({ extensions: [mute] });
+      const listeners = countMessageListeners(host);
+      const wallet = first(await discover(host));
+      const provider = await wallet.load('devnet');
+      const session = createCip103Session({ network: 'devnet' });
+      const controller = new AbortController();
+      const connecting = session.connect(provider, { signal: controller.signal }).catch((e: unknown) => e);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      expect(listeners()).toBe(1);
+      controller.abort();
+      expect(await connecting).toMatchObject({ name: 'AbortError' });
+      // Only the sign-out the cancelled connect sends remains (bounded by the five-minute timeout); `connect` is freed.
+      expect(listeners()).toBe(1);
+      const methods = host.posted.map((m) => (m as { request?: { method?: string } }).request?.method);
+      expect(methods).toEqual(['connect', 'disconnect']);
+      expect(session.getSnapshot().status).toBe('disconnected');
+    });
+
+    it('is freed after five minutes when it submits nothing, and is never timed out when it may submit', async () => {
+      const host = browser({ extensions: [mute] });
+      const listeners = countMessageListeners(host);
+      const provider = await first(await discover(host)).load('devnet');
+      jest.useFakeTimers();
+      try {
+        const connect = provider.request({ method: 'connect' }).catch((e: unknown) => e);
+        const sign = provider.request({ method: 'signMessage', params: { message: 'x' } });
+        void sign.catch(() => undefined);
+        await jest.advanceTimersByTimeAsync(5 * 60 * 1000 + 1);
+        expect(await connect).toMatchObject({ message: expect.stringContaining('did not answer connect') });
+        // The signing request is still pending, with its listener.
+        expect(listeners()).toBe(1);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   it('load() rejects with an AbortError when its signal already aborted, and works without one', async () => {

@@ -74,7 +74,11 @@ export type Cip103EventListener = (...args: unknown[]) => void;
  * fits whatever SDK built it. Results are validated, never trusted.
  */
 export interface Cip103Provider {
-  request(args: Cip103Request): Promise<unknown>;
+  /**
+   * Sends a request. `options.signal` only stops waiting for the answer (a provider over a message channel also frees
+   * its pending request); it never recalls a request the wallet already has.
+   */
+  request(args: Cip103Request, options?: { readonly signal?: AbortSignal | undefined }): Promise<unknown>;
   on(event: string, listener: Cip103EventListener): unknown;
   removeListener(event: string, listener: Cip103EventListener): unknown;
 }
