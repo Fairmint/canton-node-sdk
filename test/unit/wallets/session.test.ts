@@ -848,6 +848,39 @@ describe('createCip103Session', () => {
       expect(session.getSnapshot()).toEqual(DISCONNECTED);
     });
 
+    it('signs out and keeps out of restore() a provider that rejects connect when the signal aborts', async () => {
+      const { session } = observed();
+      class AbortingProvider extends TestProvider {
+        override async request(
+          args: Parameters<TestProvider['request']>[0],
+          options?: { readonly signal?: AbortSignal | undefined }
+        ): Promise<unknown> {
+          if (args.method === 'connect' && options?.signal !== undefined) {
+            this.requests.push('connect');
+            const { signal } = options;
+            return new Promise((_resolve, reject) => {
+              signal.addEventListener('abort', () => {
+                reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+              });
+            });
+          }
+          return super.request(args);
+        }
+      }
+      const provider = new AbortingProvider(HOLDER);
+      const controller = new AbortController();
+      const connecting = session.connect(provider, { signal: controller.signal });
+      await flush();
+      controller.abort();
+      await expect(connecting).rejects.toMatchObject({ name: 'AbortError' });
+      await flush();
+      expect(session.getSnapshot()).toEqual(DISCONNECTED);
+      expect(provider.requests).toEqual(['connect', 'disconnect']);
+      await session.restore(provider);
+      expect(provider.requests).toEqual(['connect', 'disconnect']);
+      expect(session.getSnapshot()).toEqual(DISCONNECTED);
+    });
+
     it('leaves a connect() that a newer one superseded to the newer one when the older is cancelled', async () => {
       const { session } = observed();
       const slow = new TestProvider(HOLDER, { connect: async () => deferred<unknown>().promise });

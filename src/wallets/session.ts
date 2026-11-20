@@ -329,10 +329,16 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
         signInSent = true;
         await provider.request({ method: 'connect' }, { signal });
       } catch (error) {
-        // A cancelled connect() ends the attempt itself (see connect()): the abort is not the wallet's failure.
-        if (current() && signal?.aborted !== true) {
-          interrupt();
-          publish({ status: 'disconnected', error: connectError(error) });
+        if (current()) {
+          if (signal?.aborted === true) {
+            // Cancelled: the user gave up, as with disconnect(). Done here, while the pending provider is still
+            // recorded in signingIn, so it is signed out and kept out of restore() even though this provider
+            // rejected on abort (connect()'s own handler runs after the finally below has cleared it).
+            api.disconnect();
+          } else {
+            interrupt();
+            publish({ status: 'disconnected', error: connectError(error) });
+          }
         }
         return;
       }
