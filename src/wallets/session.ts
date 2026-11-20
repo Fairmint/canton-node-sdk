@@ -62,7 +62,10 @@ export interface Cip103Session {
    * sign-in), then reads the primary account (`getPrimaryAccount`). A failure becomes `error` (4001: declined).
    * Resolves when it settled; superseded by a newer `connect()`, `disconnect()`, `fail()` or `dispose()`.
    * `options.signal` cancels it: the call rejects with an `AbortError` and, when it was still the session's pending
-   * connect, the session disconnects as `disconnect()` does (the wallet's own prompt cannot be closed from here).
+   * connect, the session disconnects as `disconnect()` does (the wallet's own prompt cannot be closed from here). When
+   * the wallet signed in but its account was refused (another network, no account) and nothing newer changed the
+   * session since, the wallet is signed out and kept out of `restore()` all the same, and the session keeps that
+   * error.
    */
   connect(provider: Cip103Provider, options?: WalletCallOptions): Promise<void>;
   /**
@@ -215,23 +218,37 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
       onStatusChanged: (status) => {
         if (attachment !== own || !isRecord(status) || connectionFlag(status['connection']) !== false) return;
         interrupt();
-        publish(DISCONNECTED);
+        // A wallet that ends before anything was published (a sticky event during a quiet restore) leaves the session
+        // as it was, error included: only a connecting or connected session has something to end.
+        if (state.status !== 'disconnected') publish(DISCONNECTED);
       },
     };
     attachment = own;
+    // A provider may answer a new listener inside on() before it stores it, so a detach that answer set off removed
+    // nothing: take both listeners off again once on() returns when the attachment was superseded meanwhile.
+    const superseded = (): boolean => {
+      if (attachment === own) return false;
+      provider.removeListener('accountsChanged', own.onAccountsChanged);
+      provider.removeListener('statusChanged', own.onStatusChanged);
+      return true;
+    };
     provider.on('accountsChanged', own.onAccountsChanged);
+    if (superseded()) return;
     provider.on('statusChanged', own.onStatusChanged);
+    superseded();
   }
 
   /**
    * Read the primary account and connect as its party, unless something newer superseded it. A failure, or an account
    * on the other DA network, leaves the session disconnected with `error`; `quiet` (a restore) publishes nothing then.
+   * `onFailed` runs when this lookup ended the session with its error, after the interrupt and before the publish.
    */
   async function lookup(
     provider: Cip103Provider,
     quiet: boolean,
     stillWanted: () => boolean = () => true,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onFailed?: () => void
   ): Promise<void> {
     const attempt = ++lookups;
     // Every publish below is guarded by this, checked right before it: superseded, disposed, no longer wanted or cancelled.
@@ -239,6 +256,7 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     const failed = (error: WalletErrorDescription): void => {
       if (quiet) return;
       interrupt();
+      onFailed?.();
       publish({ status: 'disconnected', error });
     };
     let account: Cip103Account;
@@ -321,7 +339,8 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
   async function runConnect(
     provider: Cip103Provider,
     started: (epoch: number) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    signedInThenFailed?: (epoch: number) => void
   ): Promise<void> {
     if (disposed) return;
     // Another wallet the session is on is signed out: the user switched wallets.
@@ -360,7 +379,9 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
       // Signed in again: restore() may reconnect it from now on. A sign-in that failed or was cancelled keeps it out.
       signedOut.delete(provider);
       // Read the account even when the wallet was already connected.
-      await lookup(provider, false, undefined, signal);
+      // Its own failure (another network, no account) supersedes `own`: report the epoch it published at, so a
+      // cancellation that follows still signs the wallet out.
+      await lookup(provider, false, undefined, signal, () => signedInThenFailed?.(epoch));
     } finally {
       if (own === epoch) {
         signingIn = null;
@@ -405,11 +426,22 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     async connect(provider, { signal } = {}) {
       throwIfAborted(signal);
       let own: number | undefined;
+      // The epoch at which this run's own account read failed after the wallet signed in (nothing newer since then).
+      let failedAt: number | undefined;
       // Cancelled while it is still the session's pending connect: the user gave up, as with disconnect(). Done the
       // moment the signal aborts, so no reply that is already queued can publish first, and the provider (still
       // recorded as signing in) is signed out and kept out of restore(). Idempotent: once run, `own` is superseded.
+      // Cancelled after the run signed in and then failed on its own (nothing newer owns the session): the wallet is
+      // signed out and kept out of restore() as well, and the session keeps the error it shows.
       const cancel = (): void => {
-        if (own !== undefined && own === epoch && !disposed) api.disconnect();
+        if (disposed) return;
+        if (own !== undefined && own === epoch) {
+          api.disconnect();
+        } else if (failedAt !== undefined && failedAt === epoch) {
+          failedAt = undefined;
+          signedOut.add(provider);
+          recordDisconnect(provider)();
+        }
       };
       // Watching before the run starts: its first steps (the sign-out of another wallet, the `connecting` publish) run
       // synchronously and may set off the abort.
@@ -419,13 +451,23 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
         (epochAtStart) => {
           own = epochAtStart;
         },
-        signal
+        signal,
+        (epochAtFailure) => {
+          failedAt = epochAtFailure;
+        }
       );
       void run.catch(() => undefined); // an abort stops waiting only: the run drops itself once superseded
-      // Aborted before the run recorded its epoch (nothing to cancel then): cancel it now.
-      if (signal?.aborted === true) cancel();
+      // Aborted before the run recorded its epoch (a provider call-out before it started, such as the old wallet's
+      // removeListener, aborted the signal while `cancel` had nothing to cancel): the run returned early without
+      // signing in, so sign the provider out here, also when the run's own cleanup already cleared `signingIn`.
+      if (signal?.aborted === true && own !== undefined && own === epoch && !disposed) {
+        signedOut.add(provider);
+        api.disconnect();
+      }
       try {
         await awaitWithAbort(async () => run, signal);
+        // An abort after the run settled, before the watch stops, still ran `cancel`: the call rejects too.
+        throwIfAborted(signal);
       } finally {
         stopWatching();
       }
@@ -461,6 +503,8 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
       if (signal?.aborted === true) cancel();
       try {
         await awaitWithAbort(async () => run, signal);
+        // An abort after the run settled, before the watch stops, still ran `cancel`: the call rejects too.
+        throwIfAborted(signal);
       } finally {
         stopWatching();
       }
