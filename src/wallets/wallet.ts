@@ -520,15 +520,11 @@ export function createWallet(options: WalletOptions): Wallet {
 
   /**
    * Refuse a DA transfer preapproval for Canton Coin's DSO: it would do nothing for Canton Coin (a DSO
-   * `TransferPreapproval` is made through a validator, not this wallet). The DSO is the known one (pinned, or confirmed
-   * by the registry), or the admin of one of the party's genuine Canton Coin `holdings` (signed by that admin).
+   * `TransferPreapproval` is made through a validator, not this wallet). `dso` is the DSO party: pinned, or confirmed
+   * by Canton Coin's registry; undefined when neither is known.
    */
-  function refuseCantonCoinPreapproval(instrumentAdmin: string, holdings: readonly Holding[] = []): void {
-    if (cantonCoin === null) return;
-    if (
-      instrumentAdmin === cantonCoin.knownDsoParty() ||
-      holdings.some((holding) => holding.instrumentId.admin === instrumentAdmin)
-    ) {
+  function refuseCantonCoinPreapproval(instrumentAdmin: string, dso: string | undefined): void {
+    if (dso !== undefined && instrumentAdmin === dso) {
       throw new WalletError(
         'invalid-input',
         `${instrumentAdmin} is Canton Coin's DSO party: a DA transfer preapproval does nothing for Canton Coin; nothing was submitted`
@@ -874,7 +870,9 @@ export function createWallet(options: WalletOptions): Wallet {
     signal: AbortSignal | undefined
   ): Promise<SubmitResult> {
     const instrumentAdmin = requireNonEmpty(preapproval.instrumentAdmin, 'instrumentAdmin');
-    refuseCantonCoinPreapproval(instrumentAdmin);
+    // A known DSO (pinned, or confirmed earlier) refuses before any read.
+    const knownDso = cantonCoin?.knownDsoParty();
+    refuseCantonCoinPreapproval(instrumentAdmin, knownDso);
     const instrumentIds = [...new Set(preapproval.instrumentIds ?? [])];
     if (instrumentIds.length > MAX_PREAPPROVAL_INSTRUMENTS) {
       throw new WalletError(
@@ -883,29 +881,17 @@ export function createWallet(options: WalletOptions): Wallet {
       );
     }
     instrumentIds.forEach((id) => requireNonEmpty(id, 'instrumentIds[]'));
-    const [contracts, operator] = await Promise.all([
-      cantonCoin === null
-        ? read(DA_REGISTRY_TEMPLATES.transferPreapproval, signal)
-        : awaitWithAbort(
-            async () =>
-              (
-                await ledger.readActiveContracts([
-                  DA_REGISTRY_TEMPLATES.transferPreapproval,
-                  ...CANTON_COIN_HOLDING_FILTERS,
-                ])
-              ).contracts,
-            signal
-          ),
+    // Only the party's preapprovals are read (never its holdings, which could exceed the participant's ACS list limit).
+    // Unpinned and not yet confirmed, Canton Coin's registry is asked for the DSO alongside, with its usual bounds (the
+    // whole request on a first lookup, then a short wait; nothing during the back-off after a failure). When it cannot
+    // confirm the DSO, the DA preapproval is still created (fail open): DA writes do not depend on Scan, and a DA
+    // preapproval naming the DSO is inert (it lets no Canton Coin in) and can be withdrawn.
+    const [contracts, operator, dso] = await Promise.all([
+      read(DA_REGISTRY_TEMPLATES.transferPreapproval, signal),
       registry.operatorParty(signal),
+      cantonCoin === null || knownDso !== undefined ? knownDso : cantonCoin.dsoParty(signal),
     ]);
-    // The DSO may not be known yet (unpinned, the registry not asked): a Canton Coin holding of the party names it.
-    refuseCantonCoinPreapproval(
-      instrumentAdmin,
-      contracts.flatMap((contract) => {
-        const holding = parseHolding(contract);
-        return holding !== null && isCantonCoin(holding) && holding.owner === partyId ? [holding] : [];
-      })
-    );
+    refuseCantonCoinPreapproval(instrumentAdmin, dso);
     const covering = ownPreapprovals(contracts, operator).find(
       (existing) =>
         existing.instrumentAdmin === instrumentAdmin &&

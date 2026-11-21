@@ -294,7 +294,9 @@ const store = createWalletStore({
 
 - Canton Coin is not transferred, burnt or pre-approved through this wallet: `planTransfer`,
   `requestBurn` and `createTransferPreapproval` (for the DSO as `instrumentAdmin`) refuse it with
-  `invalid-input`.
+  `invalid-input`. Unpinned, `createTransferPreapproval` asks Canton Coin's registry for the DSO
+  (bounded like a snapshot's lookup); when the registry cannot confirm it, the DA preapproval is
+  still created, inert for Canton Coin, rather than making DA writes depend on Scan.
 - Upgrading: `balances` and `holdings` now include Canton Coin, and `Amulet` sorts before most
   instrument ids, so a picker that takes the first balance may now default to Canton Coin. Filter
   pickers for transfer, burn and pre-approval with `isCantonCoin` (`balance.source === 'amulet'`):

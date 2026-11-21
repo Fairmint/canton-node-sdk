@@ -275,7 +275,12 @@ export interface OfferExternalPartyWalletProviderTransferInput {
  * - `direct`: the receiver has a Canton Coin transfer preapproval, so the CC moved at once.
  * - `already-submitted`: a transfer with this idempotency key was already made within the validator's deduplication
  *   window (it answered 409 with its duplicate-command error); nothing new was sent. `transferInstructionContractId`
- *   names its offer when exactly one pending offer of these details remains.
+ *   names its offer when exactly one pending offer from the provider matches every input of this request (receiver,
+ *   amount, description and `expiresAt`, which the validator stores as the offer's `executeBefore`), else null. The
+ *   validator keeps the idempotency key only as the command's deduplication id, never on the contract, so an offer
+ *   cannot be tied to its key directly: a caller that gives two keys the same receiver, amount, description and
+ *   `expiresAt` can be handed the other key's offer once this key's offer has settled. Choose a distinct `expiresAt`
+ *   per key (millisecond precision is enough) when the contract id must be exact.
  */
 export type ExternalPartyWalletProviderTransferOutcome = 'offer' | 'direct' | 'already-submitted';
 
@@ -289,7 +294,7 @@ export interface OfferedExternalPartyWalletProviderTransfer {
   readonly outcome: ExternalPartyWalletProviderTransferOutcome;
   /**
    * The offer's contract id (`offer`), or the one pending offer from the provider matching this request's receiver,
-   * amount and description (`already-submitted`), else null.
+   * amount, description and `expiresAt` (`already-submitted`), else null.
    */
   readonly transferInstructionContractId: string | null;
   /** The receiver's new holdings (`direct`), else empty. */
@@ -802,6 +807,7 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
               receiver: receiverPartyId,
               amount,
               description: description ?? '',
+              expiresAtMs,
             }),
             receiverHoldingContractIds: [],
             sourceBalanceAfter: await bestEffort(async () => validatorClient.getWalletBalance()),
@@ -1452,6 +1458,8 @@ export function findPendingProviderTransfer(
     readonly receiver: string;
     readonly amount: string;
     readonly description: string;
+    /** The request's `expiresAt`: the validator sets the instruction's `executeBefore` to exactly this instant. */
+    readonly expiresAtMs: number;
   }
 ): string | null {
   const transfers = isRecord(listed) ? listed['transfers'] : undefined;
@@ -1464,7 +1472,10 @@ export function findPendingProviderTransfer(
     const amount = typeof transfer['amount'] === 'string' ? normalizeDecimalForComparison(transfer['amount']) : null;
     const values = objectOrEmpty(objectOrEmpty(transfer['meta'])['values']);
     const reason = values[TOKEN_STANDARD_V1_REASON_META_KEY] ?? '';
+    const executeBefore =
+      typeof transfer['executeBefore'] === 'string' ? Date.parse(transfer['executeBefore']) : Number.NaN;
     return contractId !== null &&
+      executeBefore === expected.expiresAtMs &&
       transfer['sender'] === expected.sender &&
       transfer['receiver'] === expected.receiver &&
       amount !== null &&

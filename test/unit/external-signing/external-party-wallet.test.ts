@@ -148,7 +148,13 @@ const createMockValidatorClient = (): jest.Mocked<ValidatorApiClient> =>
   }) as unknown as jest.Mocked<ValidatorApiClient>;
 
 /** A `listTokenStandardTransfers` entry: an `AmuletTransferInstruction` contract as the validator lists it. */
-const listedInstruction = (contractId: string, receiver: string, amount: string, reason: string): unknown => ({
+const listedInstruction = (
+  contractId: string,
+  receiver: string,
+  amount: string,
+  reason: string,
+  executeBefore = '2026-05-29T00:00:00Z'
+): unknown => ({
   template_id: 'a0b1c2:Splice.AmuletTransferInstruction:AmuletTransferInstruction',
   contract_id: contractId,
   payload: {
@@ -159,7 +165,7 @@ const listedInstruction = (contractId: string, receiver: string, amount: string,
       amount,
       instrumentId: { admin: 'DSO::1220dso', id: 'Amulet' },
       requestedAt: '2026-05-28T00:00:00Z',
-      executeBefore: '2026-05-29T00:00:00Z',
+      executeBefore,
       inputHoldingCids: [],
       meta: { values: { 'splice.lfdecentralizedtrust.org/reason': reason } },
     },
@@ -510,9 +516,35 @@ describe('external-party wallet bridge', (): void => {
       validatorClient.createTokenStandardTransfer.mockRejectedValueOnce(duplicateCommand());
       validatorClient.listTokenStandardTransfers.mockResolvedValueOnce({
         transfers: [
-          listedInstruction('00match', 'receiver::fingerprint', '20.0000000000', 'faucet'),
-          listedInstruction('00other-receiver', 'other::fingerprint', '20.0000000000', 'faucet'),
-          listedInstruction('00other-amount', 'receiver::fingerprint', '21.0000000000', 'faucet'),
+          listedInstruction(
+            '00match',
+            'receiver::fingerprint',
+            '20.0000000000',
+            'faucet',
+            '2026-05-29T20:26:40.000000Z'
+          ),
+          listedInstruction(
+            '00other-receiver',
+            'other::fingerprint',
+            '20.0000000000',
+            'faucet',
+            EXPIRES_AT.toISOString()
+          ),
+          listedInstruction(
+            '00other-amount',
+            'receiver::fingerprint',
+            '21.0000000000',
+            'faucet',
+            EXPIRES_AT.toISOString()
+          ),
+          // Another key's offer with the same receiver, amount and description but its own expiry.
+          listedInstruction(
+            '00other-expiry',
+            'receiver::fingerprint',
+            '20.0000000000',
+            'faucet',
+            '2026-05-29T20:26:40.001Z'
+          ),
         ],
       } as never);
       const bridge = createBridge({ validatorClient });
@@ -645,10 +677,23 @@ describe('external-party wallet bridge', (): void => {
     });
 
     it('reports no contract id for a duplicate when the pending offer is ambiguous or gone', (): void => {
-      const expected = { sender: 'provider::fingerprint', receiver: 'r::1', amount: '1', description: 'x' };
+      const expected = {
+        sender: 'provider::fingerprint',
+        receiver: 'r::1',
+        amount: '1',
+        description: 'x',
+        expiresAtMs: Date.parse('2026-05-29T00:00:00Z'),
+      };
       expect(
         findPendingProviderTransfer(
           { transfers: [listedInstruction('00a', 'r::1', '1.0', 'x'), listedInstruction('00b', 'r::1', '1', 'x')] },
+          expected
+        )
+      ).toBeNull();
+      // This key's offer settled; another key's pending offer differs only in its expiry, so it is not this one.
+      expect(
+        findPendingProviderTransfer(
+          { transfers: [listedInstruction('00b', 'r::1', '1', 'x', '2026-05-30T00:00:00Z')] },
           expected
         )
       ).toBeNull();

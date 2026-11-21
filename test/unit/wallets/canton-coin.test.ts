@@ -322,6 +322,7 @@ describe('createWallet.loadState: Canton Coin', () => {
     load: () => ReturnType<ReturnType<typeof createWallet>['loadState']>;
     wallet: ReturnType<typeof createWallet>;
     calls: FetchCall[];
+    provider: ReturnType<typeof fakeProvider>;
   } {
     const { fetch, calls } = fakeFetch((call) => {
       if (call.url.endsWith('/api/utilities/v0/operator')) return { json: { partyId: OPERATOR } };
@@ -334,8 +335,9 @@ describe('createWallet.loadState: Canton Coin', () => {
       }
       return { status: 404, json: {} };
     });
+    const provider = fakeProvider({ ...contracts(), ...extra });
     const options: WalletInternalOptions = {
-      provider: fakeProvider({ ...contracts(), ...extra }),
+      provider,
       partyId: HOLDER,
       network: 'devnet',
       registry: { fetch },
@@ -343,7 +345,7 @@ describe('createWallet.loadState: Canton Coin', () => {
       cantonCoin: cantonCoin === false ? false : { fetch, registryUrl: SCAN, ...cantonCoin },
     };
     const wallet = createWallet(options);
-    return { load: async () => wallet.loadState(), wallet, calls };
+    return { load: async () => wallet.loadState(), wallet, calls, provider };
   }
 
   it('lists Canton Coin with the other holdings, locked apart, of the DSO the registry names', async () => {
@@ -493,23 +495,50 @@ describe('createWallet.loadState: Canton Coin', () => {
     await expect(wallet.requestBurn({ instrumentId: CC, amount: '1' })).rejects.toThrow(/cannot be burned/);
   });
 
-  it("refuses a DA transfer preapproval for the DSO, known or named by the party's Canton Coin", async () => {
+  it('refuses a DA transfer preapproval for the DSO, pinned or confirmed by the registry', async () => {
     // Pinned: refused before any read.
     const pinned = setup({ dsoParty: DSO });
     await expect(pinned.wallet.createTransferPreapproval({ instrumentAdmin: DSO })).rejects.toMatchObject({
       code: 'invalid-input',
       message: expect.stringMatching(/Canton Coin's DSO party/),
     });
-    // Unpinned and never looked up: the party's genuine Canton Coin names the DSO, and Scan is not asked.
-    const unpinned = setup();
-    await expect(unpinned.wallet.createTransferPreapproval({ instrumentAdmin: DSO })).rejects.toMatchObject({
+    expect(pinned.provider.reads).toEqual([]);
+    // Unpinned and never looked up, on a party with no Canton Coin: the registry is asked and names the DSO.
+    const fresh = setup({}, { [HOLDING_V1_VIEW_KEY]: [] });
+    await expect(fresh.wallet.createTransferPreapproval({ instrumentAdmin: DSO })).rejects.toMatchObject({
       code: 'invalid-input',
     });
-    expect(unpinned.calls.some((c) => c.url.startsWith(SCAN))).toBe(false);
-    // A forged look-alike (not signed by its admin) names nobody: HOLDER is not refused for it.
-    await expect(unpinned.wallet.createTransferPreapproval({ instrumentAdmin: HOLDER })).resolves.toMatchObject({
+    expect(fresh.calls.some((c) => c.url.endsWith('/info'))).toBe(true);
+    expect(fresh.provider.submissions).toEqual([]);
+    // Only the party's preapprovals are read, never its holdings.
+    expect(fresh.provider.reads).toEqual([[DA_REGISTRY_TEMPLATES.transferPreapproval]]);
+    // Another admin is not refused, and the confirmed DSO is reused without asking again.
+    const infoCalls = fresh.calls.filter((c) => c.url.endsWith('/info')).length;
+    await expect(fresh.wallet.createTransferPreapproval({ instrumentAdmin: HOLDER })).resolves.toMatchObject({
       updateId: expect.any(String),
     });
+    expect(fresh.calls.filter((c) => c.url.endsWith('/info'))).toHaveLength(infoCalls);
+  });
+
+  it('still creates a DA preapproval when the registry cannot confirm the DSO (fail open)', async () => {
+    const da = fakeFetch((call) =>
+      call.url.endsWith('/operator') ? { json: { partyId: OPERATOR } } : { status: 404, json: {} }
+    ).fetch;
+    const down: FetchLike = async (url, init) =>
+      url.startsWith(SCAN) ? Promise.reject(new Error('Scan unreachable')) : da(url, init);
+    const provider = fakeProvider(contracts());
+    const wallet = createWallet({
+      provider,
+      partyId: HOLDER,
+      network: 'devnet',
+      registry: { fetch: down },
+      cantonCoin: { registryUrl: SCAN, fetch: down },
+      now: () => NOW,
+    } as WalletInternalOptions);
+    await expect(wallet.createTransferPreapproval({ instrumentAdmin: DSO })).resolves.toMatchObject({
+      updateId: expect.any(String),
+    });
+    expect(provider.submissions).toHaveLength(1);
   });
 
   it('reads Canton Coin metadata alongside the DSO, so a snapshot waits for the registry once', async () => {
