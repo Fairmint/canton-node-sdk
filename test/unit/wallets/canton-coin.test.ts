@@ -532,6 +532,15 @@ describe('createWallet.loadState: Canton Coin', () => {
     expect(calls.filter((c) => c.method === 'POST')).toHaveLength(2);
   });
 
+  it("does not mistake a registrar's 'Amulet' the party holds none of for Canton Coin once the DSO is known", async () => {
+    const { wallet } = setup({ dsoParty: DSO });
+    const instrumentId = { admin: REGISTRAR, id: 'Amulet' };
+    await expect(wallet.planTransfer({ receiver: OTHER, instrumentId, amount: '1' })).rejects.not.toThrow(
+      /Canton Coin/
+    );
+    await expect(wallet.requestBurn({ instrumentId, amount: '1' })).rejects.not.toThrow(/Canton Coin/);
+  });
+
   it('refuses a Canton Coin transfer or burn before any read', async () => {
     const { wallet } = setup({ dsoParty: DSO });
     await expect(wallet.planTransfer({ receiver: OTHER, instrumentId: CC, amount: '1' })).rejects.toThrow(

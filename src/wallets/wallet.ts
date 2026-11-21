@@ -499,10 +499,14 @@ export function createWallet(options: WalletOptions): Wallet {
    */
   function refuseCantonCoin(instrumentId: InstrumentId, action: string, holdings?: readonly Holding[]): void {
     if (instrumentId.id !== AMULET_INSTRUMENT_ID) return;
+    if (cantonCoin === null) return;
+    const knownDso = cantonCoin.knownDsoParty();
+    // A known DSO decides; otherwise, with the holdings read, an `Amulet` the party holds no DA Registry holding of.
     const isAmulet =
-      holdings === undefined
-        ? cantonCoin !== null && instrumentId.admin === cantonCoin.knownDsoParty()
-        : !holdings.some(
+      knownDso !== undefined
+        ? instrumentId.admin === knownDso
+        : holdings !== undefined &&
+          !holdings.some(
             (holding) =>
               holding.instrumentId.admin === instrumentId.admin && holding.instrumentId.id === instrumentId.id
           );
