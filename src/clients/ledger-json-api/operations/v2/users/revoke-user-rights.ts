@@ -13,7 +13,7 @@ export type RevokeUserRightsResponse = paths[Endpoint]['patch']['responses']['20
 export const RevokeUserRights = createApiOperation<RevokeUserRightsParams, RevokeUserRightsResponse>({
   paramsSchema: RevokeUserRightsParamsSchema,
   method: 'PATCH',
-  buildUrl: (params, apiUrl) => `${apiUrl}/v2/users/${params.userId}/rights`,
+  buildUrl: (params, apiUrl) => `${apiUrl}/v2/users/${encodeURIComponent(params.userId)}/rights`,
   // Always inject empty string for identityProviderId
   buildRequestData: (params) => ({
     ...params,

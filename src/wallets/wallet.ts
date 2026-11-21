@@ -555,19 +555,23 @@ export function createWallet(options: WalletOptions): Wallet {
    * DSO and their sender signed (none without one).
    */
   function transferOffers(contracts: readonly ActiveContract[], operator: string, dso?: string): TransferOffers {
-    const amuletOffers =
-      dso === undefined
-        ? []
-        : contracts.flatMap((contract) => {
-            const offer = parseAmuletTransferOffer(contract, dso);
-            return offer === null ? [] : [offer];
-          });
-    const offers = [...fromRegistry(contracts, parseTransferOffer, operator), ...amuletOffers];
-    return {
-      incoming: offers.filter((offer) => offer.receiver === partyId && offer.sender !== partyId),
-      outgoing: offers.filter((offer) => offer.sender === partyId),
-    };
+    return byDirection([
+      ...fromRegistry(contracts, parseTransferOffer, operator),
+      ...amuletTransferOffers(contracts, dso),
+    ]);
   }
+  /** Canton Coin's transfer offers among `contracts` of the confirmed `dso`, signed by it and their sender. */
+  function amuletTransferOffers(contracts: readonly ActiveContract[], dso: string | undefined): TransferOffer[] {
+    if (dso === undefined) return [];
+    return contracts.flatMap((contract) => {
+      const offer = parseAmuletTransferOffer(contract, dso);
+      return offer === null ? [] : [offer];
+    });
+  }
+  const byDirection = (offers: readonly TransferOffer[]): TransferOffers => ({
+    incoming: offers.filter((offer) => offer.receiver === partyId && offer.sender !== partyId),
+    outgoing: offers.filter((offer) => offer.sender === partyId),
+  });
   /** The party's own preapprovals under DA's operator: the party is their only signatory. */
   const ownPreapprovals = (contracts: readonly ActiveContract[], operator: string): TransferPreapproval[] =>
     contracts.flatMap((contract) => {
@@ -750,16 +754,24 @@ export function createWallet(options: WalletOptions): Wallet {
     action: TransferInstructionAction,
     signal: AbortSignal | undefined
   ): Promise<SubmitResult> {
-    const [contracts, operator] = await Promise.all([read(offerTemplates, signal), registry.operatorParty(signal)]);
-    // The DSO is asked only for a Canton Coin offer, so DA offers never depend on Canton Coin's registry.
-    const target = contracts.filter((contract) => contract.contractId === transferOfferCid);
-    const { dso, unavailable } = await cantonCoinDso(target, signal, AMULET_REGISTRY_REQUEST_TIMEOUT_MS);
-    if (unavailable) {
-      throw new RegistryResponseError(
-        `${AMULET_REGISTRY_NAME} could not confirm Canton Coin's DSO party, so transfer offer ${transferOfferCid} cannot be checked; nothing was submitted. Try again later, or pin cantonCoin.dsoParty.`
-      );
+    // Read the target first, then resolve only the registry that validates it: the DSO for a Canton Coin offer, DA's
+    // operator for a DA offer. Neither offer kind depends on the other registry being up.
+    const target = (await read(offerTemplates, signal)).filter((contract) => contract.contractId === transferOfferCid);
+    let offers: TransferOffers;
+    if (cantonCoin !== null && anyOf(target, [AMULET_TEMPLATES.transferInstruction])) {
+      const { dso, unavailable } = await cantonCoinDso(target, signal, AMULET_REGISTRY_REQUEST_TIMEOUT_MS);
+      if (unavailable) {
+        throw new RegistryResponseError(
+          `${AMULET_REGISTRY_NAME} could not confirm Canton Coin's DSO party, so transfer offer ${transferOfferCid} cannot be checked; nothing was submitted. Try again later, or pin cantonCoin.dsoParty.`
+        );
+      }
+      offers = byDirection(amuletTransferOffers(target, dso));
+    } else if (anyOf(target, [DA_REGISTRY_TEMPLATES.transferOffer])) {
+      offers = byDirection(fromRegistry(target, parseTransferOffer, await registry.operatorParty(signal)));
+    } else {
+      offers = { incoming: [], outgoing: [] };
     }
-    const { incoming, outgoing } = transferOffers(contracts, operator, dso);
+    const { incoming, outgoing } = offers;
     const offer = find(
       action === 'withdraw' ? outgoing : incoming,
       transferOfferCid,

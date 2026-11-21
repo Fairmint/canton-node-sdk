@@ -6,6 +6,8 @@ type Endpoint = '/v2/users/{user-id}/rights';
 
 export const ListUserRightsParamsSchema = z.object({
   userId: z.string(),
+  /** The user's identity provider; omitted or empty: the default identity provider. */
+  identityProviderId: z.string().optional(),
 });
 
 export type ListUserRightsParams = z.infer<typeof ListUserRightsParamsSchema>;
@@ -15,10 +17,10 @@ export const ListUserRights = createApiOperation<ListUserRightsParams, ListUserR
   paramsSchema: ListUserRightsParamsSchema,
   method: 'GET',
   buildUrl: (params, apiUrl) => {
-    const baseUrl = `${apiUrl}/v2/users/${params.userId}/rights`;
+    const baseUrl = `${apiUrl}/v2/users/${encodeURIComponent(params.userId)}/rights`;
     const queryParams = new URLSearchParams();
-    // Always pass empty string for identity-provider-id
-    queryParams.append('identity-provider-id', '');
+    // Empty string: the default identity provider.
+    queryParams.append('identity-provider-id', params.identityProviderId ?? '');
     const queryString = queryParams.toString();
     return queryString ? `${baseUrl}?${queryString}` : baseUrl;
   },

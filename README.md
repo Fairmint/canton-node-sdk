@@ -260,16 +260,19 @@ const store = createWalletStore({
   it does not answer); and `AmuletTransferInstruction`s to or from the party, as `transferOffers`
   with `registry: 'amulet'` (DA's carry `registry: 'da'`).
 - Trust: Canton Coin counts only when it is the confirmed DSO's and the DSO signed it (with the
-  owner for a holding, the sender for an offer). The DSO party is resolved once per wallet, for
-  holdings and offers alike: the pinned `dsoParty`, else the `adminId` the registry answers at
-  `/registry/metadata/v1/info`. The registry is asked only when the party has Canton Coin, and a
-  request is aborted after 5 s. A snapshot looks up the DSO and Canton Coin's metadata at once and
-  waits for them together: the very first lookup in full (at most 5 s, so a cold Scan does not
-  report Canton Coin unavailable on a first load), later ones at most 1.5 s (a slower answer is
-  cached for the next load). After a failure the registry is not asked again for 30 s.
+  owner for a holding, and every lock holder for a `LockedAmulet`; the sender for an offer). The DSO
+  party is resolved once per wallet, for holdings and offers alike: the pinned `dsoParty`, else the
+  `adminId` the registry answers at `/registry/metadata/v1/info`. The registry is asked only when
+  the party has Canton Coin, and a request is aborted after 5 s. A snapshot looks up the DSO and
+  Canton Coin's metadata at once and waits for them together: the very first lookup in full (at most
+  5 s, so a cold Scan does not report Canton Coin unavailable on a first load), later ones at most
+  1.5 s (a slower answer is cached for the next load). After a failure the registry is not asked
+  again for 30 s.
 - With a pinned `dsoParty`, the registry's own `adminId` is still checked against it: a registry of
   another DSO has its metadata ignored (`CANTON_COIN_METADATA` is shown) and its choice contexts
-  refused with a `RegistryResponseError` naming both parties, before anything is submitted.
+  refused with a `RegistryResponseError` naming both parties, before anything is submitted. A
+  registry whose `adminId` cannot be read (no `adminId`, an error or a timeout) has its choice
+  contexts refused the same way: answering a Canton Coin offer fails closed.
 - LocalNet and other custom networks: `network` is `devnet` or `mainnet`, so the default registry is
   DevNet's or MainNet's SV-1 Scan, which names that network's DSO. Pass your own Scan as
   `registryUrl` (or pin `dsoParty`), or the party's Canton Coin is silently left out: Canton Coin of
@@ -280,7 +283,7 @@ const store = createWalletStore({
   then shows a `canton-coin` warning notice with Retry.
 - Offers: `acceptTransferOffer`, `rejectTransferOffer` and `withdrawTransferOffer` answer a Canton
   Coin offer like a DA one, with the choice context from the Canton Coin registry. A DA offer never
-  waits on Scan.
+  waits on Scan, and a Canton Coin offer never waits on DA's Utilities API.
 
   ```ts
   for (const offer of view.state?.transferOffers.incoming ?? []) {
@@ -305,9 +308,11 @@ const store = createWalletStore({
   `'da'`), `MintOffer.memo` and `BurnRequest.memo` (absent: `null`) and
   `WalletState.cantonCoinUnavailable`. The wallet always sets them.
 - To send Canton Coin from a provider validator (a faucet), use
-  `ExternalPartyWalletBridge.offerProviderTransfer({ receiverPartyId, amount, idempotencyKey })`: it
-  settles at once when the receiver pre-approved Canton Coin, else it lands as an offer in the
-  receiver's inbox above.
+  `ExternalPartyWalletBridge.offerProviderTransfer({ receiverPartyId, amount, idempotencyKey, expiresAt })`:
+  it settles at once when the receiver pre-approved Canton Coin, else it lands as an offer in the
+  receiver's inbox above. The validator deduplicates the key only within its deduplication window
+  (24 h by default), so persist the key with its `expiresAt` (at most that window away), retry with
+  both unchanged, and keep your own record of the outcome if a key must never send twice.
 
 ### The ownership routes
 

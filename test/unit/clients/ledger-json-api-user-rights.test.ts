@@ -40,4 +40,45 @@ describe('LedgerJsonApiClient user rights', () => {
       expectedConfig
     );
   });
+
+  it('encodes the user ID path segment (a "#" is allowed) and keeps it as given in the body', async () => {
+    const client = new LedgerJsonApiClient(new CantonRuntime(config));
+    const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({ newlyGrantedRights: [] });
+    const get = jest.spyOn(client, 'makeGetRequest').mockResolvedValue({ rights: [] });
+    const userId = 'wallet#server';
+    const rights = [{ kind: { CanActAs: { value: { party: 'party::1220aa' } } } }];
+
+    await client.grantUserRights({ userId, rights });
+    await client.listUserRights({ userId });
+
+    expect(post).toHaveBeenCalledWith(
+      'https://ledger.example.test/v2/users/wallet%23server/rights',
+      { userId, rights, identityProviderId: '' },
+      expect.anything()
+    );
+    expect(get).toHaveBeenCalledWith(
+      'https://ledger.example.test/v2/users/wallet%23server/rights?identity-provider-id=',
+      expect.anything()
+    );
+  });
+
+  it('sends the given identityProviderId when granting and listing rights', async () => {
+    const client = new LedgerJsonApiClient(new CantonRuntime(config));
+    const post = jest.spyOn(client, 'makePostRequest').mockResolvedValue({ newlyGrantedRights: [] });
+    const get = jest.spyOn(client, 'makeGetRequest').mockResolvedValue({ rights: [] });
+    const rights = [{ kind: { CanActAs: { value: { party: 'party::1220aa' } } } }];
+
+    await client.grantUserRights({ userId: 'u-1', identityProviderId: 'idp-wallets', rights });
+    await client.listUserRights({ userId: 'u-1', identityProviderId: 'idp-wallets' });
+
+    expect(post).toHaveBeenCalledWith(
+      'https://ledger.example.test/v2/users/u-1/rights',
+      { userId: 'u-1', rights, identityProviderId: 'idp-wallets' },
+      expect.anything()
+    );
+    expect(get).toHaveBeenCalledWith(
+      'https://ledger.example.test/v2/users/u-1/rights?identity-provider-id=idp-wallets',
+      expect.anything()
+    );
+  });
 });

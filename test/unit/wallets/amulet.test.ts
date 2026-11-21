@@ -312,6 +312,21 @@ describe('createWallet: Canton Coin transfer offers', () => {
     expect(wallet.submissions[0]?.commands[0]).toMatchObject({ ExerciseCommand: { contractId: '00dain' } });
   });
 
+  it("answers a CC offer during a DA Utilities outage: DA's operator is not asked", async () => {
+    const { tokens, wallet, calls } = setup({
+      daOffers: [DA_OFFER],
+      scan: (call) =>
+        call.url.endsWith('/api/utilities/v0/operator') ? { status: 503, json: { error: 'down' } } : undefined,
+    });
+    await tokens.acceptTransferOffer('00ccin');
+    await tokens.withdrawTransferOffer('00ccout');
+    expect(calls.filter((c) => c.url.endsWith('/api/utilities/v0/operator'))).toEqual([]);
+    expect(wallet.submissions).toHaveLength(2);
+    // A DA offer still needs DA's operator, and fails without it.
+    await expect(tokens.acceptTransferOffer('00dain')).rejects.toBeDefined();
+    expect(wallet.submissions).toHaveLength(2);
+  });
+
   it('refuses to answer a CC offer while Scan cannot confirm the DSO, and submits nothing', async () => {
     const { tokens, wallet, calls } = setup({
       scan: (call) => (call.url.endsWith('/registry/metadata/v1/info') ? { status: 503, json: {} } : undefined),

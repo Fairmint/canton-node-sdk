@@ -176,6 +176,7 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
     ledgerClient.allocateExternalParty.mockRejectedValueOnce(
       new ApiError('already exists', 409, 'Conflict', { code: 'ALREADY_EXISTS' })
     );
+    ledgerClient.listUserRights = jest.fn().mockResolvedValue({ rights: [] });
     ledgerClient.grantUserRights = jest.fn().mockResolvedValue({ newlyGrantedRights: [] });
 
     const created = await createExternalPartyWithEd25519Signer({
@@ -192,6 +193,7 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
     expect(created.alreadyExisted).toBe(true);
     expect(ledgerClient.grantUserRights).toHaveBeenCalledWith({
       userId: 'wallet-server',
+      identityProviderId: '',
       rights: [{ kind: { CanActAs: { value: { party: fixture.partyId } } } }],
     });
   });

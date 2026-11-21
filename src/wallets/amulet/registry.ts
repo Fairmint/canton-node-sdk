@@ -10,7 +10,7 @@
  * are left out, never shown for any DSO that signed them. With a pinned DSO, the registry's own `adminId` is still read
  * (once, when its metadata or a choice context is first needed) to check it serves that DSO: a registry of another DSO
  * (another network) has its metadata ignored and its choice contexts refused, so a misconfiguration fails with a clear
- * error before anything is submitted.
+ * error before anything is submitted; a registry whose `adminId` cannot be read is refused the same way (fail closed).
  *
  * Endpoints: the token standard metadata V1 (`GET /registry/metadata/v1/info`, `GET
  * /registry/metadata/v1/instruments/Amulet`) and transfer-instruction V1 (`POST
@@ -88,7 +88,8 @@ export interface AmuletRegistry {
   instrumentMetadata(signal?: AbortSignal): Promise<InstrumentMetadata>;
   /**
    * Context to accept, reject or withdraw a Canton Coin transfer instruction. With a pinned DSO, refused with
-   * `RegistryResponseError` (nothing submitted) when the registry's `adminId` is another party.
+   * `RegistryResponseError` (nothing submitted) unless the registry's `adminId` is confirmed to be that DSO: another
+   * party, no `adminId`, or a failed or timed-out lookup all refuse.
    */
   transferInstructionContext(
     instructionCid: string,
@@ -266,10 +267,15 @@ export function createAmuletRegistry(
     },
     async transferInstructionContext(instructionCid, action, signal) {
       if (pinned !== undefined) {
-        // Not a trust check (the ledger and the DSO's signatures decide): a clear error for a misconfiguration. An
-        // unanswered lookup lets the request go on; the ledger refuses a context of another DSO anyway.
+        // Fail closed: no context is asked for (and nothing submitted) until the registry is confirmed to serve the
+        // pinned DSO. An unanswered or failed lookup (including during its back-off) refuses the action as well.
         const admin = await registryAdminId(signal, AMULET_REGISTRY_REQUEST_TIMEOUT_MS);
-        if (admin !== undefined && admin !== pinned) {
+        if (admin === undefined) {
+          throw new RegistryResponseError(
+            `${AMULET_REGISTRY_NAME} at ${baseUrl} could not be confirmed to serve the pinned cantonCoin.dsoParty ${pinned} (its /registry/metadata/v1/info gave no adminId, failed or timed out). Nothing was submitted; try again shortly.`
+          );
+        }
+        if (admin !== pinned) {
           throw new RegistryResponseError(
             `${AMULET_REGISTRY_NAME} at ${baseUrl} serves the DSO party ${admin}, not the pinned cantonCoin.dsoParty ${pinned}: cantonCoin.registryUrl and cantonCoin.dsoParty name different networks. Nothing was submitted.`
           );

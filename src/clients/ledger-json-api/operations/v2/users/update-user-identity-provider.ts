@@ -17,7 +17,7 @@ export const UpdateUserIdentityProvider = createApiOperation<
 >({
   paramsSchema: UpdateUserIdentityProviderParamsSchema,
   method: 'PATCH',
-  buildUrl: (params, apiUrl) => `${apiUrl}/v2/users/${params.userId}/identity-provider-id`,
+  buildUrl: (params, apiUrl) => `${apiUrl}/v2/users/${encodeURIComponent(params.userId)}/identity-provider-id`,
   buildRequestData: (params) => {
     const { userId: _userId, ...requestBody } = params;
     return requestBody;

@@ -90,6 +90,23 @@ describe('parseHolding: Canton Coin', () => {
     expect(holding).toMatchObject({ locked: true, source: 'amulet', amount: '4' });
   });
 
+  it('requires every lock holder of a LockedAmulet to have signed it', () => {
+    const twoHolders = { ...AMULET_LOCK, holders: [OTHER, OPERATOR] };
+    // The DSO and the owner signed, but not the lock holder the view names.
+    expect(parseHolding(amuletHolding('00lcc', '4', { lock: AMULET_LOCK, signatories: [DSO, HOLDER] }))).toBeNull();
+    // One of two lock holders missing.
+    expect(
+      parseHolding(amuletHolding('00lcc', '4', { lock: twoHolders, signatories: [DSO, HOLDER, OTHER] }))
+    ).toBeNull();
+    // Every lock holder signed, but not the DSO.
+    expect(
+      parseHolding(amuletHolding('00lcc', '4', { lock: twoHolders, signatories: [HOLDER, OTHER, OPERATOR] }))
+    ).toBeNull();
+    expect(
+      parseHolding(amuletHolding('00lcc', '4', { lock: twoHolders, signatories: [DSO, HOLDER, OTHER, OPERATOR] }))
+    ).toMatchObject({ locked: true, source: 'amulet' });
+  });
+
   it('fails closed on look-alikes and inconsistent views', () => {
     // Not signed by the DSO, or not by the owner.
     expect(parseHolding(amuletHolding('00a', '1', { signatories: [HOLDER] }))).toBeNull();
@@ -168,6 +185,22 @@ describe('createAmuletRegistry', () => {
       new RegExp(`serves the DSO party ${OTHER}, not the pinned cantonCoin.dsoParty ${DSO}.*Nothing was submitted`)
     );
     expect(calls.filter((c) => c.url.includes('/transfer-instruction/'))).toEqual([]);
+  });
+
+  it('fails closed on choice contexts when a pinned registry gives no adminId or its lookup fails', async () => {
+    const noAdmin = fakeFetch((call) => (call.url.endsWith('/info') ? { json: { supportedApis: {} } } : { json: {} }));
+    const registry = createAmuletRegistry('devnet', { dsoParty: DSO, registryUrl: SCAN, fetch: noAdmin.fetch });
+    await expect(registry.transferInstructionContext('00ti', 'accept')).rejects.toThrow(
+      new RegExp(`could not be confirmed to serve the pinned cantonCoin.dsoParty ${DSO}.*Nothing was submitted`)
+    );
+    expect(noAdmin.calls.filter((c) => c.url.includes('/transfer-instruction/'))).toEqual([]);
+
+    const down = fakeFetch((call) => (call.url.endsWith('/info') ? { status: 503, json: {} } : { json: {} }));
+    const failing = createAmuletRegistry('devnet', { dsoParty: DSO, registryUrl: SCAN, fetch: down.fetch });
+    await expect(failing.transferInstructionContext('00ti', 'reject')).rejects.toThrow(/could not be confirmed/);
+    // During the back-off the lookup is not retried, and the action is still refused.
+    await expect(failing.transferInstructionContext('00ti', 'reject')).rejects.toThrow(/could not be confirmed/);
+    expect(down.calls.filter((c) => c.url.includes('/transfer-instruction/'))).toEqual([]);
   });
 
   it("learns the DSO from the registry's adminId, once, and reads the metadata from the registry", async () => {

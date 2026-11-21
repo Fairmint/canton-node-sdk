@@ -92,12 +92,16 @@ export const UpdateUserParamsSchema = z.object({
 export const ListUserRightsParamsSchema = z.object({
   /** User ID to list rights for. */
   userId: NonEmptyStringSchema,
+  /** The user's identity provider; omitted or empty: the default identity provider. */
+  identityProviderId: z.string().optional(),
 });
 
 /** Schema for grant user rights parameters. */
 export const GrantUserRightsParamsSchema = z.object({
   /** User ID to grant rights to. */
   userId: NonEmptyStringSchema,
+  /** The user's identity provider; omitted or empty: the default identity provider. */
+  identityProviderId: z.string().optional(),
   /** Rights to grant (optional). */
   rights: z
     .array(

@@ -1,7 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { type ValidatorApiClient } from '../../clients/validator-api';
-import { ApiError, ConfigurationError, OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
+import {
+  ApiError,
+  CantonError,
+  ConfigurationError,
+  OperationError,
+  OperationErrorCode,
+  ValidationError,
+} from '../../core/errors';
 import { isRecord } from '../../core/utils';
 import {
   prepareExternalPartyCcTransfer,
@@ -44,6 +51,12 @@ import {
 
 export const DEFAULT_PROVIDER_TRANSFER_OFFER_TTL_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Splice's default validator deduplication window (`deduplication-duration`, 24 h): how long the provider validator
+ * remembers a `tracking_id` after a transfer is submitted.
+ */
+export const DEFAULT_VALIDATOR_DEDUPLICATION_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 export interface ExternalPartyWalletOptions {
   readonly ledgerClient: LedgerJsonApiClient;
   readonly validatorClient?: ValidatorApiClient | null;
@@ -53,6 +66,12 @@ export interface ExternalPartyWalletOptions {
   readonly provider?: string;
   readonly network?: string;
   readonly providerTransferOfferTtlMs?: number;
+  /**
+   * The provider validator's command deduplication window (its `deduplication-duration`; Splice's default is 24 h).
+   * `offerProviderTransfer` refuses an `expiresAt` further away than this, so that every retry it accepts (one made
+   * before `expiresAt`) still falls inside the window. Set it only to match a validator configured differently.
+   */
+  readonly validatorDeduplicationWindowMs?: number;
   readonly now?: () => number;
   readonly randomId?: () => string;
 }
@@ -232,12 +251,19 @@ export interface OfferExternalPartyWalletProviderTransferInput {
    */
   readonly description?: string | null;
   /**
-   * The validator's tracking id: one transfer per key. Retry a failed or unknown attempt with the same key (never a
-   * fresh one), so a transfer that did go through is not sent twice.
+   * The validator's tracking id. The validator refuses a second transfer with the same key only within its
+   * deduplication window (Splice's default: 24 h from the submission), not forever. Retry a failed or unknown attempt
+   * with the same key and the same `expiresAt` (never fresh ones), so a transfer that did go through is not sent twice.
+   * A caller that needs one transfer per key beyond that window must persist the key and its outcome itself.
    */
   readonly idempotencyKey: string;
-  /** When the offer stops being acceptable. Defaults to now + `providerTransferOfferTtlMs` (24 h). */
-  readonly expiresAt?: Date | number;
+  /**
+   * When the offer stops being acceptable. Required and fixed per key: choose it on the first attempt, persist it with
+   * the key and send the same value on every retry. It must be in the future and no further away than the validator's
+   * deduplication window (`validatorDeduplicationWindowMs`, 24 h by default), so a retry is refused (`expiresAt` in the
+   * past) before the validator could forget the key.
+   */
+  readonly expiresAt: Date | number;
 }
 
 /**
@@ -247,8 +273,9 @@ export interface OfferExternalPartyWalletProviderTransferInput {
  *   example through CIP-0103 (`TransferInstruction_Accept`). The provider's CC stays locked until then; an offer that
  *   expires unaccepted is withdrawn by the validator's wallet automation.
  * - `direct`: the receiver has a Canton Coin transfer preapproval, so the CC moved at once.
- * - `already-submitted`: a transfer with this idempotency key was already made (the validator answered 409); nothing new
- *   was sent. `transferInstructionContractId` names its offer when exactly one pending offer of these details remains.
+ * - `already-submitted`: a transfer with this idempotency key was already made within the validator's deduplication
+ *   window (it answered 409 with its duplicate-command error); nothing new was sent. `transferInstructionContractId`
+ *   names its offer when exactly one pending offer of these details remains.
  */
 export type ExternalPartyWalletProviderTransferOutcome = 'offer' | 'direct' | 'already-submitted';
 
@@ -369,10 +396,16 @@ export interface ExternalPartyWalletBridge {
    * as an offer in the receiver's CC inbox (`@fairmint/canton-node-sdk/wallets` lists it), which the receiver accepts
    * with their own wallet. The receiver needs no preapproval and signs nothing here.
    *
-   * Throws `ValidationError` on bad input, `OperationError` (`TRANSACTION_FAILED`) when the transfer failed or the
-   * validator is still processing the same key (`context.retryable: true`: retry later with the same key), and
-   * `ConfigurationError` when the validator has no wallet for the provider user or does not serve token-standard
-   * transfers.
+   * Idempotency is the validator's and is bounded: it refuses a repeated `idempotencyKey` as a duplicate command only
+   * within its deduplication window (Splice's default: 24 h). Retry with the same key and the same `expiresAt`; this
+   * method refuses an `expiresAt` beyond that window and refuses a retry once `expiresAt` has passed, so every retry it
+   * sends is still deduplicated. It does not remember keys itself: a caller that needs one transfer per key forever
+   * must persist the key and its outcome.
+   *
+   * Throws `ValidationError` on bad input (including an `expiresAt` in the past or beyond the deduplication window),
+   * `OperationError` (`TRANSACTION_FAILED`) when the transfer failed or the validator is still processing the same key
+   * (`context.retryable: true`: retry later with the same key), and `ConfigurationError` when the validator has no
+   * wallet for the provider user or does not serve token-standard transfers.
    */
   readonly offerProviderTransfer: (
     input: OfferExternalPartyWalletProviderTransferInput
@@ -434,6 +467,10 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
   const randomId = options.randomId ?? randomUUID;
   const providerTransferOfferTtlMs = validateProviderTransferOfferTtlMs(
     options.providerTransferOfferTtlMs ?? DEFAULT_PROVIDER_TRANSFER_OFFER_TTL_MS
+  );
+  const validatorDeduplicationWindowMs = validatePositiveSafeInteger(
+    'validatorDeduplicationWindowMs',
+    options.validatorDeduplicationWindowMs ?? DEFAULT_VALIDATOR_DEDUPLICATION_WINDOW_MS
   );
 
   return {
@@ -716,11 +753,22 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
       const amount = normalizeAmountString(input.amount);
       const description = normalizeDescription(input.description);
       const at = now();
-      const expiresAtMs = readOfferExpiry(input.expiresAt, at + providerTransferOfferTtlMs);
+      const expiresAtMs = readOfferExpiry(input.expiresAt);
       if (expiresAtMs <= at) {
-        throw new ValidationError('expiresAt must be in the future', {
-          expiresAt: new Date(expiresAtMs).toISOString(),
-        });
+        throw new ValidationError(
+          'expiresAt must be in the future; a retry after it may fall outside the validator deduplication window, so use a new key and expiry only once the earlier attempt is known to have failed',
+          { expiresAt: new Date(expiresAtMs).toISOString(), idempotencyKey }
+        );
+      }
+      if (expiresAtMs > at + validatorDeduplicationWindowMs) {
+        throw new ValidationError(
+          'expiresAt must be within the validator deduplication window, so every accepted retry with this key is still deduplicated',
+          {
+            expiresAt: new Date(expiresAtMs).toISOString(),
+            validatorDeduplicationWindowMs,
+            idempotencyKey,
+          }
+        );
       }
       const base = {
         sourcePartyId: options.providerPartyId,
@@ -742,7 +790,7 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
         });
       } catch (error) {
         const status = errorStatus(error);
-        if (status === 409) {
+        if (status === 409 && isDuplicateTransferCommand(error)) {
           // The key was already accepted: the reads below only enrich the answer and never turn it into an error, or a
           // retry with the same key would fail forever instead of reporting the transfer it already made.
           const raw = await bestEffort(async () => validatorClient.listTokenStandardTransfers());
@@ -1349,8 +1397,12 @@ function requireTrimmedString(name: string, value: unknown): string {
   return normalized;
 }
 
-function readOfferExpiry(expiresAt: Date | number | undefined, fallbackMs: number): number {
-  if (expiresAt === undefined) return fallbackMs;
+function readOfferExpiry(expiresAt: Date | number | undefined): number {
+  if (expiresAt === undefined) {
+    throw new ValidationError(
+      'expiresAt is required: choose it once per idempotencyKey and send the same value on every retry'
+    );
+  }
   const ms = expiresAt instanceof Date ? expiresAt.getTime() : expiresAt;
   if (typeof ms !== 'number' || !Number.isSafeInteger(ms)) {
     throw new ValidationError('expiresAt must be a valid Date or epoch milliseconds');
@@ -1361,6 +1413,23 @@ function readOfferExpiry(expiresAt: Date | number | undefined, fallbackMs: numbe
 function errorStatus(error: unknown): number | null {
   if (error instanceof ApiError) return error.status ?? null;
   return isRecord(error) && typeof error['status'] === 'number' ? error['status'] : null;
+}
+
+/**
+ * The validator's duplicate-command refusal for `createTokenStandardTransfer`: Splice maps the ledger's ALREADY_EXISTS
+ * to 409 with `{ error: 'CreateTokenStandardTransfer duplicate command' }`. Other 409s (interpretation, routing,
+ * precondition failures) are not duplicates.
+ */
+function isDuplicateTransferCommand(error: unknown): boolean {
+  const context =
+    error instanceof CantonError
+      ? error.context
+      : isRecord(error)
+        ? (error['context'] ?? error['response'])
+        : undefined;
+  const body = isRecord(context) ? context['error'] : undefined;
+  const text = typeof body === 'string' ? body : error instanceof Error ? error.message : '';
+  return /\bduplicate command\b/i.test(text);
 }
 
 /** `read`'s result, or null when it fails for any reason: for reads made after a write already went through. */
@@ -1409,6 +1478,13 @@ export function findPendingProviderTransfer(
 
 function epochMillisecondsToMicroseconds(epochMilliseconds: number): number {
   return epochMilliseconds * 1000;
+}
+
+function validatePositiveSafeInteger(name: string, value: number): number {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new ValidationError(`${name} must be a positive safe integer`, { [name]: value });
+  }
+  return value;
 }
 
 function validateProviderTransferOfferTtlMs(providerTransferOfferTtlMs: number): number {

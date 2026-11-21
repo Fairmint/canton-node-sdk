@@ -14,5 +14,5 @@ export type DeleteUserResponse = paths[Endpoint]['delete']['responses']['200']['
 export const DeleteUser = createApiOperation<DeleteUserParams, DeleteUserResponse>({
   paramsSchema: DeleteUserParamsSchema,
   method: 'DELETE',
-  buildUrl: (params, apiUrl) => `${apiUrl}/v2/users/${params.userId}`,
+  buildUrl: (params, apiUrl) => `${apiUrl}/v2/users/${encodeURIComponent(params.userId)}`,
 });

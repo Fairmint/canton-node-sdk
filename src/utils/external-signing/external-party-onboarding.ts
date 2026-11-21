@@ -65,8 +65,11 @@ export interface SubmitExternalPartyOnboardingOptions {
    * server's own ledger user). Trimmed, then checked with Canton's user id rule (non-empty, at most 128 characters,
    * ASCII letters, digits and "@^$.!`-#+'~_|:()") before anything is prepared, signed or sent. The ledger grants the
    * right only when the allocation itself succeeds, so when `allowAlreadyExists`confirms an existing party the SDK
-   * grants`CanActAs` to this user itself (an idempotent grant). Omit it to grant no user rights (the ledger's
-   * default).
+   * reads the user's rights and, only when`CanActAs`on the party is missing, grants it (granting needs participant
+   * admin or identity-provider admin rights; an ordinary user allocating for itself already holds the right after its
+   * first allocation, so its replay grants nothing). A successful return means the user can act as the party; when the
+   * right is missing and the caller may not grant it, an`OperationError` says so. Omit it to grant no user rights (the
+   * ledger's default).
    */
   readonly userId?: string;
   readonly identityProviderId?: string;
@@ -130,8 +133,11 @@ export interface CreateExternalPartyWithSignerOptions extends PrepareExternalPar
    * server's own ledger user). Trimmed, then checked with Canton's user id rule (non-empty, at most 128 characters,
    * ASCII letters, digits and "@^$.!`-#+'~_|:()") before anything is prepared, signed or sent. The ledger grants the
    * right only when the allocation itself succeeds, so when `allowAlreadyExists`confirms an existing party the SDK
-   * grants`CanActAs` to this user itself (an idempotent grant). Omit it to grant no user rights (the ledger's
-   * default).
+   * reads the user's rights and, only when`CanActAs`on the party is missing, grants it (granting needs participant
+   * admin or identity-provider admin rights; an ordinary user allocating for itself already holds the right after its
+   * first allocation, so its replay grants nothing). A successful return means the user can act as the party; when the
+   * right is missing and the caller may not grant it, an`OperationError` says so. Omit it to grant no user rights (the
+   * ledger's default).
    */
   readonly userId?: string;
   /**
@@ -337,7 +343,13 @@ export async function submitExternalPartyOnboarding(
       throw error;
     }
     if (userId !== undefined) {
-      await grantActAsOnExistingParty(options.ledgerClient, userId, options.partyId, options.signal);
+      await ensureActAsOnExistingParty(
+        options.ledgerClient,
+        userId,
+        options.partyId,
+        options.identityProviderId ?? DEFAULT_CANTON_IDENTITY_PROVIDER_ID,
+        options.signal
+      );
     }
     return {
       partyId: options.partyId,
@@ -419,22 +431,77 @@ export async function getExternalPartyIdForHintAndPublicKey(
 }
 
 /**
- * Grants `CanActAs` on an external party that already existed. The ledger grants the allocation's `userId` only when
- * the allocation itself succeeds, so an idempotent replay (a retry after an ambiguous first allocation, or a party
- * first allocated for another user) must grant it here. Granting a right the user already holds is a no-op.
+ * Makes sure `userId` holds `CanActAs` on an external party that already existed. The ledger grants the allocation's
+ * `userId` only when the allocation itself succeeds, so an idempotent replay (a retry after an ambiguous first
+ * allocation, or a party first allocated for another user) may need the right granted here. The user's rights are read
+ * first (any user may read its own, an admin any user's) and the grant, which needs participant admin or
+ * identity-provider admin rights, is sent only when the right is missing. Returns only once the user is known to hold
+ * the right; throws an `OperationError` when the caller may not read the rights, or the right is missing and the caller
+ * may not grant it.
  */
-async function grantActAsOnExistingParty(
+async function ensureActAsOnExistingParty(
   ledgerClient: LedgerJsonApiClient,
   userId: string,
   partyId: string,
+  identityProviderId: string,
   signal: AbortSignal | undefined
 ): Promise<void> {
-  const params = { userId, rights: [{ kind: { CanActAs: { value: { party: partyId } } } }] };
-  if (signal === undefined) {
-    await ledgerClient.grantUserRights(params);
-  } else {
-    await ledgerClient.grantUserRights(params, { signal });
+  let listed: unknown;
+  try {
+    const listParams = { userId, identityProviderId };
+    listed =
+      signal === undefined
+        ? await ledgerClient.listUserRights(listParams)
+        : await ledgerClient.listUserRights(listParams, { signal });
+  } catch (error) {
+    if (!isPermissionDenied(error)) throw error;
+    throw new OperationError(
+      `Party ${partyId} already exists, but the caller may not read user ${userId}'s rights, so it cannot confirm that user can act as the party`,
+      OperationErrorCode.TRANSACTION_FAILED,
+      { partyId, userId, identityProviderId, cause: errorMessage(error) }
+    );
   }
+  if (hasCanActAs(listed, partyId)) return;
+  try {
+    const grantParams = {
+      userId,
+      identityProviderId,
+      rights: [{ kind: { CanActAs: { value: { party: partyId } } } }],
+    };
+    if (signal === undefined) {
+      await ledgerClient.grantUserRights(grantParams);
+    } else {
+      await ledgerClient.grantUserRights(grantParams, { signal });
+    }
+  } catch (error) {
+    if (!isPermissionDenied(error)) throw error;
+    throw new OperationError(
+      `Party ${partyId} already exists and user ${userId} does not hold CanActAs on it; granting it needs participant admin or identity-provider admin rights, which the caller lacks`,
+      OperationErrorCode.TRANSACTION_FAILED,
+      { partyId, userId, identityProviderId, cause: errorMessage(error) }
+    );
+  }
+}
+
+/** Whether a `ListUserRights` answer holds `CanActAs` on `partyId`. */
+function hasCanActAs(listed: unknown, partyId: string): boolean {
+  const rights = isRecord(listed) ? listed['rights'] : undefined;
+  if (!Array.isArray(rights)) return false;
+  return rights.some((right: unknown) => {
+    const kind = isRecord(right) ? right['kind'] : undefined;
+    const canActAs = isRecord(kind) ? kind['CanActAs'] : undefined;
+    const value = isRecord(canActAs) ? canActAs['value'] : undefined;
+    return isRecord(value) && value['party'] === partyId;
+  });
+}
+
+function isPermissionDenied(error: unknown): boolean {
+  const status = readErrorStatus(error);
+  return status === 401 || status === 403;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function validateRequiredString(name: string, value: string): void {

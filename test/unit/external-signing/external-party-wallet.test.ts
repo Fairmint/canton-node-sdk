@@ -434,6 +434,12 @@ describe('external-party wallet bridge', (): void => {
   });
 
   describe('offerProviderTransfer', (): void => {
+    const NOW = 1_780_000_000_000;
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const EXPIRES_AT = new Date(NOW + DAY_MS);
+    const duplicateCommand = (): ApiError =>
+      new ApiError('HTTP 409', 409, 'Conflict', { error: 'CreateTokenStandardTransfer duplicate command' });
+
     it('creates a CIP-56 offer with the idempotency key as tracking id and reports its contract id', async (): Promise<void> => {
       const validatorClient = createMockValidatorClient();
       const bridge = createBridge({ validatorClient });
@@ -443,6 +449,7 @@ describe('external-party wallet bridge', (): void => {
         amount: '20',
         description: '  Canton Coin from the faucet ',
         idempotencyKey: 'faucet-request-1',
+        expiresAt: EXPIRES_AT,
       });
 
       expect(validatorClient.createTokenStandardTransfer).toHaveBeenCalledWith({
@@ -500,9 +507,7 @@ describe('external-party wallet bridge', (): void => {
 
     it('treats a duplicate idempotency key as already submitted and finds its pending offer', async (): Promise<void> => {
       const validatorClient = createMockValidatorClient();
-      validatorClient.createTokenStandardTransfer.mockRejectedValueOnce(
-        new ApiError('CreateTokenStandardTransfer duplicate command', 409)
-      );
+      validatorClient.createTokenStandardTransfer.mockRejectedValueOnce(duplicateCommand());
       validatorClient.listTokenStandardTransfers.mockResolvedValueOnce({
         transfers: [
           listedInstruction('00match', 'receiver::fingerprint', '20.0000000000', 'faucet'),
@@ -517,9 +522,84 @@ describe('external-party wallet bridge', (): void => {
         amount: '20',
         description: 'faucet',
         idempotencyKey: 'faucet-request-1',
+        expiresAt: EXPIRES_AT,
       });
 
       expect(offered).toMatchObject({ outcome: 'already-submitted', transferInstructionContractId: '00match' });
+    });
+
+    it('propagates a 409 that is not the duplicate-command refusal instead of reporting a prior transfer', async (): Promise<void> => {
+      const validatorClient = createMockValidatorClient();
+      const interpretation = new ApiError('HTTP 409', 409, 'Conflict', {
+        error: 'DAML_INTERPRETATION_ERROR(9,abc): Interpretation error: Error: insufficient funds',
+      });
+      const routing = new ApiError('HTTP 409', 409, 'Conflict', {
+        error: 'UNKNOWN_CONTRACT_SYNCHRONIZERS(...): no synchronizer for contracts',
+      });
+      validatorClient.createTokenStandardTransfer.mockRejectedValueOnce(interpretation).mockRejectedValueOnce(routing);
+      const bridge = createBridge({ validatorClient });
+      const input = {
+        receiverPartyId: 'receiver::fingerprint',
+        amount: '20',
+        idempotencyKey: 'fresh-key',
+        expiresAt: EXPIRES_AT,
+      };
+
+      await expect(bridge.offerProviderTransfer(input)).rejects.toBe(interpretation);
+      await expect(bridge.offerProviderTransfer(input)).rejects.toBe(routing);
+      expect(validatorClient.listTokenStandardTransfers).not.toHaveBeenCalled();
+    });
+
+    it('requires a stable expiresAt within the validator deduplication window', async (): Promise<void> => {
+      const validatorClient = createMockValidatorClient();
+      const bridge = createBridge({ validatorClient });
+      const input = { receiverPartyId: 'receiver::fingerprint', amount: '1', idempotencyKey: 'k-1' };
+
+      await expect(
+        bridge.offerProviderTransfer({ ...input } as unknown as Parameters<typeof bridge.offerProviderTransfer>[0])
+      ).rejects.toMatchObject({ name: 'ValidationError', message: expect.stringContaining('expiresAt is required') });
+      await expect(bridge.offerProviderTransfer({ ...input, expiresAt: NOW + DAY_MS + 1 })).rejects.toMatchObject({
+        name: 'ValidationError',
+        context: expect.objectContaining({ validatorDeduplicationWindowMs: DAY_MS }) as object,
+      });
+      expect(validatorClient.createTokenStandardTransfer).not.toHaveBeenCalled();
+
+      await expect(bridge.offerProviderTransfer({ ...input, expiresAt: NOW + DAY_MS })).resolves.toMatchObject({
+        outcome: 'offer',
+      });
+      expect(validatorClient.createTokenStandardTransfer).toHaveBeenCalledWith(
+        expect.objectContaining({ expires_at: (NOW + DAY_MS) * 1000, tracking_id: 'k-1' })
+      );
+    });
+
+    it('honours a configured validator deduplication window', async (): Promise<void> => {
+      const validatorClient = createMockValidatorClient();
+      const bridge = createExternalPartyWalletBridge({
+        ledgerClient: createMockLedgerClient(),
+        validatorClient,
+        providerPartyId: 'provider::fingerprint',
+        providerUserId: 'provider-user',
+        prepareTokenSecret: 'prepare-token-secret',
+        now: (): number => NOW,
+        validatorDeduplicationWindowMs: 60 * 60 * 1000,
+      });
+      const input = { receiverPartyId: 'receiver::fingerprint', amount: '1', idempotencyKey: 'k-1' };
+
+      await expect(
+        bridge.offerProviderTransfer({ ...input, expiresAt: NOW + 2 * 60 * 60 * 1000 })
+      ).rejects.toMatchObject({ name: 'ValidationError' });
+      await expect(bridge.offerProviderTransfer({ ...input, expiresAt: NOW + 60 * 60 * 1000 })).resolves.toMatchObject({
+        outcome: 'offer',
+      });
+      expect(() =>
+        createExternalPartyWalletBridge({
+          ledgerClient: createMockLedgerClient(),
+          providerPartyId: 'provider::fingerprint',
+          providerUserId: 'provider-user',
+          prepareTokenSecret: 'prepare-token-secret',
+          validatorDeduplicationWindowMs: 0,
+        })
+      ).toThrow('validatorDeduplicationWindowMs must be a positive safe integer');
     });
 
     it('still reports the offer when the balance read fails after the transfer was made', async (): Promise<void> => {
@@ -531,6 +611,7 @@ describe('external-party wallet bridge', (): void => {
         receiverPartyId: 'receiver::fingerprint',
         amount: '20',
         idempotencyKey: 'faucet-request-1',
+        expiresAt: EXPIRES_AT,
       });
 
       expect(offered).toMatchObject({
@@ -542,13 +623,16 @@ describe('external-party wallet bridge', (): void => {
 
     it('still reports already-submitted for a duplicate key when the follow-up reads fail', async (): Promise<void> => {
       const validatorClient = createMockValidatorClient();
-      validatorClient.createTokenStandardTransfer.mockRejectedValue(
-        new ApiError('CreateTokenStandardTransfer duplicate command', 409)
-      );
+      validatorClient.createTokenStandardTransfer.mockRejectedValue(duplicateCommand());
       validatorClient.listTokenStandardTransfers.mockRejectedValue(new ApiError('list unavailable', 500));
       validatorClient.getWalletBalance.mockRejectedValue(new Error('timeout'));
       const bridge = createBridge({ validatorClient });
-      const input = { receiverPartyId: 'receiver::fingerprint', amount: '20', idempotencyKey: 'faucet-request-1' };
+      const input = {
+        receiverPartyId: 'receiver::fingerprint',
+        amount: '20',
+        idempotencyKey: 'faucet-request-1',
+        expiresAt: EXPIRES_AT,
+      };
 
       for (let attempt = 0; attempt < 2; attempt += 1) {
         await expect(bridge.offerProviderTransfer(input)).resolves.toMatchObject({
@@ -575,7 +659,12 @@ describe('external-party wallet bridge', (): void => {
     it('maps 429, 404 and a failed transfer to typed errors', async (): Promise<void> => {
       const validatorClient = createMockValidatorClient();
       const bridge = createBridge({ validatorClient });
-      const input = { receiverPartyId: 'receiver::fingerprint', amount: '1', idempotencyKey: 'k-1' };
+      const input = {
+        receiverPartyId: 'receiver::fingerprint',
+        amount: '1',
+        idempotencyKey: 'k-1',
+        expiresAt: EXPIRES_AT,
+      };
 
       validatorClient.createTokenStandardTransfer.mockRejectedValueOnce(new ApiError('busy', 429));
       await expect(bridge.offerProviderTransfer(input)).rejects.toMatchObject({
@@ -605,7 +694,12 @@ describe('external-party wallet bridge', (): void => {
     it('validates its input before calling the validator', async (): Promise<void> => {
       const validatorClient = createMockValidatorClient();
       const bridge = createBridge({ validatorClient });
-      const input = { receiverPartyId: 'receiver::fingerprint', amount: '1', idempotencyKey: 'k-1' };
+      const input = {
+        receiverPartyId: 'receiver::fingerprint',
+        amount: '1',
+        idempotencyKey: 'k-1',
+        expiresAt: EXPIRES_AT,
+      };
 
       await expect(bridge.offerProviderTransfer({ ...input, idempotencyKey: ' ' })).rejects.toMatchObject({
         name: 'ValidationError',

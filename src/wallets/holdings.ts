@@ -16,7 +16,8 @@ import type { ActiveContract, InstrumentId } from './types';
  * Which kind of holding contract a holding was read from, and so whose signatures made it genuine:
  *
  * - `da-registry`: a DA Utility Registry `Holding`, signed by its registrar (the instrument admin) and its owner;
- * - `amulet`: Canton Coin, a Splice `Amulet` or `LockedAmulet`, signed by the DSO (the instrument admin) and its owner.
+ * - `amulet`: Canton Coin, a Splice `Amulet` or `LockedAmulet`, signed by the DSO (the instrument admin) and its owner
+ *   (and, for a `LockedAmulet`, by every lock holder).
  */
 export type HoldingSource = 'da-registry' | 'amulet';
 
@@ -89,7 +90,10 @@ function parseDaHolding(contract: ActiveContract): Holding | null {
 
 /**
  * Canton Coin, read from its `HoldingV1` view (an interface filter returns no create argument for it). The instrument
- * must be `Amulet`; an `Amulet` must be unlocked and a `LockedAmulet` locked, as Splice's views report them.
+ * must be `Amulet`; an `Amulet` must be unlocked and a `LockedAmulet` locked, as Splice's views report them. A
+ * `LockedAmulet` is signed by its lock holders as well as the DSO and the owner (`signatory lock.holders, signatory
+ * amulet`), so every lock holder the view names must be a signatory: a view naming a holder who did not sign is not
+ * genuine.
  */
 function parseAmuletHolding(contract: ActiveContract): Holding | null {
   const view = holdingViewOf(contract);
@@ -97,6 +101,7 @@ function parseAmuletHolding(contract: ActiveContract): Holding | null {
   if (parseDecimalUnits(view.amount) === null) return null;
   const locked = view.lock !== null;
   if (locked !== isTemplate(contract, AMULET_TEMPLATES.lockedAmulet)) return null;
+  if (view.lock !== null && !view.lock.holders.every((holder) => contract.signatories.includes(holder))) return null;
   return {
     contractId: contract.contractId,
     owner: view.owner,
@@ -111,7 +116,8 @@ function parseAmuletHolding(contract: ActiveContract): Holding | null {
 
 /**
  * The holding contracts the wallet counts, per source: the templates (package-name form, so the package name is checked
- * too) and how to read them. Every rule then requires the instrument admin's and the owner's signatures.
+ * too) and how to read them. Every rule then requires the instrument admin's and the owner's signatures (a
+ * `LockedAmulet`'s parser also requires its lock holders').
  */
 const HOLDING_RULES: ReadonlyArray<{
   readonly templateIds: readonly string[];
@@ -124,9 +130,9 @@ const HOLDING_RULES: ReadonlyArray<{
 /**
  * A genuine holding, or null: a DA Registry `Holding` (read from its create argument) or a Canton Coin `Amulet` or
  * `LockedAmulet` (read from its `HoldingV1` view). Genuine: of a template in the trust table above, and signed by its
- * instrument admin (DA's registrar, or the DSO) and its owner. Any party can create a look-alike from its own package,
- * with the wallet party as an observer, so only those signatures make a holding real. An unreadable holding is never
- * spendable.
+ * instrument admin (DA's registrar, or the DSO) and its owner, and a `LockedAmulet` by every lock holder. Any party can
+ * create a look-alike from its own package, with the wallet party as an observer, so only those signatures make a
+ * holding real. An unreadable holding is never spendable.
  */
 export function parseHolding(contract: ActiveContract): Holding | null {
   const rule = HOLDING_RULES.find(({ templateIds }) => templateIds.some((id) => isTemplate(contract, id)));

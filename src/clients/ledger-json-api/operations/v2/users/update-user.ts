@@ -13,7 +13,7 @@ export type UpdateUserResponse = paths[Endpoint]['patch']['responses']['200']['c
 export const UpdateUser = createApiOperation<UpdateUserParams, UpdateUserResponse>({
   paramsSchema: UpdateUserParamsSchema,
   method: 'PATCH',
-  buildUrl: (params, apiUrl) => `${apiUrl}/v2/users/${params.userId}`,
+  buildUrl: (params, apiUrl) => `${apiUrl}/v2/users/${encodeURIComponent(params.userId)}`,
   buildRequestData: (params) => {
     const { userId: _userId, ...requestBody } = params;
     return requestBody;
