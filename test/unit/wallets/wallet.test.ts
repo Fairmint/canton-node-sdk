@@ -1,5 +1,6 @@
 import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
 import { isCancelledBeforeSubmit } from '../../../src/wallets/abort';
+import { HOLDING_V1_INTERFACE_ID } from '../../../src/wallets/holding-view';
 import type { TransferKind } from '../../../src/wallets/da-utilities/client';
 import {
   describeWalletError,
@@ -235,6 +236,7 @@ function setup(
 
 const UUID = /^[0-9a-f-]{36}$/;
 const STATE_TEMPLATES = [
+  `${HOLDING_V1_INTERFACE_ID}+view`,
   DA_REGISTRY_TEMPLATES.holding,
   DA_REGISTRY_TEMPLATES.transferOffer,
   DA_REGISTRY_TEMPLATES.mintOffer,
@@ -296,7 +298,7 @@ describe('createWallet', () => {
 });
 
 describe('createWallet.loadState', () => {
-  it('reads every list with one ledger-end call and one ACS read of the five DA templates, as the party', async () => {
+  it('reads every list with one ledger-end call and one ACS read of HoldingV1 and the five DA templates, as the party', async () => {
     const { tokens, wallet } = setup();
     const state = await tokens.loadState();
     expect(wallet.ledgerCalls()).toEqual(['GET /v2/state/ledger-end', 'POST /v2/state/active-contracts']);
@@ -315,6 +317,7 @@ describe('createWallet.loadState', () => {
         locked: '50.0000000000',
         holdingCount: 3,
         metadata: { name: 'Example', symbol: 'XMPL', decimals: 2 },
+        source: 'da-registry',
       },
     ]);
     expect(state.mintOffers.map((o) => o.contractId)).toEqual(['00mint']);
