@@ -1,6 +1,6 @@
 import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
-import { CANTON_COIN_METADATA } from '../../../src/wallets/amulet';
-import { createAmuletRegistry } from '../../../src/wallets/amulet-registry';
+import { CANTON_COIN_METADATA } from '../../../src/wallets/amulet/constants';
+import { createAmuletRegistry } from '../../../src/wallets/amulet/registry';
 import { WalletError } from '../../../src/wallets/errors';
 import { holdingViewOf, readHoldingView, readHoldingViewLock } from '../../../src/wallets/holding-view';
 import { instrumentBalances, parseHolding } from '../../../src/wallets/holdings';
@@ -148,25 +148,18 @@ describe('createAmuletRegistry', () => {
     return { status: 404, json: {} };
   };
 
-  it('knows no DSO and no metadata without options, and makes no request', async () => {
+  it('never asks the registry for a pinned DSO, and describes only its Amulet', async () => {
     const { fetch, calls } = fakeFetch(answers);
-    const registry = createAmuletRegistry({ fetch });
-    expect(await registry.dsoParty()).toBeUndefined();
-    expect(await registry.instrumentMetadata(CC)).toBeUndefined();
-    expect(calls).toEqual([]);
-  });
-
-  it('uses a pinned DSO, with built-in metadata when no registry is named', async () => {
-    const registry = createAmuletRegistry({ dsoParty: DSO });
+    const registry = createAmuletRegistry('devnet', { dsoParty: DSO, registryUrl: SCAN, fetch });
     expect(await registry.dsoParty()).toBe(DSO);
-    expect(await registry.instrumentMetadata(CC)).toEqual(CANTON_COIN_METADATA);
     expect(await registry.instrumentMetadata({ admin: OTHER, id: 'Amulet' })).toBeUndefined();
     expect(await registry.instrumentMetadata({ admin: DSO, id: 'XMPL' })).toBeUndefined();
+    expect(calls).toEqual([]);
   });
 
   it("learns the DSO from the registry's adminId, once, and reads the metadata from the registry", async () => {
     const { fetch, calls } = fakeFetch(answers);
-    const registry = createAmuletRegistry({ registryUrl: `${SCAN}/`, fetch });
+    const registry = createAmuletRegistry('devnet', { registryUrl: `${SCAN}/`, fetch });
     expect(await registry.dsoParty()).toBe(DSO);
     expect(await registry.instrumentMetadata(CC)).toEqual({ name: 'Canton Coin', symbol: 'CC', decimals: 10 });
     expect(await registry.instrumentMetadata(CC)).toEqual({ name: 'Canton Coin', symbol: 'CC', decimals: 10 });
@@ -180,7 +173,7 @@ describe('createAmuletRegistry', () => {
     let status = 503;
     let clock = 0;
     const { fetch, calls } = fakeFetch((call) => (status === 200 ? answers(call) : { status, json: {} }));
-    const registry = createAmuletRegistry({ registryUrl: SCAN, fetch }, { now: () => clock });
+    const registry = createAmuletRegistry('devnet', { registryUrl: SCAN, fetch }, { now: () => clock });
     expect(await registry.dsoParty()).toBeUndefined();
     expect(await registry.instrumentMetadata(CC)).toBeUndefined();
     status = 200;
@@ -200,7 +193,7 @@ describe('createAmuletRegistry', () => {
       return new Response(JSON.stringify({ adminId: DSO }), { status: 200 });
     }) as typeof globalThis.fetch;
     try {
-      expect(await createAmuletRegistry({ registryUrl: SCAN }).dsoParty()).toBe(DSO);
+      expect(await createAmuletRegistry('devnet', { registryUrl: SCAN }).dsoParty()).toBe(DSO);
       expect(seen).toEqual([`${SCAN}/registry/metadata/v1/info`]);
     } finally {
       globalThis.fetch = original;
@@ -218,7 +211,7 @@ describe('createAmuletRegistry', () => {
         if (init.signal !== undefined) signals.push(init.signal);
         return new Promise<never>(() => undefined);
       };
-      const registry = createAmuletRegistry({ registryUrl: SCAN, fetch }, { now: () => clock });
+      const registry = createAmuletRegistry('devnet', { registryUrl: SCAN, fetch }, { now: () => clock });
       const first = registry.dsoParty();
       await jest.advanceTimersByTimeAsync(1500);
       expect(await first).toBeUndefined();
@@ -242,7 +235,7 @@ describe('createAmuletRegistry', () => {
 
   it('falls back to the built-in metadata for a pinned DSO when the registry does not answer', async () => {
     const { fetch } = fakeFetch(() => ({ text: 'not json' }));
-    const registry = createAmuletRegistry({ dsoParty: DSO, registryUrl: SCAN, fetch });
+    const registry = createAmuletRegistry('devnet', { dsoParty: DSO, registryUrl: SCAN, fetch });
     expect(await registry.instrumentMetadata(CC)).toEqual(CANTON_COIN_METADATA);
   });
 });
@@ -267,7 +260,7 @@ describe('createWallet.loadState: Canton Coin', () => {
   };
 
   function setup(
-    cantonCoin?: WalletInternalOptions['cantonCoin'],
+    cantonCoin: WalletInternalOptions['cantonCoin'] = {},
     extra: Record<string, ActiveContract[]> = {}
   ): {
     load: () => ReturnType<ReturnType<typeof createWallet>['loadState']>;
@@ -291,15 +284,16 @@ describe('createWallet.loadState: Canton Coin', () => {
       network: 'devnet',
       registry: { fetch },
       now: () => NOW,
-      ...(cantonCoin !== undefined && { cantonCoin: { fetch, ...cantonCoin } }),
+      cantonCoin: cantonCoin === false ? false : { fetch, registryUrl: SCAN, ...cantonCoin },
     };
     const wallet = createWallet(options);
     return { load: async () => wallet.loadState(), wallet, calls };
   }
 
   it('lists Canton Coin with the other holdings, locked apart, of the DSO the registry names', async () => {
-    const { load, calls } = setup({ registryUrl: SCAN });
+    const { load, calls } = setup();
     const state = await load();
+    expect(state.cantonCoinUnavailable).toBe(false);
     expect(state.holdings.map((h) => [h.contractId, h.source, h.locked])).toEqual([
       ['00h10', 'da-registry', false],
       ['00cc10', 'amulet', false],
@@ -330,7 +324,7 @@ describe('createWallet.loadState: Canton Coin', () => {
     expect(calls.filter((c) => c.url.includes('/registrars/'))).toHaveLength(1);
   });
 
-  it('keeps only the pinned DSO and labels it with the built-in metadata', async () => {
+  it("keeps only the pinned DSO's Canton Coin, and never asks the registry for the DSO", async () => {
     const { load, calls } = setup({ dsoParty: OTHER_DSO });
     const state = await load();
     expect(state.holdings.filter((h) => h.source === 'amulet').map((h) => h.contractId)).toEqual(['00ccdso2']);
@@ -339,17 +333,34 @@ describe('createWallet.loadState: Canton Coin', () => {
       unlocked: '7.0000000000',
       metadata: CANTON_COIN_METADATA,
     });
+    expect(calls.some((c) => c.url.endsWith('/registry/metadata/v1/info'))).toBe(false);
+  });
+
+  it('reads no Canton Coin with cantonCoin: false, and never asks the registry', async () => {
+    const { load, calls } = setup(false);
+    const state = await load();
+    expect(state.holdings.map((h) => h.source)).toEqual(['da-registry']);
+    expect(state.cantonCoinUnavailable).toBe(false);
     expect(calls.some((c) => c.url.startsWith(SCAN))).toBe(false);
   });
 
-  it('without a known DSO lists each signing DSO as its own instrument, unlabelled', async () => {
-    const { load } = setup();
-    const state = await load();
-    const cc = state.balances.filter((b) => b.source === 'amulet');
-    expect(cc.map((b) => [b.instrumentId.admin, b.unlocked, b.metadata])).toEqual([
-      [DSO, '12.5000000000', undefined],
-      [OTHER_DSO, '7.0000000000', undefined],
-    ]);
+  it('never asks the registry for a party without Canton Coin', async () => {
+    const { fetch, calls } = fakeFetch((call) =>
+      call.url.endsWith('/operator')
+        ? { json: { partyId: OPERATOR } }
+        : { json: { id: 'XMPL', name: 'Example', symbol: 'XMPL', decimals: 2 } }
+    );
+    const wallet = createWallet({
+      provider: fakeProvider({ [DA_REGISTRY_TEMPLATES.holding]: [daHolding('00h10', '10')] }),
+      partyId: HOLDER,
+      network: 'devnet',
+      registry: { fetch },
+      cantonCoin: { fetch },
+      now: () => NOW,
+    } as WalletInternalOptions);
+    const state = await wallet.loadState();
+    expect(state.cantonCoinUnavailable).toBe(false);
+    expect(calls.some((c) => c.url.includes('sync.global'))).toBe(false);
   });
 
   it('lists no Canton Coin while a named registry cannot confirm the DSO (never every DSO)', async () => {
@@ -369,6 +380,7 @@ describe('createWallet.loadState: Canton Coin', () => {
     const state = await wallet.loadState();
     expect(state.holdings.map((h) => [h.contractId, h.source])).toEqual([['00h10', 'da-registry']]);
     expect(state.balances.map((b) => b.source)).toEqual(['da-registry']);
+    expect(state.cantonCoinUnavailable).toBe(true);
   });
 
   it('does not let a hanging registry hold the snapshot for its full timeout', async () => {
@@ -405,7 +417,7 @@ describe('createWallet.loadState: Canton Coin', () => {
   });
 
   it('refuses a Canton Coin transfer or burn the party holds no DA holding of, after reading its holdings', async () => {
-    const { wallet } = setup({ registryUrl: SCAN });
+    const { wallet } = setup();
     await expect(wallet.planTransfer({ receiver: OTHER, instrumentId: CC, amount: '1' })).rejects.toThrow(
       /Canton Coin \(Amulet\) cannot be transferred/
     );

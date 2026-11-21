@@ -21,7 +21,7 @@ import {
   type WalletStore,
 } from '../../../src/wallets';
 import type { WalletStoreInternalOptions } from '../../../src/wallets/store';
-import { CANTON_COIN_METADATA } from '../../../src/wallets/amulet';
+import { CANTON_COIN_METADATA } from '../../../src/wallets/amulet/constants';
 import {
   amuletHolding,
   DSO,
@@ -53,7 +53,7 @@ const snapshot = (offset: number): WalletState => ({
   mintOffers: [],
   burnRequests: [],
   transferPreapprovals: [],
-  amuletOffersUnavailable: false,
+  cantonCoinUnavailable: false,
 });
 
 const SUBMITTED = { updateId: 'update-1', commandId: 'command-1' };
@@ -254,7 +254,7 @@ describe('createWalletStore', () => {
       call.url.endsWith('/api/utilities/v0/operator') ? { json: { partyId: OPERATOR } } : { status: 404, json: {} }
     );
     const session = createCip103Session({ network: 'devnet' });
-    const store = createWalletStore({ session, registry: { fetch }, cantonCoin: { dsoParty: DSO } });
+    const store = createWalletStore({ session, registry: { fetch }, cantonCoin: { dsoParty: DSO, fetch } });
     const provider = fakeProvider(
       {
         [HOLDING_V1_VIEW_KEY]: [amuletHolding('00cc', '3'), amuletHolding('00ccother', '9', { dso: 'DSO::1220ffff' })],
@@ -273,6 +273,23 @@ describe('createWalletStore', () => {
         source: 'amulet',
         metadata: CANTON_COIN_METADATA,
       }),
+    ]);
+    store.dispose();
+  });
+
+  it('warns, with a retry, while Canton Coin cannot be confirmed, and shows the rest of the state', async () => {
+    const { fetch } = fakeFetch((call) =>
+      call.url.endsWith('/api/utilities/v0/operator') ? { json: { partyId: OPERATOR } } : { status: 503, json: {} }
+    );
+    const session = createCip103Session({ network: 'devnet' });
+    const store = createWalletStore({ session, registry: { fetch }, cantonCoin: { fetch } });
+    await session.connect(fakeProvider({ [HOLDING_V1_VIEW_KEY]: [amuletHolding('00cc', '3')] }, { party: HOLDER }));
+    await flush();
+    const view = store.getSnapshot();
+    expect(view.loadError).toBeNull();
+    expect(view.state).toMatchObject({ holdings: [], cantonCoinUnavailable: true });
+    expect(view.notices).toEqual([
+      expect.objectContaining({ key: 'canton-coin', level: 'warning', title: 'Canton Coin is not shown', retry: true }),
     ]);
     store.dispose();
   });

@@ -2,7 +2,7 @@
  * Read a wallet party's holdings from the ACS (DA Registry holdings and Canton Coin) and pick the inputs for a transfer
  * or burn, with exact decimal arithmetic.
  */
-import { AMULET_INSTRUMENT_ID, AMULET_TEMPLATES } from './amulet';
+import { AMULET_INSTRUMENT_ID, AMULET_TEMPLATES } from './amulet/constants';
 import { formatDecimalUnits, MAX_DECIMAL_UNITS, parseDecimalUnits } from './decimal';
 import { WalletError } from './errors';
 import { holdingViewOf } from './holding-view';

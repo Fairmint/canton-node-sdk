@@ -1,5 +1,5 @@
 import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
-import { AMULET_TRANSFER_INSTRUCTION_TEMPLATE } from '../../../src/wallets/contracts';
+import { AMULET_TEMPLATES } from '../../../src/wallets/amulet/constants';
 import { isCancelledBeforeSubmit } from '../../../src/wallets/abort';
 import { HOLDING_V1_INTERFACE_ID } from '../../../src/wallets/holding-view';
 import type { TransferKind } from '../../../src/wallets/da-utilities/client';
@@ -243,7 +243,7 @@ const STATE_TEMPLATES = [
   DA_REGISTRY_TEMPLATES.mintOffer,
   DA_REGISTRY_TEMPLATES.burnRequest,
   DA_REGISTRY_TEMPLATES.transferPreapproval,
-  AMULET_TRANSFER_INSTRUCTION_TEMPLATE,
+  AMULET_TEMPLATES.transferInstruction,
 ];
 const postCalls = (calls: FetchCall[]): FetchCall[] => calls.filter((c) => c.method === 'POST');
 const request = { receiver: OTHER, instrumentId: INSTRUMENT, amount: '12' };
@@ -662,7 +662,7 @@ describe('createWallet: transfer offers', () => {
     ]);
     expect(wallet.reads[wallet.reads.length - 1]).toEqual([
       DA_REGISTRY_TEMPLATES.transferOffer,
-      AMULET_TRANSFER_INSTRUCTION_TEMPLATE,
+      AMULET_TEMPLATES.transferInstruction,
     ]);
     expect(wallet.submissions[0]?.commands).toEqual([
       {

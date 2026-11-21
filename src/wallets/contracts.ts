@@ -3,7 +3,7 @@
  * preapprovals, and Canton Coin's transfer instructions (as transfer offers). Each returns null for a contract of
  * another template or package, or one whose create argument does not read.
  */
-import { AMULET_INSTRUMENT_ID } from './amulet/constants';
+import { AMULET_INSTRUMENT_ID, AMULET_TEMPLATES } from './amulet/constants';
 import { readInstrumentId } from './instrument';
 import { isRecord, nonEmptyString } from './json';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
@@ -39,7 +39,11 @@ export type TransferOfferRegistry = 'da' | 'amulet';
  * both the DSO party, which runs its own registry.
  */
 export interface TransferOffer extends RegistryParties {
-  readonly registry: TransferOfferRegistry;
+  /**
+   * Which registry the offer is under. The wallet always sets it; optional so an object built without it (a test
+   * double, a cached state) still type-checks, and absent reads as `'da'`.
+   */
+  readonly registry?: TransferOfferRegistry;
   readonly contractId: string;
   readonly sender: string;
   readonly receiver: string;
@@ -146,20 +150,13 @@ export function parseTransferOffer(contract: ActiveContract): TransferOffer | nu
 }
 
 /**
- * Canton Coin's pending transfer (`#splice-amulet:Splice.AmuletTransferInstruction:AmuletTransferInstruction`): the
- * Amulet implementation of the token standard `TransferInstruction` interface. Signatories: the DSO (the instrument
- * admin) and the sender.
- */
-export const AMULET_TRANSFER_INSTRUCTION_TEMPLATE =
-  '#splice-amulet:Splice.AmuletTransferInstruction:AmuletTransferInstruction';
-
-/**
- * An `AmuletTransferInstruction` (`{lockedAmulet, transfer: CIP-56 Transfer}`) as a {@link TransferOffer}, or null when
- * it is of another template or package, does not read, is not of Canton Coin under `dsoParty`, or was not signed by
- * both the DSO and its sender (anyone can create a look-alike in their own package; only the signatures prove it).
+ * A Canton Coin `AmuletTransferInstruction` (`AMULET_TEMPLATES.transferInstruction`, `{lockedAmulet, transfer: CIP-56
+ * Transfer}`) as a {@link TransferOffer}, or null when it is of another template or package, does not read, is not of
+ * Canton Coin under `dsoParty`, or was not signed by both the DSO and its sender (anyone can create a look-alike in
+ * their own package; only the signatures prove it).
  */
 export function parseAmuletTransferOffer(contract: ActiveContract, dsoParty: string): TransferOffer | null {
-  const args = argumentsOf(contract, AMULET_TRANSFER_INSTRUCTION_TEMPLATE);
+  const args = argumentsOf(contract, AMULET_TEMPLATES.transferInstruction);
   const transfer = args?.['transfer'];
   if (args === null || !isRecord(transfer)) return null;
   const fields = strings(transfer, ['sender', 'receiver', 'amount', 'requestedAt', 'executeBefore']);

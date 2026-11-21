@@ -1,10 +1,7 @@
 import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
-import {
-  AMULET_REGISTRY_BASE_URLS,
-  AMULET_REGISTRY_NAME,
-  createAmuletRegistryClient,
-} from '../../../src/wallets/amulet/registry';
-import { AMULET_TRANSFER_INSTRUCTION_TEMPLATE, parseAmuletTransferOffer } from '../../../src/wallets/contracts';
+import { AMULET_REGISTRY_BASE_URLS, AMULET_TEMPLATES } from '../../../src/wallets/amulet/constants';
+import { AMULET_REGISTRY_NAME, createAmuletRegistry } from '../../../src/wallets/amulet/registry';
+import { parseAmuletTransferOffer } from '../../../src/wallets/contracts';
 import { describeWalletError, RegistryApiError, RegistryResponseError } from '../../../src/wallets/errors';
 import type { JsonObject } from '../../../src/wallets/json';
 import type { ActiveContract } from '../../../src/wallets/types';
@@ -117,7 +114,7 @@ function setup(
   options: {
     instructions?: ActiveContract[];
     daOffers?: ActiveContract[];
-    amulet?: WalletInternalOptions['amulet'];
+    cantonCoin?: WalletInternalOptions['cantonCoin'];
     scan?: (call: FetchCall) => { status?: number; json?: unknown } | undefined;
   } = {}
 ): {
@@ -144,7 +141,7 @@ function setup(
     return { status: 500, json: { error: `unexpected ${call.url}` } };
   });
   const wallet = fakeProvider({
-    [AMULET_TRANSFER_INSTRUCTION_TEMPLATE]: options.instructions ?? INSTRUCTIONS,
+    [AMULET_TEMPLATES.transferInstruction]: options.instructions ?? INSTRUCTIONS,
     ...(options.daOffers !== undefined && { [DA_REGISTRY_TEMPLATES.transferOffer]: options.daOffers }),
   });
   const walletOptions: WalletInternalOptions = {
@@ -152,7 +149,7 @@ function setup(
     partyId: HOLDER,
     network: 'devnet',
     registry: { fetch },
-    amulet: options.amulet ?? { fetch },
+    cantonCoin: options.cantonCoin ?? { fetch },
     now: () => NOW,
     readRetry: { sleep: async () => undefined },
   };
@@ -190,7 +187,7 @@ describe('createWallet: Canton Coin transfer offers', () => {
   it('lists genuine CC offers beside DA offers, asking Scan for the DSO party once', async () => {
     const { tokens, wallet, calls } = setup();
     const state = await tokens.loadState();
-    expect(wallet.reads[0]).toContain(AMULET_TRANSFER_INSTRUCTION_TEMPLATE);
+    expect(wallet.reads[0]).toContain(AMULET_TEMPLATES.transferInstruction);
     expect(state.transferOffers.incoming.map((o) => [o.registry, o.contractId])).toEqual([['amulet', '00ccin']]);
     expect(state.transferOffers.outgoing.map((o) => [o.registry, o.contractId, o.memo])).toEqual([
       ['amulet', '00ccout', 'thanks'],
@@ -211,21 +208,21 @@ describe('createWallet: Canton Coin transfer offers', () => {
       call.url.endsWith('/operator') ? { json: { partyId: OPERATOR } } : { status: 500, json: {} }
     );
     const tokens = createWallet({
-      provider: fakeProvider({ [AMULET_TRANSFER_INSTRUCTION_TEMPLATE]: INSTRUCTIONS }),
+      provider: fakeProvider({ [AMULET_TEMPLATES.transferInstruction]: INSTRUCTIONS }),
       partyId: HOLDER,
       network: 'devnet',
       registry: { fetch },
-      amulet: { fetch, dsoParty: DSO },
+      cantonCoin: { fetch, dsoParty: DSO },
     });
     const state = await tokens.loadState();
     expect(state.transferOffers.incoming.map((o) => o.contractId)).toEqual(['00ccin']);
     expect(calls.map((c) => c.url)).toEqual(['https://api.utilities.digitalasset-dev.com/api/utilities/v0/operator']);
   });
 
-  it('reads DA offers only with amulet: false', async () => {
-    const { tokens, wallet, calls } = setup({ amulet: false });
+  it('reads DA offers only with cantonCoin: false', async () => {
+    const { tokens, wallet, calls } = setup({ cantonCoin: false });
     const state = await tokens.loadState();
-    expect(wallet.reads[0]).not.toContain(AMULET_TRANSFER_INSTRUCTION_TEMPLATE);
+    expect(wallet.reads[0]).not.toContain(AMULET_TEMPLATES.transferInstruction);
     expect(state.transferOffers.incoming).toEqual([]);
     await expect(tokens.acceptTransferOffer('00ccin')).rejects.toMatchObject({ code: 'not-found' });
     expect(calls.filter((c) => c.url.startsWith(SCAN))).toEqual([]);
@@ -240,7 +237,7 @@ describe('createWallet: Canton Coin transfer offers', () => {
     await tokens[method](cid);
     expect(wallet.reads[wallet.reads.length - 1]).toEqual([
       DA_REGISTRY_TEMPLATES.transferOffer,
-      AMULET_TRANSFER_INSTRUCTION_TEMPLATE,
+      AMULET_TEMPLATES.transferInstruction,
     ]);
     expect(calls.filter((c) => c.method === 'POST')).toEqual([
       {
@@ -248,7 +245,8 @@ describe('createWallet: Canton Coin transfer offers', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: { excludeDebugFields: true },
-        signal: undefined,
+        // Every Scan request carries a timeout signal.
+        signal: expect.any(AbortSignal),
       },
     ]);
     expect(wallet.submissions).toHaveLength(1);
@@ -290,17 +288,17 @@ describe('createWallet: Canton Coin transfer offers', () => {
     expect(wallet.submissions).toEqual([]);
   });
 
-  it('keeps the rest of the state when Scan cannot name the DSO, and flags the CC offers as unavailable', async () => {
+  it('keeps the rest of the state when Scan cannot name the DSO, and flags Canton Coin as unavailable', async () => {
     const down = (call: FetchCall): { status: number; json: unknown } | undefined =>
       call.url.endsWith('/registry/metadata/v1/info') ? { status: 500, json: { error: 'down' } } : undefined;
     const { tokens } = setup({ daOffers: [DA_OFFER], scan: down });
     const state = await tokens.loadState();
-    expect(state.amuletOffersUnavailable).toBe(true);
+    expect(state.cantonCoinUnavailable).toBe(true);
     expect(state.transferOffers.incoming.map((o) => [o.registry, o.contractId])).toEqual([['da', '00dain']]);
     expect(state.transferOffers.outgoing).toEqual([]);
 
     const healthy = await setup({ daOffers: [DA_OFFER] }).tokens.loadState();
-    expect(healthy.amuletOffersUnavailable).toBe(false);
+    expect(healthy.cantonCoinUnavailable).toBe(false);
   });
 
   it('answers a DA offer without asking Scan, even beside a CC offer', async () => {
@@ -312,6 +310,20 @@ describe('createWallet: Canton Coin transfer offers', () => {
     expect(calls.filter((c) => c.url.startsWith(SCAN))).toEqual([]);
     expect(wallet.submissions).toHaveLength(1);
     expect(wallet.submissions[0]?.commands[0]).toMatchObject({ ExerciseCommand: { contractId: '00dain' } });
+  });
+
+  it('refuses to answer a CC offer while Scan cannot confirm the DSO, and submits nothing', async () => {
+    const { tokens, wallet, calls } = setup({
+      scan: (call) => (call.url.endsWith('/registry/metadata/v1/info') ? { status: 503, json: {} } : undefined),
+    });
+    const error: unknown = await tokens.acceptTransferOffer('00ccin').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RegistryResponseError);
+    expect(describeWalletError(error)).toMatchObject({
+      kind: 'registry',
+      message: expect.stringMatching(/could not confirm Canton Coin's DSO party/),
+    });
+    expect(calls.filter((c) => c.url.includes('/choice-contexts/'))).toEqual([]);
+    expect(wallet.submissions).toEqual([]);
   });
 
   it('names the Canton Coin registry when Scan refuses, and submits nothing', async () => {
@@ -329,35 +341,47 @@ describe('createWallet: Canton Coin transfer offers', () => {
   });
 });
 
-describe('createAmuletRegistryClient', () => {
-  it("defaults to SV-1's Scan of each network and trims a given base URL", async () => {
+describe('createAmuletRegistry: network defaults and validation', () => {
+  it("defaults to SV-1's Scan of each network and trims a given registry URL", async () => {
     const { fetch, calls } = fakeFetch(() => ({ json: { adminId: DSO } }));
-    await createAmuletRegistryClient('mainnet', { fetch }).dsoParty();
-    await createAmuletRegistryClient('devnet', { fetch, baseUrl: 'https://proxy.example/scan//' }).dsoParty();
+    await createAmuletRegistry('mainnet', { fetch }).dsoParty();
+    await createAmuletRegistry('devnet', { fetch, registryUrl: 'https://proxy.example/scan//' }).dsoParty();
     expect(calls.map((c) => c.url)).toEqual([
       'https://scan.sv-1.global.canton.network.sync.global/registry/metadata/v1/info',
       'https://proxy.example/scan/registry/metadata/v1/info',
     ]);
   });
 
-  it('refuses an answer without adminId, retries a failed lookup, and refuses an empty pinned party', async () => {
-    let answer: { status?: number; json?: unknown } = { json: { supportedApis: {} } };
-    const { fetch } = fakeFetch(() => answer);
-    const client = createAmuletRegistryClient('devnet', { fetch });
-    await expect(client.dsoParty()).rejects.toBeInstanceOf(RegistryResponseError);
-    answer = { status: 503, json: { error: 'down' } };
-    const failed: unknown = await client.dsoParty().catch((e: unknown) => e);
-    expect(failed).toMatchObject({ status: 503, registry: AMULET_REGISTRY_NAME });
-    answer = { json: { adminId: DSO } };
-    await expect(client.dsoParty()).resolves.toBe(DSO);
-    expect(() => createAmuletRegistryClient('devnet', { fetch, dsoParty: '' })).toThrow(TypeError);
+  it('confirms no DSO from an answer without adminId, and names itself when it answers an error', async () => {
+    const { fetch } = fakeFetch((call) =>
+      call.url.endsWith('/info') ? { json: { supportedApis: {} } } : { status: 404, json: { error: 'gone' } }
+    );
+    const registry = createAmuletRegistry('devnet', { fetch });
+    await expect(registry.dsoParty()).resolves.toBeUndefined();
+    expect(registry.knownDsoParty()).toBeUndefined();
+    const failed: unknown = await registry.transferInstructionContext('00x', 'accept').catch((e: unknown) => e);
+    expect(failed).toMatchObject({ status: 404, registry: AMULET_REGISTRY_NAME });
+  });
+
+  it('refuses an empty pinned party or registry URL', () => {
+    expect(() => createAmuletRegistry('devnet', { dsoParty: '' })).toThrow(TypeError);
+    expect(() => createAmuletRegistry('devnet', { registryUrl: '' })).toThrow(TypeError);
+  });
+
+  it('remembers the DSO the registry confirmed', async () => {
+    const { fetch } = fakeFetch(() => ({ json: { adminId: DSO } }));
+    const registry = createAmuletRegistry('devnet', { fetch });
+    expect(registry.knownDsoParty()).toBeUndefined();
+    await registry.dsoParty();
+    expect(registry.knownDsoParty()).toBe(DSO);
+    expect(createAmuletRegistry('devnet', { fetch, dsoParty: 'DSO::pinned' }).knownDsoParty()).toBe('DSO::pinned');
   });
 
   it('stops waiting when the signal aborts', async () => {
     const { fetch } = fakeFetch(() => ({ json: { adminId: DSO } }));
     const controller = new AbortController();
     controller.abort();
-    await expect(createAmuletRegistryClient('devnet', { fetch }).dsoParty(controller.signal)).rejects.toMatchObject({
+    await expect(createAmuletRegistry('devnet', { fetch }).dsoParty(controller.signal)).rejects.toMatchObject({
       name: 'AbortError',
     });
   });

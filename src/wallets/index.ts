@@ -79,7 +79,6 @@ export {
   type WalletOwnershipVerdict,
 } from './ownership';
 export type { DaNetwork, DaRegistryOptions, FetchLike, TransferKind } from './da-utilities/client';
-export { AMULET_REGISTRY_BASE_URLS, type AmuletRegistryOptions } from './amulet/registry';
 export {
   describeWalletError,
   isRegistryApiError,
@@ -102,17 +101,15 @@ export {
   type WalletSubmitErrorDetails,
   type WalletSubmitOutcome,
 } from './errors';
-export {
-  AMULET_TRANSFER_INSTRUCTION_TEMPLATE,
-  type BurnRequest,
-  type MintOffer,
-  type TransferOffer,
-  type TransferOfferRegistry,
-  type TransferPreapproval,
-} from './contracts';
+export type { BurnRequest, MintOffer, TransferOffer, TransferOfferRegistry, TransferPreapproval } from './contracts';
 export type { Holding, HoldingSource, InstrumentBalance, InstrumentMetadata } from './holdings';
-export { AMULET_INSTRUMENT_ID, AMULET_TEMPLATES, CANTON_COIN_METADATA } from './amulet';
-export type { CantonCoinOptions } from './amulet-registry';
+export {
+  AMULET_INSTRUMENT_ID,
+  AMULET_REGISTRY_BASE_URLS,
+  AMULET_TEMPLATES,
+  CANTON_COIN_METADATA,
+} from './amulet/constants';
+export type { CantonCoinOptions } from './amulet/registry';
 export {
   HOLDING_V1_INTERFACE_ID,
   readHoldingView,
