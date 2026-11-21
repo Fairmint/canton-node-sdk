@@ -180,14 +180,17 @@ export class RegistryApiError extends Error {
   readonly status: number;
   readonly body: string;
   readonly url: string;
+  /** Which registry answered, as `describeWalletError` names it (`DA's registry`, `The Canton Coin registry`). */
+  readonly registry: string;
 
-  constructor(status: number, body: string, url: string) {
+  constructor(status: number, body: string, url: string, registry = "DA's registry") {
     super(`Registry API ${status} for ${url}: ${body.slice(0, 500)}`);
     this.name = 'RegistryApiError';
     brand(this, 'RegistryApiError');
     this.status = status;
     this.body = body;
     this.url = url;
+    this.registry = registry;
   }
 }
 
@@ -384,7 +387,7 @@ export function describeWalletError(error: unknown): WalletErrorDescription {
   if (isRegistryApiError(error)) {
     return described(
       'registry',
-      `DA's registry answered ${error.status}: ${error.body.slice(0, REGISTRY_BODY_CHARS)}`,
+      `${typeof error.registry === 'string' ? error.registry : "DA's registry"} answered ${error.status}: ${error.body.slice(0, REGISTRY_BODY_CHARS)}`,
       error.status
     );
   }

@@ -1,0 +1,301 @@
+import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
+import {
+  AMULET_REGISTRY_BASE_URLS,
+  AMULET_REGISTRY_NAME,
+  createAmuletRegistryClient,
+} from '../../../src/wallets/amulet/registry';
+import { AMULET_TRANSFER_INSTRUCTION_TEMPLATE, parseAmuletTransferOffer } from '../../../src/wallets/contracts';
+import { describeWalletError, RegistryApiError, RegistryResponseError } from '../../../src/wallets/errors';
+import type { JsonObject } from '../../../src/wallets/json';
+import type { ActiveContract } from '../../../src/wallets/types';
+import { createWallet, type WalletInternalOptions } from '../../../src/wallets/wallet';
+import { fakeFetch, fakeProvider, HOLDER, NOW, OPERATOR, OTHER, pkgId, type FetchCall } from './helpers';
+
+const DSO = 'DSO::1220dso';
+const SCAN = AMULET_REGISTRY_BASE_URLS.devnet;
+const AMULET_T = 'Splice.AmuletTransferInstruction:AmuletTransferInstruction';
+const INTERFACE =
+  '#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferInstruction';
+
+/** A recorded-shape Scan answer for a transfer-instruction choice context (`excludeDebugFields: true`). */
+const SCAN_CONTEXT = {
+  choiceContextData: {
+    values: {
+      'amulet-rules': { tag: 'AV_ContractId', value: '00amuletrules' },
+      'open-round': { tag: 'AV_ContractId', value: '00openround' },
+    },
+  },
+  disclosedContracts: [
+    {
+      templateId: 'a0b1c2:Splice.AmuletRules:AmuletRules',
+      contractId: '00amuletrules',
+      createdEventBlob: 'blob-amuletrules',
+      synchronizerId: 'global-domain::1220ee',
+      debugPackageName: 'splice-amulet',
+    },
+    {
+      templateId: 'a0b1c2:Splice.Round:OpenMiningRound',
+      contractId: '00openround',
+      createdEventBlob: 'blob-openround',
+      synchronizerId: 'global-domain::1220ee',
+    },
+  ],
+};
+
+/** The create argument of an `AmuletTransferInstruction`, as the provider validator's token-standard transfer makes it. */
+const instructionArgs = (
+  sender: string,
+  receiver: string,
+  overrides: { admin?: string; id?: string; memo?: string } = {}
+): JsonObject => ({
+  lockedAmulet: '00lockedamulet',
+  transfer: {
+    sender,
+    receiver,
+    amount: '20.0000000000',
+    instrumentId: { admin: overrides.admin ?? DSO, id: overrides.id ?? 'Amulet' },
+    requestedAt: '2026-11-13T00:00:00Z',
+    executeBefore: '2026-11-14T00:00:00Z',
+    inputHoldingCids: ['00amulet'],
+    meta: { values: { 'splice.lfdecentralizedtrust.org/reason': overrides.memo ?? 'Canton Coin from the faucet' } },
+  },
+});
+
+const instruction = (
+  contractId: string,
+  args: JsonObject,
+  signatories: readonly string[],
+  packageName = 'splice-amulet'
+): ActiveContract => ({
+  contractId,
+  templateId: pkgId('a0b1c2', AMULET_T),
+  packageName,
+  signatories,
+  createArgument: args,
+});
+
+const INSTRUCTIONS: ActiveContract[] = [
+  instruction('00ccin', instructionArgs(OTHER, HOLDER), [DSO, OTHER]),
+  instruction('00ccout', instructionArgs(HOLDER, OTHER, { memo: 'thanks' }), [DSO, HOLDER]),
+  // Look-alikes: another package, not signed by the DSO, another admin, another instrument.
+  instruction('00ccpkg', instructionArgs(OTHER, HOLDER), [DSO, OTHER], 'evil-amulet'),
+  instruction('00ccunsigned', instructionArgs(OTHER, HOLDER), [OTHER]),
+  instruction('00ccadmin', instructionArgs(OTHER, HOLDER, { admin: OTHER }), [OTHER]),
+  instruction('00ccid', instructionArgs(OTHER, HOLDER, { id: 'NotAmulet' }), [DSO, OTHER]),
+];
+
+function setup(
+  options: {
+    instructions?: ActiveContract[];
+    amulet?: WalletInternalOptions['amulet'];
+    scan?: (call: FetchCall) => { status?: number; json?: unknown } | undefined;
+  } = {}
+): {
+  tokens: ReturnType<typeof createWallet>;
+  wallet: ReturnType<typeof fakeProvider>;
+  calls: FetchCall[];
+} {
+  const { fetch, calls } = fakeFetch((call) => {
+    const custom = options.scan?.(call);
+    if (custom !== undefined) return custom;
+    if (call.url.endsWith('/api/utilities/v0/operator')) return { json: { partyId: OPERATOR } };
+    if (call.url === `${SCAN}/registry/metadata/v1/info`) {
+      return { json: { adminId: DSO, supportedApis: { 'splice-api-token-metadata-v1': 1 } } };
+    }
+    if (call.url.startsWith(`${SCAN}/registry/transfer-instruction/v1/`)) return { json: SCAN_CONTEXT };
+    return { status: 500, json: { error: `unexpected ${call.url}` } };
+  });
+  const wallet = fakeProvider({
+    [AMULET_TRANSFER_INSTRUCTION_TEMPLATE]: options.instructions ?? INSTRUCTIONS,
+  });
+  const walletOptions: WalletInternalOptions = {
+    provider: wallet,
+    partyId: HOLDER,
+    network: 'devnet',
+    registry: { fetch },
+    amulet: options.amulet ?? { fetch },
+    now: () => NOW,
+    readRetry: { sleep: async () => undefined },
+  };
+  return { tokens: createWallet(walletOptions), wallet, calls };
+}
+
+describe('parseAmuletTransferOffer', () => {
+  it('reads a CC transfer instruction signed by the DSO and its sender as a transfer offer', () => {
+    expect(parseAmuletTransferOffer(INSTRUCTIONS[0] as ActiveContract, DSO)).toEqual({
+      registry: 'amulet',
+      contractId: '00ccin',
+      operator: DSO,
+      provider: DSO,
+      sender: OTHER,
+      receiver: HOLDER,
+      amount: '20.0000000000',
+      instrumentId: { admin: DSO, id: 'Amulet' },
+      memo: 'Canton Coin from the faucet',
+      requestedAt: '2026-11-13T00:00:00Z',
+      executeBefore: '2026-11-14T00:00:00Z',
+    });
+  });
+
+  it('refuses look-alikes and other instruments', () => {
+    for (const lookAlike of INSTRUCTIONS.slice(2)) {
+      expect(parseAmuletTransferOffer(lookAlike, DSO)).toBeNull();
+    }
+    // The genuine one under another DSO (a reset DevNet, a forged registry answer).
+    expect(parseAmuletTransferOffer(INSTRUCTIONS[0] as ActiveContract, 'DSO::other')).toBeNull();
+    expect(parseAmuletTransferOffer(instruction('00x', { transfer: 'no' }, [DSO]), DSO)).toBeNull();
+  });
+});
+
+describe('createWallet: Canton Coin transfer offers', () => {
+  it('lists genuine CC offers beside DA offers, asking Scan for the DSO party once', async () => {
+    const { tokens, wallet, calls } = setup();
+    const state = await tokens.loadState();
+    expect(wallet.reads[0]).toContain(AMULET_TRANSFER_INSTRUCTION_TEMPLATE);
+    expect(state.transferOffers.incoming.map((o) => [o.registry, o.contractId])).toEqual([['amulet', '00ccin']]);
+    expect(state.transferOffers.outgoing.map((o) => [o.registry, o.contractId, o.memo])).toEqual([
+      ['amulet', '00ccout', 'thanks'],
+    ]);
+    await tokens.loadState();
+    expect(calls.filter((c) => c.url.endsWith('/registry/metadata/v1/info'))).toHaveLength(1);
+  });
+
+  it('does not call Scan when the party has no CC offer', async () => {
+    const { tokens, calls } = setup({ instructions: [] });
+    const state = await tokens.loadState();
+    expect(state.transferOffers).toEqual({ incoming: [], outgoing: [] });
+    expect(calls.filter((c) => c.url.startsWith(SCAN))).toEqual([]);
+  });
+
+  it('trusts a pinned DSO party without asking the registry', async () => {
+    const { fetch, calls } = fakeFetch((call) =>
+      call.url.endsWith('/operator') ? { json: { partyId: OPERATOR } } : { status: 500, json: {} }
+    );
+    const tokens = createWallet({
+      provider: fakeProvider({ [AMULET_TRANSFER_INSTRUCTION_TEMPLATE]: INSTRUCTIONS }),
+      partyId: HOLDER,
+      network: 'devnet',
+      registry: { fetch },
+      amulet: { fetch, dsoParty: DSO },
+    });
+    const state = await tokens.loadState();
+    expect(state.transferOffers.incoming.map((o) => o.contractId)).toEqual(['00ccin']);
+    expect(calls.map((c) => c.url)).toEqual(['https://api.utilities.digitalasset-dev.com/api/utilities/v0/operator']);
+  });
+
+  it('reads DA offers only with amulet: false', async () => {
+    const { tokens, wallet, calls } = setup({ amulet: false });
+    const state = await tokens.loadState();
+    expect(wallet.reads[0]).not.toContain(AMULET_TRANSFER_INSTRUCTION_TEMPLATE);
+    expect(state.transferOffers.incoming).toEqual([]);
+    await expect(tokens.acceptTransferOffer('00ccin')).rejects.toMatchObject({ code: 'not-found' });
+    expect(calls.filter((c) => c.url.startsWith(SCAN))).toEqual([]);
+  });
+
+  it.each([
+    ['acceptTransferOffer', '00ccin', 'accept', 'TransferInstruction_Accept'],
+    ['rejectTransferOffer', '00ccin', 'reject', 'TransferInstruction_Reject'],
+    ['withdrawTransferOffer', '00ccout', 'withdraw', 'TransferInstruction_Withdraw'],
+  ] as const)('%s takes the %s context from Scan and exercises %s', async (method, cid, action, choice) => {
+    const { tokens, wallet, calls } = setup();
+    await tokens[method](cid);
+    expect(wallet.reads[wallet.reads.length - 1]).toEqual([
+      DA_REGISTRY_TEMPLATES.transferOffer,
+      AMULET_TRANSFER_INSTRUCTION_TEMPLATE,
+    ]);
+    expect(calls.filter((c) => c.method === 'POST')).toEqual([
+      {
+        url: `${SCAN}/registry/transfer-instruction/v1/${cid}/choice-contexts/${action}`,
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: { excludeDebugFields: true },
+        signal: undefined,
+      },
+    ]);
+    expect(wallet.submissions).toHaveLength(1);
+    expect(wallet.submissions[0]?.commands).toEqual([
+      {
+        ExerciseCommand: {
+          templateId: INTERFACE,
+          contractId: cid,
+          choice,
+          choiceArgument: {
+            extraArgs: { context: SCAN_CONTEXT.choiceContextData, meta: { values: {} } },
+          },
+        },
+      },
+    ]);
+    // Scan's debug fields are dropped: the Ledger API refuses them.
+    expect(wallet.submissions[0]?.disclosedContracts).toEqual([
+      {
+        templateId: 'a0b1c2:Splice.AmuletRules:AmuletRules',
+        contractId: '00amuletrules',
+        createdEventBlob: 'blob-amuletrules',
+        synchronizerId: 'global-domain::1220ee',
+      },
+      {
+        templateId: 'a0b1c2:Splice.Round:OpenMiningRound',
+        contractId: '00openround',
+        createdEventBlob: 'blob-openround',
+        synchronizerId: 'global-domain::1220ee',
+      },
+    ]);
+  });
+
+  it('refuses a CC offer in the wrong direction or a look-alike', async () => {
+    const { tokens, wallet } = setup();
+    await expect(tokens.acceptTransferOffer('00ccout')).rejects.toMatchObject({ code: 'not-found' });
+    await expect(tokens.withdrawTransferOffer('00ccin')).rejects.toMatchObject({ code: 'not-found' });
+    await expect(tokens.acceptTransferOffer('00ccunsigned')).rejects.toMatchObject({ code: 'not-found' });
+    await expect(tokens.acceptTransferOffer('00ccpkg')).rejects.toMatchObject({ code: 'not-found' });
+    expect(wallet.submissions).toEqual([]);
+  });
+
+  it('names the Canton Coin registry when Scan refuses, and submits nothing', async () => {
+    const { tokens, wallet } = setup({
+      scan: (call) =>
+        call.url.includes('/choice-contexts/') ? { status: 404, json: { error: 'contract not found' } } : undefined,
+    });
+    const error: unknown = await tokens.acceptTransferOffer('00ccin').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RegistryApiError);
+    expect(describeWalletError(error)).toMatchObject({
+      kind: 'registry',
+      message: expect.stringMatching(/^The Canton Coin registry \(Scan\) answered 404/),
+    });
+    expect(wallet.submissions).toEqual([]);
+  });
+});
+
+describe('createAmuletRegistryClient', () => {
+  it("defaults to SV-1's Scan of each network and trims a given base URL", async () => {
+    const { fetch, calls } = fakeFetch(() => ({ json: { adminId: DSO } }));
+    await createAmuletRegistryClient('mainnet', { fetch }).dsoParty();
+    await createAmuletRegistryClient('devnet', { fetch, baseUrl: 'https://proxy.example/scan//' }).dsoParty();
+    expect(calls.map((c) => c.url)).toEqual([
+      'https://scan.sv-1.global.canton.network.sync.global/registry/metadata/v1/info',
+      'https://proxy.example/scan/registry/metadata/v1/info',
+    ]);
+  });
+
+  it('refuses an answer without adminId, retries a failed lookup, and refuses an empty pinned party', async () => {
+    let answer: { status?: number; json?: unknown } = { json: { supportedApis: {} } };
+    const { fetch } = fakeFetch(() => answer);
+    const client = createAmuletRegistryClient('devnet', { fetch });
+    await expect(client.dsoParty()).rejects.toBeInstanceOf(RegistryResponseError);
+    answer = { status: 503, json: { error: 'down' } };
+    const failed: unknown = await client.dsoParty().catch((e: unknown) => e);
+    expect(failed).toMatchObject({ status: 503, registry: AMULET_REGISTRY_NAME });
+    answer = { json: { adminId: DSO } };
+    await expect(client.dsoParty()).resolves.toBe(DSO);
+    expect(() => createAmuletRegistryClient('devnet', { fetch, dsoParty: '' })).toThrow(TypeError);
+  });
+
+  it('stops waiting when the signal aborts', async () => {
+    const { fetch } = fakeFetch(() => ({ json: { adminId: DSO } }));
+    const controller = new AbortController();
+    controller.abort();
+    await expect(createAmuletRegistryClient('devnet', { fetch }).dsoParty(controller.signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+  });
+});

@@ -7,6 +7,10 @@
  * Trust: a holding counts when its registrar and owner signed it; an offer, a request or a preapproval when it names
  * DA's operator and (offers and requests) a provider trusted for its instrument admin signed it. By default a registrar
  * must be its own provider; `registry.trustedProviders` trusts others (see `isFromRegistry`).
+ *
+ * Canton Coin transfer offers (`AmuletTransferInstruction`s, for example a faucet's) are listed and answered beside
+ * DA's: one counts when it is of Canton Coin (`Amulet` under the DSO party) and the DSO and its sender signed it; its
+ * choice context comes from Canton Coin's registry (Scan), see `WalletOptions.amulet`.
  */
 import {
   cip103Wallet,
@@ -29,7 +33,9 @@ import {
   type TransferSpec,
 } from './commands';
 import {
+  AMULET_TRANSFER_INSTRUCTION_TEMPLATE,
   isFromRegistry,
+  parseAmuletTransferOffer,
   parseBurnRequest,
   parseMintOffer,
   parseTransferOffer,
@@ -50,9 +56,11 @@ import {
   type TransferFactory,
   type TransferKind,
 } from './da-utilities/client';
+import { createAmuletRegistryClient, type AmuletRegistryClient, type AmuletRegistryOptions } from './amulet/registry';
 import { awaitWithAbort, throwIfAborted } from './abort';
 import { isWalletSubmitError, RegistryResponseError, WalletError, WalletSubmitError } from './errors';
 import { instrumentBalances, parseHolding, selectHoldings, type Holding, type InstrumentBalance } from './holdings';
+import { isTemplate } from './templates';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
 import { TOKEN_STANDARD_V1_REASON_META_KEY } from '../utils/token-standard/v1/constants';
 import type { ActiveContract, InstrumentId, SubmitResult, WalletSubmission } from './types';
@@ -110,6 +118,13 @@ export interface WalletOptions {
   readonly network: DaNetwork;
   readonly registry?: DaRegistryOptions;
   /**
+   * Canton Coin's registry (Scan), so Canton Coin transfer offers (`AmuletTransferInstruction`s) to and from the party
+   * are listed in `transferOffers` beside DA's, and can be accepted, rejected or withdrawn the same way. Defaults to
+   * SV-1's Scan of `network`; the registry is asked only when the party has such an offer. `false`: list DA's offers
+   * only.
+   */
+  readonly amulet?: AmuletRegistryOptions | false;
+  /**
    * Whether the wallet session this wallet belongs to is still live. Once it answers false, every write is refused with
    * `invalid-input` before its first read, and again right before the wallet signs, so nothing is submitted: the
    * provider may now be signed in to another account. Reads are not limited. Default: always live.
@@ -137,6 +152,7 @@ export interface WalletCallOptions {
   readonly signal?: AbortSignal;
 }
 
+/** DA's and Canton Coin's pending transfers alike (`TransferOffer.registry` tells them apart). */
 export interface TransferOffers {
   /** Offers to the wallet party, which it can accept or reject. */
   readonly incoming: TransferOffer[];
@@ -273,7 +289,7 @@ const TRANSFER_KIND_DESCRIPTIONS: Readonly<Record<TransferKind, string>> = {
   self: 'Self-transfer: the receiver is this wallet; the holdings are merged or split.',
 };
 
-/** Every template a state snapshot reads, in one cumulative filter. */
+/** Every DA template a state snapshot reads, in one cumulative filter (with Canton Coin's transfer instructions). */
 const STATE_TEMPLATES = [
   DA_REGISTRY_TEMPLATES.holding,
   DA_REGISTRY_TEMPLATES.transferOffer,
@@ -324,6 +340,13 @@ export function createWallet(options: WalletOptions): Wallet {
   const { network } = options;
   if (!isDaNetwork(network)) throw new TypeError('createWallet: network must be devnet or mainnet');
   const registry: DaUtilitiesClient = createDaUtilitiesClient(network, options.registry);
+  const amulet: AmuletRegistryClient | null =
+    options.amulet === false ? null : createAmuletRegistryClient(network, options.amulet);
+  const stateTemplates = amulet === null ? STATE_TEMPLATES : [...STATE_TEMPLATES, AMULET_TRANSFER_INSTRUCTION_TEMPLATE];
+  const offerTemplates =
+    amulet === null
+      ? [DA_REGISTRY_TEMPLATES.transferOffer]
+      : [DA_REGISTRY_TEMPLATES.transferOffer, AMULET_TRANSFER_INSTRUCTION_TEMPLATE];
   const now = (): number => requireTime(clock(), 'now()');
 
   /** Refuse a write once the wallet session this wallet belongs to ended (`isActive`). */
@@ -339,8 +362,12 @@ export function createWallet(options: WalletOptions): Wallet {
   const ledger: Cip103Wallet = cip103Wallet(provider, partyId, readRetry !== undefined ? { readRetry } : {});
 
   /** A ledger read; an aborted `signal` stops waiting for it (the wallet's read itself cannot be cancelled). */
-  async function read(templateId: string, signal: AbortSignal | undefined): Promise<ActiveContract[]> {
-    return (await awaitWithAbort(async () => ledger.readActiveContracts([templateId]), signal)).contracts;
+  async function read(
+    templateId: string | readonly string[],
+    signal: AbortSignal | undefined
+  ): Promise<ActiveContract[]> {
+    const templateIds = typeof templateId === 'string' ? [templateId] : templateId;
+    return (await awaitWithAbort(async () => ledger.readActiveContracts(templateIds), signal)).contracts;
   }
 
   async function submit(submission: WalletSubmission, signal: AbortSignal | undefined): Promise<SubmitResult> {
@@ -395,8 +422,31 @@ export function createWallet(options: WalletOptions): Wallet {
     fromRegistry(contracts, parseMintOffer, operator).filter((offer) => offer.holder === partyId);
   const ownBurnRequests = (contracts: readonly ActiveContract[], operator: string): BurnRequest[] =>
     fromRegistry(contracts, parseBurnRequest, operator).filter((request) => request.holder === partyId);
-  function transferOffers(contracts: readonly ActiveContract[], operator: string): TransferOffers {
-    const offers = fromRegistry(contracts, parseTransferOffer, operator);
+  /**
+   * The Canton Coin transfer instructions among `contracts` that the DSO and their sender signed. The DSO party is
+   * asked of the registry only when there is an Amulet transfer instruction to check, so a party without one never
+   * calls it.
+   */
+  async function amuletTransferOffers(
+    contracts: readonly ActiveContract[],
+    signal: AbortSignal | undefined
+  ): Promise<TransferOffer[]> {
+    if (amulet === null) return [];
+    const candidates = contracts.filter((contract) => isTemplate(contract, AMULET_TRANSFER_INSTRUCTION_TEMPLATE));
+    if (candidates.length === 0) return [];
+    const dso = await amulet.dsoParty(signal);
+    return candidates.flatMap((contract) => {
+      const offer = parseAmuletTransferOffer(contract, dso);
+      return offer === null ? [] : [offer];
+    });
+  }
+
+  function transferOffers(
+    contracts: readonly ActiveContract[],
+    operator: string,
+    amuletOffers: readonly TransferOffer[] = []
+  ): TransferOffers {
+    const offers = [...fromRegistry(contracts, parseTransferOffer, operator), ...amuletOffers];
     return {
       incoming: offers.filter((offer) => offer.receiver === partyId && offer.sender !== partyId),
       outgoing: offers.filter((offer) => offer.sender === partyId),
@@ -436,14 +486,18 @@ export function createWallet(options: WalletOptions): Wallet {
   }
 
   async function readState(): Promise<WalletState> {
-    const { offset, contracts } = await ledger.readActiveContracts(STATE_TEMPLATES);
+    const { offset, contracts } = await ledger.readActiveContracts(stateTemplates);
     const holdings = holdingsIn(contracts);
-    const [operator, balances] = await Promise.all([registry.operatorParty(), balancesWithMetadata(holdings)]);
+    const [operator, balances, amuletOffers] = await Promise.all([
+      registry.operatorParty(),
+      balancesWithMetadata(holdings),
+      amuletTransferOffers(contracts, undefined),
+    ]);
     return {
       offset,
       holdings,
       balances,
-      transferOffers: transferOffers(contracts, operator),
+      transferOffers: transferOffers(contracts, operator, amuletOffers),
       mintOffers: ownMintOffers(contracts, operator),
       burnRequests: ownBurnRequests(contracts, operator),
       transferPreapprovals: ownPreapprovals(contracts, operator),
@@ -562,22 +616,17 @@ export function createWallet(options: WalletOptions): Wallet {
     action: TransferInstructionAction,
     signal: AbortSignal | undefined
   ): Promise<SubmitResult> {
-    const [contracts, operator] = await Promise.all([
-      read(DA_REGISTRY_TEMPLATES.transferOffer, signal),
-      registry.operatorParty(signal),
-    ]);
-    const { incoming, outgoing } = transferOffers(contracts, operator);
+    const [contracts, operator] = await Promise.all([read(offerTemplates, signal), registry.operatorParty(signal)]);
+    const { incoming, outgoing } = transferOffers(contracts, operator, await amuletTransferOffers(contracts, signal));
     const offer = find(
       action === 'withdraw' ? outgoing : incoming,
       transferOfferCid,
       action === 'withdraw' ? 'Outgoing transfer offer' : 'Incoming transfer offer'
     );
-    const context = await registry.transferInstructionContext(
-      offer.instrumentId.admin,
-      transferOfferCid,
-      action,
-      signal
-    );
+    const context =
+      offer.registry === 'amulet' && amulet !== null
+        ? await amulet.transferInstructionContext(transferOfferCid, action, signal)
+        : await registry.transferInstructionContext(offer.instrumentId.admin, transferOfferCid, action, signal);
     return submit(
       {
         commands: [transferInstructionCommand(transferOfferCid, action, context.choiceContextData)],

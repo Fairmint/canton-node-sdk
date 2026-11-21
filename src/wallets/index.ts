@@ -75,6 +75,7 @@ export {
   type WalletOwnershipVerdict,
 } from './ownership';
 export type { DaNetwork, DaRegistryOptions, FetchLike, TransferKind } from './da-utilities/client';
+export { AMULET_INSTRUMENT_ID, AMULET_REGISTRY_BASE_URLS, type AmuletRegistryOptions } from './amulet/registry';
 export {
   describeWalletError,
   isRegistryApiError,
@@ -97,7 +98,14 @@ export {
   type WalletSubmitErrorDetails,
   type WalletSubmitOutcome,
 } from './errors';
-export type { BurnRequest, MintOffer, TransferOffer, TransferPreapproval } from './contracts';
+export {
+  AMULET_TRANSFER_INSTRUCTION_TEMPLATE,
+  type BurnRequest,
+  type MintOffer,
+  type TransferOffer,
+  type TransferOfferRegistry,
+  type TransferPreapproval,
+} from './contracts';
 export type { Holding, InstrumentBalance, InstrumentMetadata } from './holdings';
 export type { InstrumentId, SubmitResult } from './types';
 export { formatDecimalUnits, parseDecimalUnits } from './decimal';

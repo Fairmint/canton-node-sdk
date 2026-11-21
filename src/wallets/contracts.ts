@@ -1,8 +1,9 @@
 /**
- * Readers for the DA Registry contracts a holder acts on: mint offers, transfer offers, burn requests and transfer
- * preapprovals. Each returns null for a contract of another template or package, or one whose create argument does not
- * read.
+ * Readers for the registry contracts a holder acts on: DA's mint offers, transfer offers, burn requests and transfer
+ * preapprovals, and Canton Coin's transfer instructions (as transfer offers). Each returns null for a contract of
+ * another template or package, or one whose create argument does not read.
  */
+import { AMULET_INSTRUMENT_ID } from './amulet/constants';
 import { readInstrumentId } from './instrument';
 import { isRecord, nonEmptyString } from './json';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
@@ -27,7 +28,16 @@ export interface MintOffer extends RegistryParties {
   readonly executeBefore: string;
 }
 
+/** Which registry a transfer offer is under: DA's Utility Registry, or Canton Coin's (the DSO's, served by Scan). */
+export type TransferOfferRegistry = 'da' | 'amulet';
+
+/**
+ * A pending CIP-56 transfer (a TransferInstruction) to or from the wallet party: a DA `TransferOffer`, or a Canton Coin
+ * `AmuletTransferInstruction`. One shape, so an inbox lists both alike. For Canton Coin, `operator` and `provider` are
+ * both the DSO party, which runs its own registry.
+ */
 export interface TransferOffer extends RegistryParties {
+  readonly registry: TransferOfferRegistry;
   readonly contractId: string;
   readonly sender: string;
   readonly receiver: string;
@@ -113,15 +123,52 @@ export function parseTransferOffer(contract: ActiveContract): TransferOffer | nu
   const fields = strings(transfer, ['sender', 'receiver', 'amount', 'requestedAt', 'executeBefore']);
   const instrumentId = readInstrumentId(transfer['instrumentId']);
   if (!parties || !fields || !instrumentId) return null;
-  const { meta } = transfer;
-  const values = isRecord(meta) ? meta['values'] : undefined;
-  const memo = isRecord(values) ? text(values[TOKEN_STANDARD_V1_REASON_META_KEY]) : null;
   return {
+    registry: 'da',
     contractId: contract.contractId,
     ...parties,
     ...fields,
     instrumentId,
-    memo,
+    memo: reasonOf(transfer['meta']),
+  };
+}
+
+/** The CIP-56 reason metadata (the sender's memo) of a `Metadata` value, or null. */
+function reasonOf(meta: unknown): string | null {
+  const values = isRecord(meta) ? meta['values'] : undefined;
+  return isRecord(values) ? text(values[TOKEN_STANDARD_V1_REASON_META_KEY]) : null;
+}
+
+/**
+ * Canton Coin's pending transfer (`#splice-amulet:Splice.AmuletTransferInstruction:AmuletTransferInstruction`): the
+ * Amulet implementation of the token standard `TransferInstruction` interface. Signatories: the DSO (the instrument
+ * admin) and the sender.
+ */
+export const AMULET_TRANSFER_INSTRUCTION_TEMPLATE =
+  '#splice-amulet:Splice.AmuletTransferInstruction:AmuletTransferInstruction';
+
+/**
+ * An `AmuletTransferInstruction` (`{lockedAmulet, transfer: CIP-56 Transfer}`) as a {@link TransferOffer}, or null when
+ * it is of another template or package, does not read, is not of Canton Coin under `dsoParty`, or was not signed by
+ * both the DSO and its sender (anyone can create a look-alike in their own package; only the signatures prove it).
+ */
+export function parseAmuletTransferOffer(contract: ActiveContract, dsoParty: string): TransferOffer | null {
+  const args = argumentsOf(contract, AMULET_TRANSFER_INSTRUCTION_TEMPLATE);
+  const transfer = args?.['transfer'];
+  if (args === null || !isRecord(transfer)) return null;
+  const fields = strings(transfer, ['sender', 'receiver', 'amount', 'requestedAt', 'executeBefore']);
+  const instrumentId = readInstrumentId(transfer['instrumentId']);
+  if (!fields || !instrumentId) return null;
+  if (instrumentId.admin !== dsoParty || instrumentId.id !== AMULET_INSTRUMENT_ID) return null;
+  if (!contract.signatories.includes(dsoParty) || !contract.signatories.includes(fields.sender)) return null;
+  return {
+    registry: 'amulet',
+    contractId: contract.contractId,
+    operator: dsoParty,
+    provider: dsoParty,
+    ...fields,
+    instrumentId,
+    memo: reasonOf(transfer['meta']),
   };
 }
 
