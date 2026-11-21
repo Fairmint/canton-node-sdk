@@ -4,7 +4,7 @@
  */
 import { WalletReadError } from './errors';
 import { isJsonObject, isRecord, nonEmptyString } from './json';
-import type { ActiveContract } from './types';
+import type { ActiveContract, InterfaceView } from './types';
 
 /** A party list; anything else reads as no parties, so a contract without signatories counts as signed by no one. */
 function parseParties(value: unknown): string[] {
@@ -12,6 +12,23 @@ function parseParties(value: unknown): string[] {
   return value.flatMap((party) => {
     const id = nonEmptyString(party);
     return id === undefined ? [] : [id];
+  });
+}
+
+/**
+ * The interface views of a created event (`JsInterfaceView[]`): each with an interface id and an integer
+ * `viewStatus.code`; anything else is dropped. A view value that is not a JSON object reads as null.
+ */
+function parseInterfaceViews(value: unknown): InterfaceView[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((view): InterfaceView[] => {
+    if (!isRecord(view)) return [];
+    const interfaceId = nonEmptyString(view['interfaceId']);
+    const status = view['viewStatus'];
+    const code = isRecord(status) ? status['code'] : undefined;
+    if (interfaceId === undefined || typeof code !== 'number' || !Number.isInteger(code)) return [];
+    const { viewValue } = view;
+    return [{ interfaceId, viewStatusCode: code, viewValue: isJsonObject(viewValue) ? viewValue : null }];
   });
 }
 
@@ -39,6 +56,7 @@ export function parseActiveContractEntry(entry: unknown): ActiveContract | null 
   if (packageName === undefined) return null;
   const { createArgument } = created;
   const synchronizerId = isRecord(active) ? nonEmptyString(active['synchronizerId']) : undefined;
+  const interfaceViews = parseInterfaceViews(created['interfaceViews']);
   return {
     contractId,
     templateId,
@@ -46,6 +64,7 @@ export function parseActiveContractEntry(entry: unknown): ActiveContract | null 
     signatories: parseParties(created['signatories']),
     createArgument: isJsonObject(createArgument) ? createArgument : null,
     ...(synchronizerId !== undefined && { synchronizerId }),
+    ...(interfaceViews.length > 0 && { interfaceViews }),
   };
 }
 

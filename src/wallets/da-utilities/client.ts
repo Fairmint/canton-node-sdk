@@ -236,7 +236,7 @@ export function globalFetch(option: string): FetchLike {
 }
 
 /** CIP-56 `Instrument` metadata of `id`, or undefined when the answer is of another instrument or malformed. */
-function parseInstrumentMetadata(raw: unknown, id: string): InstrumentMetadata | undefined {
+export function parseInstrumentMetadata(raw: unknown, id: string): InstrumentMetadata | undefined {
   if (!isRecord(raw) || raw['id'] !== id) return undefined;
   const { name, symbol } = raw;
   // The spec's default when the registry leaves it out.
@@ -435,7 +435,7 @@ function trustedProvidersResolver(
 }
 
 /** Drop trailing `/` characters in linear time (a `/\/+$/` regex backtracks quadratically). */
-function trimTrailingSlashes(url: string): string {
+export function trimTrailingSlashes(url: string): string {
   let end = url.length;
   while (end > 0 && url[end - 1] === '/') end--;
   return url.slice(0, end);

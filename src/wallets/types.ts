@@ -35,6 +35,16 @@ export interface DisclosedContract {
   readonly synchronizerId?: string;
 }
 
+/** An interface view the ledger computed for a contract (`JsInterfaceView`), as an interface filter asked for it. */
+export interface InterfaceView {
+  /** As the ledger reports it: usually the package-id form `pkgId:Module:Interface`. */
+  readonly interfaceId: string;
+  /** `viewStatus.code`: 0 when the view was computed; anything else means `viewValue` is not usable. */
+  readonly viewStatusCode: number;
+  /** The view value; null when the ledger did not include one. */
+  readonly viewValue: JsonObject | null;
+}
+
 /** An active contract read from the wallet party's ACS. */
 export interface ActiveContract {
   readonly contractId: string;
@@ -51,6 +61,11 @@ export interface ActiveContract {
   readonly createArgument: JsonObject | null;
   /** The synchronizer the contract is assigned to, when the ledger reported it. */
   readonly synchronizerId?: string;
+  /**
+   * The interface views the read asked for (an interface filter with `includeInterfaceView`); absent when the ledger
+   * returned none. A view is the contract's own claim: trust still comes from `signatories`.
+   */
+  readonly interfaceViews?: readonly InterfaceView[];
 }
 
 /** What the SDK asks the wallet to sign and submit, acting as the wallet party only. */

@@ -157,10 +157,22 @@ function createdEvent(active: ActiveContract): Record<string, unknown> {
     observers: [],
     createdAt: '2026-11-13T00:00:00Z',
     packageName: active.packageName,
+    interfaceViews: (active.interfaceViews ?? []).map((view) => ({
+      interfaceId: view.interfaceId,
+      viewStatus: { code: view.viewStatusCode, message: '' },
+      viewValue: view.viewValue,
+    })),
   };
 }
 
-/** The template ids a `/v2/state/active-contracts` body filters on (and the party it filters for). */
+type IdentifierFilter =
+  | { TemplateFilter: { value: { templateId: string } } }
+  | { InterfaceFilter: { value: { interfaceId: string; includeInterfaceView: boolean } } };
+
+/**
+ * The template and interface ids a `/v2/state/active-contracts` body filters on, in order (and the party it filters
+ * for). An interface filter that asks for views is listed as `<interfaceId>+view`.
+ */
 export function acsFilter(body: unknown): {
   party: string;
   templateIds: string[];
@@ -168,14 +180,7 @@ export function acsFilter(body: unknown): {
   const byParty = (
     body as {
       eventFormat: {
-        filtersByParty: Record<
-          string,
-          {
-            cumulative: Array<{
-              identifierFilter: { TemplateFilter: { value: { templateId: string } } };
-            }>;
-          }
-        >;
+        filtersByParty: Record<string, { cumulative: Array<{ identifierFilter: IdentifierFilter }> }>;
       };
     }
   ).eventFormat.filtersByParty;
@@ -183,15 +188,27 @@ export function acsFilter(body: unknown): {
   if (party === undefined || partyFilters === undefined || partyFilters.cumulative.length === 0) {
     throw new Error('no party filter');
   }
-  const templateIds = partyFilters.cumulative.map(
-    ({ identifierFilter }) => identifierFilter.TemplateFilter.value.templateId
+  const templateIds = partyFilters.cumulative.map(({ identifierFilter }) =>
+    'TemplateFilter' in identifierFilter
+      ? identifierFilter.TemplateFilter.value.templateId
+      : `${identifierFilter.InterfaceFilter.value.interfaceId}${identifierFilter.InterfaceFilter.value.includeInterfaceView ? '+view' : ''}`
   );
   return { party, templateIds };
 }
 
-/** The ledger entries of any of the templates (the union a cumulative filter asks for). */
+/**
+ * The ledger entries of any of the filters (the union a cumulative filter asks for), each contract once, as the ledger
+ * answers. Contracts are keyed by the template id, or for an interface by `<interfaceId>+view`.
+ */
 function matching(contracts: Record<string, ActiveContract[]>, templateIds: readonly string[]): unknown[] {
-  return templateIds.flatMap((templateId) => (contracts[templateId] ?? []).map((c) => acsEntry(createdEvent(c))));
+  const seen = new Set<string>();
+  return templateIds.flatMap((templateId) =>
+    (contracts[templateId] ?? []).flatMap((c) => {
+      if (seen.has(c.contractId)) return [];
+      seen.add(c.contractId);
+      return [acsEntry(createdEvent(c))];
+    })
+  );
 }
 
 export interface FakeProvider extends Cip103Provider {
@@ -425,3 +442,71 @@ export function acsEntry(event: Record<string, unknown>): unknown {
     },
   };
 }
+
+export const DSO = 'DSO::1220dd50';
+export const HOLDING_V1_VIEW_KEY = '#splice-api-token-holding-v1:Splice.Api.Token.HoldingV1:Holding+view';
+const HOLDING_V1_PKG_ID = '718a0f77:Splice.Api.Token.HoldingV1:Holding';
+
+/**
+ * A Canton Coin holding as an interface-filtered read returns it: a `splice-amulet` `Amulet` (or `LockedAmulet` when
+ * `lock` is given) with no create argument and its `HoldingV1` view, signed by the DSO and the owner unless
+ * `signatories` says otherwise.
+ */
+export function amuletHolding(
+  contractId: string,
+  amount: string,
+  options: {
+    owner?: string;
+    dso?: string;
+    instrumentIdText?: string;
+    lock?: JsonObject | null;
+    signatories?: readonly string[];
+    packageName?: string;
+    viewStatusCode?: number;
+    viewValue?: JsonObject | null;
+  } = {}
+): ActiveContract {
+  const owner = options.owner ?? HOLDER;
+  const dso = options.dso ?? DSO;
+  const lock = options.lock ?? null;
+  const locked = lock !== null;
+  return {
+    contractId,
+    templateId: pkgId('3ca1343a', locked ? 'Splice.Amulet:LockedAmulet' : 'Splice.Amulet:Amulet'),
+    packageName: options.packageName ?? 'splice-amulet',
+    signatories:
+      options.signatories ??
+      (locked ? [dso, owner, ...((lock['holders'] as string[] | undefined) ?? [])] : [dso, owner]),
+    createArgument: null,
+    synchronizerId: 'global-domain::1220ee',
+    interfaceViews: [
+      {
+        interfaceId: HOLDING_V1_PKG_ID,
+        viewStatusCode: options.viewStatusCode ?? 0,
+        viewValue:
+          options.viewValue === undefined
+            ? {
+                owner,
+                instrumentId: { admin: dso, id: options.instrumentIdText ?? 'Amulet' },
+                amount,
+                lock,
+                meta: {
+                  values: {
+                    'amulet.splice.lfdecentralizedtrust.org/created-in-round': '42',
+                    'amulet.splice.lfdecentralizedtrust.org/rate-per-round': '0.0000190259',
+                  },
+                },
+              }
+            : options.viewValue,
+      },
+    ],
+  };
+}
+
+/** A Splice `TimeLock` as the `HoldingV1` view reports it. */
+export const AMULET_LOCK: JsonObject = {
+  holders: [OTHER],
+  expiresAt: '2026-11-14T00:00:00Z',
+  expiresAfter: null,
+  context: 'transfer to other',
+};

@@ -9,6 +9,9 @@
  * - `createCip103Session({ network })`: which wallet is connected, as which party (`connect`, `restore`, `disconnect`).
  * - `createWalletStore({ session })`: the page's observable state, typed actions (`act`), notices to show.
  * - `createWallet(...)`: one party's token actions, for code that does not need the store.
+ * - Canton Coin: `loadState()` lists the party's Canton Coin (Splice `Amulet` / `LockedAmulet`, read through the
+ *   `HoldingV1` interface view) with its other holdings (`source: 'amulet'`); pass `cantonCoin: { dsoParty }` and/or `{
+ *   registryUrl }` (Scan) to pin the DSO and label it. Canton Coin is read-only here.
  * - The ownership proof's browser half (`requestWalletOwnershipVerdict`); the server half
  *   (`createWalletOwnershipChallenger`, `verifyWalletOwnership`) is Node-only and exported from the package root.
  * - The errors, their guards (`isWalletError`, `isWalletSubmitError`, …: they match errors of any copy of this module,
@@ -98,6 +101,15 @@ export {
   type WalletSubmitOutcome,
 } from './errors';
 export type { BurnRequest, MintOffer, TransferOffer, TransferPreapproval } from './contracts';
-export type { Holding, InstrumentBalance, InstrumentMetadata } from './holdings';
+export type { Holding, HoldingSource, InstrumentBalance, InstrumentMetadata } from './holdings';
+export { AMULET_INSTRUMENT_ID, AMULET_TEMPLATES, CANTON_COIN_METADATA } from './amulet';
+export type { CantonCoinOptions } from './amulet-registry';
+export {
+  HOLDING_V1_INTERFACE_ID,
+  readHoldingView,
+  type HoldingView,
+  type HoldingViewLock,
+  type HoldingViewMetadata,
+} from './holding-view';
 export type { InstrumentId, SubmitResult } from './types';
 export { formatDecimalUnits, parseDecimalUnits } from './decimal';

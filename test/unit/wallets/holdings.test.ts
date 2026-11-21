@@ -54,6 +54,7 @@ describe('parseHolding', () => {
       instrumentId: INSTRUMENT,
       amount: '5.0000000000',
       locked: false,
+      source: 'da-registry',
     });
   });
 
@@ -95,6 +96,7 @@ describe('selectHoldings', () => {
     instrumentId: INSTRUMENT,
     amount,
     locked: false,
+    source: 'da-registry',
     ...extra,
   });
   const request = (amount: string): { owner: string; instrumentId: InstrumentId; amount: string } => ({
@@ -289,6 +291,7 @@ describe('instrumentBalances', () => {
     instrumentId: INSTRUMENT,
     amount,
     locked: false,
+    source: 'da-registry',
     ...extra,
   });
 
@@ -308,6 +311,7 @@ describe('instrumentBalances', () => {
         unlocked: '1.0000000000',
         locked: '0.0000000000',
         holdingCount: 1,
+        source: 'da-registry',
       },
       {
         key: instrumentKey({ admin: OTHER, id: 'XMPL' }),
@@ -315,6 +319,7 @@ describe('instrumentBalances', () => {
         unlocked: '2.0000000000',
         locked: '0.0000000000',
         holdingCount: 1,
+        source: 'da-registry',
       },
       {
         key: instrumentKey(INSTRUMENT),
@@ -323,6 +328,7 @@ describe('instrumentBalances', () => {
         unlocked: '99999999999999999.3000000001',
         locked: '5.5000000000',
         holdingCount: 4,
+        source: 'da-registry',
       },
     ]);
     expect(instrumentBalances([])).toEqual([]);
@@ -352,6 +358,7 @@ describe('instrumentBalances', () => {
         unlocked: '2.0000000000',
         locked: '0.0000000000',
         holdingCount: 1,
+        source: 'da-registry',
       },
       {
         key: 'USD%40issuer@registrar::1220bb',
@@ -359,6 +366,7 @@ describe('instrumentBalances', () => {
         unlocked: '1.0000000000',
         locked: '0.0000000000',
         holdingCount: 1,
+        source: 'da-registry',
       },
     ]);
   });
