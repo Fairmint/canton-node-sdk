@@ -1,10 +1,10 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
-import { AllocateExternalPartyParamsSchema } from '../../clients/ledger-json-api/operations/v2/parties/external/allocate-external-party';
 import { ApiError, OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
 import { isRecord } from '../../core/utils';
 import { runWithAbortSignal } from '../../core/utils/abort';
 import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
 import { allocateExternalParty } from './allocate-external-party';
+import { normalizeAllocationUserId } from './allocation-user-id';
 import { type CantonEd25519Signature, normalizeCantonEd25519Signature } from './canton-ed25519-signer';
 import {
   assertCantonHashSignature,
@@ -62,8 +62,11 @@ export interface SubmitExternalPartyOnboardingOptions {
   readonly publicKeyFingerprint?: string | null;
   /**
    * Participant user that gets `CanActAs` on the new party, so that user can submit commands for it (for example the
-   * server's own ledger user). Trimmed; must be non-empty, at most 512 characters and free of line breaks. Omit it to
-   * grant no user rights (the ledger's default).
+   * server's own ledger user). Trimmed, then checked with Canton's user id rule (non-empty, at most 128 characters,
+   * ASCII letters, digits and "@^$.!`-#+'~_|:()") before anything is prepared, signed or sent. The ledger grants the
+   * right only when the allocation itself succeeds, so when `allowAlreadyExists`confirms an existing party the SDK
+   * grants`CanActAs` to this user itself (an idempotent grant). Omit it to grant no user rights (the ledger's
+   * default).
    */
   readonly userId?: string;
   readonly identityProviderId?: string;
@@ -124,8 +127,11 @@ export interface CreateExternalPartyWithSignerOptions extends PrepareExternalPar
   readonly identityProviderId?: string;
   /**
    * Participant user that gets `CanActAs` on the new party, so that user can submit commands for it (for example the
-   * server's own ledger user). Trimmed; must be non-empty, at most 512 characters and free of line breaks. Omit it to
-   * grant no user rights (the ledger's default).
+   * server's own ledger user). Trimmed, then checked with Canton's user id rule (non-empty, at most 128 characters,
+   * ASCII letters, digits and "@^$.!`-#+'~_|:()") before anything is prepared, signed or sent. The ledger grants the
+   * right only when the allocation itself succeeds, so when `allowAlreadyExists`confirms an existing party the SDK
+   * grants`CanActAs` to this user itself (an idempotent grant). Omit it to grant no user rights (the ledger's
+   * default).
    */
   readonly userId?: string;
   /**
@@ -213,6 +219,7 @@ export async function prepareExternalPartyOnboarding(
 export async function createExternalPartyWithSigner(
   options: CreateExternalPartyWithSignerOptions
 ): Promise<CreatedExternalPartyWithSigner> {
+  const userId = options.userId === undefined ? undefined : normalizeAllocationUserId(options.userId);
   const publicKeyBase64 = normalizeEd25519PublicKeyForCanton(options.publicKeyBase64);
   const prepared = await prepareExternalPartyOnboarding({
     ledgerClient: options.ledgerClient,
@@ -251,7 +258,7 @@ export async function createExternalPartyWithSigner(
     topologyTransactions: prepared.topologyTransactions,
     multiHashSignatureBase64: normalizeExternalPartyHashSignature(signature),
     ...(options.identityProviderId !== undefined ? { identityProviderId: options.identityProviderId } : {}),
-    ...(options.userId !== undefined ? { userId: options.userId } : {}),
+    ...(userId !== undefined ? { userId } : {}),
     ...(options.allowAlreadyExists !== undefined ? { allowAlreadyExists: options.allowAlreadyExists } : {}),
     ...(options.signal !== undefined ? { signal: options.signal } : {}),
   });
@@ -328,6 +335,9 @@ export async function submitExternalPartyOnboarding(
     );
     if (!existing) {
       throw error;
+    }
+    if (userId !== undefined) {
+      await grantActAsOnExistingParty(options.ledgerClient, userId, options.partyId, options.signal);
     }
     return {
       partyId: options.partyId,
@@ -408,14 +418,23 @@ export async function getExternalPartyIdForHintAndPublicKey(
   }
 }
 
-/** Validates and trims the participant user id with the allocate operation's own rules, before anything is signed. */
-function normalizeAllocationUserId(value: string): string {
-  const result = AllocateExternalPartyParamsSchema.shape.userId.safeParse(value);
-  if (!result.success || result.data === undefined) {
-    const message = result.success ? 'userId is required' : (result.error.issues[0]?.message ?? 'userId is invalid');
-    throw new ValidationError(message, { userId: value });
+/**
+ * Grants `CanActAs` on an external party that already existed. The ledger grants the allocation's `userId` only when
+ * the allocation itself succeeds, so an idempotent replay (a retry after an ambiguous first allocation, or a party
+ * first allocated for another user) must grant it here. Granting a right the user already holds is a no-op.
+ */
+async function grantActAsOnExistingParty(
+  ledgerClient: LedgerJsonApiClient,
+  userId: string,
+  partyId: string,
+  signal: AbortSignal | undefined
+): Promise<void> {
+  const params = { userId, rights: [{ kind: { CanActAs: { value: { party: partyId } } } }] };
+  if (signal === undefined) {
+    await ledgerClient.grantUserRights(params);
+  } else {
+    await ledgerClient.grantUserRights(params, { signal });
   }
-  return result.data;
 }
 
 function validateRequiredString(name: string, value: string): void {

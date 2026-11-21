@@ -1,6 +1,6 @@
 import { generateKeyPairSync, sign } from 'node:crypto';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import { ApiError } from '../../../src/core/errors';
+import { ApiError, ValidationError } from '../../../src/core/errors';
 import {
   buildExternalPartyId,
   deriveCantonEd25519PublicKeyFingerprint,
@@ -209,8 +209,8 @@ describe('external-party onboarding helpers', () => {
 
   it.each([
     ['', 'userId must not be empty'],
-    ['u'.repeat(513), 'userId must be at most 512 characters'],
-    ['user\nname', 'userId must not contain line breaks'],
+    ['u'.repeat(129), 'userId must be at most 128 characters'],
+    ['user\nname', 'userId may contain only'],
   ])('rejects an invalid userId %j before allocating', async (userId, message) => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient(fixture);
@@ -228,6 +228,99 @@ describe('external-party onboarding helpers', () => {
       })
     ).rejects.toThrow(message);
     expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['', 'userId must not be empty'],
+    ['u'.repeat(129), 'userId must be at most 128 characters'],
+    ['wallet server', 'userId may contain only'],
+  ])('rejects an invalid userId %j before preparing or signing', async (userId, message) => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    const signMultiHash = jest.fn(() => ({ signatureBase64: fixture.signMultiHash() }));
+
+    const result = createExternalPartyWithSigner({
+      ledgerClient,
+      synchronizerId: 'global-domain::sync',
+      partyHint: 'privy-test',
+      publicKeyBase64: fixture.publicKeyBase64,
+      userId,
+      signMultiHash,
+    });
+
+    await expect(result).rejects.toBeInstanceOf(ValidationError);
+    await expect(result).rejects.toThrow(message);
+    expect(signMultiHash).not.toHaveBeenCalled();
+    expect(ledgerClient.generateExternalPartyTopology).not.toHaveBeenCalled();
+    expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
+  });
+
+  it('grants CanActAs to userId when allowAlreadyExists confirms an existing party', async () => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    const controller = new AbortController();
+    ledgerClient.allocateExternalParty.mockRejectedValueOnce(new ApiError('already exists', 409));
+    ledgerClient.grantUserRights = jest.fn().mockResolvedValue({ newlyGrantedRights: [] });
+
+    const submitted = await submitExternalPartyOnboarding({
+      ledgerClient,
+      synchronizerId: 'global-domain::sync',
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+      multiHashHex: MULTI_HASH_HEX,
+      topologyTransactions: ['topology-tx-1'],
+      multiHashSignatureBase64: fixture.signMultiHash(),
+      userId: ' wallet-server ',
+      allowAlreadyExists: true,
+      signal: controller.signal,
+    });
+
+    expect(submitted.alreadyExisted).toBe(true);
+    expect(ledgerClient.grantUserRights).toHaveBeenCalledWith(
+      { userId: 'wallet-server', rights: [{ kind: { CanActAs: { value: { party: fixture.partyId } } } }] },
+      { signal: controller.signal }
+    );
+  });
+
+  it('fails an already-existing party when granting CanActAs to userId fails', async () => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    ledgerClient.allocateExternalParty.mockRejectedValueOnce(new ApiError('already exists', 409));
+    ledgerClient.grantUserRights = jest.fn().mockRejectedValue(new ApiError('permission denied', 403));
+
+    await expect(
+      submitExternalPartyOnboarding({
+        ledgerClient,
+        synchronizerId: 'global-domain::sync',
+        partyId: fixture.partyId,
+        publicKeyBase64: fixture.publicKeyBase64,
+        multiHashHex: MULTI_HASH_HEX,
+        topologyTransactions: ['topology-tx-1'],
+        multiHashSignatureBase64: fixture.signMultiHash(),
+        userId: 'wallet-server',
+        allowAlreadyExists: true,
+      })
+    ).rejects.toThrow('permission denied');
+  });
+
+  it('does not grant user rights separately when the allocation itself succeeds', async () => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    ledgerClient.grantUserRights = jest.fn();
+
+    await submitExternalPartyOnboarding({
+      ledgerClient,
+      synchronizerId: 'global-domain::sync',
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+      multiHashHex: MULTI_HASH_HEX,
+      topologyTransactions: ['topology-tx-1'],
+      multiHashSignatureBase64: fixture.signMultiHash(),
+      userId: 'wallet-server',
+      allowAlreadyExists: true,
+    });
+
+    expect(ledgerClient.grantUserRights).not.toHaveBeenCalled();
   });
 
   it('forwards userId through external signer party creation', async () => {

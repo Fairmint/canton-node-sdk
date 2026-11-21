@@ -47,9 +47,12 @@ describe('LedgerJsonApiClient allocateExternalParty userId', () => {
   it.each([
     ['empty', '', 'userId must not be empty'],
     ['whitespace', '   ', 'userId must not be empty'],
-    ['too long', 'u'.repeat(513), 'userId must be at most 512 characters'],
-    ['carriage return', 'user\rname', 'userId must not contain line breaks'],
-    ['line feed', 'user\nname', 'userId must not contain line breaks'],
+    ['too long', 'u'.repeat(129), 'userId must be at most 128 characters'],
+    ['carriage return', 'user\rname', 'userId may contain only'],
+    ['line feed', 'user\nname', 'userId may contain only'],
+    ['inner space', 'wallet server', 'userId may contain only'],
+    ['slash', 'wallet/server', 'userId may contain only'],
+    ['non-ASCII letter', 'wället', 'userId may contain only'],
   ])('rejects a %s userId before sending anything', async (_label, userId, message) => {
     const { client, post } = createClient();
 
@@ -60,9 +63,18 @@ describe('LedgerJsonApiClient allocateExternalParty userId', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
-  it('accepts a userId of exactly 512 characters', async () => {
+  it('accepts a userId of exactly 128 characters', async () => {
     const { client, post } = createClient();
-    const userId = 'u'.repeat(512);
+    const userId = 'u'.repeat(128);
+
+    await client.allocateExternalParty({ ...BASE_PARAMS, userId });
+
+    expect(post).toHaveBeenCalledWith(ENDPOINT, { ...BASE_PARAMS, userId }, expect.anything());
+  });
+
+  it('accepts every symbol Canton allows in a user id', async () => {
+    const { client, post } = createClient();
+    const userId = "aZ09@^$.!`-#+'~_|:()";
 
     await client.allocateExternalParty({ ...BASE_PARAMS, userId });
 

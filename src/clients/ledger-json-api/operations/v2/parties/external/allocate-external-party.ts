@@ -26,8 +26,26 @@ const SignedTransactionSchema = z.union([
   }),
 ]);
 
-/** Longest participant user id the SDK sends. */
-const MAX_USER_ID_LENGTH = 512;
+/** Longest participant user id Canton accepts (Ledger API `User.id`). */
+const MAX_USER_ID_LENGTH = 128;
+
+/** Characters Canton allows in a participant user id: ASCII alphanumerics and the symbols "@^$.!`-#+'~_|:()". */
+const USER_ID_CHARACTERS = /^[a-zA-Z0-9@^$.!`\-#+'~_|:()]*$/;
+
+/**
+ * Participant user id, checked with Canton's own `User.id` rule (non-empty, at most 128 characters, each an ASCII
+ * alphanumeric or one of "@^$.!`-#+'~_|:()") after trimming, so the SDK refuses what the ledger would refuse.
+ */
+export const CantonUserIdSchema = z
+  .string()
+  .transform((value) => value.trim())
+  .refine((value) => value.length > 0, { message: 'userId must not be empty' })
+  .refine((value) => value.length <= MAX_USER_ID_LENGTH, {
+    message: `userId must be at most ${MAX_USER_ID_LENGTH} characters`,
+  })
+  .refine((value) => USER_ID_CHARACTERS.test(value), {
+    message: "userId may contain only ASCII letters, digits and the symbols @^$.!`-#+'~_|:()",
+  });
 
 // Schema for the parameters
 export const AllocateExternalPartyParamsSchema = z.object({
@@ -40,18 +58,10 @@ export const AllocateExternalPartyParamsSchema = z.object({
   /** Identity provider ID. If not set, assume the party is managed by the default identity provider. */
   identityProviderId: z.string(),
   /**
-   * Participant user that gets `CanActAs` on the new party (sent as `userId`). Trimmed, then must be non-empty, at most
-   * 512 characters and free of line breaks. Omit it to grant no user rights (the ledger's default).
+   * Participant user that gets `CanActAs` on the new party (sent as `userId`). Trimmed, then checked with Canton's user
+   * id rule ({@link CantonUserIdSchema}). Omit it to grant no user rights (the ledger's default).
    */
-  userId: z
-    .string()
-    .transform((value) => value.trim())
-    .refine((value) => value.length > 0, { message: 'userId must not be empty' })
-    .refine((value) => value.length <= MAX_USER_ID_LENGTH, {
-      message: `userId must be at most ${MAX_USER_ID_LENGTH} characters`,
-    })
-    .refine((value) => !/[\r\n]/.test(value), { message: 'userId must not contain line breaks' })
-    .optional(),
+  userId: CantonUserIdSchema.optional(),
 });
 
 export type AllocateExternalPartyParams = z.infer<typeof AllocateExternalPartyParamsSchema>;

@@ -1,6 +1,7 @@
 import type { Keypair } from '@stellar/stellar-base';
 import type { LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { OperationError, OperationErrorCode } from '../../core/errors';
+import { normalizeAllocationUserId } from './allocation-user-id';
 import { signHexWithStellarKeypair, stellarPublicKeyToBase64, stellarPublicKeyToHex } from './stellar-utils';
 
 /** Parameters for creating an external party. */
@@ -16,8 +17,9 @@ export interface CreateExternalPartyParams {
   /** Identity provider ID (default: 'default'). */
   readonly identityProviderId?: string;
   /**
-   * Participant user granted `CanActAs` on the new party. Trimmed; must be non-empty, at most 512 characters and free
-   * of line breaks. Omit to grant no user rights.
+   * Participant user granted `CanActAs` on the new party. Trimmed, then checked with Canton's user id rule (non-empty,
+   * at most 128 characters, ASCII letters, digits and "@^$.!`-#+'~_|:()") before topology is generated. Omit to grant
+   * no user rights.
    */
   readonly userId?: string;
   /** If true, the local participant will only observe, not confirm (default: false). */
@@ -82,12 +84,13 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
     partyName,
     synchronizerId,
     identityProviderId = 'default',
-    userId,
+    userId: rawUserId,
     localParticipantObservationOnly,
     otherConfirmingParticipantUids,
     confirmationThreshold,
     observingParticipantUids,
   } = params;
+  const userId = rawUserId === undefined ? undefined : normalizeAllocationUserId(rawUserId);
 
   // Step 1: Convert Stellar public key to base64 for Ledger API
   const publicKeyBase64 = stellarPublicKeyToBase64(keypair);

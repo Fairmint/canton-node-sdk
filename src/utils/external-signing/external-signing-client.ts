@@ -9,6 +9,7 @@ import {
 import { isAbortError } from '../../core/http/abort';
 import { readRequiredString } from '../canton-response-utils';
 import { waitForPartyCanSubmit, type WaitForPartyCanSubmitOptions } from '../party-readiness';
+import { normalizeAllocationUserId } from './allocation-user-id';
 import {
   CantonEd25519SigningPurpose,
   signAndVerifyCantonEd25519Payload,
@@ -55,7 +56,11 @@ export interface CreateExternalPartyWithEd25519SignerOptions extends Omit<
 > {
   readonly signer: CantonEd25519Signer;
   readonly identityProviderId?: string;
-  /** Participant user granted `CanActAs` on the new party. Trimmed; non-empty, at most 512 characters, no line breaks. */
+  /**
+   * Participant user granted `CanActAs` on the new party, also when the party already existed. Trimmed, then checked
+   * with Canton's user id rule (non-empty, at most 128 characters, ASCII letters, digits and "@^$.!`-#+'~_|:()") before
+   * anything is prepared or signed.
+   */
   readonly userId?: string;
   /** Treat a confirmed existing party as an idempotent success (default: true). */
   readonly allowAlreadyExists?: boolean;
@@ -130,6 +135,8 @@ export class ExternalPartyPostAllocationError extends Error {
 export async function createExternalPartyWithEd25519Signer(
   options: CreateExternalPartyWithEd25519SignerOptions
 ): Promise<CreatedExternalPartyWithEd25519Signer> {
+  // Checked before prepare and signing, so a bad id is a plain ValidationError, never a reconciled allocation failure.
+  const userId = options.userId === undefined ? undefined : normalizeAllocationUserId(options.userId);
   const publicKeyBase64 = normalizeEd25519PublicKeyForCanton(options.signer.publicKeyBase64);
   const signedPayloads: Array<Awaited<ReturnType<typeof signAndVerifyCantonEd25519Payload>>> = [];
   let created: CreatedExternalPartyWithSigner;
@@ -140,7 +147,7 @@ export async function createExternalPartyWithEd25519Signer(
       partyHint: options.partyHint,
       publicKeyBase64,
       ...(options.identityProviderId !== undefined ? { identityProviderId: options.identityProviderId } : {}),
-      ...(options.userId !== undefined ? { userId: options.userId } : {}),
+      ...(userId !== undefined ? { userId } : {}),
       allowAlreadyExists: options.allowAlreadyExists ?? true,
       ...(options.localParticipantObservationOnly !== undefined
         ? { localParticipantObservationOnly: options.localParticipantObservationOnly }
