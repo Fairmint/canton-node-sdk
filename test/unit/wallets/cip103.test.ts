@@ -118,10 +118,11 @@ describe('cip103Wallet reads', () => {
         contractId: '00c',
         templateId: 'pkg:Utility.Registry.App.V0.Model.Mint:MintOffer',
         packageName: 'utility-registry-app-v0',
-        // Non-party entries are dropped; the blob and interface views are not read.
+        // Non-party entries are dropped; the blob is not read.
         signatories: ['provider::1220bb'],
         createArgument: { operator: 'op' },
         synchronizerId: 'global-domain::1220ee',
+        interfaceViews: [{ interfaceId: 'pkg:A:B', viewStatusCode: 0, viewValue: { x: 1 } }],
       },
     ]);
     expect(provider.requests).toEqual([
@@ -152,6 +153,66 @@ describe('cip103Wallet reads', () => {
         },
       },
     ]);
+  });
+
+  it('sends an interface filter with its view flag, and keeps well-formed interface views only', async () => {
+    const provider = ledger(() => [
+      acsEntry({
+        ...createdEvent,
+        interfaceViews: [
+          { interfaceId: 'pkg:A:B', viewStatus: { code: 0 }, viewValue: { x: 1 } },
+          { interfaceId: 'pkg:A:Failed', viewStatus: { code: 3, message: 'no' } },
+          { interfaceId: 'pkg:A:NoStatus', viewValue: { x: 1 } },
+          { interfaceId: '', viewStatus: { code: 0 }, viewValue: {} },
+          'not a view',
+        ],
+      }),
+    ]);
+    const { contracts } = await cip103Wallet(provider, HOLDER).readActiveContracts([
+      { interfaceId: '#splice-api-token-holding-v1:Splice.Api.Token.HoldingV1:Holding', includeInterfaceView: true },
+      { interfaceId: '#p:M:I' },
+      MINT_OFFER,
+    ]);
+    expect(contracts[0]?.interfaceViews).toEqual([
+      { interfaceId: 'pkg:A:B', viewStatusCode: 0, viewValue: { x: 1 } },
+      { interfaceId: 'pkg:A:Failed', viewStatusCode: 3, viewValue: null },
+    ]);
+    const { body } = (provider.requests[1] as { params: { body: Record<string, unknown> } }).params;
+    expect(body).toEqual({
+      activeAtOffset: 42,
+      eventFormat: {
+        verbose: false,
+        filtersByParty: {
+          [HOLDER]: {
+            cumulative: [
+              {
+                identifierFilter: {
+                  InterfaceFilter: {
+                    value: {
+                      interfaceId: '#splice-api-token-holding-v1:Splice.Api.Token.HoldingV1:Holding',
+                      includeInterfaceView: true,
+                      includeCreatedEventBlob: false,
+                    },
+                  },
+                },
+              },
+              {
+                identifierFilter: {
+                  InterfaceFilter: {
+                    value: { interfaceId: '#p:M:I', includeInterfaceView: false, includeCreatedEventBlob: false },
+                  },
+                },
+              },
+              {
+                identifierFilter: {
+                  TemplateFilter: { value: { templateId: MINT_OFFER, includeCreatedEventBlob: false } },
+                },
+              },
+            ],
+          },
+        },
+      },
+    });
   });
 
   it('skips a contract without a package name, and reads one without signatories as signed by no one', async () => {

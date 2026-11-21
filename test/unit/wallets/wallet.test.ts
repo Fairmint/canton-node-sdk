@@ -1,5 +1,7 @@
 import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
+import { AMULET_TEMPLATES } from '../../../src/wallets/amulet/constants';
 import { isCancelledBeforeSubmit } from '../../../src/wallets/abort';
+import { HOLDING_V1_INTERFACE_ID } from '../../../src/wallets/holding-view';
 import type { TransferKind } from '../../../src/wallets/da-utilities/client';
 import {
   describeWalletError,
@@ -235,11 +237,13 @@ function setup(
 
 const UUID = /^[0-9a-f-]{36}$/;
 const STATE_TEMPLATES = [
+  `${HOLDING_V1_INTERFACE_ID}+view`,
   DA_REGISTRY_TEMPLATES.holding,
   DA_REGISTRY_TEMPLATES.transferOffer,
   DA_REGISTRY_TEMPLATES.mintOffer,
   DA_REGISTRY_TEMPLATES.burnRequest,
   DA_REGISTRY_TEMPLATES.transferPreapproval,
+  AMULET_TEMPLATES.transferInstruction,
 ];
 const postCalls = (calls: FetchCall[]): FetchCall[] => calls.filter((c) => c.method === 'POST');
 const request = { receiver: OTHER, instrumentId: INSTRUMENT, amount: '12' };
@@ -296,7 +300,7 @@ describe('createWallet', () => {
 });
 
 describe('createWallet.loadState', () => {
-  it('reads every list with one ledger-end call and one ACS read of the five DA templates, as the party', async () => {
+  it('reads every list with one ledger-end call and one ACS read of HoldingV1, the five DA templates and CC offers, as the party', async () => {
     const { tokens, wallet } = setup();
     const state = await tokens.loadState();
     expect(wallet.ledgerCalls()).toEqual(['GET /v2/state/ledger-end', 'POST /v2/state/active-contracts']);
@@ -315,14 +319,16 @@ describe('createWallet.loadState', () => {
         locked: '50.0000000000',
         holdingCount: 3,
         metadata: { name: 'Example', symbol: 'XMPL', decimals: 2 },
+        source: 'da-registry',
       },
     ]);
     expect(state.mintOffers.map((o) => o.contractId)).toEqual(['00mint']);
+    expect(state.mintOffers[0]).toMatchObject({ reference: 'mint_0001', memo: null });
     expect(state.transferOffers.incoming.map((o) => o.contractId)).toEqual(['00in']);
     expect(state.transferOffers.outgoing.map((o) => o.contractId)).toEqual(['00out']);
     expect(state.transferOffers.incoming[0]).toMatchObject({ memo: 'hello', sender: OTHER, receiver: HOLDER });
     expect(state.burnRequests.map((r) => r.contractId)).toEqual(['00burn']);
-    expect(state.burnRequests[0]).toMatchObject({ lockedHoldingCid: '00locked', reference: 'r-1' });
+    expect(state.burnRequests[0]).toMatchObject({ lockedHoldingCid: '00locked', reference: 'r-1', memo: null });
     expect(state.transferPreapprovals).toEqual([
       {
         contractId: '00pre',
@@ -654,7 +660,10 @@ describe('createWallet: transfer offers', () => {
         body: { excludeDebugFields: true },
       },
     ]);
-    expect(wallet.reads[wallet.reads.length - 1]).toEqual([DA_REGISTRY_TEMPLATES.transferOffer]);
+    expect(wallet.reads[wallet.reads.length - 1]).toEqual([
+      DA_REGISTRY_TEMPLATES.transferOffer,
+      AMULET_TEMPLATES.transferInstruction,
+    ]);
     expect(wallet.submissions[0]?.commands).toEqual([
       {
         ExerciseCommand: {

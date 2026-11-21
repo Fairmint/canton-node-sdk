@@ -24,7 +24,7 @@ export const GetUser = createApiOperation<GetUserParams, GetUserResponse>({
   paramsSchema: GetUserParamsSchema,
   method: 'GET',
   buildUrl: (params, apiUrl) => {
-    const baseUrl = `${apiUrl}/v2/users/${params.userId}`;
+    const baseUrl = `${apiUrl}/v2/users/${encodeURIComponent(params.userId)}`;
     const queryParams = new URLSearchParams();
     // Always pass empty string for identity-provider-id
     queryParams.append('identity-provider-id', '');

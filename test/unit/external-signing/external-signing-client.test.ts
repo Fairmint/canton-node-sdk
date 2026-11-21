@@ -1,6 +1,6 @@
 import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import { ApiError, NetworkError, OperationErrorCode } from '../../../src/core/errors';
+import { ApiError, NetworkError, OperationErrorCode, ValidationError } from '../../../src/core/errors';
 import {
   CantonEd25519SigningPurpose,
   createExternalPartyWithEd25519Signer,
@@ -126,6 +126,75 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
       publicKeyFingerprint: fixture.publicKeyFingerprint,
       alreadyExisted: false,
       status: { state: 'ready', exists: true, ready: true },
+    });
+  });
+
+  it('forwards userId to allocation', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+
+    await createExternalPartyWithEd25519Signer({
+      ledgerClient,
+      synchronizerId: SYNCHRONIZER_ID,
+      partyHint: 'external-test',
+      signer: fixture.signer,
+      userId: 'wallet-server',
+      readinessDelaysMs: [0],
+      requestTtlMs: 60_000,
+      now: () => NOW_MS,
+    });
+
+    expect(ledgerClient.allocateExternalParty).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'wallet-server' })
+    );
+  });
+
+  it('rejects an invalid userId as a plain ValidationError before the signer or the ledger runs', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+
+    const result = createExternalPartyWithEd25519Signer({
+      ledgerClient,
+      synchronizerId: SYNCHRONIZER_ID,
+      partyHint: 'external-test',
+      signer: fixture.signer,
+      userId: 'wallet server',
+      readinessDelaysMs: [0],
+    });
+
+    await expect(result).rejects.toBeInstanceOf(ValidationError);
+    await expect(result).rejects.not.toBeInstanceOf(ExternalPartyOnboardingError);
+    expect(fixture.signCantonPayload).not.toHaveBeenCalled();
+    expect(ledgerClient.generateExternalPartyTopology).not.toHaveBeenCalled();
+    expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
+    expect(ledgerClient.getPartyDetails).not.toHaveBeenCalled();
+  });
+
+  it('grants CanActAs to userId on an already-existing party (the default allowAlreadyExists path)', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    ledgerClient.allocateExternalParty.mockRejectedValueOnce(
+      new ApiError('already exists', 409, 'Conflict', { code: 'ALREADY_EXISTS' })
+    );
+    ledgerClient.listUserRights = jest.fn().mockResolvedValue({ rights: [] });
+    ledgerClient.grantUserRights = jest.fn().mockResolvedValue({ newlyGrantedRights: [] });
+
+    const created = await createExternalPartyWithEd25519Signer({
+      ledgerClient,
+      synchronizerId: SYNCHRONIZER_ID,
+      partyHint: 'external-test',
+      signer: fixture.signer,
+      userId: 'wallet-server',
+      readinessDelaysMs: [0],
+      requestTtlMs: 60_000,
+      now: () => NOW_MS,
+    });
+
+    expect(created.alreadyExisted).toBe(true);
+    expect(ledgerClient.grantUserRights).toHaveBeenCalledWith({
+      userId: 'wallet-server',
+      identityProviderId: '',
+      rights: [{ kind: { CanActAs: { value: { party: fixture.partyId } } } }],
     });
   });
 

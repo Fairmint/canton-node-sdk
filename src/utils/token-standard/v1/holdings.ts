@@ -3,14 +3,18 @@ import type { JsGetActiveContractsResponse } from '../../../clients/ledger-json-
 import { CantonError, type ErrorContext } from '../../../core/errors';
 import { isNonEmptyString, isRecord } from '../../../core/utils';
 import { isJsActiveContractItem, type JsActiveContractItem } from '../../contracts';
+import {
+  readHoldingViewLock,
+  readHoldingViewMetadata,
+  readLedgerTimestamp,
+  type HoldingViewLock,
+} from '../../../wallets/holding-view';
+import { readInstrumentId } from '../../../wallets/instrument';
 import { TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID } from './constants';
 import type { TokenStandardV1InstrumentId, TokenStandardV1Metadata } from './transfer-factory';
 
 export const TOKEN_STANDARD_V1_AMOUNT_DECIMALS = 10;
 
-const ISO_8601_TIMESTAMP_PATTERN =
-  /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,9})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
-const SIGNED_INTEGER_PATTERN = /^-?\d+$/;
 const DECIMAL_AMOUNT_PATTERN = /^(\d+)(?:\.(\d+))?$/;
 const TRAILING_ZEROS_PATTERN = /0+$/;
 const NON_NEGATIVE_INTEGER_PATTERN = /^\d+$/;
@@ -37,13 +41,8 @@ export interface TokenStandardV1HoldingActiveContractsClient {
   getActiveContracts(params: GetActiveContractsParams): Promise<JsGetActiveContractsResponse>;
 }
 
-export interface TokenStandardV1Lock {
-  readonly holders: readonly string[];
-  readonly expiresAt: string | null;
-  /** Duration from the holding's createdAt ledger time after which the lock expires. */
-  readonly expiresAfter: { readonly microseconds: string } | null;
-  readonly context: string | null;
-}
+/** `HoldingV1.Lock`; the view parsing is the browser-safe wallet layer's (`src/wallets/holding-view`). */
+export type TokenStandardV1Lock = HoldingViewLock;
 
 export interface TokenStandardV1Holding {
   readonly contractId: string;
@@ -177,26 +176,8 @@ function validateInstrumentId(instrumentId: TokenStandardV1InstrumentId): void {
   }
 }
 
-function readNullableString(value: unknown): string | null | undefined {
-  if (value === null) return null;
-  return isNonEmptyString(value) ? value : undefined;
-}
-
-function readCreatedAt(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const match = ISO_8601_TIMESTAMP_PATTERN.exec(value);
-  if (!match || Number.isNaN(Date.parse(value))) return undefined;
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const isLeapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-  const daysInMonth = month === 2 ? (isLeapYear ? 29 : 28) : [4, 6, 9, 11].includes(month) ? 30 : 31;
-  return day <= daysInMonth ? value : undefined;
-}
-
 function requireCreatedAt(value: unknown, context: ErrorContext): string {
-  const createdAt = readCreatedAt(value);
+  const createdAt = readLedgerTimestamp(value);
   if (createdAt === undefined) {
     interfaceViewInvalid('Active Holding contract is missing a valid createdAt ledger timestamp.', {
       ...context,
@@ -212,53 +193,6 @@ function readRawActiveContract(item: unknown): Readonly<Record<string, unknown>>
   if (!isRecord(contractEntry)) return undefined;
   const activeContract = contractEntry['JsActiveContract'];
   return isRecord(activeContract) ? activeContract : undefined;
-}
-
-function readInstrumentId(value: unknown): TokenStandardV1InstrumentId | undefined {
-  if (!isRecord(value)) return undefined;
-  const admin = isNonEmptyString(value['admin']) ? value['admin'] : undefined;
-  const id = isNonEmptyString(value['id']) ? value['id'] : undefined;
-  return admin && id ? { admin, id } : undefined;
-}
-
-function readMetadata(value: unknown): TokenStandardV1Metadata | undefined {
-  if (!isRecord(value) || !isRecord(value['values'])) return undefined;
-  const values = Object.create(null) as Record<string, string>;
-  for (const [key, metadataValue] of Object.entries(value['values'])) {
-    if (typeof metadataValue !== 'string') return undefined;
-    Object.defineProperty(values, key, {
-      value: metadataValue,
-      enumerable: true,
-      configurable: true,
-      writable: false,
-    });
-  }
-  return { values };
-}
-
-function readLock(value: unknown): TokenStandardV1Lock | null | undefined {
-  if (value === null) return null;
-  if (!isRecord(value) || !Array.isArray(value['holders'])) return undefined;
-  const { holders } = value;
-  if (!holders.every(isNonEmptyString)) return undefined;
-
-  const expiresAt = readNullableString(value['expiresAt']);
-  const context = readNullableString(value['context']);
-  const rawExpiresAfter = value['expiresAfter'];
-  let expiresAfter: TokenStandardV1Lock['expiresAfter'];
-  if (rawExpiresAfter === null) {
-    expiresAfter = null;
-  } else if (
-    isRecord(rawExpiresAfter) &&
-    typeof rawExpiresAfter['microseconds'] === 'string' &&
-    SIGNED_INTEGER_PATTERN.test(rawExpiresAfter['microseconds'])
-  ) {
-    expiresAfter = { microseconds: rawExpiresAfter['microseconds'] };
-  } else {
-    return undefined;
-  }
-  if (expiresAt === undefined || context === undefined) return undefined;
-  return { holders, expiresAt, expiresAfter, context };
 }
 
 function instrumentIdsEqual(left: TokenStandardV1InstrumentId, right: TokenStandardV1InstrumentId): boolean {
@@ -366,7 +300,7 @@ function readHolding(params: {
   }
   const viewValue = isRecord(interfaceView.viewValue) ? interfaceView.viewValue : undefined;
   const owner = viewValue && isNonEmptyString(viewValue['owner']) ? viewValue['owner'] : undefined;
-  const instrumentId = viewValue ? readInstrumentId(viewValue['instrumentId']) : undefined;
+  const instrumentId = viewValue ? (readInstrumentId(viewValue['instrumentId']) ?? undefined) : undefined;
   if ((owner && owner !== params.owner) || (instrumentId && !instrumentIdsEqual(instrumentId, params.instrumentId))) {
     return undefined;
   }
@@ -398,8 +332,8 @@ function readHolding(params: {
     contractId: createdEvent.contractId,
   });
 
-  const lock = readLock(viewValue['lock']);
-  const meta = readMetadata(viewValue['meta']);
+  const lock = readHoldingViewLock(viewValue['lock']);
+  const meta = readHoldingViewMetadata(viewValue['meta']);
   if (lock === undefined || !meta) {
     interfaceViewInvalid('HoldingV1 interface view has an invalid lock or metadata value.', {
       itemIndex: params.itemIndex,

@@ -3,6 +3,7 @@ import { WalletError } from '../../../src/wallets/errors';
 import {
   instrumentBalances,
   instrumentKey,
+  isCantonCoin,
   MAX_SKIPPING_COVER_CANDIDATES,
   parseHolding,
   requirePositiveAmount,
@@ -54,6 +55,7 @@ describe('parseHolding', () => {
       instrumentId: INSTRUMENT,
       amount: '5.0000000000',
       locked: false,
+      source: 'da-registry',
     });
   });
 
@@ -95,6 +97,7 @@ describe('selectHoldings', () => {
     instrumentId: INSTRUMENT,
     amount,
     locked: false,
+    source: 'da-registry',
     ...extra,
   });
   const request = (amount: string): { owner: string; instrumentId: InstrumentId; amount: string } => ({
@@ -289,7 +292,17 @@ describe('instrumentBalances', () => {
     instrumentId: INSTRUMENT,
     amount,
     locked: false,
+    source: 'da-registry',
     ...extra,
+  });
+
+  it("reads a holding built without a source as 'da-registry', and tells Canton Coin apart", () => {
+    const { source: _omitted, ...bare } = h('00a', '1');
+    const [balance] = instrumentBalances([bare]);
+    expect(balance?.source).toBe('da-registry');
+    expect(isCantonCoin(bare)).toBe(false);
+    expect(isCantonCoin({ ...bare, source: 'amulet' })).toBe(true);
+    expect(isCantonCoin(h('00b', '1'))).toBe(false);
   });
 
   it('sums exactly per instrument, locked apart, sorted by id then admin', () => {
@@ -308,6 +321,7 @@ describe('instrumentBalances', () => {
         unlocked: '1.0000000000',
         locked: '0.0000000000',
         holdingCount: 1,
+        source: 'da-registry',
       },
       {
         key: instrumentKey({ admin: OTHER, id: 'XMPL' }),
@@ -315,6 +329,7 @@ describe('instrumentBalances', () => {
         unlocked: '2.0000000000',
         locked: '0.0000000000',
         holdingCount: 1,
+        source: 'da-registry',
       },
       {
         key: instrumentKey(INSTRUMENT),
@@ -323,6 +338,7 @@ describe('instrumentBalances', () => {
         unlocked: '99999999999999999.3000000001',
         locked: '5.5000000000',
         holdingCount: 4,
+        source: 'da-registry',
       },
     ]);
     expect(instrumentBalances([])).toEqual([]);
@@ -352,6 +368,7 @@ describe('instrumentBalances', () => {
         unlocked: '2.0000000000',
         locked: '0.0000000000',
         holdingCount: 1,
+        source: 'da-registry',
       },
       {
         key: 'USD%40issuer@registrar::1220bb',
@@ -359,6 +376,7 @@ describe('instrumentBalances', () => {
         unlocked: '1.0000000000',
         locked: '0.0000000000',
         holdingCount: 1,
+        source: 'da-registry',
       },
     ]);
   });

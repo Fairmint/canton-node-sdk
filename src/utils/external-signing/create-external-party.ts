@@ -1,6 +1,7 @@
 import type { Keypair } from '@stellar/stellar-base';
 import type { LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { OperationError, OperationErrorCode } from '../../core/errors';
+import { normalizeAllocationUserId } from './allocation-user-id';
 import { signHexWithStellarKeypair, stellarPublicKeyToBase64, stellarPublicKeyToHex } from './stellar-utils';
 
 /** Parameters for creating an external party. */
@@ -15,6 +16,12 @@ export interface CreateExternalPartyParams {
   readonly synchronizerId: string;
   /** Identity provider ID (default: 'default'). */
   readonly identityProviderId?: string;
+  /**
+   * Participant user granted `CanActAs` on the new party. Trimmed, then checked with Canton's user id rule (non-empty,
+   * at most 128 characters, ASCII letters, digits and "@^$.!`-#+'~_|:()") before topology is generated. Omit to grant
+   * no user rights.
+   */
+  readonly userId?: string;
   /** If true, the local participant will only observe, not confirm (default: false). */
   readonly localParticipantObservationOnly?: boolean;
   /** Other participant UIDs that should confirm for this party. */
@@ -77,11 +84,13 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
     partyName,
     synchronizerId,
     identityProviderId = 'default',
+    userId: rawUserId,
     localParticipantObservationOnly,
     otherConfirmingParticipantUids,
     confirmationThreshold,
     observingParticipantUids,
   } = params;
+  const userId = rawUserId === undefined ? undefined : normalizeAllocationUserId(rawUserId);
 
   // Step 1: Convert Stellar public key to base64 for Ledger API
   const publicKeyBase64 = stellarPublicKeyToBase64(keypair);
@@ -154,6 +163,7 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
   const allocateResult = await ledgerClient.allocateExternalParty({
     synchronizer: synchronizerId,
     identityProviderId,
+    ...(userId !== undefined ? { userId } : {}),
     onboardingTransactions,
     multiHashSignatures: [
       {

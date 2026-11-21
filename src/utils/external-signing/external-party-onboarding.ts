@@ -4,6 +4,7 @@ import { isRecord } from '../../core/utils';
 import { runWithAbortSignal } from '../../core/utils/abort';
 import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
 import { allocateExternalParty } from './allocate-external-party';
+import { normalizeAllocationUserId } from './allocation-user-id';
 import { type CantonEd25519Signature, normalizeCantonEd25519Signature } from './canton-ed25519-signer';
 import {
   assertCantonHashSignature,
@@ -59,6 +60,18 @@ export interface SubmitExternalPartyOnboardingOptions {
   readonly topologyTransactions: readonly string[];
   readonly multiHashSignatureBase64: string;
   readonly publicKeyFingerprint?: string | null;
+  /**
+   * Participant user that gets `CanActAs` on the new party, so that user can submit commands for it (for example the
+   * server's own ledger user). Trimmed, then checked with Canton's user id rule (non-empty, at most 128 characters,
+   * ASCII letters, digits and "@^$.!`-#+'~_|:()") before anything is prepared, signed or sent. The ledger grants the
+   * right only when the allocation itself succeeds, so when `allowAlreadyExists`confirms an existing party the SDK
+   * reads the user's rights and, only when`CanActAs`on the party is missing, grants it (granting needs participant
+   * admin or identity-provider admin rights; an ordinary user allocating for itself already holds the right after its
+   * first allocation, so its replay grants nothing). A successful return means the user can act as the party; when the
+   * right is missing and the caller may not grant it, an`OperationError` says so. Omit it to grant no user rights (the
+   * ledger's default).
+   */
+  readonly userId?: string;
   readonly identityProviderId?: string;
   /**
    * Cancels the allocation request. Cancellation after dispatch has an ambiguous outcome; reconcile `partyId` before
@@ -115,6 +128,18 @@ export type ExternalPartyHashSigner = (
 export interface CreateExternalPartyWithSignerOptions extends PrepareExternalPartyOnboardingOptions {
   readonly signMultiHash: ExternalPartyHashSigner;
   readonly identityProviderId?: string;
+  /**
+   * Participant user that gets `CanActAs` on the new party, so that user can submit commands for it (for example the
+   * server's own ledger user). Trimmed, then checked with Canton's user id rule (non-empty, at most 128 characters,
+   * ASCII letters, digits and "@^$.!`-#+'~_|:()") before anything is prepared, signed or sent. The ledger grants the
+   * right only when the allocation itself succeeds, so when `allowAlreadyExists`confirms an existing party the SDK
+   * reads the user's rights and, only when`CanActAs`on the party is missing, grants it (granting needs participant
+   * admin or identity-provider admin rights; an ordinary user allocating for itself already holds the right after its
+   * first allocation, so its replay grants nothing). A successful return means the user can act as the party; when the
+   * right is missing and the caller may not grant it, an`OperationError` says so. Omit it to grant no user rights (the
+   * ledger's default).
+   */
+  readonly userId?: string;
   /**
    * Cancels allocation transport. It does not cancel topology preparation or the caller-provided signer callback, and
    * it cannot undo an allocation already accepted by Canton.
@@ -200,6 +225,7 @@ export async function prepareExternalPartyOnboarding(
 export async function createExternalPartyWithSigner(
   options: CreateExternalPartyWithSignerOptions
 ): Promise<CreatedExternalPartyWithSigner> {
+  const userId = options.userId === undefined ? undefined : normalizeAllocationUserId(options.userId);
   const publicKeyBase64 = normalizeEd25519PublicKeyForCanton(options.publicKeyBase64);
   const prepared = await prepareExternalPartyOnboarding({
     ledgerClient: options.ledgerClient,
@@ -238,6 +264,7 @@ export async function createExternalPartyWithSigner(
     topologyTransactions: prepared.topologyTransactions,
     multiHashSignatureBase64: normalizeExternalPartyHashSignature(signature),
     ...(options.identityProviderId !== undefined ? { identityProviderId: options.identityProviderId } : {}),
+    ...(userId !== undefined ? { userId } : {}),
     ...(options.allowAlreadyExists !== undefined ? { allowAlreadyExists: options.allowAlreadyExists } : {}),
     ...(options.signal !== undefined ? { signal: options.signal } : {}),
   });
@@ -258,6 +285,7 @@ export async function submitExternalPartyOnboarding(
   options: SubmitExternalPartyOnboardingOptions
 ): Promise<SubmittedExternalPartyOnboarding> {
   validateRequiredString('synchronizerId', options.synchronizerId);
+  const userId = options.userId === undefined ? undefined : normalizeAllocationUserId(options.userId);
   const publicKeyFingerprint = assertCantonPartyMatchesPublicKey({
     partyId: options.partyId,
     publicKeyBase64: options.publicKeyBase64,
@@ -284,6 +312,7 @@ export async function submitExternalPartyOnboarding(
           signingAlgorithmSpec: CANTON_ED25519_SIGNATURE_ALGORITHM,
         },
       ],
+      ...(userId !== undefined ? { userId } : {}),
       ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
     const partyId = readAllocatedExternalPartyId(raw);
@@ -312,6 +341,15 @@ export async function submitExternalPartyOnboarding(
     );
     if (!existing) {
       throw error;
+    }
+    if (userId !== undefined) {
+      await ensureActAsOnExistingParty(
+        options.ledgerClient,
+        userId,
+        options.partyId,
+        options.identityProviderId ?? DEFAULT_CANTON_IDENTITY_PROVIDER_ID,
+        options.signal
+      );
     }
     return {
       partyId: options.partyId,
@@ -390,6 +428,80 @@ export async function getExternalPartyIdForHintAndPublicKey(
     }
     throw error;
   }
+}
+
+/**
+ * Makes sure `userId` holds `CanActAs` on an external party that already existed. The ledger grants the allocation's
+ * `userId` only when the allocation itself succeeds, so an idempotent replay (a retry after an ambiguous first
+ * allocation, or a party first allocated for another user) may need the right granted here. The user's rights are read
+ * first (any user may read its own, an admin any user's) and the grant, which needs participant admin or
+ * identity-provider admin rights, is sent only when the right is missing. Returns only once the user is known to hold
+ * the right; throws an `OperationError` when the caller may not read the rights, or the right is missing and the caller
+ * may not grant it.
+ */
+async function ensureActAsOnExistingParty(
+  ledgerClient: LedgerJsonApiClient,
+  userId: string,
+  partyId: string,
+  identityProviderId: string,
+  signal: AbortSignal | undefined
+): Promise<void> {
+  let listed: unknown;
+  try {
+    const listParams = { userId, identityProviderId };
+    listed =
+      signal === undefined
+        ? await ledgerClient.listUserRights(listParams)
+        : await ledgerClient.listUserRights(listParams, { signal });
+  } catch (error) {
+    if (!isPermissionDenied(error)) throw error;
+    throw new OperationError(
+      `Party ${partyId} already exists, but the caller may not read user ${userId}'s rights, so it cannot confirm that user can act as the party`,
+      OperationErrorCode.TRANSACTION_FAILED,
+      { partyId, userId, identityProviderId, cause: errorMessage(error) }
+    );
+  }
+  if (hasCanActAs(listed, partyId)) return;
+  try {
+    const grantParams = {
+      userId,
+      identityProviderId,
+      rights: [{ kind: { CanActAs: { value: { party: partyId } } } }],
+    };
+    if (signal === undefined) {
+      await ledgerClient.grantUserRights(grantParams);
+    } else {
+      await ledgerClient.grantUserRights(grantParams, { signal });
+    }
+  } catch (error) {
+    if (!isPermissionDenied(error)) throw error;
+    throw new OperationError(
+      `Party ${partyId} already exists and user ${userId} does not hold CanActAs on it; granting it needs participant admin or identity-provider admin rights, which the caller lacks`,
+      OperationErrorCode.TRANSACTION_FAILED,
+      { partyId, userId, identityProviderId, cause: errorMessage(error) }
+    );
+  }
+}
+
+/** Whether a `ListUserRights` answer holds `CanActAs` on `partyId`. */
+function hasCanActAs(listed: unknown, partyId: string): boolean {
+  const rights = isRecord(listed) ? listed['rights'] : undefined;
+  if (!Array.isArray(rights)) return false;
+  return rights.some((right: unknown) => {
+    const kind = isRecord(right) ? right['kind'] : undefined;
+    const canActAs = isRecord(kind) ? kind['CanActAs'] : undefined;
+    const value = isRecord(canActAs) ? canActAs['value'] : undefined;
+    return isRecord(value) && value['party'] === partyId;
+  });
+}
+
+function isPermissionDenied(error: unknown): boolean {
+  const status = readErrorStatus(error);
+  return status === 401 || status === 403;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function validateRequiredString(name: string, value: string): void {

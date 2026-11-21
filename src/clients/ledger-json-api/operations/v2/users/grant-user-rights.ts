@@ -13,12 +13,11 @@ export type GrantUserRightsResponse = paths[Endpoint]['post']['responses']['200'
 export const GrantUserRights = createApiOperation<GrantUserRightsParams, GrantUserRightsResponse>({
   paramsSchema: GrantUserRightsParamsSchema,
   method: 'POST',
-  buildUrl: (params, apiUrl) => `${apiUrl}/v2/users/${params.userId}/rights`,
-  buildRequestData: (params) =>
-    // Canton API expects userId in both the URL path AND the request body
-    // Always inject empty string for identityProviderId
-    ({
-      ...params,
-      identityProviderId: '',
-    }),
+  buildUrl: (params, apiUrl) => `${apiUrl}/v2/users/${encodeURIComponent(params.userId)}/rights`,
+  // Canton API expects userId in both the URL path (encoded) AND the request body (as given). identityProviderId
+  // defaults to '' (the default identity provider); an identity-provider admin passes its own.
+  buildRequestData: (params) => ({
+    ...params,
+    identityProviderId: params.identityProviderId ?? '',
+  }),
 });

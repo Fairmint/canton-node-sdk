@@ -1,22 +1,49 @@
-/** Read DA Registry holdings from the ACS and pick the inputs for a transfer or burn, with exact decimal arithmetic. */
+/**
+ * Read a wallet party's holdings from the ACS (DA Registry holdings and Canton Coin) and pick the inputs for a transfer
+ * or burn, with exact decimal arithmetic.
+ */
+import { AMULET_INSTRUMENT_ID, AMULET_TEMPLATES } from './amulet/constants';
 import { formatDecimalUnits, MAX_DECIMAL_UNITS, parseDecimalUnits } from './decimal';
 import { WalletError } from './errors';
+import { holdingViewOf } from './holding-view';
 import { readInstrumentId, sameInstrument } from './instrument';
 import { isRecord, nonEmptyString } from './json';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
 import { isTemplate } from './templates';
 import type { ActiveContract, InstrumentId } from './types';
 
+/**
+ * Which kind of holding contract a holding was read from, and so whose signatures made it genuine:
+ *
+ * - `da-registry`: a DA Utility Registry `Holding`, signed by its registrar (the instrument admin) and its owner;
+ * - `amulet`: Canton Coin, a Splice `Amulet` or `LockedAmulet`, signed by the DSO (the instrument admin) and its owner
+ *   (and, for a `LockedAmulet`, by every lock holder).
+ */
+export type HoldingSource = 'da-registry' | 'amulet';
+
 export interface Holding {
   readonly contractId: string;
   readonly owner: string;
   readonly instrumentId: InstrumentId;
-  /** Decimal string as the ledger reports it. */
+  /**
+   * Decimal string as the ledger reports it. For Canton Coin this is the amount the holding was created with (the
+   * `HoldingV1` view's `amount`); holding fees accrued since are not deducted.
+   */
   readonly amount: string;
   /** Locked to an allocation, a burn request or a transfer in flight: it cannot be spent. */
   readonly locked: boolean;
   /** The synchronizer the holding is assigned to, when the ledger reported it. Inputs never mix synchronizers. */
   readonly synchronizerId?: string;
+  /**
+   * Which kind of holding contract it is (see {@link HoldingSource}). The wallet always sets it; optional so an object
+   * built without it (a test double, a cached state) still type-checks, and absent reads as `'da-registry'`.
+   */
+  readonly source?: HoldingSource;
+  /**
+   * The `HoldingV1` view's metadata, for a holding read through its view (Canton Coin: the round it was created in and
+   * its holding fee rate, `amulet.splice.lfdecentralizedtrust.org/created-in-round` and `.../rate-per-round`).
+   */
+  readonly meta?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -29,14 +56,11 @@ function readLocked(value: unknown): boolean | null {
   return value['tag'] !== 'None';
 }
 
-/**
- * A genuine DA Registry `Holding`, read from its create argument (`owner`, `instrument {source, id}`, `amount`,
- * `lock`), or null. Genuine: of DA's holding package, and signed by its registrar (the instrument admin, `source`) and
- * its owner. Any party can create a look-alike from its own package, with the wallet party as an observer, so only
- * those signatures make a holding real. An unreadable holding is never spendable.
- */
-export function parseHolding(contract: ActiveContract): Holding | null {
-  if (!isTemplate(contract, DA_REGISTRY_TEMPLATES.holding)) return null;
+const synchronizerOf = (contract: ActiveContract): { synchronizerId?: string } =>
+  contract.synchronizerId !== undefined ? { synchronizerId: contract.synchronizerId } : {};
+
+/** A DA Registry `Holding`, read from its create argument (`owner`, `instrument {source, id}`, `amount`, `lock`). */
+function parseDaHolding(contract: ActiveContract): Holding | null {
   const args = contract.createArgument;
   const instrument = args?.['instrument'];
   if (args === null || !isRecord(instrument)) return null;
@@ -49,9 +73,7 @@ export function parseHolding(contract: ActiveContract): Holding | null {
     instrumentId === null ||
     typeof amount !== 'string' ||
     parseDecimalUnits(amount) === null ||
-    locked === null ||
-    !contract.signatories.includes(instrumentId.admin) ||
-    !contract.signatories.includes(owner)
+    locked === null
   ) {
     return null;
   }
@@ -61,8 +83,68 @@ export function parseHolding(contract: ActiveContract): Holding | null {
     instrumentId,
     amount,
     locked,
-    ...(contract.synchronizerId !== undefined && { synchronizerId: contract.synchronizerId }),
+    ...synchronizerOf(contract),
+    source: 'da-registry',
   };
+}
+
+/**
+ * Canton Coin, read from its `HoldingV1` view (an interface filter returns no create argument for it). The instrument
+ * must be `Amulet`; an `Amulet` must be unlocked and a `LockedAmulet` locked, as Splice's views report them. A
+ * `LockedAmulet` is signed by its lock holders as well as the DSO and the owner (`signatory lock.holders, signatory
+ * amulet`), so every lock holder the view names must be a signatory: a view naming a holder who did not sign is not
+ * genuine.
+ */
+function parseAmuletHolding(contract: ActiveContract): Holding | null {
+  const view = holdingViewOf(contract);
+  if (view?.instrumentId.id !== AMULET_INSTRUMENT_ID) return null;
+  if (parseDecimalUnits(view.amount) === null) return null;
+  const locked = view.lock !== null;
+  if (locked !== isTemplate(contract, AMULET_TEMPLATES.lockedAmulet)) return null;
+  if (view.lock !== null && !view.lock.holders.every((holder) => contract.signatories.includes(holder))) return null;
+  return {
+    contractId: contract.contractId,
+    owner: view.owner,
+    instrumentId: view.instrumentId,
+    amount: view.amount,
+    locked,
+    ...synchronizerOf(contract),
+    source: 'amulet',
+    meta: view.meta.values,
+  };
+}
+
+/**
+ * The holding contracts the wallet counts, per source: the templates (package-name form, so the package name is checked
+ * too) and how to read them. Every rule then requires the instrument admin's and the owner's signatures (a
+ * `LockedAmulet`'s parser also requires its lock holders').
+ */
+const HOLDING_RULES: ReadonlyArray<{
+  readonly templateIds: readonly string[];
+  readonly parse: (contract: ActiveContract) => Holding | null;
+}> = [
+  { templateIds: [DA_REGISTRY_TEMPLATES.holding], parse: parseDaHolding },
+  { templateIds: [AMULET_TEMPLATES.amulet, AMULET_TEMPLATES.lockedAmulet], parse: parseAmuletHolding },
+];
+
+/**
+ * A genuine holding, or null: a DA Registry `Holding` (read from its create argument) or a Canton Coin `Amulet` or
+ * `LockedAmulet` (read from its `HoldingV1` view). Genuine: of a template in the trust table above, and signed by its
+ * instrument admin (DA's registrar, or the DSO) and its owner, and a `LockedAmulet` by every lock holder. Any party can
+ * create a look-alike from its own package, with the wallet party as an observer, so only those signatures make a
+ * holding real. An unreadable holding is never spendable.
+ */
+export function parseHolding(contract: ActiveContract): Holding | null {
+  const rule = HOLDING_RULES.find(({ templateIds }) => templateIds.some((id) => isTemplate(contract, id)));
+  const holding = rule?.parse(contract) ?? null;
+  if (
+    holding === null ||
+    !contract.signatories.includes(holding.instrumentId.admin) ||
+    !contract.signatories.includes(holding.owner)
+  ) {
+    return null;
+  }
+  return holding;
 }
 
 export interface HoldingSelection {
@@ -245,6 +327,20 @@ export interface InstrumentBalance {
   readonly holdingCount: number;
   /** The registry's metadata of the instrument; absent when the registry did not answer it. */
   readonly metadata?: InstrumentMetadata;
+  /**
+   * Where the holdings come from: `amulet` for Canton Coin (see {@link HoldingSource}). The wallet always sets it;
+   * optional like `Holding.source`, and absent reads as `'da-registry'`.
+   */
+  readonly source?: HoldingSource;
+}
+
+/**
+ * Whether a holding or balance is Canton Coin (`source: 'amulet'`). Canton Coin is listed but not transferred, burnt or
+ * pre-approved through the wallet: filter it out of pickers for those actions (`balances.filter((b) =>
+ * !isCantonCoin(b))`).
+ */
+export function isCantonCoin(entry: Holding | InstrumentBalance): boolean {
+  return entry.source === 'amulet';
 }
 
 /** Escapes `%` and `@` in one key component, so the component holds no bare `@` and the escape itself is unambiguous. */
@@ -268,12 +364,21 @@ const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 
  * not depend on the locale). Holdings come from {@link parseHolding}, which refuses an unparseable amount.
  */
 export function instrumentBalances(holdings: readonly Holding[]): InstrumentBalance[] {
-  const totals = new Map<string, { instrumentId: InstrumentId; unlocked: bigint; locked: bigint; count: number }>();
+  const totals = new Map<
+    string,
+    { instrumentId: InstrumentId; source: HoldingSource; unlocked: bigint; locked: bigint; count: number }
+  >();
   for (const entry of holdings) {
     const units = parseDecimalUnits(entry.amount);
     if (units === null) continue;
     const key = instrumentKey(entry.instrumentId);
-    const total = totals.get(key) ?? { instrumentId: entry.instrumentId, unlocked: 0n, locked: 0n, count: 0 };
+    const total = totals.get(key) ?? {
+      instrumentId: entry.instrumentId,
+      source: entry.source ?? 'da-registry',
+      unlocked: 0n,
+      locked: 0n,
+      count: 0,
+    };
     if (entry.locked) total.locked += units;
     else total.unlocked += units;
     total.count += 1;
@@ -286,6 +391,7 @@ export function instrumentBalances(holdings: readonly Holding[]): InstrumentBala
       unlocked: formatDecimalUnits(total.unlocked),
       locked: formatDecimalUnits(total.locked),
       holdingCount: total.count,
+      source: total.source,
     }))
     .sort(
       (a, b) =>

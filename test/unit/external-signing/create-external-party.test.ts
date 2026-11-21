@@ -95,6 +95,36 @@ describe('createExternalParty', () => {
     });
   });
 
+  it('forwards userId so the participant user gets act-as rights', async () => {
+    const mockClient = createMockLedgerClient();
+
+    await createExternalParty({
+      ledgerClient: mockClient,
+      keypair,
+      partyName: 'alice',
+      synchronizerId: 'global-sync',
+      userId: 'wallet-server',
+    });
+
+    expect(mockClient.allocateExternalParty).toHaveBeenCalledWith(expect.objectContaining({ userId: 'wallet-server' }));
+  });
+
+  it('rejects an invalid userId before generating topology', async () => {
+    const mockClient = createMockLedgerClient();
+
+    await expect(
+      createExternalParty({
+        ledgerClient: mockClient,
+        keypair,
+        partyName: 'alice',
+        synchronizerId: 'global-sync',
+        userId: 'wallet server',
+      })
+    ).rejects.toThrow('userId may contain only');
+    expect(mockClient.generateExternalPartyTopology).not.toHaveBeenCalled();
+    expect(mockClient.allocateExternalParty).not.toHaveBeenCalled();
+  });
+
   it('uses custom identityProviderId when provided', async () => {
     const mockClient = createMockLedgerClient();
 

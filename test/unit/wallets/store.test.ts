@@ -21,7 +21,18 @@ import {
   type WalletStore,
 } from '../../../src/wallets';
 import type { WalletStoreInternalOptions } from '../../../src/wallets/store';
-import { fakeFetch, fakeProvider, HOLDER, OTHER, REGISTRAR } from './helpers';
+import { CANTON_COIN_METADATA } from '../../../src/wallets/amulet/constants';
+import {
+  amuletHolding,
+  DSO,
+  fakeFetch,
+  fakeProvider,
+  HOLDER,
+  HOLDING_V1_VIEW_KEY,
+  OPERATOR,
+  OTHER,
+  REGISTRAR,
+} from './helpers';
 import { connectedWallet, deferred, flush, TestProvider } from './session-helpers';
 
 /** A wallet call the test answers: the party and method it was asked for, and its settle functions. */
@@ -42,6 +53,7 @@ const snapshot = (offset: number): WalletState => ({
   mintOffers: [],
   burnRequests: [],
   transferPreapprovals: [],
+  cantonCoinUnavailable: false,
 });
 
 const SUBMITTED = { updateId: 'update-1', commandId: 'command-1' };
@@ -234,6 +246,51 @@ describe('createWalletStore', () => {
     expect(calls.every((call) => call.url.startsWith('https://registry.example/'))).toBe(true);
     // Bound to the party: it does not read the primary account again.
     expect(provider.requests.filter((r) => r.method === 'getPrimaryAccount')).toHaveLength(1);
+    store.dispose();
+  });
+
+  it("passes the Canton Coin options to each token wallet: a pinned DSO drops another DSO's Amulet", async () => {
+    const { fetch } = fakeFetch((call) =>
+      call.url.endsWith('/api/utilities/v0/operator') ? { json: { partyId: OPERATOR } } : { status: 404, json: {} }
+    );
+    const session = createCip103Session({ network: 'devnet' });
+    const store = createWalletStore({ session, registry: { fetch }, cantonCoin: { dsoParty: DSO, fetch } });
+    const provider = fakeProvider(
+      {
+        [HOLDING_V1_VIEW_KEY]: [amuletHolding('00cc', '3'), amuletHolding('00ccother', '9', { dso: 'DSO::1220ffff' })],
+      },
+      { party: HOLDER }
+    );
+    await session.connect(provider);
+    await flush();
+    const { state, loadError } = store.getSnapshot();
+    expect(loadError).toBeNull();
+    expect(state?.holdings.map((h) => h.contractId)).toEqual(['00cc']);
+    expect(state?.balances).toEqual([
+      expect.objectContaining({
+        instrumentId: { admin: DSO, id: 'Amulet' },
+        unlocked: '3.0000000000',
+        source: 'amulet',
+        metadata: CANTON_COIN_METADATA,
+      }),
+    ]);
+    store.dispose();
+  });
+
+  it('warns, with a retry, while Canton Coin cannot be confirmed, and shows the rest of the state', async () => {
+    const { fetch } = fakeFetch((call) =>
+      call.url.endsWith('/api/utilities/v0/operator') ? { json: { partyId: OPERATOR } } : { status: 503, json: {} }
+    );
+    const session = createCip103Session({ network: 'devnet' });
+    const store = createWalletStore({ session, registry: { fetch }, cantonCoin: { fetch } });
+    await session.connect(fakeProvider({ [HOLDING_V1_VIEW_KEY]: [amuletHolding('00cc', '3')] }, { party: HOLDER }));
+    await flush();
+    const view = store.getSnapshot();
+    expect(view.loadError).toBeNull();
+    expect(view.state).toMatchObject({ holdings: [], cantonCoinUnavailable: true });
+    expect(view.notices).toEqual([
+      expect.objectContaining({ key: 'canton-coin', level: 'warning', title: 'Canton Coin is not shown', retry: true }),
+    ]);
     store.dispose();
   });
 

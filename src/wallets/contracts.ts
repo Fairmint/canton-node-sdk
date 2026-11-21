@@ -1,8 +1,9 @@
 /**
- * Readers for the DA Registry contracts a holder acts on: mint offers, transfer offers, burn requests and transfer
- * preapprovals. Each returns null for a contract of another template or package, or one whose create argument does not
- * read.
+ * Readers for the registry contracts a holder acts on: DA's mint offers, transfer offers, burn requests and transfer
+ * preapprovals, and Canton Coin's transfer instructions (as transfer offers). Each returns null for a contract of
+ * another template or package, or one whose create argument does not read.
  */
+import { AMULET_INSTRUMENT_ID, AMULET_TEMPLATES } from './amulet/constants';
 import { readInstrumentId } from './instrument';
 import { isRecord, nonEmptyString } from './json';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
@@ -23,11 +24,29 @@ export interface MintOffer extends RegistryParties {
   readonly instrumentId: InstrumentId;
   readonly amount: string;
   readonly reference: string;
+  /**
+   * The mint's reason metadata (the issuer's note to the holder), null when there is none. The wallet always sets it;
+   * optional so an object built without it still type-checks, and absent reads as null.
+   */
+  readonly memo?: string | null;
   readonly requestedAt: string;
   readonly executeBefore: string;
 }
 
+/** Which registry a transfer offer is under: DA's Utility Registry, or Canton Coin's (the DSO's, served by Scan). */
+export type TransferOfferRegistry = 'da' | 'amulet';
+
+/**
+ * A pending CIP-56 transfer (a TransferInstruction) to or from the wallet party: a DA `TransferOffer`, or a Canton Coin
+ * `AmuletTransferInstruction`. One shape, so an inbox lists both alike. For Canton Coin, `operator` and `provider` are
+ * both the DSO party, which runs its own registry.
+ */
 export interface TransferOffer extends RegistryParties {
+  /**
+   * Which registry the offer is under. The wallet always sets it; optional so an object built without it (a test
+   * double, a cached state) still type-checks, and absent reads as `'da'`.
+   */
+  readonly registry?: TransferOfferRegistry;
   readonly contractId: string;
   readonly sender: string;
   readonly receiver: string;
@@ -45,6 +64,11 @@ export interface BurnRequest extends RegistryParties {
   readonly instrumentId: InstrumentId;
   readonly amount: string;
   readonly reference: string;
+  /**
+   * The burn's reason metadata, null when there is none. The wallet always sets it; optional like `MintOffer.memo`, and
+   * absent reads as null.
+   */
+  readonly memo?: string | null;
   readonly requestedAt: string;
   readonly executeBefore: string;
   /** The holding DA locked for the burn: the registrar's accept burns it, a reject or cancel unlocks it. */
@@ -78,13 +102,20 @@ function text(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }
 
+/** The reason (memo) a CIP-56 payload's `meta.values` carries, or null when there is none. */
+function reasonMemo(payload: Record<string, unknown>): string | null {
+  const { meta } = payload;
+  const values = isRecord(meta) ? meta['values'] : undefined;
+  return isRecord(values) ? text(values[TOKEN_STANDARD_V1_REASON_META_KEY]) : null;
+}
+
 function argumentsOf(contract: ActiveContract, templateId: string): Record<string, unknown> | null {
   return isTemplate(contract, templateId) ? contract.createArgument : null;
 }
 
 /**
- * A DA `MintOffer` (`{operator, provider, mint: {instrumentId, amount, holder, reference, requestedAt,
- * executeBefore}}`).
+ * A DA `MintOffer` (`{operator, provider, mint: {instrumentId, amount, holder, reference, requestedAt, executeBefore,
+ * meta}}`). `memo` is the mint's `meta` reason, the same key a transfer's memo uses.
  */
 export function parseMintOffer(contract: ActiveContract): MintOffer | null {
   const args = argumentsOf(contract, DA_REGISTRY_TEMPLATES.mintOffer);
@@ -101,6 +132,7 @@ export function parseMintOffer(contract: ActiveContract): MintOffer | null {
     ...fields,
     instrumentId,
     reference,
+    memo: reasonMemo(mint),
   };
 }
 
@@ -113,19 +145,43 @@ export function parseTransferOffer(contract: ActiveContract): TransferOffer | nu
   const fields = strings(transfer, ['sender', 'receiver', 'amount', 'requestedAt', 'executeBefore']);
   const instrumentId = readInstrumentId(transfer['instrumentId']);
   if (!parties || !fields || !instrumentId) return null;
-  const { meta } = transfer;
-  const values = isRecord(meta) ? meta['values'] : undefined;
-  const memo = isRecord(values) ? text(values[TOKEN_STANDARD_V1_REASON_META_KEY]) : null;
   return {
+    registry: 'da',
     contractId: contract.contractId,
     ...parties,
     ...fields,
     instrumentId,
-    memo,
+    memo: reasonMemo(transfer),
   };
 }
 
-/** A DA `BurnRequest` (`{operator, provider, burn: {...}, lockedHoldingCid}`). */
+/**
+ * A Canton Coin `AmuletTransferInstruction` (`AMULET_TEMPLATES.transferInstruction`, `{lockedAmulet, transfer: CIP-56
+ * Transfer}`) as a {@link TransferOffer}, or null when it is of another template or package, does not read, is not of
+ * Canton Coin under `dsoParty`, or was not signed by both the DSO and its sender (anyone can create a look-alike in
+ * their own package; only the signatures prove it).
+ */
+export function parseAmuletTransferOffer(contract: ActiveContract, dsoParty: string): TransferOffer | null {
+  const args = argumentsOf(contract, AMULET_TEMPLATES.transferInstruction);
+  const transfer = args?.['transfer'];
+  if (args === null || !isRecord(transfer)) return null;
+  const fields = strings(transfer, ['sender', 'receiver', 'amount', 'requestedAt', 'executeBefore']);
+  const instrumentId = readInstrumentId(transfer['instrumentId']);
+  if (!fields || !instrumentId) return null;
+  if (instrumentId.admin !== dsoParty || instrumentId.id !== AMULET_INSTRUMENT_ID) return null;
+  if (!contract.signatories.includes(dsoParty) || !contract.signatories.includes(fields.sender)) return null;
+  return {
+    registry: 'amulet',
+    contractId: contract.contractId,
+    operator: dsoParty,
+    provider: dsoParty,
+    ...fields,
+    instrumentId,
+    memo: reasonMemo(transfer),
+  };
+}
+
+/** A DA `BurnRequest` (`{operator, provider, burn: {..., meta}, lockedHoldingCid}`); `memo` is the burn's `meta` reason. */
 export function parseBurnRequest(contract: ActiveContract): BurnRequest | null {
   const args = argumentsOf(contract, DA_REGISTRY_TEMPLATES.burnRequest);
   const burn = args?.['burn'];
@@ -141,6 +197,7 @@ export function parseBurnRequest(contract: ActiveContract): BurnRequest | null {
     ...fields,
     instrumentId,
     reference,
+    memo: reasonMemo(burn),
   };
 }
 

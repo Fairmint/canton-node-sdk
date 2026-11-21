@@ -483,10 +483,12 @@ export interface AcsSnapshot {
 /** What the token actions need from a wallet: one party's contracts, and a submit that waits for the commit. */
 export interface Cip103Wallet {
   /**
-   * Active contracts of `partyId` of the templates (package-name `#pkg:Module:Entity` ids), as one snapshot at the
-   * ledger end: one ledger-end call and one ACS call whose cumulative filter carries every template.
+   * Active contracts of `partyId` matching any of the filters, as one snapshot at the ledger end: one ledger-end call
+   * and one ACS call whose cumulative filter carries every filter. A string is a template (package-name
+   * `#pkg:Module:Entity` id); an {@link AcsInterfaceFilter} matches every implementation of an interface and, with
+   * `includeInterfaceView`, returns its view in `interfaceViews`.
    */
-  readActiveContracts(templateIds: readonly string[]): Promise<AcsSnapshot>;
+  readActiveContracts(filters: readonly AcsFilter[]): Promise<AcsSnapshot>;
   /** Sign and submit as `partyId`; resolves once committed, else throws `WalletSubmitError`. Never retries. */
   submit(submission: WalletSubmission): Promise<SubmitResult>;
 }
@@ -495,9 +497,36 @@ export interface Cip103WalletOptions {
   readonly readRetry?: WalletReadRetryOptions;
 }
 
-/** A Ledger JSON API v2 `CumulativeFilter` for one template. */
-function cumulativeFilter(templateId: string): Record<string, unknown> {
-  return { identifierFilter: { TemplateFilter: { value: { templateId, includeCreatedEventBlob: false } } } };
+/**
+ * An interface filter of an ACS read: every contract implementing the interface (package-name `#pkg:Module:Interface`
+ * id). The ledger includes a contract's create argument only for a matching template filter, so a contract matched by
+ * this filter alone has `createArgument` null; read it through its view instead.
+ */
+export interface AcsInterfaceFilter {
+  readonly interfaceId: string;
+  /** Return the interface view with each contract (`interfaceViews`). Default false. */
+  readonly includeInterfaceView?: boolean;
+}
+
+/** One filter of an ACS read: a template id, or an {@link AcsInterfaceFilter}. */
+export type AcsFilter = string | AcsInterfaceFilter;
+
+/** A Ledger JSON API v2 `CumulativeFilter` for one template or interface. */
+function cumulativeFilter(filter: AcsFilter): Record<string, unknown> {
+  if (typeof filter === 'string') {
+    return { identifierFilter: { TemplateFilter: { value: { templateId: filter, includeCreatedEventBlob: false } } } };
+  }
+  return {
+    identifierFilter: {
+      InterfaceFilter: {
+        value: {
+          interfaceId: filter.interfaceId,
+          includeInterfaceView: filter.includeInterfaceView === true,
+          includeCreatedEventBlob: false,
+        },
+      },
+    },
+  };
 }
 
 /** The SDK's CIP-0103 client acting as `partyId` through `provider`. */
@@ -552,8 +581,8 @@ export function cip103Wallet(
     }
   }
 
-  async function readActiveContracts(templateIds: readonly string[]): Promise<AcsSnapshot> {
-    if (templateIds.length === 0) throw new TypeError('readActiveContracts needs at least one filter');
+  async function readActiveContracts(filters: readonly AcsFilter[]): Promise<AcsSnapshot> {
+    if (filters.length === 0) throw new TypeError('readActiveContracts needs at least one filter');
     const end = await ledgerApi('get', '/v2/state/ledger-end');
     const offset = isRecord(end) ? end['offset'] : undefined;
     if (typeof offset !== 'number' || !Number.isSafeInteger(offset)) {
@@ -563,7 +592,7 @@ export function cip103Wallet(
       activeAtOffset: offset,
       eventFormat: {
         verbose: false,
-        filtersByParty: { [partyId]: { cumulative: templateIds.map(cumulativeFilter) } },
+        filtersByParty: { [partyId]: { cumulative: filters.map(cumulativeFilter) } },
       },
     });
     if (!Array.isArray(entries)) {

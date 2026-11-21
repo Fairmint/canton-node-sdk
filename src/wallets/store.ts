@@ -8,6 +8,7 @@
  */
 import { anySignal } from './abort';
 import { notifyListeners } from './notify';
+import type { CantonCoinOptions } from './amulet/registry';
 import type { FetchLike, DaRegistryOptions } from './da-utilities/client';
 import { describeWalletError, WalletError, type WalletErrorDescription } from './errors';
 import { instrumentKey } from './holdings';
@@ -248,6 +249,8 @@ export interface WalletStoreOptions {
   readonly session: Cip103Session;
   /** How each token wallet reaches DA's Utilities API (`createWallet`'s `registry`). */
   readonly registry?: DaRegistryOptions;
+  /** Canton Coin for each token wallet (`createWallet`'s `cantonCoin`): on by default, `false` to read none. */
+  readonly cantonCoin?: CantonCoinOptions | false;
 }
 
 /** A test hook beside {@link WalletStoreOptions}; not part of the public options. */
@@ -404,7 +407,7 @@ function forParty(message: string, partyId: string, current: ConnectedWallet | n
  * which runs for the wallet current when the latch frees. A wallet call that never settles holds the latch.
  */
 export function createWalletStore(options: WalletStoreOptions): WalletStore {
-  const { session, registry, openWallet = createWallet } = options as WalletStoreInternalOptions;
+  const { session, registry, cantonCoin, openWallet = createWallet } = options as WalletStoreInternalOptions;
   const listeners = new Set<() => void>();
   const plans: StorePlans = new WeakMap();
 
@@ -451,6 +454,16 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
         level: rateLimited ? 'warning' : 'error',
         title: rateLimited ? 'The wallet is busy' : 'The wallet could not be read',
         message: loadError.message,
+        ...(tokens !== null && { retry: true as const }),
+      });
+    }
+    if (state?.cantonCoinUnavailable === true) {
+      list.push({
+        key: 'canton-coin',
+        level: 'warning',
+        title: 'Canton Coin is not shown',
+        message:
+          "The Canton Coin registry (Scan) could not confirm Canton Coin's DSO party, so the wallet's Canton Coin and Canton Coin offers are left out; everything else is shown. Try again in a minute.",
         ...(tokens !== null && { retry: true as const }),
       });
     }
@@ -567,6 +580,7 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
           partyId: next.partyId,
           network: next.network,
           ...(registry !== undefined && { registry }),
+          ...(cantonCoin !== undefined && { cantonCoin }),
           isActive: () => session.isCurrent(next),
         });
       } catch (error) {
