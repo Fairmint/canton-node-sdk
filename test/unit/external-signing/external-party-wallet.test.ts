@@ -9,6 +9,7 @@ import {
   buildExternalPartyId,
   createExternalPartyWalletBridge,
   deriveCantonEd25519PublicKeyFingerprint,
+  findPendingProviderTransfer,
   hashPreparedTransaction,
   parseExternalPartyWalletConnectedSynchronizerId,
   type ExternalPartyWalletBridge,
@@ -137,7 +138,35 @@ const createMockValidatorClient = (): jest.Mocked<ValidatorApiClient> =>
       ],
     }),
     getExternalPartyBalance: jest.fn().mockResolvedValue({ effective_unlocked_qty: '5.0' }),
+    // Recorded shape of `POST /v0/wallet/token-standard/transfers` for a receiver without a CC preapproval.
+    createTokenStandardTransfer: jest.fn().mockResolvedValue({
+      output: { transfer_instruction_cid: '00amulet-transfer-instruction' },
+      sender_change_cids: ['00provider-change'],
+      meta: {},
+    }),
+    listTokenStandardTransfers: jest.fn().mockResolvedValue({ transfers: [] }),
   }) as unknown as jest.Mocked<ValidatorApiClient>;
+
+/** A `listTokenStandardTransfers` entry: an `AmuletTransferInstruction` contract as the validator lists it. */
+const listedInstruction = (contractId: string, receiver: string, amount: string, reason: string): unknown => ({
+  template_id: 'a0b1c2:Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+  contract_id: contractId,
+  payload: {
+    lockedAmulet: '00locked',
+    transfer: {
+      sender: 'provider::fingerprint',
+      receiver,
+      amount,
+      instrumentId: { admin: 'DSO::1220dso', id: 'Amulet' },
+      requestedAt: '2026-05-28T00:00:00Z',
+      executeBefore: '2026-05-29T00:00:00Z',
+      inputHoldingCids: [],
+      meta: { values: { 'splice.lfdecentralizedtrust.org/reason': reason } },
+    },
+  },
+  created_event_blob: 'blob',
+  created_at: '2026-05-28T00:00:00Z',
+});
 
 const createBridge = (
   overrides: {
@@ -401,6 +430,202 @@ describe('external-party wallet bridge', (): void => {
           message: 'failure tracking write failed',
         }) as object,
       }) as object,
+    });
+  });
+
+  describe('offerProviderTransfer', (): void => {
+    it('creates a CIP-56 offer with the idempotency key as tracking id and reports its contract id', async (): Promise<void> => {
+      const validatorClient = createMockValidatorClient();
+      const bridge = createBridge({ validatorClient });
+
+      const offered = await bridge.offerProviderTransfer({
+        receiverPartyId: 'receiver::fingerprint',
+        amount: '20',
+        description: '  Canton Coin from the faucet ',
+        idempotencyKey: 'faucet-request-1',
+      });
+
+      expect(validatorClient.createTokenStandardTransfer).toHaveBeenCalledWith({
+        receiver_party_id: 'receiver::fingerprint',
+        amount: '20',
+        description: 'Canton Coin from the faucet',
+        expires_at: (1_780_000_000_000 + 24 * 60 * 60 * 1000) * 1000,
+        tracking_id: 'faucet-request-1',
+      });
+      expect(offered).toEqual({
+        sourcePartyId: 'provider::fingerprint',
+        receiverPartyId: 'receiver::fingerprint',
+        amount: '20',
+        description: 'Canton Coin from the faucet',
+        idempotencyKey: 'faucet-request-1',
+        expiresAt: new Date(1_780_000_000_000 + 24 * 60 * 60 * 1000).toISOString(),
+        outcome: 'offer',
+        transferInstructionContractId: '00amulet-transfer-instruction',
+        receiverHoldingContractIds: [],
+        sourceBalanceAfter: { effective_unlocked_qty: '100.0' },
+        raw: {
+          output: { transfer_instruction_cid: '00amulet-transfer-instruction' },
+          sender_change_cids: ['00provider-change'],
+          meta: {},
+        },
+      });
+    });
+
+    it('reports a direct settlement when the receiver pre-approved Canton Coin', async (): Promise<void> => {
+      const validatorClient = createMockValidatorClient();
+      validatorClient.createTokenStandardTransfer.mockResolvedValueOnce({
+        output: { receiver_holding_cids: ['00receiver-amulet'] },
+        sender_change_cids: [],
+        meta: {},
+      });
+      const bridge = createBridge({ validatorClient });
+
+      const offered = await bridge.offerProviderTransfer({
+        receiverPartyId: 'receiver::fingerprint',
+        amount: 5,
+        idempotencyKey: 'faucet-request-2',
+        expiresAt: new Date(1_780_000_600_000),
+      });
+
+      expect(validatorClient.createTokenStandardTransfer).toHaveBeenCalledWith(
+        expect.objectContaining({ description: '', expires_at: 1_780_000_600_000_000, amount: '5' })
+      );
+      expect(offered).toMatchObject({
+        outcome: 'direct',
+        transferInstructionContractId: null,
+        receiverHoldingContractIds: ['00receiver-amulet'],
+        description: null,
+      });
+    });
+
+    it('treats a duplicate idempotency key as already submitted and finds its pending offer', async (): Promise<void> => {
+      const validatorClient = createMockValidatorClient();
+      validatorClient.createTokenStandardTransfer.mockRejectedValueOnce(
+        new ApiError('CreateTokenStandardTransfer duplicate command', 409)
+      );
+      validatorClient.listTokenStandardTransfers.mockResolvedValueOnce({
+        transfers: [
+          listedInstruction('00match', 'receiver::fingerprint', '20.0000000000', 'faucet'),
+          listedInstruction('00other-receiver', 'other::fingerprint', '20.0000000000', 'faucet'),
+          listedInstruction('00other-amount', 'receiver::fingerprint', '21.0000000000', 'faucet'),
+        ],
+      } as never);
+      const bridge = createBridge({ validatorClient });
+
+      const offered = await bridge.offerProviderTransfer({
+        receiverPartyId: 'receiver::fingerprint',
+        amount: '20',
+        description: 'faucet',
+        idempotencyKey: 'faucet-request-1',
+      });
+
+      expect(offered).toMatchObject({ outcome: 'already-submitted', transferInstructionContractId: '00match' });
+    });
+
+    it('still reports the offer when the balance read fails after the transfer was made', async (): Promise<void> => {
+      const validatorClient = createMockValidatorClient();
+      validatorClient.getWalletBalance.mockRejectedValueOnce(new ApiError('balance unavailable', 500));
+      const bridge = createBridge({ validatorClient });
+
+      const offered = await bridge.offerProviderTransfer({
+        receiverPartyId: 'receiver::fingerprint',
+        amount: '20',
+        idempotencyKey: 'faucet-request-1',
+      });
+
+      expect(offered).toMatchObject({
+        outcome: 'offer',
+        transferInstructionContractId: '00amulet-transfer-instruction',
+        sourceBalanceAfter: null,
+      });
+    });
+
+    it('still reports already-submitted for a duplicate key when the follow-up reads fail', async (): Promise<void> => {
+      const validatorClient = createMockValidatorClient();
+      validatorClient.createTokenStandardTransfer.mockRejectedValue(
+        new ApiError('CreateTokenStandardTransfer duplicate command', 409)
+      );
+      validatorClient.listTokenStandardTransfers.mockRejectedValue(new ApiError('list unavailable', 500));
+      validatorClient.getWalletBalance.mockRejectedValue(new Error('timeout'));
+      const bridge = createBridge({ validatorClient });
+      const input = { receiverPartyId: 'receiver::fingerprint', amount: '20', idempotencyKey: 'faucet-request-1' };
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await expect(bridge.offerProviderTransfer(input)).resolves.toMatchObject({
+          outcome: 'already-submitted',
+          transferInstructionContractId: null,
+          sourceBalanceAfter: null,
+          raw: null,
+        });
+      }
+    });
+
+    it('reports no contract id for a duplicate when the pending offer is ambiguous or gone', (): void => {
+      const expected = { sender: 'provider::fingerprint', receiver: 'r::1', amount: '1', description: 'x' };
+      expect(
+        findPendingProviderTransfer(
+          { transfers: [listedInstruction('00a', 'r::1', '1.0', 'x'), listedInstruction('00b', 'r::1', '1', 'x')] },
+          expected
+        )
+      ).toBeNull();
+      expect(findPendingProviderTransfer({ transfers: [] }, expected)).toBeNull();
+      expect(findPendingProviderTransfer(null, expected)).toBeNull();
+    });
+
+    it('maps 429, 404 and a failed transfer to typed errors', async (): Promise<void> => {
+      const validatorClient = createMockValidatorClient();
+      const bridge = createBridge({ validatorClient });
+      const input = { receiverPartyId: 'receiver::fingerprint', amount: '1', idempotencyKey: 'k-1' };
+
+      validatorClient.createTokenStandardTransfer.mockRejectedValueOnce(new ApiError('busy', 429));
+      await expect(bridge.offerProviderTransfer(input)).rejects.toMatchObject({
+        name: 'OperationError',
+        code: 'TRANSACTION_FAILED',
+        context: { retryable: true, idempotencyKey: 'k-1' },
+      });
+
+      validatorClient.createTokenStandardTransfer.mockRejectedValueOnce(new ApiError('no wallet', 404));
+      await expect(bridge.offerProviderTransfer(input)).rejects.toMatchObject({ name: 'ConfigurationError' });
+
+      validatorClient.createTokenStandardTransfer.mockResolvedValueOnce({
+        output: {},
+        sender_change_cids: [],
+        meta: {},
+      });
+      await expect(bridge.offerProviderTransfer(input)).rejects.toMatchObject({
+        name: 'OperationError',
+        code: 'TRANSACTION_FAILED',
+      });
+
+      const other = new ApiError('server error', 500);
+      validatorClient.createTokenStandardTransfer.mockRejectedValueOnce(other);
+      await expect(bridge.offerProviderTransfer(input)).rejects.toBe(other);
+    });
+
+    it('validates its input before calling the validator', async (): Promise<void> => {
+      const validatorClient = createMockValidatorClient();
+      const bridge = createBridge({ validatorClient });
+      const input = { receiverPartyId: 'receiver::fingerprint', amount: '1', idempotencyKey: 'k-1' };
+
+      await expect(bridge.offerProviderTransfer({ ...input, idempotencyKey: ' ' })).rejects.toMatchObject({
+        name: 'ValidationError',
+      });
+      await expect(bridge.offerProviderTransfer({ ...input, receiverPartyId: '' })).rejects.toMatchObject({
+        name: 'ValidationError',
+      });
+      await expect(bridge.offerProviderTransfer({ ...input, amount: '0' })).rejects.toMatchObject({
+        name: 'ValidationError',
+      });
+      await expect(
+        bridge.offerProviderTransfer({ ...input, expiresAt: new Date(1_780_000_000_000 - 1) })
+      ).rejects.toMatchObject({ name: 'ValidationError' });
+      await expect(bridge.offerProviderTransfer({ ...input, expiresAt: Number.NaN })).rejects.toMatchObject({
+        name: 'ValidationError',
+      });
+      await expect(createBridge({ validatorClient: null }).offerProviderTransfer(input)).rejects.toMatchObject({
+        name: 'ConfigurationError',
+      });
+      expect(validatorClient.createTokenStandardTransfer).not.toHaveBeenCalled();
     });
   });
 

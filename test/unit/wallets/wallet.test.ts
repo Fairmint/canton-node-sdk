@@ -1,4 +1,5 @@
 import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
+import { AMULET_TRANSFER_INSTRUCTION_TEMPLATE } from '../../../src/wallets/contracts';
 import { isCancelledBeforeSubmit } from '../../../src/wallets/abort';
 import { HOLDING_V1_INTERFACE_ID } from '../../../src/wallets/holding-view';
 import type { TransferKind } from '../../../src/wallets/da-utilities/client';
@@ -242,6 +243,7 @@ const STATE_TEMPLATES = [
   DA_REGISTRY_TEMPLATES.mintOffer,
   DA_REGISTRY_TEMPLATES.burnRequest,
   DA_REGISTRY_TEMPLATES.transferPreapproval,
+  AMULET_TRANSFER_INSTRUCTION_TEMPLATE,
 ];
 const postCalls = (calls: FetchCall[]): FetchCall[] => calls.filter((c) => c.method === 'POST');
 const request = { receiver: OTHER, instrumentId: INSTRUMENT, amount: '12' };
@@ -298,7 +300,7 @@ describe('createWallet', () => {
 });
 
 describe('createWallet.loadState', () => {
-  it('reads every list with one ledger-end call and one ACS read of HoldingV1 and the five DA templates, as the party', async () => {
+  it('reads every list with one ledger-end call and one ACS read of HoldingV1, the five DA templates and CC offers, as the party', async () => {
     const { tokens, wallet } = setup();
     const state = await tokens.loadState();
     expect(wallet.ledgerCalls()).toEqual(['GET /v2/state/ledger-end', 'POST /v2/state/active-contracts']);
@@ -658,7 +660,10 @@ describe('createWallet: transfer offers', () => {
         body: { excludeDebugFields: true },
       },
     ]);
-    expect(wallet.reads[wallet.reads.length - 1]).toEqual([DA_REGISTRY_TEMPLATES.transferOffer]);
+    expect(wallet.reads[wallet.reads.length - 1]).toEqual([
+      DA_REGISTRY_TEMPLATES.transferOffer,
+      AMULET_TRANSFER_INSTRUCTION_TEMPLATE,
+    ]);
     expect(wallet.submissions[0]?.commands).toEqual([
       {
         ExerciseCommand: {

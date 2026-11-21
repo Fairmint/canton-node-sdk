@@ -23,6 +23,7 @@ import {
   type SubmittedExternalPartyTransferPreapprovalSetup,
 } from '../amulet/external-party-transfer-preapproval';
 import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
+import { TOKEN_STANDARD_V1_REASON_META_KEY } from '../token-standard/v1/constants';
 import { readConnectedSynchronizers as readPartyConnectedSynchronizers } from '../party-readiness';
 import {
   assertCantonHashSignature,
@@ -222,6 +223,59 @@ export interface SubmittedExternalPartyWalletProviderTransfer {
   readonly raw: Record<string, unknown>;
 }
 
+export interface OfferExternalPartyWalletProviderTransferInput {
+  readonly receiverPartyId: string;
+  readonly amount: string | number;
+  /**
+   * Shown to the receiver as the offer's reason (`splice.lfdecentralizedtrust.org/reason`). Visible to the DSO's SVs
+   * and the receiver's wallet: no personal data. Empty or omitted: no reason.
+   */
+  readonly description?: string | null;
+  /**
+   * The validator's tracking id: one transfer per key. Retry a failed or unknown attempt with the same key (never a
+   * fresh one), so a transfer that did go through is not sent twice.
+   */
+  readonly idempotencyKey: string;
+  /** When the offer stops being acceptable. Defaults to now + `providerTransferOfferTtlMs` (24 h). */
+  readonly expiresAt?: Date | number;
+}
+
+/**
+ * How the provider validator ran a CIP-56 transfer:
+ *
+ * - `offer`: an `AmuletTransferInstruction` was created; the receiver accepts (or rejects) it from their wallet, for
+ *   example through CIP-0103 (`TransferInstruction_Accept`). The provider's CC stays locked until then; an offer that
+ *   expires unaccepted is withdrawn by the validator's wallet automation.
+ * - `direct`: the receiver has a Canton Coin transfer preapproval, so the CC moved at once.
+ * - `already-submitted`: a transfer with this idempotency key was already made (the validator answered 409); nothing new
+ *   was sent. `transferInstructionContractId` names its offer when exactly one pending offer of these details remains.
+ */
+export type ExternalPartyWalletProviderTransferOutcome = 'offer' | 'direct' | 'already-submitted';
+
+export interface OfferedExternalPartyWalletProviderTransfer {
+  readonly sourcePartyId: string;
+  readonly receiverPartyId: string;
+  readonly amount: string;
+  readonly description: string | null;
+  readonly idempotencyKey: string;
+  readonly expiresAt: string;
+  readonly outcome: ExternalPartyWalletProviderTransferOutcome;
+  /**
+   * The offer's contract id (`offer`), or the one pending offer from the provider matching this request's receiver,
+   * amount and description (`already-submitted`), else null.
+   */
+  readonly transferInstructionContractId: string | null;
+  /** The receiver's new holdings (`direct`), else empty. */
+  readonly receiverHoldingContractIds: readonly string[];
+  /** The provider's wallet balance after the call; null when that read failed (the transfer stands either way). */
+  readonly sourceBalanceAfter: unknown | null;
+  /**
+   * The validator's answer (`offer`/`direct`), or its pending transfers (`already-submitted`; null if that read
+   * failed).
+   */
+  readonly raw: unknown;
+}
+
 export interface ExternalPartyWalletTransferPreapprovalSetupInput {
   readonly partyId: string;
   readonly publicKeyBase64: string;
@@ -309,9 +363,29 @@ export interface ExternalPartyWalletBridge {
     input: SubmitExternalPartyWalletCcTransferInput,
     hooks?: SubmitExternalPartyWalletCcTransferHooks
   ) => Promise<SubmittedExternalPartyWalletCcTransfer>;
+  /**
+   * Send the provider's Canton Coin to a party as a CIP-56 transfer through the provider validator's wallet (`POST
+   * /v0/wallet/token-standard/transfers`): it settles at once when the receiver pre-approved Canton Coin, else it lands
+   * as an offer in the receiver's CC inbox (`@fairmint/canton-node-sdk/wallets` lists it), which the receiver accepts
+   * with their own wallet. The receiver needs no preapproval and signs nothing here.
+   *
+   * Throws `ValidationError` on bad input, `OperationError` (`TRANSACTION_FAILED`) when the transfer failed or the
+   * validator is still processing the same key (`context.retryable: true`: retry later with the same key), and
+   * `ConfigurationError` when the validator has no wallet for the provider user or does not serve token-standard
+   * transfers.
+   */
+  readonly offerProviderTransfer: (
+    input: OfferExternalPartyWalletProviderTransferInput
+  ) => Promise<OfferedExternalPartyWalletProviderTransfer>;
+  /**
+   * @deprecated Use {@link ExternalPartyWalletBridge.offerProviderTransfer}: a CIP-56 offer the receiver accepts from
+   *   any CIP-0103 wallet. This legacy path creates a Splice wallet `TransferOffer` and has the receiver sign its
+   *   acceptance through the provider's interactive submission.
+   */
   readonly prepareProviderTransfer: (
     input: PrepareExternalPartyWalletProviderTransferInput
   ) => Promise<PreparedExternalPartyWalletProviderTransfer>;
+  /** @deprecated Use {@link ExternalPartyWalletBridge.offerProviderTransfer}; see `prepareProviderTransfer`. */
   readonly submitProviderTransfer: (
     input: SubmitExternalPartyWalletProviderTransferInput
   ) => Promise<SubmittedExternalPartyWalletProviderTransfer>;
@@ -631,6 +705,99 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
         );
       }
       return result;
+    },
+
+    async offerProviderTransfer(
+      input: OfferExternalPartyWalletProviderTransferInput
+    ): Promise<OfferedExternalPartyWalletProviderTransfer> {
+      const validatorClient = requireValidatorClient(options.validatorClient, 'provider transfer offer');
+      const receiverPartyId = requireTrimmedString('receiverPartyId', input.receiverPartyId);
+      const idempotencyKey = requireTrimmedString('idempotencyKey', input.idempotencyKey);
+      const amount = normalizeAmountString(input.amount);
+      const description = normalizeDescription(input.description);
+      const at = now();
+      const expiresAtMs = readOfferExpiry(input.expiresAt, at + providerTransferOfferTtlMs);
+      if (expiresAtMs <= at) {
+        throw new ValidationError('expiresAt must be in the future', {
+          expiresAt: new Date(expiresAtMs).toISOString(),
+        });
+      }
+      const base = {
+        sourcePartyId: options.providerPartyId,
+        receiverPartyId,
+        amount,
+        description,
+        idempotencyKey,
+        expiresAt: new Date(expiresAtMs).toISOString(),
+      };
+
+      let result: unknown;
+      try {
+        result = await validatorClient.createTokenStandardTransfer({
+          receiver_party_id: receiverPartyId,
+          amount,
+          description: description ?? '',
+          expires_at: epochMillisecondsToMicroseconds(expiresAtMs),
+          tracking_id: idempotencyKey,
+        });
+      } catch (error) {
+        const status = errorStatus(error);
+        if (status === 409) {
+          // The key was already accepted: the reads below only enrich the answer and never turn it into an error, or a
+          // retry with the same key would fail forever instead of reporting the transfer it already made.
+          const raw = await bestEffort(async () => validatorClient.listTokenStandardTransfers());
+          return {
+            ...base,
+            outcome: 'already-submitted',
+            transferInstructionContractId: findPendingProviderTransfer(raw, {
+              sender: options.providerPartyId,
+              receiver: receiverPartyId,
+              amount,
+              description: description ?? '',
+            }),
+            receiverHoldingContractIds: [],
+            sourceBalanceAfter: await bestEffort(async () => validatorClient.getWalletBalance()),
+            raw,
+          };
+        }
+        if (status === 429) {
+          throw new OperationError(
+            'The provider validator is still processing a transfer with this idempotencyKey; retry later with the same key',
+            OperationErrorCode.TRANSACTION_FAILED,
+            { retryable: true, idempotencyKey, receiverPartyId }
+          );
+        }
+        if (status === 404) {
+          throw new ConfigurationError(
+            'The provider validator has no wallet for the provider user, or does not serve token-standard transfers (POST /v0/wallet/token-standard/transfers)',
+            { idempotencyKey, cause: errorToContext(error) }
+          );
+        }
+        throw error;
+      }
+
+      const output = isRecord(result) ? objectOrEmpty(result['output']) : {};
+      const instructionCid = readOptionalString(output, 'transfer_instruction_cid');
+      const receiverHoldingCids = output['receiver_holding_cids'];
+      if (instructionCid === null && !Array.isArray(receiverHoldingCids)) {
+        throw new OperationError(
+          'The provider CC transfer failed (TransferInstructionResult_Failed); nothing was sent',
+          OperationErrorCode.TRANSACTION_FAILED,
+          { idempotencyKey, receiverPartyId, raw: objectOrEmpty(result) }
+        );
+      }
+      return {
+        ...base,
+        outcome: instructionCid !== null ? 'offer' : 'direct',
+        transferInstructionContractId: instructionCid,
+        receiverHoldingContractIds:
+          instructionCid === null && Array.isArray(receiverHoldingCids)
+            ? receiverHoldingCids.filter((cid): cid is string => typeof cid === 'string')
+            : [],
+        // The transfer is made: a failed balance read must not hide the offer's contract id from the caller.
+        sourceBalanceAfter: await bestEffort(async () => validatorClient.getWalletBalance()),
+        raw: result,
+      };
     },
 
     async prepareProviderTransfer(
@@ -1174,6 +1341,70 @@ function buildProviderTransferTrackingId(input: {
     .update(`${input.receiverPartyId}:${input.amount}:${input.now}:${input.randomId}`)
     .digest('hex')
     .slice(0, 32)}`;
+}
+
+function requireTrimmedString(name: string, value: unknown): string {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  if (!normalized) throw new ValidationError(`${name} is required`);
+  return normalized;
+}
+
+function readOfferExpiry(expiresAt: Date | number | undefined, fallbackMs: number): number {
+  if (expiresAt === undefined) return fallbackMs;
+  const ms = expiresAt instanceof Date ? expiresAt.getTime() : expiresAt;
+  if (typeof ms !== 'number' || !Number.isSafeInteger(ms)) {
+    throw new ValidationError('expiresAt must be a valid Date or epoch milliseconds');
+  }
+  return ms;
+}
+
+function errorStatus(error: unknown): number | null {
+  if (error instanceof ApiError) return error.status ?? null;
+  return isRecord(error) && typeof error['status'] === 'number' ? error['status'] : null;
+}
+
+/** `read`'s result, or null when it fails for any reason: for reads made after a write already went through. */
+async function bestEffort<T>(read: () => Promise<T>): Promise<T | null> {
+  try {
+    return await read();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The contract id of the one pending provider transfer (an `AmuletTransferInstruction` in the validator's
+ * `listTokenStandardTransfers`) of these details, or null when there is none or more than one.
+ */
+export function findPendingProviderTransfer(
+  listed: unknown,
+  expected: {
+    readonly sender: string;
+    readonly receiver: string;
+    readonly amount: string;
+    readonly description: string;
+  }
+): string | null {
+  const transfers = isRecord(listed) ? listed['transfers'] : undefined;
+  if (!Array.isArray(transfers)) return null;
+  const expectedAmount = normalizeDecimalForComparison(expected.amount);
+  const matches = transfers.flatMap((entry: unknown) => {
+    if (!isRecord(entry)) return [];
+    const contractId = readOptionalString(entry, 'contract_id');
+    const transfer = objectOrEmpty(objectOrEmpty(entry['payload'])['transfer']);
+    const amount = typeof transfer['amount'] === 'string' ? normalizeDecimalForComparison(transfer['amount']) : null;
+    const values = objectOrEmpty(objectOrEmpty(transfer['meta'])['values']);
+    const reason = values[TOKEN_STANDARD_V1_REASON_META_KEY] ?? '';
+    return contractId !== null &&
+      transfer['sender'] === expected.sender &&
+      transfer['receiver'] === expected.receiver &&
+      amount !== null &&
+      amount === expectedAmount &&
+      reason === expected.description
+      ? [contractId]
+      : [];
+  });
+  return matches.length === 1 ? (matches[0] ?? null) : null;
 }
 
 function epochMillisecondsToMicroseconds(epochMilliseconds: number): number {

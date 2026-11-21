@@ -53,6 +53,7 @@ const snapshot = (offset: number): WalletState => ({
   mintOffers: [],
   burnRequests: [],
   transferPreapprovals: [],
+  amuletOffersUnavailable: false,
 });
 
 const SUBMITTED = { updateId: 'update-1', commandId: 'command-1' };
