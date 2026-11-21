@@ -260,11 +260,19 @@ export interface OfferedExternalPartyWalletProviderTransfer {
   readonly idempotencyKey: string;
   readonly expiresAt: string;
   readonly outcome: ExternalPartyWalletProviderTransferOutcome;
-  /** The offer's contract id (`offer`), or the matching pending offer (`already-submitted`), else null. */
+  /**
+   * The offer's contract id (`offer`), or the one pending offer from the provider matching this request's receiver,
+   * amount and description (`already-submitted`), else null.
+   */
   readonly transferInstructionContractId: string | null;
   /** The receiver's new holdings (`direct`), else empty. */
   readonly receiverHoldingContractIds: readonly string[];
+  /** The provider's wallet balance after the call; null when that read failed (the transfer stands either way). */
   readonly sourceBalanceAfter: unknown | null;
+  /**
+   * The validator's answer (`offer`/`direct`), or its pending transfers (`already-submitted`; null if that read
+   * failed).
+   */
   readonly raw: unknown;
 }
 
@@ -735,7 +743,9 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
       } catch (error) {
         const status = errorStatus(error);
         if (status === 409) {
-          const raw = await readOptionalTokenStandardTransfers(validatorClient);
+          // The key was already accepted: the reads below only enrich the answer and never turn it into an error, or a
+          // retry with the same key would fail forever instead of reporting the transfer it already made.
+          const raw = await bestEffort(async () => validatorClient.listTokenStandardTransfers());
           return {
             ...base,
             outcome: 'already-submitted',
@@ -746,7 +756,7 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
               description: description ?? '',
             }),
             receiverHoldingContractIds: [],
-            sourceBalanceAfter: await readOptionalProviderWalletBalance(validatorClient),
+            sourceBalanceAfter: await bestEffort(async () => validatorClient.getWalletBalance()),
             raw,
           };
         }
@@ -784,7 +794,8 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
           instructionCid === null && Array.isArray(receiverHoldingCids)
             ? receiverHoldingCids.filter((cid): cid is string => typeof cid === 'string')
             : [],
-        sourceBalanceAfter: await readOptionalProviderWalletBalance(validatorClient),
+        // The transfer is made: a failed balance read must not hide the offer's contract id from the caller.
+        sourceBalanceAfter: await bestEffort(async () => validatorClient.getWalletBalance()),
         raw: result,
       };
     },
@@ -1352,12 +1363,11 @@ function errorStatus(error: unknown): number | null {
   return isRecord(error) && typeof error['status'] === 'number' ? error['status'] : null;
 }
 
-/** The validator's open token-standard transfers, or null when it does not list them. */
-async function readOptionalTokenStandardTransfers(validatorClient: ValidatorApiClient): Promise<unknown | null> {
+/** `read`'s result, or null when it fails for any reason: for reads made after a write already went through. */
+async function bestEffort<T>(read: () => Promise<T>): Promise<T | null> {
   try {
-    return await validatorClient.listTokenStandardTransfers();
-  } catch (error) {
-    if (!isNotFound(error)) throw error;
+    return await read();
+  } catch {
     return null;
   }
 }

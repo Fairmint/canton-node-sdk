@@ -9,7 +9,20 @@ import { describeWalletError, RegistryApiError, RegistryResponseError } from '..
 import type { JsonObject } from '../../../src/wallets/json';
 import type { ActiveContract } from '../../../src/wallets/types';
 import { createWallet, type WalletInternalOptions } from '../../../src/wallets/wallet';
-import { fakeFetch, fakeProvider, HOLDER, NOW, OPERATOR, OTHER, pkgId, type FetchCall } from './helpers';
+import {
+  CONTEXT_VALUES,
+  contract,
+  daDisclosed,
+  fakeFetch,
+  fakeProvider,
+  HOLDER,
+  NOW,
+  OPERATOR,
+  OTHER,
+  pkgId,
+  REGISTRAR,
+  type FetchCall,
+} from './helpers';
 
 const DSO = 'DSO::1220dso';
 const SCAN = AMULET_REGISTRY_BASE_URLS.devnet;
@@ -74,6 +87,22 @@ const instruction = (
   createArgument: args,
 });
 
+/** A DA registry transfer offer from OTHER to HOLDER, made by REGISTRAR. */
+const DA_OFFER = contract('00dain', 'Utility.Registry.App.V0.Model.Transfer:TransferOffer', {
+  operator: OPERATOR,
+  provider: REGISTRAR,
+  transfer: {
+    sender: OTHER,
+    receiver: HOLDER,
+    amount: '1.0000000000',
+    instrumentId: { admin: REGISTRAR, id: 'XMPL' },
+    requestedAt: '2026-11-13T00:00:00Z',
+    executeBefore: '2026-11-14T00:00:00Z',
+    inputHoldingCids: ['00x'],
+    meta: { values: {} },
+  },
+});
+
 const INSTRUCTIONS: ActiveContract[] = [
   instruction('00ccin', instructionArgs(OTHER, HOLDER), [DSO, OTHER]),
   instruction('00ccout', instructionArgs(HOLDER, OTHER, { memo: 'thanks' }), [DSO, HOLDER]),
@@ -87,6 +116,7 @@ const INSTRUCTIONS: ActiveContract[] = [
 function setup(
   options: {
     instructions?: ActiveContract[];
+    daOffers?: ActiveContract[];
     amulet?: WalletInternalOptions['amulet'];
     scan?: (call: FetchCall) => { status?: number; json?: unknown } | undefined;
   } = {}
@@ -103,10 +133,19 @@ function setup(
       return { json: { adminId: DSO, supportedApis: { 'splice-api-token-metadata-v1': 1 } } };
     }
     if (call.url.startsWith(`${SCAN}/registry/transfer-instruction/v1/`)) return { json: SCAN_CONTEXT };
+    if (call.url.includes('/registry/transfer-instruction/v1/')) {
+      return {
+        json: {
+          choiceContextData: { values: CONTEXT_VALUES },
+          disclosedContracts: [daDisclosed('00config', 'X.Y:Config')],
+        },
+      };
+    }
     return { status: 500, json: { error: `unexpected ${call.url}` } };
   });
   const wallet = fakeProvider({
     [AMULET_TRANSFER_INSTRUCTION_TEMPLATE]: options.instructions ?? INSTRUCTIONS,
+    ...(options.daOffers !== undefined && { [DA_REGISTRY_TEMPLATES.transferOffer]: options.daOffers }),
   });
   const walletOptions: WalletInternalOptions = {
     provider: wallet,
@@ -249,6 +288,30 @@ describe('createWallet: Canton Coin transfer offers', () => {
     await expect(tokens.acceptTransferOffer('00ccunsigned')).rejects.toMatchObject({ code: 'not-found' });
     await expect(tokens.acceptTransferOffer('00ccpkg')).rejects.toMatchObject({ code: 'not-found' });
     expect(wallet.submissions).toEqual([]);
+  });
+
+  it('keeps the rest of the state when Scan cannot name the DSO, and flags the CC offers as unavailable', async () => {
+    const down = (call: FetchCall): { status: number; json: unknown } | undefined =>
+      call.url.endsWith('/registry/metadata/v1/info') ? { status: 500, json: { error: 'down' } } : undefined;
+    const { tokens } = setup({ daOffers: [DA_OFFER], scan: down });
+    const state = await tokens.loadState();
+    expect(state.amuletOffersUnavailable).toBe(true);
+    expect(state.transferOffers.incoming.map((o) => [o.registry, o.contractId])).toEqual([['da', '00dain']]);
+    expect(state.transferOffers.outgoing).toEqual([]);
+
+    const healthy = await setup({ daOffers: [DA_OFFER] }).tokens.loadState();
+    expect(healthy.amuletOffersUnavailable).toBe(false);
+  });
+
+  it('answers a DA offer without asking Scan, even beside a CC offer', async () => {
+    const { tokens, wallet, calls } = setup({
+      daOffers: [DA_OFFER],
+      scan: (call) => (call.url.startsWith(SCAN) ? { status: 500, json: { error: 'down' } } : undefined),
+    });
+    await tokens.acceptTransferOffer('00dain');
+    expect(calls.filter((c) => c.url.startsWith(SCAN))).toEqual([]);
+    expect(wallet.submissions).toHaveLength(1);
+    expect(wallet.submissions[0]?.commands[0]).toMatchObject({ ExerciseCommand: { contractId: '00dain' } });
   });
 
   it('names the Canton Coin registry when Scan refuses, and submits nothing', async () => {

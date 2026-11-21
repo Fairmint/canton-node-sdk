@@ -522,6 +522,44 @@ describe('external-party wallet bridge', (): void => {
       expect(offered).toMatchObject({ outcome: 'already-submitted', transferInstructionContractId: '00match' });
     });
 
+    it('still reports the offer when the balance read fails after the transfer was made', async (): Promise<void> => {
+      const validatorClient = createMockValidatorClient();
+      validatorClient.getWalletBalance.mockRejectedValueOnce(new ApiError('balance unavailable', 500));
+      const bridge = createBridge({ validatorClient });
+
+      const offered = await bridge.offerProviderTransfer({
+        receiverPartyId: 'receiver::fingerprint',
+        amount: '20',
+        idempotencyKey: 'faucet-request-1',
+      });
+
+      expect(offered).toMatchObject({
+        outcome: 'offer',
+        transferInstructionContractId: '00amulet-transfer-instruction',
+        sourceBalanceAfter: null,
+      });
+    });
+
+    it('still reports already-submitted for a duplicate key when the follow-up reads fail', async (): Promise<void> => {
+      const validatorClient = createMockValidatorClient();
+      validatorClient.createTokenStandardTransfer.mockRejectedValue(
+        new ApiError('CreateTokenStandardTransfer duplicate command', 409)
+      );
+      validatorClient.listTokenStandardTransfers.mockRejectedValue(new ApiError('list unavailable', 500));
+      validatorClient.getWalletBalance.mockRejectedValue(new Error('timeout'));
+      const bridge = createBridge({ validatorClient });
+      const input = { receiverPartyId: 'receiver::fingerprint', amount: '20', idempotencyKey: 'faucet-request-1' };
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await expect(bridge.offerProviderTransfer(input)).resolves.toMatchObject({
+          outcome: 'already-submitted',
+          transferInstructionContractId: null,
+          sourceBalanceAfter: null,
+          raw: null,
+        });
+      }
+    });
+
     it('reports no contract id for a duplicate when the pending offer is ambiguous or gone', (): void => {
       const expected = { sender: 'provider::fingerprint', receiver: 'r::1', amount: '1', description: 'x' };
       expect(

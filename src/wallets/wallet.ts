@@ -175,6 +175,11 @@ export interface WalletState {
   readonly burnRequests: BurnRequest[];
   /** The wallet party's transfer preapprovals. */
   readonly transferPreapprovals: TransferPreapproval[];
+  /**
+   * True when the party has Canton Coin transfer instructions but the Canton Coin registry (Scan) could not name the
+   * DSO party to check them, so `transferOffers` leaves them out; everything else is complete. Load again to retry.
+   */
+  readonly amuletOffersUnavailable: boolean;
 }
 
 export interface TransferRequest {
@@ -427,18 +432,32 @@ export function createWallet(options: WalletOptions): Wallet {
    * asked of the registry only when there is an Amulet transfer instruction to check, so a party without one never
    * calls it.
    */
+  const amuletCandidates = (contracts: readonly ActiveContract[]): ActiveContract[] =>
+    amulet === null ? [] : contracts.filter((contract) => isTemplate(contract, AMULET_TRANSFER_INSTRUCTION_TEMPLATE));
   async function amuletTransferOffers(
     contracts: readonly ActiveContract[],
     signal: AbortSignal | undefined
   ): Promise<TransferOffer[]> {
-    if (amulet === null) return [];
-    const candidates = contracts.filter((contract) => isTemplate(contract, AMULET_TRANSFER_INSTRUCTION_TEMPLATE));
-    if (candidates.length === 0) return [];
+    const candidates = amuletCandidates(contracts);
+    if (amulet === null || candidates.length === 0) return [];
     const dso = await amulet.dsoParty(signal);
     return candidates.flatMap((contract) => {
       const offer = parseAmuletTransferOffer(contract, dso);
       return offer === null ? [] : [offer];
     });
+  }
+  /**
+   * The state's Canton Coin offers. Scan is a second registry the rest of the state does not depend on, so its failure
+   * drops only these offers (flagged `unavailable`) instead of the party's holdings and DA offers too.
+   */
+  async function amuletOffersForState(
+    contracts: readonly ActiveContract[]
+  ): Promise<{ readonly offers: TransferOffer[]; readonly unavailable: boolean }> {
+    try {
+      return { offers: await amuletTransferOffers(contracts, undefined), unavailable: false };
+    } catch {
+      return { offers: [], unavailable: true };
+    }
   }
 
   function transferOffers(
@@ -491,16 +510,17 @@ export function createWallet(options: WalletOptions): Wallet {
     const [operator, balances, amuletOffers] = await Promise.all([
       registry.operatorParty(),
       balancesWithMetadata(holdings),
-      amuletTransferOffers(contracts, undefined),
+      amuletOffersForState(contracts),
     ]);
     return {
       offset,
       holdings,
       balances,
-      transferOffers: transferOffers(contracts, operator, amuletOffers),
+      transferOffers: transferOffers(contracts, operator, amuletOffers.offers),
       mintOffers: ownMintOffers(contracts, operator),
       burnRequests: ownBurnRequests(contracts, operator),
       transferPreapprovals: ownPreapprovals(contracts, operator),
+      amuletOffersUnavailable: amuletOffers.unavailable,
     };
   }
 
@@ -617,7 +637,13 @@ export function createWallet(options: WalletOptions): Wallet {
     signal: AbortSignal | undefined
   ): Promise<SubmitResult> {
     const [contracts, operator] = await Promise.all([read(offerTemplates, signal), registry.operatorParty(signal)]);
-    const { incoming, outgoing } = transferOffers(contracts, operator, await amuletTransferOffers(contracts, signal));
+    // Scan is asked only when the offer is a Canton Coin transfer instruction, so DA offers never depend on it.
+    const isAmuletCandidate = amuletCandidates(contracts).some((contract) => contract.contractId === transferOfferCid);
+    const { incoming, outgoing } = transferOffers(
+      contracts,
+      operator,
+      isAmuletCandidate ? await amuletTransferOffers(contracts, signal) : []
+    );
     const offer = find(
       action === 'withdraw' ? outgoing : incoming,
       transferOfferCid,
