@@ -88,6 +88,12 @@ describe('parseHolding: Canton Coin', () => {
   it('reads a LockedAmulet as locked', () => {
     const holding = parseHolding(amuletHolding('00lcc', '4', { lock: AMULET_LOCK }));
     expect(holding).toMatchObject({ locked: true, source: 'amulet', amount: '4' });
+    // An empty lock context is valid Optional Text, not a malformed view.
+    expect(parseHolding(amuletHolding('00lce', '2', { lock: { ...AMULET_LOCK, context: '' } }))).toMatchObject({
+      locked: true,
+      source: 'amulet',
+      amount: '2',
+    });
   });
 
   it('requires every lock holder of a LockedAmulet to have signed it', () => {

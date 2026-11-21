@@ -85,7 +85,9 @@ export function readHoldingViewLock(value: unknown): HoldingViewLock | null | un
   const { holders } = value;
   if (!holders.every((holder) => nonEmptyString(holder) !== undefined)) return undefined;
   const expiresAt = readNullableString(value['expiresAt']);
-  const context = readNullableString(value['context']);
+  // Descriptive Optional Text: an empty context is valid (Splice copies it into the view as is).
+  const rawContext = value['context'];
+  const context = rawContext === null || typeof rawContext === 'string' ? rawContext : undefined;
   const rawExpiresAfter = value['expiresAfter'];
   let expiresAfter: HoldingViewLock['expiresAfter'];
   if (rawExpiresAfter === null) {
