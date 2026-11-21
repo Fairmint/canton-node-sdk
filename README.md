@@ -198,10 +198,11 @@ if (plan !== null && confirm(plan.description)) await store.act({ type: 'submitT
   result as succeeded for its party, a certain failure as failed, a failure before anything was
   submitted not at all.
 - A snapshot is one `/v2/state/ledger-end` call and one `POST /v2/state/active-contracts` filtered
-  to the five DA templates the wallet reads. A participant refuses a list longer than its
-  `http-list-max-elements-limit` (200 by default); the read then fails with an error that says so. A
-  read the wallet rate-limits is retried after 0.5, 1, 2 and 4 s (jittered), then shown as a warning
-  with Retry.
+  to the five DA templates the wallet reads, plus, with Canton Coin on (the default), the
+  `HoldingV1` interface and Canton Coin's transfer instructions. A participant refuses a list longer
+  than its `http-list-max-elements-limit` (200 by default); the read then fails with an error that
+  says so. A read the wallet rate-limits is retried after 0.5, 1, 2 and 4 s (jittered), then shown
+  as a warning with Retry.
 - `planTransfer` asks DA's registry how it will run the transfer (`plan.kind`: `direct` through the
   receiver's preapproval, an `offer` the receiver must accept, or `self`).
   `requirePreapproval: true` refuses anything but `direct` before anything is signed, and
@@ -233,6 +234,57 @@ if (plan !== null && confirm(plan.description)) await store.act({ type: 'submitT
   outcome, since CIP-0103 has no cancellation.
 - Wallet discovery follows the Canton dApp SDK's announce handshake; a CIP that standardizes
   discovery is still a draft, so `discoverCip103Wallets` will follow it once it settles.
+
+### Canton Coin
+
+Canton Coin is on by default: a wallet lists the party's Canton Coin with its other tokens and
+Canton Coin transfer offers (for example a faucet's) beside DA's. One option configures it, on the
+store or on `createWallet`:
+
+```ts
+const store = createWalletStore({
+  session,
+  // All optional; `{}` (or leaving it out) works on DevNet and MainNet.
+  cantonCoin: {
+    dsoParty: 'DSO::1220…', // pin the network's DSO party; else the registry's adminId is trusted
+    registryUrl: 'https://scan.example', // defaults to SV-1's Scan of the network
+    fetch: myFetch, // defaults to globalThis.fetch
+  },
+});
+// cantonCoin: false reads no Canton Coin and never calls Scan.
+```
+
+- What is read: `Amulet` and `LockedAmulet` holdings through their `HoldingV1` view, as `holdings`
+  with `source: 'amulet'` and a `balances` entry (`locked` apart) under the instrument
+  `{ admin: <DSO party>, id: 'Amulet' }` with the registry's metadata (`CANTON_COIN_METADATA` when
+  it does not answer); and `AmuletTransferInstruction`s to or from the party, as `transferOffers`
+  with `registry: 'amulet'` (DA's carry `registry: 'da'`).
+- Trust: Canton Coin counts only when it is the confirmed DSO's and the DSO signed it (with the
+  owner for a holding, the sender for an offer). The DSO party is resolved once per wallet, for
+  holdings and offers alike: the pinned `dsoParty`, else the `adminId` the registry answers at
+  `/registry/metadata/v1/info`. The registry is asked only when the party has Canton Coin, a request
+  is aborted after 5 s, a snapshot waits for it at most 1.5 s, and after a failure it is not asked
+  again for 30 s.
+- Fail closed: while the DSO cannot be confirmed, all Canton Coin is left out (never every DSO's)
+  and `state.cantonCoinUnavailable` is true; everything else in the snapshot is complete. The store
+  then shows a `canton-coin` warning notice with Retry.
+- Offers: `acceptTransferOffer`, `rejectTransferOffer` and `withdrawTransferOffer` answer a Canton
+  Coin offer like a DA one, with the choice context from the Canton Coin registry. A DA offer never
+  waits on Scan.
+
+  ```ts
+  for (const offer of view.state?.transferOffers.incoming ?? []) {
+    if (offer.registry === 'amulet')
+      await store.act({ type: 'acceptTransferOffer', transferOfferCid: offer.contractId });
+  }
+  ```
+
+- Canton Coin is not transferred or burnt through this wallet: `planTransfer` and `requestBurn`
+  refuse it with `invalid-input`.
+- To send Canton Coin from a provider validator (a faucet), use
+  `ExternalPartyWalletBridge.offerProviderTransfer({ receiverPartyId, amount, idempotencyKey })`: it
+  settles at once when the receiver pre-approved Canton Coin, else it lands as an offer in the
+  receiver's inbox above.
 
 ### The ownership routes
 
