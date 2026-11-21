@@ -93,7 +93,9 @@ works). The package root also exports it as the `Wallets` namespace.
   disconnected until the next `connect`), and `disconnect()`.
 - `createWalletStore({ session })`: the page's state and actions. `view.state` is one ledger
   snapshot: holdings, `balances` per instrument (with the registry's `metadata`), transfer offers in
-  and out, mint offers, burn requests and transfer preapprovals. `store.act(action)` runs one typed
+  and out, mint offers, burn requests and transfer preapprovals. Transfer offers, mint offers and
+  burn requests carry `memo`: the payload's `splice.lfdecentralizedtrust.org/reason` metadata (the
+  sender's or issuer's note), or `null` when there is none. `store.act(action)` runs one typed
   action, and `view.notices` lists what to show.
 - `createWallet({ provider, partyId, network })`: the same actions for one party, without the store.
 

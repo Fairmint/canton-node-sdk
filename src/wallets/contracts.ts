@@ -23,6 +23,8 @@ export interface MintOffer extends RegistryParties {
   readonly instrumentId: InstrumentId;
   readonly amount: string;
   readonly reference: string;
+  /** The mint's reason metadata (the issuer's note to the holder), when present. */
+  readonly memo: string | null;
   readonly requestedAt: string;
   readonly executeBefore: string;
 }
@@ -45,6 +47,8 @@ export interface BurnRequest extends RegistryParties {
   readonly instrumentId: InstrumentId;
   readonly amount: string;
   readonly reference: string;
+  /** The burn's reason metadata, when present. */
+  readonly memo: string | null;
   readonly requestedAt: string;
   readonly executeBefore: string;
   /** The holding DA locked for the burn: the registrar's accept burns it, a reject or cancel unlocks it. */
@@ -78,13 +82,20 @@ function text(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }
 
+/** The reason (memo) a CIP-56 payload's `meta.values` carries, or null when there is none. */
+function reasonMemo(payload: Record<string, unknown>): string | null {
+  const { meta } = payload;
+  const values = isRecord(meta) ? meta['values'] : undefined;
+  return isRecord(values) ? text(values[TOKEN_STANDARD_V1_REASON_META_KEY]) : null;
+}
+
 function argumentsOf(contract: ActiveContract, templateId: string): Record<string, unknown> | null {
   return isTemplate(contract, templateId) ? contract.createArgument : null;
 }
 
 /**
- * A DA `MintOffer` (`{operator, provider, mint: {instrumentId, amount, holder, reference, requestedAt,
- * executeBefore}}`).
+ * A DA `MintOffer` (`{operator, provider, mint: {instrumentId, amount, holder, reference, requestedAt, executeBefore,
+ * meta}}`). `memo` is the mint's `meta` reason, the same key a transfer's memo uses.
  */
 export function parseMintOffer(contract: ActiveContract): MintOffer | null {
   const args = argumentsOf(contract, DA_REGISTRY_TEMPLATES.mintOffer);
@@ -101,6 +112,7 @@ export function parseMintOffer(contract: ActiveContract): MintOffer | null {
     ...fields,
     instrumentId,
     reference,
+    memo: reasonMemo(mint),
   };
 }
 
@@ -113,19 +125,16 @@ export function parseTransferOffer(contract: ActiveContract): TransferOffer | nu
   const fields = strings(transfer, ['sender', 'receiver', 'amount', 'requestedAt', 'executeBefore']);
   const instrumentId = readInstrumentId(transfer['instrumentId']);
   if (!parties || !fields || !instrumentId) return null;
-  const { meta } = transfer;
-  const values = isRecord(meta) ? meta['values'] : undefined;
-  const memo = isRecord(values) ? text(values[TOKEN_STANDARD_V1_REASON_META_KEY]) : null;
   return {
     contractId: contract.contractId,
     ...parties,
     ...fields,
     instrumentId,
-    memo,
+    memo: reasonMemo(transfer),
   };
 }
 
-/** A DA `BurnRequest` (`{operator, provider, burn: {...}, lockedHoldingCid}`). */
+/** A DA `BurnRequest` (`{operator, provider, burn: {..., meta}, lockedHoldingCid}`); `memo` is the burn's `meta` reason. */
 export function parseBurnRequest(contract: ActiveContract): BurnRequest | null {
   const args = argumentsOf(contract, DA_REGISTRY_TEMPLATES.burnRequest);
   const burn = args?.['burn'];
@@ -141,6 +150,7 @@ export function parseBurnRequest(contract: ActiveContract): BurnRequest | null {
     ...fields,
     instrumentId,
     reference,
+    memo: reasonMemo(burn),
   };
 }
 

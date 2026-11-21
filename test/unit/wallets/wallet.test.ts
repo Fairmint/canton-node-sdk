@@ -318,11 +318,12 @@ describe('createWallet.loadState', () => {
       },
     ]);
     expect(state.mintOffers.map((o) => o.contractId)).toEqual(['00mint']);
+    expect(state.mintOffers[0]).toMatchObject({ reference: 'mint_0001', memo: null });
     expect(state.transferOffers.incoming.map((o) => o.contractId)).toEqual(['00in']);
     expect(state.transferOffers.outgoing.map((o) => o.contractId)).toEqual(['00out']);
     expect(state.transferOffers.incoming[0]).toMatchObject({ memo: 'hello', sender: OTHER, receiver: HOLDER });
     expect(state.burnRequests.map((r) => r.contractId)).toEqual(['00burn']);
-    expect(state.burnRequests[0]).toMatchObject({ lockedHoldingCid: '00locked', reference: 'r-1' });
+    expect(state.burnRequests[0]).toMatchObject({ lockedHoldingCid: '00locked', reference: 'r-1', memo: null });
     expect(state.transferPreapprovals).toEqual([
       {
         contractId: '00pre',
