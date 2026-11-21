@@ -9,10 +9,13 @@
  * - `createCip103Session({ network })`: which wallet is connected, as which party (`connect`, `restore`, `disconnect`).
  * - `createWalletStore({ session })`: the page's observable state, typed actions (`act`), notices to show.
  * - `createWallet(...)`: one party's token actions, for code that does not need the store.
- * - Canton Coin: `loadState()` lists the party's Canton Coin (Splice `Amulet` / `LockedAmulet`, read through the
- *   `HoldingV1` interface view) with its other holdings (`source: 'amulet'`); pass `cantonCoin: { dsoParty }` and/or `{
- *   registryUrl }` (Scan) to `createWallet` or `createWalletStore` to pin the DSO and label it (while a named DSO
- *   cannot be confirmed, no Canton Coin is listed). Canton Coin is read-only here.
+ * - Canton Coin, on by default (`cantonCoin: false` on `createWallet` or `createWalletStore` turns it off): `loadState()`
+ *   lists the party's `Amulet` and `LockedAmulet` holdings (read through the `HoldingV1` view, `source: 'amulet'`,
+ *   `isCantonCoin`) and Canton Coin transfer offers (`registry: 'amulet'`), which can be accepted, rejected or
+ *   withdrawn. Holdings and offers share one DSO lookup: the pinned `cantonCoin.dsoParty`, else the `adminId` of the
+ *   registry (`cantonCoin.registryUrl`, SV-1's Scan of the network by default). While it is unconfirmed, no Canton Coin
+ *   is listed and `cantonCoinUnavailable` is true. Canton Coin cannot be transferred, burnt or pre-approved through the
+ *   wallet.
  * - The ownership proof's browser half (`requestWalletOwnershipVerdict`); the server half
  *   (`createWalletOwnershipChallenger`, `verifyWalletOwnership`) is Node-only and exported from the package root.
  * - The errors, their guards (`isWalletError`, `isWalletSubmitError`, …: they match errors of any copy of this module,
@@ -102,7 +105,13 @@ export {
   type WalletSubmitOutcome,
 } from './errors';
 export type { BurnRequest, MintOffer, TransferOffer, TransferOfferRegistry, TransferPreapproval } from './contracts';
-export type { Holding, HoldingSource, InstrumentBalance, InstrumentMetadata } from './holdings';
+export {
+  isCantonCoin,
+  type Holding,
+  type HoldingSource,
+  type InstrumentBalance,
+  type InstrumentMetadata,
+} from './holdings';
 export {
   AMULET_INSTRUMENT_ID,
   AMULET_REGISTRY_BASE_URLS,

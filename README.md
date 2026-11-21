@@ -262,9 +262,19 @@ const store = createWalletStore({
 - Trust: Canton Coin counts only when it is the confirmed DSO's and the DSO signed it (with the
   owner for a holding, the sender for an offer). The DSO party is resolved once per wallet, for
   holdings and offers alike: the pinned `dsoParty`, else the `adminId` the registry answers at
-  `/registry/metadata/v1/info`. The registry is asked only when the party has Canton Coin, a request
-  is aborted after 5 s, a snapshot waits for it at most 1.5 s, and after a failure it is not asked
-  again for 30 s.
+  `/registry/metadata/v1/info`. The registry is asked only when the party has Canton Coin, and a
+  request is aborted after 5 s. A snapshot looks up the DSO and Canton Coin's metadata at once and
+  waits for them together: the very first lookup in full (at most 5 s, so a cold Scan does not
+  report Canton Coin unavailable on a first load), later ones at most 1.5 s (a slower answer is
+  cached for the next load). After a failure the registry is not asked again for 30 s.
+- With a pinned `dsoParty`, the registry's own `adminId` is still checked against it: a registry of
+  another DSO has its metadata ignored (`CANTON_COIN_METADATA` is shown) and its choice contexts
+  refused with a `RegistryResponseError` naming both parties, before anything is submitted.
+- LocalNet and other custom networks: `network` is `devnet` or `mainnet`, so the default registry is
+  DevNet's or MainNet's SV-1 Scan, which names that network's DSO. Pass your own Scan as
+  `registryUrl` (or pin `dsoParty`), or the party's Canton Coin is silently left out: Canton Coin of
+  any other DSO is never listed and does not set `cantonCoinUnavailable` (anyone can create
+  look-alike contracts, so they never raise a warning).
 - Fail closed: while the DSO cannot be confirmed, all Canton Coin is left out (never every DSO's)
   and `state.cantonCoinUnavailable` is true; everything else in the snapshot is complete. The store
   then shows a `canton-coin` warning notice with Retry.
@@ -279,8 +289,21 @@ const store = createWalletStore({
   }
   ```
 
-- Canton Coin is not transferred or burnt through this wallet: `planTransfer` and `requestBurn`
-  refuse it with `invalid-input`.
+- Canton Coin is not transferred, burnt or pre-approved through this wallet: `planTransfer`,
+  `requestBurn` and `createTransferPreapproval` (for the DSO as `instrumentAdmin`) refuse it with
+  `invalid-input`.
+- Upgrading: `balances` and `holdings` now include Canton Coin, and `Amulet` sorts before most
+  instrument ids, so a picker that takes the first balance may now default to Canton Coin. Filter
+  pickers for transfer, burn and pre-approval with `isCantonCoin` (`balance.source === 'amulet'`):
+
+  ```ts
+  const sendable = state.balances.filter((b) => !isCantonCoin(b) && Number(b.unlocked) > 0);
+  ```
+
+- New fields stay optional for objects built by hand: `Holding.source` and
+  `InstrumentBalance.source` (absent reads as `'da-registry'`), `TransferOffer.registry` (absent:
+  `'da'`), `MintOffer.memo` and `BurnRequest.memo` (absent: `null`) and
+  `WalletState.cantonCoinUnavailable`. The wallet always sets them.
 - To send Canton Coin from a provider validator (a faucet), use
   `ExternalPartyWalletBridge.offerProviderTransfer({ receiverPartyId, amount, idempotencyKey })`: it
   settles at once when the receiver pre-approved Canton Coin, else it lands as an offer in the

@@ -7,7 +7,10 @@
  * Trust: the DSO party is `CantonCoinOptions.dsoParty` when pinned (no registry answer is trusted for it), else the
  * registry's `adminId` (the registry is then the trust anchor, as DA's Utilities API is for DA's operator). While
  * neither is known (the registry failed, is slow or is backing off), no Canton Coin is confirmed: holdings and offers
- * are left out, never shown for any DSO that signed them.
+ * are left out, never shown for any DSO that signed them. With a pinned DSO, the registry's own `adminId` is still read
+ * (once, when its metadata or a choice context is first needed) to check it serves that DSO: a registry of another DSO
+ * (another network) has its metadata ignored and its choice contexts refused, so a misconfiguration fails with a clear
+ * error before anything is submitted.
  *
  * Endpoints: the token standard metadata V1 (`GET /registry/metadata/v1/info`, `GET
  * /registry/metadata/v1/instruments/Amulet`) and transfer-instruction V1 (`POST
@@ -29,7 +32,6 @@ import {
 import { RegistryApiError, RegistryResponseError } from '../errors';
 import type { InstrumentMetadata } from '../holdings';
 import { isRecord, nonEmptyString } from '../json';
-import type { InstrumentId } from '../types';
 import { AMULET_INSTRUMENT_ID, AMULET_REGISTRY_BASE_URLS, CANTON_COIN_METADATA } from './constants';
 
 /** How a wallet recognises Canton Coin and reaches its registry. Every field is optional: `{}` is a working setup. */
@@ -58,8 +60,12 @@ export const AMULET_REGISTRY_NAME = 'The Canton Coin registry (Scan)';
 
 /** A registry request still unanswered after this long is aborted and counts as a failure. */
 export const AMULET_REGISTRY_REQUEST_TIMEOUT_MS = 5000;
-/** How long a snapshot waits for a registry lookup; a slower answer is still cached for the next call. */
-const SNAPSHOT_WAIT_MS = 1500;
+/**
+ * How long a snapshot waits for a registry lookup once the registry answered or failed before; a slower answer is still
+ * cached for the next call. The very first DSO lookup waits for its request in full instead (at most
+ * {@link AMULET_REGISTRY_REQUEST_TIMEOUT_MS}), so a cold Scan does not report Canton Coin unavailable on a first load.
+ */
+export const AMULET_SNAPSHOT_WAIT_MS = 1500;
 /** After a failed lookup, the registry is not asked again for this long (the lookup answers undefined meanwhile). */
 const FAILURE_BACKOFF_MS = 30_000;
 
@@ -70,15 +76,20 @@ export interface AmuletRegistry {
   /**
    * The DSO party: pinned, else the registry's `adminId`, looked up once and cached. Undefined when it cannot be
    * confirmed: the lookup failed or timed out (it is asked again only after a back-off) or did not answer within
-   * `waitMs` (default: a short wait fit for a snapshot; the answer is still cached when it comes).
+   * `waitMs`. Default wait: the whole request on the very first lookup, else {@link AMULET_SNAPSHOT_WAIT_MS} (the answer
+   * is still cached when it comes).
    */
   dsoParty(signal?: AbortSignal, waitMs?: number): Promise<string | undefined>;
   /**
-   * Canton Coin's metadata when `instrumentId` is the confirmed DSO's `Amulet`: the registry's answer, else
-   * {@link CANTON_COIN_METADATA}. Undefined for any other instrument.
+   * Canton Coin's metadata: the registry's answer once the registry is confirmed to serve the DSO (its `adminId` is the
+   * DSO party), else {@link CANTON_COIN_METADATA}. Runs its lookups in parallel and waits for them as `dsoParty` does,
+   * so a snapshot that asks for both concurrently waits once.
    */
-  instrumentMetadata(instrumentId: InstrumentId, signal?: AbortSignal): Promise<InstrumentMetadata | undefined>;
-  /** Context to accept, reject or withdraw a Canton Coin transfer instruction. */
+  instrumentMetadata(signal?: AbortSignal): Promise<InstrumentMetadata>;
+  /**
+   * Context to accept, reject or withdraw a Canton Coin transfer instruction. With a pinned DSO, refused with
+   * `RegistryResponseError` (nothing submitted) when the registry's `adminId` is another party.
+   */
   transferInstructionContext(
     instructionCid: string,
     action: TransferInstructionAction,
@@ -110,13 +121,17 @@ function cachedLookup<T>(
   now: () => number
 ): {
   readonly known: () => T | undefined;
+  /** Whether a lookup has settled (answered or failed) at least once. */
+  readonly settled: () => boolean;
   readonly get: (signal: AbortSignal | undefined, waitMs: number) => Promise<T | undefined>;
 } {
   let pending: Promise<T | undefined> | undefined;
   let answer: T | undefined;
   let retryAt = 0;
+  let settled = false;
   return {
     known: () => answer,
+    settled: () => settled,
     async get(signal, waitMs) {
       throwIfAborted(signal);
       if (pending === undefined) {
@@ -124,6 +139,7 @@ function cachedLookup<T>(
         const request = lookup().catch(() => undefined);
         pending = request;
         void request.then((value) => {
+          settled = true;
           if (value !== undefined) {
             answer = value;
           } else if (pending === request) {
@@ -222,21 +238,43 @@ export function createAmuletRegistry(
     now
   );
 
-  async function dsoParty(signal?: AbortSignal, waitMs: number = SNAPSHOT_WAIT_MS): Promise<string | undefined> {
+  /** The registry's `adminId`: the whole request on the very first lookup, a short wait after that. */
+  async function registryAdminId(signal: AbortSignal | undefined, waitMs?: number): Promise<string | undefined> {
+    const wait = waitMs ?? (registryAdmin.settled() ? AMULET_SNAPSHOT_WAIT_MS : AMULET_REGISTRY_REQUEST_TIMEOUT_MS);
+    return registryAdmin.get(signal, wait);
+  }
+
+  async function dsoParty(signal?: AbortSignal, waitMs?: number): Promise<string | undefined> {
     throwIfAborted(signal);
-    return pinned ?? registryAdmin.get(signal, waitMs);
+    return pinned ?? registryAdminId(signal, waitMs);
   }
 
   return {
     knownDsoParty: () => pinned ?? registryAdmin.known(),
     dsoParty,
-    async instrumentMetadata(instrumentId, signal) {
-      if (instrumentId.id !== AMULET_INSTRUMENT_ID) return undefined;
-      const dso = await dsoParty(signal);
-      if (dso === undefined || instrumentId.admin !== dso) return undefined;
-      return (await registryMetadata.get(signal, SNAPSHOT_WAIT_MS)) ?? CANTON_COIN_METADATA;
+    async instrumentMetadata(signal) {
+      throwIfAborted(signal);
+      // Both lookups run at once: unpinned, the admin lookup is the DSO lookup a snapshot already waits for (shared).
+      const [admin, metadata] = await Promise.all([
+        registryAdminId(signal, pinned === undefined ? undefined : AMULET_SNAPSHOT_WAIT_MS),
+        registryMetadata.get(signal, AMULET_SNAPSHOT_WAIT_MS),
+      ]);
+      // A registry not confirmed to serve the DSO (another network's, or not answering) has its metadata ignored.
+      return metadata !== undefined && admin !== undefined && admin === (pinned ?? admin)
+        ? metadata
+        : CANTON_COIN_METADATA;
     },
     async transferInstructionContext(instructionCid, action, signal) {
+      if (pinned !== undefined) {
+        // Not a trust check (the ledger and the DSO's signatures decide): a clear error for a misconfiguration. An
+        // unanswered lookup lets the request go on; the ledger refuses a context of another DSO anyway.
+        const admin = await registryAdminId(signal, AMULET_REGISTRY_REQUEST_TIMEOUT_MS);
+        if (admin !== undefined && admin !== pinned) {
+          throw new RegistryResponseError(
+            `${AMULET_REGISTRY_NAME} at ${baseUrl} serves the DSO party ${admin}, not the pinned cantonCoin.dsoParty ${pinned}: cantonCoin.registryUrl and cantonCoin.dsoParty name different networks. Nothing was submitted.`
+          );
+        }
+      }
       return parseChoiceContext(
         await call(
           'POST',

@@ -71,7 +71,15 @@ import {
 } from './amulet/registry';
 import { isWalletSubmitError, RegistryResponseError, WalletError, WalletSubmitError } from './errors';
 import { HOLDING_V1_INTERFACE_ID } from './holding-view';
-import { instrumentBalances, parseHolding, selectHoldings, type Holding, type InstrumentBalance } from './holdings';
+import {
+  instrumentBalances,
+  isCantonCoin,
+  parseHolding,
+  selectHoldings,
+  type Holding,
+  type InstrumentBalance,
+  type InstrumentMetadata,
+} from './holdings';
 import { isTemplate } from './templates';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
 import { TOKEN_STANDARD_V1_REASON_META_KEY } from '../utils/token-standard/v1/constants';
@@ -319,23 +327,33 @@ const DA_STATE_TEMPLATES: readonly AcsFilter[] = [
   DA_REGISTRY_TEMPLATES.transferPreapproval,
 ];
 
+/** Canton Coin's holdings, read through the `HoldingV1` view (the interface filter matches DA's `Holding` too). */
+const CANTON_COIN_HOLDING_FILTERS: readonly AcsFilter[] = [
+  { interfaceId: HOLDING_V1_INTERFACE_ID, includeInterfaceView: true },
+];
+
 /**
  * Every filter a state snapshot reads with Canton Coin on, in one cumulative filter: `HoldingV1` with its view (it
  * matches Canton Coin's `Amulet` and `LockedAmulet`, and DA's `Holding` again, which the ledger returns once), the DA
  * templates, and Canton Coin's transfer instructions.
  */
 const CANTON_COIN_STATE_FILTERS: readonly AcsFilter[] = [
-  { interfaceId: HOLDING_V1_INTERFACE_ID, includeInterfaceView: true },
+  ...CANTON_COIN_HOLDING_FILTERS,
   ...DA_STATE_TEMPLATES,
   AMULET_TEMPLATES.transferInstruction,
 ];
 
+/** Canton Coin's holding templates. */
+const CANTON_COIN_HOLDING_TEMPLATES: readonly string[] = [AMULET_TEMPLATES.amulet, AMULET_TEMPLATES.lockedAmulet];
 /** Canton Coin contracts whose DSO must be confirmed before they are listed. */
 const CANTON_COIN_TEMPLATES: readonly string[] = [
-  AMULET_TEMPLATES.amulet,
-  AMULET_TEMPLATES.lockedAmulet,
+  ...CANTON_COIN_HOLDING_TEMPLATES,
   AMULET_TEMPLATES.transferInstruction,
 ];
+
+/** Whether any of `contracts` is of one of `templateIds`. */
+const anyOf = (contracts: readonly ActiveContract[], templateIds: readonly string[]): boolean =>
+  contracts.some((contract) => templateIds.some((templateId) => isTemplate(contract, templateId)));
 
 function requireNonEmpty(value: string, field: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
@@ -448,10 +466,7 @@ export function createWallet(options: WalletOptions): Wallet {
     signal: AbortSignal | undefined,
     waitMs?: number
   ): Promise<{ readonly dso: string | undefined; readonly unavailable: boolean }> {
-    if (
-      cantonCoin === null ||
-      !contracts.some((contract) => CANTON_COIN_TEMPLATES.some((t) => isTemplate(contract, t)))
-    ) {
+    if (cantonCoin === null || !anyOf(contracts, CANTON_COIN_TEMPLATES)) {
       return { dso: undefined, unavailable: false };
     }
     const dso = await cantonCoin.dsoParty(signal, waitMs);
@@ -467,7 +482,7 @@ export function createWallet(options: WalletOptions): Wallet {
     return contracts.flatMap((contract) => {
       const holding = parseHolding(contract);
       if (holding?.owner !== partyId || seen.has(holding.contractId)) return [];
-      if (holding.source === 'amulet' && (dso === undefined || holding.instrumentId.admin !== dso)) return [];
+      if (isCantonCoin(holding) && (dso === undefined || holding.instrumentId.admin !== dso)) return [];
       seen.add(holding.contractId);
       return [holding];
     });
@@ -475,7 +490,7 @@ export function createWallet(options: WalletOptions): Wallet {
 
   /** The party's DA Registry holdings, for a transfer or burn (Canton Coin is read-only here). */
   const daHoldingsIn = (contracts: readonly ActiveContract[]): Holding[] =>
-    holdingsIn(contracts).filter((holding) => holding.source === 'da-registry');
+    holdingsIn(contracts).filter((holding) => !isCantonCoin(holding));
 
   /**
    * Refuse a Canton Coin transfer or burn: this wallet only reads Canton Coin. Before any read when the instrument is
@@ -484,17 +499,35 @@ export function createWallet(options: WalletOptions): Wallet {
    */
   function refuseCantonCoin(instrumentId: InstrumentId, action: string, holdings?: readonly Holding[]): void {
     if (instrumentId.id !== AMULET_INSTRUMENT_ID) return;
-    const isCantonCoin =
+    const isAmulet =
       holdings === undefined
         ? cantonCoin !== null && instrumentId.admin === cantonCoin.knownDsoParty()
         : !holdings.some(
             (holding) =>
               holding.instrumentId.admin === instrumentId.admin && holding.instrumentId.id === instrumentId.id
           );
-    if (isCantonCoin) {
+    if (isAmulet) {
       throw new WalletError(
         'invalid-input',
         `Canton Coin (Amulet) cannot be ${action} through this wallet yet; nothing was submitted`
+      );
+    }
+  }
+
+  /**
+   * Refuse a DA transfer preapproval for Canton Coin's DSO: it would do nothing for Canton Coin (a DSO
+   * `TransferPreapproval` is made through a validator, not this wallet). The DSO is the known one (pinned, or confirmed
+   * by the registry), or the admin of one of the party's genuine Canton Coin `holdings` (signed by that admin).
+   */
+  function refuseCantonCoinPreapproval(instrumentAdmin: string, holdings: readonly Holding[] = []): void {
+    if (cantonCoin === null) return;
+    if (
+      instrumentAdmin === cantonCoin.knownDsoParty() ||
+      holdings.some((holding) => holding.instrumentId.admin === instrumentAdmin)
+    ) {
+      throw new WalletError(
+        'invalid-input',
+        `${instrumentAdmin} is Canton Coin's DSO party: a DA transfer preapproval does nothing for Canton Coin; nothing was submitted`
       );
     }
   }
@@ -559,13 +592,16 @@ export function createWallet(options: WalletOptions): Wallet {
     return found;
   }
 
-  async function balancesWithMetadata(holdings: readonly Holding[]): Promise<InstrumentBalance[]> {
+  /** The balances of `holdings`, each with its registry's metadata (Canton Coin's is given: it is looked up apart). */
+  async function balancesWithMetadata(
+    holdings: readonly Holding[],
+    cantonCoinMetadata: InstrumentMetadata | undefined
+  ): Promise<InstrumentBalance[]> {
     return Promise.all(
       instrumentBalances(holdings).map(async (balance) => {
-        const metadata =
-          balance.source === 'amulet'
-            ? await cantonCoin?.instrumentMetadata(balance.instrumentId)
-            : await registry.instrumentMetadata(balance.instrumentId);
+        const metadata = isCantonCoin(balance)
+          ? cantonCoinMetadata
+          : await registry.instrumentMetadata(balance.instrumentId);
         return metadata === undefined ? balance : { ...balance, metadata };
       })
     );
@@ -573,10 +609,19 @@ export function createWallet(options: WalletOptions): Wallet {
 
   async function readState(): Promise<WalletState> {
     const { offset, contracts } = await ledger.readActiveContracts(stateFilters);
-    // Asked only when the party has Canton Coin; it waits a short, bounded time (see `createAmuletRegistry`).
-    const { dso, unavailable } = await cantonCoinDso(contracts, undefined);
+    // Asked only when the party has Canton Coin. The DSO and Canton Coin's metadata are looked up at once, so a
+    // snapshot waits for the registry once (see `createAmuletRegistry` for how long).
+    const [{ dso, unavailable }, cantonCoinMetadata] = await Promise.all([
+      cantonCoinDso(contracts, undefined),
+      cantonCoin !== null && anyOf(contracts, CANTON_COIN_HOLDING_TEMPLATES)
+        ? cantonCoin.instrumentMetadata()
+        : undefined,
+    ]);
     const holdings = holdingsIn(contracts, dso);
-    const [operator, balances] = await Promise.all([registry.operatorParty(), balancesWithMetadata(holdings)]);
+    const [operator, balances] = await Promise.all([
+      registry.operatorParty(),
+      balancesWithMetadata(holdings, cantonCoinMetadata),
+    ]);
     return {
       offset,
       holdings,
@@ -813,6 +858,7 @@ export function createWallet(options: WalletOptions): Wallet {
     signal: AbortSignal | undefined
   ): Promise<SubmitResult> {
     const instrumentAdmin = requireNonEmpty(preapproval.instrumentAdmin, 'instrumentAdmin');
+    refuseCantonCoinPreapproval(instrumentAdmin);
     const instrumentIds = [...new Set(preapproval.instrumentIds ?? [])];
     if (instrumentIds.length > MAX_PREAPPROVAL_INSTRUMENTS) {
       throw new WalletError(
@@ -822,9 +868,28 @@ export function createWallet(options: WalletOptions): Wallet {
     }
     instrumentIds.forEach((id) => requireNonEmpty(id, 'instrumentIds[]'));
     const [contracts, operator] = await Promise.all([
-      read(DA_REGISTRY_TEMPLATES.transferPreapproval, signal),
+      cantonCoin === null
+        ? read(DA_REGISTRY_TEMPLATES.transferPreapproval, signal)
+        : awaitWithAbort(
+            async () =>
+              (
+                await ledger.readActiveContracts([
+                  DA_REGISTRY_TEMPLATES.transferPreapproval,
+                  ...CANTON_COIN_HOLDING_FILTERS,
+                ])
+              ).contracts,
+            signal
+          ),
       registry.operatorParty(signal),
     ]);
+    // The DSO may not be known yet (unpinned, the registry not asked): a Canton Coin holding of the party names it.
+    refuseCantonCoinPreapproval(
+      instrumentAdmin,
+      contracts.flatMap((contract) => {
+        const holding = parseHolding(contract);
+        return holding !== null && isCantonCoin(holding) && holding.owner === partyId ? [holding] : [];
+      })
+    );
     const covering = ownPreapprovals(contracts, operator).find(
       (existing) =>
         existing.instrumentAdmin === instrumentAdmin &&

@@ -148,21 +148,34 @@ describe('createAmuletRegistry', () => {
     return { status: 404, json: {} };
   };
 
-  it('never asks the registry for a pinned DSO, and describes only its Amulet', async () => {
+  it('never asks the registry for a pinned DSO, and uses its metadata once its adminId matches the pin', async () => {
     const { fetch, calls } = fakeFetch(answers);
     const registry = createAmuletRegistry('devnet', { dsoParty: DSO, registryUrl: SCAN, fetch });
     expect(await registry.dsoParty()).toBe(DSO);
-    expect(await registry.instrumentMetadata({ admin: OTHER, id: 'Amulet' })).toBeUndefined();
-    expect(await registry.instrumentMetadata({ admin: DSO, id: 'XMPL' })).toBeUndefined();
     expect(calls).toEqual([]);
+    expect(await registry.instrumentMetadata()).toEqual({ name: 'Canton Coin', symbol: 'CC', decimals: 10 });
+  });
+
+  it('ignores the metadata and refuses choice contexts of a registry serving another DSO than the pin', async () => {
+    const { fetch, calls } = fakeFetch((call) =>
+      call.url.endsWith('/info')
+        ? { json: { adminId: OTHER, supportedApis: {} } }
+        : { json: { id: 'Amulet', name: 'Other Coin', symbol: 'OC', decimals: 10, supportedApis: {} } }
+    );
+    const registry = createAmuletRegistry('devnet', { dsoParty: DSO, registryUrl: SCAN, fetch });
+    expect(await registry.instrumentMetadata()).toEqual(CANTON_COIN_METADATA);
+    await expect(registry.transferInstructionContext('00ti', 'accept')).rejects.toThrow(
+      new RegExp(`serves the DSO party ${OTHER}, not the pinned cantonCoin.dsoParty ${DSO}.*Nothing was submitted`)
+    );
+    expect(calls.filter((c) => c.url.includes('/transfer-instruction/'))).toEqual([]);
   });
 
   it("learns the DSO from the registry's adminId, once, and reads the metadata from the registry", async () => {
     const { fetch, calls } = fakeFetch(answers);
     const registry = createAmuletRegistry('devnet', { registryUrl: `${SCAN}/`, fetch });
     expect(await registry.dsoParty()).toBe(DSO);
-    expect(await registry.instrumentMetadata(CC)).toEqual({ name: 'Canton Coin', symbol: 'CC', decimals: 10 });
-    expect(await registry.instrumentMetadata(CC)).toEqual({ name: 'Canton Coin', symbol: 'CC', decimals: 10 });
+    expect(await registry.instrumentMetadata()).toEqual({ name: 'Canton Coin', symbol: 'CC', decimals: 10 });
+    expect(await registry.instrumentMetadata()).toEqual({ name: 'Canton Coin', symbol: 'CC', decimals: 10 });
     expect(calls.map((c) => [c.method, c.url])).toEqual([
       ['GET', `${SCAN}/registry/metadata/v1/info`],
       ['GET', `${SCAN}/registry/metadata/v1/instruments/Amulet`],
@@ -175,7 +188,7 @@ describe('createAmuletRegistry', () => {
     const { fetch, calls } = fakeFetch((call) => (status === 200 ? answers(call) : { status, json: {} }));
     const registry = createAmuletRegistry('devnet', { registryUrl: SCAN, fetch }, { now: () => clock });
     expect(await registry.dsoParty()).toBeUndefined();
-    expect(await registry.instrumentMetadata(CC)).toBeUndefined();
+    expect(await registry.instrumentMetadata()).toEqual(CANTON_COIN_METADATA);
     status = 200;
     // Within the back-off the registry is not asked again.
     expect(await registry.dsoParty()).toBeUndefined();
@@ -204,7 +217,7 @@ describe('createAmuletRegistry', () => {
     beforeEach(() => jest.useFakeTimers());
     afterEach(() => jest.useRealTimers());
 
-    it('waits a short time, aborts the request after its timeout, then backs off', async () => {
+    it('waits for the first lookup in full, aborts it after its timeout, backs off, then waits a short time', async () => {
       let clock = 0;
       const signals: AbortSignal[] = [];
       const fetch: FetchLike = async (_url, init) => {
@@ -212,21 +225,31 @@ describe('createAmuletRegistry', () => {
         return new Promise<never>(() => undefined);
       };
       const registry = createAmuletRegistry('devnet', { registryUrl: SCAN, fetch }, { now: () => clock });
-      const first = registry.dsoParty();
+      let firstSettled = false;
+      const first = registry.dsoParty().finally(() => {
+        firstSettled = true;
+      });
       await jest.advanceTimersByTimeAsync(1500);
-      expect(await first).toBeUndefined();
+      // The first lookup is not cut short: a cold Scan gets its whole request.
+      expect(firstSettled).toBe(false);
       expect(signals).toHaveLength(1);
       expect(signals[0]?.aborted).toBe(false);
       // A second caller joins the request still in flight rather than starting another.
       const second = registry.dsoParty();
       await jest.advanceTimersByTimeAsync(3500);
+      expect(await first).toBeUndefined();
       expect(await second).toBeUndefined();
       expect(signals[0]?.aborted).toBe(true);
       expect(await registry.dsoParty()).toBeUndefined();
       expect(signals).toHaveLength(1);
       clock = 30_000;
-      const retried = registry.dsoParty();
+      // After a failure, a snapshot waits a short time only.
+      let retriedSettled = false;
+      const retried = registry.dsoParty().finally(() => {
+        retriedSettled = true;
+      });
       await jest.advanceTimersByTimeAsync(1500);
+      expect(retriedSettled).toBe(true);
       await retried;
       expect(signals).toHaveLength(2);
       await jest.advanceTimersByTimeAsync(5000);
@@ -236,7 +259,7 @@ describe('createAmuletRegistry', () => {
   it('falls back to the built-in metadata for a pinned DSO when the registry does not answer', async () => {
     const { fetch } = fakeFetch(() => ({ text: 'not json' }));
     const registry = createAmuletRegistry('devnet', { dsoParty: DSO, registryUrl: SCAN, fetch });
-    expect(await registry.instrumentMetadata(CC)).toEqual(CANTON_COIN_METADATA);
+    expect(await registry.instrumentMetadata()).toEqual(CANTON_COIN_METADATA);
   });
 });
 
@@ -324,7 +347,7 @@ describe('createWallet.loadState: Canton Coin', () => {
     expect(calls.filter((c) => c.url.includes('/registrars/'))).toHaveLength(1);
   });
 
-  it("keeps only the pinned DSO's Canton Coin, and never asks the registry for the DSO", async () => {
+  it("keeps only the pinned DSO's Canton Coin, and ignores the metadata of a registry serving another DSO", async () => {
     const { load, calls } = setup({ dsoParty: OTHER_DSO });
     const state = await load();
     expect(state.holdings.filter((h) => h.source === 'amulet').map((h) => h.contractId)).toEqual(['00ccdso2']);
@@ -333,7 +356,8 @@ describe('createWallet.loadState: Canton Coin', () => {
       unlocked: '7.0000000000',
       metadata: CANTON_COIN_METADATA,
     });
-    expect(calls.some((c) => c.url.endsWith('/registry/metadata/v1/info'))).toBe(false);
+    // The registry's adminId is read only to check it against the pin (it names DSO, not OTHER_DSO).
+    expect(calls.filter((c) => c.url.endsWith('/registry/metadata/v1/info'))).toHaveLength(1);
   });
 
   it('reads no Canton Coin with cantonCoin: false, and never asks the registry', async () => {
@@ -383,7 +407,7 @@ describe('createWallet.loadState: Canton Coin', () => {
     expect(state.cantonCoinUnavailable).toBe(true);
   });
 
-  it('does not let a hanging registry hold the snapshot for its full timeout', async () => {
+  it('gives a hanging registry its whole first request, then does not hold later snapshots', async () => {
     jest.useFakeTimers();
     try {
       const da = fakeFetch((call) =>
@@ -406,10 +430,22 @@ describe('createWallet.loadState: Canton Coin', () => {
         settled = true;
       });
       await jest.advanceTimersByTimeAsync(1500);
+      // The first lookup waits for its request (a cold Scan), bounded by the request timeout.
+      expect(settled).toBe(false);
+      await jest.advanceTimersByTimeAsync(3500);
       expect(settled).toBe(true);
       const state = await load;
       // The look-alike from another DSO, and every Amulet, is left out while the DSO is unconfirmed.
       expect(state.holdings.filter((h) => h.source === 'amulet')).toEqual([]);
+      expect(state.cantonCoinUnavailable).toBe(true);
+      // Backing off after the failure: the next snapshot does not wait for the registry at all.
+      let again = false;
+      const next = wallet.loadState().finally(() => {
+        again = true;
+      });
+      await jest.advanceTimersByTimeAsync(0);
+      expect(again).toBe(true);
+      expect((await next).cantonCoinUnavailable).toBe(true);
       await jest.advanceTimersByTimeAsync(5000);
     } finally {
       jest.useRealTimers();
@@ -422,6 +458,32 @@ describe('createWallet.loadState: Canton Coin', () => {
       /Canton Coin \(Amulet\) cannot be transferred/
     );
     await expect(wallet.requestBurn({ instrumentId: CC, amount: '1' })).rejects.toThrow(/cannot be burned/);
+  });
+
+  it("refuses a DA transfer preapproval for the DSO, known or named by the party's Canton Coin", async () => {
+    // Pinned: refused before any read.
+    const pinned = setup({ dsoParty: DSO });
+    await expect(pinned.wallet.createTransferPreapproval({ instrumentAdmin: DSO })).rejects.toMatchObject({
+      code: 'invalid-input',
+      message: expect.stringMatching(/Canton Coin's DSO party/),
+    });
+    // Unpinned and never looked up: the party's genuine Canton Coin names the DSO, and Scan is not asked.
+    const unpinned = setup();
+    await expect(unpinned.wallet.createTransferPreapproval({ instrumentAdmin: DSO })).rejects.toMatchObject({
+      code: 'invalid-input',
+    });
+    expect(unpinned.calls.some((c) => c.url.startsWith(SCAN))).toBe(false);
+    // A forged look-alike (not signed by its admin) names nobody: HOLDER is not refused for it.
+    await expect(unpinned.wallet.createTransferPreapproval({ instrumentAdmin: HOLDER })).resolves.toMatchObject({
+      updateId: expect.any(String),
+    });
+  });
+
+  it('reads Canton Coin metadata alongside the DSO, so a snapshot waits for the registry once', async () => {
+    const { load, calls } = setup();
+    await load();
+    const scan = calls.filter((c) => c.url.startsWith(SCAN)).map((c) => c.url.split('/').pop());
+    expect(scan).toEqual(['info', 'Amulet']);
   });
 
   it("keeps a DA Registry instrument a registrar named 'Amulet' transferable and burnable", async () => {

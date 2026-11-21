@@ -24,8 +24,11 @@ export interface MintOffer extends RegistryParties {
   readonly instrumentId: InstrumentId;
   readonly amount: string;
   readonly reference: string;
-  /** The mint's reason metadata (the issuer's note to the holder), when present. */
-  readonly memo: string | null;
+  /**
+   * The mint's reason metadata (the issuer's note to the holder), null when there is none. The wallet always sets it;
+   * optional so an object built without it still type-checks, and absent reads as null.
+   */
+  readonly memo?: string | null;
   readonly requestedAt: string;
   readonly executeBefore: string;
 }
@@ -61,8 +64,11 @@ export interface BurnRequest extends RegistryParties {
   readonly instrumentId: InstrumentId;
   readonly amount: string;
   readonly reference: string;
-  /** The burn's reason metadata, when present. */
-  readonly memo: string | null;
+  /**
+   * The burn's reason metadata, null when there is none. The wallet always sets it; optional like `MintOffer.memo`, and
+   * absent reads as null.
+   */
+  readonly memo?: string | null;
   readonly requestedAt: string;
   readonly executeBefore: string;
   /** The holding DA locked for the burn: the registrar's accept burns it, a reject or cancel unlocks it. */

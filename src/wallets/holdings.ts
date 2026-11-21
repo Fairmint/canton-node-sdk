@@ -33,7 +33,11 @@ export interface Holding {
   readonly locked: boolean;
   /** The synchronizer the holding is assigned to, when the ledger reported it. Inputs never mix synchronizers. */
   readonly synchronizerId?: string;
-  readonly source: HoldingSource;
+  /**
+   * Which kind of holding contract it is (see {@link HoldingSource}). The wallet always sets it; optional so an object
+   * built without it (a test double, a cached state) still type-checks, and absent reads as `'da-registry'`.
+   */
+  readonly source?: HoldingSource;
   /**
    * The `HoldingV1` view's metadata, for a holding read through its view (Canton Coin: the round it was created in and
    * its holding fee rate, `amulet.splice.lfdecentralizedtrust.org/created-in-round` and `.../rate-per-round`).
@@ -317,8 +321,20 @@ export interface InstrumentBalance {
   readonly holdingCount: number;
   /** The registry's metadata of the instrument; absent when the registry did not answer it. */
   readonly metadata?: InstrumentMetadata;
-  /** Where the holdings come from: `amulet` for Canton Coin (see {@link HoldingSource}). */
-  readonly source: HoldingSource;
+  /**
+   * Where the holdings come from: `amulet` for Canton Coin (see {@link HoldingSource}). The wallet always sets it;
+   * optional like `Holding.source`, and absent reads as `'da-registry'`.
+   */
+  readonly source?: HoldingSource;
+}
+
+/**
+ * Whether a holding or balance is Canton Coin (`source: 'amulet'`). Canton Coin is listed but not transferred, burnt or
+ * pre-approved through the wallet: filter it out of pickers for those actions (`balances.filter((b) =>
+ * !isCantonCoin(b))`).
+ */
+export function isCantonCoin(entry: Holding | InstrumentBalance): boolean {
+  return entry.source === 'amulet';
 }
 
 /** Escapes `%` and `@` in one key component, so the component holds no bare `@` and the escape itself is unambiguous. */
@@ -352,7 +368,7 @@ export function instrumentBalances(holdings: readonly Holding[]): InstrumentBala
     const key = instrumentKey(entry.instrumentId);
     const total = totals.get(key) ?? {
       instrumentId: entry.instrumentId,
-      source: entry.source,
+      source: entry.source ?? 'da-registry',
       unlocked: 0n,
       locked: 0n,
       count: 0,
