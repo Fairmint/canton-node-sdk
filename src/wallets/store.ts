@@ -7,6 +7,7 @@
  * store.getSnapshot, store.getSnapshot)`).
  */
 import { anySignal } from './abort';
+import type { CantonCoinOptions } from './amulet-registry';
 import { notifyListeners } from './notify';
 import type { FetchLike, DaRegistryOptions } from './da-utilities/client';
 import { describeWalletError, WalletError, type WalletErrorDescription } from './errors';
@@ -248,6 +249,8 @@ export interface WalletStoreOptions {
   readonly session: Cip103Session;
   /** How each token wallet reaches DA's Utilities API (`createWallet`'s `registry`). */
   readonly registry?: DaRegistryOptions;
+  /** How each token wallet recognises and describes Canton Coin (`createWallet`'s `cantonCoin`). */
+  readonly cantonCoin?: CantonCoinOptions;
 }
 
 /** A test hook beside {@link WalletStoreOptions}; not part of the public options. */
@@ -404,7 +407,7 @@ function forParty(message: string, partyId: string, current: ConnectedWallet | n
  * which runs for the wallet current when the latch frees. A wallet call that never settles holds the latch.
  */
 export function createWalletStore(options: WalletStoreOptions): WalletStore {
-  const { session, registry, openWallet = createWallet } = options as WalletStoreInternalOptions;
+  const { session, registry, cantonCoin, openWallet = createWallet } = options as WalletStoreInternalOptions;
   const listeners = new Set<() => void>();
   const plans: StorePlans = new WeakMap();
 
@@ -567,6 +570,7 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
           partyId: next.partyId,
           network: next.network,
           ...(registry !== undefined && { registry }),
+          ...(cantonCoin !== undefined && { cantonCoin }),
           isActive: () => session.isCurrent(next),
         });
       } catch (error) {

@@ -61,6 +61,7 @@ import { AMULET_INSTRUMENT_ID } from './amulet';
 import { createAmuletRegistry, type AmuletRegistry, type CantonCoinOptions } from './amulet-registry';
 import { isWalletSubmitError, RegistryResponseError, WalletError, WalletSubmitError } from './errors';
 import { HOLDING_V1_INTERFACE_ID } from './holding-view';
+import { nonEmptyString } from './json';
 import { instrumentBalances, parseHolding, selectHoldings, type Holding, type InstrumentBalance } from './holdings';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
 import { TOKEN_STANDARD_V1_REASON_META_KEY } from '../utils/token-standard/v1/constants';
@@ -121,7 +122,8 @@ export interface WalletOptions {
   /**
    * How Canton Coin is recognised and described: pin the network's DSO party (`dsoParty`) and/or name the DSO's
    * registry (`registryUrl`, a Scan URL) for its metadata. Without either, Canton Coin of any DSO that signed it is
-   * listed, without metadata.
+   * listed, without metadata. With either, only the confirmed DSO's Canton Coin is listed: while the registry cannot
+   * confirm it (no `dsoParty`, Scan down or slow), no Canton Coin is.
    */
   readonly cantonCoin?: CantonCoinOptions;
   /**
@@ -343,7 +345,8 @@ export function createWallet(options: WalletOptions): Wallet {
   const { network } = options;
   if (!isDaNetwork(network)) throw new TypeError('createWallet: network must be devnet or mainnet');
   const registry: DaUtilitiesClient = createDaUtilitiesClient(network, options.registry);
-  const amulet: AmuletRegistry = createAmuletRegistry(options.cantonCoin, options.registry?.fetch);
+  const amulet: AmuletRegistry = createAmuletRegistry(options.cantonCoin, { now: () => requireTime(clock(), 'now()') });
+  const pinnedDso = nonEmptyString(options.cantonCoin?.dsoParty);
   const now = (): number => requireTime(clock(), 'now()');
 
   /** Refuse a write once the wallet session this wallet belongs to ended (`isActive`). */
@@ -393,14 +396,17 @@ export function createWallet(options: WalletOptions): Wallet {
 
   /**
    * The party's genuine holdings among `contracts`, each contract once. With the DSO known (`dsoParty`), Canton Coin of
-   * any other DSO is dropped.
+   * any other DSO is dropped; when the options name a DSO that could not be confirmed, all Canton Coin is (never every
+   * DSO's). Only a wallet whose options name no DSO lists each signing DSO's.
    */
   function holdingsIn(contracts: readonly ActiveContract[], dso?: string): Holding[] {
     const seen = new Set<string>();
     return contracts.flatMap((contract) => {
       const holding = parseHolding(contract);
       if (holding?.owner !== partyId || seen.has(holding.contractId)) return [];
-      if (holding.source === 'amulet' && dso !== undefined && holding.instrumentId.admin !== dso) return [];
+      if (holding.source === 'amulet') {
+        if (dso !== undefined ? holding.instrumentId.admin !== dso : amulet.namesDso) return [];
+      }
       seen.add(holding.contractId);
       return [holding];
     });
@@ -410,9 +416,21 @@ export function createWallet(options: WalletOptions): Wallet {
   const daHoldingsIn = (contracts: readonly ActiveContract[]): Holding[] =>
     holdingsIn(contracts).filter((holding) => holding.source === 'da-registry');
 
-  /** Refuse a Canton Coin transfer or burn before any read: this wallet only reads Canton Coin. */
-  function refuseCantonCoin(instrumentId: InstrumentId, action: string): void {
-    if (instrumentId.id === AMULET_INSTRUMENT_ID) {
+  /**
+   * Refuse a Canton Coin transfer or burn: this wallet only reads Canton Coin. Before any read when the instrument is
+   * the pinned DSO's `Amulet`; otherwise (`holdings` given) an `Amulet` the party holds no DA Registry holding of. A DA
+   * Registry instrument a registrar named `Amulet` stays transferable.
+   */
+  function refuseCantonCoin(instrumentId: InstrumentId, action: string, holdings?: readonly Holding[]): void {
+    if (instrumentId.id !== AMULET_INSTRUMENT_ID) return;
+    const isCantonCoin =
+      holdings === undefined
+        ? instrumentId.admin === pinnedDso
+        : !holdings.some(
+            (holding) =>
+              holding.instrumentId.admin === instrumentId.admin && holding.instrumentId.id === instrumentId.id
+          );
+    if (isCantonCoin) {
       throw new WalletError(
         'invalid-input',
         `Canton Coin (Amulet) cannot be ${action} through this wallet yet; nothing was submitted`
@@ -482,6 +500,7 @@ export function createWallet(options: WalletOptions): Wallet {
   }
 
   async function readState(): Promise<WalletState> {
+    // The DSO lookup runs beside the ACS read and waits a short, bounded time (see `createAmuletRegistry`).
     const [{ offset, contracts }, dso] = await Promise.all([
       ledger.readActiveContracts(STATE_FILTERS),
       amulet.dsoParty(),
@@ -540,7 +559,9 @@ export function createWallet(options: WalletOptions): Wallet {
   ): Promise<{ transfer: TransferSpec; factory: TransferFactory }> {
     const at = now();
     const executeBefore = deadline(request.executeBefore, at, TRANSFER_TTL_MS);
-    const selection = selectHoldings(daHoldingsIn(await read(DA_REGISTRY_TEMPLATES.holding, signal)), {
+    const daHoldings = daHoldingsIn(await read(DA_REGISTRY_TEMPLATES.holding, signal));
+    refuseCantonCoin(request.instrumentId, 'transferred', daHoldings);
+    const selection = selectHoldings(daHoldings, {
       owner: partyId,
       instrumentId: request.instrumentId,
       amount: request.amount,
@@ -658,7 +679,9 @@ export function createWallet(options: WalletOptions): Wallet {
       );
     }
     const executeBefore = deadline(burn.executeBefore, at, BURN_TTL_MS);
-    const selection = selectHoldings(daHoldingsIn(await read(DA_REGISTRY_TEMPLATES.holding, signal)), {
+    const daHoldings = daHoldingsIn(await read(DA_REGISTRY_TEMPLATES.holding, signal));
+    refuseCantonCoin(instrumentId, 'burned', daHoldings);
+    const selection = selectHoldings(daHoldings, {
       owner: partyId,
       instrumentId,
       amount: burn.amount,

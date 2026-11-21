@@ -11,7 +11,8 @@
  * - `createWallet(...)`: one party's token actions, for code that does not need the store.
  * - Canton Coin: `loadState()` lists the party's Canton Coin (Splice `Amulet` / `LockedAmulet`, read through the
  *   `HoldingV1` interface view) with its other holdings (`source: 'amulet'`); pass `cantonCoin: { dsoParty }` and/or `{
- *   registryUrl }` (Scan) to pin the DSO and label it. Canton Coin is read-only here.
+ *   registryUrl }` (Scan) to `createWallet` or `createWalletStore` to pin the DSO and label it (while a named DSO
+ *   cannot be confirmed, no Canton Coin is listed). Canton Coin is read-only here.
  * - The ownership proof's browser half (`requestWalletOwnershipVerdict`); the server half
  *   (`createWalletOwnershipChallenger`, `verifyWalletOwnership`) is Node-only and exported from the package root.
  * - The errors, their guards (`isWalletError`, `isWalletSubmitError`, …: they match errors of any copy of this module,

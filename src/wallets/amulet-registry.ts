@@ -19,12 +19,20 @@ export interface CantonCoinOptions {
    * `${registryUrl}/registry/metadata/v1/instruments/Amulet`. Unset: no registry request is made.
    */
   readonly registryUrl?: string;
-  /** Defaults to the wallet's `registry.fetch`, else `globalThis.fetch`. */
+  /**
+   * Defaults to `globalThis.fetch`. Never the wallet's `registry.fetch`: that one was given for DA's Utilities API and
+   * may add headers or route requests meant for that host only.
+   */
   readonly fetch?: FetchLike;
 }
 
 /** The DSO's registry, as far as reading Canton Coin needs it. */
 export interface AmuletRegistry {
+  /**
+   * Whether the options name the wallet's DSO (`dsoParty` or `registryUrl`). When they do and {@link dsoParty} answers
+   * nothing, no Canton Coin can be confirmed, so none is listed (never every DSO's).
+   */
+  readonly namesDso: boolean;
   /** The DSO party: `dsoParty`, else the registry's `adminId`; undefined when neither is known. A failure is retried. */
   dsoParty(signal?: AbortSignal): Promise<string | undefined>;
   /**
@@ -35,50 +43,94 @@ export interface AmuletRegistry {
   instrumentMetadata(instrumentId: InstrumentId, signal?: AbortSignal): Promise<InstrumentMetadata | undefined>;
 }
 
-/** A registry lookup still unanswered after this long gives undefined (and is asked again next time). */
-const REGISTRY_TIMEOUT_MS = 5000;
+/** A registry request still unanswered after this long is aborted and counts as a failure. */
+const REGISTRY_REQUEST_TIMEOUT_MS = 5000;
+/** How long a caller waits for a registry answer; a slower one is still cached for the next call. */
+const REGISTRY_WAIT_MS = 1500;
+/** After a failed lookup, the registry is not asked again for this long (the lookup answers undefined meanwhile). */
+const REGISTRY_FAILURE_BACKOFF_MS = 30_000;
 
-/** A cached lookup: a defined answer is kept, an undefined one (failure, timeout) is asked again next call. */
-function cachedLookup<T>(lookup: () => Promise<T | undefined>): (signal?: AbortSignal) => Promise<T | undefined> {
+/** Test hooks of {@link createAmuletRegistry}; not part of the public options. */
+export interface AmuletRegistryInternalOptions {
+  /** The clock of the failure back-off, in milliseconds. Defaults to `Date.now`. */
+  readonly now?: () => number;
+}
+
+/** Resolves undefined after `ms`; `cancel` clears the timer. */
+function after(ms: number): { readonly promise: Promise<undefined>; cancel(): void } {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const promise = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), ms);
+  });
+  return { promise, cancel: () => clearTimeout(timer) };
+}
+
+/**
+ * A cached lookup: a defined answer is kept; a failure (an error, an undefined answer, a request aborted after
+ * {@link REGISTRY_REQUEST_TIMEOUT_MS}) is asked again only after {@link REGISTRY_FAILURE_BACKOFF_MS}. A caller waits at
+ * most {@link REGISTRY_WAIT_MS}, or until its `signal` aborts.
+ */
+function cachedLookup<T>(
+  lookup: (signal: AbortSignal) => Promise<T | undefined>,
+  now: () => number
+): (signal?: AbortSignal) => Promise<T | undefined> {
   let pending: Promise<T | undefined> | undefined;
+  let retryAt = 0;
   return async (signal) => {
     throwIfAborted(signal);
     if (pending === undefined) {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const timedOut = new Promise<undefined>((resolve) => {
-        timer = setTimeout(() => resolve(undefined), REGISTRY_TIMEOUT_MS);
+      if (now() < retryAt) return undefined;
+      const controller = new AbortController();
+      const timeout = after(REGISTRY_REQUEST_TIMEOUT_MS);
+      void timeout.promise.then(() => controller.abort());
+      // The race also ends a custom fetch that ignores the signal.
+      const request: Promise<T | undefined> = Promise.race([
+        lookup(controller.signal).catch(() => undefined),
+        timeout.promise,
+      ]).finally(() => timeout.cancel());
+      pending = request;
+      void request.then((answer) => {
+        if (answer === undefined && pending === request) {
+          pending = undefined;
+          retryAt = now() + REGISTRY_FAILURE_BACKOFF_MS;
+        }
       });
-      pending = Promise.race([lookup().catch(() => undefined), timedOut]).finally(() => clearTimeout(timer));
     }
     const shared = pending;
-    const answer = signal === undefined ? await shared : await awaitWithAbort(async () => shared, signal);
-    if (answer === undefined && pending === shared) pending = undefined;
-    return answer;
+    const wait = after(REGISTRY_WAIT_MS);
+    const bounded = Promise.race([shared, wait.promise]).finally(() => wait.cancel());
+    return signal === undefined ? bounded : awaitWithAbort(async () => bounded, signal);
   };
 }
 
-/** The Canton Coin registry of `options`; `fallbackFetch` is the wallet's registry fetch. */
-export function createAmuletRegistry(options: CantonCoinOptions = {}, fallbackFetch?: FetchLike): AmuletRegistry {
+/** The Canton Coin registry of `options`. */
+export function createAmuletRegistry(
+  options: CantonCoinOptions = {},
+  internal: AmuletRegistryInternalOptions = {}
+): AmuletRegistry {
   const pinned = nonEmptyString(options.dsoParty);
   const registryUrl = options.registryUrl === undefined ? undefined : trimTrailingSlashes(options.registryUrl);
-  const fetchFn = options.fetch ?? fallbackFetch ?? globalFetch('cantonCoin.fetch');
+  const fetchFn = options.fetch ?? globalFetch('cantonCoin.fetch');
+  const now = internal.now ?? Date.now;
 
-  async function getJson(path: string): Promise<unknown> {
+  async function getJson(path: string, signal: AbortSignal): Promise<unknown> {
     if (registryUrl === undefined) return undefined;
-    const response = await fetchFn(`${registryUrl}${path}`, { method: 'GET' });
+    const response = await fetchFn(`${registryUrl}${path}`, { method: 'GET', signal });
     if (!response.ok) return undefined;
     return JSON.parse(await response.text()) as unknown;
   }
 
-  const registryAdmin = cachedLookup(async () => {
-    const info = await getJson('/registry/metadata/v1/info');
+  const registryAdmin = cachedLookup(async (signal) => {
+    const info = await getJson('/registry/metadata/v1/info', signal);
     return isRecord(info) ? nonEmptyString(info['adminId']) : undefined;
-  });
-  const registryMetadata = cachedLookup(async () =>
-    parseInstrumentMetadata(
-      await getJson(`/registry/metadata/v1/instruments/${encodeURIComponent(AMULET_INSTRUMENT_ID)}`),
-      AMULET_INSTRUMENT_ID
-    )
+  }, now);
+  const registryMetadata = cachedLookup(
+    async (signal) =>
+      parseInstrumentMetadata(
+        await getJson(`/registry/metadata/v1/instruments/${encodeURIComponent(AMULET_INSTRUMENT_ID)}`, signal),
+        AMULET_INSTRUMENT_ID
+      ),
+    now
   );
 
   async function dsoParty(signal?: AbortSignal): Promise<string | undefined> {
@@ -87,6 +139,7 @@ export function createAmuletRegistry(options: CantonCoinOptions = {}, fallbackFe
   }
 
   return {
+    namesDso: pinned !== undefined || registryUrl !== undefined,
     dsoParty,
     async instrumentMetadata(instrumentId, signal) {
       if (instrumentId.id !== AMULET_INSTRUMENT_ID) return undefined;
