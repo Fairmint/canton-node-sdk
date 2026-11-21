@@ -129,6 +129,26 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
     });
   });
 
+  it('forwards userId to allocation', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+
+    await createExternalPartyWithEd25519Signer({
+      ledgerClient,
+      synchronizerId: SYNCHRONIZER_ID,
+      partyHint: 'external-test',
+      signer: fixture.signer,
+      userId: 'wallet-server',
+      readinessDelaysMs: [0],
+      requestTtlMs: 60_000,
+      now: () => NOW_MS,
+    });
+
+    expect(ledgerClient.allocateExternalParty).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'wallet-server' })
+    );
+  });
+
   it('rejects a signer response that does not verify before allocating or executing', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const other = createSigningFixture();

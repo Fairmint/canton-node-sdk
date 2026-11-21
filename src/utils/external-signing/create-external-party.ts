@@ -15,6 +15,11 @@ export interface CreateExternalPartyParams {
   readonly synchronizerId: string;
   /** Identity provider ID (default: 'default'). */
   readonly identityProviderId?: string;
+  /**
+   * Participant user granted `CanActAs` on the new party. Trimmed; must be non-empty, at most 512 characters and free
+   * of line breaks. Omit to grant no user rights.
+   */
+  readonly userId?: string;
   /** If true, the local participant will only observe, not confirm (default: false). */
   readonly localParticipantObservationOnly?: boolean;
   /** Other participant UIDs that should confirm for this party. */
@@ -77,6 +82,7 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
     partyName,
     synchronizerId,
     identityProviderId = 'default',
+    userId,
     localParticipantObservationOnly,
     otherConfirmingParticipantUids,
     confirmationThreshold,
@@ -154,6 +160,7 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
   const allocateResult = await ledgerClient.allocateExternalParty({
     synchronizer: synchronizerId,
     identityProviderId,
+    ...(userId !== undefined ? { userId } : {}),
     onboardingTransactions,
     multiHashSignatures: [
       {

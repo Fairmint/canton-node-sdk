@@ -1,4 +1,5 @@
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
+import { AllocateExternalPartyParamsSchema } from '../../clients/ledger-json-api/operations/v2/parties/external/allocate-external-party';
 import { ApiError, OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
 import { isRecord } from '../../core/utils';
 import { runWithAbortSignal } from '../../core/utils/abort';
@@ -59,6 +60,12 @@ export interface SubmitExternalPartyOnboardingOptions {
   readonly topologyTransactions: readonly string[];
   readonly multiHashSignatureBase64: string;
   readonly publicKeyFingerprint?: string | null;
+  /**
+   * Participant user that gets `CanActAs` on the new party, so that user can submit commands for it (for example the
+   * server's own ledger user). Trimmed; must be non-empty, at most 512 characters and free of line breaks. Omit it to
+   * grant no user rights (the ledger's default).
+   */
+  readonly userId?: string;
   readonly identityProviderId?: string;
   /**
    * Cancels the allocation request. Cancellation after dispatch has an ambiguous outcome; reconcile `partyId` before
@@ -115,6 +122,12 @@ export type ExternalPartyHashSigner = (
 export interface CreateExternalPartyWithSignerOptions extends PrepareExternalPartyOnboardingOptions {
   readonly signMultiHash: ExternalPartyHashSigner;
   readonly identityProviderId?: string;
+  /**
+   * Participant user that gets `CanActAs` on the new party, so that user can submit commands for it (for example the
+   * server's own ledger user). Trimmed; must be non-empty, at most 512 characters and free of line breaks. Omit it to
+   * grant no user rights (the ledger's default).
+   */
+  readonly userId?: string;
   /**
    * Cancels allocation transport. It does not cancel topology preparation or the caller-provided signer callback, and
    * it cannot undo an allocation already accepted by Canton.
@@ -238,6 +251,7 @@ export async function createExternalPartyWithSigner(
     topologyTransactions: prepared.topologyTransactions,
     multiHashSignatureBase64: normalizeExternalPartyHashSignature(signature),
     ...(options.identityProviderId !== undefined ? { identityProviderId: options.identityProviderId } : {}),
+    ...(options.userId !== undefined ? { userId: options.userId } : {}),
     ...(options.allowAlreadyExists !== undefined ? { allowAlreadyExists: options.allowAlreadyExists } : {}),
     ...(options.signal !== undefined ? { signal: options.signal } : {}),
   });
@@ -258,6 +272,7 @@ export async function submitExternalPartyOnboarding(
   options: SubmitExternalPartyOnboardingOptions
 ): Promise<SubmittedExternalPartyOnboarding> {
   validateRequiredString('synchronizerId', options.synchronizerId);
+  const userId = options.userId === undefined ? undefined : normalizeAllocationUserId(options.userId);
   const publicKeyFingerprint = assertCantonPartyMatchesPublicKey({
     partyId: options.partyId,
     publicKeyBase64: options.publicKeyBase64,
@@ -284,6 +299,7 @@ export async function submitExternalPartyOnboarding(
           signingAlgorithmSpec: CANTON_ED25519_SIGNATURE_ALGORITHM,
         },
       ],
+      ...(userId !== undefined ? { userId } : {}),
       ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
     const partyId = readAllocatedExternalPartyId(raw);
@@ -390,6 +406,16 @@ export async function getExternalPartyIdForHintAndPublicKey(
     }
     throw error;
   }
+}
+
+/** Validates and trims the participant user id with the allocate operation's own rules, before anything is signed. */
+function normalizeAllocationUserId(value: string): string {
+  const result = AllocateExternalPartyParamsSchema.shape.userId.safeParse(value);
+  if (!result.success || result.data === undefined) {
+    const message = result.success ? 'userId is required' : (result.error.issues[0]?.message ?? 'userId is invalid');
+    throw new ValidationError(message, { userId: value });
+  }
+  return result.data;
 }
 
 function validateRequiredString(name: string, value: string): void {

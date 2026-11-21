@@ -55,6 +55,8 @@ export interface CreateExternalPartyWithEd25519SignerOptions extends Omit<
 > {
   readonly signer: CantonEd25519Signer;
   readonly identityProviderId?: string;
+  /** Participant user granted `CanActAs` on the new party. Trimmed; non-empty, at most 512 characters, no line breaks. */
+  readonly userId?: string;
   /** Treat a confirmed existing party as an idempotent success (default: true). */
   readonly allowAlreadyExists?: boolean;
   /** Poll for submit readiness after allocation (default: true; ignored for observation-only onboarding). */
@@ -138,6 +140,7 @@ export async function createExternalPartyWithEd25519Signer(
       partyHint: options.partyHint,
       publicKeyBase64,
       ...(options.identityProviderId !== undefined ? { identityProviderId: options.identityProviderId } : {}),
+      ...(options.userId !== undefined ? { userId: options.userId } : {}),
       allowAlreadyExists: options.allowAlreadyExists ?? true,
       ...(options.localParticipantObservationOnly !== undefined
         ? { localParticipantObservationOnly: options.localParticipantObservationOnly }

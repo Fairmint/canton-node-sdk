@@ -186,6 +186,68 @@ describe('external-party onboarding helpers', () => {
     );
   });
 
+  it('grants the trimmed userId act-as rights through allocation', async () => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+
+    await submitExternalPartyOnboarding({
+      ledgerClient,
+      synchronizerId: 'global-domain::sync',
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+      publicKeyFingerprint: fixture.publicKeyFingerprint,
+      multiHashHex: MULTI_HASH_HEX,
+      topologyTransactions: ['topology-tx-1'],
+      multiHashSignatureBase64: fixture.signMultiHash(),
+      userId: '  wallet-server ',
+    });
+
+    expect(ledgerClient.allocateExternalParty).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'wallet-server' })
+    );
+  });
+
+  it.each([
+    ['', 'userId must not be empty'],
+    ['u'.repeat(513), 'userId must be at most 512 characters'],
+    ['user\nname', 'userId must not contain line breaks'],
+  ])('rejects an invalid userId %j before allocating', async (userId, message) => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+
+    await expect(
+      submitExternalPartyOnboarding({
+        ledgerClient,
+        synchronizerId: 'global-domain::sync',
+        partyId: fixture.partyId,
+        publicKeyBase64: fixture.publicKeyBase64,
+        multiHashHex: MULTI_HASH_HEX,
+        topologyTransactions: ['topology-tx-1'],
+        multiHashSignatureBase64: fixture.signMultiHash(),
+        userId,
+      })
+    ).rejects.toThrow(message);
+    expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
+  });
+
+  it('forwards userId through external signer party creation', async () => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+
+    await createExternalPartyWithSigner({
+      ledgerClient,
+      synchronizerId: 'global-domain::sync',
+      partyHint: 'privy-test',
+      publicKeyBase64: fixture.publicKeyBase64,
+      userId: 'wallet-server',
+      signMultiHash: () => ({ signatureBase64: fixture.signMultiHash() }),
+    });
+
+    expect(ledgerClient.allocateExternalParty).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'wallet-server' })
+    );
+  });
+
   it('creates an external party with an external signer callback returning hex', async () => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient(fixture);

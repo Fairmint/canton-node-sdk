@@ -95,6 +95,20 @@ describe('createExternalParty', () => {
     });
   });
 
+  it('forwards userId so the participant user gets act-as rights', async () => {
+    const mockClient = createMockLedgerClient();
+
+    await createExternalParty({
+      ledgerClient: mockClient,
+      keypair,
+      partyName: 'alice',
+      synchronizerId: 'global-sync',
+      userId: 'wallet-server',
+    });
+
+    expect(mockClient.allocateExternalParty).toHaveBeenCalledWith(expect.objectContaining({ userId: 'wallet-server' }));
+  });
+
   it('uses custom identityProviderId when provided', async () => {
     const mockClient = createMockLedgerClient();
 

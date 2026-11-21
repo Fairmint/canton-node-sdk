@@ -26,6 +26,9 @@ const SignedTransactionSchema = z.union([
   }),
 ]);
 
+/** Longest participant user id the SDK sends. */
+const MAX_USER_ID_LENGTH = 512;
+
 // Schema for the parameters
 export const AllocateExternalPartyParamsSchema = z.object({
   /** Synchronizer ID on which to onboard the party */
@@ -36,6 +39,19 @@ export const AllocateExternalPartyParamsSchema = z.object({
   multiHashSignatures: z.array(SignatureSchema).optional(),
   /** Identity provider ID. If not set, assume the party is managed by the default identity provider. */
   identityProviderId: z.string(),
+  /**
+   * Participant user that gets `CanActAs` on the new party (sent as `userId`). Trimmed, then must be non-empty, at most
+   * 512 characters and free of line breaks. Omit it to grant no user rights (the ledger's default).
+   */
+  userId: z
+    .string()
+    .transform((value) => value.trim())
+    .refine((value) => value.length > 0, { message: 'userId must not be empty' })
+    .refine((value) => value.length <= MAX_USER_ID_LENGTH, {
+      message: `userId must be at most ${MAX_USER_ID_LENGTH} characters`,
+    })
+    .refine((value) => !/[\r\n]/.test(value), { message: 'userId must not contain line breaks' })
+    .optional(),
 });
 
 export type AllocateExternalPartyParams = z.infer<typeof AllocateExternalPartyParamsSchema>;
@@ -46,8 +62,8 @@ export type AllocateExternalPartyResponse = GeneratedResponse;
  * Allocate a new external party
  *
  * This endpoint completes the onboarding of an external party by submitting the topology transactions and signatures.
- * The topology transactions and multi-hash should be obtained from the generate-topology
- * endpoint and signed with the external party's private key.
+ * The topology transactions and multi-hash should be obtained from the generate-topology endpoint and signed with the
+ * external party's private key.
  *
  * @example
  *   ```typescript
@@ -88,5 +104,6 @@ export const AllocateExternalParty = createApiOperation<AllocateExternalPartyPar
     ...(params.multiHashSignatures && {
       multiHashSignatures: params.multiHashSignatures,
     }),
+    ...(params.userId !== undefined ? { userId: params.userId } : {}),
   }),
 });

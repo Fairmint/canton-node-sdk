@@ -10,6 +10,8 @@ export interface AllocateExternalPartyOptions {
   readonly identityProviderId: string;
   readonly onboardingTransactions: AllocateExternalPartyParams['onboardingTransactions'];
   readonly multiHashSignatures?: AllocateExternalPartyParams['multiHashSignatures'];
+  /** Participant user granted `CanActAs` on the new party. Omit to grant no user rights. */
+  readonly userId?: string;
   /**
    * Cancels the HTTP request. Because allocation is a mutation, cancellation after dispatch has an ambiguous outcome
    * and callers must reconcile the exact party ID before deciding whether to retry.
@@ -26,6 +28,7 @@ export async function allocateExternalParty(
     identityProviderId: options.identityProviderId,
     onboardingTransactions: options.onboardingTransactions,
     multiHashSignatures: options.multiHashSignatures,
+    ...(options.userId !== undefined ? { userId: options.userId } : {}),
   };
   return options.signal === undefined
     ? options.ledgerClient.allocateExternalParty(params)
