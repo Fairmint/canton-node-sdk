@@ -883,6 +883,18 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
         // Remembered at once: its connect may finish only after a login redirect, which the next page load restores.
         writeStorage(local, walletStorageKey, key);
         if (selected !== null && selected !== key) setSelected(null);
+        // Already on this option's wallet (perhaps kept by an earlier object while a rediscovered replacement has not
+        // offered yet): nothing to do, and rebuilding the wanted state would drop that earlier object and disconnect.
+        const current = live;
+        if (
+          current?.option === option &&
+          current.connected !== null &&
+          sessionState().status === 'connected' &&
+          sessionOn(current.connected)
+        ) {
+          publish();
+          return { status: 'connected' };
+        }
         // A new attempt: the same provider connects again (after a cancelled or failed connect).
         const wanted: Live = { option, connected: null, former: null, stray: null };
         setLive(wanted);

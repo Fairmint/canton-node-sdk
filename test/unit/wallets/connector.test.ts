@@ -1301,6 +1301,20 @@ describe('createWalletConnector: review fixes', () => {
       expect(connects()).toBe(0);
     });
 
+    it('keeps the wallet when connect() picks the same key before the replacement offers', async () => {
+      const { c, made, provider, connects } = await connectedThenRediscovered();
+      expect(await c.connect('privy:x')).toEqual({ status: 'connected' });
+      await flush();
+      expect(connectedProvider(c)).toBe(provider);
+      expect(provider.requests).not.toContain('disconnect');
+      expect(connects()).toBe(0);
+      // The earlier object still speaks for the wallet: its withdrawal is heard.
+      expect(made[0]?.subscribers()).toBe(1);
+      made[0]?.offer(null);
+      await flush();
+      expect(c.session?.getSnapshot().status).toBe('disconnected');
+    });
+
     it('changes nothing when the replacement offers the same provider', async () => {
       const { c, made, provider, connects } = await connectedThenRediscovered();
       made[1]?.offer(provider, PARTY_A);
