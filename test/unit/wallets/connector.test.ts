@@ -1391,6 +1391,37 @@ describe('createWalletConnector: review fixes', () => {
       expect(connects()).toBe(1);
     });
 
+    it('connect() before the replacement offers runs a change the earlier object deferred, keeping that sign-in', async () => {
+      const made: Array<ReturnType<typeof liveOption>> = [];
+      let availability: WalletAvailability = AVAILABLE;
+      const c = connector({
+        discover: async () => {
+          const next = liveOption('privy:x');
+          made.push(next);
+          return [{ ...next.option, availability: () => availability }];
+        },
+      });
+      await flush();
+      const provider = new TestProvider(PARTY_A);
+      made[0]?.offer(provider, PARTY_A);
+      expect(await c.connect('privy:x')).toEqual({ status: 'connected' });
+      await c.rediscover();
+      await flush();
+      expect(made).toHaveLength(2);
+      // The earlier object rotates while the option cannot connect: the change is deferred.
+      availability = { available: false, reason: 'not-configured' };
+      const rotated = new TestProvider(PARTY_A);
+      made[0]?.offer(rotated, PARTY_A);
+      await flush();
+      expect(rotated.requests).toEqual([]);
+      expect(connectedProvider(c)).toBe(provider);
+      availability = AVAILABLE;
+      expect(await c.connect('privy:x')).toEqual({ status: 'connected' });
+      await flush();
+      expect(connectedProvider(c)).toBe(rotated);
+      expect(rotated.requests.filter((method) => method === 'connect')).toHaveLength(1);
+    });
+
     it('reconnects when the replacement offers a different provider', async () => {
       const { c, made, provider, connects } = await connectedThenRediscovered();
       const rebuilt = new TestProvider(PARTY_A);
@@ -1871,6 +1902,32 @@ describe('createWalletConnector: races with a write and a superseding call', () 
     expect(c.session?.getSnapshot().status).toBe('disconnected');
   });
 
+  it('disconnect() leaves the wallet before a write a latch subscriber starts during its bump', async () => {
+    const latch = createWriteLatch();
+    const first = new TestProvider('first::1220abc');
+    const c = connector({ latch, options: [readyOption('loop', first)] });
+    expect(await c.connect('loop')).toEqual({ status: 'connected' });
+    const seen: string[] = [];
+    const write = deferred<undefined>();
+    let started = false;
+    const unsubscribe = latch.subscribe(() => {
+      if (started) return;
+      started = true;
+      unsubscribe();
+      void latch.run('canton-coin', async () => {
+        // What the write finds as it starts: it must not be handed a wallet that is then disconnected under it.
+        seen.push(c.session?.getSnapshot().status ?? 'none', first.requests.includes('disconnect') ? 'left' : 'on');
+        return write.promise;
+      });
+    });
+    c.disconnect();
+    expect(started).toBe(true);
+    expect(seen).toEqual(['disconnected', 'left']);
+    write.resolve(undefined);
+    await flush();
+    expect(c.session?.getSnapshot().status).toBe('disconnected');
+  });
+
   /** Connected to `first` on a live option; `rotated` (whose sign-in waits on `signIn`) is offered while unavailable. */
   async function deferredRotation(signIn: Deferred<unknown>): Promise<{
     c: WalletConnector;
@@ -1908,6 +1965,18 @@ describe('createWalletConnector: races with a write and a superseding call', () 
     signIn.resolve({ isConnected: true, isNetworkConnected: true });
     await flush();
     expect(outcome).toEqual({ status: 'connected' });
+    expect(connectedProvider(c)).toBe(rotated);
+  });
+
+  it('connect() to the wallet already on sends a deferred change it starts one sign-in, not two', async () => {
+    const signIn = deferred<unknown>();
+    const { c, rotated } = await deferredRotation(signIn);
+    const pending = c.connect('privy');
+    await flush();
+    signIn.resolve({ isConnected: true, isNetworkConnected: true });
+    expect(await pending).toEqual({ status: 'connected' });
+    await flush();
+    expect(rotated.requests.filter((method) => method === 'connect')).toHaveLength(1);
     expect(connectedProvider(c)).toBe(rotated);
   });
 
