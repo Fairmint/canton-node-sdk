@@ -42,6 +42,13 @@ describe('createDaUtilitiesClient', () => {
     expect(() => requireQualifiedName('not-an-id')).toThrow(TypeError);
   });
 
+  it('refuses a request timeout setTimeout cannot honour', () => {
+    expect(() => createDaUtilitiesClient('devnet', { timeoutMs: 2 ** 31 })).toThrow(/at most 2147483647/);
+    expect(() =>
+      createDaUtilitiesClient('devnet', { timeoutMs: 2_147_483_647, fetch: jest.fn() as never })
+    ).not.toThrow();
+  });
+
   it("calls DA's URL of the network, or the given base URL without its trailing slashes", async () => {
     expect(DA_UTILITIES_BASE_URLS).toEqual({
       devnet: 'https://api.utilities.digitalasset-dev.com',

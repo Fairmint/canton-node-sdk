@@ -103,19 +103,25 @@ function timeoutError(ms: number): Error {
   return error;
 }
 
+/** The longest delay `setTimeout` honours (2^31 - 1 ms, about 24.8 days); a longer one fires at once. */
+export const MAX_TIMER_MS = 2_147_483_647;
+
 /**
  * Runs `work` with a deadline. `work` gets a signal that aborts when `ms` milliseconds pass or `options.signal` aborts;
  * pass it on (to `fetch`, a wallet call) so the work stops too. The call settles as `work` does, else rejects at the
  * deadline with an `Error` named `TimeoutError` (match it by `name`), or, when `options.signal` aborted first, with an
  * `AbortError`. A rejection here does not say whether the work had an effect: work that may submit something must be
- * treated as of unknown outcome. `ms` must be a non-negative finite number (else a `RangeError`).
+ * treated as of unknown outcome. `ms` must be a non-negative finite number of at most {@link MAX_TIMER_MS} (else a
+ * `RangeError`).
  */
 export async function withTimeout<Value>(
   work: (signal: AbortSignal) => Promise<Value>,
   ms: number,
   options: { readonly signal?: AbortSignal } = {}
 ): Promise<Value> {
-  if (!Number.isFinite(ms) || ms < 0) throw new RangeError('withTimeout: ms must be a non-negative finite number');
+  if (!Number.isFinite(ms) || ms < 0 || ms > MAX_TIMER_MS) {
+    throw new RangeError(`withTimeout: ms must be a non-negative finite number, at most ${MAX_TIMER_MS}`);
+  }
   const { signal } = options;
   if (signal?.aborted === true) throw createAbortError(signal);
   const controller = new AbortController();

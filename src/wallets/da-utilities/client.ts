@@ -6,7 +6,7 @@
  * Endpoints: DA's Utilities OpenAPI (`utility.yaml` v2.2.0), and the token standard transfer-instruction V1 and
  * metadata V1 specs under `/api/token-standard/v0/registrars/{admin}`.
  */
-import { anySignal, awaitWithAbort, throwIfAborted } from '../abort';
+import { anySignal, awaitWithAbort, MAX_TIMER_MS, throwIfAborted } from '../abort';
 import { RegistryApiError, RegistryResponseError } from '../errors';
 import type { InstrumentMetadata } from '../holdings';
 import { instrumentKey } from '../holdings';
@@ -60,7 +60,7 @@ export interface DaRegistryOptions {
    * How long one request may take, body included, in milliseconds ({@link DA_REGISTRY_REQUEST_TIMEOUT_MS} by default). A
    * request still unanswered then is aborted (a custom `fetch` that ignores its signal stops being waited for) and
    * fails with a `RegistryResponseError`; registry requests run before anything is signed, so nothing was submitted. A
-   * positive finite number.
+   * positive finite number, at most {@link MAX_TIMER_MS} (the longest delay `setTimeout` honours).
    */
   readonly timeoutMs?: number;
 }
@@ -262,8 +262,8 @@ export function createDaUtilitiesClient(network: DaNetwork, options: DaRegistryO
   const fetchFn = options.fetch ?? globalFetch('registry.fetch');
   const trustedProvidersOf = trustedProvidersResolver(options.trustedProviders);
   const timeoutMs = options.timeoutMs ?? DA_REGISTRY_REQUEST_TIMEOUT_MS;
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    throw new TypeError('registry.timeoutMs must be a positive finite number of milliseconds');
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_TIMER_MS) {
+    throw new TypeError(`registry.timeoutMs must be a positive finite number of milliseconds, at most ${MAX_TIMER_MS}`);
   }
 
   /**

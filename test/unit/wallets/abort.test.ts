@@ -1,6 +1,6 @@
 import { awaitWithAbort as coreAwaitWithAbort } from '../../../src/core/http/abort';
 import * as Wallets from '../../../src/wallets';
-import { awaitWithAbort, isCancelledBeforeSubmit, withTimeout } from '../../../src/wallets/abort';
+import { awaitWithAbort, isCancelledBeforeSubmit, MAX_TIMER_MS, withTimeout } from '../../../src/wallets/abort';
 
 describe('awaitWithAbort starts no work once cancellation won', () => {
   it('wallets: an abort between the call and the microtask never runs the work, and is branded', async () => {
@@ -35,6 +35,11 @@ describe('awaitWithAbort starts no work once cancellation won', () => {
 describe('withTimeout', () => {
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it('refuses a deadline setTimeout cannot honour (it would fire at once)', async () => {
+    await expect(withTimeout(async () => 'x', MAX_TIMER_MS + 1)).rejects.toThrow(RangeError);
+    await expect(withTimeout(async () => 'x', 30 * 24 * 60 * 60 * 1000)).rejects.toThrow(RangeError);
   });
 
   it('settles as the work does, before the deadline', async () => {

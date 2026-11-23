@@ -162,7 +162,7 @@ export {
   type SignMessageProblem,
   type ValidateSignMessageOptions,
 } from './sign-message';
-export { withTimeout } from './abort';
+export { MAX_TIMER_MS, withTimeout } from './abort';
 export {
   isCantonCoin,
   type Holding,
