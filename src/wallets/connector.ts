@@ -904,6 +904,9 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
         if (selected !== null && selected !== key) setSelected(null);
         // Already on this option's wallet (perhaps kept by an earlier object while a rediscovered replacement has not
         // offered yet): nothing to do, and rebuilding the wanted state would drop that earlier object and disconnect.
+        // A change the option offered while it could not connect is heard first, as the bump would have: a change it
+        // starts or a withdrawal moves the session, so the check below fails and this call awaits a new attempt.
+        if (live?.option === option) evaluateLive();
         const current = live;
         if (
           current?.option === option &&
@@ -911,8 +914,6 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
           sessionState().status === 'connected' &&
           sessionOn(current.connected)
         ) {
-          // A change the option offered while it could not connect is heard now, as the bump would have.
-          evaluateLive();
           publish();
           return { status: 'connected' };
         }
