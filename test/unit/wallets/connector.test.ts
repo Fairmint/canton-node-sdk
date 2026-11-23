@@ -1289,6 +1289,19 @@ describe('createWalletConnector: review fixes', () => {
       expect(connectedProvider(c)).toBe(provider);
       expect(provider.requests).not.toContain('disconnect');
       expect(connects()).toBe(0);
+      // The replacement speaks for the wallet now: the earlier object is no longer listened to.
+      expect(made[0]?.subscribers()).toBe(0);
+    });
+
+    it('disconnects when the earlier object withdraws its provider before the replacement offers', async () => {
+      const { c, local, made, provider } = await connectedThenRediscovered();
+      expect(made[0]?.subscribers()).toBe(1);
+      made[0]?.offer(null);
+      await flush();
+      expect(c.session?.getSnapshot().status).toBe('disconnected');
+      expect(provider.requests).toContain('disconnect');
+      expect(made[0]?.subscribers()).toBe(0);
+      expect(local.getItem(WALLET)).toBe('privy:x');
     });
 
     it('disconnects when the replacement withdraws its provider after offering it', async () => {
@@ -1315,6 +1328,35 @@ describe('createWalletConnector: review fixes', () => {
       expect(connects()).toBe(1);
       expect(provider).not.toBe(rebuilt);
     });
+  });
+
+  it('reconnects a re-offered provider after a rediscover when the session had left it (a cancelled connect)', async () => {
+    const made: Array<ReturnType<typeof liveOption>> = [];
+    const c = connector({
+      discover: async () => {
+        const next = liveOption('privy:x');
+        made.push(next);
+        return [next.option];
+      },
+    });
+    await flush();
+    const wallet = fakeProvider('alice');
+    made[0]?.offer(wallet.provider);
+    void c.connect('privy:x');
+    expect(c.getSnapshot().status).toBe('connecting');
+    c.cancel();
+    expect(c.getSnapshot().status).toBe('preparing');
+    await c.rediscover();
+    await flush();
+    expect(made).toHaveLength(2);
+    expect(made[0]?.subscribers()).toBe(0);
+    const before = wallet.requests.length;
+    made[1]?.offer(null);
+    await flush();
+    made[1]?.offer(wallet.provider);
+    await flush();
+    expect(c.getSnapshot().status).toBe('connecting');
+    expect(wallet.requests.length).toBeGreaterThan(before);
   });
 
   it('ends discovering when discover throws synchronously', async () => {
