@@ -1243,6 +1243,24 @@ describe('createWalletConnector: review fixes', () => {
     expect(c.getSnapshot()).toMatchObject({ status: 'connected', target: { key: 'privy:x' } });
   });
 
+  it('connects a wanted object that offered while unlisted once a rediscover lists it again', async () => {
+    const x = liveOption('privy:x');
+    let found: WalletOption[] = [x.option];
+    const c = connector({ discover: async () => found });
+    await flush();
+    expect(await c.connect('privy:x')).toEqual({ status: 'preparing' });
+    found = [];
+    await c.rediscover();
+    await flush();
+    x.offer(new TestProvider(PARTY_A), PARTY_A);
+    await flush();
+    expect(c.session?.getSnapshot().status).toBe('disconnected');
+    found = [x.option];
+    await c.rediscover();
+    await flush();
+    expect(c.getSnapshot()).toMatchObject({ status: 'connected', target: { key: 'privy:x' } });
+  });
+
   describe('a discover that returns a new live option object per call, with the same key', () => {
     async function connectedThenRediscovered(latch?: ReturnType<typeof createWriteLatch>): Promise<{
       c: WalletConnector;
@@ -1422,10 +1440,12 @@ describe('createWalletConnector: review fixes', () => {
       first.offer(null);
       await flush();
       expect(c.session?.getSnapshot().status).toBe('disconnected');
+      expect(c.getSnapshot()).toMatchObject({ status: 'disconnected', target: null });
       expect(first.subscribers()).toBe(0);
       first.offer(provider, PARTY_A);
       await flush();
       expect(c.session?.getSnapshot().status).toBe('disconnected');
+      expect(c.getSnapshot()).toMatchObject({ status: 'disconnected', target: null });
       expect(connects()).toBe(0);
     });
 
@@ -1434,10 +1454,12 @@ describe('createWalletConnector: review fixes', () => {
       first.offer(null);
       await flush();
       expect(c.session?.getSnapshot().status).toBe('disconnected');
+      expect(c.getSnapshot()).toMatchObject({ status: 'disconnected', target: null });
       expect(first.subscribers()).toBe(0);
       first.offer(new TestProvider(PARTY_A), PARTY_A);
       await flush();
       expect(c.session?.getSnapshot().status).toBe('disconnected');
+      expect(c.getSnapshot()).toMatchObject({ status: 'disconnected', target: null });
       expect(connects()).toBe(0);
       expect(provider.requests).toContain('disconnect');
     });
@@ -1447,8 +1469,25 @@ describe('createWalletConnector: review fixes', () => {
       first.offer(new TestProvider(PARTY_A), PARTY_A);
       await flush();
       expect(c.session?.getSnapshot().status).toBe('disconnected');
+      expect(c.getSnapshot()).toMatchObject({ status: 'disconnected', target: null });
       expect(provider.requests).toContain('disconnect');
       expect(first.subscribers()).toBe(0);
+      expect(connects()).toBe(0);
+    });
+
+    it('no longer wants the torn-down object, so listing it again later does not connect it', async () => {
+      let found: WalletOption[] = [];
+      const { c, first, connects } = await connectedThenDropped(() => found);
+      first.offer(null);
+      await flush();
+      first.offer(new TestProvider(PARTY_A), PARTY_A);
+      await flush();
+      expect(connects()).toBe(0);
+      found = [first.option];
+      await c.rediscover();
+      await flush();
+      expect(c.session?.getSnapshot().status).toBe('disconnected');
+      expect(c.getSnapshot()).toMatchObject({ status: 'disconnected', target: null });
       expect(connects()).toBe(0);
     });
 

@@ -632,11 +632,12 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
     if (provider === null) {
       const previous = wanted.connected;
       if (previous === null) return;
-      // Torn down (logout, another wallet or party): leave it. An unlisted object is no longer listened to.
+      // Torn down (logout, another wallet or party): leave it. An unlisted object is no longer wanted either: it can
+      // never connect again, so keeping it would leave the connector 'preparing' a wallet it no longer lists.
       dropFormer(wanted);
-      if (!listed) dropStray(wanted);
       wanted.connected = null;
       held = null;
+      if (!listed) setLive(null);
       if (sessionOn(previous)) session.disconnect();
       publish();
       return;
@@ -695,6 +696,7 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
       preloads.delete(option.key);
       unsubscribeLive(option.key);
     }
+    const before = discovered;
     discovered = next;
     for (const option of next) subscribeLive(option);
     // The wanted live option was replaced by a new object with its key: want the replacement.
@@ -719,6 +721,8 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
     if (kept === null || kept !== wanted) return;
     if (fixed.includes(kept.option) || next.includes(kept.option)) {
       dropStray(kept);
+      // Listed again after a rediscover that did not: what it offered meanwhile was not acted on, so hear it now.
+      if (!fixed.includes(kept.option) && !before.includes(kept.option)) evaluateLive();
       return;
     }
     if (kept.stray === null && kept.connected !== null && sessionOn(kept.connected)) {
