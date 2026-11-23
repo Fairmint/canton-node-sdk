@@ -25,6 +25,7 @@ import {
   type WalletCallOptions,
   type WalletOptions,
   type WalletState,
+  type WithdrawExpiredResult,
 } from './wallet';
 
 /** What a page asks the store to do. `planTransfer` and `proveOwnership` only read; every other action is a write. */
@@ -42,6 +43,8 @@ export type WalletAction =
       readonly executeBefore?: Date;
     }
   | { readonly type: 'cancelBurnRequest'; readonly burnRequestCid: string }
+  /** Withdraw all of the party's expired outgoing offers of one token, unlocking what they keep locked. */
+  | { readonly type: 'withdrawExpiredTransferOffers'; readonly instrumentId: InstrumentId }
   /** Read-only; resolves with a plan to show. Send it with `submitTransfer`: its own `submit()` refuses. */
   | { readonly type: 'planTransfer'; readonly request: TransferRequest }
   | { readonly type: 'submitTransfer'; readonly plan: TransferPlan }
@@ -67,6 +70,7 @@ export interface WalletActionResults {
   readonly acceptTransferOffer: SubmitResult;
   readonly rejectTransferOffer: SubmitResult;
   readonly withdrawTransferOffer: SubmitResult;
+  readonly withdrawExpiredTransferOffers: WithdrawExpiredResult;
   readonly requestBurn: BurnRequestResult;
   readonly cancelBurnRequest: SubmitResult;
   readonly planTransfer: TransferPlan;
@@ -94,6 +98,7 @@ export function walletActionKey(action: WalletAction): string {
     case 'withdrawTransferOffer':
       return `${action.type}:${action.transferOfferCid}`;
     case 'requestBurn':
+    case 'withdrawExpiredTransferOffers':
       return `${action.type}:${instrumentKey(action.instrumentId)}`;
     case 'cancelBurnRequest':
       return `${action.type}:${action.burnRequestCid}`;
@@ -314,6 +319,16 @@ async function perform(
         await tokens.withdrawTransferOffer(action.transferOfferCid, call),
         'Transfer offer withdrawn; its tokens are unlocked'
       );
+    case 'withdrawExpiredTransferOffers': {
+      const result = await tokens.withdrawExpiredTransferOffers(action.instrumentId, call);
+      const count = result.withdrawn.length;
+      const last = result.withdrawn[count - 1];
+      return {
+        ok: true,
+        result,
+        message: `Withdrew ${count} expired transfer offer${count === 1 ? '' : 's'} of ${action.instrumentId.id}; the tokens they locked are unlocked${last === undefined ? '' : ` ${update(last)}`}.`,
+      };
+    }
     case 'requestBurn': {
       const { instrumentId, amount, reference, executeBefore } = action;
       const result = await tokens.requestBurn(

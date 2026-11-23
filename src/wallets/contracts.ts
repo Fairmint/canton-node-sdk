@@ -56,6 +56,17 @@ export interface TransferOffer extends RegistryParties {
   readonly memo: string | null;
   readonly requestedAt: string;
   readonly executeBefore: string;
+  /**
+   * Whether `executeBefore` had passed, by the wallet's clock, when the state was read: the receiver can no longer
+   * accept it, but the sender's tokens stay locked until the sender withdraws it (or the receiver rejects it). Set by
+   * `loadState`; absent on an offer read another way, which reads as not expired.
+   */
+  readonly expired?: boolean;
+  /**
+   * The holding the offer locked, when the offer names it: a Canton Coin offer's `LockedAmulet`. Absent for DA offers,
+   * whose create argument names no locked holding.
+   */
+  readonly lockedHoldingCid?: string;
 }
 
 export interface BurnRequest extends RegistryParties {
@@ -84,6 +95,34 @@ export interface TransferPreapproval {
   readonly instrumentAdmin: string;
   /** The instruments it covers; empty: every instrument of `instrumentAdmin`. */
   readonly instrumentIds: readonly string[];
+}
+
+/** What a transfer preapproval covers: an instrument admin and its instrument ids (empty: every instrument of it). */
+export interface PreapprovalScope {
+  readonly instrumentAdmin: string;
+  /** Empty: every instrument of `instrumentAdmin`. */
+  readonly instrumentIds: readonly string[];
+}
+
+/**
+ * The first of `existing` that already covers `request`, or null: a preapproval covers a request of its own admin when
+ * it covers every instrument of the admin (empty `instrumentIds`), or when the request lists instrument ids and it
+ * names them all. An issuer-wide request is covered only by an issuer-wide preapproval. This is the rule
+ * `createTransferPreapproval` refuses with `already-exists` by; a page can use it to hide or disable the button.
+ */
+export function coveringPreapproval<T extends PreapprovalScope>(
+  existing: readonly T[],
+  request: PreapprovalScope
+): T | null {
+  return (
+    existing.find(
+      (candidate) =>
+        candidate.instrumentAdmin === request.instrumentAdmin &&
+        (candidate.instrumentIds.length === 0 ||
+          (request.instrumentIds.length > 0 &&
+            request.instrumentIds.every((id) => candidate.instrumentIds.includes(id))))
+    ) ?? null
+  );
 }
 
 /** Fields that must all be non-empty strings, or null. */
@@ -170,6 +209,7 @@ export function parseAmuletTransferOffer(contract: ActiveContract, dsoParty: str
   if (!fields || !instrumentId) return null;
   if (instrumentId.admin !== dsoParty || instrumentId.id !== AMULET_INSTRUMENT_ID) return null;
   if (!contract.signatories.includes(dsoParty) || !contract.signatories.includes(fields.sender)) return null;
+  const lockedHoldingCid = nonEmptyString(args['lockedAmulet']);
   return {
     registry: 'amulet',
     contractId: contract.contractId,
@@ -178,6 +218,7 @@ export function parseAmuletTransferOffer(contract: ActiveContract, dsoParty: str
     ...fields,
     instrumentId,
     memo: reasonMemo(transfer),
+    ...(lockedHoldingCid !== undefined && { lockedHoldingCid }),
   };
 }
 

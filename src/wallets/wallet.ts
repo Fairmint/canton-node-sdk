@@ -38,6 +38,7 @@ import {
   type TransferSpec,
 } from './commands';
 import {
+  coveringPreapproval,
   isFromRegistry,
   parseAmuletTransferOffer,
   parseBurnRequest,
@@ -80,7 +81,11 @@ import {
   type InstrumentBalance,
   type InstrumentMetadata,
 } from './holdings';
+import { formatDecimalUnits } from './decimal';
+import { sameInstrument } from './instrument';
+import { isRecord } from './json';
 import { isTemplate } from './templates';
+import { isTransferOfferExpired, lockedInExpiredOffers } from './tokens';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
 import { TOKEN_STANDARD_V1_REASON_META_KEY } from '../utils/token-standard/v1/constants';
 import type { ActiveContract, InstrumentId, SubmitResult, WalletSubmission } from './types';
@@ -258,6 +263,17 @@ export interface BurnRequestResult extends SubmitResult {
   readonly reference: string;
 }
 
+/** One expired offer withdrawn: its submission, the offer and the amount it offered. */
+export interface WithdrawnOffer extends SubmitResult {
+  readonly transferOfferCid: string;
+  readonly amount: string;
+}
+
+/** What `withdrawExpiredTransferOffers` withdrew, in the order it did. */
+export interface WithdrawExpiredResult {
+  readonly withdrawn: readonly WithdrawnOffer[];
+}
+
 export interface TransferPreapprovalOptions {
   readonly instrumentAdmin: string;
   /** Up to 10 instrument ids of the admin; empty or omitted: every instrument of the admin. */
@@ -286,6 +302,16 @@ export interface Wallet {
   rejectTransferOffer(transferOfferCid: string, options?: WalletCallOptions): Promise<SubmitResult>;
   /** Withdraw one of the party's own transfer offers, which unlocks its tokens (also after the offer expired). */
   withdrawTransferOffer(transferOfferCid: string, options?: WalletCallOptions): Promise<SubmitResult>;
+  /**
+   * Withdraw all of the party's own expired transfer offers of one token (`TransferOffer.expired`), so the tokens they
+   * keep locked (`InstrumentBalance.lockedInExpiredOffers`) are unlocked: one `TransferInstruction_Withdraw` per offer,
+   * each as `withdrawTransferOffer` sends it, through the offer's own registry. Refused with `not-found` when there is
+   * none. Stops at the first failure and throws it; the offers withdrawn before it stay withdrawn.
+   */
+  withdrawExpiredTransferOffers(
+    instrumentId: InstrumentId,
+    options?: WalletCallOptions
+  ): Promise<WithdrawExpiredResult>;
   acceptMintOffer(mintOfferCid: string, options?: WalletCallOptions): Promise<SubmitResult>;
   /** Reject a mint offer; the registrar sees {@link MINT_OFFER_REJECT_REASON}. */
   rejectMintOffer(mintOfferCid: string, options?: WalletCallOptions): Promise<SubmitResult>;
@@ -626,11 +652,23 @@ export function createWallet(options: WalletOptions): Wallet {
       registry.operatorParty(),
       balancesWithMetadata(holdings, cantonCoinMetadata),
     ]);
+    const at = now();
+    const withExpiry = (offers: readonly TransferOffer[]): TransferOffer[] =>
+      offers.map((offer) => ({ ...offer, expired: isTransferOfferExpired(offer, at) }));
+    const offers = transferOffers(contracts, operator, dso);
+    const outgoing = withExpiry(offers.outgoing);
+    const reclaimable = lockedInExpiredOffers(
+      holdings,
+      outgoing.filter((offer) => offer.expired === true)
+    );
     return {
       offset,
       holdings,
-      balances,
-      transferOffers: transferOffers(contracts, operator, dso),
+      balances: balances.map((balance) => ({
+        ...balance,
+        lockedInExpiredOffers: formatDecimalUnits(reclaimable.get(balance.key) ?? 0n),
+      })),
+      transferOffers: { incoming: withExpiry(offers.incoming), outgoing },
       mintOffers: ownMintOffers(contracts, operator),
       burnRequests: ownBurnRequests(contracts, operator),
       transferPreapprovals: ownPreapprovals(contracts, operator),
@@ -777,6 +815,16 @@ export function createWallet(options: WalletOptions): Wallet {
       transferOfferCid,
       action === 'withdraw' ? 'Outgoing transfer offer' : 'Incoming transfer offer'
     );
+    return submitOfferAnswer(offer, action, signal);
+  }
+
+  /** Exercise `action` on a transfer offer already read and validated, with its own registry's choice context. */
+  async function submitOfferAnswer(
+    offer: TransferOffer,
+    action: TransferInstructionAction,
+    signal: AbortSignal | undefined
+  ): Promise<SubmitResult> {
+    const transferOfferCid = offer.contractId;
     const context =
       offer.registry === 'amulet' && cantonCoin !== null
         ? await cantonCoin.transferInstructionContext(transferOfferCid, action, signal)
@@ -788,6 +836,61 @@ export function createWallet(options: WalletOptions): Wallet {
       },
       signal
     );
+  }
+
+  /**
+   * Withdraw every one of the party's own expired transfer offers of `instrumentId`, one submission each, oldest
+   * deadline first. Read once; each offer is withdrawn through its own registry (Canton Coin's for a Canton Coin offer,
+   * DA's for a DA offer), exactly as `withdrawTransferOffer` does. Stops at the first failure and throws it (the offers
+   * withdrawn before it stay withdrawn; a reload shows them).
+   */
+  async function runWithdrawExpired(
+    instrumentIdInput: InstrumentId,
+    signal: AbortSignal | undefined
+  ): Promise<WithdrawExpiredResult> {
+    const instrumentId = requireInstrumentId(instrumentIdInput);
+    const contracts = (await read(offerTemplates, signal)).filter((contract) => {
+      const transfer = contract.createArgument?.['transfer'];
+      return isRecord(transfer) && transfer['sender'] === partyId;
+    });
+    const candidates: TransferOffer[] = [];
+    let cantonCoinUnconfirmed = false;
+    if (
+      cantonCoin !== null &&
+      instrumentId.id === AMULET_INSTRUMENT_ID &&
+      anyOf(contracts, [AMULET_TEMPLATES.transferInstruction])
+    ) {
+      const { dso, unavailable } = await cantonCoinDso(contracts, signal, AMULET_REGISTRY_REQUEST_TIMEOUT_MS);
+      cantonCoinUnconfirmed = unavailable;
+      candidates.push(...amuletTransferOffers(contracts, dso));
+    }
+    const isAmuletOf = candidates.some((offer) => sameInstrument(offer.instrumentId, instrumentId));
+    if (!isAmuletOf && anyOf(contracts, [DA_REGISTRY_TEMPLATES.transferOffer])) {
+      candidates.push(...fromRegistry(contracts, parseTransferOffer, await registry.operatorParty(signal)));
+    }
+    const at = now();
+    const expired = byDirection(candidates)
+      .outgoing.filter((offer) => sameInstrument(offer.instrumentId, instrumentId) && isTransferOfferExpired(offer, at))
+      .sort(
+        (a, b) => Date.parse(a.executeBefore) - Date.parse(b.executeBefore) || (a.contractId < b.contractId ? -1 : 1)
+      );
+    if (expired.length === 0) {
+      if (cantonCoinUnconfirmed) {
+        throw new RegistryResponseError(
+          `${AMULET_REGISTRY_NAME} could not confirm Canton Coin's DSO party, so the wallet's Canton Coin offers cannot be checked; nothing was submitted. Try again later, or pin cantonCoin.dsoParty.`
+        );
+      }
+      throw new WalletError(
+        'not-found',
+        `The wallet has no expired outgoing transfer offers of ${instrumentId.id}; nothing was submitted`
+      );
+    }
+    const withdrawn: WithdrawnOffer[] = [];
+    for (const offer of expired) {
+      const result = await submitOfferAnswer(offer, 'withdraw', signal);
+      withdrawn.push({ ...result, transferOfferCid: offer.contractId, amount: offer.amount });
+    }
+    return { withdrawn };
   }
 
   async function ownMintOffer(mintOfferCid: string, signal: AbortSignal | undefined): Promise<MintOffer> {
@@ -892,13 +995,8 @@ export function createWallet(options: WalletOptions): Wallet {
       cantonCoin === null || knownDso !== undefined ? knownDso : cantonCoin.dsoParty(signal),
     ]);
     refuseCantonCoinPreapproval(instrumentAdmin, dso);
-    const covering = ownPreapprovals(contracts, operator).find(
-      (existing) =>
-        existing.instrumentAdmin === instrumentAdmin &&
-        (existing.instrumentIds.length === 0 ||
-          (instrumentIds.length > 0 && instrumentIds.every((id) => existing.instrumentIds.includes(id))))
-    );
-    if (covering !== undefined) {
+    const covering = coveringPreapproval(ownPreapprovals(contracts, operator), { instrumentAdmin, instrumentIds });
+    if (covering !== null) {
       throw new WalletError(
         'already-exists',
         `Transfer preapproval ${covering.contractId} already covers ${instrumentIds.length === 0 ? 'every instrument' : instrumentIds.join(', ')} of ${instrumentAdmin}; nothing was submitted`
@@ -935,6 +1033,8 @@ export function createWallet(options: WalletOptions): Wallet {
       exclusive(signal, async () => answerTransferOffer(cid, 'reject', signal)),
     withdrawTransferOffer: async (cid, { signal } = {}) =>
       exclusive(signal, async () => answerTransferOffer(cid, 'withdraw', signal)),
+    withdrawExpiredTransferOffers: async (instrumentId, { signal } = {}) =>
+      exclusive(signal, async () => runWithdrawExpired(instrumentId, signal)),
     acceptMintOffer: async (cid, { signal } = {}) =>
       exclusive(signal, async () => {
         await ownMintOffer(cid, signal);

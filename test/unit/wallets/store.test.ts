@@ -115,6 +115,7 @@ function setup(): {
       acceptTransferOffer: action('acceptTransferOffer'),
       rejectTransferOffer: action('rejectTransferOffer'),
       withdrawTransferOffer: action('withdrawTransferOffer'),
+      withdrawExpiredTransferOffers: action('withdrawExpiredTransferOffers'),
       acceptMintOffer: action('acceptMintOffer'),
       rejectMintOffer: action('rejectMintOffer'),
       requestBurn: action('requestBurn'),
@@ -485,6 +486,34 @@ describe('createWalletStore', () => {
       t.answer(2);
       await flush();
       expect(t.store.getSnapshot()).toMatchObject({ busy: false, state: { offset: 2 } });
+    });
+
+    it('withdrawExpiredTransferOffers withdraws per token, counts the offers and reloads', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const action = { type: 'withdrawExpiredTransferOffers', instrumentId: INSTRUMENT } as const;
+      expect(walletActionKey(action)).toBe('withdrawExpiredTransferOffers:XMPL@registrar::1220bb');
+      const ran = t.store.act(action);
+      const call = t.call();
+      expect([call.method, call.args]).toEqual([
+        'withdrawExpiredTransferOffers',
+        [INSTRUMENT, { signal: expect.any(AbortSignal) }],
+      ]);
+      const result = {
+        withdrawn: [
+          { ...SUBMITTED, updateId: 'update-a', transferOfferCid: 'offer-a', amount: '1' },
+          { ...SUBMITTED, transferOfferCid: 'offer-b', amount: '2' },
+        ],
+      };
+      call.resolve(result);
+      expect(await ran).toEqual(result);
+      expect(t.store.getSnapshot()).toMatchObject({
+        loading: true,
+        outcome: {
+          status: 'succeeded',
+          message: 'Withdrew 2 expired transfer offers of XMPL; the tokens they locked are unlocked (update update-1).',
+        },
+      });
     });
 
     it('requestBurn passes its options on and names the reference', async () => {

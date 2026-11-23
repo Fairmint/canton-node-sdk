@@ -317,11 +317,13 @@ describe('createWallet.loadState', () => {
         instrumentId: INSTRUMENT,
         unlocked: '13.0000000000',
         locked: '50.0000000000',
+        lockedInExpiredOffers: '0.0000000000',
         holdingCount: 3,
         metadata: { name: 'Example', symbol: 'XMPL', decimals: 2 },
         source: 'da-registry',
       },
     ]);
+    expect(state.transferOffers.outgoing[0]?.expired).toBe(false);
     expect(state.mintOffers.map((o) => o.contractId)).toEqual(['00mint']);
     expect(state.mintOffers[0]).toMatchObject({ reference: 'mint_0001', memo: null });
     expect(state.transferOffers.incoming.map((o) => o.contractId)).toEqual(['00in']);

@@ -323,6 +323,12 @@ export interface InstrumentBalance {
   readonly unlocked: string;
   /** The total locked to a burn request, an allocation or a transfer in flight, with 10 decimal places. */
   readonly locked: string;
+  /**
+   * The part of `locked` held by the party's own expired transfer offers of the instrument (10 decimal places): no
+   * receiver can accept them any more, so withdrawing them (`withdrawExpiredTransferOffers`) unlocks it. Set by
+   * `loadState` (`'0.0000000000'` when there is none); absent on a balance built another way.
+   */
+  readonly lockedInExpiredOffers?: string;
   /** How many holdings (locked ones included) make up the totals. */
   readonly holdingCount: number;
   /** The registry's metadata of the instrument; absent when the registry did not answer it. */
