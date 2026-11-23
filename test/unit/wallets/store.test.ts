@@ -1588,7 +1588,7 @@ describe('createWalletStore: shared latch, read-only gate and held snapshots', (
   });
 
   it('shows the live state and holds it for its key while the same key reloads after a reconnect', async () => {
-    const t = setup({ retainKey: () => 'privy:party' });
+    const t = setup({ retainKey: () => 'privy:party', connectingRetainKey: () => 'privy:party' });
     await connectAndLoad(t);
     const first = t.store.getSnapshot();
     expect(first).toMatchObject({ shown: first.state, stale: false });
@@ -1626,6 +1626,57 @@ describe('createWalletStore: shared latch, read-only gate and held snapshots', (
     same.fail(new WalletReadError('down'));
     await flush();
     expect(same.store.getSnapshot()).toMatchObject({ state: null, loading: false, shown: null, stale: false });
+  });
+
+  it("never shows one party's snapshot as another's across an accountsChanged switch", async () => {
+    for (const retainKey of [undefined, (wallet: ConnectedWallet) => `privy:${wallet.partyId}`]) {
+      const t = setup(retainKey === undefined ? {} : { retainKey });
+      await connectAndLoad(t);
+      expect(t.store.getSnapshot().state).not.toBeNull();
+      const views: WalletView[] = [];
+      t.store.subscribe(() => views.push(t.store.getSnapshot()));
+      await switchAccount(t, OTHER);
+      // Every view published for the new party carries none of the old party's state or outcome.
+      const forOther = views.filter((seen) => seen.wallet?.partyId === OTHER);
+      expect(forOther.length).toBeGreaterThan(0);
+      for (const seen of forOther) {
+        expect(seen).toMatchObject({ state: null, shown: null, stale: false, outcome: null });
+      }
+      expect(t.store.getSnapshot()).toMatchObject({ wallet: { partyId: OTHER }, loading: true, shown: null });
+      t.answer(5);
+      await flush();
+      expect(t.store.getSnapshot()).toMatchObject({ shown: { offset: 5 }, stale: false });
+    }
+  });
+
+  it('holds a snapshot while connecting only for a connection with the same retain key', async () => {
+    let connectingTo: string | null = null;
+    const t = setup({ retainKey: () => 'privy:party', connectingRetainKey: () => connectingTo });
+    await connectAndLoad(t);
+    expect(t.store.getSnapshot().state).not.toBeNull();
+
+    // Another connection (another wallet or party): nothing is held while it signs in.
+    connectingTo = 'privy:other';
+    const other = t.session.connect(new TestProvider(OTHER));
+    expect(t.store.getSnapshot()).toMatchObject({ state: null, shown: null, stale: false });
+    await other;
+    t.answer();
+    await flush();
+
+    // A connection the store is told nothing about: nothing is held either.
+    connectingTo = null;
+    const unnamed = t.session.connect(new TestProvider(HOLDER));
+    expect(t.store.getSnapshot()).toMatchObject({ shown: null, stale: false });
+    await unnamed;
+    t.answer();
+    await flush();
+
+    // Without `connectingRetainKey`, nothing is held while connecting.
+    const plain = setup({ retainKey: () => 'privy:party' });
+    await connectAndLoad(plain);
+    const connecting = plain.session.connect(new TestProvider(HOLDER));
+    expect(plain.store.getSnapshot()).toMatchObject({ shown: null, stale: false });
+    await connecting;
   });
 
   it('drops a held snapshot on disconnect', async () => {

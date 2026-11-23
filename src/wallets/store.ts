@@ -350,6 +350,13 @@ export interface WalletStoreOptions {
    * wallet. Default: `wallet.key`, which keeps it only across reloads of one connection.
    */
   readonly retainKey?: (wallet: ConnectedWallet) => string;
+  /**
+   * While the session is `connecting`, the retain key of the connection being made, or null when it is not known. The
+   * held snapshot stays shown (`stale`) during a connect only when this names its key, so a connect to another wallet
+   * or party never shows the previous one's holdings. Read on every view while connecting. Default: none, so nothing is
+   * held while the session connects.
+   */
+  readonly connectingRetainKey?: () => string | null;
 }
 
 /** A test hook beside {@link WalletStoreOptions}; not part of the public options. */
@@ -580,6 +587,7 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
   const { session, registry, cantonCoin, openWallet = createWallet } = options as WalletStoreInternalOptions;
   const latch = options.latch ?? createWriteLatch();
   const retainKey = options.retainKey ?? ((connected: ConnectedWallet) => connected.key);
+  const connectingRetainKey = options.connectingRetainKey ?? (() => null);
   const listeners = new Set<() => void>();
   const plans: StorePlans = new WeakMap();
 
@@ -605,7 +613,7 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
   let acting = false;
   // The current wallet's retain key, and the last snapshot shown for a key (kept across a reconnect of the same key).
   let walletRetainKey: string | null = null;
-  let held: { readonly key: string; readonly walletKey: string; readonly value: WalletState } | null = null;
+  let held: { readonly key: string; readonly value: WalletState } | null = null;
   // Aborted by dispose(): cancels the store's work in flight (combined with each caller's own signal).
   const lifetime = new AbortController();
   let view = buildView();
@@ -665,13 +673,11 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
 
   /**
    * What to render: the live state, else the held one of the same retain key while a load or reconnect runs. While the
-   * session reconnects there is no wallet yet; the held state stays only when its key outlives a wallet (a retain key
-   * other than the wallet's own `key`, which every new connection changes).
+   * session reconnects there is no wallet yet; the held state stays only when `connectingRetainKey` names its key.
    */
   function retained(): { readonly shown: WalletState | null; readonly stale: boolean } {
     if (state !== null) {
-      if (wallet !== null && walletRetainKey !== null)
-        held = { key: walletRetainKey, walletKey: wallet.key, value: state };
+      if (wallet !== null && walletRetainKey !== null) held = { key: walletRetainKey, value: state };
       return { shown: state, stale: false };
     }
     if (wallet === null) {
@@ -679,7 +685,13 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
         held = null;
         return { shown: null, stale: false };
       }
-      return held !== null && held.key !== held.walletKey
+      let target: string | null;
+      try {
+        target = connectingRetainKey();
+      } catch {
+        target = null;
+      }
+      return held !== null && target !== null && held.key === target
         ? { shown: held.value, stale: true }
         : { shown: null, stale: false };
     }
@@ -793,8 +805,6 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
         walletRetainKey = next.key;
       }
     }
-    // Runs started for the previous wallet are abandoned: their signals abort, so nothing more is sent for it.
-    latch.bump();
     generation += 1; // drop the previous wallet's load reply (its call still holds the latch until it settles)
     queued = false;
     loadInFlight = false;
@@ -802,6 +812,10 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
     loadError = null;
     outcome = null;
     tokens = null;
+    // Runs started for the previous wallet are abandoned: their signals abort, so nothing more is sent for it. Bumped
+    // only once the previous wallet's state is cleared: the bump publishes (the store follows the latch), and a view
+    // built part way through would show that state under the new wallet.
+    latch.bump();
     if (next !== null) {
       try {
         tokens = openWallet({
