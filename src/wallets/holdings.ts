@@ -32,6 +32,12 @@ export interface Holding {
   readonly amount: string;
   /** Locked to an allocation, a burn request or a transfer in flight: it cannot be spent. */
   readonly locked: boolean;
+  /**
+   * When the lock expires (ISO 8601), for a locked holding whose lock has an absolute expiry: Canton Coin's
+   * `LockedAmulet`, from its `HoldingV1` view. After it, the owner alone can release the lock
+   * (`LockedAmulet_OwnerExpireLockV2`; see `Wallet.reclaimLockedTokens`). Absent for DA holdings.
+   */
+  readonly lockExpiresAt?: string;
   /** The synchronizer the holding is assigned to, when the ledger reported it. Inputs never mix synchronizers. */
   readonly synchronizerId?: string;
   /**
@@ -108,6 +114,7 @@ function parseAmuletHolding(contract: ActiveContract): Holding | null {
     instrumentId: view.instrumentId,
     amount: view.amount,
     locked,
+    ...(view.lock?.expiresAt != null && { lockExpiresAt: view.lock.expiresAt }),
     ...synchronizerOf(contract),
     source: 'amulet',
     meta: view.meta.values,
@@ -326,9 +333,18 @@ export interface InstrumentBalance {
   /**
    * The part of `locked` held by the party's own expired transfer offers of the instrument (10 decimal places): no
    * receiver can accept them any more, so withdrawing them (`withdrawExpiredTransferOffers`) unlocks it. Set by
-   * `loadState` (`'0.0000000000'` when there is none); absent on a balance built another way.
+   * `loadState` (`'0.0000000000'` when there is none); absent on a balance built another way. Exact for Canton Coin
+   * (the offer's own `LockedAmulet`); an estimate for a DA token, whose offer names no locked holding: each expired
+   * offer's amount, capped at `locked`.
    */
   readonly lockedInExpiredOffers?: string;
+  /**
+   * The part of `locked` in the party's own Canton Coin locks that expired and that no active transfer offer names (an
+   * offer already gone, a lock left from an earlier run): the owner alone can release them (`reclaimLockedTokens`). Set
+   * by `loadState` (`'0.0000000000'` when there is none, and always for a DA token); absent on a balance built another
+   * way.
+   */
+  readonly lockedInExpiredLocks?: string;
   /** How many holdings (locked ones included) make up the totals. */
   readonly holdingCount: number;
   /** The registry's metadata of the instrument; absent when the registry did not answer it. */

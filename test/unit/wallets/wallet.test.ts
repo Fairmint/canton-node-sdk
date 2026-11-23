@@ -318,6 +318,7 @@ describe('createWallet.loadState', () => {
         unlocked: '13.0000000000',
         locked: '50.0000000000',
         lockedInExpiredOffers: '0.0000000000',
+        lockedInExpiredLocks: '0.0000000000',
         holdingCount: 3,
         metadata: { name: 'Example', symbol: 'XMPL', decimals: 2 },
         source: 'da-registry',

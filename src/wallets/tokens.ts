@@ -3,10 +3,11 @@
  * panel, whatever the token. Also the rule that decides which of the party's own transfer offers are expired, and how
  * much of a token they keep locked.
  */
+import { CANTON_COIN_METADATA } from './amulet/constants';
 import type { BurnRequest, MintOffer, TransferOffer, TransferPreapproval } from './contracts';
 import { coveringPreapproval } from './contracts';
 import { formatDecimalUnits, parseDecimalUnits } from './decimal';
-import { instrumentKey, type Holding, type InstrumentBalance, type InstrumentMetadata } from './holdings';
+import { instrumentKey, isCantonCoin, type Holding, type InstrumentBalance, type InstrumentMetadata } from './holdings';
 import type { InstrumentId } from './types';
 
 /**
@@ -56,6 +57,37 @@ export function lockedInExpiredOffers(
   return totals;
 }
 
+/**
+ * The party's own Canton Coin locks that expired at `atMs` and that none of `offers` names (any direction): the offer
+ * that locked it is gone, or the lock was never an offer's. Splice lets the owner alone release such a lock
+ * (`LockedAmulet_OwnerExpireLockV2`). A lock with no absolute expiry (`lockExpiresAt` absent) is never counted, and an
+ * active offer's lock is left to withdrawing that offer. `holdings` are the party's own.
+ */
+export function expiredUnclaimedLocks(
+  holdings: readonly Holding[],
+  offers: ReadonlyArray<Pick<TransferOffer, 'lockedHoldingCid'>>,
+  atMs: number
+): Holding[] {
+  const named = new Set(
+    offers.flatMap((offer) => (offer.lockedHoldingCid === undefined ? [] : [offer.lockedHoldingCid]))
+  );
+  return holdings.filter((holding) => {
+    if (!holding.locked || !isCantonCoin(holding) || holding.lockExpiresAt === undefined) return false;
+    const expiry = Date.parse(holding.lockExpiresAt);
+    return !Number.isNaN(expiry) && expiry <= atMs && !named.has(holding.contractId);
+  });
+}
+
+/** Per instrument (by `instrumentKey`), the units of `holdings`. */
+export function unitsByInstrument(holdings: readonly Holding[]): Map<string, bigint> {
+  const totals = new Map<string, bigint>();
+  for (const holding of holdings) {
+    const key = instrumentKey(holding.instrumentId);
+    totals.set(key, (totals.get(key) ?? 0n) + (parseDecimalUnits(holding.amount) ?? 0n));
+  }
+  return totals;
+}
+
 /** What the wallet can do with a token. Honest per token: Canton Coin's are what this wallet supports for it today. */
 export interface TokenCapabilities {
   /** Send it (`planTransfer`, `submitTransfer`). Not Canton Coin. */
@@ -71,7 +103,7 @@ export interface TokenCapabilities {
   readonly answerOffers: boolean;
   /**
    * Withdraw the party's own offers of it, expired ones included (`withdrawTransferOffer`,
-   * `withdrawExpiredTransferOffers`).
+   * `withdrawExpiredTransferOffers`, `reclaimLockedTokens`).
    */
   readonly withdrawOffers: boolean;
   /** Accept or reject mint offers of it. Only DA Registry tokens have mint offers. */
@@ -95,24 +127,44 @@ export interface WalletToken {
   readonly available: string;
   /** Locked total (offers, redemptions, allocations in flight), 10 decimal places. */
   readonly locked: string;
-  /** The part of `locked` that withdrawing the party's expired offers would unlock, 10 decimal places. */
+  /**
+   * The part of `locked` that `reclaimLockedTokens` would unlock (the party's expired offers, and its expired Canton
+   * Coin locks no offer names), 10 decimal places, capped at `locked`. Exact for Canton Coin; for a DA token an
+   * estimate (its offers name no locked holding, so each expired offer counts its amount).
+   */
   readonly lockedReclaimable: string;
+  /**
+   * Whether `reclaimLockedTokens` has something to do for this token: an expired outgoing offer to withdraw, or an
+   * expired Canton Coin lock to release. Show the Reclaim button on it, not on `lockedReclaimable`.
+   */
+  readonly canReclaim: boolean;
   readonly holdingCount: number;
   readonly isCantonCoin: boolean;
   readonly capabilities: TokenCapabilities;
-  /** Transfer offers of this token. `expiredOutgoing` is the part of `outgoing` no receiver can accept any more. */
+  /**
+   * Transfer offers of this token. `expiredIncoming` is the part of `incoming` the party can no longer accept (the
+   * ledger refuses it; it can still reject them): hide Accept on them. `expiredOutgoing` is the part of `outgoing` no
+   * receiver can accept any more (`reclaimLockedTokens` withdraws them).
+   */
   readonly offers: {
     readonly incoming: readonly TransferOffer[];
     readonly outgoing: readonly TransferOffer[];
+    readonly expiredIncoming: readonly TransferOffer[];
     readonly expiredOutgoing: readonly TransferOffer[];
   };
   readonly mintOffers: readonly MintOffer[];
   readonly burnRequests: readonly BurnRequest[];
   /**
-   * The party's preapproval that covers this token (issuer-wide, or naming it), or null; always null for Canton Coin,
-   * which this wallet cannot pre-approve.
+   * The party's DA preapproval that covers this token (issuer-wide, or naming it), or null. Always null for Canton
+   * Coin: read `preapprovalStatus`.
    */
   readonly preapproval: TransferPreapproval | null;
+  /**
+   * `covered` (`preapproval` is set) or `none` for a DA token. `unknown` for Canton Coin: its preapproval is a
+   * DSO-signed Splice `TransferPreapproval` made through the party's validator, which this wallet does not read, so a
+   * page must not say the party has none.
+   */
+  readonly preapprovalStatus: 'covered' | 'none' | 'unknown';
 }
 
 /** The parts of a `WalletState` {@link walletTokens} reads. */
@@ -125,6 +177,7 @@ export interface WalletTokensInput {
 }
 
 const ZERO = formatDecimalUnits(0n);
+const units = (text: string | undefined): bigint => (text === undefined ? 0n : (parseDecimalUnits(text) ?? 0n));
 const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
@@ -158,8 +211,20 @@ export function walletTokens(state: WalletTokensInput): WalletToken[] {
 
   return [...drafts.entries()]
     .map(([key, { instrumentId, balance, cantonCoin }]): WalletToken => {
-      const { metadata } = balance ?? {};
+      // Canton Coin offered before the party holds any has no balance to carry the registry's answer.
+      const metadata = balance?.metadata ?? (cantonCoin ? CANTON_COIN_METADATA : undefined);
+      const incoming = of(state.transferOffers.incoming, key);
       const outgoing = of(state.transferOffers.outgoing, key);
+      const expiredOutgoing = outgoing.filter((offer) => offer.expired === true);
+      const lockedUnits = units(balance?.locked);
+      const inLocks = units(balance?.lockedInExpiredLocks);
+      const reclaimable = units(balance?.lockedInExpiredOffers) + inLocks;
+      const preapproval = cantonCoin
+        ? null
+        : coveringPreapproval(state.transferPreapprovals, {
+            instrumentAdmin: instrumentId.admin,
+            instrumentIds: [instrumentId.id],
+          });
       return {
         key,
         instrumentId,
@@ -169,7 +234,8 @@ export function walletTokens(state: WalletTokensInput): WalletToken[] {
         ...(metadata !== undefined && { metadata }),
         available: balance?.unlocked ?? ZERO,
         locked: balance?.locked ?? ZERO,
-        lockedReclaimable: balance?.lockedInExpiredOffers ?? ZERO,
+        lockedReclaimable: formatDecimalUnits(reclaimable > lockedUnits ? lockedUnits : reclaimable),
+        canReclaim: expiredOutgoing.length > 0 || inLocks > 0n,
         holdingCount: balance?.holdingCount ?? 0,
         isCantonCoin: cantonCoin,
         capabilities: {
@@ -181,18 +247,15 @@ export function walletTokens(state: WalletTokensInput): WalletToken[] {
           answerMintOffers: !cantonCoin,
         },
         offers: {
-          incoming: of(state.transferOffers.incoming, key),
+          incoming,
           outgoing,
-          expiredOutgoing: outgoing.filter((offer) => offer.expired === true),
+          expiredIncoming: incoming.filter((offer) => offer.expired === true),
+          expiredOutgoing,
         },
         mintOffers: of(state.mintOffers, key),
         burnRequests: of(state.burnRequests, key),
-        preapproval: cantonCoin
-          ? null
-          : coveringPreapproval(state.transferPreapprovals, {
-              instrumentAdmin: instrumentId.admin,
-              instrumentIds: [instrumentId.id],
-            }),
+        preapproval,
+        preapprovalStatus: cantonCoin ? 'unknown' : preapproval === null ? 'none' : 'covered',
       };
     })
     .sort(

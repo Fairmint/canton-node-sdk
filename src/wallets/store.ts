@@ -7,6 +7,7 @@
  * store.getSnapshot, store.getSnapshot)`).
  */
 import { anySignal } from './abort';
+import { AMULET_INSTRUMENT_ID, CANTON_COIN_METADATA } from './amulet/constants';
 import { notifyListeners } from './notify';
 import type { CantonCoinOptions } from './amulet/registry';
 import type { FetchLike, DaRegistryOptions } from './da-utilities/client';
@@ -45,6 +46,11 @@ export type WalletAction =
   | { readonly type: 'cancelBurnRequest'; readonly burnRequestCid: string }
   /** Withdraw all of the party's expired outgoing offers of one token, unlocking what they keep locked. */
   | { readonly type: 'withdrawExpiredTransferOffers'; readonly instrumentId: InstrumentId }
+  /**
+   * Unlock everything of one token that no longer needs to be locked: its expired outgoing offers, and its expired
+   * Canton Coin locks no offer names (`Wallet.reclaimLockedTokens`). Show it where `WalletToken.canReclaim`.
+   */
+  | { readonly type: 'reclaimLockedTokens'; readonly instrumentId: InstrumentId }
   /** Read-only; resolves with a plan to show. Send it with `submitTransfer`: its own `submit()` refuses. */
   | { readonly type: 'planTransfer'; readonly request: TransferRequest }
   | { readonly type: 'submitTransfer'; readonly plan: TransferPlan }
@@ -71,6 +77,7 @@ export interface WalletActionResults {
   readonly rejectTransferOffer: SubmitResult;
   readonly withdrawTransferOffer: SubmitResult;
   readonly withdrawExpiredTransferOffers: WithdrawExpiredResult;
+  readonly reclaimLockedTokens: WithdrawExpiredResult;
   readonly requestBurn: BurnRequestResult;
   readonly cancelBurnRequest: SubmitResult;
   readonly planTransfer: TransferPlan;
@@ -99,6 +106,7 @@ export function walletActionKey(action: WalletAction): string {
       return `${action.type}:${action.transferOfferCid}`;
     case 'requestBurn':
     case 'withdrawExpiredTransferOffers':
+    case 'reclaimLockedTokens':
       return `${action.type}:${instrumentKey(action.instrumentId)}`;
     case 'cancelBurnRequest':
       return `${action.type}:${action.burnRequestCid}`;
@@ -291,6 +299,41 @@ async function submitThroughStore(): Promise<never> {
   throw new WalletError('invalid-input', "Send this plan with store.act({ type: 'submitTransfer', plan })");
 }
 
+/** A token's name for the user: Canton Coin's symbol for its `Amulet`, else the instrument id. */
+const tokenLabel = (instrumentId: InstrumentId): string =>
+  instrumentId.id === AMULET_INSTRUMENT_ID ? CANTON_COIN_METADATA.symbol : instrumentId.id;
+
+const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? '' : 's'}`;
+
+/**
+ * How a reclaim settled: success with what it did, or, when a submission after the first failed, that failure (so an
+ * unknown outcome still locks writes) with what had already committed in its message.
+ */
+function reclaimSettled(result: WithdrawExpiredResult, label: string): Settled {
+  const parts = [
+    ...(result.withdrawn.length > 0 ? [`withdrew ${plural(result.withdrawn.length, 'expired transfer offer')}`] : []),
+    ...(result.released.length > 0 ? [`released ${plural(result.released.length, 'expired lock')}`] : []),
+  ];
+  const done = `${parts.join(' and ')} of ${label}`;
+  const committed = [...result.withdrawn, ...result.released];
+  const last = committed[committed.length - 1];
+  if (result.failed !== undefined) {
+    const error = describeWalletError(result.failed.error);
+    const skipped =
+      result.notAttempted.length > 0 ? ` ${plural(result.notAttempted.length, 'more')} not attempted.` : '';
+    return {
+      ok: false,
+      error: { ...error, message: `The wallet ${done}, then stopped: ${error.message}${skipped}` },
+    };
+  }
+  const sentence = done.charAt(0).toUpperCase() + done.slice(1);
+  return {
+    ok: true,
+    result,
+    message: `${sentence}; those tokens are unlocked${last === undefined ? '' : ` ${update(last)}`}.`,
+  };
+}
+
 /** Run `action` with `tokens` for `wallet`; throws what the wallet throws. */
 async function perform(
   plans: StorePlans,
@@ -319,15 +362,13 @@ async function perform(
         await tokens.withdrawTransferOffer(action.transferOfferCid, call),
         'Transfer offer withdrawn; its tokens are unlocked'
       );
-    case 'withdrawExpiredTransferOffers': {
-      const result = await tokens.withdrawExpiredTransferOffers(action.instrumentId, call);
-      const count = result.withdrawn.length;
-      const last = result.withdrawn[count - 1];
-      return {
-        ok: true,
-        result,
-        message: `Withdrew ${count} expired transfer offer${count === 1 ? '' : 's'} of ${action.instrumentId.id}; the tokens they locked are unlocked${last === undefined ? '' : ` ${update(last)}`}.`,
-      };
+    case 'withdrawExpiredTransferOffers':
+    case 'reclaimLockedTokens': {
+      const result =
+        action.type === 'reclaimLockedTokens'
+          ? await tokens.reclaimLockedTokens(action.instrumentId, call)
+          : await tokens.withdrawExpiredTransferOffers(action.instrumentId, call);
+      return reclaimSettled(result, tokenLabel(action.instrumentId));
     }
     case 'requestBurn': {
       const { instrumentId, amount, reference, executeBefore } = action;

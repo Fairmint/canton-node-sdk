@@ -18,6 +18,7 @@ import {
   OTHER,
   pkgId,
   REGISTRAR,
+  RpcError,
   type FetchCall,
 } from './helpers';
 
@@ -448,6 +449,73 @@ describe('createWallet: expired Canton Coin offers', () => {
       { ExerciseCommand: expect.objectContaining({ contractId: '00a', choice: 'TransferInstruction_Withdraw' }) },
       { ExerciseCommand: expect.objectContaining({ contractId: '00b', choice: 'TransferInstruction_Withdraw' }) },
     ]);
+  });
+
+  /** Fail the `n`th submission (1-based) with `error`; the others go through. */
+  function failSubmission(provider: ReturnType<typeof fakeProvider>, n: number, error: unknown): void {
+    const request = provider.request.bind(provider);
+    let count = 0;
+    provider.request = async (args) => {
+      if (args.method === 'prepareExecuteAndWait') {
+        count += 1;
+        if (count === n) {
+          provider.submissions.push(args.params);
+          throw error;
+        }
+      }
+      return request(args);
+    };
+  }
+
+  const threeExpired = [
+    expiredOut('00a', '2026-11-13T07:00:00Z'),
+    expiredOut('00b', '2026-11-13T08:00:00Z'),
+    expiredOut('00c', '2026-11-13T09:00:00Z'),
+  ];
+
+  it('reports what committed when a later withdrawal fails, and stops there', async () => {
+    const { tokens, wallet } = setup({ instructions: threeExpired });
+    failSubmission(wallet, 2, new RpcError(-32003, 'ledger rejected'));
+    const result = await tokens.withdrawExpiredTransferOffers({ admin: DSO, id: 'Amulet' });
+    expect(result.withdrawn.map((w) => w.transferOfferCid)).toEqual(['00a']);
+    expect(result.released).toEqual([]);
+    expect(result.failed?.contractId).toBe('00b');
+    expect(describeWalletError(result.failed?.error).kind).toBe('not-committed');
+    expect(result.notAttempted).toEqual(['00c']);
+    expect(
+      wallet.submissions.map(
+        (s) => (s.commands[0] as { ExerciseCommand: { contractId: string } }).ExerciseCommand.contractId
+      )
+    ).toEqual(['00a', '00b']);
+  });
+
+  it('throws the first failure as usual when nothing committed', async () => {
+    const { tokens, wallet } = setup({ instructions: threeExpired });
+    failSubmission(wallet, 1, new RpcError(-32003, 'ledger rejected'));
+    await expect(tokens.withdrawExpiredTransferOffers({ admin: DSO, id: 'Amulet' })).rejects.toMatchObject({
+      outcome: 'failed',
+    });
+    expect(wallet.submissions).toHaveLength(1);
+  });
+
+  it('reports what committed when the signal aborts between withdrawals', async () => {
+    const { tokens, wallet } = setup({ instructions: threeExpired });
+    const controller = new AbortController();
+    const request = wallet.request.bind(wallet);
+    wallet.request = async (args) => {
+      const answer = await request(args);
+      if (args.method === 'prepareExecuteAndWait') controller.abort();
+      return answer;
+    };
+    const result = await tokens.withdrawExpiredTransferOffers(
+      { admin: DSO, id: 'Amulet' },
+      { signal: controller.signal }
+    );
+    expect(result.withdrawn.map((w) => w.transferOfferCid)).toEqual(['00a']);
+    expect(result.failed?.contractId).toBe('00b');
+    expect(describeWalletError(result.failed?.error).kind).toBe('cancelled');
+    expect(result.notAttempted).toEqual(['00c']);
+    expect(wallet.submissions).toHaveLength(1);
   });
 
   it('refuses with not-found when no outgoing offer of the token expired, and submits nothing', async () => {

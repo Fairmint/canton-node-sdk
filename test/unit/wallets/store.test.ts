@@ -116,6 +116,7 @@ function setup(): {
       rejectTransferOffer: action('rejectTransferOffer'),
       withdrawTransferOffer: action('withdrawTransferOffer'),
       withdrawExpiredTransferOffers: action('withdrawExpiredTransferOffers'),
+      reclaimLockedTokens: action('reclaimLockedTokens'),
       acceptMintOffer: action('acceptMintOffer'),
       rejectMintOffer: action('rejectMintOffer'),
       requestBurn: action('requestBurn'),
@@ -504,6 +505,8 @@ describe('createWalletStore', () => {
           { ...SUBMITTED, updateId: 'update-a', transferOfferCid: 'offer-a', amount: '1' },
           { ...SUBMITTED, transferOfferCid: 'offer-b', amount: '2' },
         ],
+        released: [],
+        notAttempted: [],
       };
       call.resolve(result);
       expect(await ran).toEqual(result);
@@ -511,8 +514,49 @@ describe('createWalletStore', () => {
         loading: true,
         outcome: {
           status: 'succeeded',
-          message: 'Withdrew 2 expired transfer offers of XMPL; the tokens they locked are unlocked (update update-1).',
+          message: 'Withdrew 2 expired transfer offers of XMPL; those tokens are unlocked (update update-1).',
         },
+      });
+    });
+
+    it('reclaimLockedTokens names Canton Coin by its symbol and counts offers and locks', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const cc = { admin: 'DSO::1220dso', id: 'Amulet' } as const;
+      const ran = t.store.act({ type: 'reclaimLockedTokens', instrumentId: cc });
+      const call = t.call();
+      expect(call.method).toBe('reclaimLockedTokens');
+      const result = {
+        withdrawn: [{ ...SUBMITTED, updateId: 'update-a', transferOfferCid: 'offer-a', amount: '1' }],
+        released: [{ ...SUBMITTED, updateId: 'update-b', lockedHoldingCid: 'lock-b', amount: '2' }],
+        notAttempted: [],
+      };
+      call.resolve(result);
+      expect(await ran).toEqual(result);
+      expect(t.store.getSnapshot().outcome).toMatchObject({
+        status: 'succeeded',
+        message:
+          'Withdrew 1 expired transfer offer and released 1 expired lock of CC; those tokens are unlocked (update update-b).',
+      });
+    });
+
+    it('reports a reclaim that stopped part way as failed, naming what committed, and keeps an unknown outcome', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const ran = t.store.act({ type: 'reclaimLockedTokens', instrumentId: INSTRUMENT });
+      t.call().resolve({
+        withdrawn: [{ ...SUBMITTED, transferOfferCid: 'offer-a', amount: '1' }],
+        released: [],
+        failed: { contractId: 'offer-b', error: new WalletSubmitError('unknown', 'timed out', { commandId: 'c-2' }) },
+        notAttempted: ['offer-c'],
+      });
+      expect(await ran).toBeNull();
+      const view = t.store.getSnapshot();
+      expect(view.unknownOutcome).toMatchObject({
+        commandId: 'c-2',
+        message: expect.stringMatching(
+          /^The wallet withdrew 1 expired transfer offer of XMPL, then stopped: .*1 more not attempted\.$/
+        ),
       });
     });
 

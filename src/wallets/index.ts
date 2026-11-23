@@ -19,7 +19,9 @@
  * - `walletTokens(state)`: one entry per token (Canton Coin and DA Registry tokens alike) with its balances, offers,
  *   preapproval and honest `capabilities`, for one picker and one panel; `coveringPreapproval`, the rule
  *   `createTransferPreapproval` refuses `already-exists` by; expired offers (`TransferOffer.expired`,
- *   `InstrumentBalance.lockedInExpiredOffers`) and the `withdrawExpiredTransferOffers` action that unlocks them.
+ *   `InstrumentBalance.lockedInExpiredOffers`), expired Canton Coin locks no offer names
+ *   (`InstrumentBalance.lockedInExpiredLocks`), and the `reclaimLockedTokens` action that unlocks both
+ *   (`WalletToken.canReclaim` says when it applies).
  * - The ownership proof's browser half (`requestWalletOwnershipVerdict`); the server half
  *   (`createWalletOwnershipChallenger`, `verifyWalletOwnership`) is Node-only and exported from the package root.
  * - The errors, their guards (`isWalletError`, `isWalletSubmitError`, …: they match errors of any copy of this module,
@@ -64,6 +66,8 @@ export {
   type WalletState,
   type WithdrawExpiredResult,
   type WithdrawnOffer,
+  type ReleasedLock,
+  type ReclaimLockedTokensResult,
 } from './wallet';
 export type { Cip103Connection, Cip103EventListener, Cip103Provider, Cip103Request } from './cip103';
 export {
@@ -121,6 +125,7 @@ export {
 } from './contracts';
 export {
   isTransferOfferExpired,
+  expiredUnclaimedLocks,
   walletTokens,
   type TokenCapabilities,
   type WalletToken,

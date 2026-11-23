@@ -3,7 +3,12 @@ import { coveringPreapproval } from '../../../src/wallets/contracts';
 import type { Holding, InstrumentBalance } from '../../../src/wallets/holdings';
 import type { InstrumentId } from '../../../src/wallets/types';
 import * as Wallets from '../../../src/wallets';
-import { isTransferOfferExpired, lockedInExpiredOffers, walletTokens } from '../../../src/wallets/tokens';
+import {
+  expiredUnclaimedLocks,
+  isTransferOfferExpired,
+  lockedInExpiredOffers,
+  walletTokens,
+} from '../../../src/wallets/tokens';
 import { DSO, HOLDER, INSTRUMENT, OPERATOR, OTHER, REGISTRAR } from './helpers';
 
 const CC = { admin: DSO, id: 'Amulet' } as const;
@@ -74,6 +79,31 @@ describe('lockedInExpiredOffers', () => {
       [offer({ contractId: '00cc', registry: 'amulet', instrumentId: CC, lockedHoldingCid: '00free' })]
     );
     expect(totals.size).toBe(0);
+  });
+});
+
+describe('expiredUnclaimedLocks', () => {
+  const at = Date.parse('2026-11-13T12:00:00Z');
+  const lock = (contractId: string, lockExpiresAt?: string): Holding => ({
+    ...holding(contractId, '2', true, CC),
+    ...(lockExpiresAt !== undefined && { lockExpiresAt }),
+  });
+
+  it('keeps expired Canton Coin locks no offer names, and nothing else', () => {
+    const orphan = lock('00orphan', '2026-11-13T00:00:00Z');
+    const found = expiredUnclaimedLocks(
+      [
+        orphan,
+        lock('00named', '2026-11-13T00:00:00Z'), // its offer is still active: withdrawing it unlocks it
+        lock('00live', '2026-11-14T00:00:00Z'), // not expired yet
+        lock('00relative'), // no absolute expiry
+        holding('00free', '3', false, CC),
+        { ...holding('00da', '5', true), lockExpiresAt: '2026-11-13T00:00:00Z' }, // DA: not Canton Coin
+      ],
+      [{ lockedHoldingCid: '00named' }, {}],
+      at
+    );
+    expect(found).toEqual([orphan]);
   });
 });
 
@@ -155,6 +185,10 @@ describe('walletTokens', () => {
       ['CC', 'Canton Coin', 10, '12.5000000000', '4.0000000000', '4.0000000000'],
       ['CNTN', 'Canton Network Token', 2, '7.0000000000', '0.0000000000', '0.0000000000'],
     ]);
+    expect(tokens.map((t) => [t.symbol, t.canReclaim, t.preapprovalStatus])).toEqual([
+      ['CC', true, 'unknown'],
+      ['CNTN', false, 'covered'],
+    ]);
     const [cc, cntnToken] = tokens;
     expect(cc).toMatchObject({
       key: CC_KEY,
@@ -170,6 +204,7 @@ describe('walletTokens', () => {
       preapproval: null,
     });
     expect(cc?.offers.incoming.map((o) => o.contractId)).toEqual(['00ccin']);
+    expect(cc?.offers.expiredIncoming).toEqual([]);
     expect(cc?.offers.expiredOutgoing.map((o) => o.contractId)).toEqual(['00ccold']);
     expect(cntnToken).toMatchObject({
       isCantonCoin: false,
@@ -180,7 +215,58 @@ describe('walletTokens', () => {
     expect(cntnToken?.offers.expiredOutgoing).toEqual([]);
   });
 
-  it('lists a token the party is only offered, with zero balances and its id as the label', () => {
+  it('separates expired incoming offers, which the party can no longer accept', () => {
+    const old = { ...ccIn, contractId: '00ccinold', expired: true };
+    const [cc] = walletTokens({
+      balances: [ccBalance],
+      transferOffers: { incoming: [ccIn, old], outgoing: [] },
+      mintOffers: [],
+      burnRequests: [],
+      transferPreapprovals: [],
+    });
+    expect(cc?.offers.incoming.map((o) => o.contractId)).toEqual(['00ccin', '00ccinold']);
+    expect(cc?.offers.expiredIncoming.map((o) => o.contractId)).toEqual(['00ccinold']);
+  });
+
+  it("counts expired Canton Coin locks no offer names as reclaimable, capped at locked, and says there's a reclaim", () => {
+    const [cc] = walletTokens({
+      balances: [{ ...ccBalance, lockedInExpiredOffers: '0.0000000000', lockedInExpiredLocks: '1.5000000000' }],
+      transferOffers: { incoming: [], outgoing: [] },
+      mintOffers: [],
+      burnRequests: [],
+      transferPreapprovals: [],
+    });
+    expect(cc).toMatchObject({ lockedReclaimable: '1.5000000000', canReclaim: true });
+    const [capped] = walletTokens({
+      balances: [{ ...ccBalance, lockedInExpiredLocks: '3.0000000000' }],
+      transferOffers: { incoming: [], outgoing: [] },
+      mintOffers: [],
+      burnRequests: [],
+      transferPreapprovals: [],
+    });
+    expect(capped?.lockedReclaimable).toBe('4.0000000000');
+  });
+
+  it('labels Canton Coin CC when the party is only offered it (no balance carries its metadata)', () => {
+    const [cc] = walletTokens({
+      balances: [],
+      transferOffers: { incoming: [ccIn], outgoing: [] },
+      mintOffers: [],
+      burnRequests: [],
+      transferPreapprovals: [],
+    });
+    expect(cc).toMatchObject({
+      symbol: 'CC',
+      name: 'Canton Coin',
+      decimals: 10,
+      isCantonCoin: true,
+      available: '0.0000000000',
+      canReclaim: false,
+      preapprovalStatus: 'unknown',
+    });
+  });
+
+  it('lists a DA token the party is only offered, with zero balances and its id as the label', () => {
     const tokens = walletTokens({
       balances: [],
       transferOffers: { incoming: [], outgoing: [] },
@@ -213,6 +299,8 @@ describe('walletTokens', () => {
       isCantonCoin: false,
       mintOffers: [{ contractId: '00mint', memo: 'Welcome' }],
       preapproval: null,
+      preapprovalStatus: 'none',
+      canReclaim: false,
     });
     expect(tokens[0]).not.toHaveProperty('metadata');
   });
