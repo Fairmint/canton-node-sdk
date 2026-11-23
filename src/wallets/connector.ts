@@ -207,11 +207,15 @@ interface Former {
   unsubscribe: () => void;
 }
 
-/** The live option wanted, the provider last connected for it, and the earlier object keeping that provider. */
+/**
+ * The live option wanted, the provider last connected for it, the earlier object keeping that provider, and, while a
+ * rediscovery no longer lists the wanted object as live, its own listener (so its withdrawal is still heard).
+ */
 interface Live {
   readonly option: LiveWalletOption;
   connected: Cip103Provider | null;
   former: Former | null;
+  stray: (() => void) | null;
 }
 
 /** The provider the session was last asked to connect or restore, and the option it came from. */
@@ -300,7 +304,14 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
   function setLive(next: Live | null): void {
     const former = live?.former ?? null;
     if (former !== null && former !== next?.former) former.unsubscribe();
+    if (live !== null && live !== next) dropStray(live);
     live = next;
+  }
+
+  /** Stop the wanted object's own listener, kept while discovery did not list it. */
+  function dropStray(wanted: Live): void {
+    wanted.stray?.();
+    wanted.stray = null;
   }
 
   /** Stop listening to the earlier object `wanted` kept: its replacement has offered, or the wallet is left. */
@@ -599,19 +610,22 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
       provider = null;
       retainKey = null;
     }
+    if (provider === null && wanted.former !== null) {
+      // A rediscovered replacement that has not offered yet: the earlier object speaks for the wallet. The same
+      // provider keeps it, another one is a change, and only its empty answer (or a throw) is a withdrawal.
+      try {
+        provider = wanted.former.option.live.getProvider();
+        retainKey = wanted.former.option.live.getRetainKey();
+      } catch {
+        provider = null;
+        retainKey = null;
+      }
+    } else if (provider !== null) {
+      dropFormer(wanted);
+    }
     if (provider === null) {
       const previous = wanted.connected;
       if (previous === null) return;
-      // A rediscovered replacement that has not offered yet: the earlier object still offering the wallet keeps it.
-      if (wanted.former !== null) {
-        let earlier: Cip103Provider | null;
-        try {
-          earlier = wanted.former.option.live.getProvider();
-        } catch {
-          earlier = null;
-        }
-        if (earlier === previous) return;
-      }
       // Torn down (logout, another wallet or party): leave it.
       dropFormer(wanted);
       wanted.connected = null;
@@ -620,7 +634,6 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
       publish();
       return;
     }
-    dropFormer(wanted);
     if (provider === wanted.connected) return;
     // The user's connect to a loaded option is loading: it decides first (a failure evaluates again).
     if (pendingLoad !== null) return;
@@ -688,9 +701,25 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
           option: replacement,
           connected: wanted.connected,
           former: keep ? (wanted.former ?? subscribeFormer(wanted.option)) : null,
+          stray: null,
         });
         evaluateLive();
       }
+    }
+    // The wanted object is no longer listed as live (its key vanished or turned loaded): while the session is on its
+    // wallet, keep listening to it, so a withdrawal or change it signals is still heard.
+    const kept = live;
+    if (kept === null || kept !== wanted) return;
+    if (fixed.includes(kept.option) || next.includes(kept.option)) {
+      dropStray(kept);
+      return;
+    }
+    if (kept.stray === null && kept.connected !== null && sessionOn(kept.connected)) {
+      kept.stray = kept.option.live.subscribe(() => {
+        if (live !== kept) return;
+        evaluateLive();
+        publish();
+      });
     }
   }
 
@@ -733,7 +762,7 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
   /** The remembered option is live: open its setup UI, want it, and let it start its own recovery. */
   function wantRemembered(option: LiveWalletOption): void {
     selected = option.key;
-    if (network !== null) setLive({ option, connected: null, former: null });
+    if (network !== null) setLive({ option, connected: null, former: null, stray: null });
     try {
       option.live.restore();
     } catch {
@@ -809,7 +838,7 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
         writeStorage(local, walletStorageKey, key);
         if (selected !== null && selected !== key) setSelected(null);
         // A new attempt: the same provider connects again (after a cancelled or failed connect).
-        const wanted: Live = { option, connected: null, former: null };
+        const wanted: Live = { option, connected: null, former: null, stray: null };
         setLive(wanted);
         let provider: Cip103Provider | null;
         let retainKey: string | null;

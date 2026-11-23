@@ -1244,7 +1244,7 @@ describe('createWalletConnector: review fixes', () => {
   });
 
   describe('a discover that returns a new live option object per call, with the same key', () => {
-    async function connectedThenRediscovered(): Promise<{
+    async function connectedThenRediscovered(latch?: ReturnType<typeof createWriteLatch>): Promise<{
       c: WalletConnector;
       local: ReturnType<typeof memoryStorage>;
       made: Array<ReturnType<typeof liveOption>>;
@@ -1255,6 +1255,7 @@ describe('createWalletConnector: review fixes', () => {
       const local = memoryStorage();
       const c = connector({
         local,
+        ...(latch === undefined ? {} : { latch }),
         discover: async () => {
           const next = liveOption('privy:x');
           made.push(next);
@@ -1317,6 +1318,47 @@ describe('createWalletConnector: review fixes', () => {
       expect(local.getItem(WALLET)).toBe('privy:x');
     });
 
+    it('takes the change path when the earlier object rotates its provider before the replacement offers', async () => {
+      const { c, made, provider, connects } = await connectedThenRediscovered();
+      const rotated = new TestProvider(PARTY_A);
+      made[0]?.offer(rotated, PARTY_A);
+      // The held reconnect: the previous connection stays shown, never a drop to a fresh connect.
+      expect(c.getSnapshot()).toMatchObject({ status: 'reconnecting', stale: true });
+      expect(c.getSnapshot().connection?.wallet.provider).toBe(provider);
+      await flush();
+      expect(connectedProvider(c)).toBe(rotated);
+      expect(c.getSnapshot()).toMatchObject({ status: 'connected', target: { key: 'privy:x' } });
+      expect(connects()).toBe(1);
+      // The replacement then offers the rotated provider: nothing changes.
+      made[1]?.offer(rotated, PARTY_A);
+      await flush();
+      expect(connectedProvider(c)).toBe(rotated);
+      expect(rotated.requests).not.toContain('disconnect');
+      expect(connects()).toBe(1);
+      expect(made[0]?.subscribers()).toBe(0);
+    });
+
+    it('never disconnects under a write when the earlier object rotated and the option is rediscovered again', async () => {
+      const latch = createWriteLatch();
+      const { c, made, provider, connects } = await connectedThenRediscovered(latch);
+      const write = deferred<undefined>();
+      const running = latch.run('canton-coin', async () => write.promise);
+      const rotated = new TestProvider(PARTY_A);
+      made[0]?.offer(rotated, PARTY_A);
+      await c.rediscover();
+      await flush();
+      expect(made).toHaveLength(3);
+      expect(c.session?.getSnapshot().status).toBe('connected');
+      expect(connectedProvider(c)).toBe(provider);
+      expect(provider.requests).not.toContain('disconnect');
+      expect(connects()).toBe(0);
+      write.resolve(undefined);
+      await running;
+      await flush();
+      expect(connectedProvider(c)).toBe(rotated);
+      expect(connects()).toBe(1);
+    });
+
     it('reconnects when the replacement offers a different provider', async () => {
       const { c, made, provider, connects } = await connectedThenRediscovered();
       const rebuilt = new TestProvider(PARTY_A);
@@ -1327,6 +1369,60 @@ describe('createWalletConnector: review fixes', () => {
       expect(c.getSnapshot()).toMatchObject({ status: 'connected', target: { key: 'privy:x' } });
       expect(connects()).toBe(1);
       expect(provider).not.toBe(rebuilt);
+    });
+  });
+
+  describe('a rediscover that no longer lists the connected live option as live', () => {
+    async function connectedThenDropped(then: () => WalletOption[]): Promise<{
+      c: WalletConnector;
+      first: ReturnType<typeof liveOption>;
+      provider: TestProvider;
+      connects: () => number;
+    }> {
+      const first = liveOption('privy:x');
+      let calls = 0;
+      const c = connector({
+        discover: async () => {
+          calls += 1;
+          return calls === 1 ? [first.option] : then();
+        },
+      });
+      await flush();
+      const provider = new TestProvider(PARTY_A);
+      first.offer(provider, PARTY_A);
+      expect(await c.connect('privy:x')).toEqual({ status: 'connected' });
+      await flush();
+      const connects = countConnects(c);
+      await c.rediscover();
+      await flush();
+      return { c, first, provider, connects };
+    }
+
+    it('still hears the wanted object withdraw its provider after its key vanished', async () => {
+      const { c, first, provider } = await connectedThenDropped(() => []);
+      expect(c.session?.getSnapshot().status).toBe('connected');
+      expect(first.subscribers()).toBe(1);
+      first.offer(null);
+      await flush();
+      expect(c.session?.getSnapshot().status).toBe('disconnected');
+      expect(provider.requests).toContain('disconnect');
+    });
+
+    it('still hears the wanted object withdraw after its key turned loaded', async () => {
+      const { c, first, provider } = await connectedThenDropped(() => [loadedOption('privy:x')]);
+      expect(c.session?.getSnapshot().status).toBe('connected');
+      first.offer(null);
+      await flush();
+      expect(c.session?.getSnapshot().status).toBe('disconnected');
+      expect(provider.requests).toContain('disconnect');
+    });
+
+    it('stops listening once the wallet is left', async () => {
+      const { c, first } = await connectedThenDropped(() => []);
+      expect(first.subscribers()).toBe(1);
+      c.disconnect();
+      await flush();
+      expect(first.subscribers()).toBe(0);
     });
   });
 
