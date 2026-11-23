@@ -48,6 +48,16 @@ export {
   type WriteRunContext,
   type WriteRunOutcome,
 } from './latch';
+export { loopWalletOption, type LoopSdkLike, type LoopWalletOption, type LoopWalletOptionInput } from './loop';
+export {
+  extensionWalletOptions,
+  type LiveWalletOption,
+  type LoadedWalletOption,
+  type WalletAvailability,
+  type WalletOption,
+  type WalletOptionInfo,
+} from './options';
+export type { StorageLike } from './storage';
 export {
   actionState,
   canAct,
@@ -118,17 +128,20 @@ export {
   isRegistryResponseError,
   isWalletCancellation,
   isWalletError,
+  isWalletOptionError,
   isWalletReadError,
   isWalletSignError,
   isWalletSubmitError,
   RegistryApiError,
   RegistryResponseError,
   WalletError,
+  WalletOptionError,
   WalletReadError,
   WalletSignError,
   WalletSubmitError,
   type WalletErrorCode,
   type WalletErrorDescription,
+  type WalletOptionErrorCode,
   type WalletSignErrorReason,
   type WalletSubmitCategory,
   type WalletSubmitErrorDetails,
