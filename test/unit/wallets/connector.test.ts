@@ -15,7 +15,10 @@ import {
   type StorageLike,
   type WalletConnector,
   type WalletConnectorInput,
+  type Wallet,
   type WalletOption,
+  type WalletOptions,
+  type WalletState,
 } from '../../../src/wallets';
 import { fakeFetch, RpcError } from './helpers';
 import { deferred, flush, TestProvider } from './session-helpers';
@@ -799,6 +802,30 @@ describe('createWalletConnector: loaded options', () => {
     expect(await c.connect('loop')).toEqual({ status: 'refused', reason: 'disposed' });
   });
 
+  it('reports a connect still loading its provider as connecting while another wallet is connected; cancel() ends it', async () => {
+    const first = new TestProvider('first::1220abc');
+    const slow = loadedOption('extension:slow');
+    const c = connector({ options: [readyOption('loop', first), slow] });
+    expect(await c.connect('loop')).toEqual({ status: 'connected' });
+
+    const pending = c.connect('extension:slow');
+    expect(c.getSnapshot()).toMatchObject({
+      status: 'connecting',
+      target: { key: 'extension:slow' },
+      connection: null,
+    });
+    c.cancel();
+    // The load was stopped (its signal aborted) and the previous wallet, which the connect had left, is disconnected.
+    const late = new TestProvider('late::1220abc');
+    slow.loads[0]?.resolve(late);
+    expect(await pending).toEqual({ status: 'cancelled' });
+    await flush();
+    expect(late.requests).toEqual([]);
+    expect(first.requests).toContain('disconnect');
+    expect(c.session?.getSnapshot().status).toBe('disconnected');
+    expect(c.getSnapshot()).toMatchObject({ status: 'disconnected', target: null, connection: null });
+  });
+
   it('refuses an unknown option, a connect without a DA network, and one while the latch is held', async () => {
     const latch = createWriteLatch();
     const c = connector({ latch, options: [readyOption('loop', new TestProvider())] });
@@ -1002,6 +1029,60 @@ describe('createWalletConnector: live options', () => {
 });
 
 describe('createWalletConnector: store and dispose', () => {
+  it("holds the store's snapshot only while the same live connection reconnects, never while another wallet connects", async () => {
+    const privy = liveOption();
+    const loop = new TestProvider('loop::1220abc', {
+      // Loop's sign-in stays open until the test answers it.
+      connect: async () => signIn.promise,
+    });
+    let signIn = deferred<unknown>();
+    const snapshotFor = (partyId: string): WalletState => ({
+      offset: partyId.length,
+      holdings: [],
+      balances: [],
+      transferOffers: { incoming: [], outgoing: [] },
+      mintOffers: [],
+      burnRequests: [],
+      transferPreapprovals: [],
+      cantonCoinUnavailable: false,
+    });
+    const openWallet = (options: WalletOptions): Wallet =>
+      ({
+        partyId: options.partyId,
+        network: options.network,
+        loadState: async () => snapshotFor(options.partyId),
+      }) as unknown as Wallet;
+    const c = connector({
+      options: [privy.option, readyOption('loop', loop)],
+      store: { ...OFFLINE_STORE, openWallet } as NonNullable<WalletConnectorInput['store']>,
+    });
+    const { store } = c;
+    if (store === null) throw new Error('no store');
+    privy.offer(new TestProvider(PARTY_A), PARTY_A);
+    await c.connect('privy');
+    await flush();
+    const held = store.getSnapshot().state;
+    expect(held).not.toBeNull();
+
+    // A rebuilt provider for the same party: reconnecting, and the store keeps the snapshot (stale).
+    privy.offer(new TestProvider(PARTY_A), PARTY_A);
+    expect(c.getSnapshot()).toMatchObject({ status: 'reconnecting' });
+    expect(store.getSnapshot()).toMatchObject({ shown: held, stale: true });
+    await flush();
+    expect(store.getSnapshot()).toMatchObject({ shown: held, stale: false });
+
+    // Another wallet (Loop) signing in: connecting, and the Privy party's holdings are not shown meanwhile.
+    signIn = deferred<unknown>();
+    const toLoop = c.connect('loop');
+    expect(c.getSnapshot()).toMatchObject({ status: 'connecting', connection: null });
+    await flush(); // Loop's provider loaded: the session left the Privy wallet and waits for Loop's sign-in
+    expect(c.session?.getSnapshot().status).toBe('connecting');
+    expect(c.getSnapshot()).toMatchObject({ status: 'connecting', connection: null });
+    expect(store.getSnapshot()).toMatchObject({ state: null, shown: null, stale: false });
+    signIn.resolve({ isConnected: true, isNetworkConnected: true });
+    expect(await toLoop).toEqual({ status: 'connected' });
+  });
+
   it('opens the store over the connector session', async () => {
     const privy = liveOption();
     const c = connector({ options: [privy.option] });

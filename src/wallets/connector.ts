@@ -49,8 +49,8 @@ export interface WalletConnectorInput {
    * at most `MAX_TIMER_MS`.
    */
   readonly restoreTimeoutMs?: number;
-  /** Store options other than `session`, `latch` and `retainKey`, which the connector supplies. */
-  readonly store?: Omit<WalletStoreOptions, 'session' | 'latch' | 'retainKey'>;
+  /** Store options other than `session`, `latch`, `retainKey` and `connectingRetainKey`, which the connector supplies. */
+  readonly store?: Omit<WalletStoreOptions, 'session' | 'latch' | 'retainKey' | 'connectingRetainKey'>;
   /** Shared with the app's other writers (a wallet setup session). Default: a new one. */
   readonly latch?: WriteLatch;
 }
@@ -59,7 +59,7 @@ export interface WalletConnectorInput {
  * - `disconnected`: nothing is wanted;
  * - `restoring`: restoring a remembered loaded option silently (`cancel()` abandons it);
  * - `preparing`: a live option is wanted and offers no provider yet: the app shows its setup UI;
- * - `connecting`: a connect is in flight (`cancel()` ends it);
+ * - `connecting`: a connect is in flight, its option's provider still loading included (`cancel()` ends it);
  * - `connected`;
  * - `reconnecting`: a live option offered a new provider for the same retain key; `connection` is the held one (`stale:
  *   true`).
@@ -110,7 +110,10 @@ export interface WalletConnectorSnapshot {
    * lands back on it.
    */
   readonly selected: string | null;
-  /** The live connection, or the held one while `reconnecting`. */
+  /**
+   * The live connection, or the held one while `reconnecting`. Null while `connecting`, also while a loaded option's
+   * provider loads and the session is still on the previous wallet.
+   */
   readonly connection: WalletConnection | null;
   /** `connection` is the held one. */
   readonly stale: boolean;
@@ -168,7 +171,8 @@ export interface WalletConnector {
   /**
    * - `restoring`: abandon the restore, and forget its key if it is still the remembered one;
    * - `connecting` / `reconnecting`: the same, then `session.disconnect()` (the CIP-0103 disconnect ends the wallet's own
-   *   sign-in window);
+   *   sign-in window). A connect still loading its option's provider stops loading and never connects; the wallet the
+   *   session was on is disconnected too, since the connect had already left it;
    * - `preparing`: stop wanting the live option (`selected` stays);
    * - Otherwise nothing.
    */
@@ -295,7 +299,15 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
   const store =
     session === null
       ? null
-      : createWalletStore({ ...input.store, session, latch, retainKey: (wallet) => connectionKey(wallet) });
+      : createWalletStore({
+          ...input.store,
+          session,
+          latch,
+          retainKey: (wallet) => connectionKey(wallet),
+          // The store holds its snapshot through a connect only while this connector holds the connection
+          // (`reconnecting`: a rebuilt provider for the same retain key), never through a connect to another wallet.
+          connectingRetainKey: () => held?.key ?? null,
+        });
 
   function options(): readonly WalletOption[] {
     return [...fixed, ...discovered];
@@ -330,11 +342,13 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
   }
 
   function status(): WalletConnectorStatus {
+    // The user's connect is loading its option's provider: it is in flight even while the session is still on the
+    // previous wallet (or still signing in to an earlier one), and cancel() must reach it.
+    if (pendingLoad !== null) return 'connecting';
     const state = sessionState();
     if (state.status === 'connected') return 'connected';
     if (state.status === 'connecting') return held !== null ? 'reconnecting' : 'connecting';
     if (restore !== null) return 'restoring';
-    if (pendingLoad !== null) return 'connecting';
     if (live !== null && network !== null) return 'preparing';
     return 'disconnected';
   }
@@ -374,7 +388,7 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
 
   function buildSnapshot(): WalletConnectorSnapshot {
     const current = status();
-    const connection = current === 'reconnecting' ? held : currentConnection();
+    const connection = current === 'reconnecting' ? held : current === 'connecting' ? null : currentConnection();
     return Object.freeze({
       network,
       status: current,
