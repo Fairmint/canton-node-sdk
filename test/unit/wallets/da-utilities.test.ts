@@ -1,5 +1,6 @@
 import {
   createDaUtilitiesClient,
+  DA_REGISTRY_REQUEST_TIMEOUT_MS,
   DA_BURN_FACTORY_TEMPLATES,
   DA_TRANSFER_FACTORY_TEMPLATES,
   DA_UTILITIES_BASE_URLS,
@@ -39,6 +40,13 @@ describe('createDaUtilitiesClient', () => {
     });
     expect(DA_BURN_FACTORY_TEMPLATES).toEqual([FACTORY]);
     expect(() => requireQualifiedName('not-an-id')).toThrow(TypeError);
+  });
+
+  it('refuses a request timeout setTimeout cannot honour', () => {
+    expect(() => createDaUtilitiesClient('devnet', { timeoutMs: 2 ** 31 })).toThrow(/at most 2147483647/);
+    expect(() =>
+      createDaUtilitiesClient('devnet', { timeoutMs: 2_147_483_647, fetch: jest.fn() as never })
+    ).not.toThrow();
   });
 
   it("calls DA's URL of the network, or the given base URL without its trailing slashes", async () => {
@@ -286,6 +294,46 @@ describe('createDaUtilitiesClient', () => {
     }
   });
 
+  it('fails a request still unanswered after timeoutMs (30 s by default), aborting its fetch', async () => {
+    jest.useFakeTimers();
+    try {
+      const signals: Array<AbortSignal | undefined> = [];
+      const fetch: FetchLike = async (_url, init) => {
+        signals.push(init.signal);
+        return new Promise(() => undefined); // never answers
+      };
+      expect(DA_REGISTRY_REQUEST_TIMEOUT_MS).toBe(30_000);
+      const slow = createDaUtilitiesClient('devnet', { fetch }).operatorParty();
+      const failed = slow.catch((e: unknown) => e);
+      await jest.advanceTimersByTimeAsync(29_999);
+      expect(signals[0]?.aborted).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+      const error = await failed;
+      expect(error).toBeInstanceOf(RegistryResponseError);
+      expect((error as Error).message).toMatch(/did not answer .* within 30 s$/);
+      expect(signals[0]?.aborted).toBe(true);
+
+      const quick = createDaUtilitiesClient('devnet', { fetch, timeoutMs: 1000 }).mintOfferAcceptContext('00mint');
+      const quickFailed = quick.catch((e: unknown) => e);
+      await jest.advanceTimersByTimeAsync(1000);
+      expect(await quickFailed).toBeInstanceOf(RegistryResponseError);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("rejects with the caller's AbortError, not a timeout, when the caller cancels", async () => {
+    const fetch: FetchLike = async () => new Promise(() => undefined);
+    const controller = new AbortController();
+    const pending = createDaUtilitiesClient('devnet', { fetch }).mintOfferAcceptContext('00mint', controller.signal);
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])('refuses timeoutMs %p', (timeoutMs) => {
+    expect(() => createDaUtilitiesClient('devnet', { timeoutMs })).toThrow(/timeoutMs/);
+  });
+
   it.each([
     ['a non-integer decimals', { id: 'XMPL', name: 'n', symbol: 's', decimals: 2.5 }],
     ['a negative decimals', { id: 'XMPL', name: 'n', symbol: 's', decimals: -1 }],
@@ -369,18 +417,25 @@ describe('factoryTemplateError', () => {
 describe('createDaUtilitiesClient: cancellation', () => {
   const isAbort = (error: unknown): boolean => (error as { name?: unknown }).name === 'AbortError';
 
-  it('passes the signal to fetch and rejects with an AbortError once it aborted', async () => {
-    const { fetch, calls } = fakeFetch(() => ({ json: choiceContext }));
+  it("passes a signal that follows the caller's to fetch, and rejects with an AbortError once it aborted", async () => {
+    let caller = new AbortController();
+    let passed: AbortSignal | undefined;
+    const { fetch, calls } = fakeFetch((call) => {
+      passed = call.signal;
+      caller.abort();
+      return { json: choiceContext };
+    });
     const client = createDaUtilitiesClient('devnet', { fetch });
-    const { signal } = new AbortController();
-    await client.mintOfferAcceptContext('00offer', signal);
-    expect(calls[0]?.signal).toBe(signal);
+    await client.mintOfferAcceptContext('00offer', caller.signal).catch(() => undefined);
+    expect(passed?.aborted).toBe(true);
+    calls.length = 0;
+    caller = new AbortController();
 
     const controller = new AbortController();
     controller.abort();
     const error = await client.mintOfferAcceptContext('00offer', controller.signal).catch((e: unknown) => e);
     expect(isAbort(error)).toBe(true);
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(0);
   });
 
   it('stops waiting for a fetch that ignores the signal', async () => {

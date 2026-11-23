@@ -25,7 +25,7 @@ export interface FetchCall {
   method: string;
   headers: Record<string, string> | undefined;
   body: unknown;
-  /** The signal the SDK passed (undefined when the call had none). */
+  /** The signal the SDK passed (undefined when the call had none). Not enumerable: `toEqual` ignores it. */
   signal?: AbortSignal | undefined;
 }
 
@@ -44,8 +44,10 @@ export function fakeFetch(
       method: init.method,
       headers: init.headers,
       body: init.body === undefined ? undefined : JSON.parse(init.body),
-      signal: init.signal,
     };
+    // Not enumerable, so `toEqual` on calls compares what was sent: every DA registry request carries a signal (its
+    // deadline), so it is checked apart.
+    Object.defineProperty(call, 'signal', { value: init.signal, enumerable: false });
     calls.push(call);
     const answer = handler(call);
     const status = answer.status ?? 200;

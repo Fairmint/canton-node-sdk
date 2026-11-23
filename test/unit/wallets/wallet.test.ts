@@ -172,6 +172,8 @@ function setup(
     now?: () => Date;
     /** A registry request whose URL ends with this never answers, like a request still in flight. */
     hangOn?: string;
+    /** A registry request whose URL ends with `url` waits for `release` (after calling `entered` with its signal). */
+    holdOn?: { url: string; entered: (signal: AbortSignal | undefined) => void; release: Promise<void> };
   } = {}
 ): Setup {
   const { fetch: answering, calls } = fakeFetch((call: FetchCall) => {
@@ -216,6 +218,10 @@ function setup(
   const fetch: typeof answering = async (url, init) => {
     if (options.hangOn !== undefined && url.endsWith(options.hangOn)) {
       await new Promise<never>(() => undefined);
+    }
+    if (options.holdOn !== undefined && url.endsWith(options.holdOn.url)) {
+      options.holdOn.entered(init.signal);
+      await options.holdOn.release;
     }
     return answering(url, init);
   };
@@ -1042,9 +1048,52 @@ describe('createWallet: cancellation', () => {
     const { signal } = new AbortController();
     await tokens.acceptMintOffer('00mint', { signal });
     expect(postCalls(calls)).toHaveLength(1);
-    expect(postCalls(calls).every((call) => call.signal === signal)).toBe(true);
+    // Each request's signal also carries its deadline, so it is the caller's only through `anySignal`.
+    expect(postCalls(calls).every((call) => call.signal instanceof AbortSignal)).toBe(true);
     // Shared with every other call of the wallet, so one caller's abort must not fail it for the rest.
-    expect(calls.filter((call) => call.method === 'GET').map((call) => call.signal)).toEqual([undefined]);
+    const gets = calls.filter((call) => call.method === 'GET');
+    expect(gets).toHaveLength(1);
+    expect(gets[0]?.signal).not.toBe(signal);
+  });
+
+  it('does not abort the shared operator lookup when one caller aborts while it is in flight', async () => {
+    let release = (): void => undefined;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let lookupSignal: AbortSignal | undefined;
+    let entered = (): void => undefined;
+    const lookupStarted = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const { tokens, calls } = setup({
+      holdOn: {
+        url: '/api/utilities/v0/operator',
+        entered: (signal) => {
+          // The first lookup's signal: a refetch must not replace the one this test checks.
+          lookupSignal ??= signal;
+          entered();
+        },
+        release: released,
+      },
+    });
+    const controller = new AbortController();
+    const cancelled = tokens.acceptMintOffer('00mint', { signal: controller.signal }).catch((error: unknown) => error);
+    await lookupStarted;
+    // Only the request's own deadline: a fresh signal, not yet aborted.
+    expect(lookupSignal).toBeInstanceOf(AbortSignal);
+    expect(lookupSignal?.aborted).toBe(false);
+    // A read (a write would be refused by the write guard) that waits on the same lookup.
+    const other = tokens.loadState();
+    controller.abort();
+    expect(isAbort(await cancelled)).toBe(true);
+    // The caller's abort did not reach the shared lookup, which another caller is still waiting on.
+    expect(lookupSignal?.aborted).toBe(false);
+    release();
+    await expect(other).resolves.toBeDefined();
+    expect(lookupSignal?.aborted).toBe(false);
+    // One lookup served both callers.
+    expect(calls.filter((call) => call.url.endsWith('/api/utilities/v0/operator'))).toHaveLength(1);
   });
 
   it('stops a write that is still reading, submits nothing, and frees the write guard', async () => {

@@ -28,6 +28,7 @@ import { awaitWithAbort as coreAwaitWithAbort } from '../core/http/abort';
 import { globalFetch, type FetchLike } from './da-utilities/client';
 import { WalletReadError, WalletSignError } from './errors';
 import { isRecord, nonEmptyString } from './json';
+import { readSpecSignature } from './sign-message';
 
 /** The first line of every ownership message. */
 export const WALLET_OWNERSHIP_TITLE = 'Canton wallet ownership proof';
@@ -203,11 +204,6 @@ export interface ProveWalletOwnershipOptions {
   readonly signal?: AbortSignal;
 }
 
-/** The signature from a `signMessage` result (CIP-0103's `{ signature }`). */
-function readSignature(raw: unknown): string | undefined {
-  return isRecord(raw) ? nonEmptyString(raw['signature']) : undefined;
-}
-
 /**
  * Ask the wallet to sign the ownership message for the challenge, as the connection's party. CIP-0103 wallets sign with
  * the primary account, so another primary account, or a wallet or challenge on the other DA network, is refused before
@@ -281,7 +277,7 @@ export async function proveWalletOwnership(
     }
     throw new WalletSignError('failed', `The wallet did not sign the ownership message: ${describeError(error)}`, code);
   }
-  const signature = readSignature(raw);
+  const signature = readSpecSignature(raw);
   if (signature === undefined) {
     throw new WalletSignError('failed', 'The wallet answered signMessage without a signature');
   }

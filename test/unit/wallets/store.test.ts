@@ -3,6 +3,7 @@
  * reload after every write attempt, outcomes tagged with their party, and a sticky unknown outcome.
  */
 import {
+  actionState,
   canAct,
   createCip103Session,
   createWalletStore,
@@ -19,6 +20,7 @@ import {
   type WalletOptions,
   type WalletState,
   type WalletStore,
+  type WalletView,
 } from '../../../src/wallets';
 import type { WalletStoreInternalOptions } from '../../../src/wallets/store';
 import { CANTON_COIN_METADATA } from '../../../src/wallets/amulet/constants';
@@ -1417,5 +1419,50 @@ describe('createWalletStore', () => {
     expect(t.published()).toBe(before);
     expect(t.store.getSnapshot()).toBe(view);
     expect(await t.store.act(ACCEPT)).toBeNull();
+  });
+});
+
+describe('actionState', () => {
+  const READ: WalletAction = {
+    type: 'planTransfer',
+    request: { receiver: OTHER, instrumentId: { admin: REGISTRAR, id: 'X' }, amount: '1' },
+  };
+  const WRITE: WalletAction = { type: 'acceptMintOffer', mintOfferCid: 'mint-1' };
+  const wallet = { partyId: HOLDER } as ConnectedWallet;
+  const view = (overrides: Partial<WalletView>): WalletView => ({
+    session: { status: 'connected', wallet },
+    wallet,
+    ready: true,
+    state: null,
+    loading: false,
+    loadError: null,
+    running: null,
+    busy: false,
+    outcome: null,
+    unknownOutcome: null,
+    notices: [],
+    ...overrides,
+  });
+
+  it('enables what canAct allows, with no reason', () => {
+    expect(actionState(view({}), WRITE)).toEqual({ enabled: true, reason: null });
+    expect(canAct(view({}), WRITE)).toBe(true);
+  });
+
+  it('gives the first reason, in order', () => {
+    expect(actionState(null, WRITE)).toEqual({ enabled: false, reason: 'disconnected' });
+    expect(
+      actionState(view({ session: { status: 'disconnected', error: null }, wallet: null, ready: false }), WRITE)
+    ).toEqual({
+      enabled: false,
+      reason: 'disconnected',
+    });
+    expect(actionState(view({ session: { status: 'connecting' }, busy: true }), WRITE).reason).toBe('reconnecting');
+    expect(actionState(view({ ready: false, busy: true }), WRITE).reason).toBe('not-ready');
+    expect(actionState(view({ busy: true }), WRITE).reason).toBe('busy');
+    const unknownOutcome = { action: WRITE, key: walletActionKey(WRITE), partyId: HOLDER, message: 'unknown' };
+    expect(actionState(view({ unknownOutcome }), WRITE)).toEqual({ enabled: false, reason: 'unknown-outcome' });
+    // A read still runs while a write's outcome is unknown.
+    expect(actionState(view({ unknownOutcome }), READ)).toEqual({ enabled: true, reason: null });
   });
 });
