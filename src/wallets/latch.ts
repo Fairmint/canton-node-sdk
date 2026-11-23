@@ -87,8 +87,9 @@ export function createWriteLatch(): WriteLatch {
     return state.holder?.id ?? null;
   }
 
-  function abandonAll(): void {
-    for (const controller of [...running]) controller.abort();
+  /** Abort the runs in flight now. Captured before a bump publishes, so a run a listener starts in the new epoch stays. */
+  function abandon(controllers: readonly AbortController[]): void {
+    for (const controller of controllers) controller.abort();
   }
 
   return {
@@ -135,15 +136,16 @@ export function createWriteLatch(): WriteLatch {
 
     bump() {
       if (disposed) return;
+      const stale = [...running];
       commit({ holder: state.holder, epoch: state.epoch + 1 });
-      abandonAll();
+      abandon(stale);
     },
 
     dispose() {
       if (disposed) return;
       disposed = true;
       state = Object.freeze({ holder: state.holder, epoch: state.epoch + 1 });
-      abandonAll();
+      abandon([...running]);
       listeners.clear();
     },
   };
