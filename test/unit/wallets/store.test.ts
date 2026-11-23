@@ -625,6 +625,29 @@ describe('createWalletStore', () => {
       });
     });
 
+    it("drops 'nothing was submitted' from a partial reclaim's reason, since earlier steps committed", async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const ran = t.store.act({ type: 'reclaimLockedTokens', instrumentId: INSTRUMENT });
+      t.call().resolve({
+        withdrawn: [{ ...SUBMITTED, transferOfferCid: 'offer-a', amount: '1' }],
+        released: [],
+        failed: {
+          contractId: 'offer-b',
+          error: new WalletError('invalid-input', 'The offer moved; nothing was submitted'),
+        },
+        notAttempted: [],
+      });
+      expect(await ran).toBeNull();
+      const message = t.store.getSnapshot().outcome?.status === 'failed' ? t.store.getSnapshot().outcome : undefined;
+      expect(message).toMatchObject({
+        error: {
+          message:
+            'The wallet withdrew 1 expired transfer offer of XMPL, then stopped: The offer moved. Nothing after that was submitted.',
+        },
+      });
+    });
+
     it('requestBurn passes its options on and names the reference', async () => {
       const t = setup();
       await connectAndLoad(t);

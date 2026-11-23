@@ -322,6 +322,19 @@ const plural = (count: number, noun: string): string => `${count} ${noun}${count
  * How a reclaim settled: success with what it did, or, when a submission after the first failed, that failure (so an
  * unknown outcome still locks writes) with what had already committed in its message.
  */
+/**
+ * The reason a partial reclaim stopped, without the "nothing was submitted" a describeWalletError message may carry:
+ * the steps before it did commit, so only the failed step and the ones after it were not submitted.
+ */
+function stoppedReason(message: string): string {
+  const reason = message
+    .replace(/(?:[.;,]\s*)?\bnothing (?:else )?was submitted(?: or signed)?\.?/giu, '')
+    .trim()
+    .replace(/[;,]$/u, '');
+  if (reason === '') return 'nothing after that was submitted.';
+  return `${/[.!?]$/u.test(reason) ? reason : `${reason}.`} Nothing after that was submitted.`;
+}
+
 function reclaimSettled(result: WithdrawExpiredResult, label: string): Settled {
   const parts = [
     ...(result.withdrawn.length > 0 ? [`withdrew ${plural(result.withdrawn.length, 'expired transfer offer')}`] : []),
@@ -335,7 +348,7 @@ function reclaimSettled(result: WithdrawExpiredResult, label: string): Settled {
     const skipped = result.notAttempted.length > 0 ? ` ${result.notAttempted.length} more not attempted.` : '';
     return {
       ok: false,
-      error: { ...error, message: `The wallet ${done}, then stopped: ${error.message}${skipped}` },
+      error: { ...error, message: `The wallet ${done}, then stopped: ${stoppedReason(error.message)}${skipped}` },
       committed: true,
     };
   }
