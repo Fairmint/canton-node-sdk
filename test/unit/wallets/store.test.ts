@@ -115,6 +115,8 @@ function setup(): {
       acceptTransferOffer: action('acceptTransferOffer'),
       rejectTransferOffer: action('rejectTransferOffer'),
       withdrawTransferOffer: action('withdrawTransferOffer'),
+      withdrawExpiredTransferOffers: action('withdrawExpiredTransferOffers'),
+      reclaimLockedTokens: action('reclaimLockedTokens'),
       acceptMintOffer: action('acceptMintOffer'),
       rejectMintOffer: action('rejectMintOffer'),
       requestBurn: action('requestBurn'),
@@ -485,6 +487,190 @@ describe('createWalletStore', () => {
       t.answer(2);
       await flush();
       expect(t.store.getSnapshot()).toMatchObject({ busy: false, state: { offset: 2 } });
+    });
+
+    it('withdrawExpiredTransferOffers withdraws per token, counts the offers and reloads', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const action = { type: 'withdrawExpiredTransferOffers', instrumentId: INSTRUMENT } as const;
+      expect(walletActionKey(action)).toBe('withdrawExpiredTransferOffers:XMPL@registrar::1220bb');
+      const ran = t.store.act(action);
+      const call = t.call();
+      expect([call.method, call.args]).toEqual([
+        'withdrawExpiredTransferOffers',
+        [INSTRUMENT, { signal: expect.any(AbortSignal) }],
+      ]);
+      const result = {
+        withdrawn: [
+          { ...SUBMITTED, updateId: 'update-a', transferOfferCid: 'offer-a', amount: '1', registry: 'da' },
+          { ...SUBMITTED, transferOfferCid: 'offer-b', amount: '2', registry: 'da' },
+        ],
+        released: [],
+        notAttempted: [],
+      };
+      call.resolve(result);
+      expect(await ran).toEqual(result);
+      expect(t.store.getSnapshot()).toMatchObject({
+        loading: true,
+        outcome: {
+          status: 'succeeded',
+          message: 'Withdrew 2 expired transfer offers of XMPL; those tokens are unlocked (update update-1).',
+        },
+      });
+    });
+
+    it('reclaimLockedTokens names Canton Coin by its symbol and counts offers and locks', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const cc = { admin: 'DSO::1220dso', id: 'Amulet' } as const;
+      const ran = t.store.act({ type: 'reclaimLockedTokens', instrumentId: cc });
+      const call = t.call();
+      expect(call.method).toBe('reclaimLockedTokens');
+      const result = {
+        withdrawn: [
+          { ...SUBMITTED, updateId: 'update-a', transferOfferCid: 'offer-a', amount: '1', registry: 'amulet' },
+        ],
+        released: [{ ...SUBMITTED, updateId: 'update-b', lockedHoldingCid: 'lock-b', amount: '2' }],
+        notAttempted: [],
+      };
+      call.resolve(result);
+      expect(await ran).toEqual(result);
+      expect(t.store.getSnapshot().outcome).toMatchObject({
+        status: 'succeeded',
+        message:
+          'Withdrew 1 expired transfer offer and released 1 expired lock of CC; those tokens are unlocked (update update-b).',
+      });
+    });
+
+    it("names a DA registrar's own 'Amulet' by its id, not as Canton Coin", async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const daAmulet = { admin: REGISTRAR, id: 'Amulet' } as const;
+      const ran = t.store.act({ type: 'withdrawExpiredTransferOffers', instrumentId: daAmulet });
+      t.call().resolve({
+        withdrawn: [{ ...SUBMITTED, transferOfferCid: 'offer-a', amount: '1', registry: 'da' }],
+        released: [],
+        notAttempted: [],
+      });
+      await ran;
+      expect(t.store.getSnapshot().outcome).toMatchObject({
+        status: 'succeeded',
+        message: 'Withdrew 1 expired transfer offer of Amulet; those tokens are unlocked (update update-1).',
+      });
+    });
+
+    it('counts the work a stopped reclaim did not get to without pluralising "more"', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const ran = t.store.act({ type: 'withdrawExpiredTransferOffers', instrumentId: INSTRUMENT });
+      t.call().resolve({
+        withdrawn: [{ ...SUBMITTED, transferOfferCid: 'offer-a', amount: '1', registry: 'da' }],
+        released: [],
+        failed: { contractId: 'offer-b', error: new WalletError('not-found', 'gone') },
+        notAttempted: ['offer-c', 'offer-d'],
+      });
+      expect(await ran).toBeNull();
+      const { outcome } = t.store.getSnapshot();
+      expect(outcome?.status === 'failed' && outcome.error.message).toMatch(/ 2 more not attempted\.$/);
+    });
+
+    it('keeps the outcome of a reclaim that committed part of its work before the account switched', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const ran = t.store.act({ type: 'withdrawExpiredTransferOffers', instrumentId: INSTRUMENT });
+      const call = t.call();
+      await switchAccount(t, OTHER);
+      call.resolve({
+        withdrawn: [{ ...SUBMITTED, transferOfferCid: 'offer-a', amount: '1', registry: 'da' }],
+        released: [],
+        failed: {
+          contractId: 'offer-b',
+          error: new WalletError(
+            'invalid-input',
+            'The wallet session this action was prepared in has ended (the wallet disconnected or switched accounts); nothing was submitted. Start the action again.'
+          ),
+        },
+        notAttempted: [],
+      });
+      expect(await ran).toBeNull();
+      const view = t.store.getSnapshot();
+      expect(view.outcome).toMatchObject({
+        status: 'failed',
+        partyId: HOLDER,
+        error: {
+          kind: 'refused',
+          message: expect.stringMatching(/^The wallet withdrew 1 expired transfer offer of XMPL/),
+        },
+      });
+      expect(view.notices.find((n) => n.key === 'outcome')?.message).toMatch(new RegExp(`\\(party ${HOLDER}\\)$`));
+    });
+
+    it('reports a reclaim that stopped part way as failed, naming what committed, and keeps an unknown outcome', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const ran = t.store.act({ type: 'reclaimLockedTokens', instrumentId: INSTRUMENT });
+      t.call().resolve({
+        withdrawn: [{ ...SUBMITTED, transferOfferCid: 'offer-a', amount: '1' }],
+        released: [],
+        failed: { contractId: 'offer-b', error: new WalletSubmitError('unknown', 'timed out', { commandId: 'c-2' }) },
+        notAttempted: ['offer-c'],
+      });
+      expect(await ran).toBeNull();
+      const view = t.store.getSnapshot();
+      expect(view.unknownOutcome).toMatchObject({
+        commandId: 'c-2',
+        message: expect.stringMatching(
+          /^The wallet withdrew 1 expired transfer offer of XMPL, then stopped: .*1 more not attempted\.$/
+        ),
+      });
+    });
+
+    it("drops 'nothing was submitted' from a partial reclaim's reason, since earlier steps committed", async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const ran = t.store.act({ type: 'reclaimLockedTokens', instrumentId: INSTRUMENT });
+      t.call().resolve({
+        withdrawn: [{ ...SUBMITTED, transferOfferCid: 'offer-a', amount: '1' }],
+        released: [],
+        failed: {
+          contractId: 'offer-b',
+          error: new WalletError('invalid-input', 'The offer moved; nothing was submitted'),
+        },
+        notAttempted: [],
+      });
+      expect(await ran).toBeNull();
+      const message = t.store.getSnapshot().outcome?.status === 'failed' ? t.store.getSnapshot().outcome : undefined;
+      expect(message).toMatchObject({
+        error: {
+          message:
+            'The wallet withdrew 1 expired transfer offer of XMPL, then stopped: The offer moved. Nothing after that was submitted.',
+        },
+      });
+    });
+
+    it('keeps the sentence break where it drops the clause from a reason with more after it', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const ran = t.store.act({ type: 'reclaimLockedTokens', instrumentId: INSTRUMENT });
+      t.call().resolve({
+        withdrawn: [{ ...SUBMITTED, transferOfferCid: 'offer-a', amount: '1' }],
+        released: [],
+        failed: {
+          contractId: 'offer-b',
+          error: new WalletError(
+            'invalid-input',
+            'Session ended (1.5 s); nothing was submitted. Start the action again.'
+          ),
+        },
+        notAttempted: [],
+      });
+      expect(await ran).toBeNull();
+      expect(t.store.getSnapshot().outcome).toMatchObject({
+        error: {
+          message:
+            'The wallet withdrew 1 expired transfer offer of XMPL, then stopped: Session ended (1.5 s). Start the action again. Nothing after that was submitted.',
+        },
+      });
     });
 
     it('requestBurn passes its options on and names the reference', async () => {

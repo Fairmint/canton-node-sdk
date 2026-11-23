@@ -1,5 +1,5 @@
 import { DA_REGISTRY_TEMPLATES } from '../../../src/da-registry/templates';
-import { CANTON_COIN_METADATA } from '../../../src/wallets/amulet/constants';
+import { AMULET_TEMPLATES, CANTON_COIN_METADATA } from '../../../src/wallets/amulet/constants';
 import { createAmuletRegistry } from '../../../src/wallets/amulet/registry';
 import { WalletError } from '../../../src/wallets/errors';
 import { holdingViewOf, readHoldingView, readHoldingViewLock } from '../../../src/wallets/holding-view';
@@ -370,6 +370,8 @@ describe('createWallet.loadState: Canton Coin', () => {
         instrumentId: CC,
         unlocked: '12.5000000000',
         locked: '4.0000000000',
+        lockedInExpiredOffers: '0.0000000000',
+        lockedInExpiredLocks: '0.0000000000',
         holdingCount: 3,
         source: 'amulet',
         metadata: { name: 'Canton Coin', symbol: 'CC', decimals: 10 },
@@ -379,6 +381,8 @@ describe('createWallet.loadState: Canton Coin', () => {
         instrumentId: INSTRUMENT,
         unlocked: '10.0000000000',
         locked: '0.0000000000',
+        lockedInExpiredOffers: '0.0000000000',
+        lockedInExpiredLocks: '0.0000000000',
         holdingCount: 1,
         source: 'da-registry',
         metadata: { name: 'Example', symbol: 'XMPL', decimals: 2 },
@@ -386,6 +390,96 @@ describe('createWallet.loadState: Canton Coin', () => {
     ]);
     // Canton Coin metadata comes from the DSO's registry, never DA's.
     expect(calls.filter((c) => c.url.includes('/registrars/'))).toHaveLength(1);
+  });
+
+  it('counts the LockedAmulet of an expired outgoing CC offer as reclaimable, and nothing for a live one', async () => {
+    const offer = (cid: string, executeBefore: string, lockedAmulet: string): ActiveContract => ({
+      contractId: cid,
+      templateId: `a0b1c2:Splice.AmuletTransferInstruction:AmuletTransferInstruction`,
+      packageName: 'splice-amulet',
+      signatories: [DSO, HOLDER],
+      createArgument: {
+        lockedAmulet,
+        transfer: {
+          sender: HOLDER,
+          receiver: OTHER,
+          amount: '3.9000000000',
+          instrumentId: CC,
+          requestedAt: '2026-11-12T00:00:00Z',
+          executeBefore,
+          inputHoldingCids: [],
+          meta: { values: {} },
+        },
+      },
+    });
+    const expired = setup(
+      {},
+      { [AMULET_TEMPLATES.transferInstruction]: [offer('00exp', '2026-11-13T00:00:00Z', '00cclocked')] }
+    );
+    const state = await expired.load();
+    expect(state.transferOffers.outgoing.map((o) => [o.contractId, o.expired, o.lockedHoldingCid])).toEqual([
+      ['00exp', true, '00cclocked'],
+    ]);
+    // The LockedAmulet's own amount (fees included), not the offered amount.
+    expect(state.balances.find((b) => b.source === 'amulet')?.lockedInExpiredOffers).toBe('4.0000000000');
+
+    const live = setup(
+      {},
+      { [AMULET_TEMPLATES.transferInstruction]: [offer('00live', '2026-11-20T00:00:00Z', '00cclocked')] }
+    );
+    expect((await live.load()).balances.find((b) => b.source === 'amulet')?.lockedInExpiredOffers).toBe('0.0000000000');
+
+    // A lock already released (the LockedAmulet is gone): withdrawing only archives the offer, nothing to reclaim.
+    const released = setup(
+      {},
+      { [AMULET_TEMPLATES.transferInstruction]: [offer('00exp', '2026-11-13T00:00:00Z', '00gone')] }
+    );
+    expect((await released.load()).balances.find((b) => b.source === 'amulet')?.lockedInExpiredOffers).toBe(
+      '0.0000000000'
+    );
+  });
+
+  it('counts an expired lock no offer names, and reclaimLockedTokens releases it as its owner', async () => {
+    const base = contracts();
+    const orphan = amuletHolding('00ccorphan', '1.5000000000', {
+      lock: { ...AMULET_LOCK, expiresAt: '2026-11-13T00:00:00Z' },
+    });
+    const { load, wallet, provider } = setup(
+      {},
+      { [HOLDING_V1_VIEW_KEY]: [...(base[HOLDING_V1_VIEW_KEY] ?? []), orphan] }
+    );
+    const state = await load();
+    expect(state.holdings.find((h) => h.contractId === '00ccorphan')).toMatchObject({
+      locked: true,
+      lockExpiresAt: '2026-11-13T00:00:00Z',
+    });
+    expect(state.balances.find((b) => b.source === 'amulet')).toMatchObject({
+      locked: '5.5000000000',
+      lockedInExpiredOffers: '0.0000000000',
+      lockedInExpiredLocks: '1.5000000000',
+    });
+
+    // Offers only: nothing to withdraw.
+    await expect(wallet.withdrawExpiredTransferOffers(CC)).rejects.toMatchObject({ code: 'not-found' });
+    const result = await wallet.reclaimLockedTokens(CC);
+    expect(result).toMatchObject({
+      withdrawn: [],
+      released: [{ lockedHoldingCid: '00ccorphan', amount: '1.5000000000' }],
+      notAttempted: [],
+    });
+    expect(result.failed).toBeUndefined();
+    expect(provider.submissions.map((s) => s.commands)).toEqual([
+      [
+        {
+          ExerciseCommand: {
+            templateId: AMULET_TEMPLATES.lockedAmulet,
+            contractId: '00ccorphan',
+            choice: 'LockedAmulet_OwnerExpireLockV2',
+            choiceArgument: {},
+          },
+        },
+      ],
+    ]);
   });
 
   it("keeps only the pinned DSO's Canton Coin, and ignores the metadata of a registry serving another DSO", async () => {

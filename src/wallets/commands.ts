@@ -7,6 +7,7 @@
  * throws the SDK's Node error classes); unit tests check that both produce the same JSON as those builders.
  */
 import type { JsonObject } from './json';
+import { AMULET_TEMPLATES } from './amulet/constants';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
 import {
   TOKEN_STANDARD_V1_TRANSFER_FACTORY_INTERFACE_ID,
@@ -180,6 +181,21 @@ export function transferInstructionCommand(
       contractId: transferInstructionCid,
       choice: TRANSFER_INSTRUCTION_CHOICES[action],
       choiceArgument: { extraArgs: extraArgs(context) },
+    },
+  };
+}
+
+/**
+ * Release one of the owner's own expired Canton Coin locks: Splice's `LockedAmulet_OwnerExpireLockV2` (no argument;
+ * controller the owner; it asserts the lock's `expiresAt` passed, then creates the unlocked `Amulet`).
+ */
+export function ownerExpireLockCommand(lockedAmuletCid: string): ExerciseCommand {
+  return {
+    ExerciseCommand: {
+      templateId: AMULET_TEMPLATES.lockedAmulet,
+      contractId: lockedAmuletCid,
+      choice: 'LockedAmulet_OwnerExpireLockV2',
+      choiceArgument: {},
     },
   };
 }

@@ -100,8 +100,9 @@ works). The package root also exports it as the `Wallets` namespace.
 - `createWallet({ provider, partyId, network })`: the same actions for one party, without the store.
 
 The actions are `acceptMintOffer`, `rejectMintOffer`, `acceptTransferOffer`, `rejectTransferOffer`,
-`withdrawTransferOffer`, `requestBurn`, `cancelBurnRequest`, `planTransfer` then `submitTransfer`,
-`createTransferPreapproval`, `removeTransferPreapproval` and `proveOwnership`.
+`withdrawTransferOffer`, `withdrawExpiredTransferOffers`, `reclaimLockedTokens`, `requestBurn`,
+`cancelBurnRequest`, `planTransfer` then `submitTransfer`, `createTransferPreapproval`,
+`removeTransferPreapproval` and `proveOwnership`.
 
 ```ts
 // Offer the installed wallets, then connect the one the user picks.
@@ -208,7 +209,7 @@ if (plan !== null && confirm(plan.description)) await store.act({ type: 'submitT
   `requirePreapproval: true` refuses anything but `direct` before anything is signed, and
   `submitTransfer` refuses with `kind-changed` when the registry now answers another kind. An offer
   keeps the sender's tokens locked until it is accepted, rejected or withdrawn; expiry alone does
-  not unlock them.
+  not unlock them (see [Expired offers](#expired-offers)).
 - A plan, and every write, belongs to the connected wallet that made it: once the session switched
   account or disconnected, it is refused before anything is read or signed. `submitTransfer` sends
   only a plan the same store planned for its current wallet.
@@ -234,6 +235,88 @@ if (plan !== null && confirm(plan.description)) await store.act({ type: 'submitT
   outcome, since CIP-0103 has no cancellation.
 - Wallet discovery follows the Canton dApp SDK's announce handshake; a CIP that standardizes
   discovery is still a draft, so `discoverCip103Wallets` will follow it once it settles.
+
+### One panel per token
+
+`walletTokens(view.state)` gives one entry per token the state names, Canton Coin and DA Registry
+tokens in the same shape, so a page renders one token picker and one panel whatever the token. A
+token the party is only offered (a mint offer or an incoming transfer before its first holding) is
+listed too, with zero balances. Entries are sorted by `symbol`, then instrument id and admin.
+
+```ts
+import { walletTokens } from '@fairmint/canton-node-sdk/wallets';
+
+const tokens = view.state === null ? [] : walletTokens(view.state);
+// Picker: tokens.map((t) => <option key={t.key} value={t.key}>{t.symbol}</option>)
+const token = tokens.find((t) => t.key === selectedKey) ?? tokens[0];
+// token.available, token.locked, token.lockedReclaimable, token.canReclaim, token.decimals
+// token.offers.{incoming, outgoing, expiredIncoming, expiredOutgoing}, token.mintOffers, token.burnRequests
+// token.preapproval: the party's DA preapproval covering it, or null
+// token.preapprovalStatus: 'covered' | 'none' | 'unknown' (Canton Coin)
+// token.capabilities: { send, burn, preapprove, answerOffers, withdrawOffers, answerMintOffers }
+```
+
+- `symbol`, `name` and `decimals` are the registry's metadata (`CC` and `Canton Coin` for Canton
+  Coin, also when the party is only offered it), else the instrument id and 10 decimals.
+- `offers.expiredIncoming` lists the incoming offers the party can no longer accept (the ledger
+  refuses it; rejecting still works): hide Accept on them.
+- `capabilities` says what this wallet can do with the token today. For Canton Coin, `send`, `burn`,
+  `preapprove` and `answerMintOffers` are false (see [Canton Coin](#canton-coin)); answering
+  incoming offers and withdrawing its own are true. For a DA Registry token all are true.
+- `preapproval` uses `coveringPreapproval(existing, { instrumentAdmin, instrumentIds })`, the same
+  rule `createTransferPreapproval` refuses with `already-exists` by: an issuer-wide preapproval
+  covers everything of its admin; one that lists ids covers a request whose ids it all names (never
+  an issuer-wide request). Use it to hide or disable a pre-approve button. For Canton Coin
+  `preapproval` is null and `preapprovalStatus` is `unknown`: its preapproval is a DSO-signed Splice
+  `TransferPreapproval` made through the party's validator, which this wallet does not read, so do
+  not say the party has none.
+
+### Expired offers
+
+A transfer offer's `executeBefore` only stops the receiver accepting it: the sender's tokens stay
+locked until the sender withdraws it (or the receiver rejects it). `loadState` marks every offer
+`expired` when its `executeBefore` has passed by the wallet's clock (the ledger decides by ledger
+time, which can differ by a little), and each balance's `lockedInExpiredOffers` is the part of
+`locked` that the party's own expired offers keep locked (`lockedReclaimable` in `walletTokens`).
+
+```ts
+if (token.canReclaim) {
+  // Button: `Reclaim ${token.lockedReclaimable} ${token.symbol}`
+  await store.act({ type: 'reclaimLockedTokens', instrumentId: token.instrumentId });
+}
+```
+
+- `reclaimLockedTokens` unlocks everything of the token that no longer needs to be locked: it
+  withdraws the expired outgoing offers (below), then, for Canton Coin, releases each of the party's
+  own expired locks that no active offer names (`LockedAmulet_OwnerExpireLockV2`, which Splice lets
+  the owner alone run once `expiresAt` passed; a lock left after its offer is gone, for example from
+  an earlier run). `InstrumentBalance.lockedInExpiredLocks` is what those locks hold;
+  `lockedReclaimable` is both parts, capped at `locked`. `withdrawExpiredTransferOffers` does the
+  offers only.
+- Both stop at the first failed submission. A failure before anything committed is thrown as usual;
+  after that, the call resolves with what committed (`withdrawn`, `released`), the failure
+  (`failed: { contractId, error }`, an `unknown` outcome included) and what it did not get to
+  (`notAttempted`). The store reports such a result as a failure whose message names what committed,
+  and an unknown outcome still locks writes until acknowledged.
+
+- `withdrawExpiredTransferOffers` withdraws every expired outgoing offer of the token, oldest
+  deadline first, one `TransferInstruction_Withdraw` submission each, exactly as
+  `withdrawTransferOffer` sends it, with the choice context of the offer's own registry (Scan for
+  Canton Coin, DA's Utilities API for a DA token). It resolves with the offers withdrawn and is
+  refused with `not-found` when there is none.
+- Canton Coin (checked against Splice's `AmuletTransferInstruction` and Scan's choice-context
+  handler): `TransferInstruction_Withdraw` has no deadline check, and Scan's withdraw context sets
+  `expire-lock` to whether the offer's `LockedAmulet` is still active. While it is, the withdrawal
+  unlocks it (`LockedAmulet_UnlockV2`, which the DSO's signature on the offer authorizes), so it
+  works on an expired offer. When the lock was already released (its owner ran
+  `LockedAmulet_OwnerExpireLockV2` after the lock's expiry), the withdrawal only archives the
+  expired offer. `lockedInExpiredOffers` counts the `LockedAmulet`'s own amount (which can exceed
+  the offered amount), and nothing once it is gone.
+- DA tokens: DA's `TransferOffer` implements the same CIP-56 `TransferInstruction_Withdraw`
+  (controller: the sender), and the wallet asks DA's registry for its withdraw context. DA's
+  contract source is not public, so the reclaimable amount is an estimate: each expired offer's
+  amount (capped at the token's locked total), since its create argument names no locked holding.
+  Withdrawing still archives the expired offer either way.
 
 ### Canton Coin
 
@@ -307,8 +390,11 @@ const store = createWalletStore({
 
 - New fields stay optional for objects built by hand: `Holding.source` and
   `InstrumentBalance.source` (absent reads as `'da-registry'`), `TransferOffer.registry` (absent:
-  `'da'`), `MintOffer.memo` and `BurnRequest.memo` (absent: `null`) and
-  `WalletState.cantonCoinUnavailable`. The wallet always sets them.
+  `'da'`), `TransferOffer.expired` (absent: not expired), `TransferOffer.lockedHoldingCid`,
+  `InstrumentBalance.lockedInExpiredOffers` and `.lockedInExpiredLocks`, `Holding.lockExpiresAt`,
+  `MintOffer.memo` and `BurnRequest.memo` (absent: `null`) and `WalletState.cantonCoinUnavailable`.
+  The wallet always sets them (`lockedHoldingCid` only for a Canton Coin offer, `lockExpiresAt` only
+  for a Canton Coin lock with an absolute expiry).
 - To send Canton Coin from a provider validator (a faucet), use
   `ExternalPartyWalletBridge.offerProviderTransfer({ receiverPartyId, amount, idempotencyKey, expiresAt })`:
   it settles at once when the receiver pre-approved Canton Coin, else it lands as an offer in the

@@ -16,6 +16,12 @@
  *   registry (`cantonCoin.registryUrl`, SV-1's Scan of the network by default). While it is unconfirmed, no Canton Coin
  *   is listed and `cantonCoinUnavailable` is true. Canton Coin cannot be transferred, burnt or pre-approved through the
  *   wallet.
+ * - `walletTokens(state)`: one entry per token (Canton Coin and DA Registry tokens alike) with its balances, offers,
+ *   preapproval and honest `capabilities`, for one picker and one panel; `coveringPreapproval`, the rule
+ *   `createTransferPreapproval` refuses `already-exists` by; expired offers (`TransferOffer.expired`,
+ *   `InstrumentBalance.lockedInExpiredOffers`), expired Canton Coin locks no offer names
+ *   (`InstrumentBalance.lockedInExpiredLocks`), and the `reclaimLockedTokens` action that unlocks both
+ *   (`WalletToken.canReclaim` says when it applies).
  * - The ownership proof's browser half (`requestWalletOwnershipVerdict`); the server half
  *   (`createWalletOwnershipChallenger`, `verifyWalletOwnership`) is Node-only and exported from the package root.
  * - The errors, their guards (`isWalletError`, `isWalletSubmitError`, …: they match errors of any copy of this module,
@@ -58,6 +64,10 @@ export {
   type WalletCallOptions,
   type WalletOptions,
   type WalletState,
+  type WithdrawExpiredResult,
+  type WithdrawnOffer,
+  type ReleasedLock,
+  type ReclaimLockedTokensResult,
 } from './wallet';
 export type { Cip103Connection, Cip103EventListener, Cip103Provider, Cip103Request } from './cip103';
 export {
@@ -104,7 +114,23 @@ export {
   type WalletSubmitErrorDetails,
   type WalletSubmitOutcome,
 } from './errors';
-export type { BurnRequest, MintOffer, TransferOffer, TransferOfferRegistry, TransferPreapproval } from './contracts';
+export {
+  coveringPreapproval,
+  type BurnRequest,
+  type MintOffer,
+  type PreapprovalScope,
+  type TransferOffer,
+  type TransferOfferRegistry,
+  type TransferPreapproval,
+} from './contracts';
+export {
+  isTransferOfferExpired,
+  expiredUnclaimedLocks,
+  walletTokens,
+  type TokenCapabilities,
+  type WalletToken,
+  type WalletTokensInput,
+} from './tokens';
 export {
   isCantonCoin,
   type Holding,

@@ -28,6 +28,7 @@ import {
   acceptMintOfferCommand,
   cancelBurnRequestCommand,
   createDaTransferPreapprovalCommand,
+  ownerExpireLockCommand,
   MAX_PREAPPROVAL_INSTRUMENTS,
   rejectMintOfferCommand,
   requestBurnCommand,
@@ -38,6 +39,7 @@ import {
   type TransferSpec,
 } from './commands';
 import {
+  coveringPreapproval,
   isFromRegistry,
   parseAmuletTransferOffer,
   parseBurnRequest,
@@ -47,6 +49,7 @@ import {
   type BurnRequest,
   type MintOffer,
   type TransferOffer,
+  type TransferOfferRegistry,
   type TransferPreapproval,
 } from './contracts';
 import {
@@ -80,7 +83,11 @@ import {
   type InstrumentBalance,
   type InstrumentMetadata,
 } from './holdings';
+import { formatDecimalUnits } from './decimal';
+import { sameInstrument } from './instrument';
+import { isRecord } from './json';
 import { isTemplate } from './templates';
+import { expiredUnclaimedLocks, isTransferOfferExpired, lockedInExpiredOffers, unitsByInstrument } from './tokens';
 import { DA_REGISTRY_TEMPLATES } from '../da-registry/templates';
 import { TOKEN_STANDARD_V1_REASON_META_KEY } from '../utils/token-standard/v1/constants';
 import type { ActiveContract, InstrumentId, SubmitResult, WalletSubmission } from './types';
@@ -258,6 +265,41 @@ export interface BurnRequestResult extends SubmitResult {
   readonly reference: string;
 }
 
+/** One expired offer withdrawn: its submission, the offer and the amount it offered. */
+export interface WithdrawnOffer extends SubmitResult {
+  readonly transferOfferCid: string;
+  readonly amount: string;
+  /** The registry that validated the offer: `'amulet'` for Canton Coin (its DSO confirmed by Scan), else `'da'`. */
+  readonly registry: TransferOfferRegistry;
+}
+
+/** One expired Canton Coin lock released (`LockedAmulet_OwnerExpireLockV2`): its submission, the holding and amount. */
+export interface ReleasedLock extends SubmitResult {
+  readonly lockedHoldingCid: string;
+  readonly amount: string;
+}
+
+/**
+ * What `reclaimLockedTokens` (or `withdrawExpiredTransferOffers`, whose `released` is always empty) did, in the order
+ * it did. When a submission after the first fails, or the call's `signal` aborts between submissions, the call resolves
+ * (it does not throw) with what already committed, the failure in `failed`, and the contract ids it did not get to in
+ * `notAttempted`; a failure before anything committed is thrown as usual.
+ */
+export interface WithdrawExpiredResult {
+  readonly withdrawn: readonly WithdrawnOffer[];
+  readonly released: readonly ReleasedLock[];
+  /**
+   * The submission that failed after others committed: the offer or locked holding it was for, and the error as thrown
+   * (pass it to `describeWalletError`; an `outcome-unknown` one may have committed).
+   */
+  readonly failed?: { readonly contractId: string; readonly error: unknown };
+  /** Offers and locked holdings not submitted because of `failed`, in the order they would have been. */
+  readonly notAttempted: readonly string[];
+}
+
+/** {@link WithdrawExpiredResult} under the name of the call that usually returns it. */
+export type ReclaimLockedTokensResult = WithdrawExpiredResult;
+
 export interface TransferPreapprovalOptions {
   readonly instrumentAdmin: string;
   /** Up to 10 instrument ids of the admin; empty or omitted: every instrument of the admin. */
@@ -286,6 +328,25 @@ export interface Wallet {
   rejectTransferOffer(transferOfferCid: string, options?: WalletCallOptions): Promise<SubmitResult>;
   /** Withdraw one of the party's own transfer offers, which unlocks its tokens (also after the offer expired). */
   withdrawTransferOffer(transferOfferCid: string, options?: WalletCallOptions): Promise<SubmitResult>;
+  /**
+   * Withdraw all of the party's own expired transfer offers of one token (`TransferOffer.expired`), so the tokens they
+   * keep locked (`InstrumentBalance.lockedInExpiredOffers`) are unlocked: one `TransferInstruction_Withdraw` per offer,
+   * each as `withdrawTransferOffer` sends it, through the offer's own registry. Refused with `not-found` when there is
+   * none. Stops at the first failure: thrown when nothing was withdrawn yet, else reported in the result's `failed`
+   * (see {@link WithdrawExpiredResult}).
+   */
+  withdrawExpiredTransferOffers(
+    instrumentId: InstrumentId,
+    options?: WalletCallOptions
+  ): Promise<WithdrawExpiredResult>;
+  /**
+   * Unlock everything of one token that no longer needs to be locked: first withdraw the party's expired outgoing
+   * offers (as `withdrawExpiredTransferOffers`), then, for Canton Coin, release each of the party's own expired locks
+   * that no active offer names (`LockedAmulet_OwnerExpireLockV2`, which Splice lets the owner alone run once the lock
+   * expired), one submission each. `WalletToken.canReclaim` says whether there is anything to do; refused with
+   * `not-found` when there is nothing. Failures as `withdrawExpiredTransferOffers`.
+   */
+  reclaimLockedTokens(instrumentId: InstrumentId, options?: WalletCallOptions): Promise<ReclaimLockedTokensResult>;
   acceptMintOffer(mintOfferCid: string, options?: WalletCallOptions): Promise<SubmitResult>;
   /** Reject a mint offer; the registrar sees {@link MINT_OFFER_REJECT_REASON}. */
   rejectMintOffer(mintOfferCid: string, options?: WalletCallOptions): Promise<SubmitResult>;
@@ -626,11 +687,27 @@ export function createWallet(options: WalletOptions): Wallet {
       registry.operatorParty(),
       balancesWithMetadata(holdings, cantonCoinMetadata),
     ]);
+    const at = now();
+    const withExpiry = (offers: readonly TransferOffer[]): TransferOffer[] =>
+      offers.map((offer) => ({ ...offer, expired: isTransferOfferExpired(offer, at) }));
+    const offers = transferOffers(contracts, operator, dso);
+    const outgoing = withExpiry(offers.outgoing);
+    const reclaimable = lockedInExpiredOffers(
+      holdings,
+      outgoing.filter((offer) => offer.expired === true)
+    );
+    const inExpiredLocks = unitsByInstrument(
+      expiredUnclaimedLocks(holdings, [...offers.incoming, ...offers.outgoing], at)
+    );
     return {
       offset,
       holdings,
-      balances,
-      transferOffers: transferOffers(contracts, operator, dso),
+      balances: balances.map((balance) => ({
+        ...balance,
+        lockedInExpiredOffers: formatDecimalUnits(reclaimable.get(balance.key) ?? 0n),
+        lockedInExpiredLocks: formatDecimalUnits(inExpiredLocks.get(balance.key) ?? 0n),
+      })),
+      transferOffers: { incoming: withExpiry(offers.incoming), outgoing },
       mintOffers: ownMintOffers(contracts, operator),
       burnRequests: ownBurnRequests(contracts, operator),
       transferPreapprovals: ownPreapprovals(contracts, operator),
@@ -777,6 +854,16 @@ export function createWallet(options: WalletOptions): Wallet {
       transferOfferCid,
       action === 'withdraw' ? 'Outgoing transfer offer' : 'Incoming transfer offer'
     );
+    return submitOfferAnswer(offer, action, signal);
+  }
+
+  /** Exercise `action` on a transfer offer already read and validated, with its own registry's choice context. */
+  async function submitOfferAnswer(
+    offer: TransferOffer,
+    action: TransferInstructionAction,
+    signal: AbortSignal | undefined
+  ): Promise<SubmitResult> {
+    const transferOfferCid = offer.contractId;
     const context =
       offer.registry === 'amulet' && cantonCoin !== null
         ? await cantonCoin.transferInstructionContext(transferOfferCid, action, signal)
@@ -788,6 +875,129 @@ export function createWallet(options: WalletOptions): Wallet {
       },
       signal
     );
+  }
+
+  /**
+   * Withdraw every one of the party's own expired transfer offers of `instrumentId`, one submission each, oldest
+   * deadline first; with `releaseLocks`, then release each of the party's own expired Canton Coin locks of it that no
+   * active offer names (`LockedAmulet_OwnerExpireLockV2`), oldest expiry first. Read once; each offer is withdrawn
+   * through its own registry (Canton Coin's for a Canton Coin offer, DA's for a DA offer), exactly as
+   * `withdrawTransferOffer` does. Stops at the first failure: thrown when nothing committed yet, else reported in the
+   * result (what committed stays committed; a reload shows it).
+   */
+  async function runReclaim(
+    instrumentIdInput: InstrumentId,
+    releaseLocks: boolean,
+    signal: AbortSignal | undefined
+  ): Promise<WithdrawExpiredResult> {
+    const instrumentId = requireInstrumentId(instrumentIdInput);
+    // A known DSO decides: a registrar's own `Amulet` (another admin) goes straight to DA's path, never to Scan.
+    const knownDso = cantonCoin?.knownDsoParty();
+    const isAmuletId =
+      cantonCoin !== null &&
+      instrumentId.id === AMULET_INSTRUMENT_ID &&
+      (knownDso === undefined || instrumentId.admin === knownDso);
+    const readLocks = releaseLocks && isAmuletId;
+    const all = readLocks
+      ? (
+          await awaitWithAbort(
+            async () => ledger.readActiveContracts([...offerTemplates, ...CANTON_COIN_HOLDING_FILTERS]),
+            signal
+          )
+        ).contracts
+      : await read(offerTemplates, signal);
+    const contracts = all.filter((contract) => {
+      const transfer = contract.createArgument?.['transfer'];
+      return isRecord(transfer) && transfer['sender'] === partyId;
+    });
+    const candidates: TransferOffer[] = [];
+    let cantonCoinUnconfirmed = false;
+    let expiredLocks: Holding[] = [];
+    if (
+      isAmuletId &&
+      (readLocks ? anyOf(all, CANTON_COIN_TEMPLATES) : anyOf(contracts, [AMULET_TEMPLATES.transferInstruction]))
+    ) {
+      const { dso, unavailable } = await cantonCoinDso(all, signal, AMULET_REGISTRY_REQUEST_TIMEOUT_MS);
+      cantonCoinUnconfirmed = unavailable;
+      candidates.push(...amuletTransferOffers(contracts, dso));
+      if (readLocks && dso !== undefined) {
+        expiredLocks = expiredUnclaimedLocks(holdingsIn(all, dso), amuletTransferOffers(all, dso), now())
+          .filter((holding) => sameInstrument(holding.instrumentId, instrumentId))
+          .sort(
+            (a, b) =>
+              Date.parse(a.lockExpiresAt ?? '') - Date.parse(b.lockExpiresAt ?? '') ||
+              (a.contractId < b.contractId ? -1 : 1)
+          );
+      }
+    }
+    const cantonCoinUnconfirmedError = (): RegistryResponseError =>
+      new RegistryResponseError(
+        `${AMULET_REGISTRY_NAME} could not confirm Canton Coin's DSO party, so the wallet's Canton Coin offers cannot be checked; nothing was submitted. Try again later, or pin cantonCoin.dsoParty.`
+      );
+    const isAmuletOf = candidates.some((offer) => sameInstrument(offer.instrumentId, instrumentId));
+    if (!isAmuletOf && expiredLocks.length === 0 && anyOf(contracts, [DA_REGISTRY_TEMPLATES.transferOffer])) {
+      let operator: string;
+      try {
+        operator = await registry.operatorParty(signal);
+      } catch (error) {
+        // Canton Coin's `Amulet` with an unconfirmed DSO: only Scan can validate its offers, so say that, not why DA's
+        // operator (asked in case a registrar issued an `Amulet` of its own) could not be read.
+        throwIfAborted(signal);
+        if (cantonCoinUnconfirmed) throw cantonCoinUnconfirmedError();
+        throw error;
+      }
+      candidates.push(...fromRegistry(contracts, parseTransferOffer, operator));
+    }
+    const at = now();
+    const expired = byDirection(candidates)
+      .outgoing.filter((offer) => sameInstrument(offer.instrumentId, instrumentId) && isTransferOfferExpired(offer, at))
+      .sort(
+        (a, b) => Date.parse(a.executeBefore) - Date.parse(b.executeBefore) || (a.contractId < b.contractId ? -1 : 1)
+      );
+    if (expired.length === 0 && expiredLocks.length === 0) {
+      if (cantonCoinUnconfirmed) throw cantonCoinUnconfirmedError();
+      throw new WalletError(
+        'not-found',
+        releaseLocks
+          ? `The wallet has no expired outgoing transfer offers or expired locks of ${instrumentId.id}; nothing was submitted`
+          : `The wallet has no expired outgoing transfer offers of ${instrumentId.id}; nothing was submitted`
+      );
+    }
+    type Step =
+      { readonly kind: 'offer'; readonly offer: TransferOffer } | { readonly kind: 'lock'; readonly holding: Holding };
+    const steps: Step[] = [
+      ...expired.map((offer): Step => ({ kind: 'offer', offer })),
+      ...expiredLocks.map((holding): Step => ({ kind: 'lock', holding })),
+    ];
+    const contractIdOf = (step: Step): string =>
+      step.kind === 'offer' ? step.offer.contractId : step.holding.contractId;
+    const withdrawn: WithdrawnOffer[] = [];
+    const released: ReleasedLock[] = [];
+    for (const [index, step] of steps.entries()) {
+      try {
+        if (step.kind === 'offer') {
+          const result = await submitOfferAnswer(step.offer, 'withdraw', signal);
+          withdrawn.push({
+            ...result,
+            transferOfferCid: step.offer.contractId,
+            amount: step.offer.amount,
+            registry: step.offer.registry ?? 'da',
+          });
+        } else {
+          const result = await submit({ commands: [ownerExpireLockCommand(step.holding.contractId)] }, signal);
+          released.push({ ...result, lockedHoldingCid: step.holding.contractId, amount: step.holding.amount });
+        }
+      } catch (error) {
+        if (index === 0) throw error;
+        return {
+          withdrawn,
+          released,
+          failed: { contractId: contractIdOf(step), error },
+          notAttempted: steps.slice(index + 1).map(contractIdOf),
+        };
+      }
+    }
+    return { withdrawn, released, notAttempted: [] };
   }
 
   async function ownMintOffer(mintOfferCid: string, signal: AbortSignal | undefined): Promise<MintOffer> {
@@ -892,13 +1102,8 @@ export function createWallet(options: WalletOptions): Wallet {
       cantonCoin === null || knownDso !== undefined ? knownDso : cantonCoin.dsoParty(signal),
     ]);
     refuseCantonCoinPreapproval(instrumentAdmin, dso);
-    const covering = ownPreapprovals(contracts, operator).find(
-      (existing) =>
-        existing.instrumentAdmin === instrumentAdmin &&
-        (existing.instrumentIds.length === 0 ||
-          (instrumentIds.length > 0 && instrumentIds.every((id) => existing.instrumentIds.includes(id))))
-    );
-    if (covering !== undefined) {
+    const covering = coveringPreapproval(ownPreapprovals(contracts, operator), { instrumentAdmin, instrumentIds });
+    if (covering !== null) {
       throw new WalletError(
         'already-exists',
         `Transfer preapproval ${covering.contractId} already covers ${instrumentIds.length === 0 ? 'every instrument' : instrumentIds.join(', ')} of ${instrumentAdmin}; nothing was submitted`
@@ -935,6 +1140,10 @@ export function createWallet(options: WalletOptions): Wallet {
       exclusive(signal, async () => answerTransferOffer(cid, 'reject', signal)),
     withdrawTransferOffer: async (cid, { signal } = {}) =>
       exclusive(signal, async () => answerTransferOffer(cid, 'withdraw', signal)),
+    withdrawExpiredTransferOffers: async (instrumentId, { signal } = {}) =>
+      exclusive(signal, async () => runReclaim(instrumentId, false, signal)),
+    reclaimLockedTokens: async (instrumentId, { signal } = {}) =>
+      exclusive(signal, async () => runReclaim(instrumentId, true, signal)),
     acceptMintOffer: async (cid, { signal } = {}) =>
       exclusive(signal, async () => {
         await ownMintOffer(cid, signal);

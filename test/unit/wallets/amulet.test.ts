@@ -18,6 +18,7 @@ import {
   OTHER,
   pkgId,
   REGISTRAR,
+  RpcError,
   type FetchCall,
 } from './helpers';
 
@@ -56,16 +57,16 @@ const SCAN_CONTEXT = {
 const instructionArgs = (
   sender: string,
   receiver: string,
-  overrides: { admin?: string; id?: string; memo?: string } = {}
+  overrides: { admin?: string; id?: string; memo?: string; executeBefore?: string; lockedAmulet?: string } = {}
 ): JsonObject => ({
-  lockedAmulet: '00lockedamulet',
+  lockedAmulet: overrides.lockedAmulet ?? '00lockedamulet',
   transfer: {
     sender,
     receiver,
     amount: '20.0000000000',
     instrumentId: { admin: overrides.admin ?? DSO, id: overrides.id ?? 'Amulet' },
     requestedAt: '2026-11-13T00:00:00Z',
-    executeBefore: '2026-11-14T00:00:00Z',
+    executeBefore: overrides.executeBefore ?? '2026-11-14T00:00:00Z',
     inputHoldingCids: ['00amulet'],
     meta: { values: { 'splice.lfdecentralizedtrust.org/reason': overrides.memo ?? 'Canton Coin from the faucet' } },
   },
@@ -149,7 +150,12 @@ function setup(
     partyId: HOLDER,
     network: 'devnet',
     registry: { fetch },
-    cantonCoin: options.cantonCoin ?? { fetch },
+    cantonCoin:
+      options.cantonCoin === undefined
+        ? { fetch }
+        : options.cantonCoin === false
+          ? false
+          : { fetch, ...options.cantonCoin },
     now: () => NOW,
     readRetry: { sleep: async () => undefined },
   };
@@ -170,6 +176,7 @@ describe('parseAmuletTransferOffer', () => {
       memo: 'Canton Coin from the faucet',
       requestedAt: '2026-11-13T00:00:00Z',
       executeBefore: '2026-11-14T00:00:00Z',
+      lockedHoldingCid: '00lockedamulet',
     });
   });
 
@@ -399,5 +406,220 @@ describe('createAmuletRegistry: network defaults and validation', () => {
     await expect(createAmuletRegistry('devnet', { fetch }).dsoParty(controller.signal)).rejects.toMatchObject({
       name: 'AbortError',
     });
+  });
+});
+
+describe('createWallet: expired Canton Coin offers', () => {
+  const EXPIRED = '2026-11-13T06:00:00Z'; // before NOW (2026-11-13T12:00Z)
+  const expiredOut = (cid: string, executeBefore = EXPIRED): ActiveContract =>
+    instruction(cid, instructionArgs(HOLDER, OTHER, { executeBefore, lockedAmulet: `${cid}-lock` }), [DSO, HOLDER]);
+
+  it('marks offers expired by the wallet clock, in both directions', async () => {
+    const { tokens } = setup({
+      instructions: [
+        expiredOut('00old'),
+        instruction('00ccout', instructionArgs(HOLDER, OTHER), [DSO, HOLDER]),
+        instruction('00oldin', instructionArgs(OTHER, HOLDER, { executeBefore: EXPIRED }), [DSO, OTHER]),
+      ],
+    });
+    const state = await tokens.loadState();
+    expect(state.transferOffers.outgoing.map((o) => [o.contractId, o.expired])).toEqual([
+      ['00old', true],
+      ['00ccout', false],
+    ]);
+    expect(state.transferOffers.incoming.map((o) => [o.contractId, o.expired])).toEqual([['00oldin', true]]);
+  });
+
+  it('withdraws every expired outgoing CC offer, oldest first, each with its own Scan context', async () => {
+    const { tokens, wallet, calls } = setup({
+      instructions: [
+        expiredOut('00b', '2026-11-13T08:00:00Z'),
+        expiredOut('00a', '2026-11-13T07:00:00Z'),
+        instruction('00live', instructionArgs(HOLDER, OTHER), [DSO, HOLDER]),
+        instruction('00oldin', instructionArgs(OTHER, HOLDER, { executeBefore: EXPIRED }), [DSO, OTHER]),
+      ],
+      scan: (call) =>
+        call.url.endsWith('/api/utilities/v0/operator') ? { status: 503, json: { error: 'down' } } : undefined,
+    });
+    const result = await tokens.withdrawExpiredTransferOffers({ admin: DSO, id: 'Amulet' });
+    expect(result.withdrawn.map((w) => [w.transferOfferCid, w.amount, w.registry])).toEqual([
+      ['00a', '20.0000000000', 'amulet'],
+      ['00b', '20.0000000000', 'amulet'],
+    ]);
+    expect(calls.filter((c) => c.method === 'POST').map((c) => c.url)).toEqual([
+      `${SCAN}/registry/transfer-instruction/v1/00a/choice-contexts/withdraw`,
+      `${SCAN}/registry/transfer-instruction/v1/00b/choice-contexts/withdraw`,
+    ]);
+    expect(wallet.submissions.map((s) => s.commands[0])).toEqual([
+      { ExerciseCommand: expect.objectContaining({ contractId: '00a', choice: 'TransferInstruction_Withdraw' }) },
+      { ExerciseCommand: expect.objectContaining({ contractId: '00b', choice: 'TransferInstruction_Withdraw' }) },
+    ]);
+  });
+
+  /** Fail the `n`th submission (1-based) with `error`; the others go through. */
+  function failSubmission(provider: ReturnType<typeof fakeProvider>, n: number, error: unknown): void {
+    const request = provider.request.bind(provider);
+    let count = 0;
+    provider.request = async (args) => {
+      if (args.method === 'prepareExecuteAndWait') {
+        count += 1;
+        if (count === n) {
+          provider.submissions.push(args.params);
+          throw error;
+        }
+      }
+      return request(args);
+    };
+  }
+
+  const threeExpired = [
+    expiredOut('00a', '2026-11-13T07:00:00Z'),
+    expiredOut('00b', '2026-11-13T08:00:00Z'),
+    expiredOut('00c', '2026-11-13T09:00:00Z'),
+  ];
+
+  it('reports what committed when a later withdrawal fails, and stops there', async () => {
+    const { tokens, wallet } = setup({ instructions: threeExpired });
+    failSubmission(wallet, 2, new RpcError(-32003, 'ledger rejected'));
+    const result = await tokens.withdrawExpiredTransferOffers({ admin: DSO, id: 'Amulet' });
+    expect(result.withdrawn.map((w) => w.transferOfferCid)).toEqual(['00a']);
+    expect(result.released).toEqual([]);
+    expect(result.failed?.contractId).toBe('00b');
+    expect(describeWalletError(result.failed?.error).kind).toBe('not-committed');
+    expect(result.notAttempted).toEqual(['00c']);
+    expect(
+      wallet.submissions.map(
+        (s) => (s.commands[0] as { ExerciseCommand: { contractId: string } }).ExerciseCommand.contractId
+      )
+    ).toEqual(['00a', '00b']);
+  });
+
+  it('throws the first failure as usual when nothing committed', async () => {
+    const { tokens, wallet } = setup({ instructions: threeExpired });
+    failSubmission(wallet, 1, new RpcError(-32003, 'ledger rejected'));
+    await expect(tokens.withdrawExpiredTransferOffers({ admin: DSO, id: 'Amulet' })).rejects.toMatchObject({
+      outcome: 'failed',
+    });
+    expect(wallet.submissions).toHaveLength(1);
+  });
+
+  it('reports what committed when the signal aborts between withdrawals', async () => {
+    const { tokens, wallet } = setup({ instructions: threeExpired });
+    const controller = new AbortController();
+    const request = wallet.request.bind(wallet);
+    wallet.request = async (args) => {
+      const answer = await request(args);
+      if (args.method === 'prepareExecuteAndWait') controller.abort();
+      return answer;
+    };
+    const result = await tokens.withdrawExpiredTransferOffers(
+      { admin: DSO, id: 'Amulet' },
+      { signal: controller.signal }
+    );
+    expect(result.withdrawn.map((w) => w.transferOfferCid)).toEqual(['00a']);
+    expect(result.failed?.contractId).toBe('00b');
+    expect(describeWalletError(result.failed?.error).kind).toBe('cancelled');
+    expect(result.notAttempted).toEqual(['00c']);
+    expect(wallet.submissions).toHaveLength(1);
+  });
+
+  it('refuses with not-found when no outgoing offer of the token expired, and submits nothing', async () => {
+    const { tokens, wallet } = setup();
+    await expect(tokens.withdrawExpiredTransferOffers({ admin: DSO, id: 'Amulet' })).rejects.toMatchObject({
+      code: 'not-found',
+    });
+    expect(wallet.submissions).toEqual([]);
+  });
+
+  it('refuses with a registry error when Scan cannot confirm the DSO', async () => {
+    const { tokens, wallet } = setup({
+      instructions: [expiredOut('00old')],
+      scan: (call) => (call.url.endsWith('/registry/metadata/v1/info') ? { status: 503, json: {} } : undefined),
+    });
+    await expect(tokens.withdrawExpiredTransferOffers({ admin: DSO, id: 'Amulet' })).rejects.toBeInstanceOf(
+      RegistryResponseError
+    );
+    expect(wallet.submissions).toEqual([]);
+  });
+
+  it("fails closed on Scan, not on DA's operator, when neither can be reached", async () => {
+    const daExpired = contract('00daold', 'Utility.Registry.App.V0.Model.Transfer:TransferOffer', {
+      operator: OPERATOR,
+      provider: REGISTRAR,
+      transfer: {
+        sender: HOLDER,
+        receiver: OTHER,
+        amount: '3.0000000000',
+        instrumentId: { admin: REGISTRAR, id: 'XMPL' },
+        requestedAt: '2026-11-12T00:00:00Z',
+        executeBefore: EXPIRED,
+        inputHoldingCids: ['00x'],
+        meta: { values: {} },
+      },
+    });
+    const { tokens, wallet } = setup({
+      instructions: [expiredOut('00old')],
+      daOffers: [daExpired],
+      scan: (call) =>
+        call.url.endsWith('/registry/metadata/v1/info') || call.url.endsWith('/api/utilities/v0/operator')
+          ? { status: 503, json: {} }
+          : undefined,
+    });
+    await expect(tokens.withdrawExpiredTransferOffers({ admin: DSO, id: 'Amulet' })).rejects.toThrow(
+      /could not confirm Canton Coin's DSO party, so the wallet's Canton Coin offers cannot be checked/
+    );
+    expect(wallet.submissions).toEqual([]);
+  });
+
+  it("reclaims a registrar's own 'Amulet' through DA's registry once the DSO is pinned, without Scan", async () => {
+    const daAmuletExpired = contract('00daamulet', 'Utility.Registry.App.V0.Model.Transfer:TransferOffer', {
+      operator: OPERATOR,
+      provider: REGISTRAR,
+      transfer: {
+        sender: HOLDER,
+        receiver: OTHER,
+        amount: '2.0000000000',
+        instrumentId: { admin: REGISTRAR, id: 'Amulet' },
+        requestedAt: '2026-11-12T00:00:00Z',
+        executeBefore: EXPIRED,
+        inputHoldingCids: ['00y'],
+        meta: { values: {} },
+      },
+    });
+    const { tokens, wallet, calls } = setup({
+      instructions: [],
+      daOffers: [daAmuletExpired],
+      cantonCoin: { dsoParty: DSO },
+      scan: (call) => (call.url.startsWith(SCAN) ? { status: 503, json: {} } : undefined),
+    });
+    const result = await tokens.withdrawExpiredTransferOffers({ admin: REGISTRAR, id: 'Amulet' });
+    expect(result.withdrawn.map((w) => [w.transferOfferCid, w.registry])).toEqual([['00daamulet', 'da']]);
+    expect(calls.filter((c) => c.url.startsWith(SCAN))).toEqual([]);
+    expect(wallet.submissions).toHaveLength(1);
+  });
+
+  it("withdraws an expired DA offer through DA's registry, without Scan", async () => {
+    const daExpired = contract('00daold', 'Utility.Registry.App.V0.Model.Transfer:TransferOffer', {
+      operator: OPERATOR,
+      provider: REGISTRAR,
+      transfer: {
+        sender: HOLDER,
+        receiver: OTHER,
+        amount: '3.0000000000',
+        instrumentId: { admin: REGISTRAR, id: 'XMPL' },
+        requestedAt: '2026-11-12T00:00:00Z',
+        executeBefore: EXPIRED,
+        inputHoldingCids: ['00x'],
+        meta: { values: {} },
+      },
+    });
+    const { tokens, wallet, calls } = setup({ daOffers: [daExpired, DA_OFFER] });
+    const result = await tokens.withdrawExpiredTransferOffers({ admin: REGISTRAR, id: 'XMPL' });
+    expect(result.withdrawn.map((w) => [w.transferOfferCid, w.registry])).toEqual([['00daold', 'da']]);
+    expect(calls.filter((c) => c.url.startsWith(SCAN))).toEqual([]);
+    expect(calls.filter((c) => c.method === 'POST').map((c) => c.url)).toEqual([
+      expect.stringMatching(/\/registry\/transfer-instruction\/v1\/00daold\/choice-contexts\/withdraw$/),
+    ]);
+    expect(wallet.submissions).toHaveLength(1);
   });
 });
