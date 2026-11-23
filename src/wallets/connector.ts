@@ -304,8 +304,14 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
   // end the outer one's suppression.
   let bumping = 0;
   // The provider a connect of the latest attempt is starting the session on, during the synchronous part of
-  // `session.connect` (the session leaves the previous wallet, and only then publishes `connecting`).
-  let starting: { readonly provider: Cip103Provider; readonly attempt: number } | null = null;
+  // `session.connect` (the session leaves the previous wallet, and only then publishes `connecting`). Its controller
+  // stops that sign-in when a withdrawal heard in this window tears the wallet down: the session records the run's
+  // epoch only after it signed the previous wallet out, so a plain disconnect() then would not stop it.
+  let starting: {
+    readonly provider: Cip103Provider;
+    readonly attempt: number;
+    readonly controller: AbortController;
+  } | null = null;
   // Per key, the option object subscribed to and its unsubscribe: a replacement with the same key is subscribed anew.
   const liveSubscriptions = new Map<string, { readonly option: WalletOption; readonly unsubscribe: () => void }>();
 
@@ -609,10 +615,12 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
     // Started synchronously: inside the user's click when nothing was awaited before. A notification the session's
     // sign-out of the previous wallet sets off finds the session on `provider` already.
     const outer = starting;
-    starting = { provider, attempt };
+    const controller = new AbortController();
+    starting = { provider, attempt, controller };
     let pending: Promise<void>;
     try {
-      pending = forSession.connect(provider).catch(() => undefined); // rejects only for a signal; none is passed
+      // Rejects only when a teardown in the window below aborts it: the attempt is superseded then.
+      pending = forSession.connect(provider, { signal: controller.signal }).catch(() => undefined);
     } finally {
       starting = outer;
     }
@@ -678,6 +686,13 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
       wanted.connected = null;
       held = null;
       if (!listed) setLive(null);
+      // A sign-in the connector is starting on that provider is stopped and superseded, so it neither connects nor
+      // reports `connected` for a wallet the option no longer offers.
+      if (starting?.provider === previous && starting.attempt === attempts && !starting.controller.signal.aborted) {
+        const stopping = starting;
+        nextAttempt();
+        stopping.controller.abort();
+      }
       if (sessionOn(previous)) session.disconnect();
       publish();
       return null;
@@ -936,12 +951,15 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
           const started = reconcileLive();
           if (started !== null) return started;
         }
+        // The session's own snapshot, not sessionOn(): a connect the connector is starting to that provider has not
+        // signed it in yet.
         const current = live;
+        const state = sessionState();
         if (
           current?.option === option &&
           current.connected !== null &&
-          sessionState().status === 'connected' &&
-          sessionOn(current.connected)
+          state.status === 'connected' &&
+          state.wallet.provider === current.connected
         ) {
           publish();
           return { status: 'connected' };

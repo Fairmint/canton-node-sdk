@@ -2224,4 +2224,67 @@ describe('createWalletConnector: re-entrant bumps, a sign-out that notifies, and
     expect(await loading).toEqual({ status: 'connected' });
     c.dispose();
   });
+
+  it('does not report connected for a wallet a re-entrant connect() finds still signing out the previous one', async () => {
+    const live = liveOption('privy');
+    const c = connector({ options: [live.option] });
+    const declined = new TestProvider(PARTY_A, {
+      connect: () => {
+        throw new RpcError(4001, 'User rejected');
+      },
+    });
+    // An object, not a local: it is set inside the answer, which flow analysis cannot see.
+    const reentry: { armed: boolean; result: Promise<unknown> | null } = { armed: false, result: null };
+    const first = new TestProvider(PARTY_A, {
+      disconnect: () => {
+        if (reentry.armed) {
+          reentry.armed = false;
+          reentry.result = c.connect('privy');
+        }
+        return null;
+      },
+    });
+    live.offer(first, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    await flush();
+    reentry.armed = true;
+    // The option rotates: the session signs `first` out, whose answer re-enters connect() before `declined` signs in.
+    live.offer(declined, PARTY_A);
+    expect(reentry.result).not.toBeNull();
+    expect(await reentry.result).not.toEqual({ status: 'connected' });
+    await flush();
+    expect(c.session?.getSnapshot().status).toBe('disconnected');
+    expect(c.getSnapshot().status).not.toBe('connected');
+    c.dispose();
+  });
+
+  it('stops the sign-in it is starting when the option withdraws while the session signs the previous wallet out', async () => {
+    const live = liveOption('privy');
+    const c = connector({ options: [live.option] });
+    let armed = false;
+    // The previous wallet's listener removal makes the option withdraw, synchronously (a logout it sets off).
+    class WithdrawingProvider extends TestProvider {
+      override removeListener(event: string, listener: Parameters<TestProvider['removeListener']>[1]): this {
+        super.removeListener(event, listener);
+        if (armed) {
+          armed = false;
+          live.offer(null);
+        }
+        return this;
+      }
+    }
+    const first = new WithdrawingProvider(PARTY_A);
+    live.offer(first, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    await flush();
+    armed = true;
+    const rotated = new TestProvider(PARTY_A);
+    live.offer(rotated, PARTY_A);
+    expect(armed).toBe(false);
+    await flush();
+    expect(c.session?.getSnapshot().status).toBe('disconnected');
+    expect(c.getSnapshot().status).not.toBe('connected');
+    expect(rotated.requests).not.toContain('connect');
+    c.dispose();
+  });
 });
