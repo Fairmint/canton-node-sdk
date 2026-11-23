@@ -59,8 +59,9 @@ export interface DaRegistryOptions {
   /**
    * How long one request may take, body included, in milliseconds ({@link DA_REGISTRY_REQUEST_TIMEOUT_MS} by default). A
    * request still unanswered then is aborted (a custom `fetch` that ignores its signal stops being waited for) and
-   * fails with a `RegistryResponseError`; registry requests run before anything is signed, so nothing was submitted. A
-   * positive finite number, at most {@link MAX_TIMER_MS} (the longest delay `setTimeout` honours).
+   * fails with a `RegistryResponseError`. The request itself submits nothing, but a flow that already wrote earlier
+   * steps (a reclaim's withdraws) says so itself. A positive finite number, at most {@link MAX_TIMER_MS} (the longest
+   * delay `setTimeout` honours).
    */
   readonly timeoutMs?: number;
 }
@@ -291,7 +292,8 @@ export function createDaUtilitiesClient(network: DaNetwork, options: DaRegistryO
     } catch (error) {
       if (timeout.signal.aborted && signal?.aborted !== true) {
         throw new RegistryResponseError(
-          `DA's registry did not answer ${url} within ${String(timeoutMs / 1000)} s; nothing was submitted`
+          // No "nothing was submitted": a caller may have written earlier steps (a reclaim's withdraws) before this read.
+          `DA's registry did not answer ${url} within ${String(timeoutMs / 1000)} s`
         );
       }
       throw error;

@@ -310,7 +310,7 @@ describe('createDaUtilitiesClient', () => {
       await jest.advanceTimersByTimeAsync(1);
       const error = await failed;
       expect(error).toBeInstanceOf(RegistryResponseError);
-      expect((error as Error).message).toMatch(/did not answer .* within 30 s; nothing was submitted/);
+      expect((error as Error).message).toMatch(/did not answer .* within 30 s$/);
       expect(signals[0]?.aborted).toBe(true);
 
       const quick = createDaUtilitiesClient('devnet', { fetch, timeoutMs: 1000 }).mintOfferAcceptContext('00mint');
