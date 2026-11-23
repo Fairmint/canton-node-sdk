@@ -148,17 +148,21 @@ export interface WalletConnector {
   readonly store: WalletStore | null;
   readonly latch: WriteLatch;
   /**
-   * The user's click. Refused while the latch is held (`busy`). It retires any restore, bumps the latch, remembers
-   * `key` and clears `selected` unless `key` is that live option. For a loaded option whose provider was preloaded,
-   * `session.connect` is called synchronously inside the click (a wallet's sign-in window needs the gesture); otherwise
-   * it loads first. Each call is a new attempt, so a click after a cancelled or failed connect retries it. It never
-   * rejects.
+   * The user's click. Refused while the latch is held (`busy`). It retires any restore and bumps the latch. A live
+   * option is remembered at once, and `selected` is cleared unless it is that option; without a provider yet, the
+   * previous wallet is left and the result is `preparing`. A loaded option is remembered, and the previous live option
+   * and `selected` cleared, only once the session leaves the previous wallet for it (and it is remembered only once
+   * connected): a load that fails keeps the previous wallet. With a preloaded provider, `session.connect` is called
+   * synchronously inside the click (a wallet's sign-in window needs the gesture); otherwise it loads first, and is
+   * refused `busy` if a write took the latch meanwhile (the provider stays ready). Each call is a new attempt, so a
+   * click after a cancelled or failed connect retries it. It never rejects.
    */
   connect(key: string): Promise<WalletConnectResult>;
   /**
    * Opens a live option's setup UI without connecting (`selected = key`), or closes it (`null`, "choose another
-   * wallet"). Closing forgets the remembered key when it is that option's. Refused (false) while the latch is held or
-   * `connecting`, and for a key that names no live option.
+   * wallet"). Closing forgets the remembered key when it is that option's, and stops wanting a live option a
+   * `connect()` is still preparing. Refused (false) while the latch is held or `connecting`, and for a key that names
+   * no live option.
    */
   select(key: string | null): boolean;
   /**
@@ -170,10 +174,11 @@ export interface WalletConnector {
   rediscover(): Promise<void>;
   /**
    * - `restoring`: abandon the restore, and forget its key if it is still the remembered one;
-   * - `connecting` / `reconnecting`: the same, then `session.disconnect()` (the CIP-0103 disconnect ends the wallet's own
-   *   sign-in window). A connect still loading its option's provider stops loading and never connects; the wallet the
-   *   session was on is disconnected too, since the connect had already left it;
-   * - `preparing`: stop wanting the live option (`selected` stays);
+   * - `connecting` / `reconnecting`: the same, forget the cancelled option's key if it is still the remembered one, then
+   *   `session.disconnect()` (the CIP-0103 disconnect ends the wallet's own sign-in window). A connect still loading
+   *   its option's provider stops loading and never connects; a wallet the session is connected to stays, since the
+   *   connect had not left it yet;
+   * - `preparing`: stop wanting the live option (`selected` stays) and forget its key if it is the remembered one;
    * - Otherwise nothing.
    */
   cancel(): void;
@@ -202,6 +207,11 @@ interface Via {
   readonly option: WalletOption;
   /** A live option's retain key when it was connected. */
   readonly retainKey: string | null;
+  /**
+   * The party the retain key belongs to: the first wallet the session connects through this provider. A wallet for
+   * another party (the provider's `accountsChanged`) does not keep it.
+   */
+  party: string | null;
 }
 
 /** A loaded option's preload. */
@@ -267,7 +277,8 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
   let discovery: { readonly controller: AbortController; readonly promise: Promise<void> } | null = null;
   let discovering = false;
   let disposed = false;
-  const liveSubscriptions = new Map<string, () => void>();
+  // Per key, the option object subscribed to and its unsubscribe: a replacement with the same key is subscribed anew.
+  const liveSubscriptions = new Map<string, { readonly option: WalletOption; readonly unsubscribe: () => void }>();
 
   /** Read through a call, so a check after an await is not narrowed by one before it. */
   function isDisposed(): boolean {
@@ -290,7 +301,9 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
   /** The UI key of a session wallet: the live option's retain key when it came through one. */
   function connectionKey(wallet: ConnectedWallet): string {
     if (via !== null && via.provider === wallet.provider && via.option.mode === 'live') {
-      return `${via.option.key}:${via.retainKey ?? wallet.key}`;
+      via.party ??= wallet.partyId;
+      const retained = via.party === wallet.partyId ? via.retainKey : null;
+      return `${via.option.key}:${retained ?? wallet.key}`;
     }
     return wallet.key;
   }
@@ -462,13 +475,21 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
           if (restore !== run) return;
           option = findOption(key);
         }
+        if (option?.mode === 'live') {
+          // A discovered live option: the same recovery as a fixed one.
+          restore = null;
+          clearTimeout(run.timer);
+          wantRemembered(option);
+          publish();
+          return;
+        }
         // Nothing has it (an extension no longer installed): the key stays for a later visit.
         if (option?.mode !== 'load' || !availability(option).available) return;
         run.option = info(option);
         publish();
         const provider = await option.load(forNetwork, signal);
         if (restore !== run) return;
-        via = { provider, option, retainKey: null };
+        via = { provider, option, retainKey: null, party: null };
         // Connects only when the wallet still reports its session; rejects only when the run was retired.
         await forSession.restore(provider, { signal });
       } catch {
@@ -505,7 +526,7 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
     retainKey: string | null
   ): Promise<WalletConnectResult> {
     const attempt = nextAttempt();
-    via = { provider, option, retainKey };
+    via = { provider, option, retainKey, party: null };
     // Started synchronously: inside the user's click when nothing was awaited before.
     const pending = forSession.connect(provider).catch(() => undefined); // rejects only for a signal; none is passed
     publish();
@@ -548,6 +569,10 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
       return;
     }
     if (provider === wanted.connected) return;
+    // The user's connect to a loaded option is loading: it decides first (a failure evaluates again).
+    if (pendingLoad !== null) return;
+    // An option that cannot connect here offers nothing: its next change evaluates again.
+    if (!availability(wanted.option).available) return;
     // Never reconnect under a write: the latch's release evaluates again.
     if (latch.getSnapshot().holder !== null) return;
     wanted.connected = provider;
@@ -565,13 +590,21 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
 
   // ----- discovery -----
 
+  function unsubscribeLive(key: string): void {
+    liveSubscriptions.get(key)?.unsubscribe();
+    liveSubscriptions.delete(key);
+  }
+
   function subscribeLive(option: WalletOption): void {
-    if (option.mode !== 'live' || liveSubscriptions.has(option.key)) return;
+    const current = liveSubscriptions.get(option.key);
+    if (current?.option === option) return;
+    unsubscribeLive(option.key);
+    if (option.mode !== 'live') return;
     const onChange = (): void => {
       if (live?.option === option) evaluateLive();
       publish();
     };
-    liveSubscriptions.set(option.key, option.live.subscribe(onChange));
+    liveSubscriptions.set(option.key, { option, unsubscribe: option.live.subscribe(onChange) });
   }
 
   function setDiscovered(found: readonly WalletOption[]): void {
@@ -587,11 +620,19 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
       if (nextKeys.has(option.key)) continue;
       preloads.get(option.key)?.controller?.abort();
       preloads.delete(option.key);
-      liveSubscriptions.get(option.key)?.();
-      liveSubscriptions.delete(option.key);
+      unsubscribeLive(option.key);
     }
     discovered = next;
     for (const option of next) subscribeLive(option);
+    // The wanted live option was replaced by a new object with its key: want the replacement.
+    const wanted = live;
+    if (wanted !== null) {
+      const replacement = next.find((option) => option.key === wanted.option.key);
+      if (replacement !== undefined && replacement !== wanted.option && replacement.mode === 'live') {
+        live = { option: replacement, connected: wanted.connected };
+        evaluateLive();
+      }
+    }
   }
 
   async function runDiscover(): Promise<void> {
@@ -601,6 +642,8 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
     discovering = true;
     const promise = (async () => {
       try {
+        // Called after `discovery` is set below, so a synchronous throw is cleaned up like a rejection.
+        await Promise.resolve();
         const found = await discover(controller.signal);
         if (!isDisposed() && !controller.signal.aborted) setDiscovered(found);
       } catch {
@@ -615,6 +658,18 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
     discovery = { controller, promise };
     publish();
     await promise;
+  }
+
+  /** The remembered option is live: open its setup UI, want it, and let it start its own recovery. */
+  function wantRemembered(option: LiveWalletOption): void {
+    selected = option.key;
+    if (network !== null) live = { option, connected: null };
+    try {
+      option.live.restore();
+    } catch {
+      // The option's own recovery failed: its setup UI is open anyway.
+    }
+    evaluateLive();
   }
 
   // ----- wiring -----
@@ -637,14 +692,7 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
   if (remembered !== null) {
     const option = fixed.find((candidate) => candidate.key === remembered);
     if (option?.mode === 'live') {
-      selected = remembered;
-      if (network !== null) live = { option, connected: null };
-      try {
-        option.live.restore();
-      } catch {
-        // The option's own recovery failed: its setup UI is open anyway.
-      }
-      evaluateLive();
+      wantRemembered(option);
     } else if (session !== null && network !== null) {
       startRestore(remembered, session, network);
     }
@@ -679,12 +727,13 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
       }
       retireRestore();
       latch.bump();
-      writeStorage(local, walletStorageKey, key);
       error = null;
       stopPendingLoad();
       held = null;
 
       if (option.mode === 'live') {
+        // Remembered at once: its connect may finish only after a login redirect, which the next page load restores.
+        writeStorage(local, walletStorageKey, key);
         if (selected !== null && selected !== key) setSelected(null);
         // A new attempt: the same provider connects again (after a cancelled or failed connect).
         live = { option, connected: null };
@@ -699,6 +748,8 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
         }
         if (provider === null) {
           nextAttempt();
+          // Leave the previous wallet (or its sign-in), so it neither shows nor connects late while this one prepares.
+          if (sessionState().status !== 'disconnected') session.disconnect();
           publish();
           return { status: 'preparing' };
         }
@@ -706,11 +757,20 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
         return connectProvider(session, option, provider, retainKey);
       }
 
-      live = null;
-      if (selected !== null) setSelected(null);
+      // A loaded option is remembered, and the live one stops being wanted, only once the session leaves the previous
+      // wallet for it: a load that fails or is refused keeps the previous wallet, its tracking and its remembered key.
+      const leavePrevious = (): void => {
+        live = null;
+        if (selected !== null) setSelected(null);
+      };
+      const remember = (result: WalletConnectResult): WalletConnectResult => {
+        if (result.status === 'connected') writeStorage(local, walletStorageKey, key);
+        return result;
+      };
       const preload = preloads.get(key);
       if (preload?.provider === 'ready' && preload.loaded !== null) {
-        return connectProvider(session, option, preload.loaded, null);
+        leavePrevious();
+        return remember(await connectProvider(session, option, preload.loaded, null));
       }
       const attempt = nextAttempt();
       const controller = new AbortController();
@@ -725,13 +785,21 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
         const description = describeWalletError(failure);
         preloads.set(key, { provider: 'failed', loaded: null, loadError: description, controller: null });
         error = Object.freeze({ code: 'load-failed', key, description });
+        evaluateLive();
         publish();
         return { status: 'failed' };
       }
       if (superseded(attempt)) return { status: 'cancelled' };
       pendingLoad = null;
       preloads.set(key, { provider: 'ready', loaded: provider, loadError: null, controller: null });
-      return connectProvider(session, option, provider, null);
+      // A write started while the provider loaded: connecting now would leave its wallet under it. The provider stays
+      // ready, so the next click connects at once.
+      if (latch.getSnapshot().holder !== null) {
+        publish();
+        return { status: 'refused', reason: 'busy' };
+      }
+      leavePrevious();
+      return remember(await connectProvider(session, option, provider, null));
     },
 
     select(key) {
@@ -751,7 +819,16 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
       if (previous !== null && readStorage(local, walletStorageKey) === previous) {
         writeStorage(local, walletStorageKey, null);
       }
-      if (live !== null && live.option.key === previous && currentConnection()?.option.key !== previous) live = null;
+      // Stop wanting the live option whose setup UI closes, or one a connect() is still preparing.
+      const dismissed = live;
+      if (
+        dismissed !== null &&
+        currentConnection()?.option.key !== dismissed.option.key &&
+        (dismissed.option.key === previous || status() === 'preparing')
+      ) {
+        live = null;
+        if (readStorage(local, walletStorageKey) === dismissed.option.key) writeStorage(local, walletStorageKey, null);
+      }
       error = null;
       publish();
       return true;
@@ -811,12 +888,24 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
         if (restore !== null) abandonRestore(restore);
       } else if (current === 'connecting' || current === 'reconnecting') {
         if (restore !== null) abandonRestore(restore);
+        const cancelled = target(current, null)?.key ?? null;
+        if (cancelled !== null && readStorage(local, walletStorageKey) === cancelled) {
+          writeStorage(local, walletStorageKey, null);
+        }
         nextAttempt();
+        // A connect still loading its provider has not left the session's wallet: that wallet stays. Otherwise the
+        // session is signing in (or reconnecting) and is ended.
+        const loadingOnly = pendingLoad !== null && sessionState().status === 'connected';
         stopPendingLoad();
         held = null;
-        session?.disconnect();
+        if (loadingOnly) evaluateLive();
+        else session?.disconnect();
       } else if (current === 'preparing') {
+        const dismissed = live;
         live = null;
+        if (dismissed !== null && readStorage(local, walletStorageKey) === dismissed.option.key) {
+          writeStorage(local, walletStorageKey, null);
+        }
       } else {
         return;
       }
@@ -846,7 +935,7 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
       nextAttempt();
       discovery?.controller.abort();
       for (const preload of preloads.values()) preload.controller?.abort();
-      for (const unsubscribe of liveSubscriptions.values()) unsubscribe();
+      for (const { unsubscribe } of liveSubscriptions.values()) unsubscribe();
       liveSubscriptions.clear();
       unsubscribeLatch();
       unsubscribeSession();
