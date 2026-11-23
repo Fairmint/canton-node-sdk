@@ -1042,9 +1042,12 @@ describe('createWallet: cancellation', () => {
     const { signal } = new AbortController();
     await tokens.acceptMintOffer('00mint', { signal });
     expect(postCalls(calls)).toHaveLength(1);
-    expect(postCalls(calls).every((call) => call.signal === signal)).toBe(true);
+    // Each request's signal also carries its deadline, so it is the caller's only through `anySignal`.
+    expect(postCalls(calls).every((call) => call.signal instanceof AbortSignal)).toBe(true);
     // Shared with every other call of the wallet, so one caller's abort must not fail it for the rest.
-    expect(calls.filter((call) => call.method === 'GET').map((call) => call.signal)).toEqual([undefined]);
+    const gets = calls.filter((call) => call.method === 'GET');
+    expect(gets).toHaveLength(1);
+    expect(gets[0]?.signal).not.toBe(signal);
   });
 
   it('stops a write that is still reading, submits nothing, and frees the write guard', async () => {

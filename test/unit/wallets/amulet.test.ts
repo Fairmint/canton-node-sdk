@@ -246,16 +246,17 @@ describe('createWallet: Canton Coin transfer offers', () => {
       DA_REGISTRY_TEMPLATES.transferOffer,
       AMULET_TEMPLATES.transferInstruction,
     ]);
-    expect(calls.filter((c) => c.method === 'POST')).toEqual([
+    const posts = calls.filter((c) => c.method === 'POST');
+    expect(posts).toEqual([
       {
         url: `${SCAN}/registry/transfer-instruction/v1/${cid}/choice-contexts/${action}`,
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: { excludeDebugFields: true },
-        // Every Scan request carries a timeout signal.
-        signal: expect.any(AbortSignal),
       },
     ]);
+    // Every Scan request carries a timeout signal.
+    expect(posts[0]?.signal).toBeInstanceOf(AbortSignal);
     expect(wallet.submissions).toHaveLength(1);
     expect(wallet.submissions[0]?.commands).toEqual([
       {

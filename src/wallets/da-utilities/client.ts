@@ -6,7 +6,7 @@
  * Endpoints: DA's Utilities OpenAPI (`utility.yaml` v2.2.0), and the token standard transfer-instruction V1 and
  * metadata V1 specs under `/api/token-standard/v0/registrars/{admin}`.
  */
-import { awaitWithAbort, throwIfAborted } from '../abort';
+import { anySignal, awaitWithAbort, throwIfAborted } from '../abort';
 import { RegistryApiError, RegistryResponseError } from '../errors';
 import type { InstrumentMetadata } from '../holdings';
 import { instrumentKey } from '../holdings';
@@ -56,7 +56,17 @@ export interface DaRegistryOptions {
    * never listed or acted on.
    */
   readonly trustedProviders?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * How long one request may take, body included, in milliseconds ({@link DA_REGISTRY_REQUEST_TIMEOUT_MS} by default). A
+   * request still unanswered then is aborted (a custom `fetch` that ignores its signal stops being waited for) and
+   * fails with a `RegistryResponseError`; registry requests run before anything is signed, so nothing was submitted. A
+   * positive finite number.
+   */
+  readonly timeoutMs?: number;
 }
+
+/** The default {@link DaRegistryOptions.timeoutMs}: 30 seconds. */
+export const DA_REGISTRY_REQUEST_TIMEOUT_MS = 30_000;
 
 /** Splice `ChoiceContext` data: passed through unchanged as `extraArgs.context`. */
 export interface ChoiceContextData {
@@ -251,21 +261,45 @@ export function createDaUtilitiesClient(network: DaNetwork, options: DaRegistryO
   const baseUrl = trimTrailingSlashes(options.baseUrl ?? DA_UTILITIES_BASE_URLS[network]);
   const fetchFn = options.fetch ?? globalFetch('registry.fetch');
   const trustedProvidersOf = trustedProvidersResolver(options.trustedProviders);
+  const timeoutMs = options.timeoutMs ?? DA_REGISTRY_REQUEST_TIMEOUT_MS;
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new TypeError('registry.timeoutMs must be a positive finite number of milliseconds');
+  }
 
-  /** One request; an aborted `signal` rejects it with an `AbortError`, also when `fetch` ignores the signal. */
+  /**
+   * One request, aborted after `timeoutMs` (then a `RegistryResponseError`); an aborted `signal` rejects it with an
+   * `AbortError`, also when `fetch` ignores the signal.
+   */
   async function call(method: 'GET' | 'POST', path: string, body?: object, signal?: AbortSignal): Promise<unknown> {
     const url = `${baseUrl}${path}`;
-    const { response, text } = await awaitWithAbort(async () => {
-      const answer = await fetchFn(url, {
-        method,
-        ...(body !== undefined && {
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(body),
-        }),
-        ...(signal !== undefined && { signal }),
-      });
-      return { response: answer, text: await answer.text() };
-    }, signal);
+    const timeout = new AbortController();
+    const timer = setTimeout(() => timeout.abort(), timeoutMs);
+    const combined = anySignal(signal, timeout.signal);
+    let answered: { response: Awaited<ReturnType<FetchLike>>; text: string };
+    try {
+      answered = await awaitWithAbort(async () => {
+        const answer = await fetchFn(url, {
+          method,
+          ...(body !== undefined && {
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+          }),
+          ...(combined.signal !== undefined && { signal: combined.signal }),
+        });
+        return { response: answer, text: await answer.text() };
+      }, combined.signal);
+    } catch (error) {
+      if (timeout.signal.aborted && signal?.aborted !== true) {
+        throw new RegistryResponseError(
+          `DA's registry did not answer ${url} within ${String(timeoutMs / 1000)} s; nothing was submitted`
+        );
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
+      combined.release();
+    }
+    const { response, text } = answered;
     if (!response.ok) throw new RegistryApiError(response.status, text, url);
     try {
       return JSON.parse(text) as unknown;

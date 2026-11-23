@@ -95,3 +95,64 @@ export function anySignal(...signals: ReadonlyArray<AbortSignal | undefined>): {
   }
   return { signal: controller.signal, release };
 }
+
+/** An `Error` named `TimeoutError` (the name `AbortSignal.timeout()` gives its reason), for {@link withTimeout}. */
+function timeoutError(ms: number): Error {
+  const error = new Error(`Timed out after ${String(ms)} ms`);
+  error.name = 'TimeoutError';
+  return error;
+}
+
+/**
+ * Runs `work` with a deadline. `work` gets a signal that aborts when `ms` milliseconds pass or `options.signal` aborts;
+ * pass it on (to `fetch`, a wallet call) so the work stops too. The call settles as `work` does, else rejects at the
+ * deadline with an `Error` named `TimeoutError` (match it by `name`), or, when `options.signal` aborted first, with an
+ * `AbortError`. A rejection here does not say whether the work had an effect: work that may submit something must be
+ * treated as of unknown outcome. `ms` must be a non-negative finite number (else a `RangeError`).
+ */
+export async function withTimeout<Value>(
+  work: (signal: AbortSignal) => Promise<Value>,
+  ms: number,
+  options: { readonly signal?: AbortSignal } = {}
+): Promise<Value> {
+  if (!Number.isFinite(ms) || ms < 0) throw new RangeError('withTimeout: ms must be a non-negative finite number');
+  const { signal } = options;
+  if (signal?.aborted === true) throw createAbortError(signal);
+  const controller = new AbortController();
+  return new Promise<Value>((resolve, reject) => {
+    let settled = false;
+    const finish = (): boolean => {
+      if (settled) return false;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      return true;
+    };
+    const timer = setTimeout(() => {
+      if (!finish()) return;
+      const error = timeoutError(ms);
+      controller.abort(error);
+      reject(error);
+    }, ms);
+    const onAbort = (): void => {
+      if (!finish()) return;
+      controller.abort(signal?.reason);
+      reject(createAbortError(signal));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+    let running: Promise<Value>;
+    try {
+      running = work(controller.signal);
+    } catch (error) {
+      running = Promise.reject(error);
+    }
+    running.then(
+      (value) => {
+        if (finish()) resolve(value);
+      },
+      (error: unknown) => {
+        if (finish()) reject(error);
+      }
+    );
+  });
+}

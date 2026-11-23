@@ -96,7 +96,13 @@ export {
   type WalletOwnershipProof,
   type WalletOwnershipVerdict,
 } from './ownership';
-export type { DaNetwork, DaRegistryOptions, FetchLike, TransferKind } from './da-utilities/client';
+export {
+  DA_REGISTRY_REQUEST_TIMEOUT_MS,
+  type DaNetwork,
+  type DaRegistryOptions,
+  type FetchLike,
+  type TransferKind,
+} from './da-utilities/client';
 export {
   describeWalletError,
   isRegistryApiError,
@@ -156,6 +162,7 @@ export {
   type SignMessageProblem,
   type ValidateSignMessageOptions,
 } from './sign-message';
+export { withTimeout } from './abort';
 export {
   isCantonCoin,
   type Holding,
