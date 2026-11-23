@@ -674,11 +674,34 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
     if (current?.option === option) return;
     unsubscribeLive(option.key);
     if (option.mode !== 'live') return;
-    const onChange = (): void => {
-      if (live?.option === option) evaluateLive();
-      publish();
-    };
-    liveSubscriptions.set(option.key, { option, unsubscribe: option.live.subscribe(onChange) });
+    listenTo(
+      option,
+      () => {
+        if (live?.option === option) evaluateLive();
+        publish();
+      },
+      (unsubscribe) => liveSubscriptions.set(option.key, { option, unsubscribe })
+    );
+  }
+
+  /**
+   * Subscribe to `option`, handing the stop function to `keepStop` before subscribing. A callback the option runs
+   * synchronously inside `subscribe` may already tear down and call that stop: the subscription is then ended as soon
+   * as `subscribe` returns, and no later notification reaches `onChange`.
+   */
+  function listenTo(option: LiveWalletOption, onChange: () => void, keepStop: (stop: () => void) => void): void {
+    // An object, not locals: the stop may run inside `subscribe` below, which flow analysis cannot see.
+    const listener: { stopped: boolean; end: (() => void) | null } = { stopped: false, end: null };
+    keepStop(() => {
+      listener.stopped = true;
+      listener.end?.();
+      listener.end = null;
+    });
+    const end = option.live.subscribe(() => {
+      if (!listener.stopped) onChange();
+    });
+    if (listener.stopped) end();
+    else listener.end = end;
   }
 
   function setDiscovered(found: readonly WalletOption[]): void {
@@ -726,22 +749,34 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
       return;
     }
     if (kept.stray === null && kept.connected !== null && sessionOn(kept.connected)) {
-      kept.stray = kept.option.live.subscribe(() => {
-        if (live !== kept) return;
-        evaluateLive();
-        publish();
-      });
+      listenTo(
+        kept.option,
+        () => {
+          if (live !== kept) return;
+          evaluateLive();
+          publish();
+        },
+        (stop) => {
+          kept.stray = stop;
+        }
+      );
     }
   }
 
   /** Listen to `option`, replaced by a rediscovered object with its key, while it still speaks for the wallet. */
   function subscribeFormer(option: LiveWalletOption): Former {
     const former: Former = { option, unsubscribe: () => undefined };
-    former.unsubscribe = option.live.subscribe(() => {
-      if (live?.former !== former) return;
-      evaluateLive();
-      publish();
-    });
+    listenTo(
+      option,
+      () => {
+        if (live?.former !== former) return;
+        evaluateLive();
+        publish();
+      },
+      (stop) => {
+        former.unsubscribe = stop;
+      }
+    );
     return former;
   }
 

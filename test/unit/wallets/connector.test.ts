@@ -1416,6 +1416,54 @@ describe('createWalletConnector: review fixes', () => {
       return { c, first, provider, connects };
     }
 
+    it('ends a listener whose synchronous first notification tears the wallet down', async () => {
+      // A live option that notifies inside subscribe(): its provider is gone by the time the stray listener subscribes.
+      let provider: Cip103Provider | null = null;
+      let notifyOnSubscribe = false;
+      const listeners = new Set<() => void>();
+      const option: LiveWalletOption = {
+        mode: 'live',
+        key: 'privy:x',
+        kind: 'privy',
+        name: 'Privy',
+        availability: () => AVAILABLE,
+        live: {
+          subscribe: (listener) => {
+            listeners.add(listener);
+            if (notifyOnSubscribe) listener();
+            return () => {
+              listeners.delete(listener);
+            };
+          },
+          getProvider: () => provider,
+          getRetainKey: () => PARTY_A,
+          restore: () => undefined,
+        },
+      };
+      let calls = 0;
+      const c = connector({
+        discover: async () => {
+          calls += 1;
+          return calls === 1 ? [option] : [];
+        },
+      });
+      await flush();
+      const connected = new TestProvider(PARTY_A);
+      provider = connected;
+      for (const listener of [...listeners]) listener();
+      expect(await c.connect('privy:x')).toEqual({ status: 'connected' });
+      await flush();
+      // Withdraw without notifying, then rediscover without the key: the stray listener's first call tears down.
+      provider = null;
+      notifyOnSubscribe = true;
+      await c.rediscover();
+      await flush();
+      expect(c.session?.getSnapshot().status).toBe('disconnected');
+      expect(listeners.size).toBe(0);
+      c.dispose();
+      expect(listeners.size).toBe(0);
+    });
+
     it('still hears the wanted object withdraw its provider after its key vanished', async () => {
       const { c, first, provider } = await connectedThenDropped(() => []);
       expect(c.session?.getSnapshot().status).toBe('connected');
