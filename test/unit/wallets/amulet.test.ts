@@ -150,7 +150,12 @@ function setup(
     partyId: HOLDER,
     network: 'devnet',
     registry: { fetch },
-    cantonCoin: options.cantonCoin ?? { fetch },
+    cantonCoin:
+      options.cantonCoin === undefined
+        ? { fetch }
+        : options.cantonCoin === false
+          ? false
+          : { fetch, ...options.cantonCoin },
     now: () => NOW,
     readRetry: { sleep: async () => undefined },
   };
@@ -564,6 +569,33 @@ describe('createWallet: expired Canton Coin offers', () => {
       /could not confirm Canton Coin's DSO party, so the wallet's Canton Coin offers cannot be checked/
     );
     expect(wallet.submissions).toEqual([]);
+  });
+
+  it("reclaims a registrar's own 'Amulet' through DA's registry once the DSO is pinned, without Scan", async () => {
+    const daAmuletExpired = contract('00daamulet', 'Utility.Registry.App.V0.Model.Transfer:TransferOffer', {
+      operator: OPERATOR,
+      provider: REGISTRAR,
+      transfer: {
+        sender: HOLDER,
+        receiver: OTHER,
+        amount: '2.0000000000',
+        instrumentId: { admin: REGISTRAR, id: 'Amulet' },
+        requestedAt: '2026-11-12T00:00:00Z',
+        executeBefore: EXPIRED,
+        inputHoldingCids: ['00y'],
+        meta: { values: {} },
+      },
+    });
+    const { tokens, wallet, calls } = setup({
+      instructions: [],
+      daOffers: [daAmuletExpired],
+      cantonCoin: { dsoParty: DSO },
+      scan: (call) => (call.url.startsWith(SCAN) ? { status: 503, json: {} } : undefined),
+    });
+    const result = await tokens.withdrawExpiredTransferOffers({ admin: REGISTRAR, id: 'Amulet' });
+    expect(result.withdrawn.map((w) => [w.transferOfferCid, w.registry])).toEqual([['00daamulet', 'da']]);
+    expect(calls.filter((c) => c.url.startsWith(SCAN))).toEqual([]);
+    expect(wallet.submissions).toHaveLength(1);
   });
 
   it("withdraws an expired DA offer through DA's registry, without Scan", async () => {

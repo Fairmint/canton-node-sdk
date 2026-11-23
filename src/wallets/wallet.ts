@@ -891,7 +891,12 @@ export function createWallet(options: WalletOptions): Wallet {
     signal: AbortSignal | undefined
   ): Promise<WithdrawExpiredResult> {
     const instrumentId = requireInstrumentId(instrumentIdInput);
-    const isAmuletId = cantonCoin !== null && instrumentId.id === AMULET_INSTRUMENT_ID;
+    // A known DSO decides: a registrar's own `Amulet` (another admin) goes straight to DA's path, never to Scan.
+    const knownDso = cantonCoin?.knownDsoParty();
+    const isAmuletId =
+      cantonCoin !== null &&
+      instrumentId.id === AMULET_INSTRUMENT_ID &&
+      (knownDso === undefined || instrumentId.admin === knownDso);
     const readLocks = releaseLocks && isAmuletId;
     const all = readLocks
       ? (
