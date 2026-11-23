@@ -275,7 +275,12 @@ export interface WalletStoreInternalOptions extends WalletStoreOptions {
 /** How an action settled: its result and the sentence for the user (null: nothing to say), or why it failed. */
 type Settled =
   | { readonly ok: true; readonly result: ActionResult; readonly message: string | null }
-  | { readonly ok: false; readonly error: WalletErrorDescription };
+  | {
+      readonly ok: false;
+      readonly error: WalletErrorDescription;
+      /** Something committed before the failure (a reclaim that stopped part way): always reported. */
+      readonly committed?: true;
+    };
 
 const update = (result: SubmitResult): string => `(update ${result.updateId})`;
 
@@ -299,9 +304,17 @@ async function submitThroughStore(): Promise<never> {
   throw new WalletError('invalid-input', "Send this plan with store.act({ type: 'submitTransfer', plan })");
 }
 
-/** A token's name for the user: Canton Coin's symbol for its `Amulet`, else the instrument id. */
-const tokenLabel = (instrumentId: InstrumentId): string =>
-  instrumentId.id === AMULET_INSTRUMENT_ID ? CANTON_COIN_METADATA.symbol : instrumentId.id;
+/**
+ * A reclaimed token's name for the user: Canton Coin's symbol when the wallet confirmed what it reclaimed as Canton
+ * Coin (an offer under Canton Coin's registry, or a released lock, which only Canton Coin has), else the instrument id.
+ * The id alone does not tell: a DA registrar may issue an `Amulet` of its own.
+ */
+function reclaimedTokenLabel(instrumentId: InstrumentId, result: WithdrawExpiredResult): string {
+  const cantonCoin =
+    instrumentId.id === AMULET_INSTRUMENT_ID &&
+    (result.released.length > 0 || result.withdrawn.some((offer) => offer.registry === 'amulet'));
+  return cantonCoin ? CANTON_COIN_METADATA.symbol : instrumentId.id;
+}
 
 const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
@@ -319,11 +332,11 @@ function reclaimSettled(result: WithdrawExpiredResult, label: string): Settled {
   const last = committed[committed.length - 1];
   if (result.failed !== undefined) {
     const error = describeWalletError(result.failed.error);
-    const skipped =
-      result.notAttempted.length > 0 ? ` ${plural(result.notAttempted.length, 'more')} not attempted.` : '';
+    const skipped = result.notAttempted.length > 0 ? ` ${result.notAttempted.length} more not attempted.` : '';
     return {
       ok: false,
       error: { ...error, message: `The wallet ${done}, then stopped: ${error.message}${skipped}` },
+      committed: true,
     };
   }
   const sentence = done.charAt(0).toUpperCase() + done.slice(1);
@@ -368,7 +381,7 @@ async function perform(
         action.type === 'reclaimLockedTokens'
           ? await tokens.reclaimLockedTokens(action.instrumentId, call)
           : await tokens.withdrawExpiredTransferOffers(action.instrumentId, call);
-      return reclaimSettled(result, tokenLabel(action.instrumentId));
+      return reclaimSettled(result, reclaimedTokenLabel(action.instrumentId, result));
     }
     case 'requestBurn': {
       const { instrumentId, amount, reference, executeBefore } = action;
@@ -670,8 +683,9 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
       };
       return;
     }
-    // A failure before anything was submitted is nothing to report for a wallet that is gone.
-    if (!live && !SUBMISSION_FAILURES.has(error.kind)) return;
+    // A failure before anything was submitted is nothing to report for a wallet that is gone; one after a reclaim
+    // committed part of its work still is (for the party it ran as).
+    if (!live && !SUBMISSION_FAILURES.has(error.kind) && settled.committed !== true) return;
     outcome = { action, key, partyId, status: 'failed', error };
   }
 

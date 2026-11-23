@@ -49,6 +49,7 @@ import {
   type BurnRequest,
   type MintOffer,
   type TransferOffer,
+  type TransferOfferRegistry,
   type TransferPreapproval,
 } from './contracts';
 import {
@@ -268,6 +269,8 @@ export interface BurnRequestResult extends SubmitResult {
 export interface WithdrawnOffer extends SubmitResult {
   readonly transferOfferCid: string;
   readonly amount: string;
+  /** The registry that validated the offer: `'amulet'` for Canton Coin (its DSO confirmed by Scan), else `'da'`. */
+  readonly registry: TransferOfferRegistry;
 }
 
 /** One expired Canton Coin lock released (`LockedAmulet_OwnerExpireLockV2`): its submission, the holding and amount. */
@@ -922,9 +925,23 @@ export function createWallet(options: WalletOptions): Wallet {
           );
       }
     }
+    const cantonCoinUnconfirmedError = (): RegistryResponseError =>
+      new RegistryResponseError(
+        `${AMULET_REGISTRY_NAME} could not confirm Canton Coin's DSO party, so the wallet's Canton Coin offers cannot be checked; nothing was submitted. Try again later, or pin cantonCoin.dsoParty.`
+      );
     const isAmuletOf = candidates.some((offer) => sameInstrument(offer.instrumentId, instrumentId));
     if (!isAmuletOf && expiredLocks.length === 0 && anyOf(contracts, [DA_REGISTRY_TEMPLATES.transferOffer])) {
-      candidates.push(...fromRegistry(contracts, parseTransferOffer, await registry.operatorParty(signal)));
+      let operator: string;
+      try {
+        operator = await registry.operatorParty(signal);
+      } catch (error) {
+        // Canton Coin's `Amulet` with an unconfirmed DSO: only Scan can validate its offers, so say that, not why DA's
+        // operator (asked in case a registrar issued an `Amulet` of its own) could not be read.
+        throwIfAborted(signal);
+        if (cantonCoinUnconfirmed) throw cantonCoinUnconfirmedError();
+        throw error;
+      }
+      candidates.push(...fromRegistry(contracts, parseTransferOffer, operator));
     }
     const at = now();
     const expired = byDirection(candidates)
@@ -933,11 +950,7 @@ export function createWallet(options: WalletOptions): Wallet {
         (a, b) => Date.parse(a.executeBefore) - Date.parse(b.executeBefore) || (a.contractId < b.contractId ? -1 : 1)
       );
     if (expired.length === 0 && expiredLocks.length === 0) {
-      if (cantonCoinUnconfirmed) {
-        throw new RegistryResponseError(
-          `${AMULET_REGISTRY_NAME} could not confirm Canton Coin's DSO party, so the wallet's Canton Coin offers cannot be checked; nothing was submitted. Try again later, or pin cantonCoin.dsoParty.`
-        );
-      }
+      if (cantonCoinUnconfirmed) throw cantonCoinUnconfirmedError();
       throw new WalletError(
         'not-found',
         releaseLocks
@@ -959,7 +972,12 @@ export function createWallet(options: WalletOptions): Wallet {
       try {
         if (step.kind === 'offer') {
           const result = await submitOfferAnswer(step.offer, 'withdraw', signal);
-          withdrawn.push({ ...result, transferOfferCid: step.offer.contractId, amount: step.offer.amount });
+          withdrawn.push({
+            ...result,
+            transferOfferCid: step.offer.contractId,
+            amount: step.offer.amount,
+            registry: step.offer.registry ?? 'da',
+          });
         } else {
           const result = await submit({ commands: [ownerExpireLockCommand(step.holding.contractId)] }, signal);
           released.push({ ...result, lockedHoldingCid: step.holding.contractId, amount: step.holding.amount });
