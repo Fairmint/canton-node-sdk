@@ -641,12 +641,14 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
    * object no longer listed (heard through its stray listener) can only tear the wallet down, never connect one.
    */
   function evaluateLive(): void {
+    // Quiet while the connector bumps the latch itself; an explicit reconcileLive() (connect()'s own) still runs.
+    if (bumping > 0) return;
     void reconcileLive();
   }
 
   /** {@link evaluateLive}, returning the attempt it starts (null when it starts none). */
   function reconcileLive(): Promise<WalletConnectResult> | null {
-    if (disposed || bumping > 0 || session === null || live === null) return null;
+    if (disposed || session === null || live === null) return null;
     const wanted = live;
     const listed = fixed.includes(wanted.option) || discovered.includes(wanted.option);
     let provider: Cip103Provider | null;

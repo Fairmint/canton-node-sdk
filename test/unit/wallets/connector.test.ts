@@ -2153,11 +2153,78 @@ describe('createWalletConnector: re-entrant bumps, a sign-out that notifies, and
     // The user picks `ext`: neither the re-entrant connect nor the connector's own listener runs the deferred change.
     expect(await c.connect('ext')).toEqual({ status: 'connected' });
     expect(reentry.result).not.toBeNull();
-    await reentry.result;
+    // The re-entrant call hears the deferred change first (the quiet bump does not hide it from connect() itself), so
+    // it never reports `connected` for `first`, which the option no longer offers: `ext` supersedes its sign-in.
+    expect(await reentry.result).toEqual({ status: 'cancelled' });
     await flush();
     expect(connectedProvider(c)).toBe(ext);
-    expect(rotated.requests).not.toContain('connect');
     release();
+    c.dispose();
+  });
+
+  it("sends one sign-in when the old wallet's removeListener makes the live option offer another provider", async () => {
+    const live = liveOption('privy');
+    const c = connector({ options: [live.option] });
+    const third = new TestProvider(PARTY_A);
+    let armed = false;
+    // Detaching from `first` (the rotation's sign-out) makes the option offer `third`, synchronously.
+    class Rotating extends TestProvider {
+      override removeListener(event: string, listener: Parameters<TestProvider['removeListener']>[1]): this {
+        super.removeListener(event, listener);
+        if (armed) {
+          armed = false;
+          live.offer(third, PARTY_A);
+        }
+        return this;
+      }
+    }
+    const first = new Rotating(PARTY_A);
+    live.offer(first, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    await flush();
+    expect(connectedProvider(c)).toBe(first);
+    const second = new TestProvider(PARTY_A);
+    armed = true;
+    live.offer(second, PARTY_A);
+    await flush();
+    await flush();
+    // Only the provider the option offers last signs in, and the connector shows it.
+    const connects = [second, third].flatMap((p) => p.requests.filter((m) => m === 'connect'));
+    expect(connects).toHaveLength(1);
+    expect(third.requests).toContain('connect');
+    expect(connectedProvider(c)).toBe(third);
+    c.dispose();
+  });
+
+  it("sends one sign-in when the old wallet's removeListener re-enters connect() for the live wallet", async () => {
+    const live = liveOption('privy');
+    let c: WalletConnector | null = null;
+    let armed = false;
+    const reentry: { result: Promise<unknown> | null } = { result: null };
+    class Reentering extends TestProvider {
+      override removeListener(event: string, listener: Parameters<TestProvider['removeListener']>[1]): this {
+        super.removeListener(event, listener);
+        if (armed && c !== null) {
+          armed = false;
+          reentry.result = c.connect('privy');
+        }
+        return this;
+      }
+    }
+    c = connector({ options: [live.option] });
+    const first = new Reentering(PARTY_A);
+    live.offer(first, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    await flush();
+    const second = new TestProvider(PARTY_A);
+    armed = true;
+    live.offer(second, PARTY_A);
+    expect(reentry.result).not.toBeNull();
+    await reentry.result;
+    await flush();
+    await flush();
+    expect(second.requests.filter((m) => m === 'connect')).toHaveLength(1);
+    expect(connectedProvider(c)).toBe(second);
     c.dispose();
   });
 
