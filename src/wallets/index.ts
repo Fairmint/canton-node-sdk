@@ -26,6 +26,9 @@
  *   (`createWalletOwnershipChallenger`, `verifyWalletOwnership`) is Node-only and exported from the package root.
  * - The errors, their guards (`isWalletError`, `isWalletSubmitError`, …: they match errors of any copy of this module,
  *   where `instanceof` does not), their user-facing descriptions (`describeWalletError`), and the data types.
+ * - Display helpers that return codes, not sentences: `selectWalletToken`, `formatTokenAmount`, `formatOfferExpiry`,
+ *   `describePreapprovalScope`, `shortCantonId`, `validateSignMessage` (and `readSignature` for a `signMessage`
+ *   answer).
  * - Cancellation: every call that reads, fetches or acts takes an optional `signal` (`WalletCallOptions`):
  *   `WalletStore.act`, `Cip103Session.connect` and `restore`, `DiscoveredWallet.load` included. `WalletStore.dispose()`
  *   cancels the store's own work in flight the same way.
@@ -126,11 +129,31 @@ export {
 export {
   isTransferOfferExpired,
   expiredUnclaimedLocks,
+  selectWalletToken,
   walletTokens,
   type TokenCapabilities,
   type WalletToken,
+  type WalletTokenOffer,
   type WalletTokensInput,
+  type WalletTokensOptions,
 } from './tokens';
+export {
+  describePreapprovalScope,
+  formatOfferExpiry,
+  formatTokenAmount,
+  OFFER_EXPIRY_SOON_MS,
+  shortCantonId,
+  type OfferExpiry,
+  type PreapprovalScopeDescription,
+} from './format';
+export {
+  readSignature,
+  SIGN_MESSAGE_MAX_BYTES,
+  SIGN_MESSAGE_MIN_BYTES,
+  validateSignMessage,
+  type SignMessageProblem,
+  type ValidateSignMessageOptions,
+} from './sign-message';
 export {
   isCantonCoin,
   type Holding,

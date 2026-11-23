@@ -28,6 +28,7 @@ import { awaitWithAbort as coreAwaitWithAbort } from '../core/http/abort';
 import { globalFetch, type FetchLike } from './da-utilities/client';
 import { WalletReadError, WalletSignError } from './errors';
 import { isRecord, nonEmptyString } from './json';
+import { readSignature } from './sign-message';
 
 /** The first line of every ownership message. */
 export const WALLET_OWNERSHIP_TITLE = 'Canton wallet ownership proof';
@@ -201,11 +202,6 @@ export interface ProveWalletOwnershipOptions {
    * ignored.
    */
   readonly signal?: AbortSignal;
-}
-
-/** The signature from a `signMessage` result (CIP-0103's `{ signature }`). */
-function readSignature(raw: unknown): string | undefined {
-  return isRecord(raw) ? nonEmptyString(raw['signature']) : undefined;
 }
 
 /**

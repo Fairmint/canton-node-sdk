@@ -3,7 +3,7 @@
  * panel, whatever the token. Also the rule that decides which of the party's own transfer offers are expired, and how
  * much of a token they keep locked.
  */
-import { CANTON_COIN_METADATA } from './amulet/constants';
+import { AMULET_INSTRUMENT_ID, CANTON_COIN_METADATA } from './amulet/constants';
 import type { BurnRequest, MintOffer, TransferOffer, TransferPreapproval } from './contracts';
 import { coveringPreapproval } from './contracts';
 import { formatDecimalUnits, parseDecimalUnits } from './decimal';
@@ -142,15 +142,16 @@ export interface WalletToken {
   readonly isCantonCoin: boolean;
   readonly capabilities: TokenCapabilities;
   /**
-   * Transfer offers of this token. `expiredIncoming` is the part of `incoming` the party can no longer accept (the
-   * ledger refuses it; it can still reject them): hide Accept on them. `expiredOutgoing` is the part of `outgoing` no
-   * receiver can accept any more (`reclaimLockedTokens` withdraws them).
+   * Transfer offers of this token, each with `expired` set (see {@link WalletTokenOffer}). `expiredIncoming` is the part
+   * of `incoming` the party can no longer accept (the ledger refuses it; it can still reject them): hide Accept on
+   * them. `expiredOutgoing` is the part of `outgoing` no receiver can accept any more (`reclaimLockedTokens` withdraws
+   * them).
    */
   readonly offers: {
-    readonly incoming: readonly TransferOffer[];
-    readonly outgoing: readonly TransferOffer[];
-    readonly expiredIncoming: readonly TransferOffer[];
-    readonly expiredOutgoing: readonly TransferOffer[];
+    readonly incoming: readonly WalletTokenOffer[];
+    readonly outgoing: readonly WalletTokenOffer[];
+    readonly expiredIncoming: readonly WalletTokenOffer[];
+    readonly expiredOutgoing: readonly WalletTokenOffer[];
   };
   readonly mintOffers: readonly MintOffer[];
   readonly burnRequests: readonly BurnRequest[];
@@ -159,6 +160,18 @@ export interface WalletToken {
    * Coin: read `preapprovalStatus`.
    */
   readonly preapproval: TransferPreapproval | null;
+  /**
+   * Every DA preapproval of the party that applies to this token: issuer-wide ones of its admin, and ones naming it
+   * (list them to withdraw). `preapproval` is the one of them that covers the token, if any. Always empty for Canton
+   * Coin.
+   */
+  readonly preapprovals: readonly TransferPreapproval[];
+  /**
+   * True on Canton Coin while the state could not confirm Canton Coin (`WalletState.cantonCoinUnavailable`: its DSO
+   * party is unknown, so its holdings and offers are left out). Such an entry exists only when `includeEmptyCantonCoin`
+   * added it; show why its balance is missing instead of a zero. False otherwise.
+   */
+  readonly unavailable: boolean;
   /**
    * `covered` (`preapproval` is set) or `none` for a DA token. `unknown` for Canton Coin: its preapproval is a
    * DSO-signed Splice `TransferPreapproval` made through the party's validator, which this wallet does not read, so a
@@ -174,6 +187,25 @@ export interface WalletTokensInput {
   readonly mintOffers: readonly MintOffer[];
   readonly burnRequests: readonly BurnRequest[];
   readonly transferPreapprovals: readonly TransferPreapproval[];
+  /** `WalletState.cantonCoinUnavailable`: absent reads as false. */
+  readonly cantonCoinUnavailable?: boolean;
+}
+
+/** A transfer offer as {@link WalletToken} lists it: `expired` is always set. */
+export type WalletTokenOffer = TransferOffer & {
+  /** Whether `executeBefore` had passed when the state was read (`TransferOffer.expired`, absent read as false). */
+  readonly expired: boolean;
+};
+
+/** Options of {@link walletTokens}. */
+export interface WalletTokensOptions {
+  /**
+   * When the state names no Canton Coin (no holding, no offer), add a Canton Coin entry with zero balances anyway, so a
+   * page can show Canton Coin (and its faucet or validator preapproval) before the party holds any. The state does not
+   * name the DSO party then, so that entry's `instrumentId.admin` is `''`: no wallet action can name it (all of its
+   * lists are empty). Its `unavailable` says whether Canton Coin could not be confirmed. Default false.
+   */
+  readonly includeEmptyCantonCoin?: boolean;
 }
 
 const ZERO = formatDecimalUnits(0n);
@@ -182,11 +214,11 @@ const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 
 
 /**
  * One {@link WalletToken} per token the state names: every balance, and every token of an offer, mint offer or burn
- * request (a token offered to the party before it holds any is listed with zero balances). Sorted by symbol, then
- * instrument id, then admin, by code unit. Canton Coin and DA Registry tokens share the shape; `capabilities` says
- * which actions apply.
+ * request (a token offered to the party before it holds any is listed with zero balances), and Canton Coin with zero
+ * balances when `options.includeEmptyCantonCoin` asks for it. Sorted by symbol, then instrument id, then admin, by code
+ * unit. Canton Coin and DA Registry tokens share the shape; `capabilities` says which actions apply.
  */
-export function walletTokens(state: WalletTokensInput): WalletToken[] {
+export function walletTokens(state: WalletTokensInput, options: WalletTokensOptions = {}): WalletToken[] {
   interface Draft {
     instrumentId: InstrumentId;
     balance?: InstrumentBalance;
@@ -205,6 +237,12 @@ export function walletTokens(state: WalletTokensInput): WalletToken[] {
     note(offer.instrumentId, offer.registry === 'amulet');
   }
   for (const item of [...state.mintOffers, ...state.burnRequests]) note(item.instrumentId, false);
+  if (options.includeEmptyCantonCoin === true && ![...drafts.values()].some((draft) => draft.cantonCoin)) {
+    // The DSO party is not in the state: an empty admin, so nothing acts on this entry's instrument.
+    note({ admin: '', id: AMULET_INSTRUMENT_ID }, true);
+  }
+  const cantonCoinUnavailable = state.cantonCoinUnavailable === true;
+  const withExpiry = (offer: TransferOffer): WalletTokenOffer => ({ ...offer, expired: offer.expired === true });
 
   const of = <T extends { readonly instrumentId: InstrumentId }>(list: readonly T[], key: string): T[] =>
     list.filter((item) => instrumentKey(item.instrumentId) === key);
@@ -213,18 +251,23 @@ export function walletTokens(state: WalletTokensInput): WalletToken[] {
     .map(([key, { instrumentId, balance, cantonCoin }]): WalletToken => {
       // Canton Coin offered before the party holds any has no balance to carry the registry's answer.
       const metadata = balance?.metadata ?? (cantonCoin ? CANTON_COIN_METADATA : undefined);
-      const incoming = of(state.transferOffers.incoming, key);
-      const outgoing = of(state.transferOffers.outgoing, key);
-      const expiredOutgoing = outgoing.filter((offer) => offer.expired === true);
+      const incoming = of(state.transferOffers.incoming, key).map(withExpiry);
+      const outgoing = of(state.transferOffers.outgoing, key).map(withExpiry);
+      const expiredOutgoing = outgoing.filter((offer) => offer.expired);
       const lockedUnits = units(balance?.locked);
       const inLocks = units(balance?.lockedInExpiredLocks);
       const reclaimable = units(balance?.lockedInExpiredOffers) + inLocks;
-      const preapproval = cantonCoin
-        ? null
-        : coveringPreapproval(state.transferPreapprovals, {
-            instrumentAdmin: instrumentId.admin,
-            instrumentIds: [instrumentId.id],
-          });
+      const preapprovals = cantonCoin
+        ? []
+        : state.transferPreapprovals.filter(
+            (candidate) =>
+              candidate.instrumentAdmin === instrumentId.admin &&
+              (candidate.instrumentIds.length === 0 || candidate.instrumentIds.includes(instrumentId.id))
+          );
+      const preapproval = coveringPreapproval(preapprovals, {
+        instrumentAdmin: instrumentId.admin,
+        instrumentIds: [instrumentId.id],
+      });
       return {
         key,
         instrumentId,
@@ -249,13 +292,15 @@ export function walletTokens(state: WalletTokensInput): WalletToken[] {
         offers: {
           incoming,
           outgoing,
-          expiredIncoming: incoming.filter((offer) => offer.expired === true),
+          expiredIncoming: incoming.filter((offer) => offer.expired),
           expiredOutgoing,
         },
         mintOffers: of(state.mintOffers, key),
         burnRequests: of(state.burnRequests, key),
         preapproval,
+        preapprovals,
         preapprovalStatus: cantonCoin ? 'unknown' : preapproval === null ? 'none' : 'covered',
+        unavailable: cantonCoin && cantonCoinUnavailable,
       };
     })
     .sort(
@@ -264,4 +309,21 @@ export function walletTokens(state: WalletTokensInput): WalletToken[] {
         compareText(a.instrumentId.id, b.instrumentId.id) ||
         compareText(a.instrumentId.admin, b.instrumentId.admin)
     );
+}
+
+/**
+ * The token a page opens on: the one whose `key` is `pickedKey` while it is still listed, else the first whose symbol
+ * is `prefer.symbol`, else the first token; null when `tokens` is empty.
+ */
+export function selectWalletToken(
+  tokens: readonly WalletToken[],
+  pickedKey: string | null,
+  prefer?: { readonly symbol: string }
+): WalletToken | null {
+  return (
+    tokens.find((token) => token.key === pickedKey) ??
+    (prefer === undefined ? undefined : tokens.find((token) => token.symbol === prefer.symbol)) ??
+    tokens[0] ??
+    null
+  );
 }

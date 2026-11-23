@@ -7,7 +7,9 @@ import {
   expiredUnclaimedLocks,
   isTransferOfferExpired,
   lockedInExpiredOffers,
+  selectWalletToken,
   walletTokens,
+  type WalletToken,
 } from '../../../src/wallets/tokens';
 import { DSO, HOLDER, INSTRUMENT, OPERATOR, OTHER, REGISTRAR } from './helpers';
 
@@ -303,5 +305,126 @@ describe('walletTokens', () => {
       canReclaim: false,
     });
     expect(tokens[0]).not.toHaveProperty('metadata');
+  });
+});
+
+describe('walletTokens view-model fields', () => {
+  const cntn = { admin: REGISTRAR, id: 'CNTN' } as const;
+  const empty = {
+    balances: [] as InstrumentBalance[],
+    transferOffers: { incoming: [] as TransferOffer[], outgoing: [] as TransferOffer[] },
+    mintOffers: [],
+    burnRequests: [],
+    transferPreapprovals: [] as TransferPreapproval[],
+  };
+  const cntnBalance: InstrumentBalance = {
+    key: `CNTN@${REGISTRAR}`,
+    instrumentId: cntn,
+    unlocked: '7.0000000000',
+    locked: '0.0000000000',
+    lockedInExpiredOffers: '0.0000000000',
+    holdingCount: 1,
+    source: 'da-registry',
+    metadata: { name: 'Canton Network Token', symbol: 'CNTN', decimals: 2 },
+  };
+
+  it('adds an empty Canton Coin only when asked and the state names none, sorted by symbol', () => {
+    expect(walletTokens({ ...empty, balances: [cntnBalance] }).map((t) => t.symbol)).toEqual(['CNTN']);
+    const added = walletTokens({ ...empty, balances: [cntnBalance] }, { includeEmptyCantonCoin: true });
+    expect(added.map((t) => t.symbol)).toEqual(['CC', 'CNTN']);
+    expect(added[0]).toMatchObject({
+      instrumentId: { admin: '', id: 'Amulet' },
+      name: 'Canton Coin',
+      decimals: 10,
+      available: '0.0000000000',
+      locked: '0.0000000000',
+      holdingCount: 0,
+      isCantonCoin: true,
+      canReclaim: false,
+      preapproval: null,
+      preapprovals: [],
+      preapprovalStatus: 'unknown',
+      unavailable: false,
+      capabilities: { send: false, burn: false, preapprove: false, answerOffers: true },
+    });
+    // A wallet that names Canton Coin gets no second entry.
+    const ccIn = offer({ contractId: '00ccin', registry: 'amulet', instrumentId: CC, sender: OTHER, receiver: HOLDER });
+    const named = walletTokens(
+      { ...empty, transferOffers: { incoming: [ccIn], outgoing: [] } },
+      { includeEmptyCantonCoin: true }
+    );
+    expect(named.map((t) => t.key)).toEqual([CC_KEY]);
+  });
+
+  it('marks Canton Coin unavailable while the state could not confirm it', () => {
+    const [cc, other] = walletTokens(
+      { ...empty, balances: [cntnBalance], cantonCoinUnavailable: true },
+      { includeEmptyCantonCoin: true }
+    );
+    expect(cc).toMatchObject({ isCantonCoin: true, unavailable: true });
+    expect(other).toMatchObject({ symbol: 'CNTN', unavailable: false });
+    expect(walletTokens({ ...empty, cantonCoinUnavailable: true })).toEqual([]);
+  });
+
+  it('lists every preapproval that applies to the token, and the covering one apart', () => {
+    const issuerWide: TransferPreapproval = {
+      contractId: '00all',
+      operator: OPERATOR,
+      receiver: HOLDER,
+      instrumentAdmin: REGISTRAR,
+      instrumentIds: [],
+    };
+    const named: TransferPreapproval = { ...issuerWide, contractId: '00cntn', instrumentIds: ['CNTN', 'USDC'] };
+    const otherToken: TransferPreapproval = { ...issuerWide, contractId: '00usdc', instrumentIds: ['USDC'] };
+    const otherAdmin: TransferPreapproval = { ...issuerWide, contractId: '00other', instrumentAdmin: OTHER };
+    const [token] = walletTokens({
+      ...empty,
+      balances: [cntnBalance],
+      transferPreapprovals: [named, otherToken, issuerWide, otherAdmin],
+    });
+    expect(token?.preapprovals.map((p) => p.contractId)).toEqual(['00cntn', '00all']);
+    expect(token?.preapproval?.contractId).toBe('00cntn');
+    const [none] = walletTokens({ ...empty, balances: [cntnBalance], transferPreapprovals: [otherToken] });
+    expect(none).toMatchObject({ preapprovals: [], preapproval: null, preapprovalStatus: 'none' });
+  });
+
+  it('sets expired on every offer, false where the state left it out', () => {
+    const live = offer({ contractId: '00live', instrumentId: cntn });
+    const old = offer({ contractId: '00old', instrumentId: cntn, expired: true });
+    const [token] = walletTokens({ ...empty, transferOffers: { incoming: [live], outgoing: [old] } });
+    expect(token?.offers.incoming.map((o) => [o.contractId, o.expired])).toEqual([['00live', false]]);
+    expect(token?.offers.outgoing.map((o) => [o.contractId, o.expired])).toEqual([['00old', true]]);
+    expect(token?.offers.expiredOutgoing.map((o) => o.contractId)).toEqual(['00old']);
+    expect(live).not.toHaveProperty('expired');
+  });
+});
+
+const EMPTY_STATE = {
+  balances: [],
+  transferOffers: { incoming: [], outgoing: [] },
+  mintOffers: [],
+  burnRequests: [],
+  transferPreapprovals: [],
+};
+
+describe('selectWalletToken', () => {
+  const token = (symbol: string): WalletToken =>
+    ({
+      ...walletTokens(EMPTY_STATE, { includeEmptyCantonCoin: true })[0],
+      key: `key:${symbol}`,
+      symbol,
+    }) as WalletToken;
+
+  it('opens on the pick, else the preferred symbol, else the first', () => {
+    const tokens = [token('CC'), token('CNTN'), token('USDC')];
+    expect(selectWalletToken(tokens, 'key:USDC', { symbol: 'CNTN' })?.symbol).toBe('USDC');
+    expect(selectWalletToken(tokens, 'key:gone', { symbol: 'CNTN' })?.symbol).toBe('CNTN');
+    expect(selectWalletToken(tokens, 'key:gone')?.symbol).toBe('CC');
+    expect(selectWalletToken([token('CC')], null, { symbol: 'CNTN' })?.symbol).toBe('CC');
+    expect(selectWalletToken([], null)).toBeNull();
+  });
+
+  it('is exported from the wallets entry point', () => {
+    expect(Wallets.selectWalletToken).toBe(selectWalletToken);
   });
 });
