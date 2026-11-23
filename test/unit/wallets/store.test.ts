@@ -648,6 +648,31 @@ describe('createWalletStore', () => {
       });
     });
 
+    it('keeps the sentence break where it drops the clause from a reason with more after it', async () => {
+      const t = setup();
+      await connectAndLoad(t);
+      const ran = t.store.act({ type: 'reclaimLockedTokens', instrumentId: INSTRUMENT });
+      t.call().resolve({
+        withdrawn: [{ ...SUBMITTED, transferOfferCid: 'offer-a', amount: '1' }],
+        released: [],
+        failed: {
+          contractId: 'offer-b',
+          error: new WalletError(
+            'invalid-input',
+            'Session ended (1.5 s); nothing was submitted. Start the action again.'
+          ),
+        },
+        notAttempted: [],
+      });
+      expect(await ran).toBeNull();
+      expect(t.store.getSnapshot().outcome).toMatchObject({
+        error: {
+          message:
+            'The wallet withdrew 1 expired transfer offer of XMPL, then stopped: Session ended (1.5 s). Start the action again. Nothing after that was submitted.',
+        },
+      });
+    });
+
     it('requestBurn passes its options on and names the reference', async () => {
       const t = setup();
       await connectAndLoad(t);

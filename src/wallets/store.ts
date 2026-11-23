@@ -327,10 +327,12 @@ const plural = (count: number, noun: string): string => `${count} ${noun}${count
  * the steps before it did commit, so only the failed step and the ones after it were not submitted.
  */
 function stoppedReason(message: string): string {
+  // Replace the clause with a sentence end, so the sentences around it keep their break.
   const reason = message
-    .replace(/(?:[.;,]\s*)?\bnothing (?:else )?was submitted(?: or signed)?\.?/giu, '')
+    .replace(/(?:[.;,]\s*)?\bnothing (?:else )?was submitted(?: or signed)?\.?/giu, '. ')
+    .replace(/\s{2,}/gu, ' ')
     .trim()
-    .replace(/[;,]$/u, '');
+    .replace(/^\.\s*/u, '');
   if (reason === '') return 'nothing after that was submitted.';
   return `${/[.!?]$/u.test(reason) ? reason : `${reason}.`} Nothing after that was submitted.`;
 }
