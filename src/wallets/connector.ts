@@ -263,8 +263,9 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
   let restore: RestoreRun | null = null;
   // A loaded option's connect that is still loading its provider.
   let pendingLoad: { readonly option: LoadedWalletOption; readonly controller: AbortController } | null = null;
-  // The live option wanted, and the provider the connector last connected the session to for it.
-  let live: { readonly option: LiveWalletOption; connected: Cip103Provider | null } | null = null;
+  // The live option wanted, and the provider the connector last connected the session to for it. `rebound` while a
+  // rediscovered replacement of that option has not offered a provider yet: its empty answer is not a withdrawal.
+  let live: { readonly option: LiveWalletOption; connected: Cip103Provider | null; rebound: boolean } | null = null;
   // The connection shown while a live option reconnects with a new provider for the same retain key.
   let held: WalletConnection | null = null;
   let lastConnection: WalletConnection | null = null;
@@ -564,6 +565,8 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
     if (provider === null) {
       const previous = wanted.connected;
       if (previous === null) return;
+      // A rediscovered replacement that has not offered yet keeps the wallet still connected.
+      if (wanted.rebound) return;
       // Torn down (logout, another wallet or party): leave it.
       wanted.connected = null;
       held = null;
@@ -575,6 +578,7 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
       publish();
       return;
     }
+    wanted.rebound = false;
     if (provider === wanted.connected) return;
     // The user's connect to a loaded option is loading: it decides first (a failure evaluates again).
     if (pendingLoad !== null) return;
@@ -636,7 +640,7 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
     if (wanted !== null) {
       const replacement = next.find((option) => option.key === wanted.option.key);
       if (replacement !== undefined && replacement !== wanted.option && replacement.mode === 'live') {
-        live = { option: replacement, connected: wanted.connected };
+        live = { option: replacement, connected: wanted.connected, rebound: wanted.connected !== null };
         evaluateLive();
       }
     }
@@ -670,7 +674,7 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
   /** The remembered option is live: open its setup UI, want it, and let it start its own recovery. */
   function wantRemembered(option: LiveWalletOption): void {
     selected = option.key;
-    if (network !== null) live = { option, connected: null };
+    if (network !== null) live = { option, connected: null, rebound: false };
     try {
       option.live.restore();
     } catch {
@@ -746,7 +750,7 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
         writeStorage(local, walletStorageKey, key);
         if (selected !== null && selected !== key) setSelected(null);
         // A new attempt: the same provider connects again (after a cancelled or failed connect).
-        live = { option, connected: null };
+        live = { option, connected: null, rebound: false };
         let provider: Cip103Provider | null;
         let retainKey: string | null;
         try {

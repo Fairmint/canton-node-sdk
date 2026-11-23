@@ -1243,6 +1243,80 @@ describe('createWalletConnector: review fixes', () => {
     expect(c.getSnapshot()).toMatchObject({ status: 'connected', target: { key: 'privy:x' } });
   });
 
+  describe('a discover that returns a new live option object per call, with the same key', () => {
+    async function connectedThenRediscovered(): Promise<{
+      c: WalletConnector;
+      local: ReturnType<typeof memoryStorage>;
+      made: Array<ReturnType<typeof liveOption>>;
+      provider: TestProvider;
+      connects: () => number;
+    }> {
+      const made: Array<ReturnType<typeof liveOption>> = [];
+      const local = memoryStorage();
+      const c = connector({
+        local,
+        discover: async () => {
+          const next = liveOption('privy:x');
+          made.push(next);
+          return [next.option];
+        },
+      });
+      await flush();
+      const provider = new TestProvider(PARTY_A);
+      made[0]?.offer(provider, PARTY_A);
+      expect(await c.connect('privy:x')).toEqual({ status: 'connected' });
+      await flush();
+      const connects = countConnects(c);
+      await c.rediscover();
+      await flush();
+      expect(made).toHaveLength(2);
+      return { c, local, made, provider, connects };
+    }
+
+    it('keeps the wallet connected on rediscover() before the replacement offers a provider', async () => {
+      const { c, local, provider, connects } = await connectedThenRediscovered();
+      expect(c.getSnapshot()).toMatchObject({ status: 'connected', target: { key: 'privy:x' } });
+      expect(connectedProvider(c)).toBe(provider);
+      expect(provider.requests).not.toContain('disconnect');
+      expect(local.getItem(WALLET)).toBe('privy:x');
+      expect(connects()).toBe(0);
+    });
+
+    it('changes nothing when the replacement offers the same provider', async () => {
+      const { c, made, provider, connects } = await connectedThenRediscovered();
+      made[1]?.offer(provider, PARTY_A);
+      await flush();
+      expect(connectedProvider(c)).toBe(provider);
+      expect(provider.requests).not.toContain('disconnect');
+      expect(connects()).toBe(0);
+    });
+
+    it('disconnects when the replacement withdraws its provider after offering it', async () => {
+      const { c, local, made, provider } = await connectedThenRediscovered();
+      made[1]?.offer(provider, PARTY_A);
+      await flush();
+      expect(connectedProvider(c)).toBe(provider);
+      expect(provider.requests).not.toContain('disconnect');
+      made[1]?.offer(null);
+      await flush();
+      expect(c.session?.getSnapshot().status).toBe('disconnected');
+      expect(provider.requests).toContain('disconnect');
+      expect(local.getItem(WALLET)).toBe('privy:x');
+    });
+
+    it('reconnects when the replacement offers a different provider', async () => {
+      const { c, made, provider, connects } = await connectedThenRediscovered();
+      const rebuilt = new TestProvider(PARTY_A);
+      made[1]?.offer(rebuilt, PARTY_A);
+      expect(c.getSnapshot()).toMatchObject({ status: 'reconnecting' });
+      await flush();
+      expect(connectedProvider(c)).toBe(rebuilt);
+      expect(c.getSnapshot()).toMatchObject({ status: 'connected', target: { key: 'privy:x' } });
+      expect(connects()).toBe(1);
+      expect(provider).not.toBe(rebuilt);
+    });
+  });
+
   it('ends discovering when discover throws synchronously', async () => {
     const c = connector({
       discover: () => {
