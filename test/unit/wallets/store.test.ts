@@ -20,7 +20,10 @@ import {
   type WalletOptions,
   type WalletState,
   type WalletStore,
+  type WalletStoreOptions,
   type WalletView,
+  createWriteLatch,
+  type WriteRunContext,
 } from '../../../src/wallets';
 import type { WalletStoreInternalOptions } from '../../../src/wallets/store';
 import { CANTON_COIN_METADATA } from '../../../src/wallets/amulet/constants';
@@ -70,7 +73,7 @@ const PLAN = {
  * A session over a scriptable provider, and a store whose token wallets hold every call (loads and actions) until the
  * test answers it.
  */
-function setup(): {
+function setup(extra: Partial<WalletStoreOptions> = {}): {
   session: Cip103Session;
   provider: TestProvider;
   store: WalletStore;
@@ -127,7 +130,7 @@ function setup(): {
       removeTransferPreapproval: action('removeTransferPreapproval'),
     };
   };
-  const internal: WalletStoreInternalOptions = { session, openWallet };
+  const internal: WalletStoreInternalOptions = { session, openWallet, ...extra };
   const store = createWalletStore(internal);
   let published = 0;
   store.subscribe(() => {
@@ -216,6 +219,11 @@ describe('createWalletStore', () => {
       loadError: null,
       running: null,
       busy: false,
+      busyReason: null,
+      busyLabel: null,
+      shown: null,
+      stale: false,
+      readOnly: null,
       outcome: null,
       unknownOutcome: null,
       notices: [],
@@ -1438,6 +1446,11 @@ describe('actionState', () => {
     loadError: null,
     running: null,
     busy: false,
+    busyReason: null,
+    busyLabel: null,
+    shown: null,
+    stale: false,
+    readOnly: null,
     outcome: null,
     unknownOutcome: null,
     notices: [],
@@ -1464,5 +1477,164 @@ describe('actionState', () => {
     expect(actionState(view({ unknownOutcome }), WRITE)).toEqual({ enabled: false, reason: 'unknown-outcome' });
     // A read still runs while a write's outcome is unknown.
     expect(actionState(view({ unknownOutcome }), READ)).toEqual({ enabled: true, reason: null });
+  });
+});
+
+describe('createWalletStore: shared latch, read-only gate and held snapshots', () => {
+  it('names why it is busy: a load, its own action, or another writer run', async () => {
+    const latch = createWriteLatch();
+    const t = setup({ latch });
+    await t.session.connect(t.provider);
+    expect(t.store.getSnapshot()).toMatchObject({ busy: true, busyReason: 'load', busyLabel: null });
+    t.answer();
+    await flush();
+    expect(t.store.getSnapshot()).toMatchObject({ busy: false, busyReason: null, busyLabel: null });
+
+    const acting = t.store.act(ACCEPT);
+    expect(t.store.getSnapshot()).toMatchObject({ busy: true, busyReason: 'action', busyLabel: 'acceptMintOffer' });
+    expect(latch.getSnapshot().holder?.label).toBe('acceptMintOffer');
+    t.call().resolve(SUBMITTED);
+    await acting;
+    expect(latch.getSnapshot().holder).toBeNull();
+    expect(t.store.getSnapshot()).toMatchObject({ busy: true, busyReason: 'load' });
+    t.answer();
+    await flush();
+
+    const send = deferred<string>();
+    const running = latch.run('canton-coin', async () => send.promise);
+    expect(t.store.getSnapshot()).toMatchObject({ busy: true, busyReason: 'run', busyLabel: 'canton-coin' });
+    expect(canAct(t.store.getSnapshot(), ACCEPT)).toBe(false);
+    expect(actionState(t.store.getSnapshot(), ACCEPT).reason).toBe('busy');
+    send.resolve('sent');
+    await running;
+    expect(t.store.getSnapshot()).toMatchObject({ busy: false, busyReason: null });
+  });
+
+  it('refuses act() while a run holds the latch, and run() while an action is in flight', async () => {
+    const t = setup();
+    await connectAndLoad(t);
+    const send = deferred<string>();
+    const running = t.store.run('canton-coin', async () => send.promise);
+    expect(await t.store.act(ACCEPT)).toBeNull();
+    expect(t.calls).toHaveLength(0);
+    send.resolve('sent');
+    expect(await running).toEqual({ status: 'done', value: 'sent' });
+
+    const acting = t.store.act(ACCEPT);
+    const refused = await t.store.run('canton-coin', async () => 'never');
+    expect(refused).toMatchObject({ status: 'refused', reason: 'busy', holder: { label: 'acceptMintOffer' } });
+    t.call().resolve(SUBMITTED);
+    expect(await acting).toEqual(SUBMITTED);
+  });
+
+  it("aborts a run's signal when the wallet changes and on dispose, reporting dropped or unknown-outcome", async () => {
+    const t = setup();
+    await connectAndLoad(t);
+    let context: WriteRunContext | null = null;
+    const reply = deferred<string>();
+    const running = t.store.run('canton-coin', async (ctx) => {
+      context = ctx;
+      return reply.promise;
+    });
+    const started = context as unknown as WriteRunContext;
+    expect(started.signal.aborted).toBe(false);
+    expect(started.isCurrent()).toBe(true);
+    await switchAccount(t, OTHER);
+    expect(started.signal.aborted).toBe(true);
+    expect(started.isCurrent()).toBe(false);
+    reply.resolve('late');
+    expect(await running).toEqual({ status: 'dropped' });
+
+    t.answer();
+    await flush();
+    const submitted = deferred<string>();
+    const second = t.store.run('canton-coin', async (ctx) => {
+      context = ctx;
+      ctx.markSubmitted();
+      return submitted.promise;
+    });
+    const secondContext = context as unknown as WriteRunContext;
+    t.store.dispose();
+    expect(secondContext.signal.aborted).toBe(true);
+    expect(secondContext.isCurrent()).toBe(false);
+    submitted.resolve('late');
+    // The private latch survives the store: the run settled in its epoch, but the store reports it is gone.
+    expect((await second).status).toBe('done');
+    expect(await t.store.run('x', async () => 1)).toEqual({ status: 'refused', reason: 'disposed' });
+  });
+
+  it('refuses writes while read-only and still runs reads; setReadOnly opens it again', async () => {
+    const t = setup({ readOnly: 'production' });
+    await connectAndLoad(t);
+    const view = t.store.getSnapshot();
+    expect(view.readOnly).toBe('production');
+    expect(canAct(view, ACCEPT)).toBe(false);
+    expect(actionState(view, ACCEPT)).toEqual({ enabled: false, reason: 'read-only' });
+    expect(canAct(view, PLAN)).toBe(true);
+    expect(await t.store.act(ACCEPT)).toBeNull();
+    expect(t.calls).toHaveLength(0);
+    const planning = t.store.act(PLAN);
+    expect(t.calls).toHaveLength(1);
+    t.call().resolve(fakePlan().plan);
+    expect(await planning).not.toBeNull();
+
+    const before = t.published();
+    t.store.setReadOnly('production');
+    expect(t.published()).toBe(before);
+    t.store.setReadOnly(null);
+    expect(t.published()).toBe(before + 1);
+    expect(t.store.getSnapshot().readOnly).toBeNull();
+    expect(canAct(t.store.getSnapshot(), ACCEPT)).toBe(true);
+  });
+
+  it('shows the live state and holds it for its key while the same key reloads after a reconnect', async () => {
+    const t = setup({ retainKey: () => 'privy:party' });
+    await connectAndLoad(t);
+    const first = t.store.getSnapshot();
+    expect(first).toMatchObject({ shown: first.state, stale: false });
+    expect(first.shown).not.toBeNull();
+
+    // A rebuilt provider for the same party: the session reconnects (no wallet for a moment), then loads again.
+    const rebuilt = new TestProvider(HOLDER);
+    const connecting = t.session.connect(rebuilt);
+    expect(t.store.getSnapshot()).toMatchObject({ state: null, shown: first.state, stale: true });
+    await connecting;
+    expect(t.store.getSnapshot()).toMatchObject({ state: null, loading: true, shown: first.state, stale: true });
+    t.answer(9);
+    await flush();
+    expect(t.store.getSnapshot()).toMatchObject({ state: { offset: 9 }, shown: { offset: 9 }, stale: false });
+  });
+
+  it('shows nothing for a new key, or once a load ended with no state', async () => {
+    const t = setup();
+    await connectAndLoad(t);
+    const held = t.store.getSnapshot().state;
+    // The default key is the wallet's own: another connection shows nothing until it loads.
+    const connecting = t.session.connect(new TestProvider(HOLDER));
+    expect(t.store.getSnapshot()).toMatchObject({ shown: null, stale: false });
+    await connecting;
+    expect(t.store.getSnapshot()).toMatchObject({ loading: true, shown: null, stale: false });
+    t.fail(new WalletReadError('down'));
+    await flush();
+    expect(t.store.getSnapshot()).toMatchObject({ state: null, shown: null, stale: false });
+    expect(held).not.toBeNull();
+
+    // The same key, a failed reload: nothing is shown once it ended.
+    const same = setup({ retainKey: () => 'k' });
+    await connectAndLoad(same);
+    same.store.refresh();
+    same.fail(new WalletReadError('down'));
+    await flush();
+    expect(same.store.getSnapshot()).toMatchObject({ state: null, loading: false, shown: null, stale: false });
+  });
+
+  it('drops a held snapshot on disconnect', async () => {
+    const t = setup({ retainKey: () => 'k' });
+    await connectAndLoad(t);
+    t.session.disconnect();
+    await flush();
+    const connecting = t.session.connect(t.provider);
+    expect(t.store.getSnapshot()).toMatchObject({ shown: null, stale: false });
+    await connecting;
   });
 });

@@ -41,6 +41,14 @@ export {
   type ConnectedWallet,
 } from './session';
 export {
+  createWriteLatch,
+  type WriteLatch,
+  type WriteLatchHolder,
+  type WriteLatchState,
+  type WriteRunContext,
+  type WriteRunOutcome,
+} from './latch';
+export {
   actionState,
   canAct,
   createWalletStore,
@@ -53,6 +61,7 @@ export {
   type WalletNotice,
   type WalletStore,
   type WalletActionBlocker,
+  type WalletBusyReason,
   type WalletStoreOptions,
   type WalletView,
 } from './store';
