@@ -41,6 +41,18 @@ export {
   type ConnectedWallet,
 } from './session';
 export {
+  createWalletConnector,
+  DEFAULT_RESTORE_TIMEOUT_MS,
+  type WalletConnection,
+  type WalletConnectResult,
+  type WalletConnector,
+  type WalletConnectorError,
+  type WalletConnectorInput,
+  type WalletConnectorSnapshot,
+  type WalletConnectorStatus,
+  type WalletOptionState,
+} from './connector';
+export {
   createWriteLatch,
   type WriteLatch,
   type WriteLatchHolder,
