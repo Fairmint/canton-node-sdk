@@ -597,10 +597,14 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
     return settle(attempt, option.key, provider, remember);
   }
 
-  /** Connect the wanted live option's current provider, unless it is the one already connected or a write runs. */
+  /**
+   * Connect the wanted live option's current provider, unless it is the one already connected or a write runs. An
+   * object no longer listed (heard through its stray listener) can only tear the wallet down, never connect one.
+   */
   function evaluateLive(): void {
     if (disposed || session === null || live === null) return;
     const wanted = live;
+    const listed = fixed.includes(wanted.option) || discovered.includes(wanted.option);
     let provider: Cip103Provider | null;
     let retainKey: string | null;
     try {
@@ -623,11 +627,14 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
     } else if (provider !== null) {
       dropFormer(wanted);
     }
+    // An unlisted object that offers another provider is a change the connector no longer lists: leave the wallet.
+    if (!listed && provider !== null && provider !== wanted.connected) provider = null;
     if (provider === null) {
       const previous = wanted.connected;
       if (previous === null) return;
-      // Torn down (logout, another wallet or party): leave it.
+      // Torn down (logout, another wallet or party): leave it. An unlisted object is no longer listened to.
       dropFormer(wanted);
+      if (!listed) dropStray(wanted);
       wanted.connected = null;
       held = null;
       if (sessionOn(previous)) session.disconnect();

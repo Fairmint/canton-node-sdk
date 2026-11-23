@@ -1417,6 +1417,41 @@ describe('createWalletConnector: review fixes', () => {
       expect(provider.requests).toContain('disconnect');
     });
 
+    it('stops listening after the vanished object withdraws, and never reconnects to its re-offer', async () => {
+      const { c, first, provider, connects } = await connectedThenDropped(() => []);
+      first.offer(null);
+      await flush();
+      expect(c.session?.getSnapshot().status).toBe('disconnected');
+      expect(first.subscribers()).toBe(0);
+      first.offer(provider, PARTY_A);
+      await flush();
+      expect(c.session?.getSnapshot().status).toBe('disconnected');
+      expect(connects()).toBe(0);
+    });
+
+    it('stops listening after the object turned loaded withdraws, and never reconnects to its re-offer', async () => {
+      const { c, first, provider, connects } = await connectedThenDropped(() => [loadedOption('privy:x')]);
+      first.offer(null);
+      await flush();
+      expect(c.session?.getSnapshot().status).toBe('disconnected');
+      expect(first.subscribers()).toBe(0);
+      first.offer(new TestProvider(PARTY_A), PARTY_A);
+      await flush();
+      expect(c.session?.getSnapshot().status).toBe('disconnected');
+      expect(connects()).toBe(0);
+      expect(provider.requests).toContain('disconnect');
+    });
+
+    it('leaves the wallet, rather than connecting another, when the unlisted object rotates its provider', async () => {
+      const { c, first, provider, connects } = await connectedThenDropped(() => []);
+      first.offer(new TestProvider(PARTY_A), PARTY_A);
+      await flush();
+      expect(c.session?.getSnapshot().status).toBe('disconnected');
+      expect(provider.requests).toContain('disconnect');
+      expect(first.subscribers()).toBe(0);
+      expect(connects()).toBe(0);
+    });
+
     it('stops listening once the wallet is left', async () => {
       const { c, first } = await connectedThenDropped(() => []);
       expect(first.subscribers()).toBe(1);
@@ -1426,7 +1461,10 @@ describe('createWalletConnector: review fixes', () => {
     });
   });
 
-  it('reconnects a re-offered provider after a rediscover when the session had left it (a cancelled connect)', async () => {
+  // Regression guard: a rediscover keeps the earlier object only for a wallet the session is on. Keeping it after a
+  // cancelled connect would leave the earlier object speaking for a provider the session left, so the re-offer below
+  // would match it and never connect.
+  it('does not keep the earlier object for a wallet the session left (a cancelled connect): a re-offer connects', async () => {
     const made: Array<ReturnType<typeof liveOption>> = [];
     const c = connector({
       discover: async () => {
