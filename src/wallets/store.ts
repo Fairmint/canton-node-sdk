@@ -134,6 +134,42 @@ export function canAct(view: WalletView, action: WalletAction): boolean {
 }
 
 /**
+ * Why {@link actionState} disables an action:
+ *
+ * - `disconnected`: no wallet is connected (or there is no view yet);
+ * - `reconnecting`: the session is connecting (a reconnect or a switch of wallet);
+ * - `not-ready`: connected, but the token wallet is not open (`view.loadError` may say why);
+ * - `busy`: a wallet call is in flight or a load is queued;
+ * - `unknown-outcome`: a write's outcome is unknown, so writes wait until `acknowledgeUnknownOutcome()`.
+ */
+export type WalletActionBlocker = 'disconnected' | 'reconnecting' | 'not-ready' | 'busy' | 'unknown-outcome';
+
+/**
+ * Whether `store.act(action)` would run it now (as {@link canAct}), and when not, the first reason, in the order listed
+ * by {@link WalletActionBlocker}. `view` may be null (no store yet), which reads as `disconnected`. Use `reason` to say
+ * why a button is disabled; the page words it.
+ */
+export function actionState(
+  view: WalletView | null,
+  action: WalletAction
+): { readonly enabled: boolean; readonly reason: WalletActionBlocker | null } {
+  if (view !== null && canAct(view, action)) return { enabled: true, reason: null };
+  const reason: WalletActionBlocker =
+    view === null
+      ? 'disconnected'
+      : view.session.status === 'connecting'
+        ? 'reconnecting'
+        : view.wallet === null
+          ? 'disconnected'
+          : !view.ready
+            ? 'not-ready'
+            : view.busy
+              ? 'busy'
+              : 'unknown-outcome';
+  return { enabled: false, reason };
+}
+
+/**
  * The failures a submission itself reports (`WalletSubmitError`). The wallet throws every other failure before it
  * submits, so nothing was sent.
  */

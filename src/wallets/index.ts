@@ -28,7 +28,7 @@
  *   where `instanceof` does not), their user-facing descriptions (`describeWalletError`), and the data types.
  * - Display helpers that return codes, not sentences: `selectWalletToken`, `formatTokenAmount`, `formatOfferExpiry`,
  *   `describePreapprovalScope`, `shortCantonId`, `validateSignMessage` (and `readSignature` for a `signMessage`
- *   answer).
+ *   answer); `actionState` says why an action is disabled.
  * - Cancellation: every call that reads, fetches or acts takes an optional `signal` (`WalletCallOptions`):
  *   `WalletStore.act`, `Cip103Session.connect` and `restore`, `DiscoveredWallet.load` included. `WalletStore.dispose()`
  *   cancels the store's own work in flight the same way.
@@ -41,6 +41,7 @@ export {
   type ConnectedWallet,
 } from './session';
 export {
+  actionState,
   canAct,
   createWalletStore,
   walletActionKey,
@@ -51,6 +52,7 @@ export {
   type WalletActionResults,
   type WalletNotice,
   type WalletStore,
+  type WalletActionBlocker,
   type WalletStoreOptions,
   type WalletView,
 } from './store';

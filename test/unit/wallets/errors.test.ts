@@ -267,3 +267,49 @@ describe('wallet error guards', () => {
     ).toEqual([false]);
   });
 });
+
+describe('describeWalletError for a wallet provider error (CIP-0103 codes)', () => {
+  const providerError = (code: number, message: string): Error & { code: number } =>
+    Object.assign(new Error(message), { code });
+
+  it('describes 4001 as declined, nothing signed or submitted', () => {
+    expect(describeWalletError(providerError(4001, 'User Rejected Request'))).toEqual({
+      kind: 'declined',
+      message: 'You declined in the wallet. Nothing was signed or submitted.',
+      code: 4001,
+    });
+    expect(describeWalletError({ code: 4001, message: 'no' }).kind).toBe('declined');
+  });
+
+  it('describes 4100 as unauthorized, keeping the wallet message', () => {
+    expect(describeWalletError(providerError(4100, 'key not linked'))).toEqual({
+      kind: 'unauthorized',
+      message: 'The wallet did not authorize this account (CIP-0103 4100): key not linked',
+      code: 4100,
+    });
+    expect(describeWalletError({ code: 4100, message: 'plain object' }).message).toMatch(/: plain object$/);
+  });
+
+  it('describes -32002 as an unknown outcome that must not be resubmitted', () => {
+    const described = describeWalletError(providerError(-32002, 'Resource unavailable'));
+    expect(described).toMatchObject({ kind: 'outcome-unknown', code: -32002 });
+    expect(described.message).toMatch(/Do not resubmit/);
+  });
+
+  it('leaves other codes, and the SDK errors carrying a code, as before', () => {
+    expect(describeWalletError(providerError(-32603, 'internal'))).toEqual({ kind: 'other', message: 'internal' });
+    expect(describeWalletError(new WalletReadError('not connected', 4100)).kind).toBe('read-failed');
+    expect(describeWalletError(new WalletSignError('rejected-by-user', 'declined', 4001)).message).toMatch(
+      /Nothing was verified/
+    );
+  });
+
+  it('never throws on a hostile code getter', () => {
+    const hostile = Object.defineProperty(new Error('boom'), 'code', {
+      get() {
+        throw new Error('no');
+      },
+    });
+    expect(describeWalletError(hostile)).toEqual({ kind: 'other', message: 'boom' });
+  });
+});

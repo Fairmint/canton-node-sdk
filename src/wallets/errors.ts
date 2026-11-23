@@ -294,10 +294,17 @@ export interface WalletErrorDescription {
    * - `cancelled`: the call's `signal` aborted it. The message says "Nothing was submitted" only for the cancellation
    *   this module throws before it submits; any other `AbortError` or `TimeoutError` gets a neutral sentence.
    * - `not-verified`: the server did not verify a wallet ownership proof (its verdict; never from `describeWalletError`).
+   * - `unauthorized`: a wallet's own error with CIP-0103 code 4100: the wallet did not authorize the request for this
+   *   account (for example its key is not one the signed-in user holds).
    * - `other`: anything else.
+   *
+   * A wallet's own error (a CIP-0103 provider's, thrown by code that called the provider itself) is described by its
+   * numeric `code`: 4001 is `declined`, 4100 `unauthorized`, and -32002 (the wallet did not answer in time)
+   * `outcome-unknown`, since the wallet may still have acted.
    */
   readonly kind:
     | 'declined'
+    | 'unauthorized'
     | 'not-committed'
     | 'outcome-unknown'
     | 'refused'
@@ -345,7 +352,32 @@ function thrownText(error: unknown): string {
   }
 }
 
-/** A user-facing sentence and a kind for any error the wallets module throws (or anything else thrown). */
+/** The numeric `code` of a thrown object (a CIP-0103 provider error), if any; never throws (a hostile getter). */
+function providerCode(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null) return undefined;
+  try {
+    const { code } = error as { code?: unknown };
+    return typeof code === 'number' ? code : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The text of a provider's error: its `message` when it is a string (an `Error`, or a JSON-RPC error object). */
+function providerMessage(error: object): string {
+  try {
+    const { message } = error as { message?: unknown };
+    if (typeof message === 'string') return message;
+  } catch {
+    // A hostile getter: fall through.
+  }
+  return thrownText(error);
+}
+
+/**
+ * A user-facing sentence and a kind for any error the wallets module throws, a CIP-0103 provider's own error (4001,
+ * 4100 and -32002 by code, see {@link WalletErrorDescription.kind}), or anything else thrown.
+ */
 export function describeWalletError(error: unknown): WalletErrorDescription {
   if (isWalletSubmitError(error)) {
     const submit = {
@@ -397,6 +429,27 @@ export function describeWalletError(error: unknown): WalletErrorDescription {
   // A foreign `AbortError` or `TimeoutError` (a wallet's, or `fetch`'s) may have been raised after a submission was sent.
   if (isWalletCancellation(error)) {
     return described('cancelled', 'Cancelled; this does not say whether anything was submitted.');
+  }
+  const code = providerCode(error);
+  if (typeof error === 'object' && error !== null && code !== undefined) {
+    switch (code) {
+      case 4001:
+        return described('declined', 'You declined in the wallet. Nothing was signed or submitted.', 4001);
+      case 4100:
+        return described(
+          'unauthorized',
+          `The wallet did not authorize this account (CIP-0103 4100): ${providerMessage(error)}`,
+          4100
+        );
+      case -32002:
+        return described(
+          'outcome-unknown',
+          'The wallet did not answer in time (CIP-0103 -32002), so the outcome is unknown. Do not resubmit: refresh the wallet to see whether it committed.',
+          -32002
+        );
+      default:
+        break;
+    }
   }
   if (error instanceof Error) return described('other', error.message);
   return described('other', thrownText(error));
