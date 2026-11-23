@@ -297,6 +297,10 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
   let discovery: { readonly controller: AbortController; readonly promise: Promise<void> } | null = null;
   let discovering = false;
   let disposed = false;
+  // Set while the connector bumps the latch itself: its own latch listener then does not evaluate the wanted live
+  // option, so a deferred change cannot move the session before the caller decides (a latch subscriber may start a
+  // write during the bump). The caller's own path decides instead, or the latch's release evaluates later.
+  let bumping = false;
   // Per key, the option object subscribed to and its unsubscribe: a replacement with the same key is subscribed anew.
   const liveSubscriptions = new Map<string, { readonly option: WalletOption; readonly unsubscribe: () => void }>();
 
@@ -318,6 +322,16 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
   function dropFormer(wanted: Live): void {
     wanted.former?.unsubscribe();
     wanted.former = null;
+  }
+
+  /** Bump the latch without the connector's own latch listener evaluating the wanted live option meanwhile. */
+  function bumpQuietly(): void {
+    bumping = true;
+    try {
+      latch.bump();
+    } finally {
+      bumping = false;
+    }
   }
 
   /** Whether the session is on `provider`, connected or connecting. */
@@ -602,7 +616,7 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
    * object no longer listed (heard through its stray listener) can only tear the wallet down, never connect one.
    */
   function evaluateLive(): void {
-    if (disposed || session === null || live === null) return;
+    if (disposed || bumping || session === null || live === null) return;
     const wanted = live;
     const listed = fixed.includes(wanted.option) || discovered.includes(wanted.option);
     let provider: Cip103Provider | null;
@@ -614,7 +628,11 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
       provider = null;
       retainKey = null;
     }
-    if (provider === null && wanted.former !== null) {
+    if (provider === null && wanted.former !== null && (wanted.connected === null || !sessionOn(wanted.connected))) {
+      // The session left the earlier object's provider (a cancelled sign-in): it no longer speaks for anything, and the
+      // replacement's empty answer clears the wallet below, so offering that provider again connects it.
+      dropFormer(wanted);
+    } else if (provider === null && wanted.former !== null) {
       // A rediscovered replacement that has not offered yet: the earlier object speaks for the wallet. The same
       // provider keeps it, another one is a change, and only its empty answer (or a throw) is a withdrawal.
       try {
@@ -870,9 +888,10 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
         publish();
         return { status: 'refused', reason: 'unavailable' };
       }
-      latch.bump();
       // The bump notifies the latch's subscribers synchronously, and one may start a write: the previous wallet, its
-      // restore and its remembered key then stay, as for the busy check above.
+      // restore and its remembered key then stay, as for the busy check above. The connector's own listener does not
+      // evaluate during it, so a deferred live change cannot have moved the session either.
+      bumpQuietly();
       if (latch.getSnapshot().holder !== null) return { status: 'refused', reason: 'busy' };
       retireRestore();
       error = null;
@@ -892,6 +911,8 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
           sessionState().status === 'connected' &&
           sessionOn(current.connected)
         ) {
+          // A change the option offered while it could not connect is heard now, as the bump would have.
+          evaluateLive();
           publish();
           return { status: 'connected' };
         }
@@ -1056,7 +1077,11 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
         stopPendingLoad();
         held = null;
         if (loadingOnly) evaluateLive();
-        else session?.disconnect();
+        else {
+          // The sign-in ends: an earlier object kept for it no longer speaks for the wallet.
+          if (live !== null) dropFormer(live);
+          session?.disconnect();
+        }
       } else if (current === 'preparing') {
         const dismissed = live;
         setLive(null);
@@ -1073,7 +1098,8 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
     disconnect() {
       if (disposed) return;
       retireRestore();
-      latch.bump();
+      // Quietly: a deferred live change must not start a connect that this disconnect ends at once.
+      bumpQuietly();
       nextAttempt();
       stopPendingLoad();
       setLive(null);
