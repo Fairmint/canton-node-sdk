@@ -300,7 +300,12 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
   // Set while the connector bumps the latch itself: its own latch listener then does not evaluate the wanted live
   // option, so a deferred change cannot move the session before the caller decides (a latch subscriber may start a
   // write during the bump). The caller's own path decides instead, or the latch's release evaluates later.
-  let bumping = false;
+  // A depth, not a flag: a latch subscriber may re-enter connect() during the bump, and the inner bump ending must not
+  // end the outer one's suppression.
+  let bumping = 0;
+  // The provider a connect of the latest attempt is starting the session on, during the synchronous part of
+  // `session.connect` (the session leaves the previous wallet, and only then publishes `connecting`).
+  let starting: { readonly provider: Cip103Provider; readonly attempt: number } | null = null;
   // Per key, the option object subscribed to and its unsubscribe: a replacement with the same key is subscribed anew.
   const liveSubscriptions = new Map<string, { readonly option: WalletOption; readonly unsubscribe: () => void }>();
 
@@ -326,16 +331,20 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
 
   /** Bump the latch without the connector's own latch listener evaluating the wanted live option meanwhile. */
   function bumpQuietly(): void {
-    bumping = true;
+    bumping += 1;
     try {
       latch.bump();
     } finally {
-      bumping = false;
+      bumping -= 1;
     }
   }
 
-  /** Whether the session is on `provider`, connected or connecting. */
+  /**
+   * Whether the session is on `provider`, connected or connecting. Also while the connector's current attempt is
+   * starting a connect to it: the session still shows the previous wallet while it signs that one out.
+   */
   function sessionOn(provider: Cip103Provider): boolean {
+    if (starting?.provider === provider && starting.attempt === attempts && !disposed) return true;
     const state = sessionState();
     return (
       (state.status === 'connected' && state.wallet.provider === provider) ||
@@ -597,8 +606,16 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
   ): Promise<WalletConnectResult> {
     const attempt = nextAttempt();
     via = { provider, option, retainKey, party: null };
-    // Started synchronously: inside the user's click when nothing was awaited before.
-    const pending = forSession.connect(provider).catch(() => undefined); // rejects only for a signal; none is passed
+    // Started synchronously: inside the user's click when nothing was awaited before. A notification the session's
+    // sign-out of the previous wallet sets off finds the session on `provider` already.
+    const outer = starting;
+    starting = { provider, attempt };
+    let pending: Promise<void>;
+    try {
+      pending = forSession.connect(provider).catch(() => undefined); // rejects only for a signal; none is passed
+    } finally {
+      starting = outer;
+    }
     publish();
     // A superseded connect reports at once; the session drops its late answer itself.
     let wake: () => void = () => undefined;
@@ -621,7 +638,7 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
 
   /** {@link evaluateLive}, returning the attempt it starts (null when it starts none). */
   function reconcileLive(): Promise<WalletConnectResult> | null {
-    if (disposed || bumping || session === null || live === null) return null;
+    if (disposed || bumping > 0 || session === null || live === null) return null;
     const wanted = live;
     const listed = fixed.includes(wanted.option) || discovered.includes(wanted.option);
     let provider: Cip103Provider | null;
@@ -900,6 +917,9 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
       if (latch.getSnapshot().holder !== null) return { status: 'refused', reason: 'busy' };
       retireRestore();
       error = null;
+      // A connect still loading its provider is superseded, whichever path this call takes (the wallet already on
+      // included): its load then ends `cancelled`, never reporting a failure or connecting late.
+      if (pendingLoad !== null) nextAttempt();
       stopPendingLoad();
       held = null;
 
@@ -963,6 +983,8 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
       const attempt = nextAttempt();
       const controller = new AbortController();
       pendingLoad = { option, controller };
+      // A withdrawal the bump suppressed is heard now: the session leaves a torn-down wallet while this one loads.
+      evaluateLive();
       publish();
       let provider: Cip103Provider;
       try {

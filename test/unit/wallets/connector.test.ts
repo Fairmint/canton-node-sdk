@@ -2077,3 +2077,151 @@ describe('createWalletConnector: races with a write and a superseding call', () 
     });
   }
 });
+
+describe('createWalletConnector: re-entrant bumps, a sign-out that notifies, and a superseded load', () => {
+  it('keeps the earlier object when it notifies while the session signs out of the wallet it moves from', async () => {
+    const made: Array<ReturnType<typeof liveOption>> = [];
+    const c = connector({
+      discover: async () => {
+        const next = liveOption('privy:x');
+        made.push(next);
+        return [next.option];
+      },
+    });
+    await flush();
+    const rotated = new TestProvider(PARTY_A);
+    // The previous wallet's CIP-0103 disconnect makes the earlier object notify, synchronously, with what it offers.
+    const provider = new TestProvider(PARTY_A, {
+      disconnect: () => {
+        made[0]?.offer(rotated, PARTY_A);
+        return null;
+      },
+    });
+    made[0]?.offer(provider, PARTY_A);
+    expect(await c.connect('privy:x')).toEqual({ status: 'connected' });
+    await c.rediscover();
+    await flush();
+    expect(made).toHaveLength(2);
+    // The earlier object rotates before the replacement offers: the session moves to the rotated provider.
+    made[0]?.offer(rotated, PARTY_A);
+    await flush();
+    expect(provider.requests).toContain('disconnect');
+    expect(connectedProvider(c)).toBe(rotated);
+    // Still kept for the wallet: the replacement offering the same provider is no change.
+    made[1]?.offer(rotated, PARTY_A);
+    await flush();
+    expect(connectedProvider(c)).toBe(rotated);
+    expect(rotated.requests.filter((method) => method === 'connect')).toHaveLength(1);
+    expect(rotated.requests).not.toContain('disconnect');
+    c.dispose();
+  });
+
+  it('keeps its own latch listener quiet for the whole bump when a latch subscriber re-enters connect()', async () => {
+    const latch = createWriteLatch();
+    let c: WalletConnector | null = null;
+    let armed = false;
+    // An object, not a local: it is set inside the listener, which flow analysis cannot see.
+    const reentry: { result: Promise<unknown> | null } = { result: null };
+    // Subscribed before the connector, so it runs before the connector's own listener on each bump.
+    latch.subscribe(() => {
+      if (!armed || c === null) return;
+      armed = false;
+      reentry.result = c.connect('privy');
+    });
+    let availability: WalletAvailability = AVAILABLE;
+    const live = liveOption('privy');
+    const ext = new TestProvider(PARTY_A);
+    c = connector({
+      latch,
+      options: [{ ...live.option, availability: () => availability }, readyOption('ext', ext)],
+    });
+    const first = new TestProvider(PARTY_A);
+    live.offer(first, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    await flush();
+    expect(connectedProvider(c)).toBe(first);
+    // A change the option offers while it cannot connect is deferred.
+    availability = { available: false, reason: 'not-configured' };
+    const rotated = new TestProvider(PARTY_A);
+    live.offer(rotated, PARTY_A);
+    await flush();
+    availability = AVAILABLE;
+    const release = c.preload(['ext']);
+    await flush();
+    expect(c.getSnapshot().options.find((option) => option.key === 'ext')?.provider).toBe('ready');
+    armed = true;
+    // The user picks `ext`: neither the re-entrant connect nor the connector's own listener runs the deferred change.
+    expect(await c.connect('ext')).toEqual({ status: 'connected' });
+    expect(reentry.result).not.toBeNull();
+    await reentry.result;
+    await flush();
+    expect(connectedProvider(c)).toBe(ext);
+    expect(rotated.requests).not.toContain('connect');
+    release();
+    c.dispose();
+  });
+
+  it('supersedes a loading connect when connect() picks the live wallet already on', async () => {
+    const live = liveOption('privy');
+    const loads: Array<{ readonly signal: AbortSignal; readonly answer: Deferred<Cip103Provider> }> = [];
+    const slow: LoadedWalletOption = {
+      mode: 'load',
+      key: 'slow',
+      kind: 'extension',
+      name: 'slow',
+      availability: () => AVAILABLE,
+      load: async (_network, signal) => {
+        const answer = deferred<Cip103Provider>();
+        loads.push({ signal, answer });
+        signal.addEventListener('abort', () => {
+          answer.reject(new Error('aborted'));
+        });
+        return answer.promise;
+      },
+    };
+    const c = connector({ options: [live.option, slow] });
+    const provider = new TestProvider(PARTY_A);
+    live.offer(provider, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    await flush();
+    const loading = c.connect('slow');
+    expect(c.getSnapshot().status).toBe('connecting');
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    expect(loads[0]?.signal.aborted).toBe(true);
+    expect(await loading).toEqual({ status: 'cancelled' });
+    await flush();
+    const snapshot = c.getSnapshot();
+    expect(snapshot.error).toBeNull();
+    expect(snapshot.options.find((option) => option.key === 'slow')?.provider).not.toBe('failed');
+    expect(snapshot.status).toBe('connected');
+    expect(connectedProvider(c)).toBe(provider);
+    c.dispose();
+  });
+
+  it('hears a withdrawal the bump suppressed once connect() starts loading another option', async () => {
+    const latch = createWriteLatch();
+    const live = liveOption('privy');
+    const slow = loadedOption('slow');
+    const c = connector({ latch, options: [live.option, slow] });
+    const provider = new TestProvider(PARTY_A);
+    live.offer(provider, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    await flush();
+    // A page's latch subscriber logs out of the live wallet during the bump.
+    let withdrawn = false;
+    latch.subscribe(() => {
+      if (withdrawn) return;
+      withdrawn = true;
+      live.offer(null);
+    });
+    const loading = c.connect('slow');
+    expect(withdrawn).toBe(true);
+    await flush();
+    expect(provider.requests).toContain('disconnect');
+    expect(c.session?.getSnapshot().status).toBe('disconnected');
+    expect(c.getSnapshot().status).toBe('connecting');
+    slow.loads[0]?.resolve(new TestProvider(PARTY_A));
+    expect(await loading).toEqual({ status: 'connected' });
+    c.dispose();
+  });
+});
