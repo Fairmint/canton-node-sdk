@@ -506,11 +506,17 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
 
   // ----- connecting -----
 
-  /** How a connect of `provider` (attempt `attempt`) ended, once `session.connect` settled. */
-  function settle(attempt: number, key: string, provider: Cip103Provider): WalletConnectResult {
+  /**
+   * How a connect of `provider` (attempt `attempt`) ended, once `session.connect` settled. With `remember`, a connected
+   * option is remembered here, in the same step that checks the attempt, so a superseded connect never writes storage.
+   */
+  function settle(attempt: number, key: string, provider: Cip103Provider, remember: boolean): WalletConnectResult {
     if (superseded(attempt)) return { status: 'cancelled' };
     const state = sessionState();
-    if (state.status === 'connected' && state.wallet.provider === provider) return { status: 'connected' };
+    if (state.status === 'connected' && state.wallet.provider === provider) {
+      if (remember) writeStorage(local, walletStorageKey, key);
+      return { status: 'connected' };
+    }
     if (state.status === 'disconnected' && state.error !== null) {
       error = Object.freeze({ code: 'connect-failed', key, description: state.error });
       publish();
@@ -523,7 +529,8 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
     forSession: Cip103Session,
     option: WalletOption,
     provider: Cip103Provider,
-    retainKey: string | null
+    retainKey: string | null,
+    remember = false
   ): Promise<WalletConnectResult> {
     const attempt = nextAttempt();
     via = { provider, option, retainKey, party: null };
@@ -538,7 +545,7 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
     superseders.add(wake);
     await Promise.race([pending, woken]);
     superseders.delete(wake);
-    return settle(attempt, option.key, provider);
+    return settle(attempt, option.key, provider, remember);
   }
 
   /** Connect the wanted live option's current provider, unless it is the one already connected or a write runs. */
@@ -725,8 +732,11 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
         publish();
         return { status: 'refused', reason: 'unavailable' };
       }
-      retireRestore();
       latch.bump();
+      // The bump notifies the latch's subscribers synchronously, and one may start a write: the previous wallet, its
+      // restore and its remembered key then stay, as for the busy check above.
+      if (latch.getSnapshot().holder !== null) return { status: 'refused', reason: 'busy' };
+      retireRestore();
       error = null;
       stopPendingLoad();
       held = null;
@@ -763,14 +773,10 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
         live = null;
         if (selected !== null) setSelected(null);
       };
-      const remember = (result: WalletConnectResult): WalletConnectResult => {
-        if (result.status === 'connected') writeStorage(local, walletStorageKey, key);
-        return result;
-      };
       const preload = preloads.get(key);
       if (preload?.provider === 'ready' && preload.loaded !== null) {
         leavePrevious();
-        return remember(await connectProvider(session, option, preload.loaded, null));
+        return connectProvider(session, option, preload.loaded, null, true);
       }
       const attempt = nextAttempt();
       const controller = new AbortController();
@@ -799,7 +805,7 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
         return { status: 'refused', reason: 'busy' };
       }
       leavePrevious();
-      return remember(await connectProvider(session, option, provider, null));
+      return connectProvider(session, option, provider, null, true);
     },
 
     select(key) {

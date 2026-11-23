@@ -1351,3 +1351,124 @@ describe('createWalletConnector: review fixes', () => {
     expect(local.getItem(WALLET)).toBeNull();
   });
 });
+
+describe('createWalletConnector: races with a write and a superseding call', () => {
+  /** Run `fn` after `depth` microtasks. */
+  function afterMicrotasks(depth: number, fn: () => void): void {
+    if (depth === 0) {
+      queueMicrotask(fn);
+      return;
+    }
+    queueMicrotask(() => {
+      afterMicrotasks(depth - 1, fn);
+    });
+  }
+
+  /** On the latch's next change, start a write (once), as a page's subscriber might. */
+  function writeOnNextBump(latch: ReturnType<typeof createWriteLatch>): {
+    readonly started: () => boolean;
+    readonly finish: () => void;
+  } {
+    const write = deferred<undefined>();
+    let started = false;
+    const unsubscribe = latch.subscribe(() => {
+      if (started) return;
+      started = true;
+      unsubscribe();
+      void latch.run('canton-coin', async () => write.promise);
+    });
+    return { started: () => started, finish: () => write.resolve(undefined) };
+  }
+
+  it('refuses a live connect when a latch subscriber starts a write during its bump, and keeps the previous wallet', async () => {
+    const local = memoryStorage();
+    const latch = createWriteLatch();
+    const first = new TestProvider('first::1220abc');
+    const privy = liveOption();
+    const live = new TestProvider(PARTY_A);
+    const c = connector({ local, latch, options: [readyOption('loop', first), privy.option] });
+    expect(await c.connect('loop')).toEqual({ status: 'connected' });
+    privy.offer(live, PARTY_A);
+    const write = writeOnNextBump(latch);
+    expect(await c.connect('privy')).toEqual({ status: 'refused', reason: 'busy' });
+    expect(write.started()).toBe(true);
+    await flush();
+    expect(live.requests).toEqual([]);
+    expect(first.requests).not.toContain('disconnect');
+    expect(connectedProvider(c)).toBe(first);
+    expect(local.getItem(WALLET)).toBe('loop');
+    write.finish();
+    await flush();
+    expect(connectedProvider(c)).toBe(first);
+  });
+
+  it('refuses a preloaded connect when a latch subscriber starts a write during its bump, and keeps the previous wallet', async () => {
+    const local = memoryStorage();
+    const latch = createWriteLatch();
+    const first = new TestProvider('first::1220abc');
+    const other = new TestProvider('other::1220abc');
+    const c = connector({ local, latch, options: [readyOption('loop', first), readyOption('other', other)] });
+    expect(await c.connect('loop')).toEqual({ status: 'connected' });
+    c.preload(['other']);
+    await flush();
+    expect(c.getSnapshot().options[1]?.provider).toBe('ready');
+    const write = writeOnNextBump(latch);
+    expect(await c.connect('other')).toEqual({ status: 'refused', reason: 'busy' });
+    expect(write.started()).toBe(true);
+    await flush();
+    expect(other.requests).toEqual([]);
+    expect(first.requests).not.toContain('disconnect');
+    expect(connectedProvider(c)).toBe(first);
+    expect(local.getItem(WALLET)).toBe('loop');
+    write.finish();
+  });
+
+  const DEPTHS = Array.from({ length: 40 }, (_, depth) => depth);
+
+  /** A connector connecting `loop` (preloaded, or loaded first), with `race` run `depth` microtasks after the call. */
+  async function raceLoopConnect(
+    preloaded: boolean,
+    depth: number,
+    race: (c: WalletConnector) => void
+  ): Promise<{ local: ReturnType<typeof memoryStorage>; c: WalletConnector }> {
+    const local = memoryStorage();
+    const privy = liveOption();
+    const c = connector({ local, options: [readyOption('loop', new TestProvider()), privy.option] });
+    if (preloaded) {
+      c.preload(['loop']);
+      await flush();
+    }
+    const pending = c.connect('loop');
+    afterMicrotasks(depth, () => {
+      race(c);
+    });
+    await pending;
+    await flush();
+    return { local, c };
+  }
+
+  for (const preloaded of [true, false]) {
+    const path = preloaded ? 'preloaded' : 'loaded-first';
+
+    it(`never remembers a ${path} connect that a disconnect() superseded`, async () => {
+      for (const depth of DEPTHS) {
+        const { local, c } = await raceLoopConnect(preloaded, depth, (connector_) => {
+          connector_.disconnect();
+        });
+        expect([depth, local.getItem(WALLET)]).toEqual([depth, null]);
+        c.dispose();
+      }
+    });
+
+    it(`never overwrites the key of a connect that superseded a ${path} connect`, async () => {
+      for (const depth of DEPTHS) {
+        const { local, c } = await raceLoopConnect(preloaded, depth, (connector_) => {
+          void connector_.connect('privy');
+        });
+        // The live option is remembered at once, and is preparing (no provider yet).
+        expect([depth, local.getItem(WALLET)]).toEqual([depth, 'privy']);
+        c.dispose();
+      }
+    });
+  }
+});
