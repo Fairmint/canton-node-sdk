@@ -1563,6 +1563,54 @@ describe('createWalletStore: shared latch, read-only gate and held snapshots', (
     expect(await t.store.run('x', async () => 1)).toEqual({ status: 'refused', reason: 'disposed' });
   });
 
+  it('refuses run() as a write act() is refused: read-only, and while an unknown outcome is unchecked', async () => {
+    const t = setup({ readOnly: 'production' });
+    await connectAndLoad(t);
+    let ran = false;
+    const write = async (): Promise<number> => {
+      ran = true;
+      return 1;
+    };
+    expect(await t.store.run('canton-coin', write)).toEqual({ status: 'refused', reason: 'read-only' });
+    t.store.setReadOnly(null);
+    const acting = t.store.act(ACCEPT);
+    t.call().reject(
+      new WalletSubmitError('unknown', 'The wallet did not confirm the transaction.', { commandId: 'c' })
+    );
+    expect(await acting).toBeNull();
+    expect(t.store.getSnapshot().unknownOutcome).not.toBeNull();
+    t.answer();
+    await flush();
+    expect(await t.store.run('canton-coin', write)).toEqual({ status: 'refused', reason: 'unknown-outcome' });
+    expect(ran).toBe(false);
+    t.store.acknowledgeUnknownOutcome();
+    expect(await t.store.run('canton-coin', write)).toEqual({ status: 'done', value: 1 });
+  });
+
+  it('never applies a snapshot a load read before a run, and loads again once the run ends', async () => {
+    const t = setup();
+    await t.session.connect(t.provider);
+    expect(t.loads).toHaveLength(1);
+    const send = deferred<string>();
+    const running = t.store.run('canton-coin', async () => send.promise);
+    // The load read the ledger before the write: its reply is dropped.
+    t.answer(1);
+    await flush();
+    expect(t.store.getSnapshot().state).toBeNull();
+    expect(t.store.getSnapshot().busy).toBe(true);
+    // A refresh meanwhile waits for the run.
+    t.store.refresh();
+    await flush();
+    expect(t.loads).toHaveLength(0);
+    send.resolve('sent');
+    expect(await running).toEqual({ status: 'done', value: 'sent' });
+    await flush();
+    expect(t.loads).toHaveLength(1);
+    t.answer(2);
+    await flush();
+    expect(t.store.getSnapshot().state?.offset).toBe(2);
+  });
+
   it('refuses writes while read-only and still runs reads; setReadOnly opens it again', async () => {
     const t = setup({ readOnly: 'production' });
     await connectAndLoad(t);

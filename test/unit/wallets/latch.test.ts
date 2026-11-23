@@ -148,4 +148,28 @@ describe('createWriteLatch', () => {
     expect(outcome).toMatchObject({ status: 'failed', error: { message: 'sync' } });
     expect(latch.getSnapshot().holder).toBeNull();
   });
+  it('aborts only the runs that started before a bump, not one a listener starts in the new epoch', async () => {
+    const latch = createWriteLatch();
+    const reply = deferred<string>();
+    let started: WriteRunContext | null = null;
+    const outcomes: Array<Promise<WriteRunOutcome<string>>> = [];
+    latch.subscribe(() => {
+      const { holder, epoch } = latch.getSnapshot();
+      if (holder === null && epoch === 1 && outcomes.length === 0) {
+        outcomes.push(
+          latch.run('after bump', async (ctx) => {
+            started = ctx;
+            return reply.promise;
+          })
+        );
+      }
+    });
+    latch.bump();
+    const context = started as WriteRunContext | null;
+    expect(context?.signal.aborted).toBe(false);
+    expect(context?.isCurrent()).toBe(true);
+    reply.resolve('ok');
+    expect(outcomes).toHaveLength(1);
+    expect(await outcomes[0]).toEqual({ status: 'done', value: 'ok' });
+  });
 });

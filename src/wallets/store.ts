@@ -317,10 +317,13 @@ export interface WalletStore {
    * Runs `fn` under the store's latch (`latch.run(label, fn)`), for a write that is not a store action (a Canton Coin
    * prepare, sign and submit). Its signal is also aborted when the connected wallet changes (the store bumps the latch
    * on every wallet change) and on `dispose()`. A run does not set `outcome` or `unknownOutcome`: the caller reports
-   * its {@link WriteRunOutcome}. A write here does not trigger a reload; call `refresh()`. Refused (`busy`) while a
-   * store action or another run holds the latch, and (`disposed`) after `dispose()`.
+   * its {@link WriteRunOutcome}. A write here does not trigger a reload; call `refresh()`. Refused as a write `act()`
+   * is: (`busy`) while a store action or another run holds the latch, (`read-only`) while the write gate is closed,
+   * (`unknown-outcome`) while `view.unknownOutcome` is set, and (`disposed`) after `dispose()`. While it runs it counts
+   * as a wallet call in flight (loads wait for it), and a load already in flight is dropped and asked again after it,
+   * so a snapshot read before the write is never shown after it.
    */
-  run<T>(label: string, fn: (context: WriteRunContext) => Promise<T>): Promise<WriteRunOutcome<T>>;
+  run<T>(label: string, fn: (context: WriteRunContext) => Promise<T>): Promise<WalletStoreRunOutcome<T>>;
   /** Changes the write gate (null opens it) and publishes a new view. */
   setReadOnly(reason: string | null): void;
   /**
@@ -329,6 +332,10 @@ export interface WalletStore {
    */
   dispose(): void;
 }
+
+/** How a {@link WalletStore.run} ended: the latch's outcomes, or refused by the store's own write gates. */
+export type WalletStoreRunOutcome<T> =
+  WriteRunOutcome<T> | { readonly status: 'refused'; readonly reason: 'read-only' | 'unknown-outcome' };
 
 export interface WalletStoreOptions {
   readonly session: Cip103Session;
@@ -941,9 +948,20 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
       return ended.status === 'done' && isCurrent(ranFor) ? ended.value : null;
     },
 
-    async run<T>(label: string, fn: (context: WriteRunContext) => Promise<T>): Promise<WriteRunOutcome<T>> {
+    async run<T>(label: string, fn: (context: WriteRunContext) => Promise<T>): Promise<WalletStoreRunOutcome<T>> {
       if (disposed) return { status: 'refused', reason: 'disposed' };
+      // The same write gates as act(): the app's write gate, and an unknown outcome the user has not checked yet.
+      if (readOnly !== null) return { status: 'refused', reason: 'read-only' };
+      if (unknownOutcome !== null) return { status: 'refused', reason: 'unknown-outcome' };
       return latch.run(label, async (context) => {
+        // A wallet call in flight: loads wait for it. A load already in flight read the ledger before this write, so
+        // its reply is dropped (a new generation) and the load asked again once the run ends.
+        inFlight += 1;
+        if (loadInFlight) {
+          generation += 1;
+          loadInFlight = false;
+          queued = true;
+        }
         // Also aborted by dispose(); the store bumps the latch on every wallet change.
         const { signal, release } = anySignal(context.signal, lifetime.signal);
         try {
@@ -956,6 +974,8 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
           });
         } finally {
           release();
+          inFlight -= 1;
+          drain();
         }
       });
     },

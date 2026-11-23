@@ -85,6 +85,7 @@ export {
   type WalletActionBlocker,
   type WalletBusyReason,
   type WalletStoreOptions,
+  type WalletStoreRunOutcome,
   type WalletView,
 } from './store';
 export {

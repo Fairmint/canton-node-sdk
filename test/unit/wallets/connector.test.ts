@@ -14,6 +14,7 @@ import {
   type LoadedWalletOption,
   type StorageLike,
   type WalletConnector,
+  type WalletAvailability,
   type WalletConnectorInput,
   type Wallet,
   type WalletOption,
@@ -802,7 +803,7 @@ describe('createWalletConnector: loaded options', () => {
     expect(await c.connect('loop')).toEqual({ status: 'refused', reason: 'disposed' });
   });
 
-  it('reports a connect still loading its provider as connecting while another wallet is connected; cancel() ends it', async () => {
+  it('reports a connect still loading its provider as connecting while another wallet is connected; cancel() ends it and keeps that wallet', async () => {
     const first = new TestProvider('first::1220abc');
     const slow = loadedOption('extension:slow');
     const c = connector({ options: [readyOption('loop', first), slow] });
@@ -815,15 +816,15 @@ describe('createWalletConnector: loaded options', () => {
       connection: null,
     });
     c.cancel();
-    // The load was stopped (its signal aborted) and the previous wallet, which the connect had left, is disconnected.
+    // The load was stopped (its signal aborted) and the previous wallet, which the connect had not left yet, stays.
     const late = new TestProvider('late::1220abc');
     slow.loads[0]?.resolve(late);
     expect(await pending).toEqual({ status: 'cancelled' });
     await flush();
     expect(late.requests).toEqual([]);
-    expect(first.requests).toContain('disconnect');
-    expect(c.session?.getSnapshot().status).toBe('disconnected');
-    expect(c.getSnapshot()).toMatchObject({ status: 'disconnected', target: null, connection: null });
+    expect(first.requests).not.toContain('disconnect');
+    expect(connectedProvider(c)).toBe(first);
+    expect(c.getSnapshot()).toMatchObject({ status: 'connected', target: { key: 'loop' } });
   });
 
   it('refuses an unknown option, a connect without a DA network, and one while the latch is held', async () => {
@@ -1123,3 +1124,230 @@ describe('createWalletConnector: store and dispose', () => {
 });
 
 const PARTY_A = 'alice::1220abc';
+
+describe('createWalletConnector: review fixes', () => {
+  const PARTY_B = 'bob::1220abc';
+
+  it("drops the retain key when the live provider's account changes to another party, so its snapshot is not shown", async () => {
+    const privy = liveOption();
+    const loads = new Map<string, Deferred<WalletState>>();
+    const openWallet = (options: WalletOptions): Wallet =>
+      ({
+        partyId: options.partyId,
+        network: options.network,
+        loadState: async () => {
+          const load = deferred<WalletState>();
+          loads.set(options.partyId, load);
+          return load.promise;
+        },
+      }) as unknown as Wallet;
+    const c = connector({
+      options: [privy.option],
+      store: { ...OFFLINE_STORE, openWallet } as NonNullable<WalletConnectorInput['store']>,
+    });
+    const { store } = c;
+    if (store === null) throw new Error('no store');
+    const provider = new TestProvider(PARTY_A);
+    privy.offer(provider, PARTY_A);
+    await c.connect('privy');
+    await flush();
+    loads.get(PARTY_A)?.resolve({
+      offset: 1,
+      holdings: [],
+      balances: [],
+      transferOffers: { incoming: [], outgoing: [] },
+      mintOffers: [],
+      burnRequests: [],
+      transferPreapprovals: [],
+      cantonCoinUnavailable: false,
+    });
+    await flush();
+    expect(store.getSnapshot().shown).not.toBeNull();
+    expect(c.getSnapshot().connection?.key).toBe(`privy:${PARTY_A}`);
+
+    provider.setParty(PARTY_B);
+    provider.emit('accountsChanged', [{ partyId: PARTY_B, primary: true }]);
+    await flush();
+    const { connection } = c.getSnapshot();
+    expect(connection?.wallet.partyId).toBe(PARTY_B);
+    expect(connection?.key).not.toBe(`privy:${PARTY_A}`);
+    // B's state is still loading: nothing of A's is shown meanwhile.
+    expect(store.getSnapshot()).toMatchObject({ shown: null });
+  });
+
+  it('refuses to connect a loaded option whose load finished while a write took the latch, and keeps its provider', async () => {
+    const latch = createWriteLatch();
+    const first = new TestProvider('first::1220abc');
+    const slow = loadedOption('extension:slow');
+    const c = connector({ latch, options: [readyOption('loop', first), slow] });
+    expect(await c.connect('loop')).toEqual({ status: 'connected' });
+    const pending = c.connect('extension:slow');
+    const write = deferred<undefined>();
+    const running = latch.run('canton-coin', async (context) => {
+      await write.promise;
+      return context.signal.aborted;
+    });
+    const late = new TestProvider('late::1220abc');
+    slow.loads[0]?.resolve(late);
+    expect(await pending).toEqual({ status: 'refused', reason: 'busy' });
+    await flush();
+    expect(late.requests).toEqual([]);
+    expect(first.requests).not.toContain('disconnect');
+    expect(connectedProvider(c)).toBe(first);
+    expect(c.getSnapshot().options[1]?.provider).toBe('ready');
+    write.resolve(undefined);
+    expect(await running).toEqual({ status: 'done', value: false });
+  });
+
+  it('restores a remembered live option that discovery found, as a fixed one', async () => {
+    const privy = liveOption('privy:discovered');
+    const local = memoryStorage({ [WALLET]: 'privy:discovered' });
+    const c = connector({ local, discover: async () => [privy.option] });
+    await flush();
+    expect(privy.restores()).toBe(1);
+    expect(c.getSnapshot()).toMatchObject({ status: 'preparing', selected: 'privy:discovered' });
+    privy.offer(new TestProvider(PARTY_A), PARTY_A);
+    await flush();
+    expect(c.getSnapshot()).toMatchObject({ status: 'connected', target: { key: 'privy:discovered' } });
+  });
+
+  it('never connects a remembered live option on its own while it is unavailable', async () => {
+    const privy = liveOption();
+    let availability: WalletAvailability = { available: false, reason: 'not-configured' };
+    const option: LiveWalletOption = { ...privy.option, availability: () => availability };
+    const c = connector({ local: memoryStorage({ [WALLET]: 'privy' }), options: [option] });
+    const provider = new TestProvider(PARTY_A);
+    privy.offer(provider, PARTY_A);
+    await flush();
+    expect(provider.requests).toEqual([]);
+    expect(c.getSnapshot().status).toBe('preparing');
+    availability = AVAILABLE;
+    privy.offer(provider, PARTY_A);
+    await flush();
+    expect(c.getSnapshot().status).toBe('connected');
+  });
+
+  it('subscribes to a rediscovered live option that replaces one with the same key, and wants the replacement', async () => {
+    const before = liveOption('privy:x');
+    const after = liveOption('privy:x');
+    let found: WalletOption[] = [before.option];
+    const c = connector({ discover: async () => found });
+    await flush();
+    expect(await c.connect('privy:x')).toEqual({ status: 'preparing' });
+    found = [after.option];
+    await c.rediscover();
+    expect(before.subscribers()).toBe(0);
+    expect(after.subscribers()).toBe(1);
+    after.offer(new TestProvider(PARTY_A), PARTY_A);
+    await flush();
+    expect(c.getSnapshot()).toMatchObject({ status: 'connected', target: { key: 'privy:x' } });
+  });
+
+  it('ends discovering when discover throws synchronously', async () => {
+    const c = connector({
+      discover: () => {
+        throw new Error('boom');
+      },
+    });
+    await flush();
+    expect(c.getSnapshot().discovering).toBe(false);
+    await c.rediscover();
+    expect(c.getSnapshot().discovering).toBe(false);
+  });
+
+  it('leaves the previous wallet, and its pending sign-in, when a live option without a provider is chosen', async () => {
+    const privy = liveOption();
+    const loop = new TestProvider('loop::1220abc');
+    const c = connector({ options: [privy.option, readyOption('loop', loop)] });
+    expect(await c.connect('loop')).toEqual({ status: 'connected' });
+    expect(await c.connect('privy')).toEqual({ status: 'preparing' });
+    expect(c.getSnapshot()).toMatchObject({ status: 'preparing', connection: null, target: { key: 'privy' } });
+    expect(connectedProvider(c)).toBeNull();
+    expect(loop.requests).toContain('disconnect');
+
+    const signIn = deferred<unknown>();
+    const slow = new TestProvider('slow::1220abc', { connect: async () => signIn.promise });
+    const d = connector({ options: [privy.option, readyOption('slow', slow)] });
+    const pending = d.connect('slow');
+    await flush();
+    expect(d.session?.getSnapshot().status).toBe('connecting');
+    expect(await d.connect('privy')).toEqual({ status: 'preparing' });
+    expect(await pending).toEqual({ status: 'cancelled' });
+    signIn.resolve({ isConnected: true, isNetworkConnected: true });
+    await flush();
+    expect(d.session?.getSnapshot().status).toBe('disconnected');
+    expect(d.getSnapshot().status).toBe('preparing');
+  });
+
+  it('remembers a loaded option only once connected: a cancelled or failed connect keeps the previous key', async () => {
+    const local = memoryStorage({ [WALLET]: 'loop' });
+    const slow = loadedOption('extension:slow');
+    const c = connector({ local, options: [slow] });
+    const cancelled = c.connect('extension:slow');
+    c.cancel();
+    slow.loads[0]?.resolve(new TestProvider());
+    expect(await cancelled).toEqual({ status: 'cancelled' });
+    expect(local.getItem(WALLET)).toBe('loop');
+
+    const failed = c.connect('extension:slow');
+    slow.loads[1]?.reject(new Error('not installed'));
+    expect(await failed).toEqual({ status: 'failed' });
+    expect(local.getItem(WALLET)).toBe('loop');
+
+    const connected = c.connect('extension:slow');
+    slow.loads[2]?.resolve(new TestProvider());
+    expect(await connected).toEqual({ status: 'connected' });
+    expect(local.getItem(WALLET)).toBe('extension:slow');
+  });
+
+  it('forgets a cancelled live reconnect when its key is still the remembered one', async () => {
+    const local = memoryStorage();
+    const privy = liveOption();
+    const c = connector({ local, options: [privy.option] });
+    const provider = fakeProvider('alice');
+    privy.offer(provider.provider, PARTY_A);
+    const pending = c.connect('privy');
+    expect(local.getItem(WALLET)).toBe('privy');
+    c.cancel();
+    expect(local.getItem(WALLET)).toBeNull();
+    expect(await pending).toEqual({ status: 'cancelled' });
+  });
+
+  it('keeps the previous live wallet wanted when a loaded connect fails, and reconnects its rebuilt provider', async () => {
+    const local = memoryStorage();
+    const privy = liveOption();
+    const slow = loadedOption('extension:slow');
+    const c = connector({ local, options: [privy.option, slow] });
+    privy.offer(new TestProvider(PARTY_A), PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    const failed = c.connect('extension:slow');
+    slow.loads[0]?.reject(new Error('not installed'));
+    expect(await failed).toEqual({ status: 'failed' });
+    expect(local.getItem(WALLET)).toBe('privy');
+    expect(c.getSnapshot()).toMatchObject({ status: 'connected', target: { key: 'privy' } });
+    const rebuilt = new TestProvider(PARTY_A);
+    privy.offer(rebuilt, PARTY_A);
+    await flush();
+    expect(c.getSnapshot().connection?.wallet.provider).toBe(rebuilt);
+  });
+
+  it('select(null) and cancel() dismiss a live option a connect() is only preparing', async () => {
+    const local = memoryStorage();
+    const privy = liveOption();
+    const c = connector({ local, options: [privy.option] });
+    expect(await c.connect('privy')).toEqual({ status: 'preparing' });
+    expect(c.getSnapshot().selected).toBeNull();
+    expect(c.select(null)).toBe(true);
+    expect(c.getSnapshot().status).toBe('disconnected');
+    expect(local.getItem(WALLET)).toBeNull();
+    privy.offer(new TestProvider(PARTY_A), PARTY_A);
+    await flush();
+    expect(c.getSnapshot().status).toBe('disconnected');
+
+    privy.offer(null);
+    expect(await c.connect('privy')).toEqual({ status: 'preparing' });
+    c.cancel();
+    expect(c.getSnapshot().status).toBe('disconnected');
+    expect(local.getItem(WALLET)).toBeNull();
+  });
+});
