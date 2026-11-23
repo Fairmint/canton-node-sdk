@@ -15,6 +15,17 @@ describe('formatTokenAmount', () => {
     expect(formatTokenAmount('0.0000000001')).toBe('0.0000000001');
     expect(formatTokenAmount('10')).toBe('10');
     expect(formatTokenAmount('100')).toBe('100');
+    expect(formatTokenAmount('100.0')).toBe('100');
+    expect(formatTokenAmount('100.5000')).toBe('100.5');
+    expect(formatTokenAmount('0.0')).toBe('0');
+  });
+
+  it('stays linear on long runs of zeros', () => {
+    const zeros = '0'.repeat(200_000);
+    const started = Date.now();
+    expect(formatTokenAmount(`1.${zeros}`)).toBe('1');
+    expect(formatTokenAmount(`${zeros}.${zeros}1`)).toBe(`${zeros}.${zeros}1`);
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 });
 

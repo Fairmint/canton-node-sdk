@@ -9,7 +9,12 @@ import type { PreapprovalScope } from './contracts';
  * nor a bare point: `4`, `1.25`. A string without a point is returned unchanged.
  */
 export function formatTokenAmount(amount: string): string {
-  return amount.includes('.') ? amount.replace(/\.?0+$/, '') : amount;
+  const point = amount.indexOf('.');
+  if (point < 0) return amount;
+  // A linear scan (no backtracking regex: amounts may come from a ledger or a peer).
+  let end = amount.length;
+  while (end > point + 1 && amount.charCodeAt(end - 1) === 48 /* '0' */) end -= 1;
+  return end === point + 1 ? amount.slice(0, point) : amount.slice(0, end);
 }
 
 /** How long before a deadline {@link formatOfferExpiry} reports it as `soon`: 48 hours. */
