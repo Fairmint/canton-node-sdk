@@ -1,6 +1,6 @@
 /** What text wallets sign, and reading a `signMessage` answer (ported from the apiv2 Canton Wallet playground's tests). */
 import * as Wallets from '../../../src/wallets';
-import { readSignature, validateSignMessage } from '../../../src/wallets/sign-message';
+import { readSignature, readSpecSignature, validateSignMessage } from '../../../src/wallets/sign-message';
 
 describe('validateSignMessage', () => {
   it('needs 64 to 8192 bytes', () => {
@@ -34,16 +34,38 @@ describe('validateSignMessage', () => {
 });
 
 describe('readSignature', () => {
-  it("reads the spec's { signature } shape only", () => {
+  // Ported from apiv2's canton-wallet-model.test.ts "reads both answer shapes" (null there is undefined here).
+  it('reads both answer shapes: { signature } and a bare string', () => {
     expect(readSignature({ signature: 'abc' })).toBe('abc');
-    expect(readSignature('abc')).toBeUndefined();
+    expect(readSignature('abc')).toBe('abc');
     expect(readSignature({ other: 1 })).toBeUndefined();
-    expect(readSignature({ signature: '' })).toBeUndefined();
     expect(readSignature(null)).toBeUndefined();
+  });
+
+  it('gives undefined for an empty signature in either shape, and for other answers', () => {
+    expect(readSignature({ signature: '' })).toBeUndefined();
+    expect(readSignature('')).toBeUndefined();
+    expect(readSignature({ signature: 42 })).toBeUndefined();
+    expect(readSignature(42)).toBeUndefined();
+    expect(readSignature(undefined)).toBeUndefined();
   });
 
   it('is exported from the wallets entry point', () => {
     expect(Wallets.readSignature).toBe(readSignature);
     expect(Wallets.validateSignMessage).toBe(validateSignMessage);
+  });
+});
+
+describe('readSpecSignature', () => {
+  it("reads the spec's { signature } shape only (the ownership proof's reader)", () => {
+    expect(readSpecSignature({ signature: 'abc' })).toBe('abc');
+    expect(readSpecSignature('abc')).toBeUndefined();
+    expect(readSpecSignature({ other: 1 })).toBeUndefined();
+    expect(readSpecSignature({ signature: '' })).toBeUndefined();
+    expect(readSpecSignature(null)).toBeUndefined();
+  });
+
+  it('is not exported from the wallets entry point', () => {
+    expect('readSpecSignature' in Wallets).toBe(false);
   });
 });

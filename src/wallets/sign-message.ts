@@ -51,9 +51,22 @@ export function validateSignMessage(
 }
 
 /**
- * The signature in a CIP-0103 `signMessage` answer: the `signature` field of `{ signature }`, the spec's shape (the one
- * `proveWalletOwnership` accepts). Undefined for any other answer (a bare string included) or an empty signature.
+ * The signature in a CIP-0103 `signMessage` answer, for a page that shows it: the `signature` field of `{ signature }`
+ * (the spec's shape) or a bare string (what some wallets answer). Undefined for any other answer and for an empty
+ * signature, so a page treats both as "the wallet answered without a signature".
+ *
+ * The ownership proof (`requestWalletOwnershipVerdict`) is stricter: it accepts the spec's `{ signature }` shape only.
  */
 export function readSignature(answer: unknown): string | undefined {
+  return typeof answer === 'string' ? nonEmptyString(answer) : readSpecSignature(answer);
+}
+
+/**
+ * The `signature` field of a CIP-0103 `signMessage` answer in the spec's `{ signature }` shape; undefined for any other
+ * answer (a bare string included) or an empty signature. The ownership proof reads answers with this.
+ *
+ * @internal
+ */
+export function readSpecSignature(answer: unknown): string | undefined {
   return isRecord(answer) ? nonEmptyString(answer['signature']) : undefined;
 }

@@ -28,7 +28,7 @@ import { awaitWithAbort as coreAwaitWithAbort } from '../core/http/abort';
 import { globalFetch, type FetchLike } from './da-utilities/client';
 import { WalletReadError, WalletSignError } from './errors';
 import { isRecord, nonEmptyString } from './json';
-import { readSignature } from './sign-message';
+import { readSpecSignature } from './sign-message';
 
 /** The first line of every ownership message. */
 export const WALLET_OWNERSHIP_TITLE = 'Canton wallet ownership proof';
@@ -277,7 +277,7 @@ export async function proveWalletOwnership(
     }
     throw new WalletSignError('failed', `The wallet did not sign the ownership message: ${describeError(error)}`, code);
   }
-  const signature = readSignature(raw);
+  const signature = readSpecSignature(raw);
   if (signature === undefined) {
     throw new WalletSignError('failed', 'The wallet answered signMessage without a signature');
   }
