@@ -162,8 +162,9 @@ describe('src/wallets browser safety', () => {
       // Not the `window-mismatch` reason code of a wallet ownership verdict.
       /\bwindow\b(?!-mismatch)/,
       /\bdocument\b/,
-      /\blocalStorage\b/,
-      /\bsessionStorage\b/,
+      // Browser storage only as an optional property of `globalThis`, read in a try/catch (storage.ts).
+      /(?<!globalThis\.)\blocalStorage\b/,
+      /(?<!globalThis\.)\bsessionStorage\b/,
       /\bprocess\./,
       /\bBuffer\b/,
       /\b__dirname\b/,

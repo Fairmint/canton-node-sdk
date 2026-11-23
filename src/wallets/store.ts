@@ -13,6 +13,7 @@ import type { CantonCoinOptions } from './amulet/registry';
 import type { FetchLike, DaRegistryOptions } from './da-utilities/client';
 import { describeWalletError, WalletError, type WalletErrorDescription } from './errors';
 import { instrumentKey } from './holdings';
+import { createWriteLatch, type WriteLatch, type WriteRunContext, type WriteRunOutcome } from './latch';
 import { requestWalletOwnershipVerdict, type WalletOwnershipVerdict } from './ownership';
 import type { Cip103Session, Cip103SessionState, ConnectedWallet } from './session';
 import type { InstrumentId, SubmitResult } from './types';
@@ -126,11 +127,13 @@ export function walletActionKey(action: WalletAction): string {
 const READ_ONLY: ReadonlySet<WalletAction['type']> = new Set(['planTransfer', 'proveOwnership']);
 
 /**
- * Whether `store.act(action)` would run it now: the store is `ready`, not busy, and, for a write, no outcome is
- * unknown. Use it to enable the action's button.
+ * Whether `store.act(action)` would run it now: the store is `ready`, not busy, and, for a write, the store is not
+ * read-only and no outcome is unknown. Use it to enable the action's button.
  */
 export function canAct(view: WalletView, action: WalletAction): boolean {
-  return view.ready && !view.busy && (READ_ONLY.has(action.type) || view.unknownOutcome === null);
+  return (
+    view.ready && !view.busy && (READ_ONLY.has(action.type) || (view.readOnly === null && view.unknownOutcome === null))
+  );
 }
 
 /**
@@ -139,10 +142,12 @@ export function canAct(view: WalletView, action: WalletAction): boolean {
  * - `disconnected`: no wallet is connected (or there is no view yet);
  * - `reconnecting`: the session is connecting (a reconnect or a switch of wallet);
  * - `not-ready`: connected, but the token wallet is not open (`view.loadError` may say why);
- * - `busy`: a wallet call is in flight or a load is queued;
+ * - `read-only`: the app's write gate is closed (`view.readOnly` holds its value); writes only;
+ * - `busy`: a wallet call is in flight, a load is queued, or another writer holds the shared latch;
  * - `unknown-outcome`: a write's outcome is unknown, so writes wait until `acknowledgeUnknownOutcome()`.
  */
-export type WalletActionBlocker = 'disconnected' | 'reconnecting' | 'not-ready' | 'busy' | 'unknown-outcome';
+export type WalletActionBlocker =
+  'disconnected' | 'reconnecting' | 'not-ready' | 'read-only' | 'busy' | 'unknown-outcome';
 
 /**
  * Whether `store.act(action)` would run it now (as {@link canAct}), and when not, the first reason, in the order listed
@@ -163,9 +168,11 @@ export function actionState(
           ? 'disconnected'
           : !view.ready
             ? 'not-ready'
-            : view.busy
-              ? 'busy'
-              : 'unknown-outcome';
+            : view.readOnly !== null && !READ_ONLY.has(action.type)
+              ? 'read-only'
+              : view.busy
+                ? 'busy'
+                : 'unknown-outcome';
   return { enabled: false, reason };
 }
 
@@ -221,6 +228,9 @@ export interface WalletNotice {
   readonly acknowledge?: true;
 }
 
+/** Why {@link WalletView.busy} is true. */
+export type WalletBusyReason = 'action' | 'load' | 'run';
+
 export interface WalletView {
   readonly session: Cip103SessionState;
   /** The connected wallet the state belongs to (null when disconnected). */
@@ -242,10 +252,26 @@ export interface WalletView {
   /** The running action (`key` is its `walletActionKey`). */
   readonly running: { readonly action: WalletAction; readonly key: string } | null;
   /**
-   * True while any wallet call is in flight or a load is queued: disable every action button. `act()` refuses
-   * meanwhile, so only one wallet call is ever in flight.
+   * True while any wallet call is in flight, a load is queued, or another writer holds the shared latch (a `run()`):
+   * disable every action button. `act()` refuses meanwhile, so only one wallet call is ever in flight.
    */
   readonly busy: boolean;
+  /**
+   * Why `busy` is true (null when it is not): `action` (a store action holds the latch), `run` (another writer's
+   * `run()` holds it; `busyLabel` names it) or `load` (a snapshot load is in flight or queued), in that precedence.
+   */
+  readonly busyReason: WalletBusyReason | null;
+  /** The latch holder's label while `busyReason` is `action` or `run`, else null. */
+  readonly busyLabel: string | null;
+  /**
+   * What a page renders: `state` when it is non-null; otherwise, while a load runs or the session is connecting, the
+   * last state of the same `retainKey` (see {@link WalletStoreOptions.retainKey}); otherwise null.
+   */
+  readonly shown: WalletState | null;
+  /** `shown` is a held snapshot, not `state`. */
+  readonly stale: boolean;
+  /** The app's write gate in force (`WalletStoreOptions.readOnly`, `setReadOnly`), or null when writes are open. */
+  readonly readOnly: string | null;
   /**
    * The last action that had something to say: a write's result or failure, an ownership verdict, a plan that failed. A
    * plan that succeeded leaves it as it was (its result is the plan). Cleared when the wallet changes.
@@ -288,6 +314,16 @@ export interface WalletStore {
   /** Clear `unknownOutcome` once the user checked the wallet. */
   acknowledgeUnknownOutcome(): void;
   /**
+   * Runs `fn` under the store's latch (`latch.run(label, fn)`), for a write that is not a store action (a Canton Coin
+   * prepare, sign and submit). Its signal is also aborted when the connected wallet changes (the store bumps the latch
+   * on every wallet change) and on `dispose()`. A run does not set `outcome` or `unknownOutcome`: the caller reports
+   * its {@link WriteRunOutcome}. A write here does not trigger a reload; call `refresh()`. Refused (`busy`) while a
+   * store action or another run holds the latch, and (`disposed`) after `dispose()`.
+   */
+  run<T>(label: string, fn: (context: WriteRunContext) => Promise<T>): Promise<WriteRunOutcome<T>>;
+  /** Changes the write gate (null opens it) and publishes a new view. */
+  setReadOnly(reason: string | null): void;
+  /**
    * Stop following the session; pending replies are dropped and no further view is published. Work in flight (an
    * action, a load) is cancelled through its `signal`, so nothing more is sent before a signature is requested.
    */
@@ -300,6 +336,27 @@ export interface WalletStoreOptions {
   readonly registry?: DaRegistryOptions;
   /** Canton Coin for each token wallet (`createWallet`'s `cantonCoin`): on by default, `false` to read none. */
   readonly cantonCoin?: CantonCoinOptions | false;
+  /** The latch the store shares with `run()` and the app's other writers. Default: a private one. */
+  readonly latch?: WriteLatch;
+  /**
+   * The app's write gate, such as a server-supplied reason writes are off. While it is set, every write action is
+   * refused; reads (`planTransfer`, `proveOwnership`) still run. The store does not interpret the value. Change it
+   * later with `setReadOnly`.
+   */
+  readonly readOnly?: string | null;
+  /**
+   * The connection a ledger snapshot belongs to, for `shown`/`stale`. Two wallets with the same key (for example a
+   * rebuilt provider for the same party) keep the last snapshot on screen across the reconnect. Read once per connected
+   * wallet. Default: `wallet.key`, which keeps it only across reloads of one connection.
+   */
+  readonly retainKey?: (wallet: ConnectedWallet) => string;
+  /**
+   * While the session is `connecting`, the retain key of the connection being made, or null when it is not known. The
+   * held snapshot stays shown (`stale`) during a connect only when this names its key, so a connect to another wallet
+   * or party never shows the previous one's holdings. Read on every view while connecting. Default: none, so nothing is
+   * held while the session connects.
+   */
+  readonly connectingRetainKey?: () => string | null;
 }
 
 /** A test hook beside {@link WalletStoreOptions}; not part of the public options. */
@@ -528,6 +585,9 @@ function forParty(message: string, partyId: string, current: ConnectedWallet | n
  */
 export function createWalletStore(options: WalletStoreOptions): WalletStore {
   const { session, registry, cantonCoin, openWallet = createWallet } = options as WalletStoreInternalOptions;
+  const latch = options.latch ?? createWriteLatch();
+  const retainKey = options.retainKey ?? ((connected: ConnectedWallet) => connected.key);
+  const connectingRetainKey = options.connectingRetainKey ?? (() => null);
   const listeners = new Set<() => void>();
   const plans: StorePlans = new WeakMap();
 
@@ -548,6 +608,12 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
   let outcome: ActionOutcome | null = null;
   let unknownOutcome: UnknownOutcome | null = null;
   let disposed = false;
+  let readOnly: string | null = options.readOnly ?? null;
+  // A store action holds (or is taking) the latch: its busy reason is `action`, not someone else's `run`.
+  let acting = false;
+  // The current wallet's retain key, and the last snapshot shown for a key (kept across a reconnect of the same key).
+  let walletRetainKey: string | null = null;
+  let held: { readonly key: string; readonly value: WalletState } | null = null;
   // Aborted by dispose(): cancels the store's work in flight (combined with each caller's own signal).
   const lifetime = new AbortController();
   let view = buildView();
@@ -599,7 +665,46 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
     return list;
   }
 
+  function busyReason(holder: string | null): WalletBusyReason | null {
+    if (running !== null || acting) return 'action';
+    if (holder !== null) return 'run';
+    return inFlight > 0 || queued ? 'load' : null;
+  }
+
+  /**
+   * What to render: the live state, else the held one of the same retain key while a load or reconnect runs. While the
+   * session reconnects there is no wallet yet; the held state stays only when `connectingRetainKey` names its key.
+   */
+  function retained(): { readonly shown: WalletState | null; readonly stale: boolean } {
+    if (state !== null) {
+      if (wallet !== null && walletRetainKey !== null) held = { key: walletRetainKey, value: state };
+      return { shown: state, stale: false };
+    }
+    if (wallet === null) {
+      if (sessionState.status !== 'connecting') {
+        held = null;
+        return { shown: null, stale: false };
+      }
+      let target: string | null;
+      try {
+        target = connectingRetainKey();
+      } catch {
+        target = null;
+      }
+      return held !== null && target !== null && held.key === target
+        ? { shown: held.value, stale: true }
+        : { shown: null, stale: false };
+    }
+    if (held !== null && held.key === walletRetainKey && (loadInFlight || queued)) {
+      return { shown: held.value, stale: true };
+    }
+    return { shown: null, stale: false };
+  }
+
   function buildView(): WalletView {
+    const holder = latch.getSnapshot().holder?.label ?? null;
+    const reason = busyReason(holder);
+    const { shown, stale } = retained();
     return {
       session: sessionState,
       wallet,
@@ -608,7 +713,13 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
       loading: loadInFlight || queued,
       loadError,
       running: running === null ? null : { action: running.action, key: running.key },
-      busy: inFlight > 0 || queued,
+      busy: reason !== null,
+      busyReason: reason,
+      busyLabel:
+        reason === 'run' || reason === 'action' ? (holder ?? (running === null ? null : running.action.type)) : null,
+      shown,
+      stale,
+      readOnly,
       outcome,
       unknownOutcome,
       notices: notices(),
@@ -686,6 +797,14 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
       return;
     }
     wallet = next;
+    walletRetainKey = null;
+    if (next !== null) {
+      try {
+        walletRetainKey = retainKey(next);
+      } catch {
+        walletRetainKey = next.key;
+      }
+    }
     generation += 1; // drop the previous wallet's load reply (its call still holds the latch until it settles)
     queued = false;
     loadInFlight = false;
@@ -693,6 +812,10 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
     loadError = null;
     outcome = null;
     tokens = null;
+    // Runs started for the previous wallet are abandoned: their signals abort, so nothing more is sent for it. Bumped
+    // only once the previous wallet's state is cleared: the bump publishes (the store follows the latch), and a view
+    // built part way through would show that state under the new wallet.
+    latch.bump();
     if (next !== null) {
       try {
         tokens = openWallet({
@@ -716,8 +839,8 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
   function record(ran: NonNullable<typeof running>, settled: Settled, live: boolean): void {
     const { action, key } = ran;
     const { partyId } = ran.wallet;
-    const readOnly = READ_ONLY.has(action.type);
-    if (!live && readOnly) return; // nothing it did can commit, and its wallet is gone
+    const reads = READ_ONLY.has(action.type);
+    if (!live && reads) return; // nothing it did can commit, and its wallet is gone
     if (settled.ok) {
       if (settled.message !== null) outcome = { action, key, partyId, status: 'succeeded', message: settled.message };
       return;
@@ -741,6 +864,8 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
   }
 
   const unsubscribe = session.subscribe(onSession);
+  // The latch's holder is part of the view (`busy`, `busyReason`, `busyLabel`).
+  const unsubscribeLatch = latch.subscribe(publish);
   onSession();
 
   return {
@@ -761,41 +886,84 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
       const ranFor = wallet;
       const ranTokens = tokens;
       if (disposed || inFlight > 0 || queued || ranFor === null || ranTokens === null) return null;
-      // Until the user checked the wallet, a write could repeat the one whose outcome is unknown.
-      if (unknownOutcome !== null && !READ_ONLY.has(action.type)) return null;
+      // Another writer (a `run()`, a wallet setup step) holds the shared latch.
+      if (latch.getSnapshot().holder !== null) return null;
+      const write = !READ_ONLY.has(action.type);
+      // The app's write gate; and until the user checked the wallet, a write could repeat the one whose outcome is
+      // unknown.
+      if (write && (readOnly !== null || unknownOutcome !== null)) return null;
       const ran = { action, key: walletActionKey(action), wallet: ranFor };
       inFlight += 1;
       running = ran;
-      publish();
-      // A listener of that publish may have ended the session, switched the wallet or disposed the store: then the
-      // action must not start, and queued work runs instead.
-      if (!isCurrent(ranFor)) {
+      acting = true;
+      // Takes the latch synchronously and runs the body at once, so a second call in this tick is refused.
+      const ended = await latch.run(action.type, async (context): Promise<ActionResultOf<A> | null> => {
+        publish();
+        // A listener of that publish may have ended the session, switched the wallet or disposed the store: then the
+        // action must not start, and queued work runs instead.
+        if (!isCurrent(ranFor)) {
+          inFlight -= 1;
+          running = null;
+          drain();
+          return null;
+        }
+
+        let settled: Settled;
+        const { signal, release } = anySignal(callOptions.signal, lifetime.signal, context.signal);
+        try {
+          settled = await perform(plans, ranTokens, ranFor, action, signal);
+        } catch (error) {
+          settled = { ok: false, error: describeWalletError(error) };
+        } finally {
+          release();
+        }
+
+        inFlight -= 1;
+        running = null;
+        const live = isCurrent(ranFor);
+        record(ran, settled, live);
+        // A failed write may still have committed, so reload after failures too. This only reads.
+        if (live && write) queued = true;
+        drain();
+        // The result type follows from the action type (`perform`'s switch).
+        return settled.ok ? (settled.result as ActionResultOf<A>) : null;
+      });
+      acting = false;
+      if (ended.status === 'refused') {
+        // Not taken (a disposed latch): the body never ran.
         inFlight -= 1;
         running = null;
         drain();
         return null;
       }
-
-      let settled: Settled;
-      const { signal, release } = anySignal(callOptions.signal, lifetime.signal);
-      try {
-        settled = await perform(plans, ranTokens, ranFor, action, signal);
-      } catch (error) {
-        settled = { ok: false, error: describeWalletError(error) };
-      } finally {
-        release();
-      }
-
-      inFlight -= 1;
-      running = null;
-      const live = isCurrent(ranFor);
-      record(ran, settled, live);
-      // A failed write may still have committed, so reload after failures too. This only reads.
-      if (live && !READ_ONLY.has(action.type)) queued = true;
-      drain();
+      publish();
       // Asked again: a listener of drain()'s publish may have ended the session or switched the wallet.
-      // The result type follows from the action type (`perform`'s switch).
-      return isCurrent(ranFor) && settled.ok ? (settled.result as ActionResultOf<A>) : null;
+      return ended.status === 'done' && isCurrent(ranFor) ? ended.value : null;
+    },
+
+    async run<T>(label: string, fn: (context: WriteRunContext) => Promise<T>): Promise<WriteRunOutcome<T>> {
+      if (disposed) return { status: 'refused', reason: 'disposed' };
+      return latch.run(label, async (context) => {
+        // Also aborted by dispose(); the store bumps the latch on every wallet change.
+        const { signal, release } = anySignal(context.signal, lifetime.signal);
+        try {
+          return await fn({
+            signal: signal ?? context.signal,
+            isCurrent: () => !disposed && context.isCurrent(),
+            markSubmitted: () => {
+              context.markSubmitted();
+            },
+          });
+        } finally {
+          release();
+        }
+      });
+    },
+
+    setReadOnly(reason) {
+      if (disposed || reason === readOnly) return;
+      readOnly = reason;
+      publish();
     },
 
     refresh() {
@@ -814,6 +982,7 @@ export function createWalletStore(options: WalletStoreOptions): WalletStore {
       queued = false;
       lifetime.abort();
       unsubscribe();
+      unsubscribeLatch();
       listeners.clear();
     },
   };

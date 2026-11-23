@@ -41,6 +41,36 @@ export {
   type ConnectedWallet,
 } from './session';
 export {
+  createWalletConnector,
+  DEFAULT_RESTORE_TIMEOUT_MS,
+  type WalletConnection,
+  type WalletConnectResult,
+  type WalletConnector,
+  type WalletConnectorError,
+  type WalletConnectorInput,
+  type WalletConnectorSnapshot,
+  type WalletConnectorStatus,
+  type WalletOptionState,
+} from './connector';
+export {
+  createWriteLatch,
+  type WriteLatch,
+  type WriteLatchHolder,
+  type WriteLatchState,
+  type WriteRunContext,
+  type WriteRunOutcome,
+} from './latch';
+export { loopWalletOption, type LoopSdkLike, type LoopWalletOption, type LoopWalletOptionInput } from './loop';
+export {
+  extensionWalletOptions,
+  type LiveWalletOption,
+  type LoadedWalletOption,
+  type WalletAvailability,
+  type WalletOption,
+  type WalletOptionInfo,
+} from './options';
+export type { StorageLike } from './storage';
+export {
   actionState,
   canAct,
   createWalletStore,
@@ -53,6 +83,7 @@ export {
   type WalletNotice,
   type WalletStore,
   type WalletActionBlocker,
+  type WalletBusyReason,
   type WalletStoreOptions,
   type WalletView,
 } from './store';
@@ -109,17 +140,20 @@ export {
   isRegistryResponseError,
   isWalletCancellation,
   isWalletError,
+  isWalletOptionError,
   isWalletReadError,
   isWalletSignError,
   isWalletSubmitError,
   RegistryApiError,
   RegistryResponseError,
   WalletError,
+  WalletOptionError,
   WalletReadError,
   WalletSignError,
   WalletSubmitError,
   type WalletErrorCode,
   type WalletErrorDescription,
+  type WalletOptionErrorCode,
   type WalletSignErrorReason,
   type WalletSubmitCategory,
   type WalletSubmitErrorDetails,

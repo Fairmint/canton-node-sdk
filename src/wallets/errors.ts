@@ -7,6 +7,7 @@
  */
 import { isAbortError } from '../core/http/abort';
 import { isCancelledBeforeSubmit } from './abort';
+import type { DaNetwork } from './da-utilities/client';
 
 /** The brand every wallets error carries: a non-enumerable property under a global (`Symbol.for`) symbol. */
 const WALLET_ERROR_BRAND: symbol = Symbol.for('@fairmint/canton-node-sdk/wallets.error');
@@ -17,7 +18,8 @@ type WalletErrorClassName =
   | 'WalletReadError'
   | 'WalletSignError'
   | 'RegistryApiError'
-  | 'RegistryResponseError';
+  | 'RegistryResponseError'
+  | 'WalletOptionError';
 
 function brand(error: Error, name: WalletErrorClassName): void {
   Object.defineProperty(error, WALLET_ERROR_BRAND, { value: name, enumerable: false });
@@ -260,6 +262,61 @@ export function isRegistryResponseError(error: unknown): error is RegistryRespon
 }
 
 /**
+ * Why a wallet option could not give its provider:
+ *
+ * - `unsupported-network`: the option does not run on the network asked for;
+ * - `reload-required`: the option was set up for another network in this page load (Loop) and needs a reload;
+ * - `setup-failed`: the option's own setup failed (`cause` says why); a later `load` tries again.
+ */
+export type WalletOptionErrorCode = 'unsupported-network' | 'reload-required' | 'setup-failed';
+
+/** Thrown by a wallet option's `load` (see `loopWalletOption`). */
+export class WalletOptionError extends Error {
+  readonly code: WalletOptionErrorCode;
+  /** For `reload-required`: the network the option is set up for in this page load. */
+  readonly setUpFor?: DaNetwork;
+  /** The network the caller asked for. */
+  readonly requested?: DaNetwork;
+  /** For `setup-failed`: what the setup threw. */
+  readonly cause?: unknown;
+
+  constructor(
+    code: WalletOptionErrorCode,
+    details: { readonly setUpFor?: DaNetwork; readonly requested?: DaNetwork; readonly cause?: unknown } = {}
+  ) {
+    super(walletOptionMessage(code, details));
+    this.name = 'WalletOptionError';
+    brand(this, 'WalletOptionError');
+    this.code = code;
+    if (details.setUpFor !== undefined) this.setUpFor = details.setUpFor;
+    if (details.requested !== undefined) this.requested = details.requested;
+    if (details.cause !== undefined) this.cause = details.cause;
+  }
+}
+
+function walletOptionMessage(
+  code: WalletOptionErrorCode,
+  details: { readonly setUpFor?: DaNetwork; readonly requested?: DaNetwork; readonly cause?: unknown }
+): string {
+  switch (code) {
+    case 'unsupported-network':
+      return `This wallet does not run on ${details.requested ?? 'this network'}.`;
+    case 'reload-required':
+      return `This wallet is set up for ${details.setUpFor ?? 'another network'} in this page load: reload the page to use ${details.requested ?? 'another network'}.`;
+    case 'setup-failed': {
+      const { cause } = details;
+      const reason = cause instanceof Error ? cause.message : cause === undefined ? 'no detail' : thrownText(cause);
+      return `The wallet could not be set up (${reason}). Try again, or reload the page.`;
+    }
+  }
+}
+
+/** Whether `error` is a {@link WalletOptionError} of any copy of this module (a brand check, not `instanceof`). */
+export function isWalletOptionError(error: unknown): error is WalletOptionError {
+  return error instanceof WalletOptionError || branded(error, 'WalletOptionError');
+}
+
+/**
  * Whether `error` is a cancellation: the `AbortError` an aborted `signal` makes a wallets call throw (also a
  * `TimeoutError` from `AbortSignal.timeout`, which `fetch` passes through).
  */
@@ -316,10 +373,10 @@ export interface WalletErrorDescription {
     | 'not-verified'
     | 'other';
   /**
-   * The `WalletError` code of a `refused` error, the wallet's CIP-0103 code of a wallet error when it gave one, or the
-   * HTTP status of a registry API error.
+   * The `WalletError` or `WalletOptionError` code of a `refused` error (`setup-failed` is `other`), the wallet's
+   * CIP-0103 code of a wallet error when it gave one, or the HTTP status of a registry API error.
    */
-  readonly code?: WalletErrorCode | number;
+  readonly code?: WalletErrorCode | WalletOptionErrorCode | number;
   /** An `outcome-unknown` submission's command id, to look the transaction up before anything is resubmitted. */
   readonly commandId?: string;
   /** An `outcome-unknown` burn request's reference, to look the request up before another is filed. */
@@ -336,7 +393,7 @@ const REGISTRY_BODY_CHARS = 300;
 function described(
   kind: WalletErrorDescription['kind'],
   message: string,
-  code?: WalletErrorCode | number
+  code?: WalletErrorCode | WalletOptionErrorCode | number
 ): WalletErrorDescription {
   return code === undefined ? { message, kind } : { message, kind, code };
 }
@@ -425,6 +482,9 @@ export function describeWalletError(error: unknown): WalletErrorDescription {
   }
   if (isRegistryResponseError(error)) return described('registry', error.message);
   if (isWalletError(error)) return described('refused', error.message, error.code);
+  if (isWalletOptionError(error)) {
+    return described(error.code === 'setup-failed' ? 'other' : 'refused', error.message, error.code);
+  }
   if (isCancelledBeforeSubmit(error)) return described('cancelled', 'Cancelled. Nothing was submitted.');
   // A foreign `AbortError` or `TimeoutError` (a wallet's, or `fetch`'s) may have been raised after a submission was sent.
   if (isWalletCancellation(error)) {

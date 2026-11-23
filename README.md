@@ -236,6 +236,57 @@ if (plan !== null && confirm(plan.description)) await store.act({ type: 'submitT
 - Wallet discovery follows the Canton dApp SDK's announce handshake; a CIP that standardizes
   discovery is still a draft, so `discoverCip103Wallets` will follow it once it settles.
 
+### Connecting a wallet: options, the connector and the write latch
+
+A page that offers several wallets uses `createWalletConnector` instead of wiring the session
+itself. It owns the network's session and store, restores the wallet remembered from an earlier
+visit, and remembers the user's choice. Like the store it is a framework-free observable
+(`subscribe`, `getSnapshot`), and its snapshot carries codes (`status`, `error.code`,
+`availability.reason`), never sentences: the page words them.
+
+- Options. A `LoadedWalletOption` loads its CIP-0103 provider on demand:
+  `loopWalletOption({ appName, load })` (the app passes Loop's dynamic import; node-sdk does not
+  depend on Loop) and `extensionWalletOptions()` (the installed extensions, keyed `extension:<id>`).
+  Loop serves one network per page load, so after it is set up its availability on the other network
+  is `reload-required`. A `LiveWalletOption` is one the app builds through its own setup UI (Privy's
+  session in `@fairmint/canton-privy-sdk` offers one): it offers a provider once set up, and a new
+  one whenever its setup changes.
+- `connector.connect(key)` is the user's click. A provider loaded beforehand with
+  `connector.preload()` is connected synchronously inside the click, which Loop's sign-in window
+  needs. A live option without a provider yet answers `preparing` and connects once it offers one; a
+  rebuilt provider for the same party shows `reconnecting` with the held connection (`stale`), so
+  the page stays mounted. `select(key)` opens a live option's setup UI, and survives a login
+  redirect in the same tab. `cancel()` and `disconnect()` end what is in flight.
+- Restore. On creation the connector reads `${storageKey}.wallet` (local storage) and restores that
+  wallet silently, giving up after `restoreTimeoutMs` (15 s) and forgetting it then or on
+  `cancel()`. A retired restore never connects late and never disconnects anything. Storage defaults
+  to the page's `localStorage` and `sessionStorage`; either may be missing or throw.
+- One write at a time. `createWriteLatch()` is a single-flight latch the store,
+  `store.run(label, fn)` (a write that is not a store action) and the app's other writers share. A
+  run starts synchronously, so a double click is refused; `bump()` (every wallet change) aborts the
+  runs in flight, which then report `dropped`, or `unknown-outcome` once they called
+  `markSubmitted()`. The view says why it is busy (`busyReason`: `action`, `run` or `load`, and
+  `busyLabel`).
+- `readOnly` (or `store.setReadOnly(reason)`) closes the app's write gate: writes are refused, reads
+  run, and `actionState` reports `read-only`. `view.shown` is what to render: `state`, or the last
+  snapshot of the same `retainKey` while a reload or reconnect runs (`view.stale`).
+
+```ts
+const loop = loopWalletOption({
+  appName: 'My dApp',
+  load: async () => (await import('@fivenorth/loop-sdk')).loop,
+});
+const connector = createWalletConnector({
+  network: 'devnet',
+  options: [loop],
+  discover: (signal) => extensionWalletOptions({ signal }),
+  storageKey: 'my-dapp.wallet',
+});
+const { status, options, connection, error } = connector.getSnapshot();
+await connector.connect('loop'); // { status: 'connected' | 'failed' | 'cancelled' | 'preparing' | 'refused' }
+connector.store?.getSnapshot(); // the token wallet view of the connected wallet
+```
+
 ### One panel per token
 
 `walletTokens(view.state)` gives one entry per token the state names, Canton Coin and DA Registry
