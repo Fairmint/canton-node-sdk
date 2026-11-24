@@ -1250,6 +1250,28 @@ describe('createCip103Session', () => {
       }
     );
 
+    it('never lets a restore started on the disconnected state reconnect a wallet the switch signed out', async () => {
+      const { session } = observed();
+      const previous = new TestProvider(OTHER);
+      await session.connect(previous);
+      let armed = true;
+      session.subscribe(() => {
+        if (!armed && session.getSnapshot().status === 'disconnected') void session.restore(previous);
+      });
+      const remove = previous.removeListener.bind(previous);
+      previous.removeListener = (event, listener) => {
+        if (armed) {
+          armed = false;
+          session.fail(new Error('boom'));
+        }
+        return remove(event, listener);
+      };
+      await session.connect(new TestProvider());
+      await flush();
+      expect(session.getSnapshot()).toMatchObject({ status: 'disconnected', error: { message: 'boom' } });
+      expect(previous.requests.filter((r) => r === 'connect')).toEqual(['connect']);
+    });
+
     it('does not sign the previous wallet out twice when its removeListener starts another connect()', async () => {
       const { session } = observed();
       const previous = new TestProvider(OTHER);

@@ -1147,14 +1147,17 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
       stopPendingLoad();
       setLive(null);
       held = null;
+      const epochBefore = latch.getSnapshot().epoch;
       session?.disconnect();
       setSelected(null);
       writeStorage(local, walletStorageKey, null);
       error = null;
       // Bumped once the wallet is left: the bump notifies the latch's subscribers synchronously, and a write one starts
       // then (in the new epoch, so not abandoned) finds no wallet rather than having it disconnected underneath it.
-      // Nothing is wanted any more, so the connector's own listener starts no deferred live change either.
-      latch.bump();
+      // Nothing is wanted any more, so the connector's own listener starts no deferred live change either. A store on
+      // this latch already bumped when the session left its wallet: bumping again would abandon a run a subscriber
+      // started in that new epoch, so the epoch moves once.
+      if (latch.getSnapshot().epoch === epochBefore) latch.bump();
       publish();
     },
 

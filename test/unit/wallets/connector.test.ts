@@ -827,6 +827,33 @@ describe('createWalletConnector: loaded options', () => {
     expect(c.getSnapshot()).toMatchObject({ status: 'connected', target: { key: 'loop' } });
   });
 
+  it('moves the latch epoch once on disconnect(), so a run started on the store bump is not abandoned', async () => {
+    const latch = createWriteLatch();
+    const c = connector({ latch, options: [readyOption('loop', new TestProvider())] });
+    expect(await c.connect('loop')).toEqual({ status: 'connected' });
+    // The connector's store bumps this latch when the session leaves its wallet; a subscriber starts a run then.
+    const before = latch.getSnapshot().epoch;
+    const started: Array<Promise<unknown>> = [];
+    latch.subscribe(() => {
+      if (started.length === 0 && latch.getSnapshot().epoch === before + 1 && latch.getSnapshot().holder === null) {
+        started.push(latch.run('wallet-setup', async () => 'done'));
+      }
+    });
+    c.disconnect();
+    expect(latch.getSnapshot().epoch).toBe(before + 1);
+    expect(started).toHaveLength(1);
+    expect(await started[0]).toEqual({ status: 'done', value: 'done' });
+  });
+
+  it('still bumps the latch on disconnect() when nothing else did', async () => {
+    const latch = createWriteLatch();
+    const c = connector({ latch, options: [readyOption('loop', new TestProvider())] });
+    expect(await c.connect('loop')).toEqual({ status: 'connected' });
+    const before = latch.getSnapshot().epoch;
+    c.disconnect();
+    expect(latch.getSnapshot().epoch).toBe(before + 1);
+  });
+
   it('refuses an unknown option, a connect without a DA network, and one while the latch is held', async () => {
     const latch = createWriteLatch();
     const c = connector({ latch, options: [readyOption('loop', new TestProvider())] });

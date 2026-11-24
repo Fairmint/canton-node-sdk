@@ -422,7 +422,12 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     const attempt = ++restores;
     started(attempt, own);
     const wanted = (): boolean =>
-      !disposed && own === epoch && attempt === restores && state.status === 'disconnected' && signal?.aborted !== true;
+      !disposed &&
+      own === epoch &&
+      attempt === restores &&
+      state.status === 'disconnected' &&
+      !signedOut.has(provider) &&
+      signal?.aborted !== true;
     let answer: unknown = null;
     try {
       answer = await provider.request({ method: 'isConnected' }, { signal });
