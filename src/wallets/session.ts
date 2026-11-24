@@ -195,13 +195,18 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     current.provider.removeListener('statusChanged', current.onStatusChanged);
   }
 
-  /** Supersede every pending reply and connect(), and stop following the provider. */
-  function interrupt(): void {
+  /**
+   * Supersede every pending reply and connect(), and stop following the provider. Returns the epoch it took, read
+   * before the provider's removeListener runs: a call-out there may start (and bump past it) a newer connect().
+   */
+  function interrupt(): number {
     epoch += 1;
+    const own = epoch;
     lookups += 1;
     signingIn = null;
     signInSent = false;
     detach();
+    return own;
   }
 
   function attach(provider: Cip103Provider): void {
@@ -345,10 +350,27 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     if (disposed) return;
     // Another wallet the session is on is signed out: the user switched wallets.
     const previous = [...sessionProviders()].filter((other) => other !== provider);
-    interrupt();
-    const own = epoch;
+    // The disconnect each was last recorded with, to tell whether a call-out below signed it out already.
+    const recorded = previous.map((other) => disconnecting.get(other));
+    // The epoch this run took, not the one after detaching: a connect() the old wallet's removeListener set off owns
+    // the session then, and this run must neither sign in nor send CIP-0103 `connect` as well.
+    const own = interrupt();
     started(own);
-    const current = (): boolean => own === epoch && !disposed && signal?.aborted !== true;
+    const ours = (): boolean => own === epoch && !disposed;
+    const current = (): boolean => ours() && signal?.aborted !== true;
+    // Superseded by what the old wallet's removeListener set off (an abort alone still signs it out below).
+    if (!ours()) {
+      // The user still left the previous wallets. A connect() or disconnect() set off there signed them out itself; a
+      // fail() or dispose() did not, so this run does (once each).
+      previous.forEach((other, index) => {
+        if (disconnecting.get(other) !== recorded[index]) return;
+        // The newer run is signing in to (or already on) this wallet: it owns it now and must not be signed out.
+        if (!disposed && (other === signingIn || sessionProviders().has(other))) return;
+        signedOut.add(other);
+        recordDisconnect(other)();
+      });
+      return;
+    }
     // From here on every return, early or not, clears `signingIn` (when nothing newer owns the session).
     try {
       signingIn = provider;
@@ -400,7 +422,12 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
     const attempt = ++restores;
     started(attempt, own);
     const wanted = (): boolean =>
-      !disposed && own === epoch && attempt === restores && state.status === 'disconnected' && signal?.aborted !== true;
+      !disposed &&
+      own === epoch &&
+      attempt === restores &&
+      state.status === 'disconnected' &&
+      !signedOut.has(provider) &&
+      signal?.aborted !== true;
     let answer: unknown = null;
     try {
       answer = await provider.request({ method: 'isConnected' }, { signal });

@@ -297,6 +297,17 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
   let discovery: { readonly controller: AbortController; readonly promise: Promise<void> } | null = null;
   let discovering = false;
   let disposed = false;
+  // Set while the connector bumps the latch itself: its own latch listener then does not evaluate the wanted live
+  // option, so a deferred change cannot move the session before the caller decides (a latch subscriber may start a
+  // write during the bump). The caller's own path decides instead, or the latch's release evaluates later.
+  // A depth, not a flag: a latch subscriber may re-enter connect() during the bump, and the inner bump ending must not
+  // end the outer one's suppression.
+  let bumping = 0;
+  // The provider a connect of the latest attempt is starting the session on, during the synchronous part of
+  // `session.connect` (the session leaves the previous wallet, and only then publishes `connecting`). A withdrawal
+  // heard in this window stops that sign-in with a plain `session.disconnect()`: the run took its epoch before the
+  // previous wallet's call-outs, so the disconnect supersedes it.
+  let starting: { readonly provider: Cip103Provider; readonly attempt: number } | null = null;
   // Per key, the option object subscribed to and its unsubscribe: a replacement with the same key is subscribed anew.
   const liveSubscriptions = new Map<string, { readonly option: WalletOption; readonly unsubscribe: () => void }>();
 
@@ -320,8 +331,22 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
     wanted.former = null;
   }
 
-  /** Whether the session is on `provider`, connected or connecting. */
+  /** Bump the latch without the connector's own latch listener evaluating the wanted live option meanwhile. */
+  function bumpQuietly(): void {
+    bumping += 1;
+    try {
+      latch.bump();
+    } finally {
+      bumping -= 1;
+    }
+  }
+
+  /**
+   * Whether the session is on `provider`, connected or connecting. Also while the connector's current attempt is
+   * starting a connect to it: the session still shows the previous wallet while it signs that one out.
+   */
   function sessionOn(provider: Cip103Provider): boolean {
+    if (starting?.provider === provider && starting.attempt === attempts && !disposed) return true;
     const state = sessionState();
     return (
       (state.status === 'connected' && state.wallet.provider === provider) ||
@@ -583,8 +608,17 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
   ): Promise<WalletConnectResult> {
     const attempt = nextAttempt();
     via = { provider, option, retainKey, party: null };
-    // Started synchronously: inside the user's click when nothing was awaited before.
-    const pending = forSession.connect(provider).catch(() => undefined); // rejects only for a signal; none is passed
+    // Started synchronously: inside the user's click when nothing was awaited before. A notification the session's
+    // sign-out of the previous wallet sets off finds the session on `provider` already.
+    const outer = starting;
+    starting = { provider, attempt };
+    let pending: Promise<void>;
+    try {
+      // It never rejects without a signal; the catch only keeps a surprise from going unhandled.
+      pending = forSession.connect(provider).catch(() => undefined);
+    } finally {
+      starting = outer;
+    }
     publish();
     // A superseded connect reports at once; the session drops its late answer itself.
     let wake: () => void = () => undefined;
@@ -602,7 +636,14 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
    * object no longer listed (heard through its stray listener) can only tear the wallet down, never connect one.
    */
   function evaluateLive(): void {
-    if (disposed || session === null || live === null) return;
+    // Quiet while the connector bumps the latch itself; an explicit reconcileLive() (connect()'s own) still runs.
+    if (bumping > 0) return;
+    void reconcileLive();
+  }
+
+  /** {@link evaluateLive}, returning the attempt it starts (null when it starts none). */
+  function reconcileLive(): Promise<WalletConnectResult> | null {
+    if (disposed || session === null || live === null) return null;
     const wanted = live;
     const listed = fixed.includes(wanted.option) || discovered.includes(wanted.option);
     let provider: Cip103Provider | null;
@@ -614,7 +655,11 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
       provider = null;
       retainKey = null;
     }
-    if (provider === null && wanted.former !== null) {
+    if (provider === null && wanted.former !== null && (wanted.connected === null || !sessionOn(wanted.connected))) {
+      // The session left the earlier object's provider (a cancelled sign-in): it no longer speaks for anything, and the
+      // replacement's empty answer clears the wallet below, so offering that provider again connects it.
+      dropFormer(wanted);
+    } else if (provider === null && wanted.former !== null) {
       // A rediscovered replacement that has not offered yet: the earlier object speaks for the wallet. The same
       // provider keeps it, another one is a change, and only its empty answer (or a throw) is a withdrawal.
       try {
@@ -631,29 +676,34 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
     if (!listed && provider !== null && provider !== wanted.connected) provider = null;
     if (provider === null) {
       const previous = wanted.connected;
-      if (previous === null) return;
+      if (previous === null) return null;
       // Torn down (logout, another wallet or party): leave it. An unlisted object is no longer wanted either: it can
       // never connect again, so keeping it would leave the connector 'preparing' a wallet it no longer lists.
       dropFormer(wanted);
       wanted.connected = null;
       held = null;
       if (!listed) setLive(null);
-      if (sessionOn(previous)) session.disconnect();
+      // A sign-in the connector is starting on that provider is superseded, so it never reports `connected` for a
+      // wallet the option no longer offers, and the disconnect below stops it. Whether the session is on it is read
+      // first: the new attempt ends `starting`, and the session may still show the previous wallet.
+      const on = sessionOn(previous);
+      if (starting?.provider === previous && starting.attempt === attempts) nextAttempt();
+      if (on) session.disconnect();
       publish();
-      return;
+      return null;
     }
-    if (provider === wanted.connected) return;
+    if (provider === wanted.connected) return null;
     // The user's connect to a loaded option is loading: it decides first (a failure evaluates again).
-    if (pendingLoad !== null) return;
+    if (pendingLoad !== null) return null;
     // An option that cannot connect here offers nothing: its next change evaluates again.
-    if (!availability(wanted.option).available) return;
+    if (!availability(wanted.option).available) return null;
     // Never reconnect under a write: the latch's release evaluates again.
-    if (latch.getSnapshot().holder !== null) return;
+    if (latch.getSnapshot().holder !== null) return null;
     wanted.connected = provider;
     const current = currentConnection();
     held =
       current !== null && retainKey !== null && current.key === `${wanted.option.key}:${retainKey}` ? current : null;
-    void connectProvider(session, wanted.option, provider, retainKey);
+    return connectProvider(session, wanted.option, provider, retainKey);
   }
 
   function stopPendingLoad(): void {
@@ -870,12 +920,16 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
         publish();
         return { status: 'refused', reason: 'unavailable' };
       }
-      latch.bump();
       // The bump notifies the latch's subscribers synchronously, and one may start a write: the previous wallet, its
-      // restore and its remembered key then stay, as for the busy check above.
+      // restore and its remembered key then stay, as for the busy check above. The connector's own listener does not
+      // evaluate during it, so a deferred live change cannot have moved the session either.
+      bumpQuietly();
       if (latch.getSnapshot().holder !== null) return { status: 'refused', reason: 'busy' };
       retireRestore();
       error = null;
+      // A connect still loading its provider is superseded, whichever path this call takes (the wallet already on
+      // included): its load then ends `cancelled`, never reporting a failure or connecting late.
+      if (pendingLoad !== null) nextAttempt();
       stopPendingLoad();
       held = null;
 
@@ -885,12 +939,22 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
         if (selected !== null && selected !== key) setSelected(null);
         // Already on this option's wallet (perhaps kept by an earlier object while a rediscovered replacement has not
         // offered yet): nothing to do, and rebuilding the wanted state would drop that earlier object and disconnect.
+        // A change the option offered while it could not connect is heard first, as the bump would have: this call
+        // reports the sign-in that change starts (one sign-in, not a second that supersedes it), and a withdrawal moves
+        // the session, so the check below fails and a new attempt follows.
+        if (live?.option === option) {
+          const started = reconcileLive();
+          if (started !== null) return started;
+        }
+        // The session's own snapshot, not sessionOn(): a connect the connector is starting to that provider has not
+        // signed it in yet.
         const current = live;
+        const state = sessionState();
         if (
           current?.option === option &&
           current.connected !== null &&
-          sessionState().status === 'connected' &&
-          sessionOn(current.connected)
+          state.status === 'connected' &&
+          state.wallet.provider === current.connected
         ) {
           publish();
           return { status: 'connected' };
@@ -932,6 +996,8 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
       const attempt = nextAttempt();
       const controller = new AbortController();
       pendingLoad = { option, controller };
+      // A withdrawal the bump suppressed is heard now: the session leaves a torn-down wallet while this one loads.
+      evaluateLive();
       publish();
       let provider: Cip103Provider;
       try {
@@ -1056,7 +1122,11 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
         stopPendingLoad();
         held = null;
         if (loadingOnly) evaluateLive();
-        else session?.disconnect();
+        else {
+          // The sign-in ends: an earlier object kept for it no longer speaks for the wallet.
+          if (live !== null) dropFormer(live);
+          session?.disconnect();
+        }
       } else if (current === 'preparing') {
         const dismissed = live;
         setLive(null);
@@ -1073,15 +1143,21 @@ export function createWalletConnector(input: WalletConnectorInput): WalletConnec
     disconnect() {
       if (disposed) return;
       retireRestore();
-      latch.bump();
       nextAttempt();
       stopPendingLoad();
       setLive(null);
       held = null;
+      const epochBefore = latch.getSnapshot().epoch;
       session?.disconnect();
       setSelected(null);
       writeStorage(local, walletStorageKey, null);
       error = null;
+      // Bumped once the wallet is left: the bump notifies the latch's subscribers synchronously, and a write one starts
+      // then (in the new epoch, so not abandoned) finds no wallet rather than having it disconnected underneath it.
+      // Nothing is wanted any more, so the connector's own listener starts no deferred live change either. A store on
+      // this latch already bumped when the session left its wallet: bumping again would abandon a run a subscriber
+      // started in that new epoch, so the epoch moves once.
+      if (latch.getSnapshot().epoch === epochBefore) latch.bump();
       publish();
     },
 

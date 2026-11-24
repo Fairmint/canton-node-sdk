@@ -827,6 +827,33 @@ describe('createWalletConnector: loaded options', () => {
     expect(c.getSnapshot()).toMatchObject({ status: 'connected', target: { key: 'loop' } });
   });
 
+  it('moves the latch epoch once on disconnect(), so a run started on the store bump is not abandoned', async () => {
+    const latch = createWriteLatch();
+    const c = connector({ latch, options: [readyOption('loop', new TestProvider())] });
+    expect(await c.connect('loop')).toEqual({ status: 'connected' });
+    // The connector's store bumps this latch when the session leaves its wallet; a subscriber starts a run then.
+    const before = latch.getSnapshot().epoch;
+    const started: Array<Promise<unknown>> = [];
+    latch.subscribe(() => {
+      if (started.length === 0 && latch.getSnapshot().epoch === before + 1 && latch.getSnapshot().holder === null) {
+        started.push(latch.run('wallet-setup', async () => 'done'));
+      }
+    });
+    c.disconnect();
+    expect(latch.getSnapshot().epoch).toBe(before + 1);
+    expect(started).toHaveLength(1);
+    expect(await started[0]).toEqual({ status: 'done', value: 'done' });
+  });
+
+  it('still bumps the latch on disconnect() when nothing else did', async () => {
+    const latch = createWriteLatch();
+    const c = connector({ latch, options: [readyOption('loop', new TestProvider())] });
+    expect(await c.connect('loop')).toEqual({ status: 'connected' });
+    const before = latch.getSnapshot().epoch;
+    c.disconnect();
+    expect(latch.getSnapshot().epoch).toBe(before + 1);
+  });
+
   it('refuses an unknown option, a connect without a DA network, and one while the latch is held', async () => {
     const latch = createWriteLatch();
     const c = connector({ latch, options: [readyOption('loop', new TestProvider())] });
@@ -1391,6 +1418,37 @@ describe('createWalletConnector: review fixes', () => {
       expect(connects()).toBe(1);
     });
 
+    it('connect() before the replacement offers runs a change the earlier object deferred, keeping that sign-in', async () => {
+      const made: Array<ReturnType<typeof liveOption>> = [];
+      let availability: WalletAvailability = AVAILABLE;
+      const c = connector({
+        discover: async () => {
+          const next = liveOption('privy:x');
+          made.push(next);
+          return [{ ...next.option, availability: () => availability }];
+        },
+      });
+      await flush();
+      const provider = new TestProvider(PARTY_A);
+      made[0]?.offer(provider, PARTY_A);
+      expect(await c.connect('privy:x')).toEqual({ status: 'connected' });
+      await c.rediscover();
+      await flush();
+      expect(made).toHaveLength(2);
+      // The earlier object rotates while the option cannot connect: the change is deferred.
+      availability = { available: false, reason: 'not-configured' };
+      const rotated = new TestProvider(PARTY_A);
+      made[0]?.offer(rotated, PARTY_A);
+      await flush();
+      expect(rotated.requests).toEqual([]);
+      expect(connectedProvider(c)).toBe(provider);
+      availability = AVAILABLE;
+      expect(await c.connect('privy:x')).toEqual({ status: 'connected' });
+      await flush();
+      expect(connectedProvider(c)).toBe(rotated);
+      expect(rotated.requests.filter((method) => method === 'connect')).toHaveLength(1);
+    });
+
     it('reconnects when the replacement offers a different provider', async () => {
       const { c, made, provider, connects } = await connectedThenRediscovered();
       const rebuilt = new TestProvider(PARTY_A);
@@ -1401,6 +1459,75 @@ describe('createWalletConnector: review fixes', () => {
       expect(c.getSnapshot()).toMatchObject({ status: 'connected', target: { key: 'privy:x' } });
       expect(connects()).toBe(1);
       expect(provider).not.toBe(rebuilt);
+    });
+  });
+
+  describe('a rediscover during a live sign-in that then ends', () => {
+    /** Signing in to `made[0]`'s provider when a rediscover installs an empty replacement. */
+    async function signingInThenRediscovered(signIn: Deferred<unknown>): Promise<{
+      c: WalletConnector;
+      made: Array<ReturnType<typeof liveOption>>;
+      slow: TestProvider;
+      pending: Promise<unknown>;
+    }> {
+      const made: Array<ReturnType<typeof liveOption>> = [];
+      const c = connector({
+        discover: async () => {
+          const next = liveOption('privy:x');
+          made.push(next);
+          return [next.option];
+        },
+      });
+      await flush();
+      let first = true;
+      const slow = new TestProvider(PARTY_A, {
+        connect: async () => {
+          if (!first) return { isConnected: true, isNetworkConnected: true };
+          first = false;
+          return signIn.promise;
+        },
+      });
+      made[0]?.offer(slow, PARTY_A);
+      const pending = c.connect('privy:x');
+      await flush();
+      expect(c.session?.getSnapshot().status).toBe('connecting');
+      await c.rediscover();
+      await flush();
+      expect(made).toHaveLength(2);
+      return { c, made, slow, pending };
+    }
+
+    it('hears the replacement withdraw after cancel(), and connects the same provider offered again', async () => {
+      const signIn = deferred<unknown>();
+      const { c, made, slow, pending } = await signingInThenRediscovered(signIn);
+      c.cancel();
+      expect(await pending).toEqual({ status: 'cancelled' });
+      signIn.resolve({ isConnected: true, isNetworkConnected: true });
+      await flush();
+      expect(c.session?.getSnapshot().status).toBe('disconnected');
+      expect(made[0]?.subscribers()).toBe(0);
+      made[1]?.offer(null);
+      await flush();
+      made[1]?.offer(slow, PARTY_A);
+      await flush();
+      expect(c.getSnapshot()).toMatchObject({ status: 'connected', target: { key: 'privy:x' } });
+      expect(connectedProvider(c)).toBe(slow);
+    });
+
+    it('hears the replacement withdraw after the sign-in fails, and connects the same provider offered again', async () => {
+      const signIn = deferred<unknown>();
+      const { c, made, slow, pending } = await signingInThenRediscovered(signIn);
+      signIn.reject(new Error('closed'));
+      await pending;
+      await flush();
+      expect(c.session?.getSnapshot().status).toBe('disconnected');
+      made[1]?.offer(null);
+      await flush();
+      expect(made[0]?.subscribers()).toBe(0);
+      made[1]?.offer(slow, PARTY_A);
+      await flush();
+      expect(c.getSnapshot()).toMatchObject({ status: 'connected', target: { key: 'privy:x' } });
+      expect(connectedProvider(c)).toBe(slow);
     });
   });
 
@@ -1753,6 +1880,160 @@ describe('createWalletConnector: races with a write and a superseding call', () 
     expect(connectedProvider(c)).toBe(first);
   });
 
+  it('refuses a connect when a latch subscriber starts a write during its bump, without running a deferred live change', async () => {
+    const latch = createWriteLatch();
+    const privy = liveOption();
+    let availability: WalletAvailability = AVAILABLE;
+    const option: LiveWalletOption = { ...privy.option, availability: () => availability };
+    const c = connector({ latch, options: [option, readyOption('loop', new TestProvider('loop::1220abc'))] });
+    const first = new TestProvider(PARTY_A);
+    privy.offer(first, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    // A new provider offered while the option cannot connect is deferred; it then becomes available, unannounced.
+    availability = { available: false, reason: 'not-configured' };
+    const rotated = new TestProvider(PARTY_A);
+    privy.offer(rotated, PARTY_A);
+    await flush();
+    expect(rotated.requests).toEqual([]);
+    availability = AVAILABLE;
+    const write = writeOnNextBump(latch);
+    expect(await c.connect('loop')).toEqual({ status: 'refused', reason: 'busy' });
+    expect(write.started()).toBe(true);
+    await flush();
+    expect(rotated.requests).toEqual([]);
+    expect(first.requests).not.toContain('disconnect');
+    expect(connectedProvider(c)).toBe(first);
+    // The write's release evaluates the deferred change, as before.
+    write.finish();
+    await flush();
+    expect(connectedProvider(c)).toBe(rotated);
+  });
+
+  it('disconnect() does not start a deferred live change it then ends', async () => {
+    const latch = createWriteLatch();
+    const privy = liveOption();
+    let availability: WalletAvailability = AVAILABLE;
+    const option: LiveWalletOption = { ...privy.option, availability: () => availability };
+    const c = connector({ latch, options: [option] });
+    const first = new TestProvider(PARTY_A);
+    privy.offer(first, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    availability = { available: false, reason: 'not-configured' };
+    const rotated = new TestProvider(PARTY_A);
+    privy.offer(rotated, PARTY_A);
+    await flush();
+    availability = AVAILABLE;
+    c.disconnect();
+    await flush();
+    expect(rotated.requests).toEqual([]);
+    expect(c.session?.getSnapshot().status).toBe('disconnected');
+  });
+
+  it('disconnect() leaves the wallet before a write a latch subscriber starts during its bump', async () => {
+    const latch = createWriteLatch();
+    const first = new TestProvider('first::1220abc');
+    const c = connector({ latch, options: [readyOption('loop', first)] });
+    expect(await c.connect('loop')).toEqual({ status: 'connected' });
+    const seen: string[] = [];
+    const write = deferred<undefined>();
+    let started = false;
+    const unsubscribe = latch.subscribe(() => {
+      if (started) return;
+      started = true;
+      unsubscribe();
+      void latch.run('canton-coin', async () => {
+        // What the write finds as it starts: it must not be handed a wallet that is then disconnected under it.
+        seen.push(c.session?.getSnapshot().status ?? 'none', first.requests.includes('disconnect') ? 'left' : 'on');
+        return write.promise;
+      });
+    });
+    c.disconnect();
+    expect(started).toBe(true);
+    expect(seen).toEqual(['disconnected', 'left']);
+    write.resolve(undefined);
+    await flush();
+    expect(c.session?.getSnapshot().status).toBe('disconnected');
+  });
+
+  /** Connected to `first` on a live option; `rotated` (whose sign-in waits on `signIn`) is offered while unavailable. */
+  async function deferredRotation(signIn: Deferred<unknown>): Promise<{
+    c: WalletConnector;
+    first: TestProvider;
+    rotated: TestProvider;
+  }> {
+    const privy = liveOption();
+    let availability: WalletAvailability = AVAILABLE;
+    const option: LiveWalletOption = { ...privy.option, availability: () => availability };
+    const c = connector({ options: [option] });
+    const first = new TestProvider(PARTY_A);
+    privy.offer(first, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    availability = { available: false, reason: 'not-configured' };
+    const rotated = new TestProvider(PARTY_A, { connect: async () => signIn.promise });
+    privy.offer(rotated, PARTY_A);
+    await flush();
+    expect(rotated.requests).toEqual([]);
+    expect(connectedProvider(c)).toBe(first);
+    availability = AVAILABLE;
+    return { c, first, rotated };
+  }
+
+  it('connect() to the wallet already on awaits a deferred change it starts, rather than reporting connected', async () => {
+    const signIn = deferred<unknown>();
+    const { c, rotated } = await deferredRotation(signIn);
+    let outcome: unknown = 'pending';
+    void c.connect('privy').then((result) => {
+      outcome = result;
+    });
+    await flush();
+    expect(outcome).toBe('pending');
+    expect(rotated.requests).toContain('connect');
+    expect(c.session?.getSnapshot().status).toBe('connecting');
+    signIn.resolve({ isConnected: true, isNetworkConnected: true });
+    await flush();
+    expect(outcome).toEqual({ status: 'connected' });
+    expect(connectedProvider(c)).toBe(rotated);
+  });
+
+  it('connect() to the wallet already on sends a deferred change it starts one sign-in, not two', async () => {
+    const signIn = deferred<unknown>();
+    const { c, rotated } = await deferredRotation(signIn);
+    const pending = c.connect('privy');
+    await flush();
+    signIn.resolve({ isConnected: true, isNetworkConnected: true });
+    expect(await pending).toEqual({ status: 'connected' });
+    await flush();
+    expect(rotated.requests.filter((method) => method === 'connect')).toHaveLength(1);
+    expect(connectedProvider(c)).toBe(rotated);
+  });
+
+  it('connect() to the wallet already on reports the failure of a deferred change it starts', async () => {
+    const signIn = deferred<unknown>();
+    const { c } = await deferredRotation(signIn);
+    const pending = c.connect('privy');
+    await flush();
+    signIn.reject(new Error('closed'));
+    const outcome = await pending;
+    expect(outcome).not.toEqual({ status: 'connected' });
+    expect(c.getSnapshot().status).not.toBe('connected');
+  });
+
+  it('connect() to the wallet already on does not report connected after the option withdrew unannounced', async () => {
+    const privy = liveOption();
+    let withdrawn = false;
+    const option: LiveWalletOption = {
+      ...privy.option,
+      live: { ...privy.option.live, getProvider: () => (withdrawn ? null : privy.option.live.getProvider()) },
+    };
+    const c = connector({ options: [option] });
+    const first = new TestProvider(PARTY_A);
+    privy.offer(first, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    withdrawn = true;
+    expect(await c.connect('privy')).toEqual({ status: 'preparing' });
+    expect(c.session?.getSnapshot().status).toBe('disconnected');
+  });
+
   it('refuses a preloaded connect when a latch subscriber starts a write during its bump, and keeps the previous wallet', async () => {
     const local = memoryStorage();
     const latch = createWriteLatch();
@@ -1822,4 +2103,377 @@ describe('createWalletConnector: races with a write and a superseding call', () 
       }
     });
   }
+});
+
+describe('createWalletConnector: re-entrant bumps, a sign-out that notifies, and a superseded load', () => {
+  it('keeps the earlier object when it notifies while the session signs out of the wallet it moves from', async () => {
+    const made: Array<ReturnType<typeof liveOption>> = [];
+    const c = connector({
+      discover: async () => {
+        const next = liveOption('privy:x');
+        made.push(next);
+        return [next.option];
+      },
+    });
+    await flush();
+    const rotated = new TestProvider(PARTY_A);
+    // The previous wallet's CIP-0103 disconnect makes the earlier object notify, synchronously, with what it offers.
+    const provider = new TestProvider(PARTY_A, {
+      disconnect: () => {
+        made[0]?.offer(rotated, PARTY_A);
+        return null;
+      },
+    });
+    made[0]?.offer(provider, PARTY_A);
+    expect(await c.connect('privy:x')).toEqual({ status: 'connected' });
+    await c.rediscover();
+    await flush();
+    expect(made).toHaveLength(2);
+    // The earlier object rotates before the replacement offers: the session moves to the rotated provider.
+    made[0]?.offer(rotated, PARTY_A);
+    await flush();
+    expect(provider.requests).toContain('disconnect');
+    expect(connectedProvider(c)).toBe(rotated);
+    // Still kept for the wallet: the replacement offering the same provider is no change.
+    made[1]?.offer(rotated, PARTY_A);
+    await flush();
+    expect(connectedProvider(c)).toBe(rotated);
+    expect(rotated.requests.filter((method) => method === 'connect')).toHaveLength(1);
+    expect(rotated.requests).not.toContain('disconnect');
+    c.dispose();
+  });
+
+  it('keeps its own latch listener quiet for the whole bump when a latch subscriber re-enters connect()', async () => {
+    const latch = createWriteLatch();
+    let c: WalletConnector | null = null;
+    let armed = false;
+    // An object, not a local: it is set inside the listener, which flow analysis cannot see.
+    const reentry: { result: Promise<unknown> | null } = { result: null };
+    // Subscribed before the connector, so it runs before the connector's own listener on each bump.
+    latch.subscribe(() => {
+      if (!armed || c === null) return;
+      armed = false;
+      reentry.result = c.connect('privy');
+    });
+    let availability: WalletAvailability = AVAILABLE;
+    const live = liveOption('privy');
+    const ext = new TestProvider(PARTY_A);
+    c = connector({
+      latch,
+      options: [{ ...live.option, availability: () => availability }, readyOption('ext', ext)],
+    });
+    const first = new TestProvider(PARTY_A);
+    live.offer(first, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    await flush();
+    expect(connectedProvider(c)).toBe(first);
+    // A change the option offers while it cannot connect is deferred.
+    availability = { available: false, reason: 'not-configured' };
+    const rotated = new TestProvider(PARTY_A);
+    live.offer(rotated, PARTY_A);
+    await flush();
+    availability = AVAILABLE;
+    const release = c.preload(['ext']);
+    await flush();
+    expect(c.getSnapshot().options.find((option) => option.key === 'ext')?.provider).toBe('ready');
+    armed = true;
+    // The user picks `ext`: neither the re-entrant connect nor the connector's own listener runs the deferred change.
+    expect(await c.connect('ext')).toEqual({ status: 'connected' });
+    expect(reentry.result).not.toBeNull();
+    // The re-entrant call hears the deferred change first (the quiet bump does not hide it from connect() itself), so
+    // it never reports `connected` for `first`, which the option no longer offers: `ext` supersedes its sign-in.
+    expect(await reentry.result).toEqual({ status: 'cancelled' });
+    await flush();
+    expect(connectedProvider(c)).toBe(ext);
+    // That re-entrant connect() is a page request for the live wallet, so starting the deferred sign-in is accepted:
+    // `rotated` hears CIP-0103 `connect` once, from it, and never from the connector's own listener as well.
+    expect(rotated.requests.filter((m) => m === 'connect')).toHaveLength(1);
+    release();
+    c.dispose();
+  });
+
+  it('stays quiet for the rest of the bump after a re-entrant connect() ends its own bump', async () => {
+    const latch = createWriteLatch();
+    let c: WalletConnector | null = null;
+    let armed = false;
+    const reentry: { result: Promise<unknown> | null } = { result: null };
+    // Subscribed before the connector, so it runs before the connector's own listener on each bump.
+    latch.subscribe(() => {
+      if (!armed || c === null) return;
+      armed = false;
+      reentry.result = c.connect('broken');
+    });
+    let availability: WalletAvailability = AVAILABLE;
+    const live = liveOption('privy');
+    const ext = new TestProvider(PARTY_A);
+    // A loaded option whose load throws synchronously: the re-entrant connect() bumps, then fails inside the outer bump.
+    const broken: LoadedWalletOption = {
+      mode: 'load',
+      key: 'broken',
+      kind: 'extension',
+      name: 'broken',
+      availability: () => AVAILABLE,
+      load: () => {
+        throw new Error('no extension');
+      },
+    };
+    c = connector({
+      latch,
+      options: [{ ...live.option, availability: () => availability }, readyOption('ext', ext), broken],
+    });
+    const first = new TestProvider(PARTY_A);
+    live.offer(first, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    await flush();
+    // A change the option offers while it cannot connect is deferred.
+    availability = { available: false, reason: 'not-configured' };
+    const rotated = new TestProvider(PARTY_A);
+    live.offer(rotated, PARTY_A);
+    await flush();
+    availability = AVAILABLE;
+    const release = c.preload(['ext']);
+    await flush();
+    armed = true;
+    // The user picks `ext`. The re-entrant connect() ends its own bump and fails while the outer bump still runs: the
+    // failure's evaluation stays quiet, so the deferred change never starts a sign-in the pick then supersedes.
+    expect(await c.connect('ext')).toEqual({ status: 'connected' });
+    expect(await reentry.result).toEqual({ status: 'failed' });
+    await flush();
+    expect(connectedProvider(c)).toBe(ext);
+    expect(rotated.requests).toEqual([]);
+    release();
+    c.dispose();
+  });
+
+  it("sends one sign-in when the old wallet's removeListener makes the live option offer another provider", async () => {
+    const live = liveOption('privy');
+    const c = connector({ options: [live.option] });
+    const third = new TestProvider(PARTY_A);
+    let armed = false;
+    // Detaching from `first` (the rotation's sign-out) makes the option offer `third`, synchronously.
+    class Rotating extends TestProvider {
+      override removeListener(event: string, listener: Parameters<TestProvider['removeListener']>[1]): this {
+        super.removeListener(event, listener);
+        if (armed) {
+          armed = false;
+          live.offer(third, PARTY_A);
+        }
+        return this;
+      }
+    }
+    const first = new Rotating(PARTY_A);
+    live.offer(first, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    await flush();
+    expect(connectedProvider(c)).toBe(first);
+    const second = new TestProvider(PARTY_A);
+    armed = true;
+    live.offer(second, PARTY_A);
+    await flush();
+    await flush();
+    // Only the provider the option offers last signs in, and the connector shows it.
+    const connects = [second, third].flatMap((p) => p.requests.filter((m) => m === 'connect'));
+    expect(connects).toHaveLength(1);
+    expect(third.requests).toContain('connect');
+    expect(connectedProvider(c)).toBe(third);
+    c.dispose();
+  });
+
+  it("signs out the provider the old wallet's removeListener made the option offer, while its sign-in is pending", async () => {
+    const live = liveOption('privy');
+    const c = connector({ options: [live.option] });
+    const signIn = deferred<unknown>();
+    const third = new TestProvider(PARTY_A, { connect: async () => signIn.promise });
+    let armed = false;
+    class Rotating extends TestProvider {
+      override removeListener(event: string, listener: Parameters<TestProvider['removeListener']>[1]): this {
+        super.removeListener(event, listener);
+        if (armed) {
+          armed = false;
+          live.offer(third, PARTY_A);
+        }
+        return this;
+      }
+    }
+    const first = new Rotating(PARTY_A);
+    live.offer(first, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    await flush();
+    const second = new TestProvider(PARTY_A);
+    armed = true;
+    live.offer(second, PARTY_A);
+    await flush();
+    // `third` signs in; the run for `second`, superseded inside its own sign-out of `first`, never takes the session.
+    expect(third.requests).toEqual(['connect']);
+    expect(c.getSnapshot().status).toBe('connecting');
+    c.disconnect();
+    // The session's pending sign-in is `third`'s, so the user's disconnect reaches `third`, not `second`.
+    expect(third.requests).toEqual(['connect', 'disconnect']);
+    expect(second.requests).toEqual([]);
+    signIn.resolve({ isConnected: true });
+    await flush();
+    expect(c.session?.getSnapshot()).toEqual({ status: 'disconnected', error: null });
+    c.dispose();
+  });
+
+  it("sends one sign-in when the old wallet's removeListener re-enters connect() for the live wallet", async () => {
+    const live = liveOption('privy');
+    let c: WalletConnector | null = null;
+    let armed = false;
+    const reentry: { result: Promise<unknown> | null } = { result: null };
+    class Reentering extends TestProvider {
+      override removeListener(event: string, listener: Parameters<TestProvider['removeListener']>[1]): this {
+        super.removeListener(event, listener);
+        if (armed && c !== null) {
+          armed = false;
+          reentry.result = c.connect('privy');
+        }
+        return this;
+      }
+    }
+    c = connector({ options: [live.option] });
+    const first = new Reentering(PARTY_A);
+    live.offer(first, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    await flush();
+    const second = new TestProvider(PARTY_A);
+    armed = true;
+    live.offer(second, PARTY_A);
+    expect(reentry.result).not.toBeNull();
+    await reentry.result;
+    await flush();
+    await flush();
+    expect(second.requests.filter((m) => m === 'connect')).toHaveLength(1);
+    expect(connectedProvider(c)).toBe(second);
+    c.dispose();
+  });
+
+  it('supersedes a loading connect when connect() picks the live wallet already on', async () => {
+    const live = liveOption('privy');
+    const loads: Array<{ readonly signal: AbortSignal; readonly answer: Deferred<Cip103Provider> }> = [];
+    const slow: LoadedWalletOption = {
+      mode: 'load',
+      key: 'slow',
+      kind: 'extension',
+      name: 'slow',
+      availability: () => AVAILABLE,
+      load: async (_network, signal) => {
+        const answer = deferred<Cip103Provider>();
+        loads.push({ signal, answer });
+        signal.addEventListener('abort', () => {
+          answer.reject(new Error('aborted'));
+        });
+        return answer.promise;
+      },
+    };
+    const c = connector({ options: [live.option, slow] });
+    const provider = new TestProvider(PARTY_A);
+    live.offer(provider, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    await flush();
+    const loading = c.connect('slow');
+    expect(c.getSnapshot().status).toBe('connecting');
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    expect(loads[0]?.signal.aborted).toBe(true);
+    expect(await loading).toEqual({ status: 'cancelled' });
+    await flush();
+    const snapshot = c.getSnapshot();
+    expect(snapshot.error).toBeNull();
+    expect(snapshot.options.find((option) => option.key === 'slow')?.provider).not.toBe('failed');
+    expect(snapshot.status).toBe('connected');
+    expect(connectedProvider(c)).toBe(provider);
+    c.dispose();
+  });
+
+  it('hears a withdrawal the bump suppressed once connect() starts loading another option', async () => {
+    const latch = createWriteLatch();
+    const live = liveOption('privy');
+    const slow = loadedOption('slow');
+    const c = connector({ latch, options: [live.option, slow] });
+    const provider = new TestProvider(PARTY_A);
+    live.offer(provider, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    await flush();
+    // A page's latch subscriber logs out of the live wallet during the bump.
+    let withdrawn = false;
+    latch.subscribe(() => {
+      if (withdrawn) return;
+      withdrawn = true;
+      live.offer(null);
+    });
+    const loading = c.connect('slow');
+    expect(withdrawn).toBe(true);
+    await flush();
+    expect(provider.requests).toContain('disconnect');
+    expect(c.session?.getSnapshot().status).toBe('disconnected');
+    expect(c.getSnapshot().status).toBe('connecting');
+    slow.loads[0]?.resolve(new TestProvider(PARTY_A));
+    expect(await loading).toEqual({ status: 'connected' });
+    c.dispose();
+  });
+
+  it('does not report connected for a wallet a re-entrant connect() finds still signing out the previous one', async () => {
+    const live = liveOption('privy');
+    const c = connector({ options: [live.option] });
+    const declined = new TestProvider(PARTY_A, {
+      connect: () => {
+        throw new RpcError(4001, 'User rejected');
+      },
+    });
+    // An object, not a local: it is set inside the answer, which flow analysis cannot see.
+    const reentry: { armed: boolean; result: Promise<unknown> | null } = { armed: false, result: null };
+    const first = new TestProvider(PARTY_A, {
+      disconnect: () => {
+        if (reentry.armed) {
+          reentry.armed = false;
+          reentry.result = c.connect('privy');
+        }
+        return null;
+      },
+    });
+    live.offer(first, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    await flush();
+    reentry.armed = true;
+    // The option rotates: the session signs `first` out, whose answer re-enters connect() before `declined` signs in.
+    live.offer(declined, PARTY_A);
+    expect(reentry.result).not.toBeNull();
+    expect(await reentry.result).not.toEqual({ status: 'connected' });
+    await flush();
+    expect(c.session?.getSnapshot().status).toBe('disconnected');
+    expect(c.getSnapshot().status).not.toBe('connected');
+    c.dispose();
+  });
+
+  it('stops the sign-in it is starting when the option withdraws while the session signs the previous wallet out', async () => {
+    const live = liveOption('privy');
+    const c = connector({ options: [live.option] });
+    let armed = false;
+    // The previous wallet's listener removal makes the option withdraw, synchronously (a logout it sets off).
+    class WithdrawingProvider extends TestProvider {
+      override removeListener(event: string, listener: Parameters<TestProvider['removeListener']>[1]): this {
+        super.removeListener(event, listener);
+        if (armed) {
+          armed = false;
+          live.offer(null);
+        }
+        return this;
+      }
+    }
+    const first = new WithdrawingProvider(PARTY_A);
+    live.offer(first, PARTY_A);
+    expect(await c.connect('privy')).toEqual({ status: 'connected' });
+    await flush();
+    armed = true;
+    const rotated = new TestProvider(PARTY_A);
+    live.offer(rotated, PARTY_A);
+    expect(armed).toBe(false);
+    await flush();
+    expect(c.session?.getSnapshot().status).toBe('disconnected');
+    expect(c.getSnapshot().status).not.toBe('connected');
+    expect(rotated.requests).not.toContain('connect');
+    // The session's disconnect stops the sign-in and signs `first` out; the stopped run does not sign it out again.
+    expect(first.requests.filter((m) => m === 'disconnect')).toHaveLength(1);
+    c.dispose();
+  });
 });
