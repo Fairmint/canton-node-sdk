@@ -12,3 +12,4 @@ export * from './prepare-external-transaction';
 export * from './stellar-utils';
 export * from './wallet-ownership';
 export * from './wallet-ownership-challenger';
+export * from './wallet-proof';

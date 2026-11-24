@@ -14,7 +14,7 @@ import type { FetchLike, DaRegistryOptions } from './da-utilities/client';
 import { describeWalletError, WalletError, type WalletErrorDescription } from './errors';
 import { instrumentKey } from './holdings';
 import { createWriteLatch, type WriteLatch, type WriteRunContext, type WriteRunOutcome } from './latch';
-import { requestWalletOwnershipVerdict, type WalletOwnershipVerdict } from './ownership';
+import { requestWalletOwnershipVerdict, type WalletOwnershipProof, type WalletOwnershipVerdict } from './ownership';
 import type { Cip103Session, Cip103SessionState, ConnectedWallet } from './session';
 import type { InstrumentId, SubmitResult } from './types';
 import {
@@ -63,14 +63,20 @@ export type WalletAction =
   | { readonly type: 'removeTransferPreapproval'; readonly preapprovalCid: string }
   | {
       readonly type: 'proveOwnership';
-      /** Answers `POST { network, partyId }` with `{ data: WalletOwnershipChallengeResponse }`. */
+      /**
+       * Answers `POST { network, partyId }` with `{ data: WalletOwnershipChallengeResponse }`, or `{ data:
+       * WalletProofChallengeResponse }` for a server-built wallet proof message (`wallet-proof-v1`).
+       */
       readonly challengeUrl: string;
       /** Answers `POST { token, proof }` with `{ data: WalletOwnershipVerdict }`. */
       readonly verifyUrl: string;
       readonly fetch?: FetchLike;
     };
 
-/** What each action resolves with. A not-verified ownership verdict is a failure, so only a verified one returns. */
+/**
+ * What each action resolves with. A not-verified ownership verdict is a failure, so only a verified one returns, with
+ * the proof the wallet signed (`proof`: `{ partyId, publicKey, message, signature }`) for a page to show.
+ */
 export interface WalletActionResults {
   readonly acceptMintOffer: SubmitResult;
   readonly rejectMintOffer: SubmitResult;
@@ -85,7 +91,9 @@ export interface WalletActionResults {
   readonly submitTransfer: TransferResult;
   readonly createTransferPreapproval: SubmitResult;
   readonly removeTransferPreapproval: SubmitResult;
-  readonly proveOwnership: Extract<WalletOwnershipVerdict, { readonly verified: true }>;
+  readonly proveOwnership: Extract<WalletOwnershipVerdict, { readonly verified: true }> & {
+    readonly proof: WalletOwnershipProof;
+  };
 }
 
 export type ActionResultOf<A extends WalletAction> = WalletActionResults[A['type']];
@@ -560,16 +568,22 @@ async function perform(
       );
     case 'proveOwnership': {
       const { challengeUrl, verifyUrl, fetch } = action;
+      let signed: WalletOwnershipProof | undefined;
       const verdict = await requestWalletOwnershipVerdict(wallet, {
         challengeUrl,
         verifyUrl,
+        onProof: (proof) => {
+          signed = proof;
+        },
         ...(fetch !== undefined && { fetch }),
         ...(signal !== undefined && { signal }),
       });
       if (!verdict.verified) return { ok: false, error: { kind: 'not-verified', message: verdict.message } };
+      // A verdict is only reached after the wallet signed, so onProof has run.
+      if (signed === undefined) throw new Error('The ownership check returned a verdict without a signed proof');
       return {
         ok: true,
-        result: verdict,
+        result: { ...verdict, proof: signed },
         message: `Verified: this wallet holds the key of ${verdict.partyId} (key fingerprint ${verdict.publicKeyFingerprint}).`,
       };
     }

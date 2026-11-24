@@ -21,6 +21,7 @@ import {
   describeError,
   primaryAccount,
   reportsOtherNetwork,
+  type Cip103Account,
   type Cip103Connection,
 } from './cip103';
 import { awaitWithAbort as awaitBeforeSubmit, throwIfAborted } from './abort';
@@ -29,6 +30,13 @@ import { globalFetch, type FetchLike } from './da-utilities/client';
 import { WalletReadError, WalletSignError } from './errors';
 import { isRecord, nonEmptyString } from './json';
 import { readSpecSignature } from './sign-message';
+import { isWalletOwnershipPartyId } from './ownership-fields';
+import {
+  buildWalletProofMessage,
+  parseWalletProofMessage,
+  WALLET_PROOF_FORMAT,
+  type WalletProofFields,
+} from './wallet-proof';
 
 /** The first line of every ownership message. */
 export const WALLET_OWNERSHIP_TITLE = 'Canton wallet ownership proof';
@@ -79,12 +87,7 @@ export function isWalletOwnershipDomain(value: unknown): value is string {
   return typeof value === 'string' && DOMAIN_PATTERN.test(value);
 }
 
-/** Whether `value` may be a message's party: a Canton party id (`hint::namespace`) of printable ASCII. */
-export function isWalletOwnershipPartyId(value: unknown): value is string {
-  return (
-    typeof value === 'string' && value.length <= 512 && TOKEN_PATTERN.test(value) && value.split('::').length === 2
-  );
-}
+export { isWalletOwnershipPartyId };
 
 /** The reason a field is not valid in a message, or null. */
 function fieldProblem(fields: WalletOwnershipMessageFields): string | null {
@@ -204,18 +207,9 @@ export interface ProveWalletOwnershipOptions {
   readonly signal?: AbortSignal;
 }
 
-/**
- * Ask the wallet to sign the ownership message for the challenge, as the connection's party. CIP-0103 wallets sign with
- * the primary account, so another primary account, or a wallet or challenge on the other DA network, is refused before
- * anything is signed. Returns what the server needs to verify; it is not itself proof of anything until the server
- * verified it (`verifyWalletOwnership`).
- */
-export async function proveWalletOwnership(
-  connection: Cip103Connection,
-  options: ProveWalletOwnershipOptions
-): Promise<WalletOwnershipProof> {
+/** The connection's primary account, after the checks every proof makes before anything is signed. */
+async function signingAccount(connection: Cip103Connection, signal: AbortSignal | undefined): Promise<Cip103Account> {
   const { provider, partyId, network } = connection;
-  const { challenge, signal } = options;
   throwIfAborted(signal);
   const account = await awaitBeforeSubmit(async () => primaryAccount(provider, { signal }), signal);
   if (account.partyId !== partyId) {
@@ -231,33 +225,31 @@ export async function proveWalletOwnership(
       `The wallet is on ${account.networkId}, not ${cip103NetworkId(network)}; switch networks in the wallet first`
     );
   }
-  if (challenge.network !== undefined && reportsOtherNetwork(challenge.network, network)) {
-    throw new WalletSignError(
-      'invalid-challenge',
-      `The challenge is for ${challenge.network}, not ${cip103NetworkId(network)}`
-    );
-  }
+  return account;
+}
+
+/** The account's public key; throws when the wallet did not report one. */
+function requirePublicKey(account: Cip103Account): string {
   if (account.publicKey === undefined) {
     throw new WalletReadError('The wallet returned a primary account without publicKey, so ownership cannot be proven');
   }
-  let message: string;
-  try {
-    message = buildWalletOwnershipMessage({
-      domain: challenge.domain,
-      partyId: account.partyId,
-      nonce: challenge.nonce,
-      issuedAt: challenge.issuedAt,
-      expiresAt: challenge.expiresAt,
-      ...(challenge.network !== undefined && { network: challenge.network }),
-    });
-  } catch (error) {
-    throw new WalletSignError('invalid-challenge', error instanceof Error ? error.message : String(error));
-  }
-  const now = (options.now ?? (() => new Date()))().getTime();
-  if (!(now < Date.parse(challenge.expiresAt))) {
-    throw new WalletSignError('invalid-challenge', 'The ownership challenge has expired; ask the server for a new one');
-  }
+  return account.publicKey;
+}
 
+/** Refuses an expired message before anything is signed. */
+function requireUnexpired(expiresAt: string, now: (() => Date) | undefined, what: string): void {
+  if (!((now ?? (() => new Date()))().getTime() < Date.parse(expiresAt))) {
+    throw new WalletSignError('invalid-challenge', `The ${what} has expired; ask the server for a new one`);
+  }
+}
+
+/** Have the wallet sign exactly `message` (CIP-0103 `signMessage`); the signature as the wallet returned it. */
+async function signText(
+  provider: Cip103Connection['provider'],
+  message: string,
+  signal: AbortSignal | undefined,
+  what: string
+): Promise<string> {
   throwIfAborted(signal);
   let raw: unknown;
   try {
@@ -271,37 +263,142 @@ export async function proveWalletOwnership(
     if (code === CIP103_ERROR_CODES.userRejected) {
       throw new WalletSignError(
         'rejected-by-user',
-        `The user declined to sign the ownership message: ${describeError(error)}`,
+        `The user declined to sign the ${what}: ${describeError(error)}`,
         code
       );
     }
-    throw new WalletSignError('failed', `The wallet did not sign the ownership message: ${describeError(error)}`, code);
+    throw new WalletSignError('failed', `The wallet did not sign the ${what}: ${describeError(error)}`, code);
   }
   const signature = readSpecSignature(raw);
   if (signature === undefined) {
     throw new WalletSignError('failed', 'The wallet answered signMessage without a signature');
   }
+  return signature;
+}
+
+/**
+ * Ask the wallet to sign the ownership message for the challenge, as the connection's party. CIP-0103 wallets sign with
+ * the primary account, so another primary account, or a wallet or challenge on the other DA network, is refused before
+ * anything is signed. Returns what the server needs to verify; it is not itself proof of anything until the server
+ * verified it (`verifyWalletOwnership`).
+ */
+export async function proveWalletOwnership(
+  connection: Cip103Connection,
+  options: ProveWalletOwnershipOptions
+): Promise<WalletOwnershipProof> {
+  const { network } = connection;
+  const { challenge, signal } = options;
+  const account = await signingAccount(connection, signal);
+  if (challenge.network !== undefined && reportsOtherNetwork(challenge.network, network)) {
+    throw new WalletSignError(
+      'invalid-challenge',
+      `The challenge is for ${challenge.network}, not ${cip103NetworkId(network)}`
+    );
+  }
+  const publicKey = requirePublicKey(account);
+  let message: string;
+  try {
+    message = buildWalletOwnershipMessage({
+      domain: challenge.domain,
+      partyId: account.partyId,
+      nonce: challenge.nonce,
+      issuedAt: challenge.issuedAt,
+      expiresAt: challenge.expiresAt,
+      ...(challenge.network !== undefined && { network: challenge.network }),
+    });
+  } catch (error) {
+    throw new WalletSignError('invalid-challenge', error instanceof Error ? error.message : String(error));
+  }
+  requireUnexpired(challenge.expiresAt, options.now, 'ownership challenge');
+  const signature = await signText(connection.provider, message, signal, 'ownership message');
   return {
     partyId: account.partyId,
-    publicKey: account.publicKey,
+    publicKey,
     ...(account.namespace !== undefined && { namespace: account.namespace }),
     message,
     signature,
   };
 }
 
+export interface ProveWalletProofOptions {
+  /** The exact wallet proof message to sign (`buildWalletProofMessage`), as the server built it. */
+  readonly message: string;
+  /** The fields the server sent with the message, when it did: they must be exactly the message's. */
+  readonly fields?: WalletProofFields;
+  /** Defaults to the system clock; an expired message is refused before anything is signed. */
+  readonly now?: () => Date;
+  /** As in {@link ProveWalletOwnershipOptions.signal}. */
+  readonly signal?: AbortSignal;
+}
+
+/**
+ * Ask the wallet to sign a server-built wallet proof message (`wallet-proof-v1`, see `buildWalletProofMessage`) as the
+ * connection's party. Before anything is signed, the message must parse as a wallet proof (`parseWalletProofMessage`)
+ * naming the connection's party and network, match `fields` when given, and not have expired; the wallet's primary
+ * account must be the connection's party, on its network. The wallet signs exactly `message`. Returns `{ partyId,
+ * publicKey, message, signature }` (and `namespace` when the wallet reported it), which a page may show for copying; it
+ * proves nothing until the server verified it (`verifyWalletProof`).
+ */
+export async function proveWalletProof(
+  connection: Cip103Connection,
+  options: ProveWalletProofOptions
+): Promise<WalletOwnershipProof> {
+  const { partyId, network } = connection;
+  const { message, signal } = options;
+  throwIfAborted(signal);
+  const parsed = parseWalletProofMessage(message);
+  if (parsed === null) {
+    throw new WalletSignError('invalid-challenge', 'The server sent a message that is not a wallet proof message');
+  }
+  if (parsed.partyId !== partyId) {
+    throw new WalletSignError('invalid-challenge', `The wallet proof message names ${parsed.partyId}, not ${partyId}`);
+  }
+  if (parsed.network !== network) {
+    throw new WalletSignError('invalid-challenge', `The wallet proof message is for ${parsed.network}, not ${network}`);
+  }
+  const { fields } = options;
+  if (fields !== undefined && !sameWalletProofFields(fields, message)) {
+    throw new WalletSignError('invalid-challenge', 'The fields the server sent are not the message it asks to sign');
+  }
+  const account = await signingAccount(connection, signal);
+  const publicKey = requirePublicKey(account);
+  requireUnexpired(parsed.expiresAt, options.now, 'wallet proof message');
+  const signature = await signText(connection.provider, message, signal, 'wallet proof message');
+  return {
+    partyId: account.partyId,
+    publicKey,
+    ...(account.namespace !== undefined && { namespace: account.namespace }),
+    message,
+    signature,
+  };
+}
+
+/** Whether `given` holds exactly the fields of `message` (keys beyond the message's are ignored). */
+function sameWalletProofFields(given: unknown, message: string): boolean {
+  if (!isRecord(given)) return false;
+  try {
+    return buildWalletProofMessage(given as unknown as WalletProofFields) === message;
+  } catch {
+    return false;
+  }
+}
+
 /** Why a proof did not verify (`verifyWalletOwnership`, Node only). */
 export type WalletOwnershipFailure =
   /** The proof is not an object of string fields. */
   | 'malformed-proof'
-  /** The message is not exactly a canonical ownership message. */
+  /** The message is not exactly a canonical ownership message (or wallet proof message, for `verifyWalletProof`). */
   | 'malformed-message'
   | 'domain-mismatch'
   | 'nonce-mismatch'
   /** The message, the proof and the expected party do not all name the same party, or the namespace differs. */
   | 'party-mismatch'
   | 'network-mismatch'
-  /** The message's `Issued At` or `Expiration Time` is not the one the server issued. */
+  /** A wallet proof message (`verifyWalletProof`) names another `investorContext` than expected. */
+  | 'investor-context-mismatch'
+  /** A wallet proof message (`verifyWalletProof`) names another `idempotencyKey` than expected. */
+  | 'idempotency-key-mismatch'
+  /** The message's issue or expiry time is not the one the server issued. */
   | 'window-mismatch'
   /** Issued in the future (beyond the allowed clock skew). */
   | 'not-yet-valid'
@@ -328,7 +425,10 @@ export type WalletOwnershipChallengeFailure =
   /** Issued to another subject (signed-in user) or for another host. */
   | 'challenge-not-yours';
 
-/** A challenger's answer to a challenge request: what the wallet signs, and the token to send back with the proof. */
+/**
+ * A challenger's answer to a challenge request in the default text format: what the wallet signs, and the token to send
+ * back with the proof. The `wallet-proof-v1` format answers `WalletProofChallengeResponse` instead.
+ */
 export interface WalletOwnershipChallengeResponse {
   readonly challenge: WalletOwnershipChallenge;
   /** Opaque to the browser: the server's MACed record of the challenge. */
@@ -356,10 +456,18 @@ export type WalletOwnershipVerdict =
 export interface RequestWalletOwnershipVerdictOptions {
   /** Sends the requests; defaults to the global `fetch` (same-origin requests carry the user's session cookie). */
   readonly fetch?: FetchLike;
-  /** Answers `POST { network, partyId }` with `{ data: WalletOwnershipChallengeResponse }`. */
+  /**
+   * Answers `POST { network, partyId }` with `{ data: WalletOwnershipChallengeResponse }` (the text message) or `{
+   * data: WalletProofChallengeResponse }` (`format: 'wallet-proof-v1'`, a server-built message); the server picks.
+   */
   readonly challengeUrl: string;
   /** Answers `POST { token, proof }` with `{ data: WalletOwnershipVerdict }`. */
   readonly verifyUrl: string;
+  /**
+   * Called with the signed proof (`{ partyId, publicKey, message, signature }`) before it is sent to `verifyUrl`, for a
+   * page that shows it. Not called when the wallet did not sign.
+   */
+  readonly onProof?: (proof: WalletOwnershipProof) => void;
   /**
    * Cancels the check (for example when the user leaves the page): once aborted, the call rejects with an `AbortError`,
    * the requests in flight get the signal, and nothing more is sent. A signature request already shown to the user is
@@ -420,7 +528,8 @@ async function postForData(
 /**
  * The browser half of an ownership check, against a server that uses the SDK's challenger (or the same wire format: a
  * 2xx answer is `{ data }`, any other `{ error: string }`): POST `challengeUrl` with the connection's `{ network,
- * partyId }`, have the wallet sign the challenge (`proveWalletOwnership`), POST `verifyUrl` with `{ token, proof }`,
+ * partyId }`, have the wallet sign the challenge (`proveWalletOwnership` for the text message, `proveWalletProof` for a
+ * `wallet-proof-v1` challenge, whose server-built message it signs exactly), POST `verifyUrl` with `{ token, proof }`,
  * and return the server's verdict. Throws when no verdict was reached: the server refused (a non-2xx answer, or one
  * without `data`), or the wallet did not sign (`WalletSignError`).
  */
@@ -433,19 +542,38 @@ export async function requestWalletOwnershipVerdict(
   const { signal } = options;
   throwIfAborted(signal);
   const issued = await postForData(send, options.challengeUrl, { network, partyId }, signal, false);
-  if (!isRecord(issued) || !isRecord(issued['challenge']) || typeof issued['token'] !== 'string') {
-    throw new Error('The server answered the ownership challenge request without { challenge, token }');
+  let proof: WalletOwnershipProof;
+  let token: string;
+  if (isRecord(issued) && issued['format'] === WALLET_PROOF_FORMAT) {
+    const { message, fields, token: issuedToken } = issued;
+    if (typeof message !== 'string' || !isRecord(fields) || typeof issuedToken !== 'string') {
+      throw new Error('The server answered the wallet proof challenge request without { message, fields, token }');
+    }
+    token = issuedToken;
+    // proveWalletProof checks the message names this party and network, and matches the fields, before signing.
+    proof = await proveWalletProof(connection, {
+      message,
+      fields: fields as unknown as WalletProofFields,
+      ...(signal !== undefined && { signal }),
+    });
+  } else {
+    const { format, challenge: issuedChallenge, token: issuedToken } = isRecord(issued) ? issued : {};
+    if (format !== undefined || !isRecord(issuedChallenge) || typeof issuedToken !== 'string') {
+      throw new Error('The server answered the ownership challenge request without { challenge, token }');
+    }
+    token = issuedToken;
+    // proveWalletOwnership checks every field before anything is signed.
+    const challenge = issuedChallenge as unknown as WalletOwnershipChallenge;
+    if (challenge.network !== cip103NetworkId(network)) {
+      throw new WalletSignError(
+        'invalid-challenge',
+        `The server issued a challenge for ${String(challenge.network)}, not ${cip103NetworkId(network)}`
+      );
+    }
+    proof = await proveWalletOwnership(connection, { challenge, ...(signal !== undefined && { signal }) });
   }
-  // proveWalletOwnership checks every field before anything is signed.
-  const challenge = issued['challenge'] as unknown as WalletOwnershipChallenge;
-  if (challenge.network !== cip103NetworkId(network)) {
-    throw new WalletSignError(
-      'invalid-challenge',
-      `The server issued a challenge for ${String(challenge.network)}, not ${cip103NetworkId(network)}`
-    );
-  }
-  const proof = await proveWalletOwnership(connection, { challenge, ...(signal !== undefined && { signal }) });
-  const verdict = await postForData(send, options.verifyUrl, { token: issued['token'], proof }, signal, true);
+  options.onProof?.(proof);
+  const verdict = await postForData(send, options.verifyUrl, { token, proof }, signal, true);
   if (!isWalletOwnershipVerdict(verdict, partyId)) {
     throw new Error('The server answered the ownership proof without a well-formed verdict for the party');
   }

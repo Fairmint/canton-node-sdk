@@ -2,7 +2,7 @@
  * The server half of a wallet ownership check (challenge token, nonce store, verdict, host binding, request bodies),
  * and a round trip through the browser half (`requestWalletOwnershipVerdict`) with a proof signed the way Loop signs:
  * Ed25519 over the UTF-8 message, hex key and signature. Moved from the canton-explorer route tests, with their
- * fixtures.
+ * fixtures. The `wallet-proof-v1` format (a server-built wallet proof message) is tested last.
  */
 import { createHmac, generateKeyPairSync, randomBytes, sign, type KeyObject } from 'node:crypto';
 import {
@@ -15,6 +15,7 @@ import {
   type WalletOwnershipChallengerOptions,
   type WalletOwnershipNonceStore,
   type WalletOwnershipVerdict,
+  type WalletProofChallengeResponse,
 } from '../../../src/utils/external-signing';
 import { cip103NetworkId } from '../../../src/wallets/cip103';
 import type { FetchLike } from '../../../src/wallets/da-utilities/client';
@@ -25,6 +26,7 @@ import {
   type WalletOwnershipChallenge,
   type WalletOwnershipChallengeResponse,
 } from '../../../src/wallets/ownership';
+import { buildWalletProofMessage } from '../../../src/wallets/wallet-proof';
 import { accountProvider, type RecordingProvider } from '../wallets/helpers';
 
 const SECRET = 'wallet-ownership-unit-test-secret';
@@ -582,5 +584,225 @@ describe('requestWalletOwnershipVerdict through the handlers', () => {
       reason: 'invalid-challenge',
     });
     expect(wallet.provider.requests.some((r) => r.method === 'signMessage')).toBe(false);
+  });
+});
+
+describe('createWalletOwnershipChallenger: the wallet-proof-v1 format', () => {
+  const PROOF_DOMAIN = 'fairmint:tokenization-wallet-proof:v1';
+  const CHALLENGE_URL = '/api/wallet-ownership/challenge';
+  const VERIFY_URL = '/api/wallet-ownership/verify';
+
+  function proofSetup(): {
+    challenger: WalletOwnershipChallenger;
+    clock: { now: Date };
+  } {
+    const clock = { now: NOW };
+    return {
+      clock,
+      challenger: createWalletOwnershipChallenger({ secret: SECRET, purpose: PURPOSE, now: () => clock.now }),
+    };
+  }
+
+  const issueProof = (challenger: WalletOwnershipChallenger, proofDomain?: string): WalletProofChallengeResponse =>
+    challenger.issue({
+      subject: SUB,
+      domain: DOMAIN,
+      network: 'devnet',
+      partyId: party.partyId,
+      format: 'wallet-proof-v1',
+      ...(proofDomain !== undefined && { proofDomain }),
+    });
+
+  const signed = (
+    message: string,
+    key: PartyKey = party
+  ): { partyId: string; publicKey: string; message: string; signature: string } => ({
+    partyId: key.partyId,
+    publicKey: key.publicKeyHex,
+    message,
+    signature: signHex(key.privateKey, message),
+  });
+
+  it('issues the exact message to sign: idempotencyKey is the nonce, investorContext the subject', () => {
+    const { challenger } = proofSetup();
+    const issued = issueProof(challenger, PROOF_DOMAIN);
+    expect(issued.format).toBe('wallet-proof-v1');
+    expect(issued.fields).toEqual({
+      domain: PROOF_DOMAIN,
+      network: 'devnet',
+      partyId: party.partyId,
+      investorContext: SUB,
+      idempotencyKey: expect.stringMatching(/^[A-Za-z0-9_-]{32}$/),
+      issuedAt: NOW.toISOString(),
+      expiresAt: new Date(NOW.getTime() + DEFAULT_WALLET_OWNERSHIP_CHALLENGE_TTL_MS).toISOString(),
+    });
+    expect(issued.message).toBe(buildWalletProofMessage(issued.fields));
+    expect(issued.message).toBe(JSON.stringify(issued.fields));
+    expect(Object.keys(issued).sort()).toEqual(['fields', 'format', 'message', 'token']);
+    // The proof domain defaults to the challenger's purpose.
+    expect(issueProof(challenger).fields.domain).toBe(PURPOSE);
+    // The text format stays the default.
+    expect(challenger.issue({ subject: SUB, domain: DOMAIN, network: 'devnet', partyId: party.partyId })).toEqual({
+      challenge: expect.objectContaining({ domain: DOMAIN }),
+      token: expect.any(String),
+    });
+  });
+
+  it('refuses a proof domain the message rules refuse, and an unknown format', () => {
+    const { challenger } = proofSetup();
+    expect(() => issueProof(challenger, 'has space')).toThrow(TypeError);
+    expect(() =>
+      challenger.issue({
+        subject: SUB,
+        domain: DOMAIN,
+        network: 'devnet',
+        partyId: party.partyId,
+        format: 'other' as 'text',
+      })
+    ).toThrow('format must be text or wallet-proof-v1');
+  });
+
+  it('verifies the signed message once, with the text verdict shape', async () => {
+    const { challenger, clock } = proofSetup();
+    const { message, token } = issueProof(challenger, PROOF_DOMAIN);
+    clock.now = LATER;
+    const verify = async (proof: unknown): Promise<WalletOwnershipVerdict> =>
+      challenger.verify({ token, proof, subject: SUB, domain: DOMAIN });
+    await expect(verify(signed(message))).resolves.toEqual({
+      verified: true,
+      partyId: party.partyId,
+      publicKeyFingerprint: party.namespace,
+      claimedNetwork: 'devnet',
+      verifiedAt: LATER.toISOString(),
+    });
+    expect(reasonOf(await verify(signed(message)))).toBe('challenge-used');
+  });
+
+  it('refuses a signed message whose fields differ from the issued ones', async () => {
+    const { challenger, clock } = proofSetup();
+    clock.now = LATER;
+    for (const [change, reason] of [
+      [{ investorContext: 'someone-else' }, 'investor-context-mismatch'],
+      [{ idempotencyKey: 'another-nonce-0123456789' }, 'idempotency-key-mismatch'],
+      [{ domain: 'fairmint:other:v1' }, 'domain-mismatch'],
+      [{ network: 'mainnet' }, 'network-mismatch'],
+      [{ expiresAt: new Date(NOW.getTime() + 60_000).toISOString() }, 'window-mismatch'],
+    ] as const) {
+      clock.now = NOW;
+      const { fields, token } = issueProof(challenger, PROOF_DOMAIN);
+      clock.now = LATER;
+      const message = buildWalletProofMessage({ ...fields, ...change });
+      expect(reasonOf(await challenger.verify({ token, proof: signed(message), subject: SUB, domain: DOMAIN }))).toBe(
+        reason
+      );
+    }
+  });
+
+  it('refuses a text proof for a wallet-proof challenge, and a wallet proof for a text challenge', async () => {
+    const { challenger, clock } = proofSetup();
+    const proofChallenge = issueProof(challenger, PROOF_DOMAIN);
+    const textChallenge = challenger.issue({ subject: SUB, domain: DOMAIN, network: 'devnet', partyId: party.partyId });
+    clock.now = LATER;
+    const text = loopProof(textChallenge.challenge);
+    expect(
+      reasonOf(await challenger.verify({ token: proofChallenge.token, proof: text, subject: SUB, domain: DOMAIN }))
+    ).toBe('malformed-message');
+    expect(
+      reasonOf(
+        await challenger.verify({
+          token: textChallenge.token,
+          proof: signed(proofChallenge.message),
+          subject: SUB,
+          domain: DOMAIN,
+        })
+      )
+    ).toBe('malformed-message');
+  });
+
+  it('keeps the challenge bound to the subject and host through the token', async () => {
+    const { challenger, clock } = proofSetup();
+    const { message, token } = issueProof(challenger, PROOF_DOMAIN);
+    clock.now = LATER;
+    expect(reasonOf(await challenger.verify({ token, proof: signed(message), subject: 'other', domain: DOMAIN }))).toBe(
+      'challenge-not-yours'
+    );
+    expect(
+      reasonOf(await challenger.verify({ token, proof: signed(message), subject: SUB, domain: 'evil.example' }))
+    ).toBe('challenge-not-yours');
+  });
+
+  it('refuses a token whose format claim was not issued with a proof domain', async () => {
+    const { challenger, clock } = proofSetup();
+    const { message, token } = issueProof(challenger, PROOF_DOMAIN);
+    const [version, body] = token.split('.') as [string, string];
+    const claims = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as Record<string, string>;
+    expect(claims).toMatchObject({ format: 'wallet-proof-v1', proofDomain: PROOF_DOMAIN, network: 'devnet' });
+    const { proofDomain: _dropped, ...withoutDomain } = claims;
+    const forgedBody = Buffer.from(JSON.stringify(withoutDomain)).toString('base64url');
+    const key = createHmac('sha256', SECRET).update(PURPOSE).digest();
+    const forged = `${version}.${forgedBody}.${createHmac('sha256', key).update(`${version}.${forgedBody}`).digest('base64url')}`;
+    clock.now = LATER;
+    expect(
+      reasonOf(await challenger.verify({ token: forged, proof: signed(message), subject: SUB, domain: DOMAIN }))
+    ).toBe('challenge-invalid');
+  });
+
+  describe('through the handlers and requestWalletOwnershipVerdict', () => {
+    function routes(): { fetch: FetchLike } {
+      const challenger = createWalletOwnershipChallenger({ secret: SECRET, purpose: PURPOSE });
+      const fetch: FetchLike = async (url, init) => {
+        const request = new Request(`${ORIGIN}${url}`, {
+          method: init.method,
+          headers: { ...init.headers, origin: ORIGIN },
+          ...(init.body !== undefined && { body: init.body }),
+        });
+        return url === CHALLENGE_URL
+          ? challenger.handleChallenge(request, { subject: SUB, format: 'wallet-proof-v1', proofDomain: PROOF_DOMAIN })
+          : challenger.handleVerify(request, { subject: SUB });
+      };
+      return { fetch };
+    }
+
+    function loopWallet(key: PartyKey = party): { provider: RecordingProvider; partyId: string; network: 'devnet' } {
+      const provider = accountProvider({
+        party: key.partyId,
+        account: { publicKey: key.publicKeyHex, namespace: key.namespace },
+        signMessage: (message) => ({ signature: signHex(key.privateKey, message) }),
+      });
+      return { provider, partyId: key.partyId, network: 'devnet' };
+    }
+
+    it('answers the challenge with the message, and verifies the proof the wallet signed exactly', async () => {
+      const { fetch } = routes();
+      const response = await fetch(CHALLENGE_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ network: 'devnet', partyId: party.partyId }),
+      });
+      const { data } = JSON.parse(await response.text()) as { data: WalletProofChallengeResponse };
+      expect(data).toMatchObject({ format: 'wallet-proof-v1', fields: { domain: PROOF_DOMAIN, investorContext: SUB } });
+
+      const wallet = loopWallet();
+      const proofs: unknown[] = [];
+      const verdict = await requestWalletOwnershipVerdict(wallet, {
+        fetch,
+        challengeUrl: CHALLENGE_URL,
+        verifyUrl: VERIFY_URL,
+        onProof: (proof) => proofs.push(proof),
+      });
+      expect(verdict).toMatchObject({ verified: true, partyId: party.partyId, claimedNetwork: 'devnet' });
+      const messages = wallet.provider.requests.flatMap((r) => (r.method === 'signMessage' ? [r.params.message] : []));
+      expect(messages).toHaveLength(1);
+      expect(JSON.parse(messages[0] ?? '')).toMatchObject({ domain: PROOF_DOMAIN, partyId: party.partyId });
+      expect(proofs).toEqual([
+        {
+          partyId: party.partyId,
+          publicKey: party.publicKeyHex,
+          namespace: party.namespace,
+          message: messages[0],
+          signature: expect.stringMatching(/^[0-9a-f]{128}$/),
+        },
+      ]);
+    });
   });
 });

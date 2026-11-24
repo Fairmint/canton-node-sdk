@@ -4,6 +4,7 @@ import {
   buildWalletOwnershipMessage,
   parseWalletOwnershipMessage,
   proveWalletOwnership,
+  proveWalletProof,
   requestWalletOwnershipVerdict,
   type WalletOwnershipChallenge,
 } from '../../../src/wallets/ownership';
@@ -346,5 +347,113 @@ describe('ownership checks: cancellation', () => {
     }).catch((e: unknown) => e);
     expect(isAbort(error)).toBe(true);
     expect(provider.requests).toEqual([]);
+  });
+});
+
+describe('proveWalletProof', () => {
+  const FIELDS = {
+    domain: 'fairmint:tokenization-wallet-proof:v1',
+    network: 'devnet',
+    partyId: HOLDER,
+    investorContext: 'investor-42',
+    idempotencyKey: 'idem-7',
+    issuedAt: '2026-11-16T12:00:00.000Z',
+    expiresAt: '2026-11-16T12:05:00.000Z',
+  } as const;
+  const PROOF_MESSAGE = JSON.stringify(FIELDS);
+
+  it('signs exactly the server-built message as the primary account, and returns the proof to show', async () => {
+    const provider = accountProvider({
+      account: { publicKey: 'ab'.repeat(32), namespace: '1220aa' },
+      signMessage: () => ({ signature: 'cd'.repeat(64) }),
+    });
+    const proof = await proveWalletProof(connected(provider), { message: PROOF_MESSAGE, fields: FIELDS, now: NOW });
+    expect(proof).toEqual({
+      partyId: HOLDER,
+      publicKey: 'ab'.repeat(32),
+      namespace: '1220aa',
+      message: PROOF_MESSAGE,
+      signature: 'cd'.repeat(64),
+    });
+    expect(provider.requests).toEqual([
+      { method: 'getPrimaryAccount' },
+      { method: 'signMessage', params: { message: PROOF_MESSAGE } },
+    ]);
+  });
+
+  it('signs without fields too', async () => {
+    const provider = accountProvider({ signMessage: () => ({ signature: 'sig' }) });
+    await expect(proveWalletProof(connected(provider), { message: PROOF_MESSAGE, now: NOW })).resolves.toMatchObject({
+      message: PROOF_MESSAGE,
+      signature: 'sig',
+    });
+  });
+
+  it.each([
+    ['text that is not a wallet proof', { message: MESSAGE }, 'not a wallet proof message'],
+    ['a pretty-printed message', { message: JSON.stringify(FIELDS, null, 2) }, 'not a wallet proof message'],
+    ['another party', { message: JSON.stringify({ ...FIELDS, partyId: 'other::1220dd' }) }, 'names other::1220dd'],
+    ['the other network', { message: JSON.stringify({ ...FIELDS, network: 'mainnet' }) }, 'is for mainnet, not devnet'],
+    ['fields that are not the message', { fields: { ...FIELDS, investorContext: 'x' } }, 'not the message'],
+  ] as const)('refuses %s without asking the wallet anything', async (_label, change, text) => {
+    const provider = accountProvider({ signMessage: () => ({ signature: 'sig' }) });
+    const error = await proveWalletProof(connected(provider), { message: PROOF_MESSAGE, now: NOW, ...change }).catch(
+      (e: unknown) => e
+    );
+    expect(error).toBeInstanceOf(WalletSignError);
+    expect(error).toMatchObject({ reason: 'invalid-challenge', message: expect.stringContaining(text) });
+    expect(provider.requests).toEqual([]);
+  });
+
+  it.each([
+    ['another primary account', { party: 'other::1220dd' }, {}],
+    ['a wallet on the other DA network', { account: { networkId: 'canton:mainnet' } }, {}],
+    ['an expired message', {}, { now: () => new Date('2026-11-16T12:05:00.000Z') }],
+  ] as const)('refuses %s before asking the wallet to sign', async (_label, wallet, change) => {
+    const provider = accountProvider({ ...wallet, signMessage: () => ({ signature: 'sig' }) });
+    const error = await proveWalletProof(connected(provider), { message: PROOF_MESSAGE, now: NOW, ...change }).catch(
+      (e: unknown) => e
+    );
+    expect(error).toMatchObject({ name: 'WalletSignError', reason: 'invalid-challenge' });
+    expect(provider.requests.map((r) => r.method)).toEqual(['getPrimaryAccount']);
+  });
+
+  it('maps a user rejection like the text proof', async () => {
+    const provider = accountProvider({
+      signMessage: () => {
+        throw new RpcError(4001, 'User rejected');
+      },
+    });
+    await expect(proveWalletProof(connected(provider), { message: PROOF_MESSAGE, now: NOW })).rejects.toMatchObject({
+      reason: 'rejected-by-user',
+      message: expect.stringContaining('wallet proof message'),
+    });
+  });
+
+  describe('through requestWalletOwnershipVerdict', () => {
+    const answering = (challenge: unknown): ReturnType<typeof fakeFetch> =>
+      fakeFetch((call) => (call.url === '/c' ? { json: { data: challenge } } : { json: { data: {} } }));
+
+    it.each([
+      ['without a message', { format: 'wallet-proof-v1', fields: FIELDS, token: 't' }],
+      ['without fields', { format: 'wallet-proof-v1', message: PROOF_MESSAGE, token: 't' }],
+      ['without a token', { format: 'wallet-proof-v1', message: PROOF_MESSAGE, fields: FIELDS }],
+    ])('refuses a wallet-proof challenge %s and signs nothing', async (_label, challenge) => {
+      const provider = accountProvider({ signMessage: () => ({ signature: 'sig' }) });
+      const { fetch } = answering(challenge);
+      await expect(
+        requestWalletOwnershipVerdict(connected(provider), { fetch, challengeUrl: '/c', verifyUrl: '/v' })
+      ).rejects.toThrow('without { message, fields, token }');
+      expect(provider.requests).toEqual([]);
+    });
+
+    it('refuses a challenge in a format it does not know', async () => {
+      const provider = accountProvider({ signMessage: () => ({ signature: 'sig' }) });
+      const { fetch } = answering({ format: 'wallet-proof-v2', challenge: CHALLENGE, token: 't' });
+      await expect(
+        requestWalletOwnershipVerdict(connected(provider), { fetch, challengeUrl: '/c', verifyUrl: '/v' })
+      ).rejects.toThrow('without { challenge, token }');
+      expect(provider.requests).toEqual([]);
+    });
   });
 });
