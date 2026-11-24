@@ -477,6 +477,49 @@ export async function POST(request: Request): Promise<Response> {
 }
 ```
 
+### The wallet proof format (`wallet-proof-v1`)
+
+A second message format, the same shape as apiv2's CNTN tokenization wallet proof, so a page signs
+one format whichever Fairmint server checks it: one line of JSON with the keys in this order.
+
+```json
+{
+  "domain": "fairmint:tokenization-wallet-proof:v1",
+  "network": "devnet",
+  "partyId": "hint::1220…",
+  "investorContext": "user-1",
+  "idempotencyKey": "<nonce>",
+  "issuedAt": "2026-11-24T10:00:00.000Z",
+  "expiresAt": "2026-11-24T10:05:00.000Z"
+}
+```
+
+- `buildWalletProofMessage(fields)` and `parseWalletProofMessage(text)` (browser-safe, from
+  `@fairmint/canton-node-sdk/wallets`) write and read it. Parsing is strict: the exact key set and
+  order, string values, ISO-8601 times with an offset, `expiresAt` after `issuedAt`, and the text
+  must be byte for byte what `JSON.stringify` writes for those fields.
+- `verifyWalletProof({ proof, expected: { domain, network, partyId, investorContext?, idempotencyKey? }, now?, maxLifetimeMs?, maxSkewMs? })`
+  (Node only, package root) checks the fields against the server's values, `issuedAt <= now + 60 s`,
+  `expiresAt > now`, a lifetime of at most 10 minutes, the key's fingerprint against the party's
+  namespace, and the Ed25519 signature over the exact bytes. It answers like
+  `verifyWalletOwnership`: `{ verified: true, ...fields, publicKeyFingerprint }` or
+  `{ verified: false, reason, message }`.
+- The challenger issues it on request: `issue({ ..., format: 'wallet-proof-v1', proofDomain })` or
+  `handleChallenge(request, { subject, format: 'wallet-proof-v1', proofDomain })` (`proofDomain`
+  defaults to `purpose`). The challenge answer is
+  `{ format: 'wallet-proof-v1', message, fields, token }`: `idempotencyKey` is the challenge's nonce
+  (its reference) and `investorContext` the subject. The token says which format a challenge used,
+  so `handleVerify` and `verify` need no option. The text format stays the default.
+- In the browser, `requestWalletOwnershipVerdict` (and the store's `proveOwnership`) accepts either
+  answer. For `wallet-proof-v1` it calls `proveWalletProof(connection, { message, fields })`, which
+  refuses a message that does not parse, names another party or network, differs from `fields`, or
+  has expired, and then signs exactly `message`. The signed
+  `{ partyId, publicKey, message, signature }` reaches a page through `onProof`, or as `proof` on
+  the store's `proveOwnership` result. `proveWalletProof` returns `publicKey` and `signature` as
+  standard base64 whatever the wallet gave (Loop's hex, or base64), a raw 32-byte key or a DER key
+  alike, so the proof a page shows for copying verifies with a server that decodes base64 only
+  (apiv2's CNTN verifier); `verifyWalletProof` still accepts hex or base64.
+
 ### Proving wallet ownership
 
 A connected wallet only tells the dApp a party id, which anyone can claim. To know the user controls

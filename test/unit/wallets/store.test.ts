@@ -831,7 +831,15 @@ describe('createWalletStore', () => {
           verifyUrl: '/verify',
           fetch: fetch.fetch,
         });
-        expect(result).toEqual(verdict);
+        expect(result).toEqual({
+          ...verdict,
+          proof: {
+            partyId: HOLDER,
+            publicKey: 'pk',
+            message: expect.stringMatching(/^Canton wallet ownership proof\n/),
+            signature: 'sig',
+          },
+        });
         expect(fetch.calls.map((call) => [call.url, call.body])).toEqual([
           ['/challenge', { network: 'devnet', partyId: HOLDER }],
           ['/verify', { token: 'token-1', proof: expect.objectContaining({ partyId: HOLDER, signature: 'sig' }) }],
@@ -842,6 +850,51 @@ describe('createWalletStore', () => {
           status: 'succeeded',
           message: `Verified: this wallet holds the key of ${HOLDER} (key fingerprint 1220aa).`,
         });
+      });
+
+      it('signs a server-built wallet proof message exactly, and returns the proof with the verdict', async () => {
+        const fields = {
+          domain: 'fairmint:tokenization-wallet-proof:v1',
+          network: 'devnet',
+          partyId: HOLDER,
+          investorContext: 'user-1',
+          idempotencyKey: 'nonce-0123456789abcdef',
+          issuedAt: '2026-01-01T00:00:00.000Z',
+          expiresAt: '2099-01-01T00:00:00.000Z',
+        };
+        const message = JSON.stringify(fields);
+        const verdict = {
+          verified: true,
+          partyId: HOLDER,
+          publicKeyFingerprint: '1220aa',
+          claimedNetwork: 'canton:devnet',
+          verifiedAt: '2026-11-18T00:00:00.000Z',
+        };
+        const t = setup();
+        t.provider.answers.getPrimaryAccount = () => ({ primary: true, partyId: HOLDER, publicKey: 'pk' });
+        const signed: unknown[] = [];
+        t.provider.answers.signMessage = (request) => {
+          signed.push(request);
+          return { signature: 'sig' };
+        };
+        const fetch = fakeFetch((call) =>
+          call.url === '/challenge'
+            ? { json: { data: { format: 'wallet-proof-v1', message, fields, token: 'token-1' } } }
+            : { json: { data: verdict } }
+        );
+        await t.session.connect(t.provider);
+        t.answer();
+        await flush();
+        const result = await t.store.act({
+          type: 'proveOwnership',
+          challengeUrl: '/challenge',
+          verifyUrl: '/verify',
+          fetch: fetch.fetch,
+        });
+        const proof = { partyId: HOLDER, publicKey: 'pk', message, signature: 'sig' };
+        expect(result).toEqual({ ...verdict, proof });
+        expect(signed).toEqual([{ method: 'signMessage', params: { message } }]);
+        expect(fetch.calls[1]?.body).toEqual({ token: 'token-1', proof });
       });
 
       it('a verdict that did not verify is a not-verified failure', async () => {

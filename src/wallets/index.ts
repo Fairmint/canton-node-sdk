@@ -23,7 +23,9 @@
  *   (`InstrumentBalance.lockedInExpiredLocks`), and the `reclaimLockedTokens` action that unlocks both
  *   (`WalletToken.canReclaim` says when it applies).
  * - The ownership proof's browser half (`requestWalletOwnershipVerdict`); the server half
- *   (`createWalletOwnershipChallenger`, `verifyWalletOwnership`) is Node-only and exported from the package root.
+ *   (`createWalletOwnershipChallenger`, `verifyWalletOwnership`) is Node-only and exported from the package root. The
+ *   compact wallet proof message (`buildWalletProofMessage`, `parseWalletProofMessage`, `proveWalletProof`; verified by
+ *   `verifyWalletProof` at the package root) is apiv2's CNTN tokenization wallet proof format.
  * - The errors, their guards (`isWalletError`, `isWalletSubmitError`, …: they match errors of any copy of this module,
  *   where `instanceof` does not), their user-facing descriptions (`describeWalletError`), and the data types.
  * - Display helpers that return codes, not sentences: `selectWalletToken`, `formatTokenAmount`, `formatOfferExpiry`,
@@ -117,8 +119,10 @@ export {
 export {
   buildWalletOwnershipMessage,
   proveWalletOwnership,
+  proveWalletProof,
   requestWalletOwnershipVerdict,
   type ProveWalletOwnershipOptions,
+  type ProveWalletProofOptions,
   type RequestWalletOwnershipVerdictOptions,
   type WalletOwnershipChallenge,
   type WalletOwnershipChallengeFailure,
@@ -128,6 +132,16 @@ export {
   type WalletOwnershipProof,
   type WalletOwnershipVerdict,
 } from './ownership';
+export {
+  buildWalletProofMessage,
+  parseWalletProofMessage,
+  WALLET_PROOF_FORMAT,
+  WALLET_PROOF_MAX_MESSAGE_BYTES,
+  WALLET_PROOF_MAX_MESSAGE_LENGTH,
+  type WalletProofChallengeResponse,
+  type WalletProofFields,
+  type WalletProofFormat,
+} from './wallet-proof';
 export {
   DA_REGISTRY_REQUEST_TIMEOUT_MS,
   type DaNetwork,

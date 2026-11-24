@@ -24,14 +24,16 @@
  * hosted on that network; a caller that needs that must look the party up on the network (Scan, or the ledger's party
  * and topology APIs).
  */
-import {
-  assertEd25519Signature,
-  deriveCantonEd25519PublicKeyFingerprint,
-  extractPublicKeyFingerprint,
-} from './canton-protocol';
-import { normalizeCantonEd25519Signature } from './canton-ed25519-signer';
 import { parseWalletOwnershipMessage } from '../../wallets/ownership';
-import type { WalletOwnershipFailure, WalletOwnershipProof } from '../../wallets/ownership';
+import type { WalletOwnershipFailure } from '../../wallets/ownership';
+import {
+  assertWindowOptions,
+  checkFailure as fail,
+  checkKeyAndSignature,
+  checkWindow,
+  partyNamespace,
+  readWalletOwnershipProof,
+} from './wallet-ownership-checks';
 
 /** Why a proof did not verify. Defined in the browser-safe wallets module, which shares it; re-exported here. */
 export type { WalletOwnershipFailure };
@@ -81,45 +83,6 @@ export const DEFAULT_WALLET_OWNERSHIP_MAX_AGE_MS = 10 * 60 * 1000;
 export const DEFAULT_WALLET_OWNERSHIP_CLOCK_SKEW_MS = 60 * 1000;
 
 /**
- * The key as base64 for the Canton helpers: 64 hex characters (the raw key, as Loop reports it), else base64 of the raw
- * or DER SubjectPublicKeyInfo key (as Privy's provider reports it), which the helpers accept as is.
- */
-function publicKeyBase64(value: string): string {
-  return /^[0-9a-fA-F]{64}$/.test(value) ? Buffer.from(value, 'hex').toString('base64') : value;
-}
-
-/** The signature as base64: 128 hex characters (Loop), else base64 (Privy); 64 bytes either way. */
-function signatureBase64(value: string): string {
-  return /^[0-9a-fA-F]{128}$/.test(value)
-    ? normalizeCantonEd25519Signature({ signatureHex: value })
-    : normalizeCantonEd25519Signature({ signatureBase64: value });
-}
-
-function readProof(proof: unknown): WalletOwnershipProof | null {
-  if (typeof proof !== 'object' || proof === null) return null;
-  const record = proof as Record<string, unknown>;
-  const { partyId, publicKey, namespace, message, signature } = record;
-  if (
-    typeof partyId !== 'string' ||
-    typeof publicKey !== 'string' ||
-    typeof message !== 'string' ||
-    typeof signature !== 'string' ||
-    (namespace !== undefined && typeof namespace !== 'string') ||
-    publicKey.length > 1024 ||
-    signature.length > 1024
-  ) {
-    return null;
-  }
-  return { partyId, publicKey, message, signature, ...(namespace !== undefined && { namespace }) };
-}
-
-const fail = (reason: WalletOwnershipFailure, message: string): WalletOwnershipVerification => ({
-  verified: false,
-  reason,
-  message,
-});
-
-/**
  * Verify a wallet ownership proof (see the module comment for what this does and does not establish). Never throws for
  * a bad proof: the result says why it failed. Throws `TypeError` for invalid options.
  */
@@ -136,11 +99,9 @@ export function verifyWalletOwnership(
   if (typeof options.expectedDomain !== 'string' || options.expectedDomain.length === 0) {
     throw new TypeError('expectedDomain is required');
   }
-  if (!Number.isFinite(now) || !(maxAgeMs > 0) || !(skewMs >= 0)) {
-    throw new TypeError('now, maxAgeMs and clockSkewMs must be valid');
-  }
+  assertWindowOptions(now, maxAgeMs, skewMs, 'now, maxAgeMs and clockSkewMs');
 
-  const read = readProof(proof);
+  const read = readWalletOwnershipProof(proof);
   if (read === null) return fail('malformed-proof', 'The proof is not { partyId, publicKey, message, signature }');
   const fields = parseWalletOwnershipMessage(read.message);
   if (fields === null) return fail('malformed-message', 'The signed text is not a canonical wallet ownership message');
@@ -151,8 +112,7 @@ export function verifyWalletOwnership(
   if (options.expectedPartyId !== undefined && read.partyId !== options.expectedPartyId) {
     return fail('party-mismatch', 'The proof is for another party than expected');
   }
-  const partyNamespace = read.partyId.slice(read.partyId.indexOf('::') + 2);
-  if (read.namespace !== undefined && read.namespace !== partyNamespace) {
+  if (read.namespace !== undefined && read.namespace !== partyNamespace(read.partyId)) {
     return fail('party-mismatch', "The wallet's namespace is not the party id's namespace");
   }
   if (fields.domain !== options.expectedDomain) {
@@ -175,55 +135,15 @@ export function verifyWalletOwnership(
     return fail('window-mismatch', 'The message names another validity window than the server issued');
   }
 
-  const issuedAt = Date.parse(fields.issuedAt);
-  const expiresAt = Date.parse(fields.expiresAt);
-  if (issuedAt > now + skewMs) return fail('not-yet-valid', 'The message was issued in the future');
-  if (expiresAt - issuedAt > maxAgeMs) {
-    return fail('lifetime-too-long', `The message is valid for longer than ${maxAgeMs} ms`);
-  }
-  // With the lifetime bounded above, this also bounds the message's age by maxAgeMs.
-  if (now >= expiresAt) return fail('expired', 'The message has expired');
-
-  let fingerprint: string;
-  let keyBase64: string;
-  try {
-    keyBase64 = publicKeyBase64(read.publicKey);
-    fingerprint = deriveCantonEd25519PublicKeyFingerprint(keyBase64);
-  } catch {
-    return fail(
-      'unsupported-public-key',
-      'The public key is not an Ed25519 key in hex (raw 32 bytes) or base64 (raw 32 bytes or DER SubjectPublicKeyInfo)'
-    );
-  }
-  let partyFingerprint: string;
-  try {
-    partyFingerprint = extractPublicKeyFingerprint(read.partyId);
-  } catch {
-    return fail('party-mismatch', 'The party id is not of the form hint::namespace');
-  }
-  if (partyFingerprint !== fingerprint) {
-    return fail(
-      'key-not-bound-to-party',
-      "The public key's Canton fingerprint is not the party's namespace, so the key does not prove control of the party (a participant-hosted party, or a rotated or delegated key, needs a topology lookup)"
-    );
-  }
-
-  let signature: string;
-  try {
-    signature = signatureBase64(read.signature);
-  } catch {
-    return fail('malformed-signature', 'The signature is not 64 bytes of hex or base64');
-  }
-  try {
-    assertEd25519Signature({ publicKeyBase64: keyBase64, payload: read.message, signatureBase64: signature });
-  } catch {
-    return fail('bad-signature', 'The signature does not verify against the public key');
-  }
+  const windowFailure = checkWindow(fields.issuedAt, fields.expiresAt, now, maxAgeMs, skewMs);
+  if (windowFailure !== null) return windowFailure;
+  const bound = checkKeyAndSignature(read);
+  if ('verified' in bound) return bound;
 
   return {
     verified: true,
     partyId: read.partyId,
-    publicKeyFingerprint: fingerprint,
+    publicKeyFingerprint: bound.fingerprint,
     domain: fields.domain,
     nonce: fields.nonce,
     ...(fields.network !== undefined && { network: fields.network }),
