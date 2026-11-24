@@ -31,7 +31,7 @@ export type ExternalPartyHintError = 'empty' | 'too-long' | 'charset' | 'taken';
 
 /**
  * A short, readable party hint, unique among the key's parties: `base` reduced to lowercase letters, digits and dashes
- * (at most {@link MAX_SUGGESTED_EXTERNAL_PARTY_HINT_BASE_LENGTH} characters), or `fallback`
+ * (at most {@link MAX_SUGGESTED_EXTERNAL_PARTY_HINT_BASE_LENGTH} characters), else `fallback` reduced the same way
  * ({@link DEFAULT_EXTERNAL_PARTY_HINT} by default), then `-2`, `-3`, ... until it is not one of `taken` (the hints of
  * the key's parties). Pass an app label or a nickname the user picks as `base`.
  */
@@ -42,16 +42,8 @@ export function suggestExternalPartyHint(
     readonly fallback?: string;
   } = {}
 ): string {
-  // Linear-time steps only: the input is bounded first, and dashes are trimmed without a backtracking pattern.
-  const reduced = (typeof options.base === 'string' ? options.base : '')
-    .slice(0, MAX_BASE_INPUT_LENGTH)
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/gu, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gu, '-');
-  const base =
-    trimDashes(trimDashes(reduced).slice(0, MAX_SUGGESTED_EXTERNAL_PARTY_HINT_BASE_LENGTH)) ||
-    (options.fallback ?? DEFAULT_EXTERNAL_PARTY_HINT);
+  // A base, or the fallback, reduced to lowercase letters, digits and dashes and bounded; '' when nothing is left.
+  const base = reduceHintBase(options.base) || reduceHintBase(options.fallback) || DEFAULT_EXTERNAL_PARTY_HINT;
   const taken = new Set(options.taken ?? []);
   if (!taken.has(base)) return base;
   for (let suffix = 2; ; suffix += 1) {
@@ -84,4 +76,19 @@ function trimDashes(value: string): string {
   while (start < end && value[start] === '-') start += 1;
   while (end > start && value[end - 1] === '-') end -= 1;
   return value.slice(start, end);
+}
+
+/**
+ * `value` reduced to a suggestion base: lowercase letters, digits and dashes, at most
+ * {@link MAX_SUGGESTED_EXTERNAL_PARTY_HINT_BASE_LENGTH} characters, no leading or trailing dash; '' when nothing is
+ * left. Linear time: the input is bounded first, and dashes are trimmed without a backtracking pattern.
+ */
+function reduceHintBase(value: unknown): string {
+  const reduced = (typeof value === 'string' ? value : '')
+    .slice(0, MAX_BASE_INPUT_LENGTH)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, '-');
+  return trimDashes(trimDashes(reduced).slice(0, MAX_SUGGESTED_EXTERNAL_PARTY_HINT_BASE_LENGTH));
 }

@@ -38,14 +38,13 @@ export function isExternalPartyHint(hint: unknown): hint is string {
 }
 const ED25519_FIELD_PRIME_LE = hexToBytes('edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f');
 const ED25519_SMALL_ORDER_PUBLIC_KEYS_HEX: ReadonlySet<string> = new Set([
-  '0000000000000000000000000000000000000000000000000000000000000000',
+  // The eight small-order points (the torsion subgroup), compared with the sign bit cleared: the identity (order 1),
+  // y = -1 (order 2), y = 0 (order 4) and the two order-8 y coordinates. Their sign-bit twins match the same entries.
   '0100000000000000000000000000000000000000000000000000000000000000',
   'ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
-  'edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
-  'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39cccecfd7792ac037a900',
-  'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39cccecfd7792ac037a980',
+  '0000000000000000000000000000000000000000000000000000000000000000',
+  'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a',
   '26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05',
-  '26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85',
 ]);
 
 /**

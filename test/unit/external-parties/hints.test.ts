@@ -16,6 +16,13 @@ describe('suggestExternalPartyHint', () => {
     expect(suggestExternalPartyHint({ base: 'José' })).toBe('jose');
     expect(suggestExternalPartyHint({ base: '  ***  ' })).toBe('wallet');
     expect(suggestExternalPartyHint({ base: '  ***  ', fallback: 'account' })).toBe('account');
+    // The fallback is reduced and bounded like the base, and an empty one gives way to wallet.
+    expect(suggestExternalPartyHint({ fallback: 'My/App' })).toBe('my-app');
+    expect(suggestExternalPartyHint({ fallback: '' })).toBe('wallet');
+    expect(suggestExternalPartyHint({ fallback: 'x'.repeat(41) })).toBe('x'.repeat(24));
+    for (const fallback of ['', 'my/app', 'x'.repeat(41), '***']) {
+      expect(validateExternalPartyHint(suggestExternalPartyHint({ fallback }))).toBeNull();
+    }
     expect(suggestExternalPartyHint({ base: 'a-very-long-display-name-indeed' })).toBe('a-very-long-display-name');
   });
 

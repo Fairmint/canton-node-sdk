@@ -64,6 +64,24 @@ describe('external-parties keys', () => {
     }
   });
 
+  it('refuses all eight small-order points (the torsion subgroup), in this module and the Node helper', () => {
+    // The multiples 0..7 of an order-8 point, as encoded by @noble/curves.
+    for (const hex of [
+      '0100000000000000000000000000000000000000000000000000000000000000',
+      'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a',
+      '0000000000000000000000000000000000000000000000000000000000000080',
+      '26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05',
+      'ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
+      '26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85',
+      '0000000000000000000000000000000000000000000000000000000000000000',
+      'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa',
+    ]) {
+      const key = Buffer.from(hex, 'hex').toString('base64');
+      expect(() => decodeEd25519PublicKey(key)).toThrow(/small-order point/);
+      expect(() => NodeProtocol.extractRawEd25519PublicKey(key)).toThrow(/Invalid Ed25519 public key/);
+    }
+  });
+
   it('refuses a small-order point with either sign bit, as the Node helper does', () => {
     // y = 0 with the sign bit set is the order-4 point; y = 1 and y = -1 with it set encode x = -0.
     for (const hex of [
