@@ -1219,6 +1219,57 @@ describe('createCip103Session', () => {
       expect(provider.requests).not.toContain('isConnected');
     });
 
+    it.each(['fail', 'dispose'] as const)(
+      'still signs out the previous wallet when its removeListener calls %s() during a switch',
+      async (call) => {
+        const { session } = observed();
+        const previous = new TestProvider(OTHER);
+        await session.connect(previous);
+        let armed = true;
+        const remove = previous.removeListener.bind(previous);
+        previous.removeListener = (event, listener) => {
+          if (armed) {
+            armed = false;
+            if (call === 'fail') session.fail(new Error('boom'));
+            else session.dispose();
+          }
+          return remove(event, listener);
+        };
+        const provider = new TestProvider();
+        await session.connect(provider);
+        await flush();
+        // The switch's own run stops (what the call-out did owns the session), but the user still left `previous`.
+        expect(provider.requests).toEqual([]);
+        expect(previous.requests).toEqual(['connect', 'getPrimaryAccount', 'disconnect']);
+        if (call === 'fail') {
+          expect(session.getSnapshot()).toMatchObject({ status: 'disconnected', error: { message: 'boom' } });
+          // Signed out: restore() leaves it alone although it still reports a session.
+          await session.restore(previous);
+          expect(previous.requests).not.toContain('isConnected');
+        }
+      }
+    );
+
+    it("does not sign the previous wallet out twice when its removeListener starts another connect()", async () => {
+      const { session } = observed();
+      const previous = new TestProvider(OTHER);
+      await session.connect(previous);
+      const other = new TestProvider();
+      let armed = true;
+      const remove = previous.removeListener.bind(previous);
+      previous.removeListener = (event, listener) => {
+        if (armed) {
+          armed = false;
+          void session.connect(other);
+        }
+        return remove(event, listener);
+      };
+      await session.connect(new TestProvider());
+      await flush();
+      expect(previous.requests).toEqual(['connect', 'getPrimaryAccount', 'disconnect']);
+      expect(connectedWallet(session).provider).toBe(other);
+    });
+
     it('signs out a wallet whose connect() is cancelled after its account was refused for the other network', async () => {
       const { session } = observed('devnet');
       const provider = onMainnet();
