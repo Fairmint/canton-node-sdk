@@ -867,7 +867,7 @@ describe('createWalletStore', () => {
           verified: true,
           partyId: HOLDER,
           publicKeyFingerprint: '1220aa',
-          claimedNetwork: 'devnet',
+          claimedNetwork: 'canton:devnet',
           verifiedAt: '2026-11-18T00:00:00.000Z',
         };
         const t = setup();

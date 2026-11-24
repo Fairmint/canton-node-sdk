@@ -11,6 +11,7 @@
  * label, a party not namespaced by its key fails `key-not-bound-to-party`, and the caller must accept each
  * `idempotencyKey` once (this function cannot tell a replay from a fresh proof).
  */
+import { isDaNetwork } from '../../wallets/cip103';
 import type { DaNetwork } from '../../wallets/da-utilities/client';
 import type { WalletOwnershipFailure } from '../../wallets/ownership';
 import { parseWalletProofMessage, type WalletProofFields } from '../../wallets/wallet-proof';
@@ -78,6 +79,7 @@ export function verifyWalletProof(args: VerifyWalletProofArgs): WalletProofVerif
       throw new TypeError(`expected.${key} is required`);
     }
   }
+  if (!isDaNetwork(expected.network)) throw new TypeError('expected.network must be devnet or mainnet');
   assertWindowOptions(now, maxLifetimeMs, maxSkewMs, 'now, maxLifetimeMs and maxSkewMs');
 
   const read = readWalletOwnershipProof(args.proof);

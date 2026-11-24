@@ -672,7 +672,7 @@ describe('createWalletOwnershipChallenger: the wallet-proof-v1 format', () => {
       verified: true,
       partyId: party.partyId,
       publicKeyFingerprint: party.namespace,
-      claimedNetwork: 'devnet',
+      claimedNetwork: 'canton:devnet',
       verifiedAt: LATER.toISOString(),
     });
     expect(reasonOf(await verify(signed(message)))).toBe('challenge-used');
@@ -790,7 +790,7 @@ describe('createWalletOwnershipChallenger: the wallet-proof-v1 format', () => {
         verifyUrl: VERIFY_URL,
         onProof: (proof) => proofs.push(proof),
       });
-      expect(verdict).toMatchObject({ verified: true, partyId: party.partyId, claimedNetwork: 'devnet' });
+      expect(verdict).toMatchObject({ verified: true, partyId: party.partyId, claimedNetwork: 'canton:devnet' });
       const messages = wallet.provider.requests.flatMap((r) => (r.method === 'signMessage' ? [r.params.message] : []));
       expect(messages).toHaveLength(1);
       expect(JSON.parse(messages[0] ?? '')).toMatchObject({ domain: PROOF_DOMAIN, partyId: party.partyId });

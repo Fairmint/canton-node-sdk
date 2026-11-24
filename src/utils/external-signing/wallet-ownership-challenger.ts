@@ -412,7 +412,13 @@ export function createWalletOwnershipChallenger(options: WalletOwnershipChalleng
         verified: true,
         partyId: result.partyId,
         publicKeyFingerprint: result.publicKeyFingerprint,
-        claimedNetwork: result.network ?? null,
+        // The same label in both formats: the wallet proof message names `devnet`, the text message `canton:devnet`.
+        claimedNetwork:
+          result.network === undefined
+            ? null
+            : isDaNetwork(result.network)
+              ? cip103NetworkId(result.network)
+              : result.network,
         verifiedAt: at.toISOString(),
       },
       partyId,

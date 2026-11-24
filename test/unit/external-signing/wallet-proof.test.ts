@@ -171,6 +171,9 @@ describe('verifyWalletProof', () => {
   it('throws TypeError for an expectation without domain, network or party, or a bad bound', () => {
     expect(() => verify({ expected: { ...expected, domain: '' } })).toThrow('expected.domain is required');
     expect(() => verify({ expected: { ...expected, partyId: '' } })).toThrow('expected.partyId is required');
+    expect(() => verify({ expected: { ...expected, network: 'canton:devnet' as never } })).toThrow(
+      'expected.network must be devnet or mainnet'
+    );
     expect(() => verify({ maxLifetimeMs: 0 })).toThrow(TypeError);
     expect(() => verify({ now: new Date(Number.NaN) })).toThrow(TypeError);
   });
