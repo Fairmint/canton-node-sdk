@@ -61,7 +61,11 @@ describe('external-parties keys', () => {
 
   it('says which check refused a key', () => {
     expect(() => decodeEd25519PublicKey(SMALL_ORDER.toString('base64'))).toThrow(/small-order point is not safe/);
-    expect(() => decodeEd25519PublicKey(FIELD_PRIME.toString('base64'))).toThrow(/not canonically encoded/);
+    // The field prime plus one: a y coordinate at or above the prime that is not a small-order point.
+    const abovePrime = Buffer.from(FIELD_PRIME);
+    abovePrime[0] = 0xee;
+    expect(() => decodeEd25519PublicKey(abovePrime.toString('base64'))).toThrow(/not canonically encoded/);
+    expect(() => NodeProtocol.extractRawEd25519PublicKey(abovePrime.toString('base64'))).toThrow();
     expect(() => decodeEd25519PublicKey(Buffer.alloc(33, 1).toString('base64'))).toThrow(/length: 33/);
     expect(() => decodeEd25519PublicKey('not base64!')).toThrow(/must be base64-encoded/);
   });
