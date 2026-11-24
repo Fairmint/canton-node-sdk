@@ -1,6 +1,6 @@
 /**
- * The package's `exports` map: `./wallets` is the browser-safe entry, and every deep `build/...` path that worked
- * before the map existed still resolves (Node's `exports` adds no extensions and finds no `index.js` by itself).
+ * The package's `exports` map: the root, the browser-safe `./wallets` and `./external-parties` entries, and
+ * `./package.json`. No deep `build/...` path is exported, so consumers import only through the public entry points.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -39,15 +39,20 @@ describe('package exports', () => {
     });
   });
 
-  it('keep the deep paths consumers import: files with or without .js, and directories with an index', () => {
-    const exportsMap = pkg.exports;
-    expect(exportsMap['./build/*.js']).toBe('./build/*.js');
-    expect(exportsMap['./build/*.d.ts']).toBe('./build/*.d.ts');
-    expect(exportsMap['./build/*']).toBe('./build/*.js');
-    expect(exportsMap['./build/src/utils/transactions']).toBe('./build/src/utils/transactions/index.js');
-    expect(exportsMap['./build/src/clients/ledger-json-api/operations']).toBe(
-      './build/src/clients/ledger-json-api/operations/index.js'
-    );
-    expect(exportsMap['./build/src']).toBe('./build/src/index.js');
+  it('export only the public entry points: no deep build/... path', () => {
+    expect(Object.keys(pkg.exports).sort()).toEqual(['.', './external-parties', './package.json', './wallets']);
+    const deep = Object.keys(pkg.exports).filter((key) => key.startsWith('./build'));
+    expect(deep).toEqual([]);
+    for (const former of [
+      './build/*',
+      './build/*.js',
+      './build/*.d.ts',
+      './build/src',
+      './build/src/wallets',
+      './build/src/utils/transactions',
+      './build/src/clients/ledger-json-api/operations',
+    ]) {
+      expect(pkg.exports).not.toHaveProperty([former]);
+    }
   });
 });
