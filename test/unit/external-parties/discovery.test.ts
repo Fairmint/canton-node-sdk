@@ -1,5 +1,6 @@
 import {
   discoverExternalParties,
+  ExternalPartyError,
   isExternalPartyError,
   MAX_EXTERNAL_PARTY_LOOKUP_HINTS,
   type ExternalPartyListAnswer,
@@ -139,6 +140,17 @@ describe('discoverExternalParties', () => {
     expect(
       isExternalPartyError(
         await rejection(discoverExternalParties({ publicKeyFingerprint: key.fingerprint, listParties })),
+        'INVALID_RESPONSE'
+      )
+    ).toBe(true);
+
+    // Thrown by the lookup (as the directory's findParty does), even when a complete list would skip a failure.
+    findParty.mockRejectedValueOnce(new ExternalPartyError('INVALID_RESPONSE', 'unreadable'));
+    expect(
+      isExternalPartyError(
+        await rejection(
+          discoverExternalParties({ publicKeyFingerprint: key.fingerprint, hints: ['a'], listParties, findParty })
+        ),
         'INVALID_RESPONSE'
       )
     ).toBe(true);

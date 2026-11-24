@@ -19,6 +19,13 @@ describe('suggestExternalPartyHint', () => {
     expect(suggestExternalPartyHint({ base: 'a-very-long-display-name-indeed' })).toBe('a-very-long-display-name');
   });
 
+  it('stays fast on a long run of separators', () => {
+    const started = Date.now();
+    expect(suggestExternalPartyHint({ base: `a${'-'.repeat(100_000)}!` })).toBe('a');
+    expect(suggestExternalPartyHint({ base: '-'.repeat(100_000) })).toBe('wallet');
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
   it('appends -2, -3, ... to avoid the hints already taken', () => {
     expect(suggestExternalPartyHint({ taken: ['wallet'] })).toBe('wallet-2');
     expect(suggestExternalPartyHint({ base: 'nick', taken: ['nick', 'nick-2', 'wallet'] })).toBe('nick-3');

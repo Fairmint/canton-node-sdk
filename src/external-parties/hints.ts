@@ -14,6 +14,9 @@ export const MAX_SUGGESTED_EXTERNAL_PARTY_HINT_BASE_LENGTH = 24;
 /** The longest new party hint {@link validateExternalPartyHint} accepts. */
 export const MAX_NEW_EXTERNAL_PARTY_HINT_LENGTH = 40;
 
+/** The most characters of `base` {@link suggestExternalPartyHint} reads: far more than it keeps. */
+const MAX_BASE_INPUT_LENGTH = 1_000;
+
 const NEW_PARTY_HINT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/u;
 
 /**
@@ -39,15 +42,15 @@ export function suggestExternalPartyHint(
     readonly fallback?: string;
   } = {}
 ): string {
+  // Linear-time steps only: the input is bounded first, and dashes are trimmed without a backtracking pattern.
+  const reduced = (typeof options.base === 'string' ? options.base : '')
+    .slice(0, MAX_BASE_INPUT_LENGTH)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, '-');
   const base =
-    (typeof options.base === 'string' ? options.base : '')
-      .normalize('NFKD')
-      .replace(/[̀-ͯ]/gu, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/gu, '-')
-      .replace(/^-+|-+$/gu, '')
-      .slice(0, MAX_SUGGESTED_EXTERNAL_PARTY_HINT_BASE_LENGTH)
-      .replace(/-+$/u, '') ||
+    trimDashes(trimDashes(reduced).slice(0, MAX_SUGGESTED_EXTERNAL_PARTY_HINT_BASE_LENGTH)) ||
     (options.fallback ?? DEFAULT_EXTERNAL_PARTY_HINT);
   const taken = new Set(options.taken ?? []);
   if (!taken.has(base)) return base;
@@ -72,4 +75,13 @@ export function validateExternalPartyHint(hint: string, taken: readonly string[]
   if (!NEW_PARTY_HINT_PATTERN.test(trimmed)) return 'charset';
   if (taken.includes(trimmed)) return 'taken';
   return null;
+}
+
+/** `value` without leading and trailing dashes. */
+function trimDashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === '-') start += 1;
+  while (end > start && value[end - 1] === '-') end -= 1;
+  return value.slice(start, end);
 }

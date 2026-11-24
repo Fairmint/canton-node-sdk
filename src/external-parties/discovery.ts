@@ -127,9 +127,10 @@ export async function discoverExternalParties(input: {
           partyId
         );
       } catch (error) {
+        // An unreadable answer fails the call however it arrives (thrown, or returned and checked below).
+        if (isExternalPartyError(error, 'ABORTED', 'INVALID_RESPONSE')) throw error;
         // With a complete list the lookups only add to it: a failed one is skipped, unless the call was aborted.
         if (complete && !signal?.aborted) continue;
-        if (isExternalPartyError(error, 'ABORTED', 'INVALID_RESPONSE')) throw error;
         throw new ExternalPartyError('LOOKUP_FAILED', 'The participant could not look up the party.', {
           cause: error,
           partyId,
