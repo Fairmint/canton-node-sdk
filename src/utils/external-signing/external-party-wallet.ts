@@ -133,10 +133,16 @@ export interface PrepareExternalPartyWalletCcTransferInput {
   /**
    * Default `true`: refuse (with a `ValidationError`, before anything is prepared) a receiver without a CC
    * `TransferPreapproval`, for whom the registry would only create a pending offer that locks the sender's funds. Set
-   * `false` to allow such an offer.
+   * `false` to allow such an offer; an offer also needs an explicit `executeBefore`.
    */
   readonly requirePreapproval?: boolean;
-  /** Deadline for submitting the signed transfer. Default: now + 10 minutes. */
+  /**
+   * Deadline for submitting the signed transfer. Default: now + 10 minutes.
+   *
+   * For an offer (a receiver without a `TransferPreapproval`, `requirePreapproval: false`) it is also the offer's
+   * expiry: the receiver must accept before it and the sender's funds stay locked until then. An offer is refused (a
+   * `ValidationError`, reason `offer_requires_explicit_execute_before`) unless it is given explicitly.
+   */
   readonly executeBefore?: Date | string;
   /** Ledger command id. Default: `cc-transfer-<random id>`. */
   readonly commandId?: string;

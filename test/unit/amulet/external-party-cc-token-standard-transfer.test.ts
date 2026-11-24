@@ -384,12 +384,58 @@ describe('external-party CC token-standard transfer', () => {
         sender.partyId,
         ledgerClient,
         createValidatorClient(transferFactoryResponse({ transferKind: 'offer', contextValues: {} })),
-        { requirePreapproval: false }
+        { requirePreapproval: false, executeBefore: '2026-11-25T12:00:00.000Z' }
       )
     );
 
     expect(prepared.transferKind).toBe('offer');
+    expect(prepared.executeBefore).toBe('2026-11-25T12:00:00.000Z');
     expect(ledgerClient.interactiveSubmissionPrepare).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an offer without an explicit executeBefore, which would also be its 10-minute expiry', async () => {
+    const sender = createSender();
+    const ledgerClient = createLedgerClient([
+      amuletHolding({ contractId: '00one', owner: sender.partyId, amount: '10.0' }),
+    ]);
+
+    const result = prepareExternalPartyCcTokenStandardTransfer(
+      prepareOptions(
+        sender.partyId,
+        ledgerClient,
+        createValidatorClient(transferFactoryResponse({ transferKind: 'offer', contextValues: {} })),
+        { requirePreapproval: false }
+      )
+    );
+
+    await expect(result).rejects.toBeInstanceOf(ValidationError);
+    await expect(result).rejects.toMatchObject({
+      context: expect.objectContaining({
+        reason: CcTokenStandardTransferRefusal.offerRequiresExplicitExecuteBefore,
+        transferKind: 'offer',
+        executeBefore: '2026-11-24T12:10:00.000Z',
+      }) as object,
+    });
+    expect(ledgerClient.interactiveSubmissionPrepare).not.toHaveBeenCalled();
+  });
+
+  it('keeps the default executeBefore for a self transfer the caller allows', async () => {
+    const sender = createSender();
+    const ledgerClient = createLedgerClient([
+      amuletHolding({ contractId: '00one', owner: sender.partyId, amount: '10.0' }),
+    ]);
+
+    const prepared = await prepareExternalPartyCcTokenStandardTransfer(
+      prepareOptions(
+        sender.partyId,
+        ledgerClient,
+        createValidatorClient(transferFactoryResponse({ transferKind: 'self', contextValues: {} })),
+        { requirePreapproval: false }
+      )
+    );
+
+    expect(prepared.transferKind).toBe('self');
+    expect(prepared.executeBefore).toBe('2026-11-24T12:10:00.000Z');
   });
 
   it('refuses a direct transfer whose context lacks the transfer preapproval', async () => {

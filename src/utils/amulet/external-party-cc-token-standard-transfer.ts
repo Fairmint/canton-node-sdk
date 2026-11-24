@@ -43,6 +43,11 @@ export const DEFAULT_CC_TOKEN_STANDARD_TRANSFER_MAX_INPUT_HOLDINGS = 100;
 export const CcTokenStandardTransferRefusal = {
   /** The receiver has no `TransferPreapproval`: the registry would only create a pending offer that locks funds. */
   receiverHasNoTransferPreapproval: 'receiver_has_no_transfer_preapproval',
+  /**
+   * The registry chose an `offer`, whose acceptance deadline is the transfer's `executeBefore`, and the caller left
+   * `executeBefore` to its 10-minute default: the receiver would have about 10 minutes to accept.
+   */
+  offerRequiresExplicitExecuteBefore: 'offer_requires_explicit_execute_before',
   /** The sender's unlocked CC holdings (up to the input cap) do not cover the amount. */
   insufficientBalance: 'insufficient_cc_balance',
   /** A registry-disclosed contract lives on another synchronizer than the sender. */
@@ -69,10 +74,17 @@ export interface PrepareExternalPartyCcTokenStandardTransferOptions {
   /**
    * Default `true`: refuse unless the registry chooses a `direct` transfer (the receiver has a `TransferPreapproval`).
    * Without one, the registry would create a pending transfer offer that locks the sender's funds until the receiver
-   * accepts or it expires. Set `false` to allow `offer` (and `self`) transfers.
+   * accepts or it expires. Set `false` to allow `offer` (and `self`) transfers; an `offer` also needs an explicit
+   * `executeBefore`.
    */
   readonly requirePreapproval?: boolean;
-  /** Deadline for executing the transfer. Default: now + 10 minutes. */
+  /**
+   * Deadline for executing the transfer. Default: now + 10 minutes.
+   *
+   * For an `offer` transfer, Splice also uses it as the offer's expiry: the receiver must accept before it, and the
+   * sender's funds stay locked until then. An `offer` is therefore refused unless this is given explicitly (choose the
+   * acceptance window, e.g. 24 hours); the signed transfer must still be executed before it.
+   */
   readonly executeBefore?: Date | string;
   /** The transfer's request time. Default: now - 60 seconds. */
   readonly requestedAt?: Date | string;
@@ -243,6 +255,17 @@ export async function prepareExternalPartyCcTokenStandardTransfer(
       reason: CcTokenStandardTransferRefusal.receiverHasNoTransferPreapproval,
       receiverPartyId,
       transferKind: factory.transferKind,
+    });
+  }
+  if (factory.transferKind === 'offer' && options.executeBefore === undefined) {
+    // Splice's two-step transfer locks the sender's funds until `executeBefore` and lets the receiver accept only
+    // before it (AmuletTransferInstruction `transferBefore = executeBefore`), so a silent 10-minute default would make
+    // the offer all but unacceptable.
+    throw new ValidationError('Canton CC transfer offer needs an explicit executeBefore (the offer expiry)', {
+      reason: CcTokenStandardTransferRefusal.offerRequiresExplicitExecuteBefore,
+      receiverPartyId,
+      transferKind: factory.transferKind,
+      executeBefore,
     });
   }
   if (factory.transferKind === 'direct' && !(AMULET_TRANSFER_PREAPPROVAL_CONTEXT_KEY in factory.contextValues)) {

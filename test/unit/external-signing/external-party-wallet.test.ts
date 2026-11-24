@@ -484,6 +484,38 @@ describe('external-party wallet bridge', (): void => {
     expect(ledgerClient.interactiveSubmissionPrepare).not.toHaveBeenCalled();
   });
 
+  it('refuses a CC transfer offer without an explicit executeBefore, its expiry', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createCcLedgerClient();
+    const validatorClient = createMockValidatorClient();
+    validatorClient.getTransferFactory.mockResolvedValue(
+      createCcTransferFactoryResponse('offer') as Awaited<ReturnType<ValidatorApiClient['getTransferFactory']>>
+    );
+    const bridge = createBridge({ ledgerClient, validatorClient });
+    const input = {
+      senderPartyId: fixture.partyId,
+      receiverPartyId: 'receiver::fingerprint',
+      amount: '2.5',
+      publicKeyBase64: fixture.publicKeyBase64,
+      requirePreapproval: false,
+    };
+
+    await expect(bridge.prepareCcTransfer(input)).rejects.toMatchObject({
+      name: 'ValidationError',
+      context: expect.objectContaining({
+        reason: 'offer_requires_explicit_execute_before',
+        transferKind: 'offer',
+      }) as object,
+    });
+    expect(ledgerClient.interactiveSubmissionPrepare).not.toHaveBeenCalled();
+
+    const executeBefore = new Date(1_780_000_000_000 + 24 * 60 * 60 * 1000).toISOString();
+    const prepared = await bridge.prepareCcTransfer({ ...input, executeBefore });
+
+    expect(prepared).toMatchObject({ transferKind: 'offer', executeBefore, expiresAt: executeBefore });
+    expect(ledgerClient.interactiveSubmissionPrepare).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects CC transfer submit when submitted details do not match the prepare token', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const ledgerClient = createCcLedgerClient();
