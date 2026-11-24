@@ -139,7 +139,7 @@ function assertCanonicalEd25519PublicKey(raw: Uint8Array): void {
 
 function decodeBase64(value: string): Uint8Array {
   const normalized = typeof value === 'string' ? value.trim().replace(/-/g, '+').replace(/_/g, '/') : '';
-  const unpadded = normalized.replace(/=+$/, '');
+  const unpadded = trimTrailingPadding(normalized);
   // Padding is optional, but when present it must complete the last quantum (as the Node decoder requires).
   if (
     !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized) ||
@@ -157,10 +157,17 @@ function decodeBase64(value: string): Uint8Array {
   }
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
   // Refuse trailing bits that do not round-trip (a non-canonical encoding).
-  if (bytesToBase64(bytes).replace(/=+$/, '') !== unpadded) {
+  if (trimTrailingPadding(bytesToBase64(bytes)) !== unpadded) {
     throw invalidInput('publicKeyBase64 must be base64-encoded');
   }
   return bytes;
+}
+
+/** `value` without trailing `=`, in linear time (no backtracking pattern on caller input). */
+function trimTrailingPadding(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === '=') end -= 1;
+  return value.slice(0, end);
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

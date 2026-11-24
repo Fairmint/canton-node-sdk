@@ -75,6 +75,13 @@ describe('external-parties keys', () => {
     expect(() => decodeEd25519PublicKey('not base64!')).toThrow(/must be base64-encoded/);
   });
 
+  it('stays fast on a long run of padding', () => {
+    const started = Date.now();
+    expect(() => decodeEd25519PublicKey(`A${'='.repeat(100_000)}x`)).toThrow(/must be base64-encoded/);
+    expect(() => decodeEd25519PublicKey('='.repeat(100_000))).toThrow(/must be base64-encoded/);
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
   it('builds and reads hint::fingerprint party IDs', () => {
     const { fingerprint } = createKey();
     expect(buildExternalPartyId('  alice ', fingerprint)).toBe(`alice::${fingerprint}`);
