@@ -6,6 +6,7 @@
  */
 import {
   discoverExternalParties,
+  isBoundedIdentifier,
   raceAbort,
   sortedEntries,
   type ExternalPartyEntry,
@@ -170,8 +171,10 @@ export function createExternalPartyDirectory(options: ExternalPartyDirectoryOpti
           if (!isRecord(detail)) continue;
           const { party } = detail;
           // `hint::namespace` only: one separator, a non-empty hint and namespace.
+          // And one a listing may answer (at most 255 characters, trimmed, one line), so one odd party in the store
+          // never fails every key's listing.
           const parsed = parseExternalPartyId(party);
-          if (parsed === null || typeof party !== 'string') continue;
+          if (parsed === null || !isBoundedIdentifier(party)) continue;
           let parties = byNamespace.get(parsed.namespace);
           if (parties === undefined) {
             parties = new Map();
@@ -267,7 +270,12 @@ export function createExternalPartyDirectory(options: ExternalPartyDirectoryOpti
     },
 
     noteAllocated(partyId) {
-      if (parseExternalPartyId(partyId) === null) throw invalidInput('partyId must be a hint::namespace party ID.');
+      // Only an ID a listing may answer: one it refuses would fail every listing of its key until it expired.
+      if (parseExternalPartyId(partyId) === null || !isBoundedIdentifier(partyId)) {
+        throw invalidInput(
+          'partyId must be a hint::namespace party ID of at most 255 characters, trimmed, on one line.'
+        );
+      }
       // Drops expired entries as it records one, so the map holds one cache window, not the process lifetime.
       const horizon = allocationHorizon();
       for (const [id, at] of allocatedHere) {

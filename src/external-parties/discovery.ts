@@ -194,8 +194,8 @@ export async function raceAbort<T>(
   }
 }
 
-/** A string of 1 to 255 characters (a Daml-LF Party at most), trimmed, on one line. */
-function isBoundedIdentifier(value: unknown): value is string {
+/** A string of 1 to 255 characters (a Daml-LF Party at most), trimmed, on one line: what a listing may answer. */
+export function isBoundedIdentifier(value: unknown): value is string {
   return (
     typeof value === 'string' &&
     value.length > 0 &&

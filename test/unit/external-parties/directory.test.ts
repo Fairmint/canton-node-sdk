@@ -111,6 +111,27 @@ describe('createExternalPartyDirectory', () => {
     expect(timed.parties).toHaveLength(2);
   });
 
+  it('skips a stored party a listing could not answer, instead of failing every key', async () => {
+    const key = createKey();
+    const { client } = pagedClient([
+      {
+        partyDetails: [
+          { party: `${'a'.repeat(186)}::${key.fingerprint}`, isLocal: true },
+          { party: ` padded::${key.fingerprint}`, isLocal: true },
+          { party: `ok::${key.fingerprint}`, isLocal: true },
+        ],
+      },
+    ]);
+    await expect(
+      createExternalPartyDirectory({ ledgerClient: client }).listPartiesForKey({
+        publicKeyFingerprint: key.fingerprint,
+      })
+    ).resolves.toEqual({
+      parties: [{ partyId: `ok::${key.fingerprint}`, partyHint: 'ok', hostedHere: true }],
+      complete: true,
+    });
+  });
+
   it('stops paging when the participant repeats a page token', async () => {
     const key = createKey();
     const { client, gets } = pagedClient([{ partyDetails: [], nextPageToken: 'same' }]);
@@ -232,6 +253,14 @@ describe('createExternalPartyDirectory', () => {
       deleted.mockRestore();
     }
     expect(() => directory.noteAllocated('no-namespace')).toThrow(/hint::namespace/);
+    // An ID a listing would refuse is refused here, so it can never fail the key's listings.
+    for (const partyId of [
+      `${'a'.repeat(186)}::${key.fingerprint}`,
+      ` p3::${key.fingerprint}`,
+      `p\n3::${key.fingerprint}`,
+    ]) {
+      expect(() => directory.noteAllocated(partyId)).toThrow(/255 characters/);
+    }
   });
 
   it('finds one party: 404 or unlisted is not found, else hostedHere is isLocal', async () => {
