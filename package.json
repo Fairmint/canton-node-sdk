@@ -28,6 +28,10 @@
       "types": "./build/src/wallets/index.d.ts",
       "default": "./build/src/wallets/index.js"
     },
+    "./external-parties": {
+      "types": "./build/src/external-parties/index.d.ts",
+      "default": "./build/src/external-parties/index.js"
+    },
     "./package.json": "./package.json",
     "./build/src": "./build/src/index.js",
     "./build/src/clients": "./build/src/clients/index.js",
@@ -96,6 +100,7 @@
     "./build/src/core/ws": "./build/src/core/ws/index.js",
     "./build/src/da-registry": "./build/src/da-registry/index.js",
     "./build/src/da-registry/setup": "./build/src/da-registry/setup/index.js",
+    "./build/src/external-parties": "./build/src/external-parties/index.js",
     "./build/src/utils": "./build/src/utils/index.js",
     "./build/src/utils/amulet": "./build/src/utils/amulet/index.js",
     "./build/src/utils/contracts": "./build/src/utils/contracts/index.js",
@@ -122,6 +127,9 @@
     "*": {
       "wallets": [
         "build/src/wallets/index.d.ts"
+      ],
+      "external-parties": [
+        "build/src/external-parties/index.d.ts"
       ]
     }
   },
@@ -170,6 +178,7 @@
   "dependencies": {
     "@hardlydifficult/rest-client": "1.0.65",
     "@hardlydifficult/websocket": "1.0.73",
+    "@noble/hashes": "1.8.0",
     "@stellar/stellar-base": "15.0.0",
     "axios": "1.21.1",
     "dotenv": "18.0.10",

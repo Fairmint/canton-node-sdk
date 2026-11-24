@@ -6,6 +6,8 @@
  *
  * - `.`: the Node SDK (`build/src/index.js`).
  * - `./wallets`: the browser-safe wallets module (`build/src/wallets/index.js`), which loads no Node dependency.
+ * - `./external-parties`: the browser-safe external-party discovery module (`build/src/external-parties/index.js`), which
+ *   loads `@noble/hashes` and no Node dependency.
  * - `./build/...`: every deep path that worked before the map existed, so no consumer breaks. Node's `exports` does not
  *   add extensions or look for `index.js`, so the map spells them out: `.js` and `.d.ts` paths as they are,
  *   extensionless file paths with `.js` added, and one entry per directory with an `index.ts` (its `index.js`).
@@ -38,6 +40,10 @@ export function expectedPackageExports(): Record<string, ExportTarget> {
   return {
     '.': { types: './build/src/index.d.ts', default: './build/src/index.js' },
     './wallets': { types: './build/src/wallets/index.d.ts', default: './build/src/wallets/index.js' },
+    './external-parties': {
+      types: './build/src/external-parties/index.d.ts',
+      default: './build/src/external-parties/index.js',
+    },
     './package.json': './package.json',
     ...directories,
     './build/*.js': './build/*.js',

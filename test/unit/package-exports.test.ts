@@ -20,14 +20,23 @@ describe('package exports', () => {
     expect(pkg.exports).toEqual(expectedPackageExports());
   });
 
-  it('export the SDK at the root and the browser-safe wallets module at ./wallets, with types', () => {
+  it('export the SDK at the root and the browser-safe modules at ./wallets and ./external-parties, with types', () => {
     expect(pkg.exports['.']).toEqual({ types: `./${pkg.types}`, default: `./${pkg.main}` });
     expect(pkg.exports['./wallets']).toEqual({
       types: './build/src/wallets/index.d.ts',
       default: './build/src/wallets/index.js',
     });
+    expect(pkg.exports['./external-parties']).toEqual({
+      types: './build/src/external-parties/index.d.ts',
+      default: './build/src/external-parties/index.js',
+    });
     // TypeScript's classic (node10) resolution ignores `exports`; typesVersions gives it the wallets types.
-    expect(pkg.typesVersions).toEqual({ '*': { wallets: ['build/src/wallets/index.d.ts'] } });
+    expect(pkg.typesVersions).toEqual({
+      '*': {
+        wallets: ['build/src/wallets/index.d.ts'],
+        'external-parties': ['build/src/external-parties/index.d.ts'],
+      },
+    });
   });
 
   it('keep the deep paths consumers import: files with or without .js, and directories with an index', () => {

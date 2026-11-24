@@ -69,6 +69,49 @@ same way; it requires an explicit `userId` and a non-empty `parties` list, as th
 See
 [`examples/read-any-party.ts`](https://github.com/Fairmint/canton-node-sdk/blob/main/examples/read-any-party.ts).
 
+## Finding every party a key controls
+
+An external party's ID is `hint::fingerprint`, where the fingerprint is Canton's SHA-256 multihash
+of the Ed25519 key: `1220` + hex(sha256(int32be(12) || rawKey)). Nothing about it depends on the
+signer, so one module serves any wallet. It is browser-safe: import
+`@fairmint/canton-node-sdk/external-parties` (it loads `@noble/hashes` and none of the SDK's Node
+dependencies); the package root also exports it as the `ExternalParties` namespace.
+
+```typescript
+import {
+  createExternalPartyDirectory,
+  suggestExternalPartyHint,
+  validateExternalPartyHint,
+} from '@fairmint/canton-node-sdk/external-parties';
+
+// One directory per participant: one scan of its party store answers every key for 30 s.
+const directory = createExternalPartyDirectory({ ledgerClient }); // a LedgerJsonApiClient
+const { parties, complete } = await directory.listPartiesForKey({
+  publicKeyBase64, // raw or DER Ed25519 key; or pass publicKeyFingerprint
+  hints: ['wallet'], // looked up exactly when the scan does not show them
+  signal,
+});
+// parties: [{ partyId, partyHint, hostedHere }], sorted by hint
+const hint = suggestExternalPartyHint({ base: 'My app', taken: parties.map((p) => p.partyHint) });
+validateExternalPartyHint(hint); // null, or 'empty' | 'too-long' | 'charset' | 'taken'
+```
+
+The participant API has no namespace filter, so a scan reads `GET /v2/parties` page by page and
+keeps the parties ending in `::fingerprint`. Each scan is bounded (`pageSize` 1000, `maxPages` 10,
+`timeoutMs` 10 s, a stalled page included) and cached for every key (`cacheMs` 30 s; concurrent
+callers share one scan). When a bound stops it first the answer is `complete: false`, and the hints
+asked for are still looked up with `GET /v2/parties/{party}` (also when the scan is complete, since
+a cached scan can predate a newer party). `noteAllocated(partyId)` lists a party you just allocated
+at once; `findParty({ partyId })` is the exact lookup on its own. `discoverExternalParties` is the
+same list-plus-lookups logic over your own `listParties` / `findParty` callbacks. Errors are
+`ExternalPartyError` with a `code` (`INVALID_INPUT`, `INVALID_RESPONSE`, `ABORTED`, `LIST_FAILED`,
+`LOOKUP_FAILED`); a ledger failure is its `cause`.
+
+The same module has the identity helpers: `deriveCantonEd25519PublicKeyFingerprint`,
+`buildExternalPartyId`, `parseExternalPartyId`, `readPartyNamespace`,
+`normalizeEd25519PublicKeyForCanton` and `decodeEd25519PublicKey`. The Node helpers of the same
+names under the package root (which throw `ValidationError`) derive the fingerprint through it.
+
 ## Token actions through a CIP-0103 wallet
 
 `Wallets` runs Digital Asset Utility Registry holder actions through any CIP-0103 (Canton dApp API)

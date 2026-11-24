@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual, verify as verifyEd25519Signature } from 'node:crypto';
 import { OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
+import { fingerprintRawEd25519PublicKey } from '../../external-parties/keys';
 import { isRecord } from '../../core/utils';
 import { wrapEd25519PublicKeyInDER } from './stellar-utils';
 
@@ -7,7 +8,6 @@ const ED25519_DER_X509_PREFIX_HEX = '302a300506032b6570032100';
 const ED25519_DER_X509_PREFIX = Buffer.from(ED25519_DER_X509_PREFIX_HEX, 'hex');
 const ED25519_RAW_PUBLIC_KEY_LENGTH = 32;
 const ED25519_DER_X509_PUBLIC_KEY_LENGTH = ED25519_DER_X509_PREFIX.length + ED25519_RAW_PUBLIC_KEY_LENGTH;
-const CANTON_PUBLIC_KEY_FINGERPRINT_HASH_PURPOSE = 12;
 const CANTON_SHA256_MULTIHASH_PREFIX_HEX = '1220';
 const CANTON_SHA256_MULTIHASH_BYTE_LENGTH = 34;
 const CANTON_SHA256_MULTIHASH_HEX_LENGTH = CANTON_SHA256_MULTIHASH_BYTE_LENGTH * 2;
@@ -70,11 +70,8 @@ export function deriveSolanaAddressFromEd25519PublicKeyBase64(publicKeyBase64: s
 
 /** Derives the Canton fingerprint suffix for an Ed25519 external-party key. */
 export function deriveCantonEd25519PublicKeyFingerprint(publicKeyBase64: string): string {
-  const rawPublicKey = extractRawEd25519PublicKey(publicKeyBase64);
-  const purpose = Buffer.alloc(4);
-  purpose.writeInt32BE(CANTON_PUBLIC_KEY_FINGERPRINT_HASH_PURPOSE);
-  const digest = createHash('sha256').update(purpose).update(rawPublicKey).digest('hex');
-  return `${CANTON_SHA256_MULTIHASH_PREFIX_HEX}${digest}`;
+  // One formula for the Node and browser entries: the browser-safe module's (`ExternalParties`).
+  return fingerprintRawEd25519PublicKey(new Uint8Array(extractRawEd25519PublicKey(publicKeyBase64)));
 }
 
 /** Builds a deterministic external party id from a party hint/prefix and a Canton public-key fingerprint. */
