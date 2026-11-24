@@ -1,3 +1,4 @@
+import { generateKeyPairSync, sign as ed25519Sign } from 'node:crypto';
 import { isCancelledBeforeSubmit } from '../../../src/wallets/abort';
 import { WalletReadError, WalletSignError } from '../../../src/wallets/errors';
 import {
@@ -8,6 +9,7 @@ import {
   requestWalletOwnershipVerdict,
   type WalletOwnershipChallenge,
 } from '../../../src/wallets/ownership';
+import { deriveCantonEd25519PublicKeyFingerprint, verifyWalletProof } from '../../../src/utils/external-signing';
 import { accountProvider, fakeFetch, HOLDER, RpcError, type RecordingProvider } from './helpers';
 
 const CHALLENGE: WalletOwnershipChallenge = {
@@ -370,15 +372,51 @@ describe('proveWalletProof', () => {
     const proof = await proveWalletProof(connected(provider), { message: PROOF_MESSAGE, fields: FIELDS, now: NOW });
     expect(proof).toEqual({
       partyId: HOLDER,
-      publicKey: 'ab'.repeat(32),
+      publicKey: Buffer.from('ab'.repeat(32), 'hex').toString('base64'),
       namespace: '1220aa',
       message: PROOF_MESSAGE,
-      signature: 'cd'.repeat(64),
+      signature: Buffer.from('cd'.repeat(64), 'hex').toString('base64'),
     });
     expect(provider.requests).toEqual([
       { method: 'getPrimaryAccount' },
       { method: 'signMessage', params: { message: PROOF_MESSAGE } },
     ]);
+  });
+
+  it('passes base64 through and keeps a DER key as its base64', async () => {
+    const raw = Buffer.alloc(32, 7).toString('base64');
+    const der = Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), Buffer.alloc(32, 7)]).toString('base64');
+    const signature = Buffer.alloc(64, 9).toString('base64');
+    for (const publicKey of [raw, der]) {
+      const provider = accountProvider({ account: { publicKey }, signMessage: () => ({ signature }) });
+      await expect(proveWalletProof(connected(provider), { message: PROOF_MESSAGE, now: NOW })).resolves.toMatchObject({
+        publicKey,
+        signature,
+      });
+    }
+  });
+
+  it('gives a hex wallet proof that verifyWalletProof accepts as base64', async () => {
+    const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+    const rawKey = publicKey.export({ format: 'der', type: 'spki' }).subarray(-32);
+    const namespace = deriveCantonEd25519PublicKeyFingerprint(rawKey.toString('base64'));
+    const partyId = `alice::${namespace}`;
+    const fields = { ...FIELDS, partyId };
+    const message = JSON.stringify(fields);
+    const provider = accountProvider({
+      party: partyId,
+      account: { publicKey: rawKey.toString('hex'), namespace },
+      signMessage: () => ({ signature: ed25519Sign(null, Buffer.from(message, 'utf8'), privateKey).toString('hex') }),
+    });
+    const proof = await proveWalletProof({ ...connected(provider), partyId }, { message, fields, now: NOW });
+    expect(proof.publicKey).toBe(rawKey.toString('base64'));
+    expect(proof.signature).toMatch(/^[A-Za-z0-9+/]{86}==$/);
+    const verdict = verifyWalletProof({
+      proof,
+      expected: { domain: fields.domain, network: 'devnet', partyId },
+      now: NOW(),
+    });
+    expect(verdict).toMatchObject({ verified: true, publicKeyFingerprint: namespace });
   });
 
   it('signs without fields too', async () => {

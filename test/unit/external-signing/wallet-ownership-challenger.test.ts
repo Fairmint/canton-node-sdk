@@ -797,10 +797,10 @@ describe('createWalletOwnershipChallenger: the wallet-proof-v1 format', () => {
       expect(proofs).toEqual([
         {
           partyId: party.partyId,
-          publicKey: party.publicKeyHex,
+          publicKey: Buffer.from(party.publicKeyHex, 'hex').toString('base64'),
           namespace: party.namespace,
           message: messages[0],
-          signature: expect.stringMatching(/^[0-9a-f]{128}$/),
+          signature: expect.stringMatching(/^[A-Za-z0-9+/]{86}==$/),
         },
       ]);
     });

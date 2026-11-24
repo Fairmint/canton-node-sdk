@@ -515,7 +515,10 @@ one format whichever Fairmint server checks it: one line of JSON with the keys i
   refuses a message that does not parse, names another party or network, differs from `fields`, or
   has expired, and then signs exactly `message`. The signed
   `{ partyId, publicKey, message, signature }` reaches a page through `onProof`, or as `proof` on
-  the store's `proveOwnership` result.
+  the store's `proveOwnership` result. `proveWalletProof` returns `publicKey` and `signature` as
+  standard base64 whatever the wallet gave (Loop's hex, or base64), a raw 32-byte key or a DER key
+  alike, so the proof a page shows for copying verifies with a server that decodes base64 only
+  (apiv2's CNTN verifier); `verifyWalletProof` still accepts hex or base64.
 
 ### Proving wallet ownership
 

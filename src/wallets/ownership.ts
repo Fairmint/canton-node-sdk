@@ -29,6 +29,7 @@ import { awaitWithAbort as coreAwaitWithAbort } from '../core/http/abort';
 import { globalFetch, type FetchLike } from './da-utilities/client';
 import { WalletReadError, WalletSignError } from './errors';
 import { isRecord, nonEmptyString } from './json';
+import { publicKeyToBase64, signatureToBase64 } from './proof-encoding';
 import { readSpecSignature } from './sign-message';
 import { isWalletOwnershipPartyId } from './ownership-fields';
 import {
@@ -337,7 +338,8 @@ export interface ProveWalletProofOptions {
  * naming the connection's party and network, match `fields` when given, and not have expired; the wallet's primary
  * account must be the connection's party, on its network. The wallet signs exactly `message`. Returns `{ partyId,
  * publicKey, message, signature }` (and `namespace` when the wallet reported it), which a page may show for copying; it
- * proves nothing until the server verified it (`verifyWalletProof`).
+ * proves nothing until the server verified it (`verifyWalletProof`). The key and signature are standard base64 whatever
+ * the wallet returned (hex or base64), so the proof verifies with servers that decode base64 only.
  */
 export async function proveWalletProof(
   connection: Cip103Connection,
@@ -366,10 +368,10 @@ export async function proveWalletProof(
   const signature = await signText(connection.provider, message, signal, 'wallet proof message');
   return {
     partyId: account.partyId,
-    publicKey,
+    publicKey: publicKeyToBase64(publicKey),
     ...(account.namespace !== undefined && { namespace: account.namespace }),
     message,
-    signature,
+    signature: signatureToBase64(signature),
   };
 }
 
