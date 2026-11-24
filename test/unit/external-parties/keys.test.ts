@@ -59,6 +59,13 @@ describe('external-parties keys', () => {
     }
   });
 
+  it('says which check refused a key', () => {
+    expect(() => decodeEd25519PublicKey(SMALL_ORDER.toString('base64'))).toThrow(/small-order point is not safe/);
+    expect(() => decodeEd25519PublicKey(FIELD_PRIME.toString('base64'))).toThrow(/not canonically encoded/);
+    expect(() => decodeEd25519PublicKey(Buffer.alloc(33, 1).toString('base64'))).toThrow(/length: 33/);
+    expect(() => decodeEd25519PublicKey('not base64!')).toThrow(/must be base64-encoded/);
+  });
+
   it('builds and reads hint::fingerprint party IDs', () => {
     const { fingerprint } = createKey();
     expect(buildExternalPartyId('  alice ', fingerprint)).toBe(`alice::${fingerprint}`);

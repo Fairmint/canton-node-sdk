@@ -121,7 +121,9 @@ export function readPartyNamespace(partyId: unknown): string | null {
 }
 
 function assertCanonicalEd25519PublicKey(raw: Uint8Array): void {
-  if (ED25519_SMALL_ORDER_PUBLIC_KEYS_HEX.has(bytesToHex(raw))) throw invalidInput('Invalid Ed25519 public key');
+  if (ED25519_SMALL_ORDER_PUBLIC_KEYS_HEX.has(bytesToHex(raw))) {
+    throw invalidInput('Invalid Ed25519 public key: a small-order point is not safe for Canton signing');
+  }
   // The encoded y coordinate (sign bit cleared) must be below the field prime.
   for (let index = ED25519_RAW_PUBLIC_KEY_LENGTH - 1; index >= 0; index -= 1) {
     const byte = (raw[index] ?? 0) & (index === ED25519_RAW_PUBLIC_KEY_LENGTH - 1 ? 0x7f : 0xff);
@@ -129,7 +131,7 @@ function assertCanonicalEd25519PublicKey(raw: Uint8Array): void {
     if (byte < prime) return;
     if (byte > prime) break;
   }
-  throw invalidInput('Invalid Ed25519 public key');
+  throw invalidInput('Invalid Ed25519 public key: not canonically encoded');
 }
 
 function decodeBase64(value: string): Uint8Array {
