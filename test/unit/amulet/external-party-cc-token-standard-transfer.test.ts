@@ -207,11 +207,11 @@ const firstPrepareCall = (ledgerClient: jest.Mocked<LedgerJsonApiClient>): Prepa
 };
 
 describe('external-party CC token-standard transfer', () => {
-  it('prepares TransferFactory_Transfer with every unlocked holding, the registry context and the sender only', async () => {
+  it('prepares TransferFactory_Transfer with the covering unlocked holdings, the registry context and the sender only', async () => {
     const sender = createSender();
     const ledgerClient = createLedgerClient([
       amuletHolding({ contractId: '00small', owner: sender.partyId, amount: '1.0000000000' }),
-      amuletHolding({ contractId: '00large', owner: sender.partyId, amount: '5.0000000000' }),
+      amuletHolding({ contractId: '00large', owner: sender.partyId, amount: '2.0000000000' }),
       amuletHolding({ contractId: '00locked', owner: sender.partyId, amount: '100.0000000000', locked: true }),
       amuletHolding({ contractId: '00other-owner', owner: 'other::1220other', amount: '100.0000000000' }),
       amuletHolding({
@@ -330,7 +330,7 @@ describe('external-party CC token-standard transfer', () => {
     expect(command?.ExerciseCommand.choiceArgument.transfer['meta']).toEqual({ values: {} });
   });
 
-  it('caps the input holdings, largest first', async () => {
+  it('takes the largest holdings first and stops once they cover the amount', async () => {
     const sender = createSender();
     const ledgerClient = createLedgerClient([
       amuletHolding({ contractId: '00a', owner: sender.partyId, amount: '1.0' }),
@@ -339,10 +339,26 @@ describe('external-party CC token-standard transfer', () => {
     ]);
 
     const prepared = await prepareExternalPartyCcTokenStandardTransfer(
-      prepareOptions(sender.partyId, ledgerClient, createValidatorClient(), { maxInputHoldings: 2 })
+      prepareOptions(sender.partyId, ledgerClient, createValidatorClient())
     );
 
-    expect(prepared.inputHoldingCids).toEqual(['00b', '00c']);
+    expect(prepared.inputHoldingCids).toEqual(['00b']);
+  });
+
+  it('caps the input holdings and refuses when the capped holdings do not cover the amount', async () => {
+    const sender = createSender();
+    const ledgerClient = createLedgerClient([
+      amuletHolding({ contractId: '00a', owner: sender.partyId, amount: '1.0' }),
+      amuletHolding({ contractId: '00b', owner: sender.partyId, amount: '1.0' }),
+      amuletHolding({ contractId: '00c', owner: sender.partyId, amount: '1.0' }),
+    ]);
+
+    await expect(
+      prepareExternalPartyCcTokenStandardTransfer(
+        prepareOptions(sender.partyId, ledgerClient, createValidatorClient(), { maxInputHoldings: 2 })
+      )
+    ).rejects.toThrow('Insufficient CC balance');
+    expect(ledgerClient.interactiveSubmissionPrepare).not.toHaveBeenCalled();
   });
 
   it.each(['offer', 'self'] as const)(

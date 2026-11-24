@@ -145,9 +145,10 @@ export interface SubmittedExternalPartyCcTokenStandardTransfer extends ExecuteEx
  * Splice 0.8.0 removed. The steps:
  *
  * 1. Reads the DSO party and the sender's synchronizer.
- * 2. Takes every unlocked CC holding of the sender (largest first, up to `maxInputHoldings`) as inputs. Holding fees mean
- *    a holding's view amount overstates what it can pay, so spending all of them leaves the most headroom; the ledger
- *    returns the change to the sender.
+ * 2. Takes the sender's unlocked CC holdings, largest first, until they cover the amount (at most `maxInputHoldings`).
+ *    Holding fees are charged only when a holding expires, so a holding's view amount is what it pays. Taking only what
+ *    is needed keeps the transaction small and leaves the sender's other holdings free for concurrent transfers; the
+ *    ledger returns the change to the sender.
  * 3. Asks the registry (validator scan proxy) for the transfer factory and its choice context, and refuses, before
  *    anything is prepared, a transfer the registry would not make directly (see `requirePreapproval`).
  * 4. Prepares the exercise with the sender as the only `actAs` party and returns the hash the sender's key must sign.
@@ -201,13 +202,14 @@ export async function prepareExternalPartyCcTokenStandardTransfer(
     );
   }
 
-  const inputs = await selectAllUnlockedCcHoldings({
+  const inputs = await selectCoveringUnlockedCcHoldings({
     ledgerClient: options.ledgerClient,
     senderPartyId,
     instrumentId,
     synchronizerId,
     activeAtOffset,
     maxInputHoldings,
+    amountBaseUnits,
   });
   if (inputs.totalBaseUnits < amountBaseUnits) {
     throw new ValidationError('Insufficient CC balance for this transfer', {
@@ -421,13 +423,14 @@ async function readTransferFactory(input: {
   };
 }
 
-async function selectAllUnlockedCcHoldings(input: {
+async function selectCoveringUnlockedCcHoldings(input: {
   readonly ledgerClient: LedgerJsonApiClient;
   readonly senderPartyId: string;
   readonly instrumentId: TokenStandardV1InstrumentId;
   readonly synchronizerId: string;
   readonly activeAtOffset: number;
   readonly maxInputHoldings: number;
+  readonly amountBaseUnits: bigint;
 }): Promise<{ readonly contractIds: readonly string[]; readonly totalBaseUnits: bigint }> {
   const holdings = await listTokenStandardV1Holdings({
     ledger: input.ledgerClient,
@@ -438,18 +441,21 @@ async function selectAllUnlockedCcHoldings(input: {
     synchronizerId: input.synchronizerId,
     activeAtOffset: input.activeAtOffset,
   });
-  const selected = holdings
+  const candidates = holdings
     .filter((holding) => holding.lock === null && BigInt(holding.amountBaseUnits) > 0n)
     .sort((left, right) => {
       const difference = BigInt(right.amountBaseUnits) - BigInt(left.amountBaseUnits);
       if (difference !== 0n) return difference > 0n ? 1 : -1;
       return left.contractId.localeCompare(right.contractId);
-    })
-    .slice(0, input.maxInputHoldings);
-  return {
-    contractIds: selected.map((holding) => holding.contractId),
-    totalBaseUnits: selected.reduce((total, holding) => total + BigInt(holding.amountBaseUnits), 0n),
-  };
+    });
+  const contractIds: string[] = [];
+  let totalBaseUnits = 0n;
+  for (const holding of candidates) {
+    if (totalBaseUnits >= input.amountBaseUnits || contractIds.length >= input.maxInputHoldings) break;
+    contractIds.push(holding.contractId);
+    totalBaseUnits += BigInt(holding.amountBaseUnits);
+  }
+  return { contractIds, totalBaseUnits };
 }
 
 async function readDsoPartyId(options: PrepareExternalPartyCcTokenStandardTransferOptions): Promise<string> {
