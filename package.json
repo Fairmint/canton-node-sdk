@@ -43,6 +43,12 @@
       ],
       "external-parties": [
         "build/src/external-parties/index.d.ts"
+      ],
+      "build/src/index.d.ts": [
+        "build/src/index.d.ts"
+      ],
+      "build/*": [
+        "./deep-imports-are-not-exported.d.ts"
       ]
     }
   },

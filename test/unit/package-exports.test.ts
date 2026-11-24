@@ -30,11 +30,15 @@ describe('package exports', () => {
       types: './build/src/external-parties/index.d.ts',
       default: './build/src/external-parties/index.js',
     });
-    // TypeScript's classic (node10) resolution ignores `exports`; typesVersions gives it the wallets types.
+    // TypeScript's classic (node10) resolution ignores `exports`; typesVersions gives it the subpath types, keeps the
+    // root's `types` file, and sends every other `build/...` path to a file that does not exist, so a deep import
+    // fails to typecheck there too (TS2307) instead of compiling and failing at runtime.
     expect(pkg.typesVersions).toEqual({
       '*': {
         wallets: ['build/src/wallets/index.d.ts'],
         'external-parties': ['build/src/external-parties/index.d.ts'],
+        'build/src/index.d.ts': ['build/src/index.d.ts'],
+        'build/*': ['./deep-imports-are-not-exported.d.ts'],
       },
     });
   });
