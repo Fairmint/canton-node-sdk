@@ -10,6 +10,7 @@ repository / CI-only. Repeatable enforcement lives in `npm run check:package-art
 | --- | --- | --- |
 | Runtime SDK | `build/src/**` | Ledger / Validator / Scan clients and helpers from `src/` |
 | Browser-safe wallets entry | `exports` `./wallets` → `build/src/wallets/index.js` | CIP-0103 token actions; requires only dependency-free SDK files (checked) |
+| Browser-safe external-parties entry | `exports` `./external-parties` → `build/src/external-parties/index.js` | Party discovery for a key; requires only its own SDK files and `@noble/hashes/sha2` (checked) |
 | Deep paths | `exports` `./build/...` | Every `build/` path that resolved before the `exports` map: `.js`, extensionless and directory imports (resolution checked) |
 | Package metadata | `package.json`, `LICENSE`, `README.md` | Always included by npm |
 

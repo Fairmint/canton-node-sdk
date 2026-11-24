@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual, verify as verifyEd25519Signature } from 'node:crypto';
 import { OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
+import { fingerprintRawEd25519PublicKey } from '../../external-parties/keys';
 import { isRecord } from '../../core/utils';
 import { wrapEd25519PublicKeyInDER } from './stellar-utils';
 
@@ -7,20 +8,18 @@ const ED25519_DER_X509_PREFIX_HEX = '302a300506032b6570032100';
 const ED25519_DER_X509_PREFIX = Buffer.from(ED25519_DER_X509_PREFIX_HEX, 'hex');
 const ED25519_RAW_PUBLIC_KEY_LENGTH = 32;
 const ED25519_DER_X509_PUBLIC_KEY_LENGTH = ED25519_DER_X509_PREFIX.length + ED25519_RAW_PUBLIC_KEY_LENGTH;
-const CANTON_PUBLIC_KEY_FINGERPRINT_HASH_PURPOSE = 12;
 const CANTON_SHA256_MULTIHASH_PREFIX_HEX = '1220';
 const CANTON_SHA256_MULTIHASH_BYTE_LENGTH = 34;
 const CANTON_SHA256_MULTIHASH_HEX_LENGTH = CANTON_SHA256_MULTIHASH_BYTE_LENGTH * 2;
 const ED25519_FIELD_PRIME_LE = Buffer.from('edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f', 'hex');
 const ED25519_SMALL_ORDER_PUBLIC_KEYS_HEX = new Set([
-  '0000000000000000000000000000000000000000000000000000000000000000',
+  // The eight small-order points (the torsion subgroup), compared with the sign bit cleared: the identity (order 1),
+  // y = -1 (order 2), y = 0 (order 4) and the two order-8 y coordinates. Their sign-bit twins match the same entries.
   '0100000000000000000000000000000000000000000000000000000000000000',
   'ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
-  'edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
-  'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39cccecfd7792ac037a900',
-  'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39cccecfd7792ac037a980',
+  '0000000000000000000000000000000000000000000000000000000000000000',
+  'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a',
   '26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05',
-  '26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85',
 ]);
 const SOLANA_BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
@@ -70,11 +69,8 @@ export function deriveSolanaAddressFromEd25519PublicKeyBase64(publicKeyBase64: s
 
 /** Derives the Canton fingerprint suffix for an Ed25519 external-party key. */
 export function deriveCantonEd25519PublicKeyFingerprint(publicKeyBase64: string): string {
-  const rawPublicKey = extractRawEd25519PublicKey(publicKeyBase64);
-  const purpose = Buffer.alloc(4);
-  purpose.writeInt32BE(CANTON_PUBLIC_KEY_FINGERPRINT_HASH_PURPOSE);
-  const digest = createHash('sha256').update(purpose).update(rawPublicKey).digest('hex');
-  return `${CANTON_SHA256_MULTIHASH_PREFIX_HEX}${digest}`;
+  // One formula for the Node and browser entries: the browser-safe module's (`ExternalParties`).
+  return fingerprintRawEd25519PublicKey(new Uint8Array(extractRawEd25519PublicKey(publicKeyBase64)));
 }
 
 /** Builds a deterministic external party id from a party hint/prefix and a Canton public-key fingerprint. */
@@ -336,12 +332,13 @@ function isEd25519DerX509PublicKey(key: Buffer): boolean {
 }
 
 function assertCanonicalEd25519PublicKey(rawPublicKey: Buffer): void {
-  if (ED25519_SMALL_ORDER_PUBLIC_KEYS_HEX.has(rawPublicKey.toString('hex').toLowerCase())) {
+  // Compared with the sign bit cleared, so both x signs of a small-order y (00..80 is the order-4 point) are refused.
+  const encodedY = Buffer.from(rawPublicKey);
+  encodedY[31] = (encodedY[31] ?? 0) & 0x7f;
+  if (ED25519_SMALL_ORDER_PUBLIC_KEYS_HEX.has(encodedY.toString('hex'))) {
     throw new ValidationError('Invalid Ed25519 public key');
   }
 
-  const encodedY = Buffer.from(rawPublicKey);
-  encodedY[31] = (encodedY[31] ?? 0) & 0x7f;
   if (compareLittleEndian(encodedY, ED25519_FIELD_PRIME_LE) >= 0) {
     throw new ValidationError('Invalid Ed25519 public key');
   }

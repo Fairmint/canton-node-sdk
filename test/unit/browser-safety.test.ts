@@ -1,9 +1,10 @@
 /**
- * The wallets module runs in browsers. At run time it may import only its own files and a short list of the SDK's
- * dependency-free modules (type-only imports are erased), and none of those may touch Node or DOM globals. The source
- * scan follows every runtime import, so an allowed module that later gains a Node import fails here. The emit checks
- * load the compiled entry point in a fresh Node process and confirm it requires nothing but relative files. The check
- * of build/ only sees the last local build; `npm run check:package-artifacts` is the check of the published output.
+ * The browser-safe modules (`src/wallets`, `src/external-parties`) run in browsers. At run time each may import only
+ * its own files, a short list of the SDK's dependency-free modules and its listed browser-safe packages (type-only
+ * imports are erased), and none of those may touch Node or DOM globals. The source scan follows every runtime import,
+ * so an allowed module that later gains a Node import fails here. The emit checks load each compiled entry point in a
+ * fresh Node process and confirm it requires nothing but relative files and its listed packages. The check of build/
+ * only sees the last local build; `npm run check:package-artifacts` is the check of the published output.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
@@ -11,20 +12,37 @@ import os from 'node:os';
 import path from 'node:path';
 import ts from 'typescript';
 
-const SRC = path.resolve(__dirname, '../../../src');
-const ROOT = path.join(SRC, 'wallets');
-const BUILT_ENTRY = path.resolve(__dirname, '../../../build/src/wallets/index.js');
+const SRC = path.resolve(__dirname, '../../src');
+const BUILD = path.resolve(__dirname, '../../build/src');
 
-/**
- * SDK modules outside `src/wallets` the module may import at run time. Each must itself import nothing at run time but
- * other allowed modules (checked below).
- */
-const ALLOWED_OUTSIDE = [
-  'core/http/abort.ts',
-  'core/utils/type-guards.ts',
-  'da-registry/templates.ts',
-  'utils/token-standard/v1/constants.ts',
-].map((file) => path.join(SRC, file));
+interface BrowserModule {
+  /** The module's directory under `src/`. */
+  readonly dir: string;
+  /** The fewest source files it has (a guard against scanning an empty directory). */
+  readonly minFiles: number;
+  /**
+   * SDK modules outside the module's directory it may import at run time. Each must itself import nothing at run time
+   * but other allowed modules (checked below).
+   */
+  readonly allowedOutside: readonly string[];
+  /** Packages it may import at run time: browser-safe, dependency-light, and exactly as written. */
+  readonly allowedPackages: readonly string[];
+}
+
+const MODULES: readonly BrowserModule[] = [
+  {
+    dir: 'wallets',
+    minFiles: 6,
+    allowedOutside: [
+      'core/http/abort.ts',
+      'core/utils/type-guards.ts',
+      'da-registry/templates.ts',
+      'utils/token-standard/v1/constants.ts',
+    ],
+    allowedPackages: [],
+  },
+  { dir: 'external-parties', minFiles: 5, allowedOutside: [], allowedPackages: ['@noble/hashes/sha2'] },
+];
 
 /** The SDK's Node-only runtime dependencies; none may load with the wallets entry point. */
 const NODE_ONLY_PACKAGES = ['axios', 'ws', 'pino', 'dotenv', 'glob'];
@@ -72,21 +90,27 @@ function resolveSource(from: string, specifier: string): string {
   throw new Error(`${path.relative(SRC, from)}: cannot resolve ${specifier}`);
 }
 
-/** Problems with one file's runtime imports: anything not relative, or a relative file outside the allowed set. */
+/**
+ * Problems with one file's runtime imports: a package not on the module's list, or a relative file outside its
+ * directory and allowed set.
+ */
 function importProblems(
+  module: BrowserModule,
   file: string,
   source: string = readFileSync(file, 'utf8')
 ): { problems: string[]; runtimeImports: string[] } {
+  const root = path.join(SRC, module.dir);
+  const allowedOutside = module.allowedOutside.map((name) => path.join(SRC, name));
   const problems: string[] = [];
   const runtimeImports: string[] = [];
   for (const { specifier, typeOnly } of moduleSpecifiers(source)) {
     if (typeOnly) continue;
     if (!/^\.\.?\//.test(specifier)) {
-      problems.push(`imports package ${specifier}`);
+      if (!module.allowedPackages.includes(specifier)) problems.push(`imports package ${specifier}`);
       continue;
     }
     const resolved = resolveSource(file, specifier);
-    if (!resolved.startsWith(`${ROOT}${path.sep}`) && !ALLOWED_OUTSIDE.includes(resolved)) {
+    if (!resolved.startsWith(`${root}${path.sep}`) && !allowedOutside.includes(resolved)) {
       problems.push(`imports ${path.relative(SRC, resolved)}, which is not on the browser-safe list`);
       continue;
     }
@@ -98,20 +122,18 @@ function importProblems(
 }
 
 /** Every file reachable at run time from `entries`, following imports into the allowed SDK modules. */
-function runtimeGraph(entries: readonly string[]): string[] {
+function runtimeGraph(module: BrowserModule, entries: readonly string[]): string[] {
   const seen = new Set<string>();
   const queue = [...entries];
   while (queue.length > 0) {
     const file = queue.pop();
     if (file === undefined || seen.has(file)) continue;
     seen.add(file);
-    queue.push(...importProblems(file).runtimeImports);
+    queue.push(...importProblems(module, file).runtimeImports);
   }
   return [...seen].sort();
 }
 
-const walletFiles = sourceFiles(ROOT);
-const graph = runtimeGraph(walletFiles);
 const label = (file: string): string => path.relative(SRC, file);
 
 /** Requires made while loading `entry` in a fresh Node process. */
@@ -121,7 +143,11 @@ function requiresWhileLoading(entry: string): string[] {
     const seen = [];
     const load = Module._load;
     Module._load = function (request, parent, isMain) {
-      if (parent && parent.id !== '[eval]') seen.push(request);
+      if (!parent || parent.id === '[eval]') return load.apply(this, arguments);
+      seen.push(request);
+      // A package is reported, not loaded: its own files are not the SDK's to check, and an emit outside the
+      // checkout cannot resolve it.
+      if (!request.startsWith('./') && !request.startsWith('../')) return {};
       return load.apply(this, arguments);
     };
     require(${JSON.stringify(entry)});
@@ -132,26 +158,30 @@ function requiresWhileLoading(entry: string): string[] {
   return JSON.parse(result.stdout) as string[];
 }
 
-function expectOnlyRelativeRequires(requires: readonly string[]): void {
+function expectOnlyRelativeRequires(requires: readonly string[], allowedPackages: readonly string[]): void {
   expect(requires.length).toBeGreaterThan(0);
   for (const request of requires) {
-    expect(request).toMatch(/^\.\.?\//);
+    if (!allowedPackages.includes(request)) expect(request).toMatch(/^\.\.?\//);
   }
   for (const pkg of NODE_ONLY_PACKAGES) {
     expect(requires.some((request) => request === pkg || request.startsWith(`${pkg}/`))).toBe(false);
   }
 }
 
-describe('src/wallets browser safety', () => {
-  it('has source files to check, and reaches only the allowed SDK modules outside src/wallets', () => {
-    expect(walletFiles.length).toBeGreaterThan(5);
-    expect(graph.filter((file) => !file.startsWith(`${ROOT}${path.sep}`)).map(label)).toEqual(
-      ALLOWED_OUTSIDE.map(label).sort()
+describe.each(MODULES.map((module) => [module.dir, module] as const))('src/%s browser safety', (_dir, module) => {
+  const root = path.join(SRC, module.dir);
+  const files = sourceFiles(root);
+  const graph = runtimeGraph(module, files);
+
+  it('has source files to check, and reaches only the allowed SDK modules outside its directory', () => {
+    expect(files.length).toBeGreaterThanOrEqual(module.minFiles);
+    expect(graph.filter((file) => !file.startsWith(`${root}${path.sep}`)).map(label)).toEqual(
+      [...module.allowedOutside].sort()
     );
   });
 
   it.each(graph.map((f) => [label(f), f]))('%s imports only browser-safe modules at run time', (_name, file) => {
-    expect(importProblems(file).problems).toEqual([]);
+    expect(importProblems(module, file).problems).toEqual([]);
   });
 
   it.each(graph.map((f) => [label(f), f]))('%s uses no Node or DOM globals', (_name, file) => {
@@ -187,20 +217,25 @@ describe('src/wallets browser safety', () => {
   });
 
   it('refuses an SDK module outside the allowed list (scanner self-test)', () => {
-    const probe = path.join(ROOT, 'probe.ts');
-    expect(importProblems(probe, "import { ApiError } from '../core/errors';\n").problems).toEqual([
+    const probe = path.join(root, 'probe.ts');
+    expect(importProblems(module, probe, "import { ApiError } from '../core/errors';\n").problems).toEqual([
       'imports core/errors.ts, which is not on the browser-safe list',
     ]);
-    expect(importProblems(probe, "import { type ApiError } from '../core/errors';\n").problems).toEqual([]);
-    expect(importProblems(probe, "import axios from 'axios';\n").problems).toEqual(['imports package axios']);
+    expect(importProblems(module, probe, "import { type ApiError } from '../core/errors';\n").problems).toEqual([]);
+    expect(importProblems(module, probe, "import axios from 'axios';\n").problems).toEqual(['imports package axios']);
+    expect(importProblems(module, probe, "import { sha256 } from '@noble/hashes/sha2.js';\n").problems).toEqual([
+      'imports package @noble/hashes/sha2.js',
+    ]);
   });
 });
 
-describe('src/wallets compiled entry point', () => {
+describe.each(MODULES.map((module) => [module.dir, module] as const))('src/%s compiled entry point', (_dir, module) => {
+  const builtEntry = path.join(BUILD, module.dir, 'index.js');
+
   it('requires only relative files when compiled from source', () => {
-    const outDir = mkdtempSync(path.join(os.tmpdir(), 'wallets-emit-'));
+    const outDir = mkdtempSync(path.join(os.tmpdir(), `${module.dir}-emit-`));
     try {
-      const configPath = path.resolve(__dirname, '../../../tsconfig.json');
+      const configPath = path.resolve(__dirname, '../../tsconfig.json');
       const config = ts.getParsedCommandLineOfConfigFile(
         configPath,
         {},
@@ -212,7 +247,7 @@ describe('src/wallets compiled entry point', () => {
         }
       );
       if (!config) throw new Error('cannot read tsconfig.json');
-      const program = ts.createProgram([path.join(ROOT, 'index.ts')], {
+      const program = ts.createProgram([path.join(SRC, module.dir, 'index.ts')], {
         ...config.options,
         outDir,
         rootDir: SRC,
@@ -223,7 +258,11 @@ describe('src/wallets compiled entry point', () => {
       });
       const emitted = program.emit();
       expect(emitted.emitSkipped).toBe(false);
-      expectOnlyRelativeRequires(requiresWhileLoading(path.join(outDir, 'wallets/index.js')));
+      // The emitted files load their packages from this checkout's node_modules.
+      expectOnlyRelativeRequires(
+        requiresWhileLoading(path.join(outDir, module.dir, 'index.js')),
+        module.allowedPackages
+      );
     } finally {
       rmSync(outDir, { recursive: true, force: true });
     }
@@ -231,12 +270,12 @@ describe('src/wallets compiled entry point', () => {
 
   // A spot check of whatever is in build/: skipped when there is none, and stale output is checked as it is. The
   // authoritative check of the built entry is `npm run check:package-artifacts`, which CI runs after `npm run build`.
-  (existsSync(BUILT_ENTRY) ? it : it.skip)(
-    existsSync(BUILT_ENTRY)
-      ? 'build/src/wallets/index.js requires only relative files'
-      : 'build/src/wallets/index.js requires only relative files (no build/: run npm run build)',
+  (existsSync(builtEntry) ? it : it.skip)(
+    existsSync(builtEntry)
+      ? `build/src/${module.dir}/index.js requires only relative files and its listed packages`
+      : `build/src/${module.dir}/index.js requires only relative files (no build/: run npm run build)`,
     () => {
-      expectOnlyRelativeRequires(requiresWhileLoading(BUILT_ENTRY));
+      expectOnlyRelativeRequires(requiresWhileLoading(builtEntry), module.allowedPackages);
     }
   );
 });

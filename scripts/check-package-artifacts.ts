@@ -41,10 +41,19 @@ const REQUIRED_RUNTIME_PATHS = [
   // The browser-safe wallets entry point (`exports` `./wallets`; the deep path keeps working).
   'build/src/wallets/index.js',
   'build/src/wallets/index.d.ts',
+  // The browser-safe external-party discovery entry point (`exports` `./external-parties`).
+  'build/src/external-parties/index.js',
+  'build/src/external-parties/index.d.ts',
 ] as const;
 
-/** Loaded by browser bundles: it must require nothing but relative SDK files (no axios, ws, pino, dotenv, glob). */
-const BROWSER_SAFE_ENTRY = 'build/src/wallets/index.js';
+/**
+ * Loaded by browser bundles: each must require nothing but relative SDK files and the listed browser-safe packages (no
+ * axios, ws, pino, dotenv, glob).
+ */
+const BROWSER_SAFE_ENTRIES: ReadonlyArray<{ readonly entry: string; readonly packages: readonly string[] }> = [
+  { entry: 'build/src/wallets/index.js', packages: [] },
+  { entry: 'build/src/external-parties/index.js', packages: ['@noble/hashes/sha2'] },
+];
 
 const FORBIDDEN_LOCALNET_ENGINE_PATHS = ['bin/canton-localnet', 'scripts/localnet-cloud.sh'] as const;
 
@@ -191,7 +200,11 @@ function requiresWhileLoading(entry: string): string[] {
     const seen = [];
     const load = Module._load;
     Module._load = function (request, parent, isMain) {
-      if (parent && parent.id !== '[eval]') seen.push(request);
+      if (!parent || parent.id === '[eval]') return load.apply(this, arguments);
+      seen.push(request);
+      // A package is reported, not loaded: its own files are not the SDK's to check, and an emit outside the
+      // checkout cannot resolve it.
+      if (!request.startsWith('./') && !request.startsWith('../')) return {};
       return load.apply(this, arguments);
     };
     require(${JSON.stringify(path.resolve(entry))});
@@ -202,9 +215,11 @@ function requiresWhileLoading(entry: string): string[] {
   return JSON.parse(loaded.stdout) as string[];
 }
 
-for (const request of requiresWhileLoading(BROWSER_SAFE_ENTRY)) {
-  if (!request.startsWith('./') && !request.startsWith('../')) {
-    errors.push(`${BROWSER_SAFE_ENTRY}: requires ${request}; the wallets entry must stay browser-safe`);
+for (const { entry, packages } of BROWSER_SAFE_ENTRIES) {
+  for (const request of requiresWhileLoading(entry)) {
+    if (!request.startsWith('./') && !request.startsWith('../') && !packages.includes(request)) {
+      errors.push(`${entry}: requires ${request}; this entry must stay browser-safe`);
+    }
   }
 }
 
@@ -215,6 +230,7 @@ for (const request of requiresWhileLoading(BROWSER_SAFE_ENTRY)) {
 const RESOLVED_SUBPATHS: ReadonlyArray<readonly [subpath: string, file: string]> = [
   ['', 'build/src/index.js'],
   ['/wallets', 'build/src/wallets/index.js'],
+  ['/external-parties', 'build/src/external-parties/index.js'],
   ['/package.json', 'package.json'],
   ['/build/src/wallets/index.js', 'build/src/wallets/index.js'],
   ['/build/src/core/errors', 'build/src/core/errors.js'],
@@ -275,5 +291,7 @@ console.log(
   `✓ ${result.name}@${result.version} package artifact is ${formatBytes(result.unpackedSize)} unpacked across ${result.files.length} files`
 );
 console.log('✓ LocalNet engine excluded (owned by @fairmint/canton-dev-tools)');
-console.log(`✓ ${BROWSER_SAFE_ENTRY} requires only relative SDK files`);
+for (const { entry, packages } of BROWSER_SAFE_ENTRIES) {
+  console.log(`✓ ${entry} requires only relative SDK files${packages.length > 0 ? ` and ${packages.join(', ')}` : ''}`);
+}
 console.log(`✓ every exports target ships, and ${RESOLVED_SUBPATHS.length} entry and deep paths resolve through it`);
