@@ -123,7 +123,8 @@ export async function discoverExternalParties(input: {
         lookup = await raceAbort(
           async () => findParty(signal ? { partyId, signal } : { partyId }),
           signal,
-          'The party lookup was aborted.'
+          'The party lookup was aborted.',
+          partyId
         );
       } catch (error) {
         // With a complete list the lookups only add to it: a failed one is skipped, unless the call was aborted.
@@ -160,9 +161,14 @@ export function sortedEntries(parties: ReadonlyMap<string, boolean>): readonly E
 export async function raceAbort<T>(
   start: () => Promise<T>,
   signal: AbortSignal | undefined,
-  message: string
+  message: string,
+  partyId?: string
 ): Promise<T> {
-  const aborted = (): ExternalPartyError => new ExternalPartyError('ABORTED', message, { cause: signal?.reason });
+  const aborted = (): ExternalPartyError =>
+    new ExternalPartyError('ABORTED', message, {
+      cause: signal?.reason,
+      ...(partyId === undefined ? {} : { partyId }),
+    });
   if (!signal) return start();
   if (signal.aborted) throw aborted();
   const promise = start();

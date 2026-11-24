@@ -182,7 +182,9 @@ describe('discoverExternalParties', () => {
     });
     expect(listParties.mock.calls[0]?.[0].signal).toBe(controller.signal);
     controller.abort();
-    expect(isExternalPartyError(await rejection(pending), 'ABORTED')).toBe(true);
+    const listAbort = await rejection(pending);
+    expect(isExternalPartyError(listAbort, 'ABORTED')).toBe(true);
+    expect(listAbort).toMatchObject({ partyId: undefined });
 
     findParty.mockImplementationOnce(async () => new Promise(() => undefined));
     const lookups = new AbortController();
@@ -195,7 +197,9 @@ describe('discoverExternalParties', () => {
     });
     while (findParty.mock.calls.length === 0) await new Promise((resolve) => setImmediate(resolve));
     lookups.abort();
-    expect(isExternalPartyError(await rejection(looking), 'ABORTED')).toBe(true);
+    const lookupAbort = await rejection(looking);
+    expect(isExternalPartyError(lookupAbort, 'ABORTED')).toBe(true);
+    expect(lookupAbort).toMatchObject({ partyId: `wallet::${key.fingerprint}` });
     expect(findParty).toHaveBeenCalledTimes(1);
 
     const aborted = new AbortController();

@@ -19,7 +19,7 @@ const BRAND = Symbol.for('@fairmint/canton-node-sdk/ExternalPartyError');
 export class ExternalPartyError extends Error {
   public override readonly name = 'ExternalPartyError';
   public readonly code: ExternalPartyErrorCode;
-  /** For `LOOKUP_FAILED` and `INVALID_RESPONSE` of a lookup: the party ID that was looked up. */
+  /** For `LOOKUP_FAILED`, and `ABORTED` or `INVALID_RESPONSE` of a lookup: the party ID that was looked up. */
   public readonly partyId: string | undefined;
 
   constructor(
