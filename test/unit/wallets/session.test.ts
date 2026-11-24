@@ -1250,7 +1250,7 @@ describe('createCip103Session', () => {
       }
     );
 
-    it("does not sign the previous wallet out twice when its removeListener starts another connect()", async () => {
+    it('does not sign the previous wallet out twice when its removeListener starts another connect()', async () => {
       const { session } = observed();
       const previous = new TestProvider(OTHER);
       await session.connect(previous);
@@ -1268,6 +1268,28 @@ describe('createCip103Session', () => {
       await flush();
       expect(previous.requests).toEqual(['connect', 'getPrimaryAccount', 'disconnect']);
       expect(connectedWallet(session).provider).toBe(other);
+    });
+
+    it('does not sign out the previous wallet when its removeListener re-enters connect() for it', async () => {
+      const { session } = observed();
+      const previous = new TestProvider(OTHER);
+      await session.connect(previous);
+      let armed = true;
+      const remove = previous.removeListener.bind(previous);
+      previous.removeListener = (event, listener) => {
+        if (armed) {
+          armed = false;
+          void session.connect(previous);
+        }
+        return remove(event, listener);
+      };
+      const provider = new TestProvider();
+      await session.connect(provider);
+      await flush();
+      // The re-entered connect() owns the session on `previous`: the superseded switch sends it no disconnect.
+      expect(provider.requests).toEqual([]);
+      expect(previous.requests.filter((r) => r === 'disconnect')).toEqual([]);
+      expect(connectedWallet(session).provider).toBe(previous);
     });
 
     it('signs out a wallet whose connect() is cancelled after its account was refused for the other network', async () => {

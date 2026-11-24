@@ -364,6 +364,8 @@ export function createCip103Session(options: Cip103SessionOptions): Cip103Sessio
       // fail() or dispose() did not, so this run does (once each).
       previous.forEach((other, index) => {
         if (disconnecting.get(other) !== recorded[index]) return;
+        // The newer run is signing in to (or already on) this wallet: it owns it now and must not be signed out.
+        if (!disposed && (other === signingIn || sessionProviders().has(other))) return;
         signedOut.add(other);
         recordDisconnect(other)();
       });
