@@ -4,7 +4,12 @@
  * store (an app's own port, a test double) alike. Browser-safe.
  */
 import { ExternalPartyError, invalidInput, isExternalPartyError } from './errors';
-import { isCantonPublicKeyFingerprint, MAX_EXTERNAL_PARTY_ID_LENGTH, parseExternalPartyId } from './keys';
+import {
+  isCantonPublicKeyFingerprint,
+  isExternalPartyHint,
+  MAX_EXTERNAL_PARTY_ID_LENGTH,
+  parseExternalPartyId,
+} from './keys';
 
 /** One of a key's parties. */
 export interface ExternalPartyEntry {
@@ -82,10 +87,10 @@ export async function discoverExternalParties(input: {
   if (
     !Array.isArray(hints) ||
     hints.length > MAX_EXTERNAL_PARTY_LOOKUP_HINTS ||
-    !hints.every((hint) => isBoundedIdentifier(hint) && !hint.includes('::') && !hint.endsWith(':'))
+    !hints.every((hint) => isBoundedIdentifier(hint) && isExternalPartyHint(hint))
   ) {
     throw invalidInput(
-      `hints must be at most ${MAX_EXTERNAL_PARTY_LOOKUP_HINTS} trimmed, non-empty party hints without "::" or a trailing ":"`
+      `hints must be at most ${MAX_EXTERNAL_PARTY_LOOKUP_HINTS} trimmed party hints of Daml-LF Party characters, without "::" or a trailing ":"`
     );
   }
   const found = new Map<string, boolean>();
@@ -189,7 +194,7 @@ export async function raceAbort<T>(
   }
 }
 
-/** A string of 1 to 256 characters, trimmed, on one line. */
+/** A string of 1 to 255 characters (a Daml-LF Party at most), trimmed, on one line. */
 function isBoundedIdentifier(value: unknown): value is string {
   return (
     typeof value === 'string' &&

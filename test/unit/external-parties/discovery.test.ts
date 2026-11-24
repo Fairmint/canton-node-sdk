@@ -260,6 +260,7 @@ describe('discoverExternalParties', () => {
       { publicKeyFingerprint: 'abc' },
       { publicKeyFingerprint: key.fingerprint, hints: ['a::b'] },
       { publicKeyFingerprint: key.fingerprint, hints: ['wallet:'] },
+      { publicKeyFingerprint: key.fingerprint, hints: ['my/app'] },
       { publicKeyFingerprint: key.fingerprint, hints: [' a'] },
       { publicKeyFingerprint: key.fingerprint, hints: [''] },
       {

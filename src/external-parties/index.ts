@@ -45,6 +45,7 @@ export {
   deriveCantonEd25519PublicKeyFingerprint,
   fingerprintRawEd25519PublicKey,
   isCantonPublicKeyFingerprint,
+  isExternalPartyHint,
   MAX_EXTERNAL_PARTY_ID_LENGTH,
   normalizeEd25519PublicKeyForCanton,
   parseExternalPartyId,

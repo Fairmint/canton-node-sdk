@@ -18,8 +18,24 @@ const ED25519_DER_X509_PUBLIC_KEY_LENGTH = ED25519_DER_X509_PREFIX.length + ED25
 const CANTON_PUBLIC_KEY_FINGERPRINT_HASH_PURPOSE = 12;
 const CANTON_SHA256_MULTIHASH_PREFIX_HEX = '1220';
 const CANTON_FINGERPRINT_PATTERN = /^1220[0-9a-f]{64}$/;
-/** The longest party ID this module builds (Canton's party identifier limit). */
-export const MAX_EXTERNAL_PARTY_ID_LENGTH = 256;
+/** The longest party ID this module builds: a Daml-LF Party is at most 255 characters (`LedgerPartyIdSchema`). */
+export const MAX_EXTERNAL_PARTY_ID_LENGTH = 255;
+/** The characters a Daml-LF Party may hold (`LedgerPartyIdSchema`): ASCII letters, digits, space, `:`, `-` and `_`. */
+const DAML_PARTY_CHARACTERS = /^[A-Za-z0-9:_ -]+$/;
+
+/**
+ * Whether `hint` can start a party ID: non-empty, only Daml-LF Party characters, no `::` and no trailing `:` (which
+ * would run into the separator). Not trimmed.
+ */
+export function isExternalPartyHint(hint: unknown): hint is string {
+  return (
+    typeof hint === 'string' &&
+    hint.length > 0 &&
+    DAML_PARTY_CHARACTERS.test(hint) &&
+    !hint.includes('::') &&
+    !hint.endsWith(':')
+  );
+}
 const ED25519_FIELD_PRIME_LE = hexToBytes('edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f');
 const ED25519_SMALL_ORDER_PUBLIC_KEYS_HEX: ReadonlySet<string> = new Set([
   '0000000000000000000000000000000000000000000000000000000000000000',
@@ -86,8 +102,9 @@ export function isCantonPublicKeyFingerprint(value: unknown): value is string {
 }
 
 /**
- * The party ID `hint::fingerprint`. The hint is trimmed; it must be non-empty, hold no `::` and leave the ID within
- * {@link MAX_EXTERNAL_PARTY_ID_LENGTH} characters. The fingerprint must be a lowercase SHA-256 multihash.
+ * The party ID `hint::fingerprint`. The hint is trimmed; it must be non-empty, hold only Daml-LF Party characters, no
+ * `::` and no trailing `:`, and leave the ID within {@link MAX_EXTERNAL_PARTY_ID_LENGTH} characters. The fingerprint
+ * must be a lowercase SHA-256 multihash.
  */
 export function buildExternalPartyId(partyHint: string, publicKeyFingerprint: string): string {
   const hint = typeof partyHint === 'string' ? partyHint.trim() : '';
@@ -95,6 +112,9 @@ export function buildExternalPartyId(partyHint: string, publicKeyFingerprint: st
   // A trailing ':' would run into the separator (`wallet:` gives `wallet:::…`, which no reader parses).
   if (hint.includes('::') || hint.endsWith(':')) {
     throw invalidInput('partyHint cannot include the reserved "::" separator or end with ":"');
+  }
+  if (!isExternalPartyHint(hint)) {
+    throw invalidInput('partyHint may hold only ASCII letters, digits, spaces, ":", "-" and "_"');
   }
   if (!isCantonPublicKeyFingerprint(publicKeyFingerprint)) {
     throw invalidInput(
@@ -124,7 +144,10 @@ export function readPartyNamespace(partyId: unknown): string | null {
 }
 
 function assertCanonicalEd25519PublicKey(raw: Uint8Array): void {
-  if (ED25519_SMALL_ORDER_PUBLIC_KEYS_HEX.has(bytesToHex(raw))) {
+  // Compared with the sign bit cleared, so both x signs of a small-order y (00..80 is the order-4 point) are refused.
+  const encodedY = Uint8Array.from(raw);
+  encodedY[ED25519_RAW_PUBLIC_KEY_LENGTH - 1] = (encodedY[ED25519_RAW_PUBLIC_KEY_LENGTH - 1] ?? 0) & 0x7f;
+  if (ED25519_SMALL_ORDER_PUBLIC_KEYS_HEX.has(bytesToHex(encodedY))) {
     throw invalidInput('Invalid Ed25519 public key: a small-order point is not safe for Canton signing');
   }
   // The encoded y coordinate (sign bit cleared) must be below the field prime.

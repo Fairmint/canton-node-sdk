@@ -333,12 +333,13 @@ function isEd25519DerX509PublicKey(key: Buffer): boolean {
 }
 
 function assertCanonicalEd25519PublicKey(rawPublicKey: Buffer): void {
-  if (ED25519_SMALL_ORDER_PUBLIC_KEYS_HEX.has(rawPublicKey.toString('hex').toLowerCase())) {
+  // Compared with the sign bit cleared, so both x signs of a small-order y (00..80 is the order-4 point) are refused.
+  const encodedY = Buffer.from(rawPublicKey);
+  encodedY[31] = (encodedY[31] ?? 0) & 0x7f;
+  if (ED25519_SMALL_ORDER_PUBLIC_KEYS_HEX.has(encodedY.toString('hex'))) {
     throw new ValidationError('Invalid Ed25519 public key');
   }
 
-  const encodedY = Buffer.from(rawPublicKey);
-  encodedY[31] = (encodedY[31] ?? 0) & 0x7f;
   if (compareLittleEndian(encodedY, ED25519_FIELD_PRIME_LE) >= 0) {
     throw new ValidationError('Invalid Ed25519 public key');
   }

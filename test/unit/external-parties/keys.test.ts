@@ -64,6 +64,19 @@ describe('external-parties keys', () => {
     }
   });
 
+  it('refuses a small-order point with either sign bit, as the Node helper does', () => {
+    // y = 0 with the sign bit set is the order-4 point; y = 1 and y = -1 with it set encode x = -0.
+    for (const hex of [
+      '0000000000000000000000000000000000000000000000000000000000000080',
+      '0100000000000000000000000000000000000000000000000000000000000080',
+      'ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+    ]) {
+      const key = Buffer.from(hex, 'hex').toString('base64');
+      expect(() => decodeEd25519PublicKey(key)).toThrow(/small-order point/);
+      expect(() => NodeProtocol.extractRawEd25519PublicKey(key)).toThrow(/Invalid Ed25519 public key/);
+    }
+  });
+
   it('says which check refused a key', () => {
     expect(() => decodeEd25519PublicKey(SMALL_ORDER.toString('base64'))).toThrow(/small-order point is not safe/);
     // The field prime plus one: a y coordinate at or above the prime that is not a small-order point.
@@ -90,8 +103,13 @@ describe('external-parties keys', () => {
     expect(() => buildExternalPartyId('wallet:', fingerprint)).toThrow(/end with ":"/);
     expect(buildExternalPartyId(':wallet', fingerprint)).toBe(`:wallet::${fingerprint}`);
     expect(() => buildExternalPartyId('alice', fingerprint.toUpperCase())).toThrow(/publicKeyFingerprint/);
-    expect(() => buildExternalPartyId('a'.repeat(187), fingerprint)).toThrow(/256 characters/);
-    expect(buildExternalPartyId('a'.repeat(186), fingerprint)).toHaveLength(256);
+    expect(() => buildExternalPartyId('a'.repeat(186), fingerprint)).toThrow(/255 characters/);
+    expect(buildExternalPartyId('a'.repeat(185), fingerprint)).toHaveLength(255);
+    // Daml-LF Party characters only.
+    expect(buildExternalPartyId('my app:1_x-y', fingerprint)).toBe(`my app:1_x-y::${fingerprint}`);
+    for (const hint of ['my/app', 'wallet💰', 'café', 'a.b']) {
+      expect(() => buildExternalPartyId(hint, fingerprint)).toThrow(/ASCII letters/);
+    }
 
     expect(parseExternalPartyId(`alice::${fingerprint}`)).toEqual({ partyHint: 'alice', namespace: fingerprint });
     expect(readPartyNamespace(`alice::${fingerprint}`)).toBe(fingerprint);
