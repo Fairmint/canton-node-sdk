@@ -136,6 +136,7 @@ export {
   buildWalletProofMessage,
   parseWalletProofMessage,
   WALLET_PROOF_FORMAT,
+  WALLET_PROOF_MAX_MESSAGE_BYTES,
   WALLET_PROOF_MAX_MESSAGE_LENGTH,
   type WalletProofChallengeResponse,
   type WalletProofFields,

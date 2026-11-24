@@ -2,6 +2,7 @@
 import {
   buildWalletProofMessage,
   parseWalletProofMessage,
+  WALLET_PROOF_MAX_MESSAGE_BYTES,
   WALLET_PROOF_MAX_MESSAGE_LENGTH,
   type WalletProofFields,
 } from '../../../src/wallets/wallet-proof';
@@ -53,6 +54,20 @@ describe('buildWalletProofMessage', () => {
   it('throws for a message longer than the limit', () => {
     const long = { ...FIELDS, investorContext: 'x'.repeat(WALLET_PROOF_MAX_MESSAGE_LENGTH) };
     expect(() => buildWalletProofMessage(long)).toThrow('longer than 4096 characters');
+  });
+
+  it('throws for a multibyte message within the character limit but over the signing limit in bytes', () => {
+    const long = { ...FIELDS, investorContext: '\u20ac'.repeat(3000) };
+    const message = JSON.stringify(long);
+    expect(message.length).toBeLessThan(WALLET_PROOF_MAX_MESSAGE_LENGTH);
+    expect(new TextEncoder().encode(message).length).toBeGreaterThan(WALLET_PROOF_MAX_MESSAGE_BYTES);
+    expect(() => buildWalletProofMessage(long)).toThrow(`${WALLET_PROOF_MAX_MESSAGE_BYTES} UTF-8 bytes`);
+    expect(parseWalletProofMessage(message)).toBeNull();
+  });
+
+  it('accepts a multibyte message within both limits', () => {
+    const ok = { ...FIELDS, investorContext: '\u20ac'.repeat(1000) };
+    expect(parseWalletProofMessage(buildWalletProofMessage(ok))).toEqual(ok);
   });
 
   it('escapes as JSON.stringify does, so the message stays one line', () => {

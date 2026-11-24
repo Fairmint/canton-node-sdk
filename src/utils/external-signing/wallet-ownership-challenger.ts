@@ -353,7 +353,14 @@ export function createWalletOwnershipChallenger(options: WalletOwnershipChalleng
   /** The token for these claims. */
   function sign(claims: ChallengeClaims): string {
     const body = Buffer.from(JSON.stringify(claims)).toString('base64url');
-    return `${TOKEN_VERSION}.${body}.${mac(body)}`;
+    const token = `${TOKEN_VERSION}.${body}.${mac(body)}`;
+    // The verify handler answers 400 for a longer token, so never issue one it would refuse before the signature.
+    if (token.length > MAX_TOKEN_LENGTH) {
+      throw new TypeError(
+        `The challenge token would be longer than ${MAX_TOKEN_LENGTH} characters; shorten the subject`
+      );
+    }
+    return token;
   }
 
   /** The verdict, and the party of a token this challenger issued (null for any other token). */

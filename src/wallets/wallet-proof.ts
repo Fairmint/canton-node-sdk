@@ -27,6 +27,7 @@ import { isDaNetwork } from './cip103';
 import type { DaNetwork } from './da-utilities/client';
 import { isRecord } from './json';
 import { isWalletOwnershipPartyId } from './ownership-fields';
+import { SIGN_MESSAGE_MAX_BYTES } from './sign-message';
 
 /** The challenge format that carries a server-built wallet proof message (`createWalletOwnershipChallenger`). */
 export const WALLET_PROOF_FORMAT = 'wallet-proof-v1';
@@ -34,6 +35,20 @@ export type WalletProofFormat = typeof WALLET_PROOF_FORMAT;
 
 /** The longest message accepted, in characters. */
 export const WALLET_PROOF_MAX_MESSAGE_LENGTH = 4096;
+
+/**
+ * The longest message accepted, in UTF-8 bytes: the provider's signing limit ({@link SIGN_MESSAGE_MAX_BYTES}). A
+ * multibyte message can pass the character limit and still be too long to sign.
+ */
+export const WALLET_PROOF_MAX_MESSAGE_BYTES = SIGN_MESSAGE_MAX_BYTES;
+
+/** Whether `text` is within both limits: {@link WALLET_PROOF_MAX_MESSAGE_LENGTH} characters, then UTF-8 bytes. */
+function withinMessageLimits(text: string): boolean {
+  return (
+    text.length <= WALLET_PROOF_MAX_MESSAGE_LENGTH &&
+    new TextEncoder().encode(text).length <= WALLET_PROOF_MAX_MESSAGE_BYTES
+  );
+}
 
 /** Every field of a wallet proof message, in message order. */
 export interface WalletProofFields {
@@ -110,14 +125,17 @@ function serialize(fields: WalletProofFields): string {
 
 /**
  * The exact message for these fields: one line of JSON, keys in the order of {@link WalletProofFields}. Throws
- * `TypeError` for a field that is not valid or a message longer than {@link WALLET_PROOF_MAX_MESSAGE_LENGTH}.
+ * `TypeError` for a field that is not valid or a message longer than {@link WALLET_PROOF_MAX_MESSAGE_LENGTH} characters
+ * or {@link WALLET_PROOF_MAX_MESSAGE_BYTES} UTF-8 bytes.
  */
 export function buildWalletProofMessage(fields: WalletProofFields): string {
   const problem = fieldProblem(fields);
   if (problem !== null) throw new TypeError(`Invalid wallet proof message: ${problem}`);
   const message = serialize(fields);
-  if (message.length > WALLET_PROOF_MAX_MESSAGE_LENGTH) {
-    throw new TypeError(`Invalid wallet proof message: longer than ${WALLET_PROOF_MAX_MESSAGE_LENGTH} characters`);
+  if (!withinMessageLimits(message)) {
+    throw new TypeError(
+      `Invalid wallet proof message: longer than ${WALLET_PROOF_MAX_MESSAGE_LENGTH} characters or ${WALLET_PROOF_MAX_MESSAGE_BYTES} UTF-8 bytes`
+    );
   }
   return message;
 }
@@ -128,7 +146,7 @@ export function buildWalletProofMessage(fields: WalletProofFields): string {
  * with an offset, `expiresAt` not after `issuedAt`, or any other spelling of the same JSON.
  */
 export function parseWalletProofMessage(text: string): WalletProofFields | null {
-  if (typeof text !== 'string' || text.length > WALLET_PROOF_MAX_MESSAGE_LENGTH) return null;
+  if (typeof text !== 'string' || !withinMessageLimits(text)) return null;
   let raw: unknown;
   try {
     raw = JSON.parse(text);

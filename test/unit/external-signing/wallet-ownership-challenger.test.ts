@@ -613,6 +613,29 @@ describe('createWalletOwnershipChallenger: the wallet-proof-v1 format', () => {
       ...(proofDomain !== undefined && { proofDomain }),
     });
 
+  it('refuses to issue a challenge whose token the verify handler would reject for length', () => {
+    const { challenger } = proofSetup();
+    const subject = 's'.repeat(4000);
+    for (const format of ['text', 'wallet-proof-v1'] as const) {
+      expect(() =>
+        challenger.issue({ subject, domain: DOMAIN, network: 'devnet', partyId: party.partyId, format })
+      ).toThrow(TypeError);
+    }
+  });
+
+  it('refuses to issue a wallet proof message over the signing limit in UTF-8 bytes', () => {
+    const { challenger } = proofSetup();
+    expect(() =>
+      challenger.issue({
+        subject: '\u20ac'.repeat(2000),
+        domain: DOMAIN,
+        network: 'devnet',
+        partyId: party.partyId,
+        format: 'wallet-proof-v1',
+      })
+    ).toThrow(TypeError);
+  });
+
   const signed = (
     message: string,
     key: PartyKey = party

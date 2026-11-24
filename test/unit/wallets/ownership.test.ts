@@ -364,6 +364,18 @@ describe('proveWalletProof', () => {
   } as const;
   const PROOF_MESSAGE = JSON.stringify(FIELDS);
 
+  it('refuses a multibyte message over the signing limit in bytes before the wallet is asked', async () => {
+    const provider = accountProvider({
+      account: { publicKey: 'ab'.repeat(32), namespace: '1220aa' },
+      signMessage: () => ({ signature: 'cd'.repeat(64) }),
+    });
+    const message = JSON.stringify({ ...FIELDS, investorContext: '\u20ac'.repeat(3000) });
+    await expect(proveWalletProof(connected(provider), { message, now: NOW })).rejects.toMatchObject({
+      reason: 'invalid-challenge',
+    });
+    expect(provider.requests).toEqual([]);
+  });
+
   it('signs exactly the server-built message as the primary account, and returns the proof to show', async () => {
     const provider = accountProvider({
       account: { publicKey: 'ab'.repeat(32), namespace: '1220aa' },
