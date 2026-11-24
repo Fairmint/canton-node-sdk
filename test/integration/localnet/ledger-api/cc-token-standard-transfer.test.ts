@@ -138,6 +138,8 @@ describe('External-party CC send through the token standard', () => {
       const sender = await onboardExternalWallet(bridge, ledgerClient, userId, 'sender');
       const receiver = await onboardExternalWallet(bridge, ledgerClient, userId, 'receiver');
       const unapproved = await onboardExternalWallet(bridge, ledgerClient, userId, 'unapproved');
+      // Each preapproval purchase and the sender's funding are paid from the validator wallet.
+      await validatorClient.tap({ amount: '1000', command_id: `cc-ts-fund-${randomUUID()}` });
       await createTransferPreapproval(bridge, sender);
       await createTransferPreapproval(bridge, receiver);
 
@@ -156,8 +158,7 @@ describe('External-party CC send through the token standard', () => {
       const total = (holdings: ReadonlyArray<{ amount: string }>): number =>
         holdings.reduce((sum, holding) => sum + Number(holding.amount), 0);
 
-      // Fund the sender from the validator wallet through the sender's preapproval.
-      await validatorClient.tap({ amount: '200', command_id: `cc-ts-fund-${randomUUID()}` });
+      // Fund the sender through its preapproval.
       await retry(
         async () =>
           bridge.sendProviderTransferToPreapprovedParty({

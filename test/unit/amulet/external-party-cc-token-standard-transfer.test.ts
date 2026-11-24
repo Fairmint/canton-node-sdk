@@ -124,6 +124,10 @@ const transferFactoryResponse = (
         contractId: '00open-round',
         createdEventBlob: 'open-round-blob',
         synchronizerId: SYNCHRONIZER_ID,
+        // What a LocalNet registry sends with excludeDebugFields.
+        debugPackageName: null,
+        debugPayload: null,
+        debugCreatedAt: null,
       },
     ],
   },

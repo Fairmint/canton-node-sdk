@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { type ValidatorApiClient } from '../../clients/validator-api';
-import { TransferFactoryWithChoiceContextSchema } from '../../clients/validator-api/schemas/api/scan-proxy';
 import { OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
 import { isRecord } from '../../core/utils';
 import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
@@ -344,6 +344,26 @@ interface TransferFactoryChoice {
   }>;
 }
 
+/**
+ * The parts of a registry transfer-factory answer this flow uses. Lenient on purpose: the registry may send `null`
+ * debug fields even with `excludeDebugFields`, and they are dropped anyway.
+ */
+const TransferFactoryResponseSchema = z.object({
+  factoryId: z.string().trim().min(1),
+  transferKind: z.enum(['self', 'direct', 'offer']),
+  choiceContext: z.object({
+    choiceContextData: z.object({ values: z.record(z.string(), z.unknown()) }),
+    disclosedContracts: z.array(
+      z.object({
+        templateId: z.string().min(1),
+        contractId: z.string().min(1),
+        createdEventBlob: z.string().min(1),
+        synchronizerId: z.string().min(1),
+      })
+    ),
+  }),
+});
+
 async function readTransferFactory(input: {
   readonly validatorClient: ValidatorApiClient;
   readonly choiceArguments: Record<string, JsonValue>;
@@ -352,23 +372,16 @@ async function readTransferFactory(input: {
     choiceArguments: input.choiceArguments,
     excludeDebugFields: true,
   });
-  const parsed = TransferFactoryWithChoiceContextSchema.safeParse(response);
-  if (!parsed.success || !parsed.data.factoryId.trim()) {
+  const parsed = TransferFactoryResponseSchema.safeParse(response);
+  if (!parsed.success) {
     throw new OperationError(
       'Canton CC registry transfer-factory response was invalid',
       OperationErrorCode.TRANSACTION_FAILED,
-      { issues: parsed.success ? 'factoryId is empty' : parsed.error.message }
+      { issues: parsed.error.message }
     );
   }
   const { factoryId, transferKind, choiceContext } = parsed.data;
   const { values } = choiceContext.choiceContextData;
-  if (!isRecord(values)) {
-    throw new OperationError(
-      'Canton CC registry transfer-factory response did not include choice context values',
-      OperationErrorCode.TRANSACTION_FAILED,
-      { factoryId }
-    );
-  }
   return {
     factoryId,
     transferKind,
