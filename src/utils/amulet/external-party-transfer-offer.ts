@@ -4,20 +4,12 @@ import { type ValidatorApiClient } from '../../clients/validator-api';
 import { OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
 import { isRecord } from '../../core/utils';
 import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
+import { preparedTransactionHashToHex } from '../external-signing/canton-protocol';
+import { executeExternalPartySignedTransaction } from '../external-signing/execute-external-party-signed-transaction';
 import {
-  assertCantonHashSignature,
-  assertCantonPartyMatchesPublicKey,
-  preparedTransactionHashToHex,
-} from '../external-signing/canton-protocol';
-import {
-  executeExternalTransactionAndWait,
   type ExecuteExternalTransactionAndWaitResult,
   type InteractiveSubmissionHashingSchemeVersion,
 } from '../external-signing/execute-external-transaction';
-import {
-  CANTON_ED25519_SIGNATURE_ALGORITHM,
-  CANTON_RAW_SIGNATURE_FORMAT,
-} from '../external-signing/external-party-onboarding';
 import { prepareExternalTransaction } from '../external-signing/prepare-external-transaction';
 import { assertSingleConnectedSynchronizerId } from '../party-readiness';
 
@@ -183,36 +175,17 @@ export async function submitExternalPartyTransferOfferAcceptance(
   options: SubmitExternalPartyTransferOfferAcceptanceOptions
 ): Promise<SubmittedExternalPartyTransferOfferAcceptance> {
   validateRequiredString('userId', options.userId);
-  const publicKeyFingerprint = assertCantonPartyMatchesPublicKey({
+  const result = await executeExternalPartySignedTransaction({
+    ledgerClient: options.ledgerClient,
+    userId: options.userId,
     partyId: options.acceptingPartyId,
     publicKeyBase64: options.publicKeyBase64,
     ...(options.publicKeyFingerprint !== undefined ? { publicKeyFingerprint: options.publicKeyFingerprint } : {}),
-  });
-  assertCantonHashSignature({
-    publicKeyBase64: options.publicKeyBase64,
-    hashHex: options.preparedTransactionHashHex,
-    signatureBase64: options.signatureBase64,
-  });
-
-  const result = await executeExternalTransactionAndWait({
-    ledgerClient: options.ledgerClient,
-    userId: options.userId,
     preparedTransaction: options.preparedTransaction,
-    hashingSchemeVersion: options.hashingSchemeVersion ?? 'HASHING_SCHEME_VERSION_V2',
-    submissionId: options.submissionId ?? randomUUID(),
-    partySignatures: [
-      {
-        party: options.acceptingPartyId,
-        signatures: [
-          {
-            signature: options.signatureBase64,
-            signedBy: publicKeyFingerprint,
-            format: CANTON_RAW_SIGNATURE_FORMAT,
-            signingAlgorithmSpec: CANTON_ED25519_SIGNATURE_ALGORITHM,
-          },
-        ],
-      },
-    ],
+    preparedTransactionHashHex: options.preparedTransactionHashHex,
+    signatureBase64: options.signatureBase64,
+    ...(options.hashingSchemeVersion !== undefined ? { hashingSchemeVersion: options.hashingSchemeVersion } : {}),
+    ...(options.submissionId !== undefined ? { submissionId: options.submissionId } : {}),
   });
 
   return {
