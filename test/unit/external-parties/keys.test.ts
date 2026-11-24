@@ -22,6 +22,8 @@ describe('external-parties keys', () => {
       const key = createKey();
       expect(deriveCantonEd25519PublicKeyFingerprint(key.publicKeyBase64)).toBe(key.fingerprint);
       expect(deriveCantonEd25519PublicKeyFingerprint(key.rawBase64)).toBe(key.fingerprint);
+      // Padding is optional, as in the Node decoder.
+      expect(deriveCantonEd25519PublicKeyFingerprint(key.rawBase64.replace(/=+$/, ''))).toBe(key.fingerprint);
       expect(deriveCantonEd25519PublicKeyFingerprint(key.rawBase64.replace(/\+/g, '-').replace(/\//g, '_'))).toBe(
         key.fingerprint
       );
@@ -46,6 +48,9 @@ describe('external-parties keys', () => {
       Buffer.concat([Buffer.from('302a300506032b6571032100', 'hex'), highBit]).toString('base64'),
       Buffer.alloc(33, 1).toString('base64'),
       `${createKey().rawBase64.slice(0, -2)}B=`,
+      // Excess padding on a canonical raw or DER key.
+      `${createKey().rawBase64}=`,
+      `${createKey().publicKeyBase64}=`,
     ];
     for (const input of inputs) {
       expect(() => NodeProtocol.extractRawEd25519PublicKey(input)).toThrow();
@@ -75,6 +80,8 @@ describe('external-parties keys', () => {
     expect(buildExternalPartyId('  alice ', fingerprint)).toBe(`alice::${fingerprint}`);
     expect(() => buildExternalPartyId(' ', fingerprint)).toThrow(/partyHint is required/);
     expect(() => buildExternalPartyId('a::b', fingerprint)).toThrow(/"::"/);
+    expect(() => buildExternalPartyId('wallet:', fingerprint)).toThrow(/end with ":"/);
+    expect(buildExternalPartyId(':wallet', fingerprint)).toBe(`:wallet::${fingerprint}`);
     expect(() => buildExternalPartyId('alice', fingerprint.toUpperCase())).toThrow(/publicKeyFingerprint/);
     expect(() => buildExternalPartyId('a'.repeat(187), fingerprint)).toThrow(/256 characters/);
     expect(buildExternalPartyId('a'.repeat(186), fingerprint)).toHaveLength(256);

@@ -236,12 +236,30 @@ describe('discoverExternalParties', () => {
     expect(findParty).not.toHaveBeenCalled();
   });
 
+  it('hears an abort that a callback raises while it starts', async () => {
+    const key = createKey();
+    const controller = new AbortController();
+    const listParties = jest.fn(async (): Promise<ExternalPartyListAnswer> => {
+      controller.abort();
+      return new Promise(() => undefined);
+    });
+    expect(
+      isExternalPartyError(
+        await rejection(
+          discoverExternalParties({ publicKeyFingerprint: key.fingerprint, signal: controller.signal, listParties })
+        ),
+        'ABORTED'
+      )
+    ).toBe(true);
+  });
+
   it('refuses an invalid fingerprint or hints before calling anything', async () => {
     const key = createKey();
     const { listParties, findParty } = store();
     for (const input of [
       { publicKeyFingerprint: 'abc' },
       { publicKeyFingerprint: key.fingerprint, hints: ['a::b'] },
+      { publicKeyFingerprint: key.fingerprint, hints: ['wallet:'] },
       { publicKeyFingerprint: key.fingerprint, hints: [' a'] },
       { publicKeyFingerprint: key.fingerprint, hints: [''] },
       {

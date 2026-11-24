@@ -92,7 +92,10 @@ export function isCantonPublicKeyFingerprint(value: unknown): value is string {
 export function buildExternalPartyId(partyHint: string, publicKeyFingerprint: string): string {
   const hint = typeof partyHint === 'string' ? partyHint.trim() : '';
   if (hint === '') throw invalidInput('partyHint is required');
-  if (hint.includes('::')) throw invalidInput('partyHint cannot include the reserved "::" separator');
+  // A trailing ':' would run into the separator (`wallet:` gives `wallet:::…`, which no reader parses).
+  if (hint.includes('::') || hint.endsWith(':')) {
+    throw invalidInput('partyHint cannot include the reserved "::" separator or end with ":"');
+  }
   if (!isCantonPublicKeyFingerprint(publicKeyFingerprint)) {
     throw invalidInput(
       'publicKeyFingerprint must be a Canton SHA-256 multihash (1220 and 64 lowercase hex characters)'
@@ -136,10 +139,15 @@ function assertCanonicalEd25519PublicKey(raw: Uint8Array): void {
 
 function decodeBase64(value: string): Uint8Array {
   const normalized = typeof value === 'string' ? value.trim().replace(/-/g, '+').replace(/_/g, '/') : '';
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized) || normalized.replace(/=+$/, '').length % 4 === 1) {
+  const unpadded = normalized.replace(/=+$/, '');
+  // Padding is optional, but when present it must complete the last quantum (as the Node decoder requires).
+  if (
+    !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized) ||
+    unpadded.length % 4 === 1 ||
+    (unpadded.length !== normalized.length && normalized.length % 4 !== 0)
+  ) {
     throw invalidInput('publicKeyBase64 must be base64-encoded');
   }
-  const unpadded = normalized.replace(/=+$/, '');
   const padded = unpadded.padEnd(unpadded.length + ((4 - (unpadded.length % 4)) % 4), '=');
   let binary: string;
   try {

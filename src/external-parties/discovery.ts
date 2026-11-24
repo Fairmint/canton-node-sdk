@@ -82,10 +82,10 @@ export async function discoverExternalParties(input: {
   if (
     !Array.isArray(hints) ||
     hints.length > MAX_EXTERNAL_PARTY_LOOKUP_HINTS ||
-    !hints.every((hint) => isBoundedIdentifier(hint) && !hint.includes('::'))
+    !hints.every((hint) => isBoundedIdentifier(hint) && !hint.includes('::') && !hint.endsWith(':'))
   ) {
     throw invalidInput(
-      `hints must be at most ${MAX_EXTERNAL_PARTY_LOOKUP_HINTS} trimmed, non-empty party hints without "::"`
+      `hints must be at most ${MAX_EXTERNAL_PARTY_LOOKUP_HINTS} trimmed, non-empty party hints without "::" or a trailing ":"`
     );
   }
   const found = new Map<string, boolean>();
@@ -177,6 +177,8 @@ export async function raceAbort<T>(
   const abortedWait = new Promise<never>((_, reject) => {
     onAbort = () => reject(aborted());
     signal.addEventListener('abort', onAbort, { once: true });
+    // `start()` may itself have aborted the signal, before the listener could hear it.
+    if (signal.aborted) onAbort();
   });
   abortedWait.catch(() => undefined);
   promise.catch(() => undefined);
