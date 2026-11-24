@@ -57,8 +57,12 @@ export interface SubmittedExternalPartyCcTransfer {
 /**
  * Prepares a CC transfer from an externally hosted Canton party.
  *
- * The returned transactionHashHex is the only value the browser wallet needs to sign; the SDK does not receive private
- * keys.
+ * @deprecated Splice 0.8.0 removed the validator's external-party TransferCommand endpoints (`prepare-send` /
+ *   `submit-send`); a 0.8.0+ validator answers 404. Use `prepareExternalPartyCcTokenStandardTransfer` (or the
+ *   external-party wallet bridge's `prepareCcTransfer`).
+ *
+ *   The returned transactionHashHex is the only value the browser wallet needs to sign; the SDK does not receive private
+ *   keys.
  */
 export async function prepareExternalPartyCcTransfer(
   validatorClient: ValidatorApiClient,
@@ -92,7 +96,13 @@ export async function prepareExternalPartyCcTransfer(
   };
 }
 
-/** Submits an externally signed CC transfer prepared by prepareExternalPartyCcTransfer. */
+/**
+ * Submits an externally signed CC transfer prepared by prepareExternalPartyCcTransfer.
+ *
+ * @deprecated Splice 0.8.0 removed the validator's external-party TransferCommand endpoints (`prepare-send` /
+ *   `submit-send`); a 0.8.0+ validator answers 404. Use `submitExternalPartyCcTokenStandardTransfer` (or the
+ *   external-party wallet bridge's `submitCcTransfer`).
+ */
 export async function submitExternalPartyCcTransfer(
   validatorClient: ValidatorApiClient,
   params: SubmitExternalPartyCcTransferParams

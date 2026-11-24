@@ -24,6 +24,9 @@ export const SubmitTransferPreapprovalSendParamsSchema = createRequestSchema<Sub
  * Submit an externally signed CC transfer
  *
  * Submits the signed transaction returned by prepareTransferPreapprovalSend.
+ *
+ * @deprecated Splice 0.8.0 removed the validator's external-party TransferCommand endpoints (`prepare-send` /
+ *   `submit-send`); a 0.8.0+ validator answers 404. Use `submitExternalPartyCcTokenStandardTransfer`.
  */
 export const SubmitTransferPreapprovalSend = createApiOperation<
   SubmitTransferPreapprovalSendRequest,
