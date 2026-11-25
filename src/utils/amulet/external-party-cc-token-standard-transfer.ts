@@ -473,7 +473,7 @@ const CC_SCALE = 10n ** BigInt(TOKEN_STANDARD_V1_AMOUNT_DECIMALS);
 function parseCcAmountBaseUnits(amount: string): bigint {
   const match = typeof amount === 'string' ? CC_AMOUNT_PATTERN.exec(amount.trim()) : null;
   const whole = match?.[1];
-  const fraction = (match?.[2] ?? '').replace(/0+$/, '');
+  const fraction = trimTrailingZeros(match?.[2] ?? '');
   if (!match || whole === undefined || fraction.length > TOKEN_STANDARD_V1_AMOUNT_DECIMALS) {
     throw new ValidationError(
       `amount must be a positive decimal amount with at most ${TOKEN_STANDARD_V1_AMOUNT_DECIMALS} decimal places`,
@@ -489,11 +489,16 @@ function parseCcAmountBaseUnits(amount: string): bigint {
 
 function formatCcBaseUnits(baseUnits: bigint): string {
   const whole = baseUnits / CC_SCALE;
-  const fraction = (baseUnits % CC_SCALE)
-    .toString()
-    .padStart(TOKEN_STANDARD_V1_AMOUNT_DECIMALS, '0')
-    .replace(/0+$/, '');
-  return fraction ? `${whole.toString()}.${fraction}` : whole.toString();
+  const fraction = (baseUnits % CC_SCALE).toString().padStart(TOKEN_STANDARD_V1_AMOUNT_DECIMALS, '0');
+  const trimmed = trimTrailingZeros(fraction);
+  return trimmed ? `${whole.toString()}.${trimmed}` : whole.toString();
+}
+
+/** Drops trailing `0`s in linear time (a `/0+$/` replace backtracks polynomially on long runs of zeros). */
+function trimTrailingZeros(digits: string): string {
+  let end = digits.length;
+  while (end > 0 && digits.charCodeAt(end - 1) === 48) end -= 1;
+  return digits.slice(0, end);
 }
 
 function normalizeTimestamp(name: string, value: Date | string): string {
