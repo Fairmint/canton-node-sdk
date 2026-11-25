@@ -352,7 +352,7 @@ describe('external-party CC token-standard transfer', () => {
     expect(prepared.inputHoldingCids).toEqual(['00b']);
   });
 
-  it('skips a look-alike holding the DSO did not sign, however large', async () => {
+  it('skips look-alike holdings the DSO did not sign, however large or malformed', async () => {
     const sender = createSender();
     const ledgerClient = createLedgerClient([
       amuletHolding({
@@ -366,6 +366,12 @@ describe('external-party CC token-standard transfer', () => {
         owner: sender.partyId,
         amount: '500000.0',
         signatories: [sender.partyId],
+      }),
+      amuletHolding({
+        contractId: '00malformed',
+        owner: sender.partyId,
+        amount: '-1.0',
+        signatories: ['attacker::1220attacker'],
       }),
       amuletHolding({ contractId: '00real', owner: sender.partyId, amount: '3.0' }),
     ]);

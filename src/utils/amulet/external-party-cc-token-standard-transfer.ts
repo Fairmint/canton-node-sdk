@@ -440,17 +440,13 @@ async function selectCoveringUnlockedCcHoldings(input: {
     instrumentDecimals: TOKEN_STANDARD_V1_AMOUNT_DECIMALS,
     synchronizerId: input.synchronizerId,
     activeAtOffset: input.activeAtOffset,
+    // A HoldingV1 view is whatever its template says: anyone can create a look-alike that names the sender as owner,
+    // with any amount or a malformed view. A real Amulet is signed by the instrument admin (the DSO) and the owner, so
+    // anything else is skipped before its view is read.
+    requiredSignatories: [input.instrumentId.admin, input.senderPartyId],
   });
   const candidates = holdings
-    // The HoldingV1 view is whatever its template says: anyone can create a look-alike that names the sender as owner.
-    // A real Amulet is signed by the instrument admin (the DSO) and the owner, so only those are inputs.
-    .filter(
-      (holding) =>
-        holding.lock === null &&
-        BigInt(holding.amountBaseUnits) > 0n &&
-        holding.signatories.includes(input.instrumentId.admin) &&
-        holding.signatories.includes(input.senderPartyId)
-    )
+    .filter((holding) => holding.lock === null && BigInt(holding.amountBaseUnits) > 0n)
     .sort((left, right) => {
       const difference = BigInt(right.amountBaseUnits) - BigInt(left.amountBaseUnits);
       if (difference !== 0n) return difference > 0n ? 1 : -1;

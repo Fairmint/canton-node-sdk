@@ -69,6 +69,13 @@ export interface ListTokenStandardV1HoldingsParams {
   readonly synchronizerId?: string;
   readonly activeAtOffset?: number;
   readonly holdingInterfaceId?: string;
+  /**
+   * Skip, before reading its HoldingV1 view, any contract whose signatories do not include all of these parties. A view
+   * is whatever its template says, so a contract another party signed can claim any owner or amount, or carry a
+   * malformed view that would otherwise fail the whole listing. Pass the instrument admin (and the owner) to read only
+   * genuine holdings.
+   */
+  readonly requiredSignatories?: readonly string[];
 }
 
 export interface SelectTokenStandardV1HoldingsParams extends Omit<
@@ -377,6 +384,11 @@ function readHolding(params: {
   };
 }
 
+function hasSignatories(signatories: unknown, required: readonly string[]): boolean {
+  if (!Array.isArray(signatories)) return false;
+  return required.every((party) => signatories.includes(party));
+}
+
 export async function listTokenStandardV1Holdings(
   params: ListTokenStandardV1HoldingsParams
 ): Promise<readonly TokenStandardV1Holding[]> {
@@ -395,6 +407,9 @@ export async function listTokenStandardV1Holdings(
     params.synchronizerId === undefined ? undefined : normalizeRequiredString(params.synchronizerId, 'synchronizerId');
   const activeAtOffset =
     params.activeAtOffset === undefined ? undefined : normalizeActiveAtOffset(params.activeAtOffset);
+  const requiredSignatories = (params.requiredSignatories ?? []).map((party) =>
+    normalizeRequiredString(party, 'requiredSignatories')
+  );
   const response = await params.ledger.getActiveContracts({
     parties,
     interfaceIds: [holdingInterfaceId],
@@ -414,6 +429,12 @@ export async function listTokenStandardV1Holdings(
           contractId: isRecord(createdEvent) ? createdEvent['contractId'] : undefined,
         });
       }
+      continue;
+    }
+    if (
+      requiredSignatories.length > 0 &&
+      !hasSignatories(item.contractEntry.JsActiveContract.createdEvent.signatories, requiredSignatories)
+    ) {
       continue;
     }
     const holding = readHolding({

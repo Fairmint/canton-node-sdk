@@ -29,6 +29,7 @@ function activeHolding(params: {
   readonly omitViewValue?: boolean;
   readonly omitLock?: boolean;
   readonly meta?: unknown;
+  readonly signatories?: readonly string[];
 }): JsGetActiveContractsResponseItem {
   const viewValue = {
     owner: params.owner ?? owner,
@@ -61,7 +62,7 @@ function activeHolding(params: {
             },
           ],
           witnessParties: ['Buyer::alice'],
-          signatories: ['CashAdmin::issuer'],
+          signatories: [...(params.signatories ?? ['CashAdmin::issuer'])],
           observers: ['Buyer::alice'],
           createdAt: params.createdAt ?? '2026-07-10T01:00:00.000Z',
           packageName: 'cash-token',
@@ -151,6 +152,26 @@ describe('Token Standard V1 holdings', () => {
       includeCreatedEventBlob: false,
       activeAtOffset: 42,
     });
+  });
+
+  test('skips contracts missing a required signatory before reading their view', async () => {
+    const ledger = createLedger([
+      activeHolding({ contractId: '#genuine', amount: '2.0', signatories: ['CashAdmin::issuer', owner] }),
+      activeHolding({ contractId: '#look-alike', amount: '999.0', signatories: ['Mallory::x'] }),
+      activeHolding({ contractId: '#malformed', amount: '-1.0', signatories: ['Mallory::x'] }),
+    ]);
+
+    const holdings = await listTokenStandardV1Holdings({
+      ledger,
+      parties: [owner],
+      owner,
+      instrumentId,
+      instrumentDecimals: 10,
+      requiredSignatories: ['CashAdmin::issuer', owner],
+    });
+
+    expect(holdings.map((holding) => holding.contractId)).toEqual(['#genuine']);
+    expect(holdings[0]?.signatories).toEqual(['CashAdmin::issuer', owner]);
   });
 
   test('filters by owner and InstrumentId before validating unrelated values', async () => {
