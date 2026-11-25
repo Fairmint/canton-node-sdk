@@ -2,6 +2,7 @@ export * from './allocate-external-party';
 export * from './canton-ed25519-signer';
 export * from './canton-protocol';
 export * from './create-external-party';
+export * from './execute-external-party-signed-transaction';
 export * from './execute-external-transaction';
 export * from './external-party-lifecycle';
 export * from './external-party-onboarding';

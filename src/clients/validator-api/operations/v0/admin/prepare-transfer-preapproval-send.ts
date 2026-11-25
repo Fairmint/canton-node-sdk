@@ -21,6 +21,10 @@ export const PrepareTransferPreapprovalSendParamsSchema = createRequestSchema<Pr
  *
  * Prepares a TransferCommand transaction that must be signed by the external sender and then submitted with
  * submitTransferPreapprovalSend.
+ *
+ * @deprecated Splice 0.8.0 removed the validator's external-party TransferCommand endpoints (`prepare-send` /
+ *   `submit-send`); a 0.8.0+ validator answers 404. Use `prepareExternalPartyCcTokenStandardTransfer` (a token-standard
+ *   `TransferFactory_Transfer` through Ledger interactive submission).
  */
 export const PrepareTransferPreapprovalSend = createApiOperation<
   PrepareTransferPreapprovalSendRequest,

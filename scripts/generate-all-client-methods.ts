@@ -235,6 +235,20 @@ function extractJsDocDescription(jsdoc: string | undefined): string | undefined 
   return firstParagraph?.trim();
 }
 
+/** Extract the text of a JSDoc `@deprecated` tag, collapsed to one line, so generated client methods carry it too. */
+function extractJsDocDeprecation(jsdoc: string | undefined): string | undefined {
+  if (!jsdoc) return undefined;
+  const content = jsdoc
+    .replace(/^\/\*\*\s*/s, '')
+    .replace(/\s*\*\/$/s, '')
+    .split('\n')
+    .map((line) => line.replace(/^\s*\*\s?/, ''))
+    .join('\n');
+  const match = /@deprecated\b([\s\S]*?)(?=\n\s*@\w|$)/.exec(content);
+  if (!match) return undefined;
+  return match[1]?.replace(/\s+/g, ' ').trim() ?? '';
+}
+
 function generateMethodDeclarations(ops: Array<OperationInfo & { importPath: string }>): string {
   return ops
     .map((op) => {
@@ -242,7 +256,11 @@ function generateMethodDeclarations(ops: Array<OperationInfo & { importPath: str
       const description = extractJsDocDescription(op.jsdoc) ?? generateDescriptionFromName(op.operationName);
 
       // Generate JSDoc for the method
-      const jsdocComment = `  /** ${description} */`;
+      const deprecation = extractJsDocDeprecation(op.jsdoc);
+      const jsdocComment =
+        deprecation === undefined
+          ? `  /** ${description} */`
+          : `  /**\n   * ${description}\n   *\n   * @deprecated ${deprecation}\n   */`;
 
       if (op.kind === 'api') {
         const opMethodName = op.methodName ?? 'execute';

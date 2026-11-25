@@ -11,10 +11,11 @@ import {
 } from '../../core/errors';
 import { isRecord } from '../../core/utils';
 import {
-  prepareExternalPartyCcTransfer,
-  submitExternalPartyCcTransfer,
-  type SubmittedExternalPartyCcTransfer,
-} from '../amulet/external-party-cc-transfer';
+  prepareExternalPartyCcTokenStandardTransfer,
+  submitExternalPartyCcTokenStandardTransfer,
+  type CcTokenStandardTransferKind,
+  type SubmittedExternalPartyCcTokenStandardTransfer,
+} from '../amulet/external-party-cc-token-standard-transfer';
 import {
   prepareExternalPartyTransferOfferAcceptance,
   submitExternalPartyTransferOfferAcceptance,
@@ -38,7 +39,6 @@ import {
   assertCantonPrepareToken,
   assertCantonSha256MultihashHex,
   buildCantonPrepareToken,
-  extractRawEd25519PublicKey,
   hashPreparedTransaction,
 } from './canton-protocol';
 import { type InteractiveSubmissionHashingSchemeVersion } from './execute-external-transaction';
@@ -48,6 +48,10 @@ import {
   prepareExternalPartyOnboarding,
   submitExternalPartyOnboarding,
 } from './external-party-onboarding';
+
+/** Hashing scheme of every CC transfer the bridge prepares (bound into its prepare token). */
+export const EXTERNAL_PARTY_CC_TRANSFER_HASHING_SCHEME_VERSION: InteractiveSubmissionHashingSchemeVersion =
+  'HASHING_SCHEME_VERSION_V2';
 
 export const DEFAULT_PROVIDER_TRANSFER_OFFER_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -72,6 +76,17 @@ export interface ExternalPartyWalletOptions {
    * before `expiresAt`) still falls inside the window. Set it only to match a validator configured differently.
    */
   readonly validatorDeduplicationWindowMs?: number;
+  /**
+   * Opt in (default `false`) to have `submitExternalPartySignature` make sure `providerUserId` holds `CanActAs` on the
+   * onboarded party. A new party is allocated with the right; on an idempotent replay the user's rights are read and
+   * the right is granted only when missing, which needs participant admin or identity-provider admin rights.
+   *
+   * The token-standard CC transfer and the `TransferOffer` accept prepare and execute as `providerUserId` with `actAs`
+   * the external party, so that user needs `CanActAs` on it, or `CanReadAsAnyParty` plus `CanExecuteAsAnyParty`. A
+   * provider that onboards many wallets should give its user the two any-party rights instead: Canton caps the rights
+   * per user (1000 by default), so one `CanActAs` per wallet eventually makes onboarding fail.
+   */
+  readonly grantProviderUserActAs?: boolean;
   readonly now?: () => number;
   readonly randomId?: () => string;
 }
@@ -126,6 +141,22 @@ export interface PrepareExternalPartyWalletCcTransferInput {
   readonly description?: string | null;
   readonly publicKeyBase64: string;
   readonly tokenContext?: ExternalPartyWalletTokenContext;
+  /**
+   * Default `true`: refuse (with a `ValidationError`, before anything is prepared) a receiver without a CC
+   * `TransferPreapproval`, for whom the registry would only create a pending offer that locks the sender's funds. Set
+   * `false` to allow such an offer; an offer also needs an explicit `executeBefore`.
+   */
+  readonly requirePreapproval?: boolean;
+  /**
+   * Deadline for submitting the signed transfer. Default: now + 10 minutes.
+   *
+   * For an offer (a receiver without a `TransferPreapproval`, `requirePreapproval: false`) it is also the offer's
+   * expiry: the receiver must accept before it and the sender's funds stay locked until then. An offer is refused (a
+   * `ValidationError`, reason `offer_requires_explicit_execute_before`) unless it is given explicitly.
+   */
+  readonly executeBefore?: Date | string;
+  /** Ledger command id. Default: `cc-transfer-<random id>`. */
+  readonly commandId?: string;
 }
 
 export interface PreparedExternalPartyWalletCcTransfer {
@@ -135,11 +166,25 @@ export interface PreparedExternalPartyWalletCcTransfer {
   readonly description: string | null;
   readonly preparedTransaction: string;
   readonly preparedTransactionHashHex: string;
+  /**
+   * @deprecated The validator's `TransferCommand` flow was removed in Splice 0.8.0. The transfer is now a
+   *   token-standard `TransferFactory_Transfer`, and this field holds its ledger `commandId`.
+   */
   readonly transferCommandContractIdPrefix: string;
+  /** @deprecated Always `0`: a token-standard transfer has no `TransferCommand` nonce. */
   readonly nonce: number;
+  /** When the prepared transfer stops being executable (`executeBefore`). */
   readonly expiresAt: string;
   readonly prepareToken: string;
   readonly hashingDetails: string | null;
+  /** Ledger command id of the prepared `TransferFactory_Transfer`. */
+  readonly commandId?: string;
+  readonly synchronizerId?: string;
+  /** The registry's transfer kind: `direct` unless `requirePreapproval` was `false`. */
+  readonly transferKind?: CcTokenStandardTransferKind;
+  readonly hashingSchemeVersion?: InteractiveSubmissionHashingSchemeVersion;
+  /** Same as `expiresAt`. */
+  readonly executeBefore?: string;
 }
 
 export interface SubmitExternalPartyWalletCcTransferInput {
@@ -151,7 +196,9 @@ export interface SubmitExternalPartyWalletCcTransferInput {
   readonly publicKeyFingerprint?: string | null;
   readonly preparedTransaction: string;
   readonly preparedTransactionHashHex: string;
+  /** @deprecated Pass the prepared value back unchanged; it holds the transfer's ledger `commandId`. */
   readonly transferCommandContractIdPrefix: string;
+  /** @deprecated Pass the prepared value (`0`) back unchanged. */
   readonly nonce: number;
   readonly expiresAt: string;
   readonly prepareToken: string;
@@ -388,9 +435,23 @@ export interface ExternalPartyWalletBridge {
     },
     options?: ExternalPartyWalletSubmissionOptions
   ) => Promise<SubmittedExternalPartyWalletOnboarding>;
+  /**
+   * Prepares a CC transfer from an external party: a token-standard `TransferFactory_Transfer` prepared through Ledger
+   * interactive submission as `providerUserId`, for the sender's key to sign. Needs `validatorClient` (DSO party and
+   * the registry's transfer factory). Refuses, by default, a receiver without a CC transfer preapproval.
+   *
+   * `providerUserId` must be able to read and execute as the sender: `CanActAs` on it (granted by
+   * `submitExternalPartySignature` when `grantProviderUserActAs` is `true`), or `CanReadAsAnyParty` plus
+   * `CanExecuteAsAnyParty`. The validator `TransferCommand` send this replaces needed no Ledger user rights.
+   */
   readonly prepareCcTransfer: (
     input: PrepareExternalPartyWalletCcTransferInput
   ) => Promise<PreparedExternalPartyWalletCcTransfer>;
+  /**
+   * Checks the prepare token and the sender's signature, then executes the prepared transfer through the Ledger JSON
+   * API (`executeAndWait`) as `providerUserId`, which needs the rights `prepareCcTransfer` names. Does not use the
+   * validator. The signature may be unpadded, base64url or whitespace-padded; it is sent as canonical padded base64.
+   */
   readonly submitCcTransfer: (
     input: SubmitExternalPartyWalletCcTransferInput,
     hooks?: SubmitExternalPartyWalletCcTransferHooks
@@ -575,6 +636,7 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
         multiHashSignatureBase64: input.multiHashSignatureBase64,
         ...(input.publicKeyFingerprint !== undefined ? { publicKeyFingerprint: input.publicKeyFingerprint } : {}),
         allowAlreadyExists: true,
+        ...(options.grantProviderUserActAs === true ? { userId: options.providerUserId } : {}),
         ...(submissionOptions.signal !== undefined ? { signal: submissionOptions.signal } : {}),
       });
       return {
@@ -594,24 +656,36 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
         partyId: input.senderPartyId,
         publicKeyBase64: input.publicKeyBase64,
       });
-      const prepared = await prepareExternalPartyCcTransfer(validatorClient, {
+      const prepared = await prepareExternalPartyCcTokenStandardTransfer({
+        ledgerClient: options.ledgerClient,
+        validatorClient,
+        userId: options.providerUserId,
         senderPartyId: input.senderPartyId,
         receiverPartyId: input.receiverPartyId,
         amount,
+        description,
+        commandId: input.commandId ?? `cc-transfer-${randomId()}`,
+        now,
         verboseHashing: false,
-        ...(description ? { description } : {}),
+        ...(input.requirePreapproval !== undefined ? { requirePreapproval: input.requirePreapproval } : {}),
+        ...(input.executeBefore !== undefined ? { executeBefore: input.executeBefore } : {}),
       });
+      // The bridge's wire shape predates the token-standard flow: the command id stands in for the TransferCommand
+      // contract-id prefix, the nonce is always 0 and `expiresAt` is the transfer's `executeBefore`.
+      const transferCommandContractIdPrefix = prepared.commandId;
+      const nonce = 0;
+      const expiresAt = prepared.executeBefore;
 
       return {
         senderPartyId: input.senderPartyId,
         receiverPartyId: input.receiverPartyId,
         amount,
         description,
-        preparedTransaction: prepared.transaction,
-        preparedTransactionHashHex: prepared.transactionHashHex,
-        transferCommandContractIdPrefix: prepared.transferCommandContractIdPrefix,
-        nonce: prepared.nonce,
-        expiresAt: prepared.expiresAt,
+        preparedTransaction: prepared.preparedTransaction,
+        preparedTransactionHashHex: prepared.preparedTransactionHashHex,
+        transferCommandContractIdPrefix,
+        nonce,
+        expiresAt,
         prepareToken: buildCantonPrepareToken(
           options.prepareTokenSecret,
           buildExternalPartyCcTransferPrepareTokenPayload({
@@ -623,14 +697,19 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
             amount,
             description,
             publicKeyFingerprint,
-            preparedTransaction: prepared.transaction,
-            preparedTransactionHashHex: prepared.transactionHashHex,
-            transferCommandContractIdPrefix: prepared.transferCommandContractIdPrefix,
-            nonce: prepared.nonce,
-            expiresAt: prepared.expiresAt,
+            preparedTransaction: prepared.preparedTransaction,
+            preparedTransactionHashHex: prepared.preparedTransactionHashHex,
+            transferCommandContractIdPrefix,
+            nonce,
+            expiresAt,
           })
         ),
-        hashingDetails: readOptionalString(objectOrEmpty(prepared.raw), 'hashing_details'),
+        hashingDetails: prepared.hashingDetails,
+        commandId: prepared.commandId,
+        synchronizerId: prepared.synchronizerId,
+        transferKind: prepared.transferKind,
+        hashingSchemeVersion: prepared.hashingSchemeVersion,
+        executeBefore: prepared.executeBefore,
       };
     },
 
@@ -638,7 +717,6 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
       input: SubmitExternalPartyWalletCcTransferInput,
       hooks: SubmitExternalPartyWalletCcTransferHooks = {}
     ): Promise<SubmittedExternalPartyWalletCcTransfer> {
-      const validatorClient = requireValidatorClient(options.validatorClient, 'CC transfer submit');
       const amount = normalizeAmountString(input.amount);
       const description = normalizeDescription(input.description);
       const publicKeyFingerprint = assertCantonPartyMatchesPublicKey({
@@ -672,13 +750,19 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
       });
 
       await hooks.beforeSubmit?.();
-      let submitted: SubmittedExternalPartyCcTransfer;
+      let submitted: SubmittedExternalPartyCcTokenStandardTransfer;
       try {
-        submitted = await submitExternalPartyCcTransfer(validatorClient, {
+        submitted = await submitExternalPartyCcTokenStandardTransfer({
+          ledgerClient: options.ledgerClient,
+          userId: options.providerUserId,
           senderPartyId: input.senderPartyId,
-          transaction: input.preparedTransaction,
-          transactionHashSignatureHex: decodeBase64(input.signatureBase64, 'signatureBase64').toString('hex'),
-          publicKeyHex: extractRawEd25519PublicKey(input.publicKeyBase64).toString('hex'),
+          publicKeyBase64: input.publicKeyBase64,
+          publicKeyFingerprint,
+          preparedTransaction: input.preparedTransaction,
+          preparedTransactionHashHex: input.preparedTransactionHashHex,
+          signatureBase64: input.signatureBase64,
+          hashingSchemeVersion: EXTERNAL_PARTY_CC_TRANSFER_HASHING_SCHEME_VERSION,
+          submissionId: randomId(),
         });
       } catch (error) {
         try {
@@ -1138,7 +1222,9 @@ export function buildExternalPartyCcTransferPrepareTokenPayload(input: {
 }): Record<string, unknown> {
   return {
     kind: 'external-party-cc-transfer',
-    version: 1,
+    // Version 2: a token-standard `TransferFactory_Transfer` executed through Ledger interactive submission. A version 1
+    // token (the validator's removed TransferCommand flow) no longer matches, so its transfer cannot be submitted.
+    version: 2,
     provider: input.provider ?? null,
     network: input.network ?? null,
     context: normalizeTokenContext(input.tokenContext),
@@ -1152,6 +1238,7 @@ export function buildExternalPartyCcTransferPrepareTokenPayload(input: {
     transferCommandContractIdPrefix: input.transferCommandContractIdPrefix,
     nonce: input.nonce,
     expiresAt: input.expiresAt,
+    hashingSchemeVersion: EXTERNAL_PARTY_CC_TRANSFER_HASHING_SCHEME_VERSION,
   };
 }
 
@@ -1716,14 +1803,6 @@ function normalizeDescription(description: string | null | undefined): string | 
 function normalizeTokenContext(context: ExternalPartyWalletTokenContext | undefined): Record<string, unknown> {
   if (!context) return {};
   return Object.fromEntries(Object.entries(context).filter(([, value]) => value !== undefined));
-}
-
-function decodeBase64(value: string, label: string): Buffer {
-  const normalized = value.trim().replace(/-/g, '+').replace(/_/g, '/');
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized) || normalized.length % 4 === 1) {
-    throw new ValidationError(`${label} must be base64-encoded`);
-  }
-  return Buffer.from(normalized, 'base64');
 }
 
 function errorToContext(error: unknown): Record<string, unknown> {

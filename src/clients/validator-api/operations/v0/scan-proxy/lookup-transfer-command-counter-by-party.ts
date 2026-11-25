@@ -16,6 +16,8 @@ export const LookupTransferCommandCounterByPartyParamsSchema =
 /**
  * Lookup transfer command counter by party
  *
+ * @deprecated The counter only numbered the external-party TransferCommand flow, which Splice 0.8.0 removed
+ *   (`prepare-send` / `submit-send` answer 404). External-party CC transfers no longer need a nonce.
  * @example
  *   ```typescript
  *   const counter = await client.lookupTransferCommandCounterByParty({ party: 'party123' });

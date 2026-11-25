@@ -1,11 +1,13 @@
 import { generateKeyPairSync, sign } from 'node:crypto';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
+import type { JsGetActiveContractsResponseItem } from '../../../src/clients/ledger-json-api/schemas';
 import type { ValidatorApiClient } from '../../../src/clients/validator-api';
 import type { TransferOffer } from '../../../src/clients/validator-api/schemas/api/wallet';
 import { ApiError } from '../../../src/core/errors';
 import { CANTON_TRANSFER_OFFER_TEMPLATE_ID } from '../../../src/utils/amulet/external-party-transfer-offer';
 import {
   buildCantonPrepareToken,
+  buildExternalPartyCcTransferPrepareTokenPayload,
   buildExternalPartyId,
   createExternalPartyWalletBridge,
   deriveCantonEd25519PublicKeyFingerprint,
@@ -14,12 +16,77 @@ import {
   parseExternalPartyWalletConnectedSynchronizerId,
   type ExternalPartyWalletBridge,
 } from '../../../src/utils/external-signing';
+import { TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID } from '../../../src/utils/token-standard';
 
 const PREPARED_TRANSACTION_HASH_HEX = `1220${'22'.repeat(32)}`;
 const PREPARED_TRANSACTION_HASH_BASE64 = Buffer.from(PREPARED_TRANSACTION_HASH_HEX, 'hex').toString('base64');
 const MULTI_HASH_HEX = `1220${'11'.repeat(32)}`;
 const OFFER_CONTRACT_ID = '00offer-contract-id';
 const SYNCHRONIZER_ID = 'global-domain::sync';
+const CC_DSO_PARTY_ID = 'DSO::1220dso';
+const CC_TRANSFER_FACTORY_ID = '00amulet-rules';
+/** The bridge's fixed clock (1_780_000_000_000) plus the default 10-minute CC transfer TTL. */
+const CC_EXECUTE_BEFORE = new Date(1_780_000_000_000 + 10 * 60 * 1000).toISOString();
+
+const createCcHolding = (owner: string, amount: string): JsGetActiveContractsResponseItem => ({
+  contractEntry: {
+    JsActiveContract: {
+      synchronizerId: SYNCHRONIZER_ID,
+      reassignmentCounter: 0,
+      createdEvent: {
+        offset: 1,
+        nodeId: 1,
+        contractId: '00cc-holding',
+        templateId: '#splice-amulet:Splice.Amulet:Amulet',
+        contractKey: null,
+        createArgument: {},
+        createdEventBlob: '',
+        interfaceViews: [
+          {
+            interfaceId: TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID,
+            viewStatus: { code: 0, message: '' },
+            viewValue: {
+              owner,
+              instrumentId: { admin: CC_DSO_PARTY_ID, id: 'Amulet' },
+              amount,
+              lock: null,
+              meta: { values: {} },
+            },
+          },
+        ],
+        witnessParties: [owner],
+        signatories: [CC_DSO_PARTY_ID, owner],
+        observers: [],
+        createdAt: '2026-05-28T00:00:00.000Z',
+        packageName: 'splice-amulet',
+        implementedInterfaces: [TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID],
+      },
+    },
+  },
+});
+
+const createCcTransferFactoryResponse = (transferKind: 'direct' | 'offer'): unknown => ({
+  factoryId: CC_TRANSFER_FACTORY_ID,
+  transferKind,
+  choiceContext: {
+    choiceContextData: {
+      values: {
+        'amulet-rules': { tag: 'AV_ContractId', value: CC_TRANSFER_FACTORY_ID },
+        ...(transferKind === 'direct'
+          ? { 'transfer-preapproval': { tag: 'AV_ContractId', value: '00transfer-preapproval' } }
+          : {}),
+      },
+    },
+    disclosedContracts: [
+      {
+        templateId: 'pkg:Splice.AmuletRules:AmuletRules',
+        contractId: CC_TRANSFER_FACTORY_ID,
+        createdEventBlob: 'amulet-rules-blob',
+        synchronizerId: SYNCHRONIZER_ID,
+      },
+    ],
+  },
+});
 
 const createMockTransferOffer = (input: {
   readonly receiverPartyId: string;
@@ -69,12 +136,23 @@ const createMockLedgerClient = (): jest.Mocked<LedgerJsonApiClient> =>
     getConnectedSynchronizers: jest.fn().mockResolvedValue({
       connectedSynchronizers: [{ synchronizerId: SYNCHRONIZER_ID }],
     }),
-    getActiveContracts: jest.fn().mockResolvedValue([]),
-    interactiveSubmissionPrepare: jest.fn().mockResolvedValue({
-      preparedTransaction: 'prepared-provider-accept',
+    getLedgerEnd: jest.fn().mockResolvedValue({ offset: 123 }),
+    // HoldingV1 queries see one unlocked CC holding of the queried party; every other query sees nothing.
+    getActiveContracts: jest
+      .fn()
+      .mockImplementation(
+        async (params: { readonly parties?: readonly string[]; readonly interfaceIds?: readonly string[] }) =>
+          params.interfaceIds?.includes(TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID) && params.parties?.[0]
+            ? [createCcHolding(params.parties[0], '100.0000000000')]
+            : []
+      ),
+    interactiveSubmissionPrepare: jest.fn().mockImplementation(async (params: { readonly commandId: string }) => ({
+      preparedTransaction: params.commandId.startsWith('cc-transfer-')
+        ? 'prepared-cc-transfer'
+        : 'prepared-provider-accept',
       preparedTransactionHash: PREPARED_TRANSACTION_HASH_BASE64,
       hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
-    }),
+    })),
     interactiveSubmissionExecuteAndWait: jest.fn().mockResolvedValue({
       updateId: 'provider-accept-update-1',
       completionOffset: 456,
@@ -84,8 +162,20 @@ const createMockLedgerClient = (): jest.Mocked<LedgerJsonApiClient> =>
     allocateExternalParty: jest.fn(),
   }) as unknown as jest.Mocked<LedgerJsonApiClient>;
 
+/** A ledger client whose `executeAndWait` answers like a CC transfer execution. */
+const createCcLedgerClient = (): jest.Mocked<LedgerJsonApiClient> => {
+  const ledgerClient = createMockLedgerClient();
+  ledgerClient.interactiveSubmissionExecuteAndWait.mockResolvedValue({
+    updateId: 'cc-transfer-update-1',
+    completionOffset: 789,
+  });
+  return ledgerClient;
+};
+
 const createMockValidatorClient = (): jest.Mocked<ValidatorApiClient> =>
   ({
+    getDsoPartyId: jest.fn().mockResolvedValue({ dso_party_id: CC_DSO_PARTY_ID }),
+    getTransferFactory: jest.fn().mockResolvedValue(createCcTransferFactoryResponse('direct')),
     lookupTransferCommandCounterByParty: jest.fn().mockResolvedValue({
       transfer_command_counter: {
         contract: {
@@ -178,6 +268,7 @@ const createBridge = (
   overrides: {
     readonly ledgerClient?: jest.Mocked<LedgerJsonApiClient>;
     readonly validatorClient?: jest.Mocked<ValidatorApiClient> | null;
+    readonly grantProviderUserActAs?: boolean;
   } = {}
 ): ExternalPartyWalletBridge =>
   createExternalPartyWalletBridge({
@@ -190,6 +281,9 @@ const createBridge = (
     network: 'devnet',
     now: (): number => 1_780_000_000_000,
     randomId: (): string => 'deterministic-id',
+    ...(overrides.grantProviderUserActAs !== undefined
+      ? { grantProviderUserActAs: overrides.grantProviderUserActAs }
+      : {}),
   });
 
 describe('external-party wallet bridge', (): void => {
@@ -235,6 +329,46 @@ describe('external-party wallet bridge', (): void => {
     });
   });
 
+  it('allocates the external party with CanActAs for providerUserId when grantProviderUserActAs is true', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient();
+    ledgerClient.allocateExternalParty.mockResolvedValueOnce({ partyId: fixture.partyId });
+    const bridge = createBridge({ ledgerClient, grantProviderUserActAs: true });
+
+    await bridge.submitExternalPartySignature({
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+      multiHashHex: MULTI_HASH_HEX,
+      synchronizerId: SYNCHRONIZER_ID,
+      topologyTransactions: ['topology-tx'],
+      multiHashSignatureBase64: fixture.signMultiHash(),
+    });
+
+    expect(ledgerClient.allocateExternalParty).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'provider-user' })
+    );
+  });
+
+  it('allocates without a user by default (grantProviderUserActAs is opt-in)', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient();
+    ledgerClient.allocateExternalParty.mockResolvedValueOnce({ partyId: fixture.partyId });
+    const bridge = createBridge({ ledgerClient });
+
+    await bridge.submitExternalPartySignature({
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+      multiHashHex: MULTI_HASH_HEX,
+      synchronizerId: SYNCHRONIZER_ID,
+      topologyTransactions: ['topology-tx'],
+      multiHashSignatureBase64: fixture.signMultiHash(),
+    });
+
+    expect(ledgerClient.allocateExternalParty).toHaveBeenCalledWith(
+      expect.not.objectContaining({ userId: expect.anything() as unknown })
+    );
+  });
+
   it('forwards cancellation to exact external-party recovery lookups', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient();
@@ -258,10 +392,11 @@ describe('external-party wallet bridge', (): void => {
     );
   });
 
-  it('prepares and submits an externally signed CC transfer with a token-bound payload', async (): Promise<void> => {
+  it('prepares and submits a CC transfer as a token-standard transfer through the Ledger API', async (): Promise<void> => {
     const fixture = createSigningFixture();
+    const ledgerClient = createCcLedgerClient();
     const validatorClient = createMockValidatorClient();
-    const bridge = createBridge({ validatorClient });
+    const bridge = createBridge({ ledgerClient, validatorClient });
 
     const prepared = await bridge.prepareCcTransfer({
       senderPartyId: fixture.partyId,
@@ -272,17 +407,41 @@ describe('external-party wallet bridge', (): void => {
       tokenContext: { userId: 'user-1', externalUserId: 'did:wallet:user-1' },
     });
 
-    expect(prepared).toMatchObject({
+    expect(prepared).toEqual({
       senderPartyId: fixture.partyId,
       receiverPartyId: 'receiver::fingerprint',
       amount: '2.5',
       description: 'demo transfer',
       preparedTransaction: 'prepared-cc-transfer',
       preparedTransactionHashHex: PREPARED_TRANSACTION_HASH_HEX,
-      transferCommandContractIdPrefix: 'transfer-command-prefix',
-      nonce: 3,
-      expiresAt: expect.any(String) as string,
+      transferCommandContractIdPrefix: 'cc-transfer-deterministic-id',
+      nonce: 0,
+      expiresAt: CC_EXECUTE_BEFORE,
+      prepareToken: expect.any(String) as string,
+      hashingDetails: null,
+      commandId: 'cc-transfer-deterministic-id',
+      synchronizerId: SYNCHRONIZER_ID,
+      transferKind: 'direct',
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
+      executeBefore: CC_EXECUTE_BEFORE,
     });
+    expect(ledgerClient.interactiveSubmissionPrepare).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commandId: 'cc-transfer-deterministic-id',
+        userId: 'provider-user',
+        actAs: [fixture.partyId],
+        readAs: [fixture.partyId],
+        synchronizerId: SYNCHRONIZER_ID,
+        commands: [
+          expect.objectContaining({
+            ExerciseCommand: expect.objectContaining({
+              contractId: CC_TRANSFER_FACTORY_ID,
+              choice: 'TransferFactory_Transfer',
+            }) as object,
+          }),
+        ],
+      })
+    );
 
     const submitted = await bridge.submitCcTransfer({
       ...prepared,
@@ -291,25 +450,120 @@ describe('external-party wallet bridge', (): void => {
       tokenContext: { userId: 'user-1', externalUserId: 'did:wallet:user-1' },
     });
 
-    expect(validatorClient.submitTransferPreapprovalSend).toHaveBeenCalledWith({
-      submission: {
-        party_id: fixture.partyId,
-        transaction: 'prepared-cc-transfer',
-        signed_tx_hash: expect.stringMatching(/^[0-9a-f]+$/) as string,
-        public_key: Buffer.from(fixture.publicKeyBase64, 'base64').toString('hex'),
-      },
-    });
+    expect(ledgerClient.interactiveSubmissionExecuteAndWait).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'provider-user',
+        preparedTransaction: 'prepared-cc-transfer',
+        hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
+        submissionId: 'deterministic-id',
+        partySignatures: {
+          signatures: [
+            {
+              party: fixture.partyId,
+              signatures: [
+                expect.objectContaining({
+                  signedBy: fixture.publicKeyFingerprint,
+                  format: 'SIGNATURE_FORMAT_RAW',
+                }),
+              ],
+            },
+          ],
+        },
+      })
+    );
     expect(submitted).toEqual({
       senderPartyId: fixture.partyId,
       updateId: 'cc-transfer-update-1',
-      raw: { update_id: 'cc-transfer-update-1' },
+      raw: { updateId: 'cc-transfer-update-1', completionOffset: 789 },
     });
+    // The validator's TransferCommand endpoints were removed in Splice 0.8.0.
+    expect(validatorClient.lookupTransferCommandCounterByParty).not.toHaveBeenCalled();
+    expect(validatorClient.prepareTransferPreapprovalSend).not.toHaveBeenCalled();
+    expect(validatorClient.submitTransferPreapprovalSend).not.toHaveBeenCalled();
+  });
+
+  it('submits a CC transfer without a validator client', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createCcLedgerClient();
+    const prepared = await createBridge({ ledgerClient }).prepareCcTransfer({
+      senderPartyId: fixture.partyId,
+      receiverPartyId: 'receiver::fingerprint',
+      amount: '2.5',
+      publicKeyBase64: fixture.publicKeyBase64,
+    });
+
+    const submitted = await createBridge({ ledgerClient, validatorClient: null }).submitCcTransfer({
+      ...prepared,
+      publicKeyBase64: fixture.publicKeyBase64,
+      signatureBase64: fixture.signPreparedHash(),
+    });
+
+    expect(submitted.updateId).toBe('cc-transfer-update-1');
+  });
+
+  it('refuses a CC transfer to a receiver without a transfer preapproval before preparing', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createCcLedgerClient();
+    const validatorClient = createMockValidatorClient();
+    validatorClient.getTransferFactory.mockResolvedValueOnce(
+      createCcTransferFactoryResponse('offer') as Awaited<ReturnType<ValidatorApiClient['getTransferFactory']>>
+    );
+    const bridge = createBridge({ ledgerClient, validatorClient });
+
+    await expect(
+      bridge.prepareCcTransfer({
+        senderPartyId: fixture.partyId,
+        receiverPartyId: 'receiver::fingerprint',
+        amount: '2.5',
+        publicKeyBase64: fixture.publicKeyBase64,
+      })
+    ).rejects.toMatchObject({
+      name: 'ValidationError',
+      message: 'Canton CC receiver has no transfer preapproval',
+      context: expect.objectContaining({
+        reason: 'receiver_has_no_transfer_preapproval',
+        transferKind: 'offer',
+      }) as object,
+    });
+    expect(ledgerClient.interactiveSubmissionPrepare).not.toHaveBeenCalled();
+  });
+
+  it('refuses a CC transfer offer without an explicit executeBefore, its expiry', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createCcLedgerClient();
+    const validatorClient = createMockValidatorClient();
+    validatorClient.getTransferFactory.mockResolvedValue(
+      createCcTransferFactoryResponse('offer') as Awaited<ReturnType<ValidatorApiClient['getTransferFactory']>>
+    );
+    const bridge = createBridge({ ledgerClient, validatorClient });
+    const input = {
+      senderPartyId: fixture.partyId,
+      receiverPartyId: 'receiver::fingerprint',
+      amount: '2.5',
+      publicKeyBase64: fixture.publicKeyBase64,
+      requirePreapproval: false,
+    };
+
+    await expect(bridge.prepareCcTransfer(input)).rejects.toMatchObject({
+      name: 'ValidationError',
+      context: expect.objectContaining({
+        reason: 'offer_requires_explicit_execute_before',
+        transferKind: 'offer',
+      }) as object,
+    });
+    expect(ledgerClient.interactiveSubmissionPrepare).not.toHaveBeenCalled();
+
+    const executeBefore = new Date(1_780_000_000_000 + 24 * 60 * 60 * 1000).toISOString();
+    const prepared = await bridge.prepareCcTransfer({ ...input, executeBefore });
+
+    expect(prepared).toMatchObject({ transferKind: 'offer', executeBefore, expiresAt: executeBefore });
+    expect(ledgerClient.interactiveSubmissionPrepare).toHaveBeenCalledTimes(1);
   });
 
   it('rejects CC transfer submit when submitted details do not match the prepare token', async (): Promise<void> => {
     const fixture = createSigningFixture();
-    const validatorClient = createMockValidatorClient();
-    const bridge = createBridge({ validatorClient });
+    const ledgerClient = createCcLedgerClient();
+    const bridge = createBridge({ ledgerClient });
     const prepared = await bridge.prepareCcTransfer({
       senderPartyId: fixture.partyId,
       receiverPartyId: 'receiver::fingerprint',
@@ -328,15 +582,53 @@ describe('external-party wallet bridge', (): void => {
       })
     ).rejects.toThrow('Prepared Canton transaction token does not match the submitted details');
 
-    expect(validatorClient.submitTransferPreapprovalSend).not.toHaveBeenCalled();
+    expect(ledgerClient.interactiveSubmissionExecuteAndWait).not.toHaveBeenCalled();
+  });
+
+  it('rejects a CC transfer prepare token issued by the removed TransferCommand flow (version 1)', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createCcLedgerClient();
+    const bridge = createBridge({ ledgerClient });
+    const prepared = await bridge.prepareCcTransfer({
+      senderPartyId: fixture.partyId,
+      receiverPartyId: 'receiver::fingerprint',
+      amount: '2.5',
+      publicKeyBase64: fixture.publicKeyBase64,
+    });
+    const { hashingSchemeVersion: _hashingSchemeVersion, ...versionOnePayload } =
+      buildExternalPartyCcTransferPrepareTokenPayload({
+        provider: '5n',
+        network: 'devnet',
+        senderPartyId: fixture.partyId,
+        receiverPartyId: 'receiver::fingerprint',
+        amount: '2.5',
+        description: null,
+        publicKeyFingerprint: fixture.publicKeyFingerprint,
+        preparedTransaction: prepared.preparedTransaction,
+        preparedTransactionHashHex: prepared.preparedTransactionHashHex,
+        transferCommandContractIdPrefix: prepared.transferCommandContractIdPrefix,
+        nonce: prepared.nonce,
+        expiresAt: prepared.expiresAt,
+      });
+
+    await expect(
+      bridge.submitCcTransfer({
+        ...prepared,
+        prepareToken: buildCantonPrepareToken('prepare-token-secret', { ...versionOnePayload, version: 1 }),
+        publicKeyBase64: fixture.publicKeyBase64,
+        signatureBase64: fixture.signPreparedHash(),
+      })
+    ).rejects.toThrow('Prepared Canton transaction token does not match the submitted details');
+    expect(ledgerClient.interactiveSubmissionExecuteAndWait).not.toHaveBeenCalled();
   });
 
   it.each(['0', '0.0', '0x10', '1e3', '01', '-1'])(
     'rejects non-positive or non-decimal CC transfer amount %s',
     async (amount: string): Promise<void> => {
       const fixture = createSigningFixture();
+      const ledgerClient = createCcLedgerClient();
       const validatorClient = createMockValidatorClient();
-      const bridge = createBridge({ validatorClient });
+      const bridge = createBridge({ ledgerClient, validatorClient });
 
       await expect(
         bridge.prepareCcTransfer({
@@ -347,7 +639,8 @@ describe('external-party wallet bridge', (): void => {
         })
       ).rejects.toThrow('amount must be a positive decimal amount');
 
-      expect(validatorClient.prepareTransferPreapprovalSend).not.toHaveBeenCalled();
+      expect(validatorClient.getTransferFactory).not.toHaveBeenCalled();
+      expect(ledgerClient.interactiveSubmissionPrepare).not.toHaveBeenCalled();
     }
   );
 
@@ -366,7 +659,7 @@ describe('external-party wallet bridge', (): void => {
 
   it('preserves a successful CC transfer outcome when afterSubmit fails', async (): Promise<void> => {
     const fixture = createSigningFixture();
-    const bridge = createBridge();
+    const bridge = createBridge({ ledgerClient: createCcLedgerClient() });
     const prepared = await bridge.prepareCcTransfer({
       senderPartyId: fixture.partyId,
       receiverPartyId: 'receiver::fingerprint',
@@ -401,9 +694,9 @@ describe('external-party wallet bridge', (): void => {
 
   it('preserves a failed CC transfer outcome when afterSubmitFailure fails', async (): Promise<void> => {
     const fixture = createSigningFixture();
-    const validatorClient = createMockValidatorClient();
-    validatorClient.submitTransferPreapprovalSend.mockRejectedValueOnce(new ApiError('validator unavailable', 503));
-    const bridge = createBridge({ validatorClient });
+    const ledgerClient = createCcLedgerClient();
+    ledgerClient.interactiveSubmissionExecuteAndWait.mockRejectedValueOnce(new ApiError('ledger unavailable', 503));
+    const bridge = createBridge({ ledgerClient });
     const prepared = await bridge.prepareCcTransfer({
       senderPartyId: fixture.partyId,
       receiverPartyId: 'receiver::fingerprint',
@@ -429,7 +722,7 @@ describe('external-party wallet bridge', (): void => {
       context: expect.objectContaining({
         senderPartyId: fixture.partyId,
         submitCause: expect.objectContaining({
-          message: 'validator unavailable',
+          message: 'ledger unavailable',
           status: 503,
         }) as object,
         hookCause: expect.objectContaining({
@@ -844,6 +1137,39 @@ describe('external-party wallet bridge', (): void => {
     expect(submitted.raw).toEqual({ updateId: 'provider-accept-update-1', completionOffset: 456 });
   });
 
+  it('accepts a provider offer signed in base64url and executes it as canonical padded base64', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient();
+    const bridge = createBridge({ ledgerClient });
+    const prepared = await bridge.prepareProviderTransfer({
+      receiverPartyId: fixture.partyId,
+      amount: '5',
+      publicKeyBase64: fixture.publicKeyBase64,
+      tokenContext: { userId: 'user-1' },
+    });
+    const canonical = fixture.signPreparedHash();
+
+    await bridge.submitProviderTransfer({
+      ...prepared,
+      publicKeyBase64: fixture.publicKeyBase64,
+      signatureBase64: canonical.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
+      tokenContext: { userId: 'user-1' },
+    });
+
+    expect(ledgerClient.interactiveSubmissionExecuteAndWait).toHaveBeenCalledWith(
+      expect.objectContaining({
+        partySignatures: {
+          signatures: [
+            {
+              party: fixture.partyId,
+              signatures: [expect.objectContaining({ signature: canonical }) as object],
+            },
+          ],
+        },
+      })
+    );
+  });
+
   it('prepares and submits transfer preapproval setup through validator endpoints', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const validatorClient = createMockValidatorClient();
@@ -1162,7 +1488,7 @@ describe('external-party wallet bridge', (): void => {
 
   it('uses canonical prepare-token payloads so callers can verify prebuilt values', async (): Promise<void> => {
     const fixture = createSigningFixture();
-    const bridge = createBridge();
+    const bridge = createBridge({ ledgerClient: createCcLedgerClient() });
     const prepared = await bridge.prepareCcTransfer({
       senderPartyId: fixture.partyId,
       receiverPartyId: 'receiver::fingerprint',
@@ -1174,7 +1500,7 @@ describe('external-party wallet bridge', (): void => {
     expect(prepared.prepareToken).toEqual(
       buildCantonPrepareToken('prepare-token-secret', {
         kind: 'external-party-cc-transfer',
-        version: 1,
+        version: 2,
         provider: '5n',
         network: 'devnet',
         context: { nested: { b: 2, a: 1 } },
@@ -1185,9 +1511,10 @@ describe('external-party wallet bridge', (): void => {
         publicKeyFingerprint: fixture.publicKeyFingerprint,
         preparedTransactionSha256: hashPreparedTransaction('prepared-cc-transfer'),
         preparedTransactionHashHex: PREPARED_TRANSACTION_HASH_HEX,
-        transferCommandContractIdPrefix: 'transfer-command-prefix',
-        nonce: 3,
-        expiresAt: prepared.expiresAt,
+        transferCommandContractIdPrefix: 'cc-transfer-deterministic-id',
+        nonce: 0,
+        expiresAt: CC_EXECUTE_BEFORE,
+        hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
       })
     );
   });

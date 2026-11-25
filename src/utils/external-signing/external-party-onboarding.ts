@@ -297,6 +297,7 @@ export async function submitExternalPartyOnboarding(
     hashHex: multiHashHex,
     signatureBase64: options.multiHashSignatureBase64,
   });
+  const multiHashSignature = normalizeExternalPartyHashSignature({ signatureBase64: options.multiHashSignatureBase64 });
 
   try {
     const raw = await allocateExternalParty({
@@ -307,7 +308,7 @@ export async function submitExternalPartyOnboarding(
       multiHashSignatures: [
         {
           format: CANTON_RAW_SIGNATURE_FORMAT,
-          signature: options.multiHashSignatureBase64,
+          signature: multiHashSignature,
           signedBy: publicKeyFingerprint,
           signingAlgorithmSpec: CANTON_ED25519_SIGNATURE_ALGORITHM,
         },

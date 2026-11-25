@@ -51,6 +51,8 @@ export interface TokenStandardV1Holding {
   /** ISO 8601 ledger effective time at which the active holding was created. */
   readonly createdAt: string;
   readonly owner: string;
+  /** The contract's signatories, as the ledger reports them (not the interface view). */
+  readonly signatories: readonly string[];
   readonly instrumentId: TokenStandardV1InstrumentId;
   readonly amount: string;
   readonly amountBaseUnits: string;
@@ -67,6 +69,13 @@ export interface ListTokenStandardV1HoldingsParams {
   readonly synchronizerId?: string;
   readonly activeAtOffset?: number;
   readonly holdingInterfaceId?: string;
+  /**
+   * Skip, before reading its HoldingV1 view, any contract whose signatories do not include all of these parties. A view
+   * is whatever its template says, so a contract another party signed can claim any owner or amount, or carry a
+   * malformed view that would otherwise fail the whole listing. Pass the instrument admin (and the owner) to read only
+   * genuine holdings.
+   */
+  readonly requiredSignatories?: readonly string[];
 }
 
 export interface SelectTokenStandardV1HoldingsParams extends Omit<
@@ -366,12 +375,18 @@ function readHolding(params: {
     synchronizerId: activeContract.synchronizerId,
     createdAt,
     owner,
+    signatories: [...createdEvent.signatories],
     instrumentId,
     amount,
     amountBaseUnits,
     lock,
     meta,
   };
+}
+
+function hasSignatories(signatories: unknown, required: readonly string[]): boolean {
+  if (!Array.isArray(signatories)) return false;
+  return required.every((party) => signatories.includes(party));
 }
 
 export async function listTokenStandardV1Holdings(
@@ -392,6 +407,9 @@ export async function listTokenStandardV1Holdings(
     params.synchronizerId === undefined ? undefined : normalizeRequiredString(params.synchronizerId, 'synchronizerId');
   const activeAtOffset =
     params.activeAtOffset === undefined ? undefined : normalizeActiveAtOffset(params.activeAtOffset);
+  const requiredSignatories = (params.requiredSignatories ?? []).map((party) =>
+    normalizeRequiredString(party, 'requiredSignatories')
+  );
   const response = await params.ledger.getActiveContracts({
     parties,
     interfaceIds: [holdingInterfaceId],
@@ -411,6 +429,12 @@ export async function listTokenStandardV1Holdings(
           contractId: isRecord(createdEvent) ? createdEvent['contractId'] : undefined,
         });
       }
+      continue;
+    }
+    if (
+      requiredSignatories.length > 0 &&
+      !hasSignatories(item.contractEntry.JsActiveContract.createdEvent.signatories, requiredSignatories)
+    ) {
       continue;
     }
     const holding = readHolding({
