@@ -1,7 +1,8 @@
 /**
  * Browser-safe DA Utility Registry holder actions through any CIP-0103 (Canton dApp API) wallet provider. In a browser
- * bundle import `@fairmint/canton-node-sdk/wallets`, which loads none of the SDK's Node dependencies; the package root
- * also exports it as the `Wallets` namespace (for Node).
+ * bundle import `@fairmint/canton-node-sdk/wallets`, which loads none of the SDK's Node dependencies (the deep path
+ * `@fairmint/canton-node-sdk/build/src/wallets/index.js` still works); the package root also exports it as the
+ * `Wallets` namespace (for Node).
  *
  * - `discoverCip103Wallets()`: the CIP-0103 wallet extensions installed in the browser, each with `load(network)` that
  *   resolves its provider (the dApp SDK's announce handshake and message channel, no dependency).
