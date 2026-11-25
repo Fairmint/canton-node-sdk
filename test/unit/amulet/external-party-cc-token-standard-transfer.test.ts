@@ -206,6 +206,12 @@ const firstPrepareCall = (ledgerClient: jest.Mocked<LedgerJsonApiClient>): Prepa
   return call[0] as unknown as PreparedCall;
 };
 
+const nonCanonicalSpellings = (signatureBase64: string): ReadonlyArray<readonly [string, string]> => [
+  ['unpadded', signatureBase64.replace(/=+$/, '')],
+  ['base64url', signatureBase64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')],
+  ['whitespace-padded', ` ${signatureBase64}\n`],
+];
+
 describe('external-party CC token-standard transfer', () => {
   it('prepares TransferFactory_Transfer with the covering unlocked holdings, the registry context and the sender only', async () => {
     const sender = createSender();
@@ -606,6 +612,40 @@ describe('external-party CC token-standard transfer', () => {
       completionOffset: 4300,
     });
   });
+
+  it.each(['unpadded', 'base64url', 'whitespace-padded'])(
+    'verifies a %s signature and executes it as canonical padded base64',
+    async (kind) => {
+      const sender = createSender();
+      const ledgerClient = createLedgerClient([]);
+      const canonical = sender.signHash();
+      const spelling = nonCanonicalSpellings(canonical).find(([name]) => name === kind)?.[1] ?? canonical;
+      expect(spelling).not.toBe(canonical);
+
+      await submitExternalPartyCcTokenStandardTransfer({
+        ledgerClient,
+        userId: 'provider-user',
+        senderPartyId: sender.partyId,
+        publicKeyBase64: sender.publicKeyBase64,
+        preparedTransaction: 'prepared-cc-transfer',
+        preparedTransactionHashHex: PREPARED_HASH_HEX,
+        signatureBase64: spelling,
+      });
+
+      expect(ledgerClient.interactiveSubmissionExecuteAndWait).toHaveBeenCalledWith(
+        expect.objectContaining({
+          partySignatures: {
+            signatures: [
+              {
+                party: sender.partyId,
+                signatures: [expect.objectContaining({ signature: canonical }) as object],
+              },
+            ],
+          },
+        })
+      );
+    }
+  );
 
   it('refuses a signature that does not verify against the hash, without executing', async () => {
     const sender = createSender();

@@ -69,6 +69,12 @@ const createMockLedgerClient = (fixture = createSigningFixture()): jest.Mocked<L
   return ledgerClient;
 };
 
+const nonCanonicalSpellings = (signatureBase64: string): ReadonlyArray<readonly [string, string]> => [
+  ['unpadded', signatureBase64.replace(/=+$/, '')],
+  ['base64url', signatureBase64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')],
+  ['whitespace-padded', ` ${signatureBase64}\n`],
+];
+
 describe('external-party onboarding helpers', () => {
   it('prepares topology with normalized Canton public key metadata', async () => {
     const fixture = createSigningFixture();
@@ -253,6 +259,31 @@ describe('external-party onboarding helpers', () => {
     expect(signMultiHash).not.toHaveBeenCalled();
     expect(ledgerClient.generateExternalPartyTopology).not.toHaveBeenCalled();
     expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
+  });
+
+  it('sends a verified multihash signature to the allocation as canonical padded base64', async () => {
+    const fixture = createSigningFixture();
+    const canonical = fixture.signMultiHash();
+    for (const [, spelling] of nonCanonicalSpellings(canonical)) {
+      const ledgerClient = createMockLedgerClient(fixture);
+      ledgerClient.allocateExternalParty.mockResolvedValueOnce({ partyId: fixture.partyId });
+
+      await submitExternalPartyOnboarding({
+        ledgerClient,
+        synchronizerId: 'global-domain::sync',
+        partyId: fixture.partyId,
+        publicKeyBase64: fixture.publicKeyBase64,
+        multiHashHex: MULTI_HASH_HEX,
+        topologyTransactions: ['topology-tx-1'],
+        multiHashSignatureBase64: spelling,
+      });
+
+      expect(ledgerClient.allocateExternalParty).toHaveBeenCalledWith(
+        expect.objectContaining({
+          multiHashSignatures: [expect.objectContaining({ signature: canonical }) as object],
+        })
+      );
+    }
   });
 
   it('grants CanActAs to userId when allowAlreadyExists confirms an existing party', async () => {

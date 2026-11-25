@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { ValidationError } from '../../core/errors';
+import { normalizeCantonEd25519Signature } from './canton-ed25519-signer';
 import { assertCantonHashSignature, assertCantonPartyMatchesPublicKey } from './canton-protocol';
 import {
   executeExternalTransactionAndWait,
@@ -21,7 +22,10 @@ export interface ExecuteExternalPartySignedTransactionOptions {
   readonly publicKeyFingerprint?: string | null;
   readonly preparedTransaction: string;
   readonly preparedTransactionHashHex: string;
-  /** Ed25519 signature over the prepared transaction hash bytes, base64. */
+  /**
+   * Ed25519 signature over the prepared transaction hash bytes, base64. Unpadded, base64url and whitespace-padded input
+   * is accepted; it is sent to the participant as canonical, padded standard base64.
+   */
   readonly signatureBase64: string;
   readonly hashingSchemeVersion?: InteractiveSubmissionHashingSchemeVersion;
   readonly submissionId?: string;
@@ -32,7 +36,8 @@ export interface ExecuteExternalPartySignedTransactionOptions {
  * transaction with it (`interactiveSubmissionExecuteAndWait`), returning the update id.
  *
  * The party id must belong to the public key, and the signature must verify against the hash, before anything is sent
- * to the participant. The signature is sent in the raw Ed25519 format, signed by the key's Canton fingerprint.
+ * to the participant. The signature is sent in the raw Ed25519 format, as canonical padded base64, signed by the key's
+ * Canton fingerprint.
  */
 export async function executeExternalPartySignedTransaction(
   options: ExecuteExternalPartySignedTransactionOptions
@@ -50,6 +55,8 @@ export async function executeExternalPartySignedTransaction(
     hashHex: options.preparedTransactionHashHex,
     signatureBase64: options.signatureBase64,
   });
+  // The execute request accepts only canonical padded base64, while verification also accepts other spellings.
+  const signature = normalizeCantonEd25519Signature({ signatureBase64: options.signatureBase64 });
 
   return executeExternalTransactionAndWait({
     ledgerClient: options.ledgerClient,
@@ -62,7 +69,7 @@ export async function executeExternalPartySignedTransaction(
         party: options.partyId,
         signatures: [
           {
-            signature: options.signatureBase64,
+            signature,
             signedBy: publicKeyFingerprint,
             format: CANTON_RAW_SIGNATURE_FORMAT,
             signingAlgorithmSpec: CANTON_ED25519_SIGNATURE_ALGORITHM,
