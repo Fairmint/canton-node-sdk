@@ -38,7 +38,7 @@ const REQUIRED_RUNTIME_PATHS = [
   'build/src/clients/ledger-json-api/operations/v2/contracts/get-contract-by-id.d.ts',
   'build/src/clients/ledger-json-api/operations/v2/dars/upload-dar.d.ts',
   'build/src/clients/ledger-json-api/operations/v2/dars/validate-dar.d.ts',
-  // The browser-safe wallets entry point (`exports` `./wallets`).
+  // The browser-safe wallets entry point (`exports` `./wallets`; the deep path keeps working).
   'build/src/wallets/index.js',
   'build/src/wallets/index.d.ts',
   // The browser-safe external-party discovery entry point (`exports` `./external-parties`).
@@ -223,32 +223,23 @@ for (const { entry, packages } of BROWSER_SAFE_ENTRIES) {
   }
 }
 
-/** The public entry points, each resolved by Node through the `exports` map from a package that depends on this one. */
+/**
+ * Subpaths consumers import, each resolved by Node through the `exports` map from a package that depends on this one:
+ * the entries, and deep paths written with `.js`, without it, and as a directory.
+ */
 const RESOLVED_SUBPATHS: ReadonlyArray<readonly [subpath: string, file: string]> = [
   ['', 'build/src/index.js'],
   ['/wallets', 'build/src/wallets/index.js'],
   ['/external-parties', 'build/src/external-parties/index.js'],
   ['/package.json', 'package.json'],
+  ['/build/src/wallets/index.js', 'build/src/wallets/index.js'],
+  ['/build/src/core/errors', 'build/src/core/errors.js'],
+  ['/build/src/utils/transactions', 'build/src/utils/transactions/index.js'],
+  ['/build/src/clients/ledger-json-api/operations', 'build/src/clients/ledger-json-api/operations/index.js'],
 ];
 
-/**
- * Former deep paths (written with `.js`, without it, and as a directory) that consumers once imported. The `exports`
- * map no longer exports any `build/...` path, so Node must refuse each with `ERR_PACKAGE_PATH_NOT_EXPORTED`.
- */
-const REFUSED_SUBPATHS: readonly string[] = [
-  '/build/src/index.js',
-  '/build/src/wallets/index.js',
-  '/build/src/core/errors',
-  '/build/src/utils/transactions',
-  '/build/src/clients/ledger-json-api/operations',
-  '/build/src/clients/ledger-json-api/operations/v2/updates/subscribe-to-raw-updates.js',
-];
-
-/** How Node resolves a subpath of this package for a consumer: a file relative to the package root, or an error code. */
-type Resolution = { readonly file: string } | { readonly code: string };
-
-/** Where Node resolves each subpath of this package for a consumer. */
-function resolveAsConsumer(packageName: string, subpaths: readonly string[]): Resolution[] {
+/** Where Node resolves each subpath of this package for a consumer, relative to the package root. */
+function resolveAsConsumer(packageName: string, subpaths: readonly string[]): Array<string | null> {
   const consumer = mkdtempSync(path.join(os.tmpdir(), 'sdk-exports-'));
   try {
     const scope = path.join(consumer, 'node_modules', ...packageName.split('/').slice(0, -1));
@@ -257,14 +248,14 @@ function resolveAsConsumer(packageName: string, subpaths: readonly string[]): Re
     const script = `
       const path = require('path');
       const out = ${JSON.stringify(subpaths)}.map((subpath) => {
-        try { return { file: path.relative(${JSON.stringify(process.cwd())}, require.resolve(${JSON.stringify(packageName)} + subpath)) }; }
-        catch (error) { return { code: String(error && error.code) }; }
+        try { return path.relative(${JSON.stringify(process.cwd())}, require.resolve(${JSON.stringify(packageName)} + subpath)); }
+        catch { return null; }
       });
       process.stdout.write(JSON.stringify(out));
     `;
     const resolved = spawnSync(process.execPath, ['-e', script], { cwd: consumer, encoding: 'utf8' });
     throwIfSpawnFailed('node -e require.resolve(exports)', resolved);
-    return JSON.parse(resolved.stdout) as Resolution[];
+    return JSON.parse(resolved.stdout) as Array<string | null>;
   } finally {
     rmSync(consumer, { recursive: true, force: true });
   }
@@ -277,24 +268,14 @@ for (const [subpath, target] of Object.entries(exportsMap ?? {})) {
     if (!packagePaths.has(file)) errors.push(`exports ${subpath}: ${file} is not in the package`);
   }
 }
-const resolutions = resolveAsConsumer(result.name, [
-  ...RESOLVED_SUBPATHS.map(([subpath]) => subpath),
-  ...REFUSED_SUBPATHS,
-]);
-const describeResolution = (resolution: Resolution | undefined): string =>
-  resolution === undefined ? 'nothing' : 'file' in resolution ? resolution.file : `an error (${resolution.code})`;
+const resolvedSubpaths = resolveAsConsumer(
+  result.name,
+  RESOLVED_SUBPATHS.map(([subpath]) => subpath)
+);
 RESOLVED_SUBPATHS.forEach(([subpath, file], index) => {
-  const resolution = resolutions[index];
-  if (resolution === undefined || !('file' in resolution) || resolution.file !== file) {
-    errors.push(`${result.name}${subpath} resolves to ${describeResolution(resolution)}, not ${file}`);
-  }
-});
-REFUSED_SUBPATHS.forEach((subpath, index) => {
-  const resolution = resolutions[RESOLVED_SUBPATHS.length + index];
-  if (resolution === undefined || !('code' in resolution) || resolution.code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
-    errors.push(
-      `${result.name}${subpath} resolves to ${describeResolution(resolution)}; deep build/ paths must not be exported`
-    );
+  const resolved = resolvedSubpaths[index];
+  if (resolved !== file) {
+    errors.push(`${result.name}${subpath} resolves to ${resolved ?? 'nothing'}, not ${file}`);
   }
 });
 
@@ -313,5 +294,4 @@ console.log('✓ LocalNet engine excluded (owned by @fairmint/canton-dev-tools)'
 for (const { entry, packages } of BROWSER_SAFE_ENTRIES) {
   console.log(`✓ ${entry} requires only relative SDK files${packages.length > 0 ? ` and ${packages.join(', ')}` : ''}`);
 }
-console.log(`✓ every exports target ships, and the ${RESOLVED_SUBPATHS.length} public entry points resolve through it`);
-console.log(`✓ ${REFUSED_SUBPATHS.length} former deep build/ paths are refused (ERR_PACKAGE_PATH_NOT_EXPORTED)`);
+console.log(`✓ every exports target ships, and ${RESOLVED_SUBPATHS.length} entry and deep paths resolve through it`);

@@ -118,7 +118,8 @@ names under the package root (which throw `ValidationError`) derive the fingerpr
 wallet provider, on one DA network (`devnet` or `mainnet`). It talks to the wallet only through
 CIP-0103 and to DA's public Utilities API through `fetch`, so no wallet SDK is involved. It is
 browser-safe: import `@fairmint/canton-node-sdk/wallets`, which loads none of the SDK's Node
-dependencies. The package root also exports it as the `Wallets` namespace.
+dependencies (the older deep path `@fairmint/canton-node-sdk/build/src/wallets/index.js` still
+works). The package root also exports it as the `Wallets` namespace.
 
 - `discoverCip103Wallets()`: the CIP-0103 wallets installed in the browser as extensions, as
   `{ id, name, icon?, load(network) }`; `load` resolves the wallet's provider for a network. It runs
