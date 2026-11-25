@@ -268,6 +268,7 @@ const createBridge = (
   overrides: {
     readonly ledgerClient?: jest.Mocked<LedgerJsonApiClient>;
     readonly validatorClient?: jest.Mocked<ValidatorApiClient> | null;
+    readonly grantProviderUserActAs?: boolean;
   } = {}
 ): ExternalPartyWalletBridge =>
   createExternalPartyWalletBridge({
@@ -280,6 +281,9 @@ const createBridge = (
     network: 'devnet',
     now: (): number => 1_780_000_000_000,
     randomId: (): string => 'deterministic-id',
+    ...(overrides.grantProviderUserActAs !== undefined
+      ? { grantProviderUserActAs: overrides.grantProviderUserActAs }
+      : {}),
   });
 
 describe('external-party wallet bridge', (): void => {
@@ -323,6 +327,46 @@ describe('external-party wallet bridge', (): void => {
       raw: { partyId: fixture.partyId },
       alreadyExisted: false,
     });
+  });
+
+  it('allocates the external party with CanActAs for providerUserId by default', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient();
+    ledgerClient.allocateExternalParty.mockResolvedValueOnce({ partyId: fixture.partyId });
+    const bridge = createBridge({ ledgerClient });
+
+    await bridge.submitExternalPartySignature({
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+      multiHashHex: MULTI_HASH_HEX,
+      synchronizerId: SYNCHRONIZER_ID,
+      topologyTransactions: ['topology-tx'],
+      multiHashSignatureBase64: fixture.signMultiHash(),
+    });
+
+    expect(ledgerClient.allocateExternalParty).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'provider-user' })
+    );
+  });
+
+  it('allocates without a user when grantProviderUserActAs is false', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient();
+    ledgerClient.allocateExternalParty.mockResolvedValueOnce({ partyId: fixture.partyId });
+    const bridge = createBridge({ ledgerClient, grantProviderUserActAs: false });
+
+    await bridge.submitExternalPartySignature({
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+      multiHashHex: MULTI_HASH_HEX,
+      synchronizerId: SYNCHRONIZER_ID,
+      topologyTransactions: ['topology-tx'],
+      multiHashSignatureBase64: fixture.signMultiHash(),
+    });
+
+    expect(ledgerClient.allocateExternalParty).toHaveBeenCalledWith(
+      expect.not.objectContaining({ userId: expect.anything() as unknown })
+    );
   });
 
   it('forwards cancellation to exact external-party recovery lookups', async (): Promise<void> => {
@@ -1091,6 +1135,39 @@ describe('external-party wallet bridge', (): void => {
     );
     expect(submitted.updateId).toBe('provider-accept-update-1');
     expect(submitted.raw).toEqual({ updateId: 'provider-accept-update-1', completionOffset: 456 });
+  });
+
+  it('accepts a provider offer signed in base64url and executes it as canonical padded base64', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient();
+    const bridge = createBridge({ ledgerClient });
+    const prepared = await bridge.prepareProviderTransfer({
+      receiverPartyId: fixture.partyId,
+      amount: '5',
+      publicKeyBase64: fixture.publicKeyBase64,
+      tokenContext: { userId: 'user-1' },
+    });
+    const canonical = fixture.signPreparedHash();
+
+    await bridge.submitProviderTransfer({
+      ...prepared,
+      publicKeyBase64: fixture.publicKeyBase64,
+      signatureBase64: canonical.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
+      tokenContext: { userId: 'user-1' },
+    });
+
+    expect(ledgerClient.interactiveSubmissionExecuteAndWait).toHaveBeenCalledWith(
+      expect.objectContaining({
+        partySignatures: {
+          signatures: [
+            {
+              party: fixture.partyId,
+              signatures: [expect.objectContaining({ signature: canonical }) as object],
+            },
+          ],
+        },
+      })
+    );
   });
 
   it('prepares and submits transfer preapproval setup through validator endpoints', async (): Promise<void> => {

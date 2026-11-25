@@ -81,13 +81,14 @@ async function onboardExternalWallet(
     },
     { timeoutMs: 120_000, description: `external party ${label} visibility` }
   );
-  await ledgerClient.grantUserRights({
-    userId,
-    rights: [
-      { kind: { CanActAs: { value: { party: submitted.partyId } } } },
-      { kind: { CanReadAs: { value: { party: submitted.partyId } } } },
-    ],
+  // No manual grant: the bridge allocated the party with CanActAs for its provider user, which the CC transfer needs.
+  const { rights } = await ledgerClient.listUserRights({ userId });
+  const actAsParties = (rights ?? []).map((right) => {
+    const canActAs: unknown = (right.kind as Record<string, unknown>)['CanActAs'];
+    const inner = (canActAs as { value?: { party?: unknown }; party?: unknown } | undefined) ?? {};
+    return inner.value?.party ?? inner.party;
   });
+  expect(actAsParties).toContain(submitted.partyId);
   return { partyId: submitted.partyId, publicKeyBase64, signHex };
 }
 

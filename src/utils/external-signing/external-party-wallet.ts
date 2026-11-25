@@ -76,6 +76,15 @@ export interface ExternalPartyWalletOptions {
    * before `expiresAt`) still falls inside the window. Set it only to match a validator configured differently.
    */
   readonly validatorDeduplicationWindowMs?: number;
+  /**
+   * Whether `submitExternalPartySignature` makes sure `providerUserId` holds `CanActAs` on the onboarded party (default
+   * `true`). A new party is allocated with the right; on an idempotent replay the user's rights are read and the right
+   * is granted only when missing, which needs participant admin or identity-provider admin rights. The token-standard
+   * CC transfer and the `TransferOffer` accept prepare and execute as `providerUserId` with `actAs` the external party,
+   * so that user needs `CanActAs` on it, or `CanReadAsAnyParty` plus `CanExecuteAsAnyParty`. Set `false` only when the
+   * user's rights are managed elsewhere.
+   */
+  readonly grantProviderUserActAs?: boolean;
   readonly now?: () => number;
   readonly randomId?: () => string;
 }
@@ -428,13 +437,18 @@ export interface ExternalPartyWalletBridge {
    * Prepares a CC transfer from an external party: a token-standard `TransferFactory_Transfer` prepared through Ledger
    * interactive submission as `providerUserId`, for the sender's key to sign. Needs `validatorClient` (DSO party and
    * the registry's transfer factory). Refuses, by default, a receiver without a CC transfer preapproval.
+   *
+   * `providerUserId` must be able to read and execute as the sender: `CanActAs` on it (granted by
+   * `submitExternalPartySignature` unless `grantProviderUserActAs` is `false`), or `CanReadAsAnyParty` plus
+   * `CanExecuteAsAnyParty`. The validator `TransferCommand` send this replaces needed no Ledger user rights.
    */
   readonly prepareCcTransfer: (
     input: PrepareExternalPartyWalletCcTransferInput
   ) => Promise<PreparedExternalPartyWalletCcTransfer>;
   /**
    * Checks the prepare token and the sender's signature, then executes the prepared transfer through the Ledger JSON
-   * API (`executeAndWait`) as `providerUserId`. Does not use the validator.
+   * API (`executeAndWait`) as `providerUserId`, which needs the rights `prepareCcTransfer` names. Does not use the
+   * validator. The signature may be unpadded, base64url or whitespace-padded; it is sent as canonical padded base64.
    */
   readonly submitCcTransfer: (
     input: SubmitExternalPartyWalletCcTransferInput,
@@ -620,6 +634,7 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
         multiHashSignatureBase64: input.multiHashSignatureBase64,
         ...(input.publicKeyFingerprint !== undefined ? { publicKeyFingerprint: input.publicKeyFingerprint } : {}),
         allowAlreadyExists: true,
+        ...(options.grantProviderUserActAs === false ? {} : { userId: options.providerUserId }),
         ...(submissionOptions.signal !== undefined ? { signal: submissionOptions.signal } : {}),
       });
       return {
