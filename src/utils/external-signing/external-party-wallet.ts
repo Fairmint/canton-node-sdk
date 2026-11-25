@@ -77,12 +77,14 @@ export interface ExternalPartyWalletOptions {
    */
   readonly validatorDeduplicationWindowMs?: number;
   /**
-   * Whether `submitExternalPartySignature` makes sure `providerUserId` holds `CanActAs` on the onboarded party (default
-   * `true`). A new party is allocated with the right; on an idempotent replay the user's rights are read and the right
-   * is granted only when missing, which needs participant admin or identity-provider admin rights. The token-standard
-   * CC transfer and the `TransferOffer` accept prepare and execute as `providerUserId` with `actAs` the external party,
-   * so that user needs `CanActAs` on it, or `CanReadAsAnyParty` plus `CanExecuteAsAnyParty`. Set `false` only when the
-   * user's rights are managed elsewhere.
+   * Opt in (default `false`) to have `submitExternalPartySignature` make sure `providerUserId` holds `CanActAs` on the
+   * onboarded party. A new party is allocated with the right; on an idempotent replay the user's rights are read and
+   * the right is granted only when missing, which needs participant admin or identity-provider admin rights.
+   *
+   * The token-standard CC transfer and the `TransferOffer` accept prepare and execute as `providerUserId` with `actAs`
+   * the external party, so that user needs `CanActAs` on it, or `CanReadAsAnyParty` plus `CanExecuteAsAnyParty`. A
+   * provider that onboards many wallets should give its user the two any-party rights instead: Canton caps the rights
+   * per user (1000 by default), so one `CanActAs` per wallet eventually makes onboarding fail.
    */
   readonly grantProviderUserActAs?: boolean;
   readonly now?: () => number;
@@ -439,7 +441,7 @@ export interface ExternalPartyWalletBridge {
    * the registry's transfer factory). Refuses, by default, a receiver without a CC transfer preapproval.
    *
    * `providerUserId` must be able to read and execute as the sender: `CanActAs` on it (granted by
-   * `submitExternalPartySignature` unless `grantProviderUserActAs` is `false`), or `CanReadAsAnyParty` plus
+   * `submitExternalPartySignature` when `grantProviderUserActAs` is `true`), or `CanReadAsAnyParty` plus
    * `CanExecuteAsAnyParty`. The validator `TransferCommand` send this replaces needed no Ledger user rights.
    */
   readonly prepareCcTransfer: (
@@ -634,7 +636,7 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
         multiHashSignatureBase64: input.multiHashSignatureBase64,
         ...(input.publicKeyFingerprint !== undefined ? { publicKeyFingerprint: input.publicKeyFingerprint } : {}),
         allowAlreadyExists: true,
-        ...(options.grantProviderUserActAs === false ? {} : { userId: options.providerUserId }),
+        ...(options.grantProviderUserActAs === true ? { userId: options.providerUserId } : {}),
         ...(submissionOptions.signal !== undefined ? { signal: submissionOptions.signal } : {}),
       });
       return {

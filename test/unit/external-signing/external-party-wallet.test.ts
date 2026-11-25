@@ -329,11 +329,11 @@ describe('external-party wallet bridge', (): void => {
     });
   });
 
-  it('allocates the external party with CanActAs for providerUserId by default', async (): Promise<void> => {
+  it('allocates the external party with CanActAs for providerUserId when grantProviderUserActAs is true', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient();
     ledgerClient.allocateExternalParty.mockResolvedValueOnce({ partyId: fixture.partyId });
-    const bridge = createBridge({ ledgerClient });
+    const bridge = createBridge({ ledgerClient, grantProviderUserActAs: true });
 
     await bridge.submitExternalPartySignature({
       partyId: fixture.partyId,
@@ -349,11 +349,11 @@ describe('external-party wallet bridge', (): void => {
     );
   });
 
-  it('allocates without a user when grantProviderUserActAs is false', async (): Promise<void> => {
+  it('allocates without a user by default (grantProviderUserActAs is opt-in)', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient();
     ledgerClient.allocateExternalParty.mockResolvedValueOnce({ partyId: fixture.partyId });
-    const bridge = createBridge({ ledgerClient, grantProviderUserActAs: false });
+    const bridge = createBridge({ ledgerClient });
 
     await bridge.submitExternalPartySignature({
       partyId: fixture.partyId,

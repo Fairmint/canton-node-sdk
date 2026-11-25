@@ -442,7 +442,15 @@ async function selectCoveringUnlockedCcHoldings(input: {
     activeAtOffset: input.activeAtOffset,
   });
   const candidates = holdings
-    .filter((holding) => holding.lock === null && BigInt(holding.amountBaseUnits) > 0n)
+    // The HoldingV1 view is whatever its template says: anyone can create a look-alike that names the sender as owner.
+    // A real Amulet is signed by the instrument admin (the DSO) and the owner, so only those are inputs.
+    .filter(
+      (holding) =>
+        holding.lock === null &&
+        BigInt(holding.amountBaseUnits) > 0n &&
+        holding.signatories.includes(input.instrumentId.admin) &&
+        holding.signatories.includes(input.senderPartyId)
+    )
     .sort((left, right) => {
       const difference = BigInt(right.amountBaseUnits) - BigInt(left.amountBaseUnits);
       if (difference !== 0n) return difference > 0n ? 1 : -1;

@@ -52,6 +52,7 @@ const amuletHolding = (params: {
   readonly owner: string;
   readonly amount: string;
   readonly locked?: boolean;
+  readonly signatories?: readonly string[];
   readonly synchronizerId?: string;
 }): JsGetActiveContractsResponseItem => ({
   contractEntry: {
@@ -82,7 +83,7 @@ const amuletHolding = (params: {
           },
         ],
         witnessParties: [params.owner],
-        signatories: [DSO, params.owner],
+        signatories: [...(params.signatories ?? [DSO, params.owner])],
         observers: [],
         createdAt: '2026-11-20T00:00:00.000Z',
         packageName: 'splice-amulet',
@@ -349,6 +350,31 @@ describe('external-party CC token-standard transfer', () => {
     );
 
     expect(prepared.inputHoldingCids).toEqual(['00b']);
+  });
+
+  it('skips a look-alike holding the DSO did not sign, however large', async () => {
+    const sender = createSender();
+    const ledgerClient = createLedgerClient([
+      amuletHolding({
+        contractId: '00spoof',
+        owner: sender.partyId,
+        amount: '1000000.0',
+        signatories: ['attacker::1220attacker'],
+      }),
+      amuletHolding({
+        contractId: '00owner-only',
+        owner: sender.partyId,
+        amount: '500000.0',
+        signatories: [sender.partyId],
+      }),
+      amuletHolding({ contractId: '00real', owner: sender.partyId, amount: '3.0' }),
+    ]);
+
+    const prepared = await prepareExternalPartyCcTokenStandardTransfer(
+      prepareOptions(sender.partyId, ledgerClient, createValidatorClient())
+    );
+
+    expect(prepared.inputHoldingCids).toEqual(['00real']);
   });
 
   it('caps the input holdings and refuses when the capped holdings do not cover the amount', async () => {

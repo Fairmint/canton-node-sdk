@@ -51,6 +51,8 @@ export interface TokenStandardV1Holding {
   /** ISO 8601 ledger effective time at which the active holding was created. */
   readonly createdAt: string;
   readonly owner: string;
+  /** The contract's signatories, as the ledger reports them (not the interface view). */
+  readonly signatories: readonly string[];
   readonly instrumentId: TokenStandardV1InstrumentId;
   readonly amount: string;
   readonly amountBaseUnits: string;
@@ -366,6 +368,7 @@ function readHolding(params: {
     synchronizerId: activeContract.synchronizerId,
     createdAt,
     owner,
+    signatories: [...createdEvent.signatories],
     instrumentId,
     amount,
     amountBaseUnits,

@@ -131,6 +131,7 @@ describe('External-party CC send through the token standard', () => {
         validatorClient,
         providerPartyId: walletParty,
         providerUserId: userId,
+        grantProviderUserActAs: true,
         prepareTokenSecret: `localnet-${randomUUID()}`,
         provider: 'localnet',
         network: 'localnet',
