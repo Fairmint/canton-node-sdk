@@ -3,6 +3,7 @@ import {
   type InteractiveSubmissionExecuteAndWaitResponse,
   type InteractiveSubmissionExecuteRequest,
   type InteractiveSubmissionExecuteResponse,
+  type InteractiveSubmissionHashingSchemeVersion,
 } from '../../clients/ledger-json-api/schemas/api/interactive-submission';
 import { ValidationError } from '../../core/errors';
 
@@ -14,7 +15,10 @@ export type PartySignature = Omit<GeneratedPartySignature, 'signatures'> & {
   readonly signatures: NonEmptyReadonlyArray<GeneratedSignature>;
 };
 export type NonEmptyPartySignatures = NonEmptyReadonlyArray<PartySignature>;
-export type InteractiveSubmissionHashingSchemeVersion = InteractiveSubmissionExecuteRequest['hashingSchemeVersion'];
+// Re-exported (not re-declared) so the root entry exports the same symbol the request types use: a consumer whose
+// inferred types mention it (for example a prepared CC transfer's `hashingSchemeVersion`) can then name it through
+// `@fairmint/canton-node-sdk` instead of failing with TS2883 on an unexported deep path.
+export type { InteractiveSubmissionHashingSchemeVersion } from '../../clients/ledger-json-api/schemas/api/interactive-submission';
 
 /** A deduplication period as a duration, in the Ledger JSON API's `DeduplicationDuration` form. */
 export interface InteractiveSubmissionDeduplicationDuration {
