@@ -20,10 +20,11 @@ export {
   type RawPageUpdate,
   type RawUpdatesPage,
 } from './operations/v2/updates/get-updates-page';
-export type {
-  RawUpdateFrame,
-  RawUpdateKind,
-  SubscribeToRawUpdatesParams,
+export {
+  SubscribeToRawUpdates,
+  type RawUpdateFrame,
+  type RawUpdateKind,
+  type SubscribeToRawUpdatesParams,
 } from './operations/v2/updates/subscribe-to-raw-updates';
 export { TransactionShape } from './operations/v2/updates/subscribe-to-updates';
 export {
@@ -55,6 +56,8 @@ export {
   type RawStreamSubscription,
 } from './operations/v2/utils/raw-frame-stream';
 export {
+  CommandSchema,
+  DisclosedContractSchema,
   GetContractByIdRequestSchema,
   GetContractByIdResponseSchema,
   LedgerContractIdSchema,
