@@ -73,6 +73,21 @@ same way; it requires an explicit `userId` and a non-empty `parties` list, as th
 See
 [`examples/read-any-party.ts`](https://github.com/Fairmint/canton-node-sdk/blob/main/examples/read-any-party.ts).
 
+## Onboarding an external party
+
+`prepareExternalPartyOnboarding`, `createExternalPartyWithSigner`,
+`createExternalPartyWithEd25519Signer`, the wallet bridge's `prepareExternalParty` and
+`createExternalParty` never sign the participant's word for the topology. They read the local
+participant's ID (`GET /v2/parties/participant-id`), check the generated topology with
+`verifyPartyOnboardingTopology` from `@fairmint/canton-protocol/topology` (the party, its one key
+with the usages `NAMESPACE`, `PROTOCOL` and `PROOF_OF_OWNERSHIP`, every hosting participant with its
+permission, and the threshold, which defaults to every confirming participant), and hand the signer
+only the multi-hash recomputed from the transactions. A topology that differs is an `OperationError`
+(`TRANSACTION_FAILED`) whose `cause` is the `CantonProtocolError`, and nothing is signed. Hosting
+participant UIDs are `name::1220…` (no `PAR::` prefix), each listed once; at least one participant
+must confirm. `submitExternalPartyOnboarding` refuses a `multiHashHex` that is not the multi-hash of
+the submitted `topologyTransactions`. Canton 3.4 or later is required.
+
 ## Finding every party a key controls
 
 An external party's ID is `hint::fingerprint`, where the fingerprint is Canton's SHA-256 multihash

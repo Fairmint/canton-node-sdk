@@ -17,10 +17,11 @@ import {
 } from '../../../src/utils/external-signing';
 import { TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID } from '../../../src/utils/token-standard';
 import { expectSignatureRefused, REFUSED_SIGNATURES, type RefusedSignature } from './fixtures/hash-signatures';
+import { generatedTopologyAnswer, type GeneratedTopologyAnswer, testParticipantUid } from './fixtures/topology';
 
 const PREPARED_TRANSACTION_HASH_HEX = `1220${'22'.repeat(32)}`;
 const PREPARED_TRANSACTION_HASH_BASE64 = Buffer.from(PREPARED_TRANSACTION_HASH_HEX, 'hex').toString('base64');
-const MULTI_HASH_HEX = `1220${'11'.repeat(32)}`;
+const LOCAL_PARTICIPANT_UID = testParticipantUid('participant1', 0xd4);
 const OFFER_CONTRACT_ID = '00offer-contract-id';
 const SYNCHRONIZER_ID = 'global-domain::sync';
 const CC_DSO_PARTY_ID = 'DSO::1220dso';
@@ -113,21 +114,29 @@ const createSigningFixture = (): {
   readonly publicKeyBase64: string;
   readonly publicKeyFingerprint: string;
   readonly partyId: string;
+  /** The onboarding topology a participant generates for `partyId` on {@link LOCAL_PARTICIPANT_UID}. */
+  readonly topology: GeneratedTopologyAnswer;
   readonly signPreparedHash: () => string;
   readonly signMultiHash: () => string;
 } => {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
-  const publicKeyBase64 = Buffer.from(publicKey.export({ format: 'der', type: 'spki' }))
-    .subarray(-32)
-    .toString('base64');
+  const publicKeyDer = Buffer.from(publicKey.export({ format: 'der', type: 'spki' }));
+  const publicKeyBase64 = publicKeyDer.subarray(-32).toString('base64');
   const publicKeyFingerprint = fingerprintEd25519PublicKey(publicKeyBase64);
+  const partyId = buildExternalPartyId('privy-test', publicKeyFingerprint);
+  const topology = generatedTopologyAnswer({
+    partyId,
+    publicKeyDerBase64: publicKeyDer.toString('base64'),
+    participants: [{ participantUid: LOCAL_PARTICIPANT_UID }],
+  });
   return {
     publicKeyBase64,
     publicKeyFingerprint,
-    partyId: buildExternalPartyId('privy-test', publicKeyFingerprint),
+    partyId,
+    topology,
     signPreparedHash: (): string =>
       sign(null, Buffer.from(PREPARED_TRANSACTION_HASH_HEX, 'hex'), privateKey).toString('base64'),
-    signMultiHash: (): string => sign(null, Buffer.from(MULTI_HASH_HEX, 'hex'), privateKey).toString('base64'),
+    signMultiHash: (): string => sign(null, Buffer.from(topology.multiHashHex, 'hex'), privateKey).toString('base64'),
   };
 };
 
@@ -303,9 +312,9 @@ describe('external-party wallet bridge', (): void => {
         partyId: fixture.partyId,
         publicKeyBase64: fixture.publicKeyBase64,
         publicKeyFingerprint: fixture.publicKeyFingerprint,
-        multiHashHex: MULTI_HASH_HEX,
+        multiHashHex: fixture.topology.multiHashHex,
         synchronizerId: SYNCHRONIZER_ID,
-        topologyTransactions: ['topology-tx'],
+        topologyTransactions: fixture.topology.topologyTransactions,
         multiHashSignatureBase64: fixture.signMultiHash(),
       },
       { signal: controller.signal }
@@ -318,7 +327,7 @@ describe('external-party wallet bridge', (): void => {
     expect(ledgerClient.allocateExternalParty).toHaveBeenCalledWith(
       expect.objectContaining({
         synchronizer: SYNCHRONIZER_ID,
-        onboardingTransactions: [{ transaction: 'topology-tx' }],
+        onboardingTransactions: fixture.topology.topologyTransactions.map((transaction) => ({ transaction })),
       }),
       { signal: controller.signal }
     );
@@ -327,6 +336,49 @@ describe('external-party wallet bridge', (): void => {
       raw: { partyId: fixture.partyId },
       alreadyExisted: false,
     });
+  });
+
+  it('prepares onboarding with the multi-hash recomputed from the checked topology', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient();
+    ledgerClient.getParticipantId = jest.fn().mockResolvedValue({ participantId: LOCAL_PARTICIPANT_UID });
+    ledgerClient.generateExternalPartyTopology = jest.fn().mockResolvedValue(fixture.topology);
+    const bridge = createBridge({ ledgerClient });
+
+    await expect(
+      bridge.prepareExternalParty({ partyName: 'privy-test', publicKeyBase64: fixture.publicKeyBase64 })
+    ).resolves.toMatchObject({
+      partyId: fixture.partyId,
+      multiHashHex: fixture.topology.multiHashHex,
+      topologyTransactions: fixture.topology.topologyTransactions,
+    });
+
+    ledgerClient.getParticipantId.mockResolvedValueOnce({ participantId: testParticipantUid('participant2', 0x02) });
+    await expect(
+      bridge.prepareExternalParty({ partyName: 'privy-test', publicKeyBase64: fixture.publicKeyBase64 })
+    ).rejects.toMatchObject({
+      name: 'OperationError',
+      context: expect.objectContaining({ code: 'UNEXPECTED' }) as object,
+    });
+  });
+
+  it('refuses a submitted multi-hash that is not the hash of the submitted topology before allocating', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const other = createSigningFixture();
+    const ledgerClient = createMockLedgerClient();
+    const bridge = createBridge({ ledgerClient });
+
+    await expect(
+      bridge.submitExternalPartySignature({
+        partyId: fixture.partyId,
+        publicKeyBase64: fixture.publicKeyBase64,
+        multiHashHex: fixture.topology.multiHashHex,
+        synchronizerId: SYNCHRONIZER_ID,
+        topologyTransactions: other.topology.topologyTransactions,
+        multiHashSignatureBase64: fixture.signMultiHash(),
+      })
+    ).rejects.toThrow('multiHashHex is not the multi-hash of topologyTransactions');
+    expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
   });
 
   it('allocates the external party with CanActAs for providerUserId when grantProviderUserActAs is true', async (): Promise<void> => {
@@ -338,9 +390,9 @@ describe('external-party wallet bridge', (): void => {
     await bridge.submitExternalPartySignature({
       partyId: fixture.partyId,
       publicKeyBase64: fixture.publicKeyBase64,
-      multiHashHex: MULTI_HASH_HEX,
+      multiHashHex: fixture.topology.multiHashHex,
       synchronizerId: SYNCHRONIZER_ID,
-      topologyTransactions: ['topology-tx'],
+      topologyTransactions: fixture.topology.topologyTransactions,
       multiHashSignatureBase64: fixture.signMultiHash(),
     });
 
@@ -358,9 +410,9 @@ describe('external-party wallet bridge', (): void => {
     await bridge.submitExternalPartySignature({
       partyId: fixture.partyId,
       publicKeyBase64: fixture.publicKeyBase64,
-      multiHashHex: MULTI_HASH_HEX,
+      multiHashHex: fixture.topology.multiHashHex,
       synchronizerId: SYNCHRONIZER_ID,
-      topologyTransactions: ['topology-tx'],
+      topologyTransactions: fixture.topology.topologyTransactions,
       multiHashSignatureBase64: fixture.signMultiHash(),
     });
 

@@ -21,9 +21,17 @@ import {
   type NonEmptyPrepareExternalTransactionCommands,
 } from '../../../src/utils/external-signing';
 import { REFUSED_SIGNATURES } from './fixtures/hash-signatures';
+import {
+  generatedTopologyAnswer,
+  type GeneratedTopologyAnswer,
+  PERMISSION,
+  testParticipantUid,
+} from './fixtures/topology';
 
 const SYNCHRONIZER_ID = 'global-domain::sync';
+// A 34-byte Canton hash, signed directly through signAndVerifyCantonEd25519Payload.
 const MULTI_HASH_HEX = `1220${'11'.repeat(32)}`;
+const LOCAL_PARTICIPANT_UID = testParticipantUid('participant1', 0xd4);
 // A prepared-transaction hash is 32 bytes (SHA-256, no multihash prefix).
 const PREPARED_HASH_HEX = '5a'.repeat(32);
 const NOW_MS = Date.parse('2026-07-09T12:00:00.000Z');
@@ -41,18 +49,21 @@ const ARCHIVE_COMMANDS = [
 interface SigningFixture {
   readonly privateKey: KeyObject;
   readonly publicKeyBase64: string;
+  readonly publicKeyDerBase64: string;
   readonly publicKeyFingerprint: string;
   readonly partyId: string;
+  /** The topology the mock participant generates for `partyId` on {@link LOCAL_PARTICIPANT_UID}. */
+  readonly topology: GeneratedTopologyAnswer;
   readonly signer: CantonEd25519Signer;
   readonly signCantonPayload: jest.MockedFunction<CantonEd25519Signer['signCantonPayload']>;
 }
 
 function createSigningFixture(): SigningFixture {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
-  const publicKeyBase64 = Buffer.from(publicKey.export({ format: 'der', type: 'spki' }))
-    .subarray(-32)
-    .toString('base64');
+  const publicKeyDer = Buffer.from(publicKey.export({ format: 'der', type: 'spki' }));
+  const publicKeyBase64 = publicKeyDer.subarray(-32).toString('base64');
   const publicKeyFingerprint = fingerprintEd25519PublicKey(publicKeyBase64);
+  const partyId = buildExternalPartyId('external-test', publicKeyFingerprint);
   const signCantonPayload = jest.fn(async (request: CantonEd25519SigningRequest): Promise<CantonEd25519Signature> => ({
     signatureHex: sign(null, Buffer.from(request.payloadHex, 'hex'), privateKey).toString('hex'),
   }));
@@ -60,7 +71,13 @@ function createSigningFixture(): SigningFixture {
     privateKey,
     publicKeyBase64,
     publicKeyFingerprint,
-    partyId: buildExternalPartyId('external-test', publicKeyFingerprint),
+    publicKeyDerBase64: publicKeyDer.toString('base64'),
+    partyId,
+    topology: generatedTopologyAnswer({
+      partyId,
+      publicKeyDerBase64: publicKeyDer.toString('base64'),
+      participants: [{ participantUid: LOCAL_PARTICIPANT_UID }],
+    }),
     signer: { publicKeyBase64, signCantonPayload },
     signCantonPayload,
   };
@@ -68,11 +85,8 @@ function createSigningFixture(): SigningFixture {
 
 function createMockLedgerClient(fixture: SigningFixture): jest.Mocked<LedgerJsonApiClient> {
   const client = Object.create(null) as jest.Mocked<LedgerJsonApiClient>;
-  client.generateExternalPartyTopology = jest.fn().mockResolvedValue({
-    partyId: fixture.partyId,
-    multiHash: Buffer.from(MULTI_HASH_HEX, 'hex').toString('base64'),
-    topologyTransactions: ['topology-1'],
-  });
+  client.getParticipantId = jest.fn().mockResolvedValue({ participantId: LOCAL_PARTICIPANT_UID });
+  client.generateExternalPartyTopology = jest.fn().mockResolvedValue(fixture.topology);
   client.allocateExternalParty = jest.fn().mockResolvedValue({ partyId: fixture.partyId });
   client.getPartyDetails = jest.fn().mockResolvedValue({
     partyDetails: { party: fixture.partyId, isLocal: true },
@@ -115,8 +129,8 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
         publicKeyBase64: normalizeEd25519PublicKeyForCanton(fixture.publicKeyBase64),
         publicKeyFingerprint: fixture.publicKeyFingerprint,
         synchronizerId: SYNCHRONIZER_ID,
-        payloadHex: MULTI_HASH_HEX,
-        payloadBase64: Buffer.from(MULTI_HASH_HEX, 'hex').toString('base64'),
+        payloadHex: fixture.topology.multiHashHex,
+        payloadBase64: fixture.topology.multiHash,
         issuedAt: '2026-07-09T12:00:00.000Z',
         expiresAt: '2026-07-09T12:01:00.000Z',
         context: { provider: 'test-provider', managed: false, attempt: 1 },
@@ -220,6 +234,45 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
     ).rejects.toThrow('External Canton signer returned an invalid Ed25519 signature');
     expect(ledgerClient.allocateExternalParty.mock.calls).toHaveLength(0);
     expect(ledgerClient.makePostRequest.mock.calls).toHaveLength(0);
+  });
+
+  it('never asks the signer for a topology the participant generated other than requested', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    ledgerClient.getParticipantId.mockResolvedValueOnce({ participantId: testParticipantUid('participant2', 0x02) });
+
+    await expect(
+      createExternalPartyWithEd25519Signer({
+        ledgerClient,
+        synchronizerId: SYNCHRONIZER_ID,
+        partyHint: 'external-test',
+        signer: fixture.signer,
+        waitForReady: false,
+      })
+    ).rejects.toThrow('does not match the requested external-party onboarding');
+    expect(fixture.signCantonPayload).not.toHaveBeenCalled();
+    expect(ledgerClient.allocateExternalParty.mock.calls).toHaveLength(0);
+  });
+
+  it("never asks the signer to sign a participant multi-hash that is not the topology's", async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    ledgerClient.generateExternalPartyTopology.mockResolvedValueOnce({
+      ...fixture.topology,
+      multiHash: Buffer.from(MULTI_HASH_HEX, 'hex').toString('base64'),
+    });
+
+    await expect(
+      createExternalPartyWithEd25519Signer({
+        ledgerClient,
+        synchronizerId: SYNCHRONIZER_ID,
+        partyHint: 'external-test',
+        signer: fixture.signer,
+        waitForReady: false,
+      })
+    ).rejects.toThrow('multiHash is not the multi-hash of its topology transactions');
+    expect(fixture.signCantonPayload).not.toHaveBeenCalled();
+    expect(ledgerClient.allocateExternalParty.mock.calls).toHaveLength(0);
   });
 
   it.each([
@@ -794,6 +847,18 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
   it('treats observation-only onboarding as allocated without polling for submit readiness', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient(fixture);
+    // The local participant only observes, so another participant must confirm (Canton needs one confirmer).
+    const confirming = testParticipantUid('participant2', 0x02);
+    ledgerClient.generateExternalPartyTopology.mockResolvedValue(
+      generatedTopologyAnswer({
+        partyId: fixture.partyId,
+        publicKeyDerBase64: fixture.publicKeyDerBase64,
+        participants: [
+          { participantUid: LOCAL_PARTICIPANT_UID, permission: PERMISSION.OBSERVATION },
+          { participantUid: confirming },
+        ],
+      })
+    );
     ledgerClient.getConnectedSynchronizers.mockResolvedValue({
       connectedSynchronizers: [
         {
@@ -811,6 +876,7 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
         partyHint: 'external-test',
         signer: fixture.signer,
         localParticipantObservationOnly: true,
+        otherConfirmingParticipantUids: [confirming],
         waitForReady: true,
         readinessDelaysMs: [0],
       })
