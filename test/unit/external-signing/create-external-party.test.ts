@@ -1,33 +1,51 @@
+import { fingerprintEd25519PublicKey } from '@fairmint/canton-protocol/party';
 import { Keypair } from '@stellar/stellar-base';
+import { verify } from 'node:crypto';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
+import { OperationError, ValidationError } from '../../../src/core/errors';
 import { createExternalParty } from '../../../src/utils/external-signing/create-external-party';
+import {
+  generatedTopologyAnswer,
+  type OnboardingTopologyInput,
+  PERMISSION,
+  testParticipantUid,
+} from './fixtures/topology';
+
+// A deterministic keypair for reproducible tests.
+const KEYPAIR = Keypair.fromSecret('SBGWSG6BTNCKCOB3DIFBGCVMUPQFYPA2G4O34RMTB343OYPXU5DJDVMN');
+const PUBLIC_KEY_DER = Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), KEYPAIR.rawPublicKey()]);
+const FINGERPRINT = fingerprintEd25519PublicKey(KEYPAIR.rawPublicKey().toString('base64'));
+const PARTY_ID = `alice::${FINGERPRINT}`;
+const LOCAL_PARTICIPANT_UID = testParticipantUid('participant1', 0xd4);
+
+/** The topology a participant generates for alice on {@link LOCAL_PARTICIPANT_UID}, or a variant of it. */
+const topologyFor = (input: Partial<OnboardingTopologyInput> = {}): ReturnType<typeof generatedTopologyAnswer> =>
+  generatedTopologyAnswer({
+    partyId: PARTY_ID,
+    publicKeyDerBase64: PUBLIC_KEY_DER.toString('base64'),
+    participants: [{ participantUid: LOCAL_PARTICIPANT_UID }],
+    ...input,
+  });
+const TOPOLOGY = topologyFor();
 
 const createMockLedgerClient = (overrides?: {
   generateExternalPartyTopologyResponse?: unknown;
   allocateExternalPartyResponse?: unknown;
 }): jest.Mocked<LedgerJsonApiClient> =>
   ({
-    generateExternalPartyTopology: jest.fn().mockResolvedValue(
-      overrides?.generateExternalPartyTopologyResponse ?? {
-        partyId: 'alice::abc123fingerprint',
-        multiHash: 'deadbeef0123456789abcdef',
-        topologyTransactions: ['tx1', 'tx2'],
-      }
-    ),
+    getParticipantId: jest.fn().mockResolvedValue({ participantId: LOCAL_PARTICIPANT_UID }),
+    generateExternalPartyTopology: jest
+      .fn()
+      .mockResolvedValue(overrides?.generateExternalPartyTopologyResponse ?? TOPOLOGY),
     allocateExternalParty: jest.fn().mockResolvedValue(
       overrides?.allocateExternalPartyResponse ?? {
-        partyId: 'alice::abc123fingerprint',
+        partyId: PARTY_ID,
       }
     ),
   }) as unknown as jest.Mocked<LedgerJsonApiClient>;
 
 describe('createExternalParty', () => {
-  let keypair: Keypair;
-
-  beforeEach(() => {
-    // Use a deterministic keypair for reproducible tests
-    keypair = Keypair.fromSecret('SBGWSG6BTNCKCOB3DIFBGCVMUPQFYPA2G4O34RMTB343OYPXU5DJDVMN');
-  });
+  const keypair = KEYPAIR;
 
   it('creates external party and returns result', async () => {
     const mockClient = createMockLedgerClient();
@@ -39,10 +57,10 @@ describe('createExternalParty', () => {
       synchronizerId: 'global-sync',
     });
 
-    expect(result.partyId).toBe('alice::abc123fingerprint');
+    expect(result.partyId).toBe(PARTY_ID);
     expect(result.stellarAddress).toBe(keypair.publicKey());
     expect(result.stellarSecret).toBe(keypair.secret());
-    expect(result.publicKeyFingerprint).toBe('abc123fingerprint');
+    expect(result.publicKeyFingerprint).toBe(FINGERPRINT);
   });
 
   it('calls generateExternalPartyTopology with correct params', async () => {
@@ -83,12 +101,12 @@ describe('createExternalParty', () => {
     expect(mockClient.allocateExternalParty).toHaveBeenCalledWith({
       synchronizer: 'global-sync',
       identityProviderId: 'default',
-      onboardingTransactions: [{ transaction: 'tx1' }, { transaction: 'tx2' }],
+      onboardingTransactions: TOPOLOGY.topologyTransactions.map((transaction) => ({ transaction })),
       multiHashSignatures: [
         {
           format: 'SIGNATURE_FORMAT_RAW',
           signature: expect.any(String) as string, // Base64-encoded signature
-          signedBy: 'abc123fingerprint',
+          signedBy: FINGERPRINT,
           signingAlgorithmSpec: 'SIGNING_ALGORITHM_SPEC_ED25519',
         },
       ],
@@ -143,8 +161,19 @@ describe('createExternalParty', () => {
     );
   });
 
-  it('passes optional multi-hosting parameters', async () => {
-    const mockClient = createMockLedgerClient();
+  it('passes optional multi-hosting parameters and checks the topology hosts the party so', async () => {
+    const confirming = [testParticipantUid('participant2', 0x02), testParticipantUid('participant3', 0x03)];
+    const observer = testParticipantUid('observer1', 0x04);
+    const mockClient = createMockLedgerClient({
+      generateExternalPartyTopologyResponse: topologyFor({
+        participants: [
+          { participantUid: LOCAL_PARTICIPANT_UID, permission: PERMISSION.OBSERVATION },
+          ...confirming.map((participantUid) => ({ participantUid })),
+          { participantUid: observer, permission: PERMISSION.OBSERVATION },
+        ],
+        threshold: 2,
+      }),
+    });
 
     await createExternalParty({
       ledgerClient: mockClient,
@@ -152,19 +181,20 @@ describe('createExternalParty', () => {
       partyName: 'alice',
       synchronizerId: 'global-sync',
       localParticipantObservationOnly: true,
-      otherConfirmingParticipantUids: ['participant1', 'participant2'],
+      otherConfirmingParticipantUids: confirming,
       confirmationThreshold: 2,
-      observingParticipantUids: ['observer1'],
+      observingParticipantUids: [observer],
     });
 
     expect(mockClient.generateExternalPartyTopology).toHaveBeenCalledWith(
       expect.objectContaining({
         localParticipantObservationOnly: true,
-        otherConfirmingParticipantUids: ['participant1', 'participant2'],
+        otherConfirmingParticipantUids: confirming,
         confirmationThreshold: 2,
-        observingParticipantUids: ['observer1'],
+        observingParticipantUids: [observer],
       })
     );
+    expect(mockClient.allocateExternalParty).toHaveBeenCalledTimes(1);
   });
 
   it('returns hex-encoded public key', async () => {
@@ -185,9 +215,8 @@ describe('createExternalParty', () => {
   it('throws when no party ID returned from topology generation', async () => {
     const mockClient = createMockLedgerClient({
       generateExternalPartyTopologyResponse: {
+        ...TOPOLOGY,
         partyId: null,
-        multiHash: 'deadbeef',
-        topologyTransactions: ['tx1'],
       },
     });
 
@@ -204,9 +233,8 @@ describe('createExternalParty', () => {
   it('throws when no multi-hash returned', async () => {
     const mockClient = createMockLedgerClient({
       generateExternalPartyTopologyResponse: {
-        partyId: 'alice::fingerprint',
+        ...TOPOLOGY,
         multiHash: null,
-        topologyTransactions: ['tx1'],
       },
     });
 
@@ -223,8 +251,7 @@ describe('createExternalParty', () => {
   it('throws when no topology transactions returned', async () => {
     const mockClient = createMockLedgerClient({
       generateExternalPartyTopologyResponse: {
-        partyId: 'alice::fingerprint',
-        multiHash: 'deadbeef',
+        ...TOPOLOGY,
         topologyTransactions: [],
       },
     });
@@ -277,5 +304,159 @@ describe('createExternalParty', () => {
     // Signature should be base64-encoded
     expect(typeof signature).toBe('string');
     expect(Buffer.from(signature as string, 'base64').length).toBe(64); // Ed25519 signature is 64 bytes
+  });
+
+  it("signs the multi-hash recomputed from the transactions, decoded from the participant's base64", async () => {
+    const mockClient = createMockLedgerClient();
+
+    await createExternalParty({ ledgerClient: mockClient, keypair, partyName: 'alice', synchronizerId: 'global-sync' });
+
+    const signature = mockClient.allocateExternalParty.mock.calls[0]?.[0]?.multiHashSignatures?.[0]?.signature ?? '';
+    const publicKey = { key: PUBLIC_KEY_DER, format: 'der', type: 'spki' } as const;
+    expect(verify(null, Buffer.from(TOPOLOGY.multiHashHex, 'hex'), publicKey, Buffer.from(signature, 'base64'))).toBe(
+      true
+    );
+  });
+
+  it.each<readonly [string, unknown, string]>([
+    [
+      'a multi-hash that is not the hash of its transactions',
+      { ...TOPOLOGY, multiHash: topologyFor({ threshold: 1, protoVersion: 30 }).multiHash },
+      'HASH_MISMATCH',
+    ],
+    [
+      'a topology on another participant',
+      topologyFor({ participants: [{ participantUid: testParticipantUid('participant2', 0x02) }] }),
+      'UNEXPECTED',
+    ],
+    [
+      'a topology for another key',
+      topologyFor({
+        publicKeyDerBase64: Buffer.concat([
+          Buffer.from('302a300506032b6570032100', 'hex'),
+          Keypair.random().rawPublicKey(),
+        ]).toString('base64'),
+      }),
+      'UNEXPECTED',
+    ],
+  ])('refuses %s without signing or allocating', async (_name, answer, code) => {
+    const mockClient = createMockLedgerClient({ generateExternalPartyTopologyResponse: answer });
+
+    const result = createExternalParty({
+      ledgerClient: mockClient,
+      keypair,
+      partyName: 'alice',
+      synchronizerId: 'global-sync',
+    });
+
+    await expect(result).rejects.toBeInstanceOf(OperationError);
+    await expect(result).rejects.toMatchObject({
+      code: 'TRANSACTION_FAILED',
+      context: expect.objectContaining({ code }) as object,
+    });
+    expect(mockClient.allocateExternalParty).not.toHaveBeenCalled();
+  });
+
+  it("refuses a party ID that is not the keypair's", async () => {
+    const mockClient = createMockLedgerClient({
+      generateExternalPartyTopologyResponse: { ...TOPOLOGY, partyId: `alice::1220${'ab'.repeat(32)}` },
+    });
+
+    await expect(
+      createExternalParty({ ledgerClient: mockClient, keypair, partyName: 'alice', synchronizerId: 'global-sync' })
+    ).rejects.toThrow('Topology generation returned a party ID that does not match the keypair');
+    expect(mockClient.allocateExternalParty).not.toHaveBeenCalled();
+  });
+
+  it('refuses a topology of another party name than the one requested without signing or allocating', async () => {
+    // The participant answers alice::<this key> (self-consistent, matching multi-hash) to a request for bob.
+    const mockClient = createMockLedgerClient();
+    const sign = jest.spyOn(keypair, 'sign');
+
+    try {
+      const result = createExternalParty({
+        ledgerClient: mockClient,
+        keypair,
+        partyName: 'bob',
+        synchronizerId: 'global-sync',
+      });
+
+      await expect(result).rejects.toBeInstanceOf(OperationError);
+      await expect(result).rejects.toMatchObject({
+        message: 'Topology generation returned a party ID that is not the requested party',
+        code: 'PARTY_CREATION_FAILED',
+        context: expect.objectContaining({ expectedPartyId: `bob::${FINGERPRINT}`, partyId: PARTY_ID }) as object,
+      });
+      expect(mockClient.generateExternalPartyTopology).toHaveBeenCalledWith(
+        expect.objectContaining({ partyHint: 'bob' })
+      );
+      expect(sign).not.toHaveBeenCalled();
+      expect(mockClient.allocateExternalParty).not.toHaveBeenCalled();
+    } finally {
+      sign.mockRestore();
+    }
+  });
+
+  it.each([' alice', 'alice ', 'al.ice', 'al::ice', ''])(
+    'refuses the party name %j before reading the participant or generating topology',
+    async (partyName) => {
+      const mockClient = createMockLedgerClient();
+
+      await expect(
+        createExternalParty({ ledgerClient: mockClient, keypair, partyName, synchronizerId: 'global-sync' })
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(mockClient.getParticipantId).not.toHaveBeenCalled();
+      expect(mockClient.generateExternalPartyTopology).not.toHaveBeenCalled();
+    }
+  );
+
+  it('refuses a participant that is not expectedLocalParticipantUid before generating topology or signing', async () => {
+    const mockClient = createMockLedgerClient();
+    const sign = jest.spyOn(keypair, 'sign');
+    try {
+      const expectedLocalParticipantUid = testParticipantUid('participant9', 0x09);
+      await expect(
+        createExternalParty({
+          ledgerClient: mockClient,
+          keypair,
+          partyName: 'alice',
+          synchronizerId: 'global-sync',
+          expectedLocalParticipantUid,
+        })
+      ).rejects.toMatchObject({
+        name: 'OperationError',
+        context: { expectedLocalParticipantUid, participantId: LOCAL_PARTICIPANT_UID },
+      });
+      expect(mockClient.generateExternalPartyTopology).not.toHaveBeenCalled();
+      expect(sign).not.toHaveBeenCalled();
+
+      await expect(
+        createExternalParty({
+          ledgerClient: mockClient,
+          keypair,
+          partyName: 'alice',
+          synchronizerId: 'global-sync',
+          expectedLocalParticipantUid: LOCAL_PARTICIPANT_UID,
+        })
+      ).resolves.toMatchObject({ partyId: PARTY_ID });
+    } finally {
+      sign.mockRestore();
+    }
+  });
+
+  it('refuses invalid hosting options before reading the participant or generating topology', async () => {
+    const mockClient = createMockLedgerClient();
+
+    await expect(
+      createExternalParty({
+        ledgerClient: mockClient,
+        keypair,
+        partyName: 'alice',
+        synchronizerId: 'global-sync',
+        otherConfirmingParticipantUids: ['participant1'],
+      })
+    ).rejects.toThrow('must be a participant unique identifier');
+    expect(mockClient.getParticipantId).not.toHaveBeenCalled();
+    expect(mockClient.generateExternalPartyTopology).not.toHaveBeenCalled();
   });
 });

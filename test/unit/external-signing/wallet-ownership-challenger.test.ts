@@ -4,12 +4,12 @@
  * Ed25519 over the UTF-8 message, hex key and signature. Moved from the canton-explorer route tests, with their
  * fixtures. The `wallet-proof-v1` format (a server-built wallet proof message) is tested last.
  */
+import { fingerprintEd25519PublicKey } from '@fairmint/canton-protocol/party';
 import { createHmac, generateKeyPairSync, randomBytes, sign, type KeyObject } from 'node:crypto';
 import {
   createMemoryNonceStore,
   createWalletOwnershipChallenger,
   DEFAULT_WALLET_OWNERSHIP_CHALLENGE_TTL_MS,
-  deriveCantonEd25519PublicKeyFingerprint,
   walletOwnershipDomain,
   type WalletOwnershipChallenger,
   type WalletOwnershipChallengerOptions,
@@ -49,7 +49,7 @@ function externalParty(hint = 'alice'): PartyKey {
   const { privateKey, publicKey } = generateKeyPairSync('ed25519');
   const der = publicKey.export({ format: 'der', type: 'spki' });
   const raw = der.subarray(der.length - 32);
-  const namespace = deriveCantonEd25519PublicKeyFingerprint(raw.toString('base64'));
+  const namespace = fingerprintEd25519PublicKey(raw.toString('base64'));
   return { privateKey, publicKeyHex: raw.toString('hex'), namespace, partyId: `${hint}::${namespace}` };
 }
 const party = externalParty();

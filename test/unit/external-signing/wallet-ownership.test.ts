@@ -1,10 +1,11 @@
+import { fingerprintEd25519PublicKey } from '@fairmint/canton-protocol/party';
 import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import {
-  deriveCantonEd25519PublicKeyFingerprint,
   verifyWalletOwnership,
   type VerifyWalletOwnershipOptions,
   type WalletOwnershipFailure,
 } from '../../../src/utils/external-signing';
+import { checkKeyAndSignature } from '../../../src/utils/external-signing/wallet-ownership-checks';
 import {
   buildWalletOwnershipMessage,
   proveWalletOwnership,
@@ -24,7 +25,7 @@ function externalParty(hint = 'alice'): {
   const { privateKey, publicKey } = generateKeyPairSync('ed25519');
   const der = publicKey.export({ format: 'der', type: 'spki' });
   const raw = der.subarray(der.length - 32);
-  const namespace = deriveCantonEd25519PublicKeyFingerprint(raw.toString('base64'));
+  const namespace = fingerprintEd25519PublicKey(raw.toString('base64'));
   return {
     privateKey,
     rawHex: raw.toString('hex'),
@@ -249,6 +250,31 @@ describe('verifyWalletOwnership', () => {
       verified: false,
       reason: 'key-not-bound-to-party',
     });
+  });
+
+  it('does not trim the party ID a proof names', () => {
+    // The key and a valid signature over the message, with only the party ID untrimmed.
+    const proof = loopProof();
+    expect(checkKeyAndSignature(proof)).toEqual({ fingerprint: party.namespace });
+    const [hint, namespace] = party.partyId.split('::') as [string, string];
+    // A leading space would otherwise parse as part of the hint (space is a Daml-LF character).
+    for (const untrimmed of [`${party.partyId} `, ` ${party.partyId}`, `${party.partyId}\n`]) {
+      expect(checkKeyAndSignature({ ...proof, partyId: untrimmed })).toMatchObject({
+        verified: false,
+        reason: 'party-mismatch',
+      });
+    }
+    // A space after `::` is part of the namespace, which then is not the key's fingerprint.
+    expect(checkKeyAndSignature({ ...proof, partyId: `${hint}:: ${namespace}` })).toMatchObject({
+      verified: false,
+      reason: 'key-not-bound-to-party',
+    });
+    // A space before `::` is part of the hint, as Canton reads it: the key controls that party.
+    expect(checkKeyAndSignature({ ...proof, partyId: `${hint} ::${namespace}` })).toEqual({
+      fingerprint: party.namespace,
+    });
+    // The message refuses an untrimmed ID before any check, so a proof naming one never verifies.
+    expect(() => loopProof({ partyId: `${party.partyId} ` })).toThrow(TypeError);
   });
 
   it('refuses a proof for another party than expected', () => {

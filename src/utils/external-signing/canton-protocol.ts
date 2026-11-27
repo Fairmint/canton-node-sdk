@@ -1,39 +1,10 @@
 import { createHash, createHmac, timingSafeEqual, verify as verifyEd25519Signature } from 'node:crypto';
-import { OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
-import { fingerprintRawEd25519PublicKey } from '../../external-parties/keys';
+import { ValidationError } from '../../core/errors';
 import { isRecord } from '../../core/utils';
-import { wrapEd25519PublicKeyInDER } from './stellar-utils';
+import { decodeBase64 } from './hash-signature';
+import { cantonPublicKeyBase64, rawEd25519PublicKey } from './party-identity';
 
-const ED25519_DER_X509_PREFIX_HEX = '302a300506032b6570032100';
-const ED25519_DER_X509_PREFIX = Buffer.from(ED25519_DER_X509_PREFIX_HEX, 'hex');
-const ED25519_RAW_PUBLIC_KEY_LENGTH = 32;
-const ED25519_DER_X509_PUBLIC_KEY_LENGTH = ED25519_DER_X509_PREFIX.length + ED25519_RAW_PUBLIC_KEY_LENGTH;
-const CANTON_SHA256_MULTIHASH_PREFIX_HEX = '1220';
-const CANTON_SHA256_MULTIHASH_BYTE_LENGTH = 34;
-const CANTON_SHA256_MULTIHASH_HEX_LENGTH = CANTON_SHA256_MULTIHASH_BYTE_LENGTH * 2;
-const ED25519_FIELD_PRIME_LE = Buffer.from('edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f', 'hex');
-const ED25519_SMALL_ORDER_PUBLIC_KEYS_HEX = new Set([
-  // The eight small-order points (the torsion subgroup), compared with the sign bit cleared: the identity (order 1),
-  // y = -1 (order 2), y = 0 (order 4) and the two order-8 y coordinates. Their sign-bit twins match the same entries.
-  '0100000000000000000000000000000000000000000000000000000000000000',
-  'ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
-  '0000000000000000000000000000000000000000000000000000000000000000',
-  'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a',
-  '26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05',
-]);
 const SOLANA_BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-
-export interface CantonPartyPublicKeyInput {
-  readonly partyId: string;
-  readonly publicKeyBase64: string;
-  readonly publicKeyFingerprint?: string | null;
-}
-
-export interface CantonHashSignatureInput {
-  readonly publicKeyBase64: string;
-  readonly hashHex: string;
-  readonly signatureBase64: string;
-}
 
 export interface Ed25519SignatureInput {
   readonly publicKeyBase64: string;
@@ -42,111 +13,9 @@ export interface Ed25519SignatureInput {
   readonly failureMessage?: string;
 }
 
-/** Normalizes a raw or DER-wrapped Ed25519 public key into Canton's DER X.509 SubjectPublicKeyInfo base64 format. */
-export function normalizeEd25519PublicKeyForCanton(publicKeyBase64: string): string {
-  return wrapEd25519PublicKeyInDER(extractRawEd25519PublicKey(publicKeyBase64)).toString('base64');
-}
-
-/** Extracts and validates the raw 32-byte Ed25519 public key from raw or DER X.509 base64 input. */
-export function extractRawEd25519PublicKey(publicKeyBase64: string): Buffer {
-  const key = decodeBase64(publicKeyBase64, 'publicKeyBase64');
-  if (key.length === ED25519_RAW_PUBLIC_KEY_LENGTH) {
-    assertCanonicalEd25519PublicKey(key);
-    return key;
-  }
-  if (isEd25519DerX509PublicKey(key)) {
-    const rawKey = key.subarray(ED25519_DER_X509_PREFIX.length);
-    assertCanonicalEd25519PublicKey(rawKey);
-    return rawKey;
-  }
-  throw invalidEd25519PublicKeyLength(key.length);
-}
-
 /** Converts a raw or DER-wrapped Ed25519 public key into the equivalent Solana address. */
 export function deriveSolanaAddressFromEd25519PublicKeyBase64(publicKeyBase64: string): string {
-  return encodeSolanaBase58(extractRawEd25519PublicKey(publicKeyBase64));
-}
-
-/** Derives the Canton fingerprint suffix for an Ed25519 external-party key. */
-export function deriveCantonEd25519PublicKeyFingerprint(publicKeyBase64: string): string {
-  // One formula for the Node and browser entries: the browser-safe module's (`ExternalParties`).
-  return fingerprintRawEd25519PublicKey(new Uint8Array(extractRawEd25519PublicKey(publicKeyBase64)));
-}
-
-/** Builds a deterministic external party id from a party hint/prefix and a Canton public-key fingerprint. */
-export function buildExternalPartyId(partyHint: string, publicKeyFingerprint: string): string {
-  const normalizedHint = partyHint.trim();
-  if (!normalizedHint) {
-    throw new ValidationError('partyHint is required');
-  }
-  if (normalizedHint.includes('::')) {
-    throw new ValidationError('partyHint cannot include the reserved "::" separator', { partyHint });
-  }
-  const fingerprint = assertCantonSha256MultihashHex(publicKeyFingerprint);
-  return `${normalizedHint}::${fingerprint}`;
-}
-
-/** Extracts the public-key fingerprint suffix from a Canton party id. */
-export function extractPublicKeyFingerprint(partyId: string): string {
-  return extractCantonPartyFingerprint(
-    partyId,
-    () => new ValidationError('Expected a Canton party ID with one public key fingerprint suffix', { partyId })
-  );
-}
-
-/**
- * Verifies that a party id fingerprint and optional caller-supplied fingerprint match a submitted Ed25519 public key.
- *
- * Returns the derived fingerprint when the party/key binding is valid.
- */
-export function assertCantonPartyMatchesPublicKey(input: CantonPartyPublicKeyInput): string {
-  const partyFingerprint = extractPublicKeyFingerprint(input.partyId);
-  const keyFingerprint = deriveCantonEd25519PublicKeyFingerprint(input.publicKeyBase64);
-  const suppliedFingerprint = input.publicKeyFingerprint?.trim();
-
-  if (suppliedFingerprint && suppliedFingerprint !== keyFingerprint) {
-    throw new ValidationError('Submitted public key fingerprint does not match the public key', {
-      suppliedFingerprint,
-      keyFingerprint,
-    });
-  }
-  if (partyFingerprint !== keyFingerprint) {
-    throw new ValidationError('Canton party ID does not match the submitted public key', {
-      partyFingerprint,
-      keyFingerprint,
-    });
-  }
-  return keyFingerprint;
-}
-
-/** Converts a Canton hash from hex, base64, or base64url into lowercase hex. */
-export function normalizeCantonHashToHex(hash: string, operation = 'operation'): string {
-  const normalized = hash.trim();
-  if (isCantonSha256MultihashHex(normalized)) {
-    return normalized.toLowerCase();
-  }
-
-  const base64 = normalized.replace(/-/g, '+').replace(/_/g, '/');
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64) || base64.length % 4 === 1) {
-    throw invalidCantonHash(operation);
-  }
-
-  const paddedBase64 = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
-  const decoded = Buffer.from(paddedBase64, 'base64');
-  if (!decoded.length || decoded.toString('base64').replace(/=+$/, '') !== base64.replace(/=+$/, '')) {
-    throw invalidCantonHash(operation);
-  }
-  assertCantonSha256Multihash(decoded, operation);
-  return decoded.toString('hex');
-}
-
-/** Validates and lowercases a submitted Canton SHA-256 multihash hex value. */
-export function assertCantonSha256MultihashHex(value: string): string {
-  const normalized = value.trim();
-  if (!isCantonSha256MultihashHex(normalized)) {
-    throw new ValidationError('Expected a Canton SHA-256 multihash hex string', { value });
-  }
-  return normalized.toLowerCase();
+  return encodeSolanaBase58(rawEd25519PublicKey(publicKeyBase64));
 }
 
 /** Converts a hex-encoded hash into base64 bytes for browser wallet signing. */
@@ -154,19 +23,13 @@ export function hashHexToBase64(hashHex: string): string {
   return decodeHashHex(hashHex).toString('base64');
 }
 
-/** Verifies an Ed25519 signature over a hex-encoded Canton hash. */
-export function assertCantonHashSignature(input: CantonHashSignatureInput): void {
-  assertEd25519Signature({
-    publicKeyBase64: input.publicKeyBase64,
-    payload: decodeHashHex(input.hashHex),
-    signatureBase64: input.signatureBase64,
-    failureMessage: 'Invalid Canton hash signature',
-  });
-}
-
-/** Verifies an Ed25519 signature against a raw payload using a raw or DER-wrapped public key. */
+/**
+ * Verifies an Ed25519 signature against an arbitrary payload (such as a wallet-ownership message) using a raw or
+ * DER-wrapped public key. A signature over a Canton hash is checked with canton-protocol's
+ * `verifyCantonHashSignature`.
+ */
 export function assertEd25519Signature(input: Ed25519SignatureInput): void {
-  const derPublicKey = decodeBase64(normalizeEd25519PublicKeyForCanton(input.publicKeyBase64), 'publicKeyBase64');
+  const derPublicKey = Buffer.from(cantonPublicKeyBase64(input.publicKeyBase64), 'base64');
   const signature = decodeBase64(input.signatureBase64, 'signatureBase64');
   const payload = normalizeSignaturePayload(input.payload);
   const verified = verifyEd25519Signature(null, payload, { key: derPublicKey, format: 'der', type: 'spki' }, signature);
@@ -216,73 +79,11 @@ function assertNonEmptyPrepareTokenSecret(secret: string): void {
   }
 }
 
-/** Computes the SHA-256 hex digest of a base64 prepared transaction blob for token binding. */
-export function hashPreparedTransaction(preparedTransaction: string): string {
-  return createHash('sha256').update(preparedTransaction).digest('hex');
-}
-
-/** Converts a base64/base64url prepared transaction hash returned by interactive submission into lowercase hex. */
-export function preparedTransactionHashToHex(hashBase64: string, operation = 'interactive submission prepare'): string {
-  const normalized = hashBase64.trim().replace(/-/g, '+').replace(/_/g, '/');
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized) || normalized.length % 4 === 1) {
-    throw new OperationError(
-      `Canton ${operation} response did not include a valid prepared hash`,
-      OperationErrorCode.TRANSACTION_FAILED
-    );
-  }
-  const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
-  const decoded = Buffer.from(padded, 'base64');
-  if (!decoded.length || decoded.toString('base64').replace(/=+$/, '') !== normalized.replace(/=+$/, '')) {
-    throw new OperationError(
-      `Canton ${operation} response did not include a valid prepared hash`,
-      OperationErrorCode.TRANSACTION_FAILED
-    );
-  }
-  return decoded.toString('hex');
-}
-
 function normalizeSignaturePayload(payload: Buffer | Uint8Array | string): Buffer {
   if (typeof payload === 'string') {
     return Buffer.from(payload, 'utf8');
   }
   return Buffer.from(payload);
-}
-
-function isCantonSha256MultihashHex(value: string): boolean {
-  return (
-    value.length === CANTON_SHA256_MULTIHASH_HEX_LENGTH &&
-    value.toLowerCase().startsWith(CANTON_SHA256_MULTIHASH_PREFIX_HEX) &&
-    /^[0-9a-fA-F]+$/.test(value)
-  );
-}
-
-function assertCantonSha256Multihash(hash: Buffer, operation: string): void {
-  if (
-    hash.length !== CANTON_SHA256_MULTIHASH_BYTE_LENGTH ||
-    hash.subarray(0, 2).toString('hex') !== CANTON_SHA256_MULTIHASH_PREFIX_HEX
-  ) {
-    throw invalidCantonHash(operation);
-  }
-}
-
-function invalidCantonHash(operation: string): OperationError {
-  return new OperationError(
-    `Canton ${operation} response did not include a valid SHA-256 multihash`,
-    OperationErrorCode.TRANSACTION_FAILED
-  );
-}
-
-function decodeBase64(value: string, label: string): Buffer {
-  const normalized = value.trim().replace(/-/g, '+').replace(/_/g, '/');
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized) || normalized.length % 4 === 1) {
-    throw new ValidationError(`${label} must be base64-encoded`, { [label]: value });
-  }
-  const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
-  const decoded = Buffer.from(padded, 'base64');
-  if (decoded.toString('base64').replace(/=+$/, '') !== normalized.replace(/=+$/, '')) {
-    throw new ValidationError(`${label} must be base64-encoded`, { [label]: value });
-  }
-  return decoded;
 }
 
 function decodeHashHex(hashHex: string): Buffer {
@@ -293,7 +94,7 @@ function decodeHashHex(hashHex: string): Buffer {
   return Buffer.from(normalized, 'hex');
 }
 
-function encodeSolanaBase58(bytes: Buffer): string {
+function encodeSolanaBase58(bytes: Uint8Array): string {
   const digits: number[] = [];
 
   for (const byte of bytes) {
@@ -322,59 +123,6 @@ function encodeSolanaBase58(bytes: Buffer): string {
       .map((digit) => SOLANA_BASE58_ALPHABET.charAt(digit))
       .join('')
   );
-}
-
-function isEd25519DerX509PublicKey(key: Buffer): boolean {
-  return (
-    key.length === ED25519_DER_X509_PUBLIC_KEY_LENGTH &&
-    key.subarray(0, ED25519_DER_X509_PREFIX.length).equals(ED25519_DER_X509_PREFIX)
-  );
-}
-
-function assertCanonicalEd25519PublicKey(rawPublicKey: Buffer): void {
-  // Compared with the sign bit cleared, so both x signs of a small-order y (00..80 is the order-4 point) are refused.
-  const encodedY = Buffer.from(rawPublicKey);
-  encodedY[31] = (encodedY[31] ?? 0) & 0x7f;
-  if (ED25519_SMALL_ORDER_PUBLIC_KEYS_HEX.has(encodedY.toString('hex'))) {
-    throw new ValidationError('Invalid Ed25519 public key');
-  }
-
-  if (compareLittleEndian(encodedY, ED25519_FIELD_PRIME_LE) >= 0) {
-    throw new ValidationError('Invalid Ed25519 public key');
-  }
-}
-
-function compareLittleEndian(left: Buffer, right: Buffer): number {
-  for (let index = Math.max(left.length, right.length) - 1; index >= 0; index -= 1) {
-    const leftByte = left[index] ?? 0;
-    const rightByte = right[index] ?? 0;
-    if (leftByte !== rightByte) return leftByte - rightByte;
-  }
-  return 0;
-}
-
-function invalidEd25519PublicKeyLength(length: number): ValidationError {
-  return new ValidationError(
-    `Invalid Ed25519 public key length: ${length}; expected raw 32 bytes or DER-wrapped 44 bytes`,
-    {
-      actualLength: length,
-      expectedRawLength: ED25519_RAW_PUBLIC_KEY_LENGTH,
-      expectedDerLength: ED25519_DER_X509_PUBLIC_KEY_LENGTH,
-    }
-  );
-}
-
-function extractCantonPartyFingerprint(partyId: string, createError: () => Error): string {
-  const trimmed = partyId.trim();
-  const separatorIndex = trimmed.indexOf('::');
-  if (separatorIndex <= 0 || separatorIndex !== trimmed.lastIndexOf('::')) {
-    throw createError();
-  }
-  const fingerprint = trimmed.slice(separatorIndex + 2).trim();
-  if (!fingerprint) {
-    throw createError();
-  }
-  return fingerprint;
 }
 
 function normalizeCantonProtocolPayload(payload: unknown): unknown {

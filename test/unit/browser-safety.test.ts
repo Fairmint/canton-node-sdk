@@ -41,7 +41,12 @@ const MODULES: readonly BrowserModule[] = [
     ],
     allowedPackages: [],
   },
-  { dir: 'external-parties', minFiles: 5, allowedOutside: [], allowedPackages: ['@noble/hashes/sha2'] },
+  {
+    dir: 'external-parties',
+    minFiles: 2,
+    allowedOutside: [],
+    allowedPackages: ['@fairmint/canton-protocol/party'],
+  },
 ];
 
 /** The SDK's Node-only runtime dependencies; none may load with the wallets entry point. */

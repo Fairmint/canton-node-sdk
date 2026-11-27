@@ -1,10 +1,14 @@
 import { ApiError } from '../../../src/core/errors';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
+import { isCantonProtocolError, type ExternalPartyListing } from '@fairmint/canton-protocol/party';
 import {
   createExternalPartyDirectory,
-  isExternalPartyError,
   type ExternalPartyDirectoryLedgerClient,
+  type ExternalPartyDirectoryListing,
 } from '../../../src/external-parties';
+import * as Root from '../../../src';
+import * as ExternalPartiesEntry from '../../../src/external-parties';
+import { assertPartyKey } from '../../../src/utils/external-signing/party-identity';
 import { createKey } from './support';
 
 const API = 'https://participant.example';
@@ -166,7 +170,7 @@ describe('createExternalPartyDirectory', () => {
     const controller = new AbortController();
     const waiting = slow.listPartiesForKey({ publicKeyFingerprint: key.fingerprint, signal: controller.signal });
     controller.abort();
-    expect(isExternalPartyError(await rejection(waiting), 'ABORTED')).toBe(true);
+    expect(isCantonProtocolError(await rejection(waiting), 'ABORTED')).toBe(true);
     // The abort stopped the caller's wait, not the shared scan: it still ends at its own deadline.
     await expect(slow.listPartiesForKey({ publicKeyFingerprint: key.fingerprint })).resolves.toEqual({
       parties: [],
@@ -258,8 +262,10 @@ describe('createExternalPartyDirectory', () => {
       `${'a'.repeat(186)}::${key.fingerprint}`,
       ` p3::${key.fingerprint}`,
       `p\n3::${key.fingerprint}`,
+      // Outside the Daml-LF Party character set.
+      `p.3::${key.fingerprint}`,
     ]) {
-      expect(() => directory.noteAllocated(partyId)).toThrow(/255 characters/);
+      expect(() => directory.noteAllocated(partyId)).toThrow(/Daml-LF party ID .*255 ASCII letters, digits, spaces/);
     }
   });
 
@@ -294,7 +300,7 @@ describe('createExternalPartyDirectory', () => {
     await expect(directory.findParty({ partyId: `other::${key.fingerprint}` })).resolves.toEqual({ exists: false });
     await expect(directory.findParty({ partyId: `gone::${key.fingerprint}` })).resolves.toEqual({ exists: false });
     expect(
-      isExternalPartyError(
+      isCantonProtocolError(
         await rejection(directory.findParty({ partyId: `bad::${key.fingerprint}` })),
         'INVALID_RESPONSE'
       )
@@ -337,7 +343,7 @@ describe('createExternalPartyDirectory', () => {
     const error = await rejection(
       directory.listPartiesForKey({ publicKeyFingerprint: key.fingerprint, hints: ['down'] })
     );
-    expect(isExternalPartyError(error, 'LOOKUP_FAILED')).toBe(true);
+    expect(isCantonProtocolError(error, 'LOOKUP_FAILED')).toBe(true);
     expect((error as Error & { cause?: unknown }).cause).toBeInstanceOf(ApiError);
   });
 
@@ -348,7 +354,7 @@ describe('createExternalPartyDirectory', () => {
       ledgerClient: { getApiUrl: () => API, makeGetRequest: async () => Promise.reject(failure) },
     });
     const listError = await rejection(failing.listPartiesForKey({ publicKeyFingerprint: key.fingerprint }));
-    expect(isExternalPartyError(listError, 'LIST_FAILED')).toBe(true);
+    expect(isCantonProtocolError(listError, 'LIST_FAILED')).toBe(true);
     expect((listError as Error & { cause?: unknown }).cause).toBe(failure);
 
     const { client } = pagedClient([{ partyDetails: 'nope' }]);
@@ -357,7 +363,7 @@ describe('createExternalPartyDirectory', () => {
         publicKeyFingerprint: key.fingerprint,
       })
     );
-    expect(isExternalPartyError(invalid, 'INVALID_RESPONSE')).toBe(true);
+    expect(isCantonProtocolError(invalid, 'INVALID_RESPONSE')).toBe(true);
     expect((invalid as Error).message).toBe('The participant returned an invalid party list.');
 
     const directory = createExternalPartyDirectory({ ledgerClient: client });
@@ -367,12 +373,69 @@ describe('createExternalPartyDirectory', () => {
       { publicKeyBase64: key.publicKeyBase64, publicKeyFingerprint: createKey().fingerprint },
     ]) {
       expect(
-        isExternalPartyError(await rejection(directory.listPartiesForKey(request as never)), 'INVALID_INPUT')
+        isCantonProtocolError(await rejection(directory.listPartiesForKey(request as never)), 'INVALID_INPUT')
       ).toBe(true);
     }
     expect(() => createExternalPartyDirectory({ ledgerClient: client, pageSize: 0 })).toThrow(/pageSize/);
     expect(() => createExternalPartyDirectory({ ledgerClient: client, maxPages: 1.5 })).toThrow(/maxPages/);
     expect(() => createExternalPartyDirectory({ ledgerClient: client, timeoutMs: 10 })).toThrow(/timeoutMs/);
     expect(() => createExternalPartyDirectory({ ledgerClient: client, cacheMs: -1 })).toThrow(/cacheMs/);
+  });
+
+  it('lists only parties the SDK accepts for the key: a space before `::` is part of the hint, surrounding whitespace is skipped', async () => {
+    const key = createKey();
+    const { client } = pagedClient([
+      {
+        partyDetails: [
+          { party: `alice ::${key.fingerprint}`, isLocal: true },
+          { party: ` bob::${key.fingerprint}`, isLocal: true },
+          { party: `carol::${key.fingerprint} `, isLocal: true },
+        ],
+      },
+    ]);
+    const directory = createExternalPartyDirectory({ ledgerClient: client });
+    const { parties } = await directory.listPartiesForKey({ publicKeyBase64: key.publicKeyBase64 });
+    expect(parties).toEqual([{ partyId: `alice ::${key.fingerprint}`, partyHint: 'alice ', hostedHere: true }]);
+    // Every party listed is one the external-party submits and the wallet ownership checks accept for this key.
+    for (const { partyId } of parties) {
+      expect(assertPartyKey({ partyId, publicKeyBase64: key.publicKeyBase64 })).toBe(key.fingerprint);
+    }
+  });
+});
+
+describe('the ./external-parties entry point', () => {
+  it("declares the listing it answers itself, the same shape as canton-protocol's", () => {
+    // Compile-time: each type assigns to the other, so the public declarations need not import the ESM-only package.
+    const ours: ExternalPartyDirectoryListing = {
+      parties: [{ partyId: 'a::b', partyHint: 'a', hostedHere: true }],
+      complete: true,
+    };
+    const theirs: ExternalPartyListing = ours;
+    const back: ExternalPartyDirectoryListing = theirs;
+    expect(back).toBe(ours);
+  });
+
+  it('exports only the directory, also as the root ExternalParties namespace; identity and discovery are canton-protocol', () => {
+    expect(Object.keys(ExternalPartiesEntry).sort()).toEqual(['createExternalPartyDirectory']);
+    expect(Root.ExternalParties.createExternalPartyDirectory).toBe(createExternalPartyDirectory);
+    expect(Object.keys(Root.ExternalParties).sort()).toEqual(['createExternalPartyDirectory']);
+    // The moved helpers are not re-exported from the root either (no backward compatibility).
+    for (const moved of [
+      'deriveCantonEd25519PublicKeyFingerprint',
+      'buildExternalPartyId',
+      'normalizeEd25519PublicKeyForCanton',
+      'extractRawEd25519PublicKey',
+      'extractPublicKeyFingerprint',
+      'assertCantonPartyMatchesPublicKey',
+      'normalizeCantonHashToHex',
+      'assertCantonSha256MultihashHex',
+      'assertCantonHashSignature',
+      'hashPreparedTransaction',
+      'preparedTransactionHashToHex',
+      'prepareExternalPartyCcTransfer',
+      'submitExternalPartyCcTransfer',
+    ]) {
+      expect(moved in Root).toBe(false);
+    }
   });
 });

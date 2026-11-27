@@ -1,23 +1,13 @@
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { ValidationError } from '../../../src/core/errors';
 import {
-  assertCantonHashSignature,
-  assertCantonPartyMatchesPublicKey,
   assertCantonPrepareToken,
   assertEd25519Signature,
   buildCantonPrepareToken,
-  buildExternalPartyId,
   canonicalizeCantonProtocolPayload,
-  deriveCantonEd25519PublicKeyFingerprint,
   deriveSolanaAddressFromEd25519PublicKeyBase64,
-  extractPublicKeyFingerprint,
-  extractRawEd25519PublicKey,
   hashCantonProtocolPayload,
   hashHexToBase64,
-  hashPreparedTransaction,
-  normalizeCantonHashToHex,
-  normalizeEd25519PublicKeyForCanton,
-  preparedTransactionHashToHex,
 } from '../../../src/utils/external-signing/canton-protocol';
 
 const PRIVY_SOLANA_PUBLIC_KEY_BASE64 = 'vQ2OhTLJuhrZHGfWq+kSeMxAuHXLeryGhpe5bZ8eFd4=';
@@ -41,70 +31,23 @@ const createSigningFixture = (): {
 };
 
 describe('Canton protocol helpers', () => {
-  it('normalizes raw Privy/Solana Ed25519 public keys into Canton DER form', () => {
-    expect(normalizeEd25519PublicKeyForCanton(PRIVY_SOLANA_PUBLIC_KEY_BASE64)).toBe(PRIVY_SOLANA_DER_PUBLIC_KEY_BASE64);
-    expect(normalizeEd25519PublicKeyForCanton(PRIVY_SOLANA_DER_PUBLIC_KEY_BASE64)).toBe(
-      PRIVY_SOLANA_DER_PUBLIC_KEY_BASE64
-    );
-    expect(extractRawEd25519PublicKey(PRIVY_SOLANA_DER_PUBLIC_KEY_BASE64).toString('base64')).toBe(
-      PRIVY_SOLANA_PUBLIC_KEY_BASE64
-    );
-  });
-
-  it('derives the Solana address and Canton fingerprint used by the Privy demo wallet', () => {
+  it('derives the Solana address used by the Privy demo wallet, and refuses a key canton-protocol refuses', () => {
     expect(deriveSolanaAddressFromEd25519PublicKeyBase64(PRIVY_SOLANA_PUBLIC_KEY_BASE64)).toBe(PRIVY_SOLANA_ADDRESS);
-    expect(deriveCantonEd25519PublicKeyFingerprint(PRIVY_SOLANA_PUBLIC_KEY_BASE64)).toBe(PRIVY_CANTON_FINGERPRINT);
-  });
-
-  it('rejects malformed, non-canonical, and wrong-length Ed25519 public keys', () => {
-    expect(() => extractRawEd25519PublicKey('not base64')).toThrow(ValidationError);
-    expect(() => extractRawEd25519PublicKey(Buffer.alloc(31, 1).toString('base64'))).toThrow(
-      'Invalid Ed25519 public key length'
+    expect(deriveSolanaAddressFromEd25519PublicKeyBase64(PRIVY_SOLANA_DER_PUBLIC_KEY_BASE64)).toBe(
+      PRIVY_SOLANA_ADDRESS
     );
-    expect(() => extractRawEd25519PublicKey(Buffer.alloc(32).toString('base64'))).toThrow('Invalid Ed25519 public key');
-    expect(() => extractRawEd25519PublicKey(Buffer.from(`ee${'ff'.repeat(30)}7f`, 'hex').toString('base64'))).toThrow(
-      'Invalid Ed25519 public key'
+    expect(() => deriveSolanaAddressFromEd25519PublicKeyBase64(Buffer.alloc(32).toString('base64'))).toThrow(
+      ValidationError
     );
   });
 
-  it('builds and validates party ids bound to public-key fingerprints', () => {
-    const partyId = buildExternalPartyId('privy-test', PRIVY_CANTON_FINGERPRINT);
-    expect(partyId).toBe(`privy-test::${PRIVY_CANTON_FINGERPRINT}`);
-    expect(extractPublicKeyFingerprint(partyId)).toBe(PRIVY_CANTON_FINGERPRINT);
-    expect(
-      assertCantonPartyMatchesPublicKey({
-        partyId,
-        publicKeyBase64: PRIVY_SOLANA_PUBLIC_KEY_BASE64,
-        publicKeyFingerprint: PRIVY_CANTON_FINGERPRINT,
-      })
-    ).toBe(PRIVY_CANTON_FINGERPRINT);
-
-    expect(() => buildExternalPartyId('bad::prefix', PRIVY_CANTON_FINGERPRINT)).toThrow('partyHint cannot include');
-    expect(() => buildExternalPartyId('privy-test', 'not-a-fingerprint')).toThrow(
-      'Expected a Canton SHA-256 multihash hex string'
-    );
-    expect(buildExternalPartyId('privy-test', PRIVY_CANTON_FINGERPRINT.toUpperCase())).toBe(partyId);
-    expect(() =>
-      assertCantonPartyMatchesPublicKey({
-        partyId: `privy-test::1220${'00'.repeat(32)}`,
-        publicKeyBase64: PRIVY_SOLANA_PUBLIC_KEY_BASE64,
-      })
-    ).toThrow('Canton party ID does not match');
-  });
-
-  it('normalizes Canton hashes from hex, base64, and base64url', () => {
+  it('converts Canton hashes from hex to base64', () => {
     const base64 = Buffer.from(SAMPLE_CANTON_HASH_HEX, 'hex').toString('base64');
-    const base64Url = Buffer.from(SAMPLE_CANTON_HASH_HEX, 'hex').toString('base64url');
-
-    expect(normalizeCantonHashToHex(SAMPLE_CANTON_HASH_HEX.toUpperCase())).toBe(SAMPLE_CANTON_HASH_HEX);
-    expect(normalizeCantonHashToHex(base64)).toBe(SAMPLE_CANTON_HASH_HEX);
-    expect(normalizeCantonHashToHex(base64Url)).toBe(SAMPLE_CANTON_HASH_HEX);
     expect(hashHexToBase64(SAMPLE_CANTON_HASH_HEX)).toBe(base64);
-    expect(() => normalizeCantonHashToHex(Buffer.from('bad').toString('base64'))).toThrow('valid SHA-256 multihash');
     expect(() => hashHexToBase64('abc')).toThrow('hex-encoded Canton hash');
   });
 
-  it('verifies Ed25519 signatures over raw payloads and Canton hashes', () => {
+  it('verifies Ed25519 signatures over raw payloads', () => {
     const fixture = createSigningFixture();
     const payload = Buffer.from('Canton external party approval', 'utf8');
     const signatureBase64 = fixture.signPayload(payload);
@@ -118,20 +61,20 @@ describe('Canton protocol helpers', () => {
       payload,
       signatureBase64,
     });
-
-    const hashSignature = fixture.signPayload(Buffer.from(SAMPLE_CANTON_HASH_HEX, 'hex'));
-    assertCantonHashSignature({
-      publicKeyBase64: fixture.rawPublicKeyBase64,
-      hashHex: SAMPLE_CANTON_HASH_HEX,
-      signatureBase64: hashSignature,
-    });
     expect(() =>
-      assertCantonHashSignature({
+      assertEd25519Signature({
         publicKeyBase64: fixture.rawPublicKeyBase64,
-        hashHex: SAMPLE_CANTON_HASH_HEX,
+        payload,
         signatureBase64: fixture.signPayload(Buffer.from('wrong payload')),
       })
-    ).toThrow('Invalid Canton hash signature');
+    ).toThrow('Invalid Ed25519 signature');
+    expect(() =>
+      assertEd25519Signature({
+        publicKeyBase64: fixture.rawPublicKeyBase64,
+        payload,
+        signatureBase64: 'not*base64',
+      })
+    ).toThrow('signatureBase64 must be base64-encoded');
   });
 
   it('canonicalizes and hashes protocol payloads deterministically', () => {
@@ -164,17 +107,5 @@ describe('Canton protocol helpers', () => {
     expect(() => assertCantonPrepareToken('wrong-secret', token, payload)).toThrow(
       'does not match the submitted details'
     );
-  });
-
-  it('hashes prepared transaction blobs and converts prepared transaction hashes from base64', () => {
-    const preparedTransaction = 'prepared-transaction-base64';
-    const preparedHash = Buffer.from('interactive-hash');
-
-    expect(hashPreparedTransaction(preparedTransaction)).toBe(
-      createHash('sha256').update(preparedTransaction).digest('hex')
-    );
-    expect(preparedTransactionHashToHex(preparedHash.toString('base64'))).toBe(preparedHash.toString('hex'));
-    expect(preparedTransactionHashToHex(preparedHash.toString('base64url'))).toBe(preparedHash.toString('hex'));
-    expect(() => preparedTransactionHashToHex('not base64!')).toThrow('valid prepared hash');
   });
 });

@@ -18,6 +18,19 @@ shapes, and error behavior.
 npm install @fairmint/canton-node-sdk
 ```
 
+It needs Node.js 22.12 or later. The SDK is CommonJS, and its dependency
+[`@fairmint/canton-protocol`](https://www.npmjs.com/package/@fairmint/canton-protocol) is ESM only:
+Node loads it through `require()` of an ES module, which Node 22 supports without a flag from 22.12
+(22.12 prints a one-time `ExperimentalWarning`; 22.13 and later do not).
+
+Testing with Jest in CommonJS mode? Jest's module runtime does not load ES modules through
+`require()`, so it must compile `@fairmint/canton-protocol` and `@noble/hashes` (2.x, ESM only) to
+CommonJS: add `'^.+\\.js$'` to `transform` (for example ts-jest with `allowJs`, `isolatedModules`
+and `module: 'commonjs'`, as in this repository's
+[`jest.config.js`](https://github.com/Fairmint/canton-node-sdk/blob/main/jest.config.js)) and
+`transformIgnorePatterns: ['/node_modules/(?!(@fairmint/canton-protocol|@noble/hashes)/)']`.
+canton-protocol's other dependencies publish CommonJS. Vitest and Node itself need nothing.
+
 ```ts
 import { Canton } from '@fairmint/canton-node-sdk';
 
@@ -69,31 +82,93 @@ same way; it requires an explicit `userId` and a non-empty `parties` list, as th
 See
 [`examples/read-any-party.ts`](https://github.com/Fairmint/canton-node-sdk/blob/main/examples/read-any-party.ts).
 
+## Onboarding an external party
+
+`prepareExternalPartyOnboarding`, `createExternalPartyWithSigner`,
+`createExternalPartyWithEd25519Signer`, the wallet bridge's `prepareExternalParty` and
+`createExternalParty` never sign the participant's word for the topology. They read the local
+participant's ID (`GET /v2/parties/participant-id`), check the generated topology with
+`verifyPartyOnboardingTopology` from `@fairmint/canton-protocol/topology` (the party
+`partyHint::fingerprint` built from the request, never the ID the participant answers; its one key
+with the usages `NAMESPACE`, `PROTOCOL` and `PROOF_OF_OWNERSHIP`, every hosting participant with its
+permission, and the threshold, which defaults to every confirming participant), and hand the signer
+only the multi-hash recomputed from the transactions. A topology that differs is an `OperationError`
+(`TRANSACTION_FAILED`) whose `cause` is the `CantonProtocolError`, and nothing is signed. Hosting
+participant UIDs are `name::1220…` (no `PAR::` prefix), each listed once; at least one participant
+must confirm. The hint is used exactly as given: one with leading or trailing whitespace, or one
+canton-protocol's `buildExternalPartyId` refuses, is a `ValidationError` before any request. Pass
+`expectedLocalParticipantUid` to pin the local participant: a `participant-id` answer naming any
+other participant is then an `OperationError` before topology is generated. Without it, which
+participant hosts the party with the local permission is the participant's own word.
+
+`submitExternalPartyOnboarding` (and the wallet bridge's `submitExternalPartySignature`, and
+`createExternalPartyWithSigner` on its own submit) refuses, with a `ValidationError` and before
+allocating, a `multiHashHex` that is not the multi-hash of the submitted `topologyTransactions`, and
+transactions that do not state exactly the onboarding of `partyId` with that key and the hosting
+options it is given (the same options as prepare's: `localParticipantObservationOnly`,
+`otherConfirmingParticipantUids`, `confirmationThreshold`, `observingParticipantUids` and
+`expectedLocalParticipantUid`; by default the local participant confirming alone). It reads the
+local participant's ID for that check. Canton 3.4 or later is required.
+
+## Signing a prepared transaction
+
+Every place the SDK prepares a transaction for an external party to sign
+(`executeExternalTransactionWithEd25519Signer`, `prepareExternalPartyCcTokenStandardTransfer`,
+`prepareExternalPartyTransferOfferAcceptance`, the wallet bridge's `prepareCcTransfer` and
+`prepareProviderTransfer`, and `prepareExternalPartyTransferPreapprovalSetup`) returns, or signs,
+only the hash it recomputed from the prepared transaction with `verifyPreparedTransaction` from
+`@fairmint/canton-protocol/transaction`. The participant's hash must equal it, under the hashing
+scheme the SDK asked for (an answer naming another scheme is refused), and the transaction must act
+exactly as the requested parties, under the requested command id, on the requested synchronizer.
+Anything else is an `OperationError` (`TRANSACTION_FAILED`) whose `cause` is the
+`CantonProtocolError` and whose context names its `code` and `field`; nothing is returned to sign.
+The validator prepares the transfer-preapproval setup under a command id and synchronizer of its own
+choosing, so for it the hash (scheme V2, which the validator executes under) and the acting party
+are checked.
+
+Before anything is executed or submitted, `executeExternalPartySignedTransaction` (and so every
+submit helper) and `submitExternalPartyTransferPreapprovalSetup` recompute the hash of the submitted
+`preparedTransaction` and refuse a `preparedTransactionHashHex` that differs, or a transaction that
+acts as any party but the signer, with a `ValidationError`. The wallet bridge's prepare tokens bind
+the recomputed hash, the command id and the synchronizer (CC transfer version 3, which
+`submitCcTransfer` now needs `synchronizerId` back for; provider acceptance version 2), not the
+transaction bytes: the submit recomputes the hash from the bytes instead. Signing your own
+`prepareExternalTransaction` result? Recompute the hash the same way before you sign it.
+
+`signAndVerifyCantonEd25519Payload` signs only a hash: a topology multi-hash (34 bytes, `1220…`) or
+a prepared-transaction hash (32 bytes). Any other `payloadHex` is refused before the signer is
+called. Hash signatures are checked with canton-protocol's `verifyCantonHashSignature`, and every
+caller refuses a signature that does not verify.
+
 ## Finding every party a key controls
 
 An external party's ID is `hint::fingerprint`, where the fingerprint is Canton's SHA-256 multihash
 of the Ed25519 key: `1220` + hex(sha256(int32be(12) || rawKey)). Nothing about it depends on the
 signer, so one module serves any wallet. It is browser-safe: import
-`@fairmint/canton-node-sdk/external-parties` (it loads `@noble/hashes` and none of the SDK's Node
-dependencies); the package root also exports it as the `ExternalParties` namespace.
+`@fairmint/canton-node-sdk/external-parties` (it loads `@fairmint/canton-protocol/party` and none of
+the SDK's Node dependencies); the package root also exports it as the `ExternalParties` namespace.
+To import `isCantonProtocolError`, add `@fairmint/canton-protocol` to your own dependencies (any
+0.1.x copy matches the directory's errors: the brand is registered with `Symbol.for`).
 
 ```typescript
-import {
-  createExternalPartyDirectory,
-  suggestExternalPartyHint,
-  validateExternalPartyHint,
-} from '@fairmint/canton-node-sdk/external-parties';
+import { createExternalPartyDirectory } from '@fairmint/canton-node-sdk/external-parties';
+import { isCantonProtocolError } from '@fairmint/canton-protocol/party';
 
 // One directory per participant: one scan of its party store answers every key for 30 s.
 const directory = createExternalPartyDirectory({ ledgerClient }); // a LedgerJsonApiClient
-const { parties, complete } = await directory.listPartiesForKey({
-  publicKeyBase64, // raw or DER Ed25519 key; or pass publicKeyFingerprint
-  hints: ['wallet'], // looked up exactly when the scan does not show them
-  signal,
-});
-// parties: [{ partyId, partyHint, hostedHere }], sorted by hint
-const hint = suggestExternalPartyHint({ base: 'My app', taken: parties.map((p) => p.partyHint) });
-validateExternalPartyHint(hint); // null, or 'empty' | 'too-long' | 'charset' | 'taken'
+try {
+  const { parties, complete } = await directory.listPartiesForKey({
+    publicKeyBase64, // raw or DER Ed25519 key; or pass publicKeyFingerprint
+    hints: ['wallet'], // looked up exactly when the scan does not show them
+    signal,
+  });
+  // parties: [{ partyId, partyHint, hostedHere }], sorted by hint
+} catch (error) {
+  if (isCantonProtocolError(error, 'LIST_FAILED')) {
+    // error.cause is the ledger client's error
+  }
+  throw error;
+}
 ```
 
 The participant API has no namespace filter, so a scan reads `GET /v2/parties` page by page and
@@ -102,15 +177,26 @@ keeps the parties ending in `::fingerprint`. Each scan is bounded (`pageSize` 10
 callers share one scan). When a bound stops it first the answer is `complete: false`, and the hints
 asked for are still looked up with `GET /v2/parties/{party}` (also when the scan is complete, since
 a cached scan can predate a newer party). `noteAllocated(partyId)` lists a party you just allocated
-at once; `findParty({ partyId })` is the exact lookup on its own. `discoverExternalParties` is the
-same list-plus-lookups logic over your own `listParties` / `findParty` callbacks. Errors are
-`ExternalPartyError` with a `code` (`INVALID_INPUT`, `INVALID_RESPONSE`, `ABORTED`, `LIST_FAILED`,
+at once; `findParty({ partyId })` is the exact lookup on its own. Errors are canton-protocol's
+`CantonProtocolError` with a `code` (`INVALID_INPUT`, `INVALID_RESPONSE`, `ABORTED`, `LIST_FAILED`,
 `LOOKUP_FAILED`); a ledger failure is its `cause`.
 
-The same module has the identity helpers: `deriveCantonEd25519PublicKeyFingerprint`,
-`buildExternalPartyId`, `parseExternalPartyId`, `readPartyNamespace`,
-`normalizeEd25519PublicKeyForCanton` and `decodeEd25519PublicKey`. The Node helpers of the same
-names under the package root (which throw `ValidationError`) derive the fingerprint through it.
+The identity rules and the list-plus-lookups logic are
+[`@fairmint/canton-protocol`](https://www.npmjs.com/package/@fairmint/canton-protocol)'s: import
+`fingerprintEd25519PublicKey`, `buildExternalPartyId`, `parsePartyId`, `readPartyNamespace`,
+`normalizeEd25519PublicKeyForCanton`, `decodeEd25519PublicKey`, `isCantonHash` and
+`discoverExternalParties` (over your own `listParties` / `findParty` callbacks) from
+`@fairmint/canton-protocol/party`. A naming policy for new hints is the app's own.
+
+Those rules are stricter than the SDK's former helpers. A party ID is never trimmed and must be a
+Daml-LF Party (at most 255 ASCII letters, digits, spaces, `:`, `-` or `_`): an ID with surrounding
+whitespace is refused wherever the SDK checks a party against its key (every external-party submit
+and the wallet ownership checks), and the directory skips such IDs in listings. A space next to `::`
+is read as Canton reads it: before `::` it is part of the hint (`alice ::<fingerprint>` is a party
+of that key, listed and accepted), after it part of the namespace, which then is no key's
+fingerprint. An Ed25519 key must be a point on the curve:
+`deriveSolanaAddressFromEd25519PublicKeyBase64` and `assertEd25519Signature` refuse an off-curve
+32-byte value, such as a Solana program-derived address.
 
 ## Token actions through a CIP-0103 wallet
 

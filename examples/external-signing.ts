@@ -71,9 +71,10 @@ async function main(): Promise<void> {
     console.log('   4. Submit topology and allocate party on ledger');
 
     console.log('\n💡 To submit transactions as this party:');
-    console.log('   1. Call prepareExternalTransaction() to get hash');
-    console.log('   2. Sign hash with private key');
-    console.log('   3. Call executeExternalTransaction() with signature');
+    console.log('   1. Call prepareExternalTransaction() to get the prepared transaction');
+    console.log('   2. Recompute its hash with verifyPreparedTransaction (@fairmint/canton-protocol/transaction)');
+    console.log("   3. Sign the recomputed hash with the private key, never the participant's hash");
+    console.log('   4. Call executeExternalTransaction() with signature');
 
     console.log('\n⚠️  Security Notes:');
     console.log('   - Store the Stellar secret key securely');

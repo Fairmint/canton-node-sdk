@@ -1,10 +1,7 @@
 import { ValidationError } from '../../core/errors';
-import {
-  assertCantonPartyMatchesPublicKey,
-  assertEd25519Signature,
-  hashHexToBase64,
-  normalizeEd25519PublicKeyForCanton,
-} from './canton-protocol';
+import { hashHexToBase64 } from './canton-protocol';
+import { assertCantonHashSigned, isSignedHashHex } from './hash-signature';
+import { assertPartyKey, cantonPublicKeyBase64 } from './party-identity';
 
 export const CantonEd25519SigningPurpose = {
   EXTERNAL_PARTY_TOPOLOGY: 'external-party-topology',
@@ -79,7 +76,13 @@ export interface SignedCantonEd25519Payload {
   readonly signatureBase64: string;
 }
 
-/** Calls an external signer and independently verifies its response against the signer's declared public key. */
+/**
+ * Calls an external signer and independently verifies its response against the signer's declared public key, with
+ * canton-protocol's `verifyCantonHashSignature`. `payloadHex` must be a hash an external party signs: a 34-byte Canton
+ * hash (a topology `multiHash`) or a 32-byte prepared-transaction hash; anything else is refused before the signer is
+ * called. A signature that does not verify is a `ValidationError`; a platform without Ed25519 in WebCrypto rejects with
+ * canton-protocol's `UNSUPPORTED` error. Either way nothing signed is returned.
+ */
 export async function signAndVerifyCantonEd25519Payload(
   options: SignAndVerifyCantonEd25519PayloadOptions
 ): Promise<SignedCantonEd25519Payload> {
@@ -93,8 +96,8 @@ export async function signAndVerifyCantonEd25519Payload(
   const issuedAt = new Date(issuedAtMs).toISOString();
   const expiresAt = new Date(issuedAtMs + requestTtlMs).toISOString();
   const context = options.context === undefined ? undefined : normalizeSigningContext(options.context);
-  const publicKeyBase64 = normalizeEd25519PublicKeyForCanton(options.signer.publicKeyBase64);
-  const publicKeyFingerprint = assertCantonPartyMatchesPublicKey({
+  const publicKeyBase64 = cantonPublicKeyBase64(options.signer.publicKeyBase64);
+  const publicKeyFingerprint = assertPartyKey({
     partyId: options.partyId,
     publicKeyBase64,
   });
@@ -121,9 +124,9 @@ export async function signAndVerifyCantonEd25519Payload(
     });
   }
 
-  assertEd25519Signature({
+  await assertCantonHashSigned({
     publicKeyBase64,
-    payload: Buffer.from(payloadHex, 'hex'),
+    hashHex: payloadHex,
     signatureBase64,
     failureMessage: 'External Canton signer returned an invalid Ed25519 signature',
   });
@@ -244,8 +247,11 @@ function invalidCantonEd25519Signature(actualLength?: number): ValidationError {
 
 function normalizeHexPayload(value: string): string {
   const normalized = value.trim();
-  if (!/^(?:[0-9a-fA-F]{2})+$/.test(normalized)) {
-    throw new ValidationError('payloadHex must be non-empty, even-length hexadecimal bytes', { payloadHex: value });
+  if (!isSignedHashHex(normalized)) {
+    throw new ValidationError(
+      'payloadHex must be a Canton hash (34 bytes, 1220…) or a prepared-transaction hash (32 bytes), as hex',
+      { payloadHex: value }
+    );
   }
   return normalized.toLowerCase();
 }

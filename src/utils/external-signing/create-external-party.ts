@@ -2,7 +2,13 @@ import type { Keypair } from '@stellar/stellar-base';
 import type { LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { OperationError, OperationErrorCode } from '../../core/errors';
 import { normalizeAllocationUserId } from './allocation-user-id';
-import { signHexWithStellarKeypair, stellarPublicKeyToBase64, stellarPublicKeyToHex } from './stellar-utils';
+import {
+  checkOnboardingHosting,
+  resolveOnboardingHosting,
+  verifyGeneratedOnboardingTopology,
+} from './onboarding-topology';
+import { assertPartyKey, requestedExternalPartyId } from './party-identity';
+import { stellarPublicKeyToBase64, stellarPublicKeyToHex } from './stellar-utils';
 
 /** Parameters for creating an external party. */
 export interface CreateExternalPartyParams {
@@ -10,7 +16,10 @@ export interface CreateExternalPartyParams {
   readonly ledgerClient: LedgerJsonApiClient;
   /** Stellar keypair for the party (Ed25519). */
   readonly keypair: Keypair;
-  /** Party name hint (will be used as prefix in party ID). */
+  /**
+   * Party name hint: the party ID is `partyName::fingerprint`. Used exactly as given (leading or trailing whitespace is
+   * refused), and a participant answering any other party ID is refused before anything is signed.
+   */
   readonly partyName: string;
   /** Synchronizer ID to onboard the party on. */
   readonly synchronizerId: string;
@@ -24,12 +33,24 @@ export interface CreateExternalPartyParams {
   readonly userId?: string;
   /** If true, the local participant will only observe, not confirm (default: false). */
   readonly localParticipantObservationOnly?: boolean;
-  /** Other participant UIDs that should confirm for this party. */
+  /**
+   * Other participant UIDs that should confirm for this party: each a participant's unique identifier, `name::1220<64
+   * lowercase hex>` without the `PAR::` prefix, listed once, and not the local participant.
+   */
   readonly otherConfirmingParticipantUids?: readonly string[];
-  /** Confirmation threshold for multi-hosted party (default: all confirmers). */
+  /**
+   * Confirmation threshold for multi-hosted party: a non-negative integer, at most the number of confirming
+   * participants (default, or 0: all confirmers).
+   */
   readonly confirmationThreshold?: number;
-  /** Other participant UIDs that should only observe. */
+  /** Other participant UIDs that should only observe (same form and rules as `otherConfirmingParticipantUids`). */
   readonly observingParticipantUids?: readonly string[];
+  /**
+   * The local participant's unique identifier (`name::1220<64 lowercase hex>`, no `PAR::` prefix) as the caller knows
+   * it. When set, a `GET /v2/parties/participant-id` answering any other identifier is refused before anything is
+   * signed. Without it, which participant hosts the party with the local permission is the participant's own word.
+   */
+  readonly expectedLocalParticipantUid?: string;
 }
 
 /** Result of creating an external party. */
@@ -52,10 +73,16 @@ export interface CreateExternalPartyResult {
  * This is a convenience function that combines the three-step process:
  *
  * 1. Generate topology transactions
- * 2. Sign the multi-hash
+ * 2. Check them and sign the multi-hash recomputed from them
  * 3. Allocate the party
  *
- * The keypair's private key is used to sign the onboarding transactions, proving ownership of the public key.
+ * The keypair's private key is used to sign the onboarding transactions, proving ownership of the public key. The
+ * participant's answer is not signed on its word: the SDK reads the local participant's unique identifier (`GET
+ * /v2/parties/participant-id`), checks that the generated topology states exactly the requested onboarding (the party
+ * `partyName::fingerprint` of this key, the key with the usages `NAMESPACE`, `PROTOCOL` and `PROOF_OF_OWNERSHIP`, the
+ * hosting participants with their permissions, and the confirmation threshold), recomputes the multi-hash and signs
+ * only that. A topology that differs is an `OperationError` (`TRANSACTION_FAILED`) and nothing is signed or allocated.
+ * Canton 3.4 or later is required.
  *
  * @example
  *   ```typescript
@@ -89,14 +116,24 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
     otherConfirmingParticipantUids,
     confirmationThreshold,
     observingParticipantUids,
+    expectedLocalParticipantUid,
   } = params;
   const userId = rawUserId === undefined ? undefined : normalizeAllocationUserId(rawUserId);
+  const hostingRequest = checkOnboardingHosting({
+    localParticipantObservationOnly,
+    otherConfirmingParticipantUids,
+    confirmationThreshold,
+    observingParticipantUids,
+    expectedLocalParticipantUid,
+  });
 
   // Step 1: Convert Stellar public key to base64 for Ledger API
   const publicKeyBase64 = stellarPublicKeyToBase64(keypair);
   const publicKeyHex = stellarPublicKeyToHex(keypair);
+  const expectedPartyId = requestedExternalPartyId(partyName, publicKeyBase64);
 
   // Step 2: Generate external party topology using Ledger JSON API
+  const hosting = await resolveOnboardingHosting(ledgerClient, hostingRequest);
   const topology = await ledgerClient.generateExternalPartyTopology({
     synchronizer: synchronizerId,
     partyHint: partyName,
@@ -142,20 +179,34 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
     );
   }
 
-  // Validate fingerprint before using it in the API call
-  const publicKeyFingerprint = partyId.split('::')[1];
-  if (!publicKeyFingerprint) {
+  // The party must be this key's, and the topology exactly the requested onboarding.
+  let publicKeyFingerprint: string;
+  try {
+    publicKeyFingerprint = assertPartyKey({ partyId, publicKeyBase64 });
+  } catch (error) {
     throw new OperationError(
-      'Failed to extract public key fingerprint from party ID',
+      'Topology generation returned a party ID that does not match the keypair',
       OperationErrorCode.PARTY_CREATION_FAILED,
-      { partyId, partyName }
+      { partyId, partyName, cause: error instanceof Error ? error.message : String(error) }
     );
   }
+  if (partyId !== expectedPartyId) {
+    throw new OperationError(
+      'Topology generation returned a party ID that is not the requested party',
+      OperationErrorCode.PARTY_CREATION_FAILED,
+      { expectedPartyId, partyId, partyName }
+    );
+  }
+  const multiHashHex = verifyGeneratedOnboardingTopology({
+    transactions: rawTopologyTransactions,
+    multiHash,
+    partyId: expectedPartyId,
+    publicKeyBase64,
+    hosting,
+  });
 
-  // Step 3: Sign the multi-hash using the Stellar keypair
-  const multiHashSignatureHex = signHexWithStellarKeypair(keypair, multiHash);
-  // Convert signature from hex to base64 for Canton
-  const multiHashSignature = Buffer.from(multiHashSignatureHex, 'hex').toString('base64');
+  // Step 3: Sign the recomputed multi-hash using the Stellar keypair (raw signature, base64 for Canton)
+  const multiHashSignature = keypair.sign(Buffer.from(multiHashHex, 'hex')).toString('base64');
 
   // Step 4: Allocate the party using Ledger JSON API
   const onboardingTransactions = rawTopologyTransactions.map((transaction) => ({ transaction }));

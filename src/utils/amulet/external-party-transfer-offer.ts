@@ -4,16 +4,19 @@ import { type ValidatorApiClient } from '../../clients/validator-api';
 import { OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
 import { isRecord } from '../../core/utils';
 import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
-import { preparedTransactionHashToHex } from '../external-signing/canton-protocol';
 import { executeExternalPartySignedTransaction } from '../external-signing/execute-external-party-signed-transaction';
 import {
   type ExecuteExternalTransactionAndWaitResult,
   type InteractiveSubmissionHashingSchemeVersion,
 } from '../external-signing/execute-external-transaction';
 import { prepareExternalTransaction } from '../external-signing/prepare-external-transaction';
+import { verifyParticipantPreparedTransaction } from '../external-signing/prepared-transaction';
 import { assertSingleConnectedSynchronizerId } from '../party-readiness';
 
 export const CANTON_TRANSFER_OFFER_TEMPLATE_ID = '#splice-wallet:Splice.Wallet.TransferOffer:TransferOffer';
+
+/** The hashing scheme a transfer-offer acceptance is prepared and verified under (the Ledger default). */
+const TRANSFER_OFFER_ACCEPTANCE_HASHING_SCHEME = 'HASHING_SCHEME_VERSION_V2';
 
 export interface CantonDisclosedContract {
   readonly contractId: string;
@@ -73,9 +76,11 @@ export interface SubmittedExternalPartyTransferOfferAcceptance extends ExecuteEx
 /**
  * Prepares `TransferOffer_Accept` for an externally hosted party.
  *
- * The returned `preparedTransactionHashHex` is the value the end-user key must sign outside the SDK. The helper fetches
- * the transfer-offer disclosed contract from the validator wallet API when available and falls back to Ledger active
- * contracts for the provider/source party.
+ * The returned `preparedTransactionHashHex` is the value the end-user key must sign outside the SDK: the hash
+ * recomputed from the prepared transaction, which must act only as the accepting party, under the command id and on the
+ * synchronizer requested (a participant answer that does not is refused before anything is returned). The helper
+ * fetches the transfer-offer disclosed contract from the validator wallet API when available and falls back to Ledger
+ * active contracts for the provider/source party.
  */
 export async function prepareExternalPartyTransferOfferAcceptance(
   options: PrepareExternalPartyTransferOfferAcceptanceOptions
@@ -124,8 +129,18 @@ export async function prepareExternalPartyTransferOfferAcceptance(
     readAs: [options.acceptingPartyId],
     disclosedContracts: [offerDisclosure.contract],
     synchronizerId,
+    hashingSchemeVersion: TRANSFER_OFFER_ACCEPTANCE_HASHING_SCHEME,
     verboseHashing: options.verboseHashing ?? false,
     packageIdSelectionPreference: [],
+  });
+  // The accepting party signs the hash recomputed from the prepared transaction, never the participant's word for it.
+  const verified = await verifyParticipantPreparedTransaction({
+    operation: 'transfer-offer accept prepare',
+    preparedTransaction: readRequiredString(prepared, 'preparedTransaction', 'transfer-offer accept prepare'),
+    preparedTransactionHash: prepared.preparedTransactionHash,
+    hashingScheme: TRANSFER_OFFER_ACCEPTANCE_HASHING_SCHEME,
+    answeredHashingScheme: prepared.hashingSchemeVersion,
+    expected: { actAs: [options.acceptingPartyId], commandId: prepared.commandId, synchronizerId },
   });
 
   return {
@@ -133,12 +148,9 @@ export async function prepareExternalPartyTransferOfferAcceptance(
     acceptingPartyId: options.acceptingPartyId,
     commandId: prepared.commandId,
     synchronizerId,
-    preparedTransaction: readRequiredString(prepared, 'preparedTransaction', 'transfer-offer accept prepare'),
-    preparedTransactionHashHex: preparedTransactionHashToHex(
-      readRequiredString(prepared, 'preparedTransactionHash', 'transfer-offer accept prepare'),
-      'transfer-offer accept prepare'
-    ),
-    hashingSchemeVersion: prepared.hashingSchemeVersion,
+    preparedTransaction: verified.preparedTransaction,
+    preparedTransactionHashHex: verified.preparedTransactionHashHex,
+    hashingSchemeVersion: verified.hashingSchemeVersion,
     offerDisclosure,
     raw: objectOrEmpty(prepared),
   };

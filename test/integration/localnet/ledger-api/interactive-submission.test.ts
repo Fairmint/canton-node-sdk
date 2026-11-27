@@ -1,5 +1,6 @@
 /** End-to-end validation for Ledger JSON API interactive submission response formats. */
 
+import { verifyPreparedTransaction } from '@fairmint/canton-protocol/transaction';
 import { Keypair } from '@stellar/stellar-base';
 import {
   ApiError,
@@ -7,7 +8,6 @@ import {
   type LedgerJsonApiClient,
   ValidatorApiClient,
   createExternalPartyWithSigner,
-  preparedTransactionHashToHex,
   signHexWithStellarKeypair,
   signWithStellarKeypair,
   stellarPublicKeyToBase64,
@@ -159,7 +159,13 @@ async function prepareSignedTransferPreapprovalProposal(options: {
     preparedTransactionHash: expect.any(String) as string,
     hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
   });
-  const preparedTransactionHashHex = preparedTransactionHashToHex(prepared.preparedTransactionHash);
+  // Sign the hash recomputed from the prepared transaction, never the participant's word for it.
+  const { hash: preparedTransactionHashHex } = await verifyPreparedTransaction({
+    preparedTransaction: prepared.preparedTransaction,
+    hashingScheme: 'HASHING_SCHEME_VERSION_V2',
+    hash: prepared.preparedTransactionHash,
+    expected: { actAs: [options.externalParty], commandId: uniqueId, synchronizerId: options.synchronizerId },
+  });
 
   return {
     preparedTransactionHashHex,

@@ -1,3 +1,4 @@
+import { buildExternalPartyId, fingerprintEd25519PublicKey } from '@fairmint/canton-protocol/party';
 import { generateKeyPairSync } from 'node:crypto';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
 import {
@@ -8,10 +9,7 @@ import {
   UnknownMutationOutcomeError,
   ValidationError,
 } from '../../../src/core/errors';
-import {
-  buildExternalPartyId,
-  deriveCantonEd25519PublicKeyFingerprint,
-} from '../../../src/utils/external-signing/canton-protocol';
+
 import {
   classifyExternalPartyAllocationFailure,
   reconcileExternalPartyAllocationFailure,
@@ -30,7 +28,7 @@ function createPartyFixture(): {
     .toString('base64');
   return {
     publicKeyBase64,
-    partyId: buildExternalPartyId('external-test', deriveCantonEd25519PublicKeyFingerprint(publicKeyBase64)),
+    partyId: buildExternalPartyId('external-test', fingerprintEd25519PublicKey(publicKeyBase64)),
   };
 }
 

@@ -2,13 +2,15 @@ import { randomUUID } from 'node:crypto';
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { ValidationError } from '../../core/errors';
 import { normalizeCantonEd25519Signature } from './canton-ed25519-signer';
-import { assertCantonHashSignature, assertCantonPartyMatchesPublicKey } from './canton-protocol';
+import { assertCantonHashSigned } from './hash-signature';
+import { assertPartyKey } from './party-identity';
 import {
   executeExternalTransactionAndWait,
   type ExecuteExternalTransactionAndWaitResult,
   type InteractiveSubmissionHashingSchemeVersion,
 } from './execute-external-transaction';
 import { CANTON_ED25519_SIGNATURE_ALGORITHM, CANTON_RAW_SIGNATURE_FORMAT } from './external-party-onboarding';
+import { assertSubmittedPreparedTransaction } from './prepared-transaction';
 
 export interface ExecuteExternalPartySignedTransactionOptions {
   readonly ledgerClient: LedgerJsonApiClient;
@@ -20,13 +22,16 @@ export interface ExecuteExternalPartySignedTransactionOptions {
   readonly publicKeyBase64: string;
   /** When given, must match the fingerprint derived from `publicKeyBase64`. */
   readonly publicKeyFingerprint?: string | null;
+  /** The participant's prepared transaction, base64, as prepare returned it. */
   readonly preparedTransaction: string;
+  /** The signed hash (32 bytes, hex): it must be the hash of `preparedTransaction` under `hashingSchemeVersion`. */
   readonly preparedTransactionHashHex: string;
   /**
    * Ed25519 signature over the prepared transaction hash bytes, base64. Unpadded, base64url and whitespace-padded input
    * is accepted; it is sent to the participant as canonical, padded standard base64.
    */
   readonly signatureBase64: string;
+  /** The scheme the transaction was prepared under, and is executed under. Default: V2. */
   readonly hashingSchemeVersion?: InteractiveSubmissionHashingSchemeVersion;
   readonly submissionId?: string;
 }
@@ -35,9 +40,10 @@ export interface ExecuteExternalPartySignedTransactionOptions {
  * Verifies a single external party's Ed25519 signature over a prepared transaction hash and executes the prepared
  * transaction with it (`interactiveSubmissionExecuteAndWait`), returning the update id.
  *
- * The party id must belong to the public key, and the signature must verify against the hash, before anything is sent
- * to the participant. The signature is sent in the raw Ed25519 format, as canonical padded base64, signed by the key's
- * Canton fingerprint.
+ * Before anything is sent to the participant: the party id must belong to the public key; the hash must be the hash of
+ * `preparedTransaction` under `hashingSchemeVersion`, recomputed here, and the transaction must act only as `partyId`
+ * (its command id and synchronizer are the ones it states); and the signature must verify against that hash. The
+ * signature is sent in the raw Ed25519 format, as canonical padded base64, signed by the key's Canton fingerprint.
  */
 export async function executeExternalPartySignedTransaction(
   options: ExecuteExternalPartySignedTransactionOptions
@@ -45,12 +51,19 @@ export async function executeExternalPartySignedTransaction(
   if (!options.userId.trim()) {
     throw new ValidationError('userId is required', { userId: options.userId });
   }
-  const publicKeyFingerprint = assertCantonPartyMatchesPublicKey({
+  const publicKeyFingerprint = assertPartyKey({
     partyId: options.partyId,
     publicKeyBase64: options.publicKeyBase64,
     ...(options.publicKeyFingerprint !== undefined ? { publicKeyFingerprint: options.publicKeyFingerprint } : {}),
   });
-  assertCantonHashSignature({
+  const hashingSchemeVersion = options.hashingSchemeVersion ?? 'HASHING_SCHEME_VERSION_V2';
+  await assertSubmittedPreparedTransaction({
+    preparedTransaction: options.preparedTransaction,
+    preparedTransactionHashHex: options.preparedTransactionHashHex,
+    hashingScheme: hashingSchemeVersion,
+    expected: { actAs: [options.partyId] },
+  });
+  await assertCantonHashSigned({
     publicKeyBase64: options.publicKeyBase64,
     hashHex: options.preparedTransactionHashHex,
     signatureBase64: options.signatureBase64,
@@ -62,7 +75,7 @@ export async function executeExternalPartySignedTransaction(
     ledgerClient: options.ledgerClient,
     userId: options.userId,
     preparedTransaction: options.preparedTransaction,
-    hashingSchemeVersion: options.hashingSchemeVersion ?? 'HASHING_SCHEME_VERSION_V2',
+    hashingSchemeVersion,
     submissionId: options.submissionId ?? randomUUID(),
     partySignatures: [
       {

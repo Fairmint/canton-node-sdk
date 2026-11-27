@@ -3,9 +3,9 @@
  * are signed the way Loop signs (hex key and signature) and the way Privy's provider does (base64 DER key, base64
  * signature).
  */
+import { fingerprintEd25519PublicKey } from '@fairmint/canton-protocol/party';
 import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import {
-  deriveCantonEd25519PublicKeyFingerprint,
   verifyWalletProof,
   type VerifyWalletProofArgs,
   type WalletProofVerification,
@@ -24,7 +24,7 @@ function externalParty(hint = 'alice'): PartyKey {
   const { privateKey, publicKey } = generateKeyPairSync('ed25519');
   const der = publicKey.export({ format: 'der', type: 'spki' });
   const raw = der.subarray(der.length - 32);
-  const namespace = deriveCantonEd25519PublicKeyFingerprint(raw.toString('base64'));
+  const namespace = fingerprintEd25519PublicKey(raw.toString('base64'));
   return {
     privateKey,
     publicKeyHex: raw.toString('hex'),
