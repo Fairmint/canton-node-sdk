@@ -20,7 +20,16 @@ npm install @fairmint/canton-node-sdk
 
 It needs Node.js 22.12 or later. The SDK is CommonJS, and its dependency
 [`@fairmint/canton-protocol`](https://www.npmjs.com/package/@fairmint/canton-protocol) is ESM only:
-Node loads it through `require()` of an ES module, which Node 22 supports without a flag from 22.12.
+Node loads it through `require()` of an ES module, which Node 22 supports without a flag from 22.12
+(22.12 prints a one-time `ExperimentalWarning`; 22.13 and later do not).
+
+Testing with Jest in CommonJS mode? Jest's module runtime does not load ES modules through
+`require()`, so it must compile `@fairmint/canton-protocol` and `@noble/hashes` (2.x, ESM only) to
+CommonJS: add `'^.+\\.js$'` to `transform` (for example ts-jest with `allowJs`, `isolatedModules`
+and `module: 'commonjs'`, as in this repository's
+[`jest.config.js`](https://github.com/Fairmint/canton-node-sdk/blob/main/jest.config.js)) and
+`transformIgnorePatterns: ['/node_modules/(?!(@fairmint/canton-protocol|@noble/hashes)/)']`.
+canton-protocol's other dependencies publish CommonJS. Vitest and Node itself need nothing.
 
 ```ts
 import { Canton } from '@fairmint/canton-node-sdk';

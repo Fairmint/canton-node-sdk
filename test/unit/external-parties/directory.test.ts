@@ -391,6 +391,11 @@ describe('the ./external-parties entry point', () => {
       'assertCantonPartyMatchesPublicKey',
       'normalizeCantonHashToHex',
       'assertCantonSha256MultihashHex',
+      'assertCantonHashSignature',
+      'hashPreparedTransaction',
+      'preparedTransactionHashToHex',
+      'prepareExternalPartyCcTransfer',
+      'submitExternalPartyCcTransfer',
     ]) {
       expect(moved in Root).toBe(false);
     }
