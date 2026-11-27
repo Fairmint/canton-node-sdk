@@ -10,14 +10,33 @@ import {
   submitExternalPartyTransferOfferAcceptance,
   type CantonDisclosedContract,
 } from '../../../src/utils/amulet/external-party-transfer-offer';
+import { OperationErrorCode } from '../../../src/core/errors';
+import {
+  buildPreparedTransaction,
+  DISHONEST_PREPARE_ANSWERS,
+  honestPrepareAnswer,
+  type PrepareRequestLike,
+} from '../external-signing/fixtures/prepared-transactions';
 
-const PREPARED_TRANSACTION_HASH_HEX = `1220${'22'.repeat(32)}`;
+const SYNCHRONIZER_ID = 'global-domain::sync';
+
+/** The acceptance the honest participant prepares for `acceptingPartyId`, with its hash. */
+const preparedAcceptance = async (
+  acceptingPartyId: string,
+  note?: string
+): Promise<{ readonly preparedTransaction: string; readonly hashHex: string }> =>
+  buildPreparedTransaction({
+    partyId: acceptingPartyId,
+    commandId: 'accept-offer-command',
+    synchronizerId: SYNCHRONIZER_ID,
+    ...(note !== undefined ? { note } : {}),
+  });
 
 const createSigningFixture = (): {
   readonly publicKeyBase64: string;
   readonly publicKeyFingerprint: string;
   readonly partyId: string;
-  readonly signPreparedHash: () => string;
+  readonly signPreparedHash: (hashHex: string) => string;
 } => {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
   const publicKeyBase64 = Buffer.from(publicKey.export({ format: 'der', type: 'spki' }))
@@ -28,8 +47,7 @@ const createSigningFixture = (): {
     publicKeyBase64,
     publicKeyFingerprint,
     partyId: buildExternalPartyId('privy-test', publicKeyFingerprint),
-    signPreparedHash: () =>
-      sign(null, Buffer.from(PREPARED_TRANSACTION_HASH_HEX, 'hex'), privateKey).toString('base64'),
+    signPreparedHash: (hashHex: string) => sign(null, Buffer.from(hashHex, 'hex'), privateKey).toString('base64'),
   };
 };
 
@@ -37,20 +55,17 @@ const offerContract: CantonDisclosedContract = {
   contractId: 'offer-contract-1',
   templateId: CANTON_TRANSFER_OFFER_TEMPLATE_ID,
   createdEventBlob: 'created-event-blob',
-  synchronizerId: 'global-domain::sync',
+  synchronizerId: SYNCHRONIZER_ID,
 };
 
 const createMockLedgerClient = (): jest.Mocked<LedgerJsonApiClient> =>
   ({
     getConnectedSynchronizers: jest.fn().mockResolvedValue({
-      connectedSynchronizers: [{ synchronizerId: 'global-domain::sync' }],
+      connectedSynchronizers: [{ synchronizerId: SYNCHRONIZER_ID }],
     }),
     getActiveContracts: jest.fn().mockResolvedValue([]),
-    interactiveSubmissionPrepare: jest.fn().mockResolvedValue({
-      preparedTransaction: 'prepared-transaction-base64',
-      preparedTransactionHash: Buffer.from(PREPARED_TRANSACTION_HASH_HEX, 'hex').toString('base64'),
-      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
-    }),
+    // An honest participant: it prepares exactly what was requested.
+    interactiveSubmissionPrepare: jest.fn(async (request: PrepareRequestLike) => honestPrepareAnswer(request)),
     interactiveSubmissionExecuteAndWait: jest.fn().mockResolvedValue({
       updateId: 'update-123',
       completionOffset: 456,
@@ -292,13 +307,14 @@ describe('external-party transfer-offer helpers', () => {
       verboseHashing: false,
       packageIdSelectionPreference: [],
     });
+    const expected = await preparedAcceptance(fixture.partyId);
     expect(prepared).toMatchObject({
       offerContractId: offerContract.contractId,
       acceptingPartyId: fixture.partyId,
       commandId: 'accept-offer-command',
       synchronizerId: offerContract.synchronizerId,
-      preparedTransaction: 'prepared-transaction-base64',
-      preparedTransactionHashHex: PREPARED_TRANSACTION_HASH_HEX,
+      preparedTransaction: expected.preparedTransaction,
+      preparedTransactionHashHex: expected.hashHex,
       hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
     });
   });
@@ -398,21 +414,22 @@ describe('external-party transfer-offer helpers', () => {
   it('submits a signed TransferOffer_Accept through executeAndWait and returns the update id', async () => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient();
+    const acceptance = await preparedAcceptance(fixture.partyId);
 
     const submitted = await submitExternalPartyTransferOfferAcceptance({
       ledgerClient,
       userId: 'user-5n',
       acceptingPartyId: fixture.partyId,
       publicKeyBase64: fixture.publicKeyBase64,
-      preparedTransaction: 'prepared-transaction-base64',
-      preparedTransactionHashHex: PREPARED_TRANSACTION_HASH_HEX,
-      signatureBase64: fixture.signPreparedHash(),
+      preparedTransaction: acceptance.preparedTransaction,
+      preparedTransactionHashHex: acceptance.hashHex,
+      signatureBase64: fixture.signPreparedHash(acceptance.hashHex),
       submissionId: 'submission-123',
     });
 
     expect(ledgerClient.interactiveSubmissionExecuteAndWait).toHaveBeenCalledWith({
       userId: 'user-5n',
-      preparedTransaction: 'prepared-transaction-base64',
+      preparedTransaction: acceptance.preparedTransaction,
       hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
       submissionId: 'submission-123',
       deduplicationPeriod: {
@@ -448,6 +465,7 @@ describe('external-party transfer-offer helpers', () => {
     const fixture = createSigningFixture();
     const otherFixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient();
+    const acceptance = await preparedAcceptance(fixture.partyId);
 
     await expect(
       submitExternalPartyTransferOfferAcceptance({
@@ -455,12 +473,57 @@ describe('external-party transfer-offer helpers', () => {
         userId: 'user-5n',
         acceptingPartyId: fixture.partyId,
         publicKeyBase64: fixture.publicKeyBase64,
-        preparedTransaction: 'prepared-transaction-base64',
-        preparedTransactionHashHex: PREPARED_TRANSACTION_HASH_HEX,
-        signatureBase64: otherFixture.signPreparedHash(),
+        preparedTransaction: acceptance.preparedTransaction,
+        preparedTransactionHashHex: acceptance.hashHex,
+        signatureBase64: otherFixture.signPreparedHash(acceptance.hashHex),
       })
     ).rejects.toThrow('Invalid Canton hash signature');
 
     expect(ledgerClient.interactiveSubmissionExecuteAndWait).not.toHaveBeenCalled();
   });
+
+  it("does not submit a signed hash that is not the submitted transaction's", async () => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient();
+    const signed = await preparedAcceptance(fixture.partyId);
+    const substituted = await preparedAcceptance(fixture.partyId, 'substituted');
+
+    await expect(
+      submitExternalPartyTransferOfferAcceptance({
+        ledgerClient,
+        userId: 'user-5n',
+        acceptingPartyId: fixture.partyId,
+        publicKeyBase64: fixture.publicKeyBase64,
+        preparedTransaction: substituted.preparedTransaction,
+        preparedTransactionHashHex: signed.hashHex,
+        signatureBase64: fixture.signPreparedHash(signed.hashHex),
+      })
+    ).rejects.toThrow('preparedTransactionHashHex is not the hash of preparedTransaction');
+
+    expect(ledgerClient.interactiveSubmissionExecuteAndWait).not.toHaveBeenCalled();
+  });
+
+  it.each(DISHONEST_PREPARE_ANSWERS)(
+    'refuses a participant answer with $name, returning nothing to sign',
+    async (dishonest) => {
+      const fixture = createSigningFixture();
+      const ledgerClient = createMockLedgerClient();
+      ledgerClient.interactiveSubmissionPrepare.mockImplementationOnce(async (request) => dishonest.answer(request));
+
+      await expect(
+        prepareExternalPartyTransferOfferAcceptance({
+          ledgerClient,
+          providerPartyId: 'provider::fingerprint',
+          userId: 'user-5n',
+          acceptingPartyId: fixture.partyId,
+          offerContractId: offerContract.contractId,
+          disclosedContract: offerContract,
+          commandId: 'accept-offer-command',
+        })
+      ).rejects.toMatchObject({
+        code: OperationErrorCode.TRANSACTION_FAILED,
+        ...(dishonest.code !== undefined ? { context: { code: dishonest.code, field: dishonest.field } } : {}),
+      });
+    }
+  );
 });

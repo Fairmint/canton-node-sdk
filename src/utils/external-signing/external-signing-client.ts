@@ -17,7 +17,6 @@ import {
   type CantonEd25519SigningContext,
   type CantonEd25519SigningRequest,
 } from './canton-ed25519-signer';
-import { preparedTransactionHashToHex } from './canton-protocol';
 import { assertPartyKey, cantonPublicKeyBase64 } from './party-identity';
 import {
   createDefaultInteractiveSubmissionDeduplicationPeriod,
@@ -46,6 +45,7 @@ import {
   type PrepareExternalTransactionOptions,
   type PrepareExternalTransactionResult,
 } from './prepare-external-transaction';
+import { verifyParticipantPreparedTransaction } from './prepared-transaction';
 
 export interface CreateExternalPartyWithEd25519SignerOptions extends Omit<
   PrepareExternalPartyOnboardingOptions,
@@ -393,6 +393,7 @@ export async function executeExternalTransactionWithEd25519Signer(
     partyId: options.partyId,
     publicKeyBase64: options.signer.publicKeyBase64,
   });
+  const requestedHashingScheme = options.hashingSchemeVersion ?? 'HASHING_SCHEME_VERSION_V2';
   const prepared = await prepareExternalTransaction({
     ledgerClient: options.ledgerClient,
     commands: options.commands,
@@ -400,6 +401,7 @@ export async function executeExternalTransactionWithEd25519Signer(
     actAs: [options.partyId],
     synchronizerId: options.synchronizerId,
     commandId: options.commandId,
+    hashingSchemeVersion: requestedHashingScheme,
     ...(options.readAs !== undefined ? { readAs: options.readAs } : {}),
     ...(options.disclosedContracts !== undefined ? { disclosedContracts: options.disclosedContracts } : {}),
     ...(options.verboseHashing !== undefined ? { verboseHashing: options.verboseHashing } : {}),
@@ -407,12 +409,16 @@ export async function executeExternalTransactionWithEd25519Signer(
       ? { packageIdSelectionPreference: options.packageIdSelectionPreference }
       : {}),
   });
-  const preparedTransaction = readRequiredString(prepared, 'preparedTransaction', 'interactive submission prepare');
-  const preparedTransactionHashHex = preparedTransactionHashToHex(
-    prepared.preparedTransactionHash,
-    'interactive submission prepare'
-  );
-  const { hashingSchemeVersion } = prepared;
+  // The signer signs the hash recomputed from the prepared transaction, never the participant's word for it.
+  const { preparedTransaction, preparedTransactionHashHex, hashingSchemeVersion } =
+    await verifyParticipantPreparedTransaction({
+      operation: 'interactive submission prepare',
+      preparedTransaction: readRequiredString(prepared, 'preparedTransaction', 'interactive submission prepare'),
+      preparedTransactionHash: prepared.preparedTransactionHash,
+      hashingScheme: requestedHashingScheme,
+      answeredHashingScheme: prepared.hashingSchemeVersion,
+      expected: { actAs: [options.partyId], commandId: prepared.commandId, synchronizerId: options.synchronizerId },
+    });
   const signed = await signAndVerifyCantonEd25519Payload({
     signer: options.signer,
     purpose: CantonEd25519SigningPurpose.INTERACTIVE_SUBMISSION,

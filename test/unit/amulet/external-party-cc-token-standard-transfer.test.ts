@@ -3,7 +3,7 @@ import { generateKeyPairSync, sign } from 'node:crypto';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
 import type { JsGetActiveContractsResponseItem } from '../../../src/clients/ledger-json-api/schemas';
 import type { ValidatorApiClient } from '../../../src/clients/validator-api';
-import { ValidationError } from '../../../src/core/errors';
+import { OperationErrorCode, ValidationError } from '../../../src/core/errors';
 import {
   CcTokenStandardTransferRefusal,
   prepareExternalPartyCcTokenStandardTransfer,
@@ -15,20 +15,24 @@ import {
   TOKEN_STANDARD_V1_REASON_META_KEY,
   TOKEN_STANDARD_V1_TRANSFER_FACTORY_INTERFACE_ID,
 } from '../../../src/utils/token-standard';
+import {
+  buildPreparedTransaction,
+  DISHONEST_PREPARE_ANSWERS,
+  honestPrepareAnswer,
+  type PrepareRequestLike,
+} from '../external-signing/fixtures/prepared-transactions';
 
 const DSO = 'DSO::1220dso';
 const SYNCHRONIZER_ID = 'global-domain::1220sync';
 const RECEIVER = 'receiver::1220receiver';
 const FACTORY_ID = '00amulet-rules';
-const PREPARED_HASH_HEX = `1220${'33'.repeat(32)}`;
-const PREPARED_HASH_BASE64 = Buffer.from(PREPARED_HASH_HEX, 'hex').toString('base64');
 const NOW_MS = Date.parse('2026-11-24T12:00:00.000Z');
 
 const createSender = (): {
   readonly partyId: string;
   readonly publicKeyBase64: string;
   readonly publicKeyFingerprint: string;
-  readonly signHash: () => string;
+  readonly signHash: (hashHex: string) => string;
 } => {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
   const publicKeyBase64 = Buffer.from(publicKey.export({ format: 'der', type: 'spki' }))
@@ -39,7 +43,7 @@ const createSender = (): {
     partyId: buildExternalPartyId('sender', publicKeyFingerprint),
     publicKeyBase64,
     publicKeyFingerprint,
-    signHash: (): string => sign(null, Buffer.from(PREPARED_HASH_HEX, 'hex'), privateKey).toString('base64'),
+    signHash: (hashHex: string): string => sign(null, Buffer.from(hashHex, 'hex'), privateKey).toString('base64'),
   };
 };
 
@@ -143,12 +147,11 @@ const createLedgerClient = (holdings: readonly JsGetActiveContractsResponseItem[
     }),
     getLedgerEnd: jest.fn().mockResolvedValue({ offset: 4242 }),
     getActiveContracts: jest.fn().mockResolvedValue([...holdings]),
-    interactiveSubmissionPrepare: jest.fn().mockResolvedValue({
-      preparedTransaction: 'prepared-cc-transfer',
-      preparedTransactionHash: PREPARED_HASH_BASE64,
-      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
+    // An honest participant: it prepares exactly what was requested.
+    interactiveSubmissionPrepare: jest.fn(async (request: PrepareRequestLike) => ({
+      ...(await honestPrepareAnswer(request)),
       hashingDetails: 'hashing details',
-    }),
+    })),
     interactiveSubmissionExecuteAndWait: jest.fn().mockResolvedValue({
       updateId: 'cc-transfer-update-1',
       completionOffset: 4300,
@@ -203,6 +206,16 @@ const firstPrepareCall = (ledgerClient: jest.Mocked<LedgerJsonApiClient>): Prepa
   return call[0] as unknown as PreparedCall;
 };
 
+/** A CC transfer prepared for `senderPartyId`, as the honest participant prepares it, with its hash. */
+const preparedTransfer = async (
+  senderPartyId: string
+): Promise<{ readonly preparedTransaction: string; readonly hashHex: string }> =>
+  buildPreparedTransaction({
+    partyId: senderPartyId,
+    commandId: 'cc-transfer-command-1',
+    synchronizerId: SYNCHRONIZER_ID,
+  });
+
 const nonCanonicalSpellings = (signatureBase64: string): ReadonlyArray<readonly [string, string]> => [
   ['unpadded', signatureBase64.replace(/=+$/, '')],
   ['base64url', signatureBase64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')],
@@ -229,6 +242,7 @@ describe('external-party CC token-standard transfer', () => {
     const prepared = await prepareExternalPartyCcTokenStandardTransfer(
       prepareOptions(sender.partyId, ledgerClient, validatorClient)
     );
+    const expected = await preparedTransfer(sender.partyId);
 
     const expectedTransfer = {
       sender: sender.partyId,
@@ -309,12 +323,13 @@ describe('external-party CC token-standard transfer', () => {
       inputHoldingCids: ['00large', '00small'],
       requestedAt: '2026-11-24T11:59:00.000Z',
       executeBefore: '2026-11-24T12:10:00.000Z',
-      preparedTransaction: 'prepared-cc-transfer',
-      preparedTransactionHashHex: PREPARED_HASH_HEX,
+      preparedTransaction: expected.preparedTransaction,
+      preparedTransactionHashHex: expected.hashHex,
       hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
       hashingDetails: 'hashing details',
-      raw: expect.objectContaining({ preparedTransaction: 'prepared-cc-transfer' }) as object,
+      raw: expect.objectContaining({ preparedTransaction: expected.preparedTransaction }) as object,
     });
+    expect(firstPrepareCall(ledgerClient)['hashingSchemeVersion']).toBe('HASHING_SCHEME_VERSION_V2');
   });
 
   it('omits the reason when there is no description and skips the DSO lookup when given', async () => {
@@ -598,15 +613,16 @@ describe('external-party CC token-standard transfer', () => {
   it('executes the signed transfer as the sender, signed by its key fingerprint', async () => {
     const sender = createSender();
     const ledgerClient = createLedgerClient([]);
-    const signatureBase64 = sender.signHash();
+    const transfer = await preparedTransfer(sender.partyId);
+    const signatureBase64 = sender.signHash(transfer.hashHex);
 
     const submitted = await submitExternalPartyCcTokenStandardTransfer({
       ledgerClient,
       userId: 'provider-user',
       senderPartyId: sender.partyId,
       publicKeyBase64: sender.publicKeyBase64,
-      preparedTransaction: 'prepared-cc-transfer',
-      preparedTransactionHashHex: PREPARED_HASH_HEX,
+      preparedTransaction: transfer.preparedTransaction,
+      preparedTransactionHashHex: transfer.hashHex,
       signatureBase64,
       submissionId: 'submission-1',
     });
@@ -614,7 +630,7 @@ describe('external-party CC token-standard transfer', () => {
     expect(ledgerClient.interactiveSubmissionExecuteAndWait).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'provider-user',
-        preparedTransaction: 'prepared-cc-transfer',
+        preparedTransaction: transfer.preparedTransaction,
         hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
         submissionId: 'submission-1',
         partySignatures: {
@@ -646,7 +662,8 @@ describe('external-party CC token-standard transfer', () => {
     async (kind) => {
       const sender = createSender();
       const ledgerClient = createLedgerClient([]);
-      const canonical = sender.signHash();
+      const transfer = await preparedTransfer(sender.partyId);
+      const canonical = sender.signHash(transfer.hashHex);
       const spelling = nonCanonicalSpellings(canonical).find(([name]) => name === kind)?.[1] ?? canonical;
       expect(spelling).not.toBe(canonical);
 
@@ -655,8 +672,8 @@ describe('external-party CC token-standard transfer', () => {
         userId: 'provider-user',
         senderPartyId: sender.partyId,
         publicKeyBase64: sender.publicKeyBase64,
-        preparedTransaction: 'prepared-cc-transfer',
-        preparedTransactionHashHex: PREPARED_HASH_HEX,
+        preparedTransaction: transfer.preparedTransaction,
+        preparedTransactionHashHex: transfer.hashHex,
         signatureBase64: spelling,
       });
 
@@ -679,6 +696,7 @@ describe('external-party CC token-standard transfer', () => {
     const sender = createSender();
     const other = createSender();
     const ledgerClient = createLedgerClient([]);
+    const transfer = await preparedTransfer(sender.partyId);
 
     await expect(
       submitExternalPartyCcTokenStandardTransfer({
@@ -686,11 +704,56 @@ describe('external-party CC token-standard transfer', () => {
         userId: 'provider-user',
         senderPartyId: sender.partyId,
         publicKeyBase64: sender.publicKeyBase64,
-        preparedTransaction: 'prepared-cc-transfer',
-        preparedTransactionHashHex: PREPARED_HASH_HEX,
-        signatureBase64: other.signHash(),
+        preparedTransaction: transfer.preparedTransaction,
+        preparedTransactionHashHex: transfer.hashHex,
+        signatureBase64: other.signHash(transfer.hashHex),
       })
     ).rejects.toThrow('Invalid Canton hash signature');
     expect(ledgerClient.interactiveSubmissionExecuteAndWait).not.toHaveBeenCalled();
   });
+
+  it("refuses a signed hash that is not the submitted transaction's, without executing", async () => {
+    const sender = createSender();
+    const ledgerClient = createLedgerClient([]);
+    const signed = await preparedTransfer(sender.partyId);
+    const substituted = await buildPreparedTransaction({
+      partyId: sender.partyId,
+      commandId: 'cc-transfer-command-1',
+      synchronizerId: SYNCHRONIZER_ID,
+      note: 'substituted',
+    });
+
+    await expect(
+      submitExternalPartyCcTokenStandardTransfer({
+        ledgerClient,
+        userId: 'provider-user',
+        senderPartyId: sender.partyId,
+        publicKeyBase64: sender.publicKeyBase64,
+        preparedTransaction: substituted.preparedTransaction,
+        preparedTransactionHashHex: signed.hashHex,
+        signatureBase64: sender.signHash(signed.hashHex),
+      })
+    ).rejects.toThrow('preparedTransactionHashHex is not the hash of preparedTransaction');
+    expect(ledgerClient.interactiveSubmissionExecuteAndWait).not.toHaveBeenCalled();
+  });
+
+  it.each(DISHONEST_PREPARE_ANSWERS)(
+    'refuses a participant answer with $name, returning nothing to sign',
+    async (dishonest) => {
+      const sender = createSender();
+      const ledgerClient = createLedgerClient([
+        amuletHolding({ contractId: '00large', owner: sender.partyId, amount: '10.0000000000' }),
+      ]);
+      ledgerClient.interactiveSubmissionPrepare.mockImplementationOnce(async (request) => dishonest.answer(request));
+
+      await expect(
+        prepareExternalPartyCcTokenStandardTransfer(
+          prepareOptions(sender.partyId, ledgerClient, createValidatorClient())
+        )
+      ).rejects.toMatchObject({
+        code: OperationErrorCode.TRANSACTION_FAILED,
+        ...(dishonest.code !== undefined ? { context: { code: dishonest.code, field: dishonest.field } } : {}),
+      });
+    }
+  );
 });

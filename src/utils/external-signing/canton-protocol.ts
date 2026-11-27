@@ -1,5 +1,5 @@
 import { createHash, createHmac, timingSafeEqual, verify as verifyEd25519Signature } from 'node:crypto';
-import { OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
+import { ValidationError } from '../../core/errors';
 import { isRecord } from '../../core/utils';
 import { decodeBase64 } from './hash-signature';
 import { cantonPublicKeyBase64, rawEd25519PublicKey } from './party-identity';
@@ -77,31 +77,6 @@ function assertNonEmptyPrepareTokenSecret(secret: string): void {
   if (!secret.trim()) {
     throw new ValidationError('Prepare token secret is required');
   }
-}
-
-/** Computes the SHA-256 hex digest of a base64 prepared transaction blob for token binding. */
-export function hashPreparedTransaction(preparedTransaction: string): string {
-  return createHash('sha256').update(preparedTransaction).digest('hex');
-}
-
-/** Converts a base64/base64url prepared transaction hash returned by interactive submission into lowercase hex. */
-export function preparedTransactionHashToHex(hashBase64: string, operation = 'interactive submission prepare'): string {
-  const normalized = hashBase64.trim().replace(/-/g, '+').replace(/_/g, '/');
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized) || normalized.length % 4 === 1) {
-    throw new OperationError(
-      `Canton ${operation} response did not include a valid prepared hash`,
-      OperationErrorCode.TRANSACTION_FAILED
-    );
-  }
-  const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
-  const decoded = Buffer.from(padded, 'base64');
-  if (!decoded.length || decoded.toString('base64').replace(/=+$/, '') !== normalized.replace(/=+$/, '')) {
-    throw new OperationError(
-      `Canton ${operation} response did not include a valid prepared hash`,
-      OperationErrorCode.TRANSACTION_FAILED
-    );
-  }
-  return decoded.toString('hex');
 }
 
 function normalizeSignaturePayload(payload: Buffer | Uint8Array | string): Buffer {

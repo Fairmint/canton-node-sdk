@@ -1,5 +1,4 @@
 export * from './external-party-cc-token-standard-transfer';
-export * from './external-party-cc-transfer';
 export * from './external-party-transfer-offer';
 export * from './external-party-transfer-preapproval';
 export * from './get-amulets-for-transfer';

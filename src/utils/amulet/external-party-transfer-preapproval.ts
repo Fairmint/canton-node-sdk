@@ -4,6 +4,16 @@ import { isRecord } from '../../core/utils';
 import { objectOrEmpty, readContractWithStateContractId } from '../canton-response-utils';
 import { assertCantonHashSigned } from '../external-signing/hash-signature';
 import { assertPartyKey, rawEd25519PublicKey } from '../external-signing/party-identity';
+import {
+  assertSubmittedPreparedTransaction,
+  verifyParticipantPreparedTransaction,
+} from '../external-signing/prepared-transaction';
+
+/**
+ * The hashing scheme of the validator's prepared setup acceptance: Splice's validator prepares it under the
+ * participant's default and executes it under V2, so V2 is the hash the participant checks the signature against.
+ */
+const TRANSFER_PREAPPROVAL_SETUP_HASHING_SCHEME = 'HASHING_SCHEME_VERSION_V2';
 
 export interface ExternalPartyTransferPreapprovalContract {
   readonly contractId: string;
@@ -26,6 +36,10 @@ export interface PreparedExternalPartyTransferPreapprovalSetup {
   readonly transferPreapprovalContractId: string | null;
   readonly setupProposalContractId: string | null;
   readonly preparedTransaction: string | null;
+  /**
+   * The hash to sign: recomputed from `preparedTransaction` (hashing scheme V2), which must act only as `partyId`; the
+   * validator's `tx_hash` must equal it.
+   */
   readonly preparedTransactionHashHex: string | null;
   readonly hashingDetails: string | null;
   readonly raw: {
@@ -42,7 +56,10 @@ export interface SubmitExternalPartyTransferPreapprovalSetupParams {
   readonly publicKeyBase64: string;
   /** Base64-encoded prepared transaction returned by prepareExternalPartyTransferPreapprovalSetup. */
   readonly preparedTransaction: string;
-  /** Hex-encoded hash returned by prepareExternalPartyTransferPreapprovalSetup. */
+  /**
+   * Hex-encoded hash returned by prepareExternalPartyTransferPreapprovalSetup: it must be the hash of
+   * `preparedTransaction` (recomputed here), which must act only as `partyId`.
+   */
   readonly preparedTransactionHashHex: string;
   /** Base64-encoded Ed25519 signature over preparedTransactionHashHex. */
   readonly signatureBase64: string;
@@ -142,6 +159,16 @@ export async function prepareExternalPartyTransferPreapprovalSetup(
     user_party_id: params.partyId,
     verbose_hashing: params.verboseHashing ?? false,
   });
+  // The party signs the hash recomputed from the validator's transaction, never the validator's word for it. The
+  // validator chooses the command id and the synchronizer (its amulet-rules synchronizer), so those are the ones the
+  // transaction states; the hash and the acting party are checked exactly.
+  const verified = await verifyParticipantPreparedTransaction({
+    operation: 'transfer preapproval setup prepare',
+    preparedTransaction: objectOrEmpty(prepared)['transaction'],
+    preparedTransactionHash: objectOrEmpty(prepared)['tx_hash'],
+    hashingScheme: TRANSFER_PREAPPROVAL_SETUP_HASHING_SCHEME,
+    expected: { actAs: [params.partyId] },
+  });
 
   return {
     partyId: params.partyId,
@@ -149,8 +176,8 @@ export async function prepareExternalPartyTransferPreapprovalSetup(
     alreadyPreapproved: false,
     transferPreapprovalContractId: null,
     setupProposalContractId: proposal.contractId,
-    preparedTransaction: prepared.transaction,
-    preparedTransactionHashHex: prepared.tx_hash,
+    preparedTransaction: verified.preparedTransaction,
+    preparedTransactionHashHex: verified.preparedTransactionHashHex,
     hashingDetails: readOptionalString(prepared, 'hashing_details'),
     raw: {
       transferPreapproval: null,
@@ -168,6 +195,12 @@ export async function submitExternalPartyTransferPreapprovalSetup(
   assertPartyKey({
     partyId: params.partyId,
     publicKeyBase64: params.publicKeyBase64,
+  });
+  await assertSubmittedPreparedTransaction({
+    preparedTransaction: params.preparedTransaction,
+    preparedTransactionHashHex: params.preparedTransactionHashHex,
+    hashingScheme: TRANSFER_PREAPPROVAL_SETUP_HASHING_SCHEME,
+    expected: { actAs: [params.partyId] },
   });
   await assertCantonHashSigned({
     publicKeyBase64: params.publicKeyBase64,

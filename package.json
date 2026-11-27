@@ -95,6 +95,7 @@
     "tsc7": "node node_modules/typescript-7/bin/tsc"
   },
   "dependencies": {
+    "@canton-network/core-ledger-proto": "1.17.0",
     "@fairmint/canton-protocol": "0.1.0",
     "@hardlydifficult/rest-client": "1.0.65",
     "@hardlydifficult/websocket": "1.0.73",
@@ -109,6 +110,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@canton-network/core-tx-hashing": "1.2.0",
     "@fairmint/canton-dev-tools": "0.1.16",
     "@types/jest": "30.0.0",
     "@types/node": "26.6.6",

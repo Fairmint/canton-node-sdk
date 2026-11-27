@@ -22,17 +22,23 @@ import {
 } from '../../../src/utils/external-signing';
 import { REFUSED_SIGNATURES } from './fixtures/hash-signatures';
 import {
+  DISHONEST_PREPARE_ANSWERS,
+  honestPrepareAnswer,
+  type PrepareAnswer,
+  type PrepareRequestLike,
+} from './fixtures/prepared-transactions';
+import {
   generatedTopologyAnswer,
   type GeneratedTopologyAnswer,
   PERMISSION,
   testParticipantUid,
 } from './fixtures/topology';
 
-const SYNCHRONIZER_ID = 'global-domain::sync';
+const SYNCHRONIZER_ID = `global-domain::1220${'cd'.repeat(32)}`;
 // A 34-byte Canton hash, signed directly through signAndVerifyCantonEd25519Payload.
 const MULTI_HASH_HEX = `1220${'11'.repeat(32)}`;
 const LOCAL_PARTICIPANT_UID = testParticipantUid('participant1', 0xd4);
-// A prepared-transaction hash is 32 bytes (SHA-256, no multihash prefix).
+// A prepared-transaction hash is 32 bytes (SHA-256, no multihash prefix), signed directly through the signer helper.
 const PREPARED_HASH_HEX = '5a'.repeat(32);
 const NOW_MS = Date.parse('2026-07-09T12:00:00.000Z');
 const ARCHIVE_COMMANDS = [
@@ -94,11 +100,10 @@ function createMockLedgerClient(fixture: SigningFixture): jest.Mocked<LedgerJson
   client.getConnectedSynchronizers = jest.fn().mockResolvedValue({
     connectedSynchronizers: [{ synchronizerId: SYNCHRONIZER_ID, permission: 'SUBMISSION' }],
   });
-  client.interactiveSubmissionPrepare = jest.fn().mockResolvedValue({
-    preparedTransaction: 'prepared-transaction-base64',
-    preparedTransactionHash: Buffer.from(PREPARED_HASH_HEX, 'hex').toString('base64'),
-    hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
-  });
+  // An honest participant: it prepares exactly what was requested.
+  client.interactiveSubmissionPrepare = jest.fn(async (request: PrepareRequestLike) =>
+    honestPrepareAnswer(request)
+  ) as unknown as jest.Mocked<LedgerJsonApiClient>['interactiveSubmissionPrepare'];
   client.interactiveSubmissionExecuteAndWait = jest.fn().mockResolvedValue({ updateId: 'update-123' });
   client.getApiUrl = jest.fn().mockReturnValue('https://ledger.example.test');
   client.makePostRequest = jest.fn();
@@ -887,9 +892,15 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
     expect(ledgerClient.getConnectedSynchronizers).toHaveBeenCalledTimes(1);
   });
 
-  it('prepares, signs, verifies, executes, and waits for an interactive submission', async (): Promise<void> => {
+  it('prepares, signs the recomputed hash, verifies, executes, and waits for an interactive submission', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient(fixture);
+    const answer = await honestPrepareAnswer({
+      actAs: [fixture.partyId],
+      commandId: 'command-123',
+      synchronizerId: SYNCHRONIZER_ID,
+    });
+    ledgerClient.interactiveSubmissionPrepare.mockResolvedValueOnce(answer);
 
     const result = await executeExternalTransactionWithEd25519Signer({
       ledgerClient,
@@ -902,12 +913,13 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
       signer: fixture.signer,
     });
 
-    const preparedTransactionHashHex = PREPARED_HASH_HEX;
+    const preparedTransactionHashHex = Buffer.from(answer.preparedTransactionHash, 'base64').toString('hex');
     expect(ledgerClient.interactiveSubmissionPrepare).toHaveBeenCalledWith(
       expect.objectContaining({
         commandId: 'command-123',
         actAs: [fixture.partyId],
         synchronizerId: SYNCHRONIZER_ID,
+        hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
       })
     );
     expect(fixture.signCantonPayload).toHaveBeenCalledWith(
@@ -922,6 +934,8 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
     expect(ledgerClient.interactiveSubmissionExecuteAndWait).toHaveBeenCalledWith(
       expect.objectContaining({
         submissionId: 'submission-123',
+        preparedTransaction: answer.preparedTransaction,
+        hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
         partySignatures: {
           signatures: [
             {
@@ -965,6 +979,69 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
     expect(ledgerClient.interactiveSubmissionPrepare.mock.calls).toHaveLength(0);
   });
 
+  it('prepares, signs and executes under the requested hashing scheme V3', async (): Promise<void> => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+
+    const result = await executeExternalTransactionWithEd25519Signer({
+      ledgerClient,
+      commands: ARCHIVE_COMMANDS,
+      commandId: 'command-v3',
+      submissionId: 'submission-v3',
+      userId: 'user-123',
+      partyId: fixture.partyId,
+      synchronizerId: SYNCHRONIZER_ID,
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V3',
+      signer: fixture.signer,
+    });
+
+    expect(ledgerClient.interactiveSubmissionPrepare).toHaveBeenCalledWith(
+      expect.objectContaining({ hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V3' })
+    );
+    expect(ledgerClient.interactiveSubmissionExecuteAndWait).toHaveBeenCalledWith(
+      expect.objectContaining({ hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V3' })
+    );
+    expect(fixture.signCantonPayload).toHaveBeenCalledWith(
+      expect.objectContaining({ payloadHex: result.preparedTransactionHashHex }),
+      expect.anything()
+    );
+  });
+
+  describe.each(['HASHING_SCHEME_VERSION_V2', 'HASHING_SCHEME_VERSION_V3'] as const)(
+    'a participant answer the SDK did not ask for, under %s',
+    (hashingSchemeVersion) => {
+      it.each(DISHONEST_PREPARE_ANSWERS)(
+        'is refused before the signer is called: $name',
+        async (dishonest): Promise<void> => {
+          const fixture = createSigningFixture();
+          const ledgerClient = createMockLedgerClient(fixture);
+          ledgerClient.interactiveSubmissionPrepare.mockImplementationOnce(
+            async (request: PrepareRequestLike): Promise<PrepareAnswer> => dishonest.answer(request)
+          );
+
+          await expect(
+            executeExternalTransactionWithEd25519Signer({
+              ledgerClient,
+              commands: ARCHIVE_COMMANDS,
+              commandId: 'command-dishonest',
+              submissionId: 'submission-dishonest',
+              userId: 'user-123',
+              partyId: fixture.partyId,
+              synchronizerId: SYNCHRONIZER_ID,
+              hashingSchemeVersion,
+              signer: fixture.signer,
+            })
+          ).rejects.toMatchObject({
+            code: OperationErrorCode.TRANSACTION_FAILED,
+            ...(dishonest.code !== undefined ? { context: { code: dishonest.code, field: dishonest.field } } : {}),
+          });
+          expect(fixture.signCantonPayload).not.toHaveBeenCalled();
+          expect(ledgerClient.interactiveSubmissionExecuteAndWait).not.toHaveBeenCalled();
+        }
+      );
+    }
+  );
+
   it('preserves caller-stable IDs and signing evidence on an ambiguous submission outcome', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient(fixture);
@@ -992,15 +1069,15 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
         commandId: 'stable-command',
         submissionId: 'stable-submission',
         partyId: fixture.partyId,
-        preparedTransaction: 'prepared-transaction-base64',
+        preparedTransaction: expect.any(String) as string,
         hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
         prepared: {
           commandId: 'stable-command',
-          preparedTransaction: 'prepared-transaction-base64',
+          preparedTransaction: expect.any(String) as string,
         },
         resubmission: {
           userId: 'user-123',
-          preparedTransaction: 'prepared-transaction-base64',
+          preparedTransaction: expect.any(String) as string,
           submissionId: 'stable-submission',
           hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
           deduplicationPeriod: {

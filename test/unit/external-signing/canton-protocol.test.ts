@@ -8,8 +8,6 @@ import {
   deriveSolanaAddressFromEd25519PublicKeyBase64,
   hashCantonProtocolPayload,
   hashHexToBase64,
-  hashPreparedTransaction,
-  preparedTransactionHashToHex,
 } from '../../../src/utils/external-signing/canton-protocol';
 
 const PRIVY_SOLANA_PUBLIC_KEY_BASE64 = 'vQ2OhTLJuhrZHGfWq+kSeMxAuHXLeryGhpe5bZ8eFd4=';
@@ -109,17 +107,5 @@ describe('Canton protocol helpers', () => {
     expect(() => assertCantonPrepareToken('wrong-secret', token, payload)).toThrow(
       'does not match the submitted details'
     );
-  });
-
-  it('hashes prepared transaction blobs and converts prepared transaction hashes from base64', () => {
-    const preparedTransaction = 'prepared-transaction-base64';
-    const preparedHash = Buffer.from('interactive-hash');
-
-    expect(hashPreparedTransaction(preparedTransaction)).toBe(
-      createHash('sha256').update(preparedTransaction).digest('hex')
-    );
-    expect(preparedTransactionHashToHex(preparedHash.toString('base64'))).toBe(preparedHash.toString('hex'));
-    expect(preparedTransactionHashToHex(preparedHash.toString('base64url'))).toBe(preparedHash.toString('hex'));
-    expect(() => preparedTransactionHashToHex('not base64!')).toThrow('valid prepared hash');
   });
 });

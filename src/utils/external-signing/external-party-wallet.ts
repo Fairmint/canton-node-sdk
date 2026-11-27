@@ -33,7 +33,7 @@ import {
 import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
 import { TOKEN_STANDARD_V1_REASON_META_KEY } from '../token-standard/v1/constants';
 import { readConnectedSynchronizers as readPartyConnectedSynchronizers } from '../party-readiness';
-import { assertCantonPrepareToken, buildCantonPrepareToken, hashPreparedTransaction } from './canton-protocol';
+import { assertCantonPrepareToken, buildCantonPrepareToken } from './canton-protocol';
 import { assertCantonHashSigned } from './hash-signature';
 import { assertPartyKey, cantonHashHexOf } from './party-identity';
 import { type InteractiveSubmissionHashingSchemeVersion } from './execute-external-transaction';
@@ -43,6 +43,7 @@ import {
   prepareExternalPartyOnboarding,
   submitExternalPartyOnboarding,
 } from './external-party-onboarding';
+import { assertSubmittedPreparedTransaction } from './prepared-transaction';
 
 /** Hashing scheme of every CC transfer the bridge prepares (bound into its prepare token). */
 export const EXTERNAL_PARTY_CC_TRANSFER_HASHING_SCHEME_VERSION: InteractiveSubmissionHashingSchemeVersion =
@@ -174,7 +175,8 @@ export interface PreparedExternalPartyWalletCcTransfer {
   readonly hashingDetails: string | null;
   /** Ledger command id of the prepared `TransferFactory_Transfer`. */
   readonly commandId?: string;
-  readonly synchronizerId?: string;
+  /** The synchronizer the transfer is prepared on; pass it back to `submitCcTransfer`. */
+  readonly synchronizerId: string;
   /** The registry's transfer kind: `direct` unless `requirePreapproval` was `false`. */
   readonly transferKind?: CcTokenStandardTransferKind;
   readonly hashingSchemeVersion?: InteractiveSubmissionHashingSchemeVersion;
@@ -196,6 +198,8 @@ export interface SubmitExternalPartyWalletCcTransferInput {
   /** @deprecated Pass the prepared value (`0`) back unchanged. */
   readonly nonce: number;
   readonly expiresAt: string;
+  /** The prepared `synchronizerId`, passed back unchanged (bound into the prepare token). */
+  readonly synchronizerId: string;
   readonly prepareToken: string;
   readonly signatureBase64: string;
   readonly tokenContext?: ExternalPartyWalletTokenContext;
@@ -432,7 +436,9 @@ export interface ExternalPartyWalletBridge {
   ) => Promise<SubmittedExternalPartyWalletOnboarding>;
   /**
    * Prepares a CC transfer from an external party: a token-standard `TransferFactory_Transfer` prepared through Ledger
-   * interactive submission as `providerUserId`, for the sender's key to sign. Needs `validatorClient` (DSO party and
+   * interactive submission as `providerUserId`, for the sender's key to sign: `preparedTransactionHashHex` is the hash
+   * recomputed from the prepared transaction (the participant's answer is refused when it differs or the transaction
+   * does not act as the sender under the requested command id and synchronizer). Needs `validatorClient` (DSO party and
    * the registry's transfer factory). Refuses, by default, a receiver without a CC transfer preapproval.
    *
    * `providerUserId` must be able to read and execute as the sender: `CanActAs` on it (granted by
@@ -443,8 +449,10 @@ export interface ExternalPartyWalletBridge {
     input: PrepareExternalPartyWalletCcTransferInput
   ) => Promise<PreparedExternalPartyWalletCcTransfer>;
   /**
-   * Checks the prepare token and the sender's signature, then executes the prepared transfer through the Ledger JSON
-   * API (`executeAndWait`) as `providerUserId`, which needs the rights `prepareCcTransfer` names. Does not use the
+   * Checks the prepare token, that `preparedTransactionHashHex` is the hash of the submitted `preparedTransaction`
+   * (recomputed) and that it acts as the sender under the prepared command id on the prepared synchronizer, and the
+   * sender's signature over that hash; then executes the prepared transfer through the Ledger JSON API
+   * (`executeAndWait`) as `providerUserId`, which needs the rights `prepareCcTransfer` names. Does not use the
    * validator. The signature may be unpadded, base64url or whitespace-padded; it is sent as canonical padded base64.
    */
   readonly submitCcTransfer: (
@@ -692,11 +700,11 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
             amount,
             description,
             publicKeyFingerprint,
-            preparedTransaction: prepared.preparedTransaction,
             preparedTransactionHashHex: prepared.preparedTransactionHashHex,
             transferCommandContractIdPrefix,
             nonce,
             expiresAt,
+            synchronizerId: prepared.synchronizerId,
           })
         ),
         hashingDetails: prepared.hashingDetails,
@@ -731,13 +739,24 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
           amount,
           description,
           publicKeyFingerprint,
-          preparedTransaction: input.preparedTransaction,
           preparedTransactionHashHex: input.preparedTransactionHashHex,
           transferCommandContractIdPrefix: input.transferCommandContractIdPrefix,
           nonce: input.nonce,
           expiresAt: input.expiresAt,
+          synchronizerId: input.synchronizerId,
         })
       );
+      // The token binds the hash prepare recomputed; the submitted bytes must be what it is the hash of.
+      await assertSubmittedPreparedTransaction({
+        preparedTransaction: input.preparedTransaction,
+        preparedTransactionHashHex: input.preparedTransactionHashHex,
+        hashingScheme: EXTERNAL_PARTY_CC_TRANSFER_HASHING_SCHEME_VERSION,
+        expected: {
+          actAs: [input.senderPartyId],
+          commandId: input.transferCommandContractIdPrefix,
+          synchronizerId: input.synchronizerId,
+        },
+      });
       await assertCantonHashSigned({
         publicKeyBase64: input.publicKeyBase64,
         hashHex: input.preparedTransactionHashHex,
@@ -1024,7 +1043,6 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
             offerUpdateId: preparedOffer.offerUpdateId,
             commandId,
             synchronizerId: preparedAccept.synchronizerId,
-            preparedTransaction: preparedAccept.preparedTransaction,
             preparedTransactionHashHex: preparedAccept.preparedTransactionHashHex,
             hashingSchemeVersion: preparedAccept.hashingSchemeVersion,
           })
@@ -1068,11 +1086,21 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
           offerUpdateId: input.offerUpdateId,
           commandId: input.commandId,
           synchronizerId: input.synchronizerId,
-          preparedTransaction: input.preparedTransaction,
           preparedTransactionHashHex: input.preparedTransactionHashHex,
           hashingSchemeVersion,
         })
       );
+      // The token binds the hash prepare recomputed; the submitted bytes must be what it is the hash of.
+      await assertSubmittedPreparedTransaction({
+        preparedTransaction: input.preparedTransaction,
+        preparedTransactionHashHex: input.preparedTransactionHashHex,
+        hashingScheme: hashingSchemeVersion,
+        expected: {
+          actAs: [input.receiverPartyId],
+          commandId: input.commandId,
+          synchronizerId: input.synchronizerId,
+        },
+      });
       await assertCantonHashSigned({
         publicKeyBase64: input.publicKeyBase64,
         hashHex: input.preparedTransactionHashHex,
@@ -1200,6 +1228,12 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
   };
 }
 
+/**
+ * The payload of a CC transfer's prepare token. It binds the prepared transaction through its Canton hash
+ * (`preparedTransactionHashHex`, which prepare recomputed from the transaction), with the command id and synchronizer
+ * the transaction states, not through the transaction bytes: a submit must recompute the hash from the submitted bytes
+ * and compare it, as `submitCcTransfer` does, before it trusts them.
+ */
 export function buildExternalPartyCcTransferPrepareTokenPayload(input: {
   readonly provider?: string | undefined;
   readonly network?: string | undefined;
@@ -1209,17 +1243,17 @@ export function buildExternalPartyCcTransferPrepareTokenPayload(input: {
   readonly amount: string;
   readonly description: string | null;
   readonly publicKeyFingerprint: string;
-  readonly preparedTransaction: string;
   readonly preparedTransactionHashHex: string;
   readonly transferCommandContractIdPrefix: string;
   readonly nonce: number;
   readonly expiresAt: string;
+  readonly synchronizerId: string;
 }): Record<string, unknown> {
   return {
     kind: 'external-party-cc-transfer',
-    // Version 2: a token-standard `TransferFactory_Transfer` executed through Ledger interactive submission. A version 1
-    // token (the validator's removed TransferCommand flow) no longer matches, so its transfer cannot be submitted.
-    version: 2,
+    // Version 3: bound to the recomputed Canton hash and the synchronizer, no longer to a SHA-256 of the transaction
+    // string. Earlier tokens (version 2, and version 1 of the validator's removed TransferCommand flow) no longer match.
+    version: 3,
     provider: input.provider ?? null,
     network: input.network ?? null,
     context: normalizeTokenContext(input.tokenContext),
@@ -1228,15 +1262,20 @@ export function buildExternalPartyCcTransferPrepareTokenPayload(input: {
     amount: input.amount,
     description: input.description,
     publicKeyFingerprint: input.publicKeyFingerprint,
-    preparedTransactionSha256: hashPreparedTransaction(input.preparedTransaction),
     preparedTransactionHashHex: input.preparedTransactionHashHex,
     transferCommandContractIdPrefix: input.transferCommandContractIdPrefix,
     nonce: input.nonce,
     expiresAt: input.expiresAt,
+    synchronizerId: input.synchronizerId,
     hashingSchemeVersion: EXTERNAL_PARTY_CC_TRANSFER_HASHING_SCHEME_VERSION,
   };
 }
 
+/**
+ * The payload of a provider-funded transfer acceptance's prepare token. Like the CC transfer's, it binds the prepared
+ * transaction through its recomputed Canton hash, command id and synchronizer, not its bytes: a submit must recompute
+ * the hash from the submitted bytes, as `submitProviderTransfer` does.
+ */
 export function buildProviderTransferAcceptPrepareTokenPayload(input: {
   readonly provider?: string | undefined;
   readonly network?: string | undefined;
@@ -1250,13 +1289,13 @@ export function buildProviderTransferAcceptPrepareTokenPayload(input: {
   readonly offerUpdateId: string | null;
   readonly commandId: string;
   readonly synchronizerId: string;
-  readonly preparedTransaction: string;
   readonly preparedTransactionHashHex: string;
   readonly hashingSchemeVersion: InteractiveSubmissionHashingSchemeVersion;
 }): Record<string, unknown> {
   return {
     kind: 'provider-transfer-accept',
-    version: 1,
+    // Version 2: bound to the recomputed Canton hash, no longer to a SHA-256 of the transaction string.
+    version: 2,
     provider: input.provider ?? null,
     network: input.network ?? null,
     context: normalizeTokenContext(input.tokenContext),
@@ -1269,7 +1308,6 @@ export function buildProviderTransferAcceptPrepareTokenPayload(input: {
     offerUpdateId: input.offerUpdateId,
     commandId: input.commandId,
     synchronizerId: input.synchronizerId,
-    preparedTransactionSha256: hashPreparedTransaction(input.preparedTransaction),
     preparedTransactionHashHex: input.preparedTransactionHashHex,
     hashingSchemeVersion: input.hashingSchemeVersion,
   };

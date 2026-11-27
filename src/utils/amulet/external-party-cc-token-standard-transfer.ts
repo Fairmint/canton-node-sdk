@@ -5,13 +5,13 @@ import { type ValidatorApiClient } from '../../clients/validator-api';
 import { OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
 import { isRecord } from '../../core/utils';
 import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
-import { preparedTransactionHashToHex } from '../external-signing/canton-protocol';
 import { executeExternalPartySignedTransaction } from '../external-signing/execute-external-party-signed-transaction';
 import {
   type ExecuteExternalTransactionAndWaitResult,
   type InteractiveSubmissionHashingSchemeVersion,
 } from '../external-signing/execute-external-transaction';
 import { prepareExternalTransaction } from '../external-signing/prepare-external-transaction';
+import { verifyParticipantPreparedTransaction } from '../external-signing/prepared-transaction';
 import { assertSingleConnectedSynchronizerId } from '../party-readiness';
 import { TOKEN_STANDARD_V1_REASON_META_KEY } from '../token-standard/v1/constants';
 import { listTokenStandardV1Holdings, TOKEN_STANDARD_V1_AMOUNT_DECIMALS } from '../token-standard/v1/holdings';
@@ -35,6 +35,9 @@ export const DEFAULT_CC_TOKEN_STANDARD_TRANSFER_TTL_MS = 10 * 60 * 1000;
  * participant does not make the transfer look requested in the future.
  */
 export const DEFAULT_CC_TOKEN_STANDARD_TRANSFER_REQUESTED_AT_SKEW_MS = 60 * 1000;
+
+/** The hashing scheme a CC transfer is prepared, verified and executed under. */
+const CC_TOKEN_STANDARD_TRANSFER_HASHING_SCHEME = 'HASHING_SCHEME_VERSION_V2';
 
 /** Default cap on the number of holdings a CC transfer spends as inputs. */
 export const DEFAULT_CC_TOKEN_STANDARD_TRANSFER_MAX_INPUT_HOLDINGS = 100;
@@ -112,7 +115,7 @@ export interface PreparedExternalPartyCcTokenStandardTransfer {
   readonly requestedAt: string;
   readonly executeBefore: string;
   readonly preparedTransaction: string;
-  /** The value the sender's key signs (multihash hex of the prepared transaction). */
+  /** The value the sender's key signs: the hash node-sdk recomputed from `preparedTransaction` (32 bytes, hex). */
   readonly preparedTransactionHashHex: string;
   readonly hashingSchemeVersion: InteractiveSubmissionHashingSchemeVersion;
   readonly hashingDetails: string | null;
@@ -303,13 +306,22 @@ export async function prepareExternalPartyCcTokenStandardTransfer(
     actAs: [senderPartyId],
     readAs: [senderPartyId],
     synchronizerId,
-    hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
+    hashingSchemeVersion: CC_TOKEN_STANDARD_TRANSFER_HASHING_SCHEME,
     disclosedContracts: factory.disclosedContracts.map((contract) => ({ ...contract })),
     verboseHashing: options.verboseHashing ?? false,
     packageIdSelectionPreference: [],
   });
   const raw = objectOrEmpty(prepared);
   const { hashingDetails } = raw;
+  // The sender signs the hash recomputed from the prepared transaction, never the participant's word for it.
+  const verified = await verifyParticipantPreparedTransaction({
+    operation: 'CC transfer prepare',
+    preparedTransaction: readRequiredString(prepared, 'preparedTransaction', 'CC transfer prepare'),
+    preparedTransactionHash: prepared.preparedTransactionHash,
+    hashingScheme: CC_TOKEN_STANDARD_TRANSFER_HASHING_SCHEME,
+    answeredHashingScheme: prepared.hashingSchemeVersion,
+    expected: { actAs: [senderPartyId], commandId: prepared.commandId, synchronizerId },
+  });
 
   return {
     senderPartyId,
@@ -322,12 +334,9 @@ export async function prepareExternalPartyCcTokenStandardTransfer(
     inputHoldingCids: inputs.contractIds,
     requestedAt,
     executeBefore,
-    preparedTransaction: readRequiredString(prepared, 'preparedTransaction', 'CC transfer prepare'),
-    preparedTransactionHashHex: preparedTransactionHashToHex(
-      readRequiredString(prepared, 'preparedTransactionHash', 'CC transfer prepare'),
-      'CC transfer prepare'
-    ),
-    hashingSchemeVersion: prepared.hashingSchemeVersion,
+    preparedTransaction: verified.preparedTransaction,
+    preparedTransactionHashHex: verified.preparedTransactionHashHex,
+    hashingSchemeVersion: verified.hashingSchemeVersion,
     hashingDetails: typeof hashingDetails === 'string' && hashingDetails.trim() ? hashingDetails : null,
     raw,
   };

@@ -88,6 +88,31 @@ participant UIDs are `name::1220…` (no `PAR::` prefix), each listed once; at l
 must confirm. `submitExternalPartyOnboarding` refuses a `multiHashHex` that is not the multi-hash of
 the submitted `topologyTransactions`. Canton 3.4 or later is required.
 
+## Signing a prepared transaction
+
+Every place the SDK prepares a transaction for an external party to sign
+(`executeExternalTransactionWithEd25519Signer`, `prepareExternalPartyCcTokenStandardTransfer`,
+`prepareExternalPartyTransferOfferAcceptance`, the wallet bridge's `prepareCcTransfer` and
+`prepareProviderTransfer`, and `prepareExternalPartyTransferPreapprovalSetup`) returns, or signs,
+only the hash it recomputed from the prepared transaction with `verifyPreparedTransaction` from
+`@fairmint/canton-protocol/transaction`. The participant's hash must equal it, under the hashing
+scheme the SDK asked for (an answer naming another scheme is refused), and the transaction must act
+exactly as the requested parties, under the requested command id, on the requested synchronizer.
+Anything else is an `OperationError` (`TRANSACTION_FAILED`) whose `cause` is the
+`CantonProtocolError` and whose context names its `code` and `field`; nothing is returned to sign.
+The validator prepares the transfer-preapproval setup under a command id and synchronizer of its own
+choosing, so for it the hash (scheme V2, which the validator executes under) and the acting party
+are checked.
+
+Before anything is executed or submitted, `executeExternalPartySignedTransaction` (and so every
+submit helper) and `submitExternalPartyTransferPreapprovalSetup` recompute the hash of the submitted
+`preparedTransaction` and refuse a `preparedTransactionHashHex` that differs, or a transaction that
+acts as any party but the signer, with a `ValidationError`. The wallet bridge's prepare tokens bind
+the recomputed hash, the command id and the synchronizer (CC transfer version 3, which
+`submitCcTransfer` now needs `synchronizerId` back for; provider acceptance version 2), not the
+transaction bytes: the submit recomputes the hash from the bytes instead. Signing your own
+`prepareExternalTransaction` result? Recompute the hash the same way before you sign it.
+
 ## Finding every party a key controls
 
 An external party's ID is `hint::fingerprint`, where the fingerprint is Canton's SHA-256 multihash
