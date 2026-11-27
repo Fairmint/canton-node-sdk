@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { ValidationError } from '../../core/errors';
 import { normalizeCantonEd25519Signature } from './canton-ed25519-signer';
-import { assertCantonHashSignature, assertCantonPartyMatchesPublicKey } from './canton-protocol';
+import { assertCantonHashSignature } from './canton-protocol';
+import { assertPartyKey } from './party-identity';
 import {
   executeExternalTransactionAndWait,
   type ExecuteExternalTransactionAndWaitResult,
@@ -45,7 +46,7 @@ export async function executeExternalPartySignedTransaction(
   if (!options.userId.trim()) {
     throw new ValidationError('userId is required', { userId: options.userId });
   }
-  const publicKeyFingerprint = assertCantonPartyMatchesPublicKey({
+  const publicKeyFingerprint = assertPartyKey({
     partyId: options.partyId,
     publicKeyBase64: options.publicKeyBase64,
     ...(options.publicKeyFingerprint !== undefined ? { publicKeyFingerprint: options.publicKeyFingerprint } : {}),

@@ -6,11 +6,11 @@
  * call. LocalNet runs the pinned Splice, so this proves the replacement path works; it cannot reproduce the 404.
  */
 
+import { fingerprintEd25519PublicKey } from '@fairmint/canton-protocol/party';
 import { generateKeyPairSync, randomUUID, sign, type KeyObject } from 'node:crypto';
 
 import {
   createExternalPartyWalletBridge,
-  deriveCantonEd25519PublicKeyFingerprint,
   listTokenStandardV1Holdings,
   ValidationError,
   type ExternalPartyWalletBridge,
@@ -66,7 +66,7 @@ async function onboardExternalWallet(
   const submitted = await bridge.submitExternalPartySignature({
     partyId: prepared.partyId,
     publicKeyBase64,
-    publicKeyFingerprint: deriveCantonEd25519PublicKeyFingerprint(publicKeyBase64),
+    publicKeyFingerprint: fingerprintEd25519PublicKey(publicKeyBase64),
     multiHashHex: prepared.multiHashHex,
     synchronizerId: prepared.synchronizerId,
     topologyTransactions: prepared.topologyTransactions,

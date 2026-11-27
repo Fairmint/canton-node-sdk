@@ -1,6 +1,6 @@
+import { fingerprintEd25519PublicKey } from '@fairmint/canton-protocol/party';
 import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import {
-  deriveCantonEd25519PublicKeyFingerprint,
   verifyWalletOwnership,
   type VerifyWalletOwnershipOptions,
   type WalletOwnershipFailure,
@@ -24,7 +24,7 @@ function externalParty(hint = 'alice'): {
   const { privateKey, publicKey } = generateKeyPairSync('ed25519');
   const der = publicKey.export({ format: 'der', type: 'spki' });
   const raw = der.subarray(der.length - 32);
-  const namespace = deriveCantonEd25519PublicKeyFingerprint(raw.toString('base64'));
+  const namespace = fingerprintEd25519PublicKey(raw.toString('base64'));
   return {
     privateKey,
     rawHex: raw.toString('hex'),

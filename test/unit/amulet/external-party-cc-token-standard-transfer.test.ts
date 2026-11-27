@@ -1,3 +1,4 @@
+import { buildExternalPartyId, fingerprintEd25519PublicKey } from '@fairmint/canton-protocol/party';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
 import type { JsGetActiveContractsResponseItem } from '../../../src/clients/ledger-json-api/schemas';
@@ -9,12 +10,7 @@ import {
   submitExternalPartyCcTokenStandardTransfer,
   type PrepareExternalPartyCcTokenStandardTransferOptions,
 } from '../../../src/utils/amulet/external-party-cc-token-standard-transfer';
-import {
-  buildExternalPartyId,
-  CANTON_ED25519_SIGNATURE_ALGORITHM,
-  CANTON_RAW_SIGNATURE_FORMAT,
-  deriveCantonEd25519PublicKeyFingerprint,
-} from '../../../src/utils/external-signing';
+import { CANTON_ED25519_SIGNATURE_ALGORITHM, CANTON_RAW_SIGNATURE_FORMAT } from '../../../src/utils/external-signing';
 import {
   TOKEN_STANDARD_V1_REASON_META_KEY,
   TOKEN_STANDARD_V1_TRANSFER_FACTORY_INTERFACE_ID,
@@ -38,7 +34,7 @@ const createSender = (): {
   const publicKeyBase64 = Buffer.from(publicKey.export({ format: 'der', type: 'spki' }))
     .subarray(-32)
     .toString('base64');
-  const publicKeyFingerprint = deriveCantonEd25519PublicKeyFingerprint(publicKeyBase64);
+  const publicKeyFingerprint = fingerprintEd25519PublicKey(publicKeyBase64);
   return {
     partyId: buildExternalPartyId('sender', publicKeyFingerprint),
     publicKeyBase64,

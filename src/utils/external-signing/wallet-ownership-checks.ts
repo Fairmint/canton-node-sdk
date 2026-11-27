@@ -2,11 +2,8 @@
  * Checks shared by `verifyWalletOwnership` (the text message) and `verifyWalletProof` (the wallet proof message): the
  * proof's shape, the validity window, and the key and signature. Internal: not exported from the package.
  */
-import {
-  assertEd25519Signature,
-  deriveCantonEd25519PublicKeyFingerprint,
-  extractPublicKeyFingerprint,
-} from './canton-protocol';
+import { fingerprintEd25519PublicKey, readPartyNamespace } from '@fairmint/canton-protocol/party';
+import { assertEd25519Signature } from './canton-protocol';
 import { normalizeCantonEd25519Signature } from './canton-ed25519-signer';
 import type { WalletOwnershipFailure, WalletOwnershipProof } from '../../wallets/ownership';
 
@@ -97,17 +94,15 @@ export function checkKeyAndSignature(
   let keyBase64: string;
   try {
     keyBase64 = publicKeyBase64(proof.publicKey);
-    fingerprint = deriveCantonEd25519PublicKeyFingerprint(keyBase64);
+    fingerprint = fingerprintEd25519PublicKey(keyBase64);
   } catch {
     return checkFailure(
       'unsupported-public-key',
       'The public key is not an Ed25519 key in hex (raw 32 bytes) or base64 (raw 32 bytes or DER SubjectPublicKeyInfo)'
     );
   }
-  let partyFingerprint: string;
-  try {
-    partyFingerprint = extractPublicKeyFingerprint(proof.partyId);
-  } catch {
+  const partyFingerprint = readPartyNamespace(proof.partyId);
+  if (partyFingerprint === null) {
     return checkFailure('party-mismatch', 'The party id is not of the form hint::namespace');
   }
   if (partyFingerprint !== fingerprint) {

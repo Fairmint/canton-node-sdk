@@ -35,12 +35,11 @@ import { TOKEN_STANDARD_V1_REASON_META_KEY } from '../token-standard/v1/constant
 import { readConnectedSynchronizers as readPartyConnectedSynchronizers } from '../party-readiness';
 import {
   assertCantonHashSignature,
-  assertCantonPartyMatchesPublicKey,
   assertCantonPrepareToken,
-  assertCantonSha256MultihashHex,
   buildCantonPrepareToken,
   hashPreparedTransaction,
 } from './canton-protocol';
+import { assertPartyKey, cantonHashHexOf } from './party-identity';
 import { type InteractiveSubmissionHashingSchemeVersion } from './execute-external-transaction';
 import {
   getExternalPartyIdForHintAndPublicKey,
@@ -611,7 +610,7 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
       },
       submissionOptions: ExternalPartyWalletSubmissionOptions = {}
     ): Promise<SubmittedExternalPartyWalletOnboarding> {
-      assertCantonSha256MultihashHex(input.multiHashHex);
+      cantonHashHexOf(input.multiHashHex);
       const synchronizerId = await readRequiredConnectedSynchronizerId(
         options.ledgerClient,
         options.providerPartyId,
@@ -652,7 +651,7 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
       const validatorClient = requireValidatorClient(options.validatorClient, 'CC transfer prepare');
       const amount = normalizeAmountString(input.amount);
       const description = normalizeDescription(input.description);
-      const publicKeyFingerprint = assertCantonPartyMatchesPublicKey({
+      const publicKeyFingerprint = assertPartyKey({
         partyId: input.senderPartyId,
         publicKeyBase64: input.publicKeyBase64,
       });
@@ -719,7 +718,7 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
     ): Promise<SubmittedExternalPartyWalletCcTransfer> {
       const amount = normalizeAmountString(input.amount);
       const description = normalizeDescription(input.description);
-      const publicKeyFingerprint = assertCantonPartyMatchesPublicKey({
+      const publicKeyFingerprint = assertPartyKey({
         partyId: input.senderPartyId,
         publicKeyBase64: input.publicKeyBase64,
         ...(input.publicKeyFingerprint !== undefined ? { publicKeyFingerprint: input.publicKeyFingerprint } : {}),
@@ -944,7 +943,7 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
       const validatorClient = requireValidatorClient(options.validatorClient, 'provider transfer prepare');
       const amount = normalizeAmountString(input.amount);
       const description = normalizeDescription(input.description);
-      const publicKeyFingerprint = assertCantonPartyMatchesPublicKey({
+      const publicKeyFingerprint = assertPartyKey({
         partyId: input.receiverPartyId,
         publicKeyBase64: input.publicKeyBase64,
       });
@@ -1051,7 +1050,7 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
       const validatorClient = requireValidatorClient(options.validatorClient, 'provider transfer submit');
       const amount = normalizeAmountString(input.amount);
       const description = normalizeDescription(input.description);
-      const publicKeyFingerprint = assertCantonPartyMatchesPublicKey({
+      const publicKeyFingerprint = assertPartyKey({
         partyId: input.receiverPartyId,
         publicKeyBase64: input.publicKeyBase64,
         ...(input.publicKeyFingerprint !== undefined ? { publicKeyFingerprint: input.publicKeyFingerprint } : {}),
@@ -1124,7 +1123,7 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
       input: ExternalPartyWalletTransferPreapprovalSubmitInput
     ): Promise<SubmittedExternalPartyWalletTransferPreapprovalSetup> {
       const validatorClient = requireValidatorClient(options.validatorClient, 'transfer preapproval setup submit');
-      assertCantonPartyMatchesPublicKey({
+      assertPartyKey({
         partyId: input.partyId,
         publicKeyBase64: input.publicKeyBase64,
       });

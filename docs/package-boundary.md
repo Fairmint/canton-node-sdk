@@ -11,7 +11,7 @@ repository / CI-only. Repeatable enforcement lives in `npm run check:package-art
 | Runtime SDK | `build/src/**` | Ledger / Validator / Scan clients and helpers from `src/` |
 | Root entry | `exports` `.` → `build/src/index.js` | The Node SDK; every symbol consumers use is exported here |
 | Browser-safe wallets entry | `exports` `./wallets` → `build/src/wallets/index.js` | CIP-0103 token actions; requires only dependency-free SDK files (checked) |
-| Browser-safe external-parties entry | `exports` `./external-parties` → `build/src/external-parties/index.js` | Party discovery for a key; requires only its own SDK files and `@noble/hashes/sha2` (checked) |
+| Browser-safe external-parties entry | `exports` `./external-parties` → `build/src/external-parties/index.js` | The party directory for a key; requires only its own SDK files and `@fairmint/canton-protocol/party` (checked) |
 | No deep paths | none under `exports` `./build/...` | Consumers import only `.`, `./wallets` and `./external-parties`; a deep `build/` import fails with `ERR_PACKAGE_PATH_NOT_EXPORTED` (checked) |
 | Package metadata | `package.json`, `LICENSE`, `README.md` | Always included by npm |
 

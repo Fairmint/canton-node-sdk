@@ -1,3 +1,4 @@
+import { fingerprintEd25519PublicKey } from '@fairmint/canton-protocol/party';
 import { generateKeyPairSync, sign as ed25519Sign } from 'node:crypto';
 import { isCancelledBeforeSubmit } from '../../../src/wallets/abort';
 import { WalletReadError, WalletSignError } from '../../../src/wallets/errors';
@@ -9,7 +10,7 @@ import {
   requestWalletOwnershipVerdict,
   type WalletOwnershipChallenge,
 } from '../../../src/wallets/ownership';
-import { deriveCantonEd25519PublicKeyFingerprint, verifyWalletProof } from '../../../src/utils/external-signing';
+import { verifyWalletProof } from '../../../src/utils/external-signing';
 import { accountProvider, fakeFetch, HOLDER, RpcError, type RecordingProvider } from './helpers';
 
 const CHALLENGE: WalletOwnershipChallenge = {
@@ -411,7 +412,7 @@ describe('proveWalletProof', () => {
   it('gives a hex wallet proof that verifyWalletProof accepts as base64', async () => {
     const { privateKey, publicKey } = generateKeyPairSync('ed25519');
     const rawKey = publicKey.export({ format: 'der', type: 'spki' }).subarray(-32);
-    const namespace = deriveCantonEd25519PublicKeyFingerprint(rawKey.toString('base64'));
+    const namespace = fingerprintEd25519PublicKey(rawKey.toString('base64'));
     const partyId = `alice::${namespace}`;
     const fields = { ...FIELDS, partyId };
     const message = JSON.stringify(fields);

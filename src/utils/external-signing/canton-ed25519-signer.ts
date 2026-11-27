@@ -1,10 +1,6 @@
 import { ValidationError } from '../../core/errors';
-import {
-  assertCantonPartyMatchesPublicKey,
-  assertEd25519Signature,
-  hashHexToBase64,
-  normalizeEd25519PublicKeyForCanton,
-} from './canton-protocol';
+import { assertEd25519Signature, hashHexToBase64 } from './canton-protocol';
+import { assertPartyKey, cantonPublicKeyBase64 } from './party-identity';
 
 export const CantonEd25519SigningPurpose = {
   EXTERNAL_PARTY_TOPOLOGY: 'external-party-topology',
@@ -93,8 +89,8 @@ export async function signAndVerifyCantonEd25519Payload(
   const issuedAt = new Date(issuedAtMs).toISOString();
   const expiresAt = new Date(issuedAtMs + requestTtlMs).toISOString();
   const context = options.context === undefined ? undefined : normalizeSigningContext(options.context);
-  const publicKeyBase64 = normalizeEd25519PublicKeyForCanton(options.signer.publicKeyBase64);
-  const publicKeyFingerprint = assertCantonPartyMatchesPublicKey({
+  const publicKeyBase64 = cantonPublicKeyBase64(options.signer.publicKeyBase64);
+  const publicKeyFingerprint = assertPartyKey({
     partyId: options.partyId,
     publicKeyBase64,
   });

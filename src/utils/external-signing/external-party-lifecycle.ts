@@ -10,7 +10,7 @@ import {
 import { isAbortError } from '../../core/http/abort';
 import { runWithAbortSignal } from '../../core/utils/abort';
 import { checkPartySynchronizerReadiness, type PartySynchronizerReadiness } from '../party-readiness';
-import { assertCantonPartyMatchesPublicKey } from './canton-protocol';
+import { assertPartyKey } from './party-identity';
 import { readMatchingExternalPartyDetails } from './external-party-details';
 import { DEFAULT_CANTON_IDENTITY_PROVIDER_ID } from './external-party-onboarding';
 
@@ -102,7 +102,7 @@ export interface ReconcileExternalPartyOnboardingOptions {
 export async function reconcileExternalPartyOnboarding(
   options: ReconcileExternalPartyOnboardingOptions
 ): Promise<ExternalPartyOnboardingStatus> {
-  const publicKeyFingerprint = assertCantonPartyMatchesPublicKey({
+  const publicKeyFingerprint = assertPartyKey({
     partyId: options.partyId,
     publicKeyBase64: options.publicKeyBase64,
   });

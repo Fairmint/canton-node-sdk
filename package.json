@@ -98,7 +98,6 @@
     "@fairmint/canton-protocol": "0.1.0",
     "@hardlydifficult/rest-client": "1.0.65",
     "@hardlydifficult/websocket": "1.0.73",
-    "@noble/hashes": "1.8.0",
     "@stellar/stellar-base": "15.0.0",
     "axios": "1.21.1",
     "dotenv": "18.0.10",

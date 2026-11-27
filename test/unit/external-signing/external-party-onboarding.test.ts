@@ -1,11 +1,12 @@
+import {
+  buildExternalPartyId,
+  fingerprintEd25519PublicKey,
+  normalizeEd25519PublicKeyForCanton,
+} from '@fairmint/canton-protocol/party';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
 import { ApiError, ValidationError } from '../../../src/core/errors';
-import {
-  buildExternalPartyId,
-  deriveCantonEd25519PublicKeyFingerprint,
-  normalizeEd25519PublicKeyForCanton,
-} from '../../../src/utils/external-signing/canton-protocol';
+
 import {
   CANTON_DER_X509_PUBLIC_KEY_FORMAT,
   CANTON_EC_CURVE25519_PUBLIC_KEY_SPEC,
@@ -32,7 +33,7 @@ const createSigningFixture = (): {
   const publicKeyBase64 = Buffer.from(publicKey.export({ format: 'der', type: 'spki' }))
     .subarray(-32)
     .toString('base64');
-  const publicKeyFingerprint = deriveCantonEd25519PublicKeyFingerprint(publicKeyBase64);
+  const publicKeyFingerprint = fingerprintEd25519PublicKey(publicKeyBase64);
   return {
     publicKeyBase64,
     publicKeyFingerprint,

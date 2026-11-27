@@ -1,3 +1,8 @@
+import {
+  buildExternalPartyId,
+  fingerprintEd25519PublicKey,
+  normalizeEd25519PublicKeyForCanton,
+} from '@fairmint/canton-protocol/party';
 import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
 import { ApiError, NetworkError, OperationErrorCode, ValidationError } from '../../../src/core/errors';
@@ -15,11 +20,6 @@ import {
   type CantonEd25519SigningRequest,
   type NonEmptyPrepareExternalTransactionCommands,
 } from '../../../src/utils/external-signing';
-import {
-  buildExternalPartyId,
-  deriveCantonEd25519PublicKeyFingerprint,
-  normalizeEd25519PublicKeyForCanton,
-} from '../../../src/utils/external-signing/canton-protocol';
 
 const SYNCHRONIZER_ID = 'global-domain::sync';
 const MULTI_HASH_HEX = `1220${'11'.repeat(32)}`;
@@ -49,7 +49,7 @@ function createSigningFixture(): SigningFixture {
   const publicKeyBase64 = Buffer.from(publicKey.export({ format: 'der', type: 'spki' }))
     .subarray(-32)
     .toString('base64');
-  const publicKeyFingerprint = deriveCantonEd25519PublicKeyFingerprint(publicKeyBase64);
+  const publicKeyFingerprint = fingerprintEd25519PublicKey(publicKeyBase64);
   const signCantonPayload = jest.fn(async (request: CantonEd25519SigningRequest): Promise<CantonEd25519Signature> => ({
     signatureHex: sign(null, Buffer.from(request.payloadHex, 'hex'), privateKey).toString('hex'),
   }));

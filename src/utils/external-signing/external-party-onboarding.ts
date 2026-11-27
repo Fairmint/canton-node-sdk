@@ -6,16 +6,15 @@ import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
 import { allocateExternalParty } from './allocate-external-party';
 import { normalizeAllocationUserId } from './allocation-user-id';
 import { type CantonEd25519Signature, normalizeCantonEd25519Signature } from './canton-ed25519-signer';
+import { isCantonProtocolError, normalizeCantonHash } from '@fairmint/canton-protocol/party';
+import { assertCantonHashSignature, hashHexToBase64 } from './canton-protocol';
 import {
-  assertCantonHashSignature,
-  assertCantonPartyMatchesPublicKey,
-  assertCantonSha256MultihashHex,
-  buildExternalPartyId,
-  deriveCantonEd25519PublicKeyFingerprint,
-  hashHexToBase64,
-  normalizeCantonHashToHex,
-  normalizeEd25519PublicKeyForCanton,
-} from './canton-protocol';
+  assertPartyKey,
+  cantonHashHexOf,
+  cantonPublicKeyBase64,
+  externalPartyIdOf,
+  publicKeyFingerprintOf,
+} from './party-identity';
 import { readMatchingExternalPartyDetails } from './external-party-details';
 import { generateExternalPartyTopology } from './generate-external-party';
 
@@ -179,7 +178,7 @@ export async function prepareExternalPartyOnboarding(
     partyHint: options.partyHint,
     publicKey: {
       format: CANTON_DER_X509_PUBLIC_KEY_FORMAT,
-      keyData: normalizeEd25519PublicKeyForCanton(options.publicKeyBase64),
+      keyData: cantonPublicKeyBase64(options.publicKeyBase64),
       keySpec: CANTON_EC_CURVE25519_PUBLIC_KEY_SPEC,
     },
     ...(options.localParticipantObservationOnly !== undefined
@@ -203,10 +202,7 @@ export async function prepareExternalPartyOnboarding(
   return {
     partyId,
     publicKeyFingerprint,
-    multiHashHex: normalizeCantonHashToHex(
-      readRequiredString(topology, 'multiHash', 'topology generation'),
-      'topology generation'
-    ),
+    multiHashHex: readTopologyMultiHash(topology),
     synchronizerId: options.synchronizerId,
     topologyTransactions: readRequiredStringArray(topology, 'topologyTransactions', 'topology generation'),
     publicKeyFormat: CANTON_DER_X509_PUBLIC_KEY_FORMAT,
@@ -226,7 +222,7 @@ export async function createExternalPartyWithSigner(
   options: CreateExternalPartyWithSignerOptions
 ): Promise<CreatedExternalPartyWithSigner> {
   const userId = options.userId === undefined ? undefined : normalizeAllocationUserId(options.userId);
-  const publicKeyBase64 = normalizeEd25519PublicKeyForCanton(options.publicKeyBase64);
+  const publicKeyBase64 = cantonPublicKeyBase64(options.publicKeyBase64);
   const prepared = await prepareExternalPartyOnboarding({
     ledgerClient: options.ledgerClient,
     synchronizerId: options.synchronizerId,
@@ -286,12 +282,12 @@ export async function submitExternalPartyOnboarding(
 ): Promise<SubmittedExternalPartyOnboarding> {
   validateRequiredString('synchronizerId', options.synchronizerId);
   const userId = options.userId === undefined ? undefined : normalizeAllocationUserId(options.userId);
-  const publicKeyFingerprint = assertCantonPartyMatchesPublicKey({
+  const publicKeyFingerprint = assertPartyKey({
     partyId: options.partyId,
     publicKeyBase64: options.publicKeyBase64,
     ...(options.publicKeyFingerprint !== undefined ? { publicKeyFingerprint: options.publicKeyFingerprint } : {}),
   });
-  const multiHashHex = assertCantonSha256MultihashHex(options.multiHashHex);
+  const multiHashHex = cantonHashHexOf(options.multiHashHex);
   assertCantonHashSignature({
     publicKeyBase64: options.publicKeyBase64,
     hashHex: multiHashHex,
@@ -381,7 +377,7 @@ export async function listExternalPartyIdsForPublicKey(
   readonly parties: readonly string[];
   readonly raw: unknown;
 }> {
-  const publicKeyFingerprint = deriveCantonEd25519PublicKeyFingerprint(publicKeyBase64);
+  const publicKeyFingerprint = publicKeyFingerprintOf(publicKeyBase64);
   const raw =
     signal === undefined ? await ledgerClient.listParties({}) : await ledgerClient.listParties({}, { signal });
   return {
@@ -404,8 +400,8 @@ export async function getExternalPartyIdForHintAndPublicKey(
   readonly exists: boolean;
   readonly raw: unknown;
 }> {
-  const publicKeyFingerprint = deriveCantonEd25519PublicKeyFingerprint(publicKeyBase64);
-  const partyId = buildExternalPartyId(partyHint, publicKeyFingerprint);
+  const publicKeyFingerprint = publicKeyFingerprintOf(publicKeyBase64);
+  const partyId = externalPartyIdOf(partyHint, publicKeyFingerprint);
   try {
     const params = { party: partyId, identityProviderId };
     const raw =
@@ -511,12 +507,26 @@ function validateRequiredString(name: string, value: string): void {
   }
 }
 
+/** The participant's `multiHash` (base64 or hex) as a canonical Canton hash; anything else fails the operation. */
+function readTopologyMultiHash(topology: unknown): string {
+  const multiHash = readRequiredString(topology, 'multiHash', 'topology generation');
+  try {
+    return normalizeCantonHash(multiHash);
+  } catch (error) {
+    if (!isCantonProtocolError(error, 'INVALID_INPUT')) throw error;
+    throw new OperationError(
+      'Canton topology generation response did not include a valid SHA-256 multihash',
+      OperationErrorCode.TRANSACTION_FAILED
+    );
+  }
+}
+
 function assertGeneratedPartyMatchesPublicKey(input: {
   readonly partyId: string;
   readonly publicKeyBase64: string;
 }): string {
   try {
-    return assertCantonPartyMatchesPublicKey(input);
+    return assertPartyKey(input);
   } catch (error) {
     throw new OperationError(
       'Canton topology generation response did not include a party ID matching the submitted public key',

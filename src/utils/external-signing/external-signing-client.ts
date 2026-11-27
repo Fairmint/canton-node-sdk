@@ -17,11 +17,8 @@ import {
   type CantonEd25519SigningContext,
   type CantonEd25519SigningRequest,
 } from './canton-ed25519-signer';
-import {
-  assertCantonPartyMatchesPublicKey,
-  normalizeEd25519PublicKeyForCanton,
-  preparedTransactionHashToHex,
-} from './canton-protocol';
+import { preparedTransactionHashToHex } from './canton-protocol';
+import { assertPartyKey, cantonPublicKeyBase64 } from './party-identity';
 import {
   createDefaultInteractiveSubmissionDeduplicationPeriod,
   executeExternalTransactionAndWait,
@@ -137,7 +134,7 @@ export async function createExternalPartyWithEd25519Signer(
 ): Promise<CreatedExternalPartyWithEd25519Signer> {
   // Checked before prepare and signing, so a bad id is a plain ValidationError, never a reconciled allocation failure.
   const userId = options.userId === undefined ? undefined : normalizeAllocationUserId(options.userId);
-  const publicKeyBase64 = normalizeEd25519PublicKeyForCanton(options.signer.publicKeyBase64);
+  const publicKeyBase64 = cantonPublicKeyBase64(options.signer.publicKeyBase64);
   const signedPayloads: Array<Awaited<ReturnType<typeof signAndVerifyCantonEd25519Payload>>> = [];
   let created: CreatedExternalPartyWithSigner;
   try {
@@ -392,7 +389,7 @@ export interface ExecutedExternalTransactionWithEd25519Signer {
 export async function executeExternalTransactionWithEd25519Signer(
   options: ExecuteExternalTransactionWithEd25519SignerOptions
 ): Promise<ExecutedExternalTransactionWithEd25519Signer> {
-  assertCantonPartyMatchesPublicKey({
+  assertPartyKey({
     partyId: options.partyId,
     publicKeyBase64: options.signer.publicKeyBase64,
   });

@@ -41,7 +41,7 @@ const REQUIRED_RUNTIME_PATHS = [
   // The browser-safe wallets entry point (`exports` `./wallets`).
   'build/src/wallets/index.js',
   'build/src/wallets/index.d.ts',
-  // The browser-safe external-party discovery entry point (`exports` `./external-parties`).
+  // The browser-safe external-party directory entry point (`exports` `./external-parties`).
   'build/src/external-parties/index.js',
   'build/src/external-parties/index.d.ts',
 ] as const;
@@ -52,7 +52,7 @@ const REQUIRED_RUNTIME_PATHS = [
  */
 const BROWSER_SAFE_ENTRIES: ReadonlyArray<{ readonly entry: string; readonly packages: readonly string[] }> = [
   { entry: 'build/src/wallets/index.js', packages: [] },
-  { entry: 'build/src/external-parties/index.js', packages: ['@noble/hashes/sha2'] },
+  { entry: 'build/src/external-parties/index.js', packages: ['@fairmint/canton-protocol/party'] },
 ];
 
 const FORBIDDEN_LOCALNET_ENGINE_PATHS = ['bin/canton-localnet', 'scripts/localnet-cloud.sh'] as const;

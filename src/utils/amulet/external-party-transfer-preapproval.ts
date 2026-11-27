@@ -2,11 +2,8 @@ import { type ValidatorApiClient } from '../../clients/validator-api';
 import { ApiError, ValidationError } from '../../core/errors';
 import { isRecord } from '../../core/utils';
 import { objectOrEmpty, readContractWithStateContractId } from '../canton-response-utils';
-import {
-  assertCantonHashSignature,
-  assertCantonPartyMatchesPublicKey,
-  extractRawEd25519PublicKey,
-} from '../external-signing/canton-protocol';
+import { assertCantonHashSignature } from '../external-signing/canton-protocol';
+import { assertPartyKey, rawEd25519PublicKey } from '../external-signing/party-identity';
 
 export interface ExternalPartyTransferPreapprovalContract {
   readonly contractId: string;
@@ -97,7 +94,7 @@ export async function prepareExternalPartyTransferPreapprovalSetup(
   params: PrepareExternalPartyTransferPreapprovalSetupParams
 ): Promise<PreparedExternalPartyTransferPreapprovalSetup> {
   validatePartyId('partyId', params.partyId);
-  const publicKeyFingerprint = assertCantonPartyMatchesPublicKey({
+  const publicKeyFingerprint = assertPartyKey({
     partyId: params.partyId,
     publicKeyBase64: params.publicKeyBase64,
   });
@@ -168,7 +165,7 @@ export async function submitExternalPartyTransferPreapprovalSetup(
   params: SubmitExternalPartyTransferPreapprovalSetupParams
 ): Promise<SubmittedExternalPartyTransferPreapprovalSetup> {
   validatePartyId('partyId', params.partyId);
-  assertCantonPartyMatchesPublicKey({
+  assertPartyKey({
     partyId: params.partyId,
     publicKeyBase64: params.publicKeyBase64,
   });
@@ -183,7 +180,7 @@ export async function submitExternalPartyTransferPreapprovalSetup(
       party_id: params.partyId,
       transaction: params.preparedTransaction,
       signed_tx_hash: base64ToHex(params.signatureBase64, 'signatureBase64'),
-      public_key: extractRawEd25519PublicKey(params.publicKeyBase64).toString('hex'),
+      public_key: Buffer.from(rawEd25519PublicKey(params.publicKeyBase64)).toString('hex'),
     },
   });
 

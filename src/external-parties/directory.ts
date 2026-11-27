@@ -1,19 +1,19 @@
 /**
  * Every party a key controls on one participant, over the Ledger JSON API: a bounded, cached read of `GET /v2/parties`
  * filtered to the key's namespace, plus exact `GET /v2/parties/{party}` lookups of the hints the read may not show.
- * Browser-safe: it takes the ledger client by its shape (node-sdk's `LedgerJsonApiClient` fits), and loads nothing
- * else.
+ * Browser-safe: it takes the ledger client by its shape (node-sdk's `LedgerJsonApiClient` fits), and loads only
+ * `@fairmint/canton-protocol/party`, whose `discoverExternalParties` it runs over that client.
  */
 import {
+  CantonProtocolError,
   discoverExternalParties,
-  isBoundedIdentifier,
-  raceAbort,
-  sortedEntries,
+  fingerprintEd25519PublicKey,
+  isCantonHash,
+  MAX_PARTY_ID_LENGTH,
+  parsePartyId,
   type ExternalPartyEntry,
   type ExternalPartyListing,
-} from './discovery';
-import { ExternalPartyError, invalidInput } from './errors';
-import { deriveCantonEd25519PublicKeyFingerprint, isCantonPublicKeyFingerprint, parseExternalPartyId } from './keys';
+} from '@fairmint/canton-protocol/party';
 
 /** The request options the directory passes to the ledger client. */
 export interface ExternalPartyDirectoryRequestConfig {
@@ -69,8 +69,9 @@ export interface ExternalPartyDirectory {
    * scan's: false when a page or time bound stopped it first. With a complete scan a failed lookup is skipped; with an
    * incomplete one it fails the call. `signal` stops this caller's wait, not the shared scan.
    *
-   * Throws {@link ExternalPartyError}: `INVALID_INPUT`, `ABORTED`, `INVALID_RESPONSE`, `LIST_FAILED` (the scan's request
-   * failed: the ledger client's error is `cause`) or `LOOKUP_FAILED`.
+   * Throws canton-protocol's `CantonProtocolError` (match it with `isCantonProtocolError` from
+   * `@fairmint/canton-protocol/party`): `INVALID_INPUT`, `ABORTED`, `INVALID_RESPONSE`, `LIST_FAILED` (the scan's
+   * request failed: the ledger client's error is `cause`) or `LOOKUP_FAILED`.
    */
   listPartiesForKey(
     request: ExternalPartyKey & { readonly hints?: readonly string[]; readonly signal?: AbortSignal }
@@ -123,8 +124,8 @@ export function createExternalPartyDirectory(options: ExternalPartyDirectoryOpti
   const cacheMs = bounded(options.cacheMs, 30_000, 0, 600_000, 'cacheMs');
   const now = options.now ?? Date.now;
   const url = (path: string): string => `${ledgerClient.getApiUrl()}${path}`;
-  const invalidResponse = (message: string, partyId?: string): ExternalPartyError =>
-    new ExternalPartyError('INVALID_RESPONSE', message, partyId === undefined ? {} : { partyId });
+  const invalidResponse = (message: string, partyId?: string): CantonProtocolError =>
+    new CantonProtocolError('INVALID_RESPONSE', message, partyId === undefined ? {} : { partyId });
 
   let cachedScan: PartyScan | undefined;
   let scanInFlight: Promise<PartyScan> | undefined;
@@ -170,10 +171,10 @@ export function createExternalPartyDirectory(options: ExternalPartyDirectoryOpti
         for (const detail of details) {
           if (!isRecord(detail)) continue;
           const { party } = detail;
-          // `hint::namespace` only: one separator, a non-empty hint and namespace.
+          // `hint::namespace` only: a Daml-LF Party with one separator, a non-empty hint and namespace.
           // And one a listing may answer (at most 255 characters, trimmed, one line), so one odd party in the store
           // never fails every key's listing.
-          const parsed = parseExternalPartyId(party);
+          const parsed = parsePartyId(party);
           if (parsed === null || !isBoundedIdentifier(party)) continue;
           let parties = byNamespace.get(parsed.namespace);
           if (parties === undefined) {
@@ -271,7 +272,7 @@ export function createExternalPartyDirectory(options: ExternalPartyDirectoryOpti
 
     noteAllocated(partyId) {
       // Only an ID a listing may answer: one it refuses would fail every listing of its key until it expired.
-      if (parseExternalPartyId(partyId) === null || !isBoundedIdentifier(partyId)) {
+      if (parsePartyId(partyId) === null || !isBoundedIdentifier(partyId)) {
         throw invalidInput(
           'partyId must be a hint::namespace party ID of at most 255 characters, trimmed, on one line.'
         );
@@ -289,14 +290,64 @@ export function createExternalPartyDirectory(options: ExternalPartyDirectoryOpti
 
 function keyFingerprint(key: ExternalPartyKey): string {
   if (typeof key.publicKeyBase64 === 'string') {
-    const fingerprint = deriveCantonEd25519PublicKeyFingerprint(key.publicKeyBase64);
+    const fingerprint = fingerprintEd25519PublicKey(key.publicKeyBase64);
     if (key.publicKeyFingerprint !== undefined && key.publicKeyFingerprint !== fingerprint) {
       throw invalidInput('publicKeyFingerprint does not match publicKeyBase64.');
     }
     return fingerprint;
   }
-  if (isCantonPublicKeyFingerprint(key.publicKeyFingerprint)) return key.publicKeyFingerprint;
+  if (isCantonHash(key.publicKeyFingerprint)) return key.publicKeyFingerprint;
   throw invalidInput('Pass publicKeyBase64 or a Canton publicKeyFingerprint.');
+}
+
+function invalidInput(message: string): CantonProtocolError {
+  return new CantonProtocolError('INVALID_INPUT', message);
+}
+
+/** `parties` (party ID → hosted here) as frozen entries, sorted by hint (then party ID), in code-unit order. */
+function sortedEntries(parties: ReadonlyMap<string, boolean>): readonly ExternalPartyEntry[] {
+  const entries = [...parties].map(([partyId, hostedHere]) =>
+    Object.freeze({ partyId, partyHint: partyId.slice(0, partyId.indexOf('::')), hostedHere })
+  );
+  entries.sort((a, b) => compare(a.partyHint, b.partyHint) || compare(a.partyId, b.partyId));
+  return Object.freeze(entries);
+}
+
+function compare(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** Awaits `start()`, unless `signal` aborts first (`ABORTED`); an already-aborted signal never starts it. */
+async function raceAbort<T>(start: () => Promise<T>, signal: AbortSignal | undefined, message: string): Promise<T> {
+  const aborted = (): CantonProtocolError => new CantonProtocolError('ABORTED', message, { cause: signal?.reason });
+  if (!signal) return start();
+  if (signal.aborted) throw aborted();
+  const promise = start();
+  let onAbort: () => void = () => undefined;
+  const abortedWait = new Promise<never>((_, reject) => {
+    onAbort = () => reject(aborted());
+    signal.addEventListener('abort', onAbort, { once: true });
+    // `start()` may itself have aborted the signal, before the listener could hear it.
+    if (signal.aborted) onAbort();
+  });
+  abortedWait.catch(() => undefined);
+  promise.catch(() => undefined);
+  try {
+    return await Promise.race([promise, abortedWait]);
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
+}
+
+/** A string of 1 to 255 characters (a Daml-LF Party at most), trimmed, on one line: what a listing may answer. */
+function isBoundedIdentifier(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= MAX_PARTY_ID_LENGTH &&
+    value.trim() === value &&
+    !/[\r\n]/u.test(value)
+  );
 }
 
 function bounded(value: number | undefined, fallback: number, min: number, max: number, label: string): number {
