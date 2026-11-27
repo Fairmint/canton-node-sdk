@@ -16,6 +16,7 @@ import {
   externalPartyIdOf,
   onCallerInput,
   publicKeyFingerprintOf,
+  requestedExternalPartyId,
 } from './party-identity';
 import { readMatchingExternalPartyDetails } from './external-party-details';
 import { generateExternalPartyTopology } from './generate-external-party';
@@ -183,11 +184,12 @@ export interface CreatedExternalPartyWithSigner {
  * Prepares external-party topology for a raw or DER-wrapped Ed25519 public key.
  *
  * The participant's answer is not trusted: the SDK reads the local participant's unique identifier (`GET
- * /v2/parties/participant-id`), checks the generated topology states exactly the requested onboarding (the party, its
- * one key with the usages `NAMESPACE`, `PROTOCOL` and `PROOF_OF_OWNERSHIP`, the hosting participants with their
- * permissions, and the confirmation threshold) and recomputes the multi-hash from it. A topology that differs, or a
- * participant multi-hash that is not the recomputed one, is an `OperationError` (`TRANSACTION_FAILED`) whose `cause` is
- * `@fairmint/canton-protocol`'s `CantonProtocolError`. Canton 3.4 or later is required (one generated transaction).
+ * /v2/parties/participant-id`), checks the generated topology states exactly the requested onboarding (the party
+ * `partyHint::fingerprint` built from the request, its one key with the usages `NAMESPACE`, `PROTOCOL` and
+ * `PROOF_OF_OWNERSHIP`, the hosting participants with their permissions, and the confirmation threshold) and recomputes
+ * the multi-hash from it. A topology that differs, or a participant multi-hash that is not the recomputed one, is an
+ * `OperationError` (`TRANSACTION_FAILED`) whose `cause` is `@fairmint/canton-protocol`'s `CantonProtocolError`. Canton
+ * 3.4 or later is required (one generated transaction).
  *
  * The caller should ask the end-user wallet to sign `multiHashHex` (the recomputed multi-hash) before calling
  * {@link submitExternalPartyOnboarding}.
@@ -198,6 +200,7 @@ export async function prepareExternalPartyOnboarding(
   validateRequiredString('synchronizerId', options.synchronizerId);
   validateRequiredString('partyHint', options.partyHint);
   const publicKeyBase64 = cantonPublicKeyBase64(options.publicKeyBase64);
+  const expectedPartyId = requestedExternalPartyId(options.partyHint, publicKeyBase64);
   const hosting = onboardingHostingExpectation(
     checkOnboardingHosting(options),
     await readLocalParticipantUid(options.ledgerClient)
@@ -229,12 +232,19 @@ export async function prepareExternalPartyOnboarding(
     partyId,
     publicKeyBase64: options.publicKeyBase64,
   });
+  if (partyId !== expectedPartyId) {
+    throw new OperationError(
+      'Canton topology generation response party ID is not the requested party',
+      OperationErrorCode.TRANSACTION_FAILED,
+      { expectedPartyId, partyId }
+    );
+  }
 
   const topologyTransactions = readRequiredStringArray(topology, 'topologyTransactions', 'topology generation');
   const multiHashHex = verifyGeneratedOnboardingTopology({
     transactions: topologyTransactions,
     multiHash: readRequiredString(topology, 'multiHash', 'topology generation'),
-    partyId,
+    partyId: expectedPartyId,
     publicKeyBase64,
     hosting,
   });

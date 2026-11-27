@@ -139,7 +139,7 @@ export interface GeneratedOnboardingTopology {
   readonly transactions: readonly string[];
   /** The participant's multi-hash of them, hex or base64. */
   readonly multiHash: string;
-  /** The party being onboarded (already checked to be an external party of `publicKeyBase64`). */
+  /** The party requested: `hint::fingerprint` built from the request, never the participant's own value. */
   readonly partyId: string;
   /** The party's Ed25519 public key, raw or DER, base64. */
   readonly publicKeyBase64: string;

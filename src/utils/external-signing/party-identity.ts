@@ -66,6 +66,18 @@ export function externalPartyIdOf(partyHint: string, publicKeyFingerprint: strin
 }
 
 /**
+ * The party ID Canton allocates for `partyHint` on `publicKeyBase64` (`hint::fingerprint`), built from the request so a
+ * participant's answer can be compared with it. Canton uses the hint exactly as sent, so a hint with leading or
+ * trailing whitespace is refused rather than trimmed, as is any hint canton-protocol's `buildExternalPartyId` refuses.
+ */
+export function requestedExternalPartyId(partyHint: string, publicKeyBase64: string): string {
+  if (typeof partyHint === 'string' && partyHint !== partyHint.trim()) {
+    throw new ValidationError('partyHint must not start or end with whitespace', { partyHint });
+  }
+  return externalPartyIdOf(partyHint, publicKeyFingerprintOf(publicKeyBase64));
+}
+
+/**
  * Checks that `partyId` is an external party of `publicKeyBase64` (its namespace is the key's fingerprint) and that a
  * caller-supplied fingerprint, if any, is the key's; returns the key's fingerprint.
  */

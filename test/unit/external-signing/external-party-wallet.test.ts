@@ -372,6 +372,27 @@ describe('external-party wallet bridge', (): void => {
     });
   });
 
+  it('refuses a topology of another party hint than the one requested', async (): Promise<void> => {
+    // The participant answers privy-test::<this key> (self-consistent, matching multi-hash) to a request for treasury.
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient();
+    ledgerClient.getParticipantId = jest.fn().mockResolvedValue({ participantId: LOCAL_PARTICIPANT_UID });
+    ledgerClient.generateExternalPartyTopology = jest.fn().mockResolvedValue(fixture.topology);
+    const bridge = createBridge({ ledgerClient });
+
+    await expect(
+      bridge.prepareExternalParty({ partyName: 'treasury', publicKeyBase64: fixture.publicKeyBase64 })
+    ).rejects.toMatchObject({
+      name: 'OperationError',
+      code: OperationErrorCode.TRANSACTION_FAILED,
+      context: {
+        expectedPartyId: buildExternalPartyId('treasury', fixture.publicKeyFingerprint),
+        partyId: fixture.partyId,
+      },
+    });
+    expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
+  });
+
   it('refuses a submitted multi-hash that is not the hash of the submitted topology before allocating', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const other = createSigningFixture();

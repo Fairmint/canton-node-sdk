@@ -944,6 +944,89 @@ describe('external-party onboarding topology checks', () => {
     );
   });
 
+  it('refuses the real Canton 3.7.2 alice topology when bob was requested, before anything is signed', async () => {
+    // The participant answers alice::<this key>, self-consistent and with the right multi-hash, to a request for bob.
+    const ledgerClient = vectorLedgerClient('v31');
+    const signMultiHash = jest.fn();
+
+    const error: unknown = await createAlice(ledgerClient, signMultiHash, GENERATED_TOPOLOGY_PUBLIC_KEY, 'bob').then(
+      () => {
+        throw new Error('expected a refusal');
+      },
+      (reason: unknown) => reason
+    );
+
+    expect(error).toBeInstanceOf(OperationError);
+    expect(error).toMatchObject({
+      message: 'Canton topology generation response party ID is not the requested party',
+      code: 'TRANSACTION_FAILED',
+      context: {
+        expectedPartyId: buildExternalPartyId('bob', fingerprintEd25519PublicKey(GENERATED_TOPOLOGY_PUBLIC_KEY)),
+        partyId: GENERATED_TOPOLOGY_PARTY_ID,
+      },
+    });
+    expect(ledgerClient.generateExternalPartyTopology).toHaveBeenCalledWith(
+      expect.objectContaining({ partyHint: 'bob' })
+    );
+    expect(signMultiHash).not.toHaveBeenCalled();
+    expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
+  });
+
+  it('refuses another hint on the same key with a valid topology and multi-hash for it', async () => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+    const otherPartyId = buildExternalPartyId('other-hint', fixture.publicKeyFingerprint);
+    const otherTopology = fixture.topologyFor({ partyId: otherPartyId });
+    ledgerClient.generateExternalPartyTopology.mockResolvedValue({
+      partyId: otherPartyId,
+      publicKeyFingerprint: fixture.publicKeyFingerprint,
+      multiHash: otherTopology.multiHash,
+      topologyTransactions: [...otherTopology.topologyTransactions],
+    });
+    const signMultiHash = jest.fn();
+    const request = {
+      ledgerClient,
+      synchronizerId: 'global-domain::sync',
+      partyHint: 'privy-test',
+      publicKeyBase64: fixture.publicKeyBase64,
+    };
+
+    for (const result of [
+      prepareExternalPartyOnboarding(request),
+      createExternalPartyWithSigner({ ...request, signMultiHash }),
+    ]) {
+      await expect(result).rejects.toBeInstanceOf(OperationError);
+      await expect(result).rejects.toMatchObject({
+        code: 'TRANSACTION_FAILED',
+        context: { expectedPartyId: fixture.partyId, partyId: otherPartyId },
+      });
+    }
+    expect(signMultiHash).not.toHaveBeenCalled();
+    expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
+  });
+
+  it.each([' privy-test', 'privy-test ', 'privy-test\n', 'privy.test', 'privy::test'])(
+    'refuses the party hint %j before reading the participant or generating topology',
+    async (partyHint) => {
+      const fixture = createSigningFixture();
+      const ledgerClient = createMockLedgerClient(fixture);
+      const signMultiHash = jest.fn();
+
+      await expect(
+        createExternalPartyWithSigner({
+          ledgerClient,
+          synchronizerId: 'global-domain::sync',
+          partyHint,
+          publicKeyBase64: fixture.publicKeyBase64,
+          signMultiHash,
+        })
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(ledgerClient.getParticipantId).not.toHaveBeenCalled();
+      expect(ledgerClient.generateExternalPartyTopology).not.toHaveBeenCalled();
+      expect(signMultiHash).not.toHaveBeenCalled();
+    }
+  );
+
   it('refuses a participant multi-hash that is not the hash of its transactions', async () => {
     const ledgerClient = vectorLedgerClient('v31', { multiHash: GENERATED_TOPOLOGY.v30.multiHash });
     const signMultiHash = jest.fn();

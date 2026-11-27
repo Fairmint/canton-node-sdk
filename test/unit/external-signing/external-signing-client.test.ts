@@ -259,6 +259,30 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
     expect(ledgerClient.allocateExternalParty.mock.calls).toHaveLength(0);
   });
 
+  it('never asks the signer for a topology of another party hint than the one requested', async (): Promise<void> => {
+    // The participant answers external-test::<this key> (self-consistent, matching multi-hash) to a request for treasury.
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+
+    const result = createExternalPartyWithEd25519Signer({
+      ledgerClient,
+      synchronizerId: SYNCHRONIZER_ID,
+      partyHint: 'treasury',
+      signer: fixture.signer,
+      waitForReady: false,
+    });
+
+    await expect(result).rejects.toThrow('Canton topology generation response party ID is not the requested party');
+    await expect(result).rejects.toMatchObject({
+      context: {
+        expectedPartyId: buildExternalPartyId('treasury', fixture.publicKeyFingerprint),
+        partyId: fixture.partyId,
+      },
+    });
+    expect(fixture.signCantonPayload).not.toHaveBeenCalled();
+    expect(ledgerClient.allocateExternalParty.mock.calls).toHaveLength(0);
+  });
+
   it("never asks the signer to sign a participant multi-hash that is not the topology's", async (): Promise<void> => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient(fixture);

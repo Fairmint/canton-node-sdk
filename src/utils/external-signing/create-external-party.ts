@@ -8,7 +8,7 @@ import {
   readLocalParticipantUid,
   verifyGeneratedOnboardingTopology,
 } from './onboarding-topology';
-import { assertPartyKey } from './party-identity';
+import { assertPartyKey, requestedExternalPartyId } from './party-identity';
 import { stellarPublicKeyToBase64, stellarPublicKeyToHex } from './stellar-utils';
 
 /** Parameters for creating an external party. */
@@ -17,7 +17,10 @@ export interface CreateExternalPartyParams {
   readonly ledgerClient: LedgerJsonApiClient;
   /** Stellar keypair for the party (Ed25519). */
   readonly keypair: Keypair;
-  /** Party name hint (will be used as prefix in party ID). */
+  /**
+   * Party name hint: the party ID is `partyName::fingerprint`. Used exactly as given (leading or trailing whitespace is
+   * refused), and a participant answering any other party ID is refused before anything is signed.
+   */
   readonly partyName: string;
   /** Synchronizer ID to onboard the party on. */
   readonly synchronizerId: string;
@@ -71,10 +74,10 @@ export interface CreateExternalPartyResult {
  * The keypair's private key is used to sign the onboarding transactions, proving ownership of the public key. The
  * participant's answer is not signed on its word: the SDK reads the local participant's unique identifier (`GET
  * /v2/parties/participant-id`), checks that the generated topology states exactly the requested onboarding (the party
- * of this key, the key with the usages `NAMESPACE`, `PROTOCOL` and `PROOF_OF_OWNERSHIP`, the hosting participants with
- * their permissions, and the confirmation threshold), recomputes the multi-hash and signs only that. A topology that
- * differs is an `OperationError` (`TRANSACTION_FAILED`) and nothing is signed or allocated. Canton 3.4 or later is
- * required.
+ * `partyName::fingerprint` of this key, the key with the usages `NAMESPACE`, `PROTOCOL` and `PROOF_OF_OWNERSHIP`, the
+ * hosting participants with their permissions, and the confirmation threshold), recomputes the multi-hash and signs
+ * only that. A topology that differs is an `OperationError` (`TRANSACTION_FAILED`) and nothing is signed or allocated.
+ * Canton 3.4 or later is required.
  *
  * @example
  *   ```typescript
@@ -120,6 +123,7 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
   // Step 1: Convert Stellar public key to base64 for Ledger API
   const publicKeyBase64 = stellarPublicKeyToBase64(keypair);
   const publicKeyHex = stellarPublicKeyToHex(keypair);
+  const expectedPartyId = requestedExternalPartyId(partyName, publicKeyBase64);
 
   // Step 2: Generate external party topology using Ledger JSON API
   const hosting = onboardingHostingExpectation(hostingRequest, await readLocalParticipantUid(ledgerClient));
@@ -179,10 +183,17 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
       { partyId, partyName, cause: error instanceof Error ? error.message : String(error) }
     );
   }
+  if (partyId !== expectedPartyId) {
+    throw new OperationError(
+      'Topology generation returned a party ID that is not the requested party',
+      OperationErrorCode.PARTY_CREATION_FAILED,
+      { expectedPartyId, partyId, partyName }
+    );
+  }
   const multiHashHex = verifyGeneratedOnboardingTopology({
     transactions: rawTopologyTransactions,
     multiHash,
-    partyId,
+    partyId: expectedPartyId,
     publicKeyBase64,
     hosting,
   });

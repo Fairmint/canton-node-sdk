@@ -2,7 +2,7 @@ import { fingerprintEd25519PublicKey } from '@fairmint/canton-protocol/party';
 import { Keypair } from '@stellar/stellar-base';
 import { verify } from 'node:crypto';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import { OperationError } from '../../../src/core/errors';
+import { OperationError, ValidationError } from '../../../src/core/errors';
 import { createExternalParty } from '../../../src/utils/external-signing/create-external-party';
 import {
   generatedTopologyAnswer,
@@ -367,6 +367,48 @@ describe('createExternalParty', () => {
     ).rejects.toThrow('Topology generation returned a party ID that does not match the keypair');
     expect(mockClient.allocateExternalParty).not.toHaveBeenCalled();
   });
+
+  it('refuses a topology of another party name than the one requested without signing or allocating', async () => {
+    // The participant answers alice::<this key> (self-consistent, matching multi-hash) to a request for bob.
+    const mockClient = createMockLedgerClient();
+    const sign = jest.spyOn(keypair, 'sign');
+
+    try {
+      const result = createExternalParty({
+        ledgerClient: mockClient,
+        keypair,
+        partyName: 'bob',
+        synchronizerId: 'global-sync',
+      });
+
+      await expect(result).rejects.toBeInstanceOf(OperationError);
+      await expect(result).rejects.toMatchObject({
+        message: 'Topology generation returned a party ID that is not the requested party',
+        code: 'PARTY_CREATION_FAILED',
+        context: expect.objectContaining({ expectedPartyId: `bob::${FINGERPRINT}`, partyId: PARTY_ID }) as object,
+      });
+      expect(mockClient.generateExternalPartyTopology).toHaveBeenCalledWith(
+        expect.objectContaining({ partyHint: 'bob' })
+      );
+      expect(sign).not.toHaveBeenCalled();
+      expect(mockClient.allocateExternalParty).not.toHaveBeenCalled();
+    } finally {
+      sign.mockRestore();
+    }
+  });
+
+  it.each([' alice', 'alice ', 'al.ice', 'al::ice', ''])(
+    'refuses the party name %j before reading the participant or generating topology',
+    async (partyName) => {
+      const mockClient = createMockLedgerClient();
+
+      await expect(
+        createExternalParty({ ledgerClient: mockClient, keypair, partyName, synchronizerId: 'global-sync' })
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(mockClient.getParticipantId).not.toHaveBeenCalled();
+      expect(mockClient.generateExternalPartyTopology).not.toHaveBeenCalled();
+    }
+  );
 
   it('refuses invalid hosting options before reading the participant or generating topology', async () => {
     const mockClient = createMockLedgerClient();
