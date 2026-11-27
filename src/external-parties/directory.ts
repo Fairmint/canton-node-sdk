@@ -274,7 +274,7 @@ export function createExternalPartyDirectory(options: ExternalPartyDirectoryOpti
       // Only an ID a listing may answer: one it refuses would fail every listing of its key until it expired.
       if (parsePartyId(partyId) === null || !isBoundedIdentifier(partyId)) {
         throw invalidInput(
-          'partyId must be a hint::namespace party ID of at most 255 characters, trimmed, on one line.'
+          'partyId must be a Daml-LF party ID (hint::namespace, at most 255 ASCII letters, digits, spaces, ":", "-" or "_"), trimmed, on one line.'
         );
       }
       // Drops expired entries as it records one, so the map holds one cache window, not the process lifetime.

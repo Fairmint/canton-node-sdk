@@ -40,9 +40,11 @@ export type GenerateExternalPartyTopologyResponse = GeneratedResponse;
 /**
  * Generate a topology for an external party
  *
- * This endpoint generates the topology transactions and multi-hash needed to onboard an external party. The multi-hash
- * should be signed using the external party's private key and then submitted to the allocate endpoint along with the
- * generated topology transactions.
+ * This endpoint generates the topology transactions and multi-hash needed to onboard an external party. Do not sign
+ * `multiHash` as answered: check the transactions against the requested onboarding (party `partyHint::fingerprint`,
+ * key, hosting participants, threshold) with `verifyPartyOnboardingTopology` from `@fairmint/canton-protocol/topology`,
+ * or use `prepareExternalPartyOnboarding`, which does, and sign the multi-hash recomputed from them. Submit that
+ * signature to the allocate endpoint with the generated topology transactions.
  *
  * @example
  *   ```typescript
@@ -55,9 +57,9 @@ export type GenerateExternalPartyTopologyResponse = GeneratedResponse;
  *       keySpec: 'SIGNING_KEY_SPEC_EC_CURVE25519'
  *     }
  *   });
- *   // result.multiHash - sign this with the external party's private key
- *   // result.topologyTransactions - pass these to allocate endpoint
- *   // result.partyId - the generated party ID
+ *   // result.multiHash - the participant's word: verify it (verifyPartyOnboardingTopology), sign the recomputed hash
+ *   // result.topologyTransactions - check these, then pass them to the allocate endpoint
+ *   // result.partyId - the generated party ID: compare it with partyHint::fingerprint
  *   ```;
  */
 export const GenerateExternalPartyTopology = createApiOperation<

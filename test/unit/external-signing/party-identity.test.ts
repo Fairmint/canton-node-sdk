@@ -145,6 +145,21 @@ describe('party identity (canton-protocol, SDK errors)', () => {
     );
   });
 
+  it('does not trim a party ID: whitespace around it or around its namespace is refused', () => {
+    const partyId = `privy-test::${PRIVY_CANTON_FINGERPRINT}`;
+    for (const untrimmed of [`${partyId} `, `privy-test:: ${PRIVY_CANTON_FINGERPRINT}`]) {
+      // Space is a Daml-LF Party character, so the namespace reads as `<fingerprint> ` (or ` <fingerprint>`).
+      expect(() => assertPartyKey({ partyId: untrimmed, publicKeyBase64: PRIVY_SOLANA_PUBLIC_KEY_BASE64 })).toThrow(
+        'Canton party ID does not match the submitted public key'
+      );
+    }
+    for (const untrimmed of [`${partyId}\n`, `\t${partyId}`]) {
+      expect(() => assertPartyKey({ partyId: untrimmed, publicKeyBase64: PRIVY_SOLANA_PUBLIC_KEY_BASE64 })).toThrow(
+        'Expected a Canton party ID with one public key fingerprint suffix'
+      );
+    }
+  });
+
   it('reads a caller-supplied Canton hash as hex only, in canonical form', () => {
     const hash = `1220${'ab'.repeat(32)}`;
     expect(cantonHashHexOf(` ${hash.toUpperCase()} `)).toBe(hash);

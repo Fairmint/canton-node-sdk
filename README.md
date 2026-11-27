@@ -88,14 +88,17 @@ See
 `createExternalPartyWithEd25519Signer`, the wallet bridge's `prepareExternalParty` and
 `createExternalParty` never sign the participant's word for the topology. They read the local
 participant's ID (`GET /v2/parties/participant-id`), check the generated topology with
-`verifyPartyOnboardingTopology` from `@fairmint/canton-protocol/topology` (the party, its one key
+`verifyPartyOnboardingTopology` from `@fairmint/canton-protocol/topology` (the party
+`partyHint::fingerprint` built from the request, never the ID the participant answers; its one key
 with the usages `NAMESPACE`, `PROTOCOL` and `PROOF_OF_OWNERSHIP`, every hosting participant with its
 permission, and the threshold, which defaults to every confirming participant), and hand the signer
 only the multi-hash recomputed from the transactions. A topology that differs is an `OperationError`
 (`TRANSACTION_FAILED`) whose `cause` is the `CantonProtocolError`, and nothing is signed. Hosting
 participant UIDs are `name::1220…` (no `PAR::` prefix), each listed once; at least one participant
-must confirm. `submitExternalPartyOnboarding` refuses a `multiHashHex` that is not the multi-hash of
-the submitted `topologyTransactions`. Canton 3.4 or later is required.
+must confirm. The hint is used exactly as given: one with leading or trailing whitespace, or one
+canton-protocol's `buildExternalPartyId` refuses, is a `ValidationError` before any request.
+`submitExternalPartyOnboarding` refuses a `multiHashHex` that is not the multi-hash of the submitted
+`topologyTransactions`. Canton 3.4 or later is required.
 
 ## Signing a prepared transaction
 
@@ -122,6 +125,11 @@ the recomputed hash, the command id and the synchronizer (CC transfer version 3,
 transaction bytes: the submit recomputes the hash from the bytes instead. Signing your own
 `prepareExternalTransaction` result? Recompute the hash the same way before you sign it.
 
+`signAndVerifyCantonEd25519Payload` signs only a hash: a topology multi-hash (34 bytes, `1220…`) or
+a prepared-transaction hash (32 bytes). Any other `payloadHex` is refused before the signer is
+called. Hash signatures are checked with canton-protocol's `verifyCantonHashSignature`, and every
+caller refuses a signature that does not verify.
+
 ## Finding every party a key controls
 
 An external party's ID is `hint::fingerprint`, where the fingerprint is Canton's SHA-256 multihash
@@ -129,6 +137,8 @@ of the Ed25519 key: `1220` + hex(sha256(int32be(12) || rawKey)). Nothing about i
 signer, so one module serves any wallet. It is browser-safe: import
 `@fairmint/canton-node-sdk/external-parties` (it loads `@fairmint/canton-protocol/party` and none of
 the SDK's Node dependencies); the package root also exports it as the `ExternalParties` namespace.
+To import `isCantonProtocolError`, add `@fairmint/canton-protocol` to your own dependencies (any
+0.1.x copy matches the directory's errors: the brand is registered with `Symbol.for`).
 
 ```typescript
 import { createExternalPartyDirectory } from '@fairmint/canton-node-sdk/external-parties';
@@ -167,6 +177,14 @@ The identity rules and the list-plus-lookups logic are
 `normalizeEd25519PublicKeyForCanton`, `decodeEd25519PublicKey`, `isCantonHash` and
 `discoverExternalParties` (over your own `listParties` / `findParty` callbacks) from
 `@fairmint/canton-protocol/party`. A naming policy for new hints is the app's own.
+
+Those rules are stricter than the SDK's former helpers. A party ID is never trimmed and must be a
+Daml-LF Party (at most 255 ASCII letters, digits, spaces, `:`, `-` or `_`): an ID with surrounding
+whitespace is refused wherever the SDK checks a party against its key (every external-party submit
+and the wallet ownership checks), and the directory skips such IDs in listings. An Ed25519 key must
+be a point on the curve: `deriveSolanaAddressFromEd25519PublicKeyBase64` and
+`assertEd25519Signature` refuse an off-curve 32-byte value, such as a Solana program-derived
+address.
 
 ## Token actions through a CIP-0103 wallet
 

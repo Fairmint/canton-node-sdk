@@ -5,6 +5,7 @@ import {
   type VerifyWalletOwnershipOptions,
   type WalletOwnershipFailure,
 } from '../../../src/utils/external-signing';
+import { checkKeyAndSignature } from '../../../src/utils/external-signing/wallet-ownership-checks';
 import {
   buildWalletOwnershipMessage,
   proveWalletOwnership,
@@ -249,6 +250,22 @@ describe('verifyWalletOwnership', () => {
       verified: false,
       reason: 'key-not-bound-to-party',
     });
+  });
+
+  it('does not trim the party ID a proof names', () => {
+    // The key and a valid signature over the message, with only the party ID untrimmed.
+    const proof = loopProof();
+    expect(checkKeyAndSignature(proof)).toEqual({ fingerprint: party.namespace });
+    expect(checkKeyAndSignature({ ...proof, partyId: `${party.partyId} ` })).toMatchObject({
+      verified: false,
+      reason: 'key-not-bound-to-party',
+    });
+    expect(checkKeyAndSignature({ ...proof, partyId: `${party.partyId}\n` })).toMatchObject({
+      verified: false,
+      reason: 'party-mismatch',
+    });
+    // The message refuses an untrimmed ID before any check, so a proof naming one never verifies.
+    expect(() => loopProof({ partyId: `${party.partyId} ` })).toThrow(TypeError);
   });
 
   it('refuses a proof for another party than expected', () => {

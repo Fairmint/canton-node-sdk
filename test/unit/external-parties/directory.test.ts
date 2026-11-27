@@ -257,8 +257,10 @@ describe('createExternalPartyDirectory', () => {
       `${'a'.repeat(186)}::${key.fingerprint}`,
       ` p3::${key.fingerprint}`,
       `p\n3::${key.fingerprint}`,
+      // Outside the Daml-LF Party character set.
+      `p.3::${key.fingerprint}`,
     ]) {
-      expect(() => directory.noteAllocated(partyId)).toThrow(/255 characters/);
+      expect(() => directory.noteAllocated(partyId)).toThrow(/Daml-LF party ID .*255 ASCII letters, digits, spaces/);
     }
   });
 

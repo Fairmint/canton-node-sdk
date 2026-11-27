@@ -38,8 +38,7 @@ module.exports = {
   moduleNameMapper: {
     '^@fairmint/canton-node-sdk$': '<rootDir>/src/index.ts',
     '^@fairmint/canton-node-sdk/(.*)$': '<rootDir>/src/$1',
-    '^@fairmint/canton-dev-tools/testing$':
-      '<rootDir>/node_modules/@fairmint/canton-dev-tools/dist/testing/index.js',
+    '^@fairmint/canton-dev-tools/testing$': '<rootDir>/node_modules/@fairmint/canton-dev-tools/dist/testing/index.js',
   },
   collectCoverageFrom: ['src/**/*.ts', '!src/**/*.d.ts', '!src/**/*.test.ts', '!src/**/*.spec.ts'],
   coverageDirectory: 'coverage',
