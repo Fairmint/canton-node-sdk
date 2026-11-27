@@ -19,6 +19,7 @@ import {
   prepareExternalPartyOnboarding,
   submitExternalPartyOnboarding,
 } from '../../../src/utils/external-signing/external-party-onboarding';
+import { expectSignatureRefused, REFUSED_SIGNATURES } from './fixtures/hash-signatures';
 
 const MULTI_HASH_HEX = `1220${'11'.repeat(32)}`;
 
@@ -569,6 +570,47 @@ describe('external-party onboarding helpers', () => {
     ).rejects.toThrow('Invalid Canton hash signature');
 
     expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
+  });
+
+  it.each(REFUSED_SIGNATURES)('does not allocate when the multi-hash signature is $name', async (refusal) => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+
+    await expectSignatureRefused(
+      submitExternalPartyOnboarding({
+        ledgerClient,
+        synchronizerId: 'global-domain::sync',
+        partyId: fixture.partyId,
+        publicKeyBase64: fixture.publicKeyBase64,
+        multiHashHex: MULTI_HASH_HEX,
+        topologyTransactions: ['topology-tx-1'],
+        multiHashSignatureBase64: refusal.make({
+          valid: fixture.signMultiHash(),
+          otherKey: createSigningFixture().signMultiHash(),
+        }),
+      }),
+      refusal
+    );
+
+    expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
+  });
+
+  it('allocates when the submitted multi-hash signature verifies', async () => {
+    const fixture = createSigningFixture();
+    const ledgerClient = createMockLedgerClient(fixture);
+
+    const submitted = await submitExternalPartyOnboarding({
+      ledgerClient,
+      synchronizerId: 'global-domain::sync',
+      partyId: fixture.partyId,
+      publicKeyBase64: fixture.publicKeyBase64,
+      multiHashHex: MULTI_HASH_HEX.toUpperCase(),
+      topologyTransactions: ['topology-tx-1'],
+      multiHashSignatureBase64: fixture.signMultiHash(),
+    });
+
+    expect(submitted.partyId).toBe(fixture.partyId);
+    expect(ledgerClient.allocateExternalParty).toHaveBeenCalledTimes(1);
   });
 
   it('can treat allocation conflict as success after confirming the party exists', async () => {

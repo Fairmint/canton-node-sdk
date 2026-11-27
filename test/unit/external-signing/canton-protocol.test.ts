@@ -1,7 +1,6 @@
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { ValidationError } from '../../../src/core/errors';
 import {
-  assertCantonHashSignature,
   assertCantonPrepareToken,
   assertEd25519Signature,
   buildCantonPrepareToken,
@@ -50,7 +49,7 @@ describe('Canton protocol helpers', () => {
     expect(() => hashHexToBase64('abc')).toThrow('hex-encoded Canton hash');
   });
 
-  it('verifies Ed25519 signatures over raw payloads and Canton hashes', () => {
+  it('verifies Ed25519 signatures over raw payloads', () => {
     const fixture = createSigningFixture();
     const payload = Buffer.from('Canton external party approval', 'utf8');
     const signatureBase64 = fixture.signPayload(payload);
@@ -64,20 +63,20 @@ describe('Canton protocol helpers', () => {
       payload,
       signatureBase64,
     });
-
-    const hashSignature = fixture.signPayload(Buffer.from(SAMPLE_CANTON_HASH_HEX, 'hex'));
-    assertCantonHashSignature({
-      publicKeyBase64: fixture.rawPublicKeyBase64,
-      hashHex: SAMPLE_CANTON_HASH_HEX,
-      signatureBase64: hashSignature,
-    });
     expect(() =>
-      assertCantonHashSignature({
+      assertEd25519Signature({
         publicKeyBase64: fixture.rawPublicKeyBase64,
-        hashHex: SAMPLE_CANTON_HASH_HEX,
+        payload,
         signatureBase64: fixture.signPayload(Buffer.from('wrong payload')),
       })
-    ).toThrow('Invalid Canton hash signature');
+    ).toThrow('Invalid Ed25519 signature');
+    expect(() =>
+      assertEd25519Signature({
+        publicKeyBase64: fixture.rawPublicKeyBase64,
+        payload,
+        signatureBase64: 'not*base64',
+      })
+    ).toThrow('signatureBase64 must be base64-encoded');
   });
 
   it('canonicalizes and hashes protocol payloads deterministically', () => {

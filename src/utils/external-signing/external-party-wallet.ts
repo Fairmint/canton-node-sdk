@@ -33,12 +33,8 @@ import {
 import { objectOrEmpty, readRequiredString } from '../canton-response-utils';
 import { TOKEN_STANDARD_V1_REASON_META_KEY } from '../token-standard/v1/constants';
 import { readConnectedSynchronizers as readPartyConnectedSynchronizers } from '../party-readiness';
-import {
-  assertCantonHashSignature,
-  assertCantonPrepareToken,
-  buildCantonPrepareToken,
-  hashPreparedTransaction,
-} from './canton-protocol';
+import { assertCantonPrepareToken, buildCantonPrepareToken, hashPreparedTransaction } from './canton-protocol';
+import { assertCantonHashSigned } from './hash-signature';
 import { assertPartyKey, cantonHashHexOf } from './party-identity';
 import { type InteractiveSubmissionHashingSchemeVersion } from './execute-external-transaction';
 import {
@@ -742,7 +738,7 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
           expiresAt: input.expiresAt,
         })
       );
-      assertCantonHashSignature({
+      await assertCantonHashSigned({
         publicKeyBase64: input.publicKeyBase64,
         hashHex: input.preparedTransactionHashHex,
         signatureBase64: input.signatureBase64,
@@ -1077,7 +1073,7 @@ export function createExternalPartyWalletBridge(options: ExternalPartyWalletOpti
           hashingSchemeVersion,
         })
       );
-      assertCantonHashSignature({
+      await assertCantonHashSigned({
         publicKeyBase64: input.publicKeyBase64,
         hashHex: input.preparedTransactionHashHex,
         signatureBase64: input.signatureBase64,

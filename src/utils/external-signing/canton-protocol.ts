@@ -1,15 +1,10 @@
 import { createHash, createHmac, timingSafeEqual, verify as verifyEd25519Signature } from 'node:crypto';
 import { OperationError, OperationErrorCode, ValidationError } from '../../core/errors';
 import { isRecord } from '../../core/utils';
+import { decodeBase64 } from './hash-signature';
 import { cantonPublicKeyBase64, rawEd25519PublicKey } from './party-identity';
 
 const SOLANA_BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-
-export interface CantonHashSignatureInput {
-  readonly publicKeyBase64: string;
-  readonly hashHex: string;
-  readonly signatureBase64: string;
-}
 
 export interface Ed25519SignatureInput {
   readonly publicKeyBase64: string;
@@ -28,17 +23,11 @@ export function hashHexToBase64(hashHex: string): string {
   return decodeHashHex(hashHex).toString('base64');
 }
 
-/** Verifies an Ed25519 signature over a hex-encoded Canton hash. */
-export function assertCantonHashSignature(input: CantonHashSignatureInput): void {
-  assertEd25519Signature({
-    publicKeyBase64: input.publicKeyBase64,
-    payload: decodeHashHex(input.hashHex),
-    signatureBase64: input.signatureBase64,
-    failureMessage: 'Invalid Canton hash signature',
-  });
-}
-
-/** Verifies an Ed25519 signature against a raw payload using a raw or DER-wrapped public key. */
+/**
+ * Verifies an Ed25519 signature against an arbitrary payload (such as a wallet-ownership message) using a raw or
+ * DER-wrapped public key. A signature over a Canton hash is checked with canton-protocol's
+ * `verifyCantonHashSignature`.
+ */
 export function assertEd25519Signature(input: Ed25519SignatureInput): void {
   const derPublicKey = Buffer.from(cantonPublicKeyBase64(input.publicKeyBase64), 'base64');
   const signature = decodeBase64(input.signatureBase64, 'signatureBase64');
@@ -120,19 +109,6 @@ function normalizeSignaturePayload(payload: Buffer | Uint8Array | string): Buffe
     return Buffer.from(payload, 'utf8');
   }
   return Buffer.from(payload);
-}
-
-function decodeBase64(value: string, label: string): Buffer {
-  const normalized = value.trim().replace(/-/g, '+').replace(/_/g, '/');
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized) || normalized.length % 4 === 1) {
-    throw new ValidationError(`${label} must be base64-encoded`, { [label]: value });
-  }
-  const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
-  const decoded = Buffer.from(padded, 'base64');
-  if (decoded.toString('base64').replace(/=+$/, '') !== normalized.replace(/=+$/, '')) {
-    throw new ValidationError(`${label} must be base64-encoded`, { [label]: value });
-  }
-  return decoded;
 }
 
 function decodeHashHex(hashHex: string): Buffer {

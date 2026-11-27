@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { type LedgerJsonApiClient } from '../../clients/ledger-json-api';
 import { ValidationError } from '../../core/errors';
 import { normalizeCantonEd25519Signature } from './canton-ed25519-signer';
-import { assertCantonHashSignature } from './canton-protocol';
+import { assertCantonHashSigned } from './hash-signature';
 import { assertPartyKey } from './party-identity';
 import {
   executeExternalTransactionAndWait,
@@ -51,7 +51,7 @@ export async function executeExternalPartySignedTransaction(
     publicKeyBase64: options.publicKeyBase64,
     ...(options.publicKeyFingerprint !== undefined ? { publicKeyFingerprint: options.publicKeyFingerprint } : {}),
   });
-  assertCantonHashSignature({
+  await assertCantonHashSigned({
     publicKeyBase64: options.publicKeyBase64,
     hashHex: options.preparedTransactionHashHex,
     signatureBase64: options.signatureBase64,

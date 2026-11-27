@@ -16,6 +16,7 @@ import {
   type ExternalPartyWalletBridge,
 } from '../../../src/utils/external-signing';
 import { TOKEN_STANDARD_V1_HOLDING_INTERFACE_ID } from '../../../src/utils/token-standard';
+import { expectSignatureRefused, REFUSED_SIGNATURES, type RefusedSignature } from './fixtures/hash-signatures';
 
 const PREPARED_TRANSACTION_HASH_HEX = `1220${'22'.repeat(32)}`;
 const PREPARED_TRANSACTION_HASH_BASE64 = Buffer.from(PREPARED_TRANSACTION_HASH_HEX, 'hex').toString('base64');
@@ -1240,6 +1241,75 @@ describe('external-party wallet bridge', (): void => {
     ).rejects.toThrow('Canton party ID does not match the submitted public key');
 
     expect(validatorClient.submitAcceptExternalPartySetupProposal).not.toHaveBeenCalled();
+  });
+
+  describe('refuses a signature that does not verify before submitting anything', (): void => {
+    const signatureFor = (refusal: RefusedSignature, fixture: ReturnType<typeof createSigningFixture>): string =>
+      refusal.make({ valid: fixture.signPreparedHash(), otherKey: createSigningFixture().signPreparedHash() });
+
+    it.each(REFUSED_SIGNATURES)('submitCcTransfer: a signature $name', async (refusal): Promise<void> => {
+      const fixture = createSigningFixture();
+      const ledgerClient = createCcLedgerClient();
+      const bridge = createBridge({ ledgerClient });
+      const prepared = await bridge.prepareCcTransfer({
+        senderPartyId: fixture.partyId,
+        receiverPartyId: 'receiver::fingerprint',
+        amount: '2.5',
+        publicKeyBase64: fixture.publicKeyBase64,
+      });
+      const beforeSubmit = jest.fn();
+
+      await expectSignatureRefused(
+        bridge.submitCcTransfer(
+          { ...prepared, publicKeyBase64: fixture.publicKeyBase64, signatureBase64: signatureFor(refusal, fixture) },
+          { beforeSubmit }
+        ),
+        refusal
+      );
+      expect(beforeSubmit).not.toHaveBeenCalled();
+      expect(ledgerClient.interactiveSubmissionExecuteAndWait).not.toHaveBeenCalled();
+    });
+
+    it.each(REFUSED_SIGNATURES)('submitProviderTransfer: a signature $name', async (refusal): Promise<void> => {
+      const fixture = createSigningFixture();
+      const ledgerClient = createMockLedgerClient();
+      const bridge = createBridge({ ledgerClient });
+      const prepared = await bridge.prepareProviderTransfer({
+        receiverPartyId: fixture.partyId,
+        amount: '5',
+        publicKeyBase64: fixture.publicKeyBase64,
+        tokenContext: { userId: 'user-1' },
+      });
+
+      await expectSignatureRefused(
+        bridge.submitProviderTransfer({
+          ...prepared,
+          publicKeyBase64: fixture.publicKeyBase64,
+          signatureBase64: signatureFor(refusal, fixture),
+          tokenContext: { userId: 'user-1' },
+        }),
+        refusal
+      );
+      expect(ledgerClient.interactiveSubmissionExecuteAndWait).not.toHaveBeenCalled();
+    });
+
+    it.each(REFUSED_SIGNATURES)('submitTransferPreapprovalSetup: a signature $name', async (refusal): Promise<void> => {
+      const fixture = createSigningFixture();
+      const validatorClient = createMockValidatorClient();
+      const bridge = createBridge({ validatorClient });
+
+      await expectSignatureRefused(
+        bridge.submitTransferPreapprovalSetup({
+          partyId: fixture.partyId,
+          publicKeyBase64: fixture.publicKeyBase64,
+          preparedTransaction: 'prepared-transfer-preapproval-setup',
+          preparedTransactionHashHex: PREPARED_TRANSACTION_HASH_HEX,
+          signatureBase64: signatureFor(refusal, fixture),
+        }),
+        refusal
+      );
+      expect(validatorClient.submitAcceptExternalPartySetupProposal).not.toHaveBeenCalled();
+    });
   });
 
   it('reports an existing transfer preapproval without creating a setup proposal', async (): Promise<void> => {

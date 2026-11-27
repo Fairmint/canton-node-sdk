@@ -7,7 +7,8 @@ import { allocateExternalParty } from './allocate-external-party';
 import { normalizeAllocationUserId } from './allocation-user-id';
 import { type CantonEd25519Signature, normalizeCantonEd25519Signature } from './canton-ed25519-signer';
 import { isCantonProtocolError, normalizeCantonHash } from '@fairmint/canton-protocol/party';
-import { assertCantonHashSignature, hashHexToBase64 } from './canton-protocol';
+import { hashHexToBase64 } from './canton-protocol';
+import { assertCantonHashSigned } from './hash-signature';
 import {
   assertPartyKey,
   cantonHashHexOf,
@@ -288,7 +289,7 @@ export async function submitExternalPartyOnboarding(
     ...(options.publicKeyFingerprint !== undefined ? { publicKeyFingerprint: options.publicKeyFingerprint } : {}),
   });
   const multiHashHex = cantonHashHexOf(options.multiHashHex);
-  assertCantonHashSignature({
+  await assertCantonHashSigned({
     publicKeyBase64: options.publicKeyBase64,
     hashHex: multiHashHex,
     signatureBase64: options.multiHashSignatureBase64,

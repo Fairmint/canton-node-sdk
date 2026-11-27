@@ -28,13 +28,21 @@ export function onCallerInput<T>(call: () => T): T {
   try {
     return call();
   } catch (error) {
-    if (isCantonProtocolError(error, 'INVALID_INPUT')) {
-      const validation = new ValidationError(error.message, error.field === undefined ? {} : { field: error.field });
-      Object.defineProperty(validation, 'cause', { value: error, enumerable: false, writable: true });
-      throw validation;
-    }
-    throw error;
+    throw callerInputError(error);
   }
+}
+
+/**
+ * The error to throw for `error`, raised by canton-protocol on caller input: its `INVALID_INPUT` refusal becomes a
+ * {@link ValidationError} carrying it as `cause`; anything else is returned as it is.
+ */
+export function callerInputError(error: unknown): unknown {
+  if (isCantonProtocolError(error, 'INVALID_INPUT')) {
+    const validation = new ValidationError(error.message, error.field === undefined ? {} : { field: error.field });
+    Object.defineProperty(validation, 'cause', { value: error, enumerable: false, writable: true });
+    return validation;
+  }
+  return error;
 }
 
 /** Canton's encoding (DER X.509 SubjectPublicKeyInfo, base64) of a raw or DER Ed25519 public key. */

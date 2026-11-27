@@ -20,9 +20,12 @@ import {
   type CantonEd25519SigningRequest,
   type NonEmptyPrepareExternalTransactionCommands,
 } from '../../../src/utils/external-signing';
+import { REFUSED_SIGNATURES } from './fixtures/hash-signatures';
 
 const SYNCHRONIZER_ID = 'global-domain::sync';
 const MULTI_HASH_HEX = `1220${'11'.repeat(32)}`;
+// A prepared-transaction hash is 32 bytes (SHA-256, no multihash prefix).
+const PREPARED_HASH_HEX = '5a'.repeat(32);
 const NOW_MS = Date.parse('2026-07-09T12:00:00.000Z');
 const ARCHIVE_COMMANDS = [
   {
@@ -79,7 +82,7 @@ function createMockLedgerClient(fixture: SigningFixture): jest.Mocked<LedgerJson
   });
   client.interactiveSubmissionPrepare = jest.fn().mockResolvedValue({
     preparedTransaction: 'prepared-transaction-base64',
-    preparedTransactionHash: Buffer.from('interactive-hash').toString('base64'),
+    preparedTransactionHash: Buffer.from(PREPARED_HASH_HEX, 'hex').toString('base64'),
     hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
   });
   client.interactiveSubmissionExecuteAndWait = jest.fn().mockResolvedValue({ updateId: 'update-123' });
@@ -217,6 +220,77 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
     ).rejects.toThrow('External Canton signer returned an invalid Ed25519 signature');
     expect(ledgerClient.allocateExternalParty.mock.calls).toHaveLength(0);
     expect(ledgerClient.makePostRequest.mock.calls).toHaveLength(0);
+  });
+
+  it.each([
+    ['a 34-byte Canton hash', MULTI_HASH_HEX],
+    ['a 32-byte prepared-transaction hash', PREPARED_HASH_HEX],
+  ])('returns a signature over %s that verifies', async (_name, payloadHex): Promise<void> => {
+    const fixture = createSigningFixture();
+
+    const signed = await signAndVerifyCantonEd25519Payload({
+      signer: fixture.signer,
+      purpose: CantonEd25519SigningPurpose.INTERACTIVE_SUBMISSION,
+      operationId: 'operation-1',
+      partyId: fixture.partyId,
+      synchronizerId: SYNCHRONIZER_ID,
+      payloadHex: payloadHex.toUpperCase(),
+    });
+
+    expect(signed.request.payloadHex).toBe(payloadHex);
+    expect(signed.signatureBase64).toBe(
+      sign(null, Buffer.from(payloadHex, 'hex'), fixture.privateKey).toString('base64')
+    );
+  });
+
+  it.each(REFUSED_SIGNATURES)('refuses a signer response $name', async (refusal): Promise<void> => {
+    const fixture = createSigningFixture();
+    const other = createSigningFixture();
+    fixture.signCantonPayload.mockImplementation(async (request) => ({
+      signatureBase64: refusal.make({
+        valid: sign(null, Buffer.from(request.payloadHex, 'hex'), fixture.privateKey).toString('base64'),
+        otherKey: sign(null, Buffer.from(request.payloadHex, 'hex'), other.privateKey).toString('base64'),
+      }),
+    }));
+
+    const signed = signAndVerifyCantonEd25519Payload({
+      signer: fixture.signer,
+      purpose: CantonEd25519SigningPurpose.INTERACTIVE_SUBMISSION,
+      operationId: 'operation-1',
+      partyId: fixture.partyId,
+      synchronizerId: SYNCHRONIZER_ID,
+      payloadHex: PREPARED_HASH_HEX,
+    });
+
+    // The signer's output is normalized to 64 bytes first, so a malformed one never reaches verification.
+    await expect(signed).rejects.toThrow(
+      new ValidationError(
+        refusal.kind === 'bad'
+          ? 'External Canton signer returned an invalid Ed25519 signature'
+          : 'External Canton signer must return a 64-byte Ed25519 signature'
+      )
+    );
+  });
+
+  it.each([
+    ['16 bytes', 'ab'.repeat(16)],
+    ['33 bytes', 'ab'.repeat(33)],
+    ['34 bytes without the 1220 prefix', `1221${'ab'.repeat(32)}`],
+    ['not hex', 'zz'.repeat(32)],
+  ])('refuses a payload of %s before calling the signer', async (_name, payloadHex): Promise<void> => {
+    const fixture = createSigningFixture();
+
+    await expect(
+      signAndVerifyCantonEd25519Payload({
+        signer: fixture.signer,
+        purpose: CantonEd25519SigningPurpose.INTERACTIVE_SUBMISSION,
+        operationId: 'operation-1',
+        partyId: fixture.partyId,
+        synchronizerId: SYNCHRONIZER_ID,
+        payloadHex,
+      })
+    ).rejects.toThrow('payloadHex must be a Canton hash (34 bytes, 1220…) or a prepared-transaction hash (32 bytes)');
+    expect(fixture.signCantonPayload).not.toHaveBeenCalled();
   });
 
   it('rejects signing-request TTLs above the security bound before calling the signer', async (): Promise<void> => {
@@ -762,7 +836,7 @@ describe('Canton Ed25519 external signing orchestration', (): void => {
       signer: fixture.signer,
     });
 
-    const preparedTransactionHashHex = Buffer.from('interactive-hash').toString('hex');
+    const preparedTransactionHashHex = PREPARED_HASH_HEX;
     expect(ledgerClient.interactiveSubmissionPrepare).toHaveBeenCalledWith(
       expect.objectContaining({
         commandId: 'command-123',

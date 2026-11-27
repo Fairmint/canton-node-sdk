@@ -2,7 +2,7 @@ import { type ValidatorApiClient } from '../../clients/validator-api';
 import { ApiError, ValidationError } from '../../core/errors';
 import { isRecord } from '../../core/utils';
 import { objectOrEmpty, readContractWithStateContractId } from '../canton-response-utils';
-import { assertCantonHashSignature } from '../external-signing/canton-protocol';
+import { assertCantonHashSigned } from '../external-signing/hash-signature';
 import { assertPartyKey, rawEd25519PublicKey } from '../external-signing/party-identity';
 
 export interface ExternalPartyTransferPreapprovalContract {
@@ -169,7 +169,7 @@ export async function submitExternalPartyTransferPreapprovalSetup(
     partyId: params.partyId,
     publicKeyBase64: params.publicKeyBase64,
   });
-  assertCantonHashSignature({
+  await assertCantonHashSigned({
     publicKeyBase64: params.publicKeyBase64,
     hashHex: params.preparedTransactionHashHex,
     signatureBase64: params.signatureBase64,
