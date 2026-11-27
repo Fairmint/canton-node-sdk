@@ -8,6 +8,7 @@ import {
 } from '../../../src/external-parties';
 import * as Root from '../../../src';
 import * as ExternalPartiesEntry from '../../../src/external-parties';
+import { assertPartyKey } from '../../../src/utils/external-signing/party-identity';
 import { createKey } from './support';
 
 const API = 'https://participant.example';
@@ -379,6 +380,26 @@ describe('createExternalPartyDirectory', () => {
     expect(() => createExternalPartyDirectory({ ledgerClient: client, maxPages: 1.5 })).toThrow(/maxPages/);
     expect(() => createExternalPartyDirectory({ ledgerClient: client, timeoutMs: 10 })).toThrow(/timeoutMs/);
     expect(() => createExternalPartyDirectory({ ledgerClient: client, cacheMs: -1 })).toThrow(/cacheMs/);
+  });
+
+  it('lists only parties the SDK accepts for the key: a space before `::` is part of the hint, surrounding whitespace is skipped', async () => {
+    const key = createKey();
+    const { client } = pagedClient([
+      {
+        partyDetails: [
+          { party: `alice ::${key.fingerprint}`, isLocal: true },
+          { party: ` bob::${key.fingerprint}`, isLocal: true },
+          { party: `carol::${key.fingerprint} `, isLocal: true },
+        ],
+      },
+    ]);
+    const directory = createExternalPartyDirectory({ ledgerClient: client });
+    const { parties } = await directory.listPartiesForKey({ publicKeyBase64: key.publicKeyBase64 });
+    expect(parties).toEqual([{ partyId: `alice ::${key.fingerprint}`, partyHint: 'alice ', hostedHere: true }]);
+    // Every party listed is one the external-party submits and the wallet ownership checks accept for this key.
+    for (const { partyId } of parties) {
+      expect(assertPartyKey({ partyId, publicKeyBase64: key.publicKeyBase64 })).toBe(key.fingerprint);
+    }
   });
 });
 

@@ -257,19 +257,22 @@ describe('verifyWalletOwnership', () => {
     const proof = loopProof();
     expect(checkKeyAndSignature(proof)).toEqual({ fingerprint: party.namespace });
     const [hint, namespace] = party.partyId.split('::') as [string, string];
-    // A leading space, or one before `::`, would otherwise parse as part of the hint (space is a Daml-LF character).
-    for (const untrimmed of [
-      `${party.partyId} `,
-      ` ${party.partyId}`,
-      `${hint} ::${namespace}`,
-      `${hint}:: ${namespace}`,
-      `${party.partyId}\n`,
-    ]) {
+    // A leading space would otherwise parse as part of the hint (space is a Daml-LF character).
+    for (const untrimmed of [`${party.partyId} `, ` ${party.partyId}`, `${party.partyId}\n`]) {
       expect(checkKeyAndSignature({ ...proof, partyId: untrimmed })).toMatchObject({
         verified: false,
         reason: 'party-mismatch',
       });
     }
+    // A space after `::` is part of the namespace, which then is not the key's fingerprint.
+    expect(checkKeyAndSignature({ ...proof, partyId: `${hint}:: ${namespace}` })).toMatchObject({
+      verified: false,
+      reason: 'key-not-bound-to-party',
+    });
+    // A space before `::` is part of the hint, as Canton reads it: the key controls that party.
+    expect(checkKeyAndSignature({ ...proof, partyId: `${hint} ::${namespace}` })).toEqual({
+      fingerprint: party.namespace,
+    });
     // The message refuses an untrimmed ID before any check, so a proof naming one never verifies.
     expect(() => loopProof({ partyId: `${party.partyId} ` })).toThrow(TypeError);
   });

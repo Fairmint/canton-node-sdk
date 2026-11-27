@@ -102,9 +102,9 @@ export function checkKeyAndSignature(
       'The public key is not an Ed25519 key in hex (raw 32 bytes) or base64 (raw 32 bytes or DER SubjectPublicKeyInfo)'
     );
   }
-  // A party id is never trimmed: a leading space, or one before `::`, would otherwise pass as part of the hint.
+  // A party id is never trimmed: a leading space would otherwise pass as part of the hint.
   if (hasSurroundingWhitespace(proof.partyId)) {
-    return checkFailure('party-mismatch', 'The party id has whitespace around it or around its namespace');
+    return checkFailure('party-mismatch', 'The party id has whitespace around it');
   }
   const partyFingerprint = readPartyNamespace(proof.partyId);
   if (partyFingerprint === null) {

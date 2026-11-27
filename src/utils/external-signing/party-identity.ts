@@ -78,26 +78,23 @@ export function requestedExternalPartyId(partyHint: string, publicKeyBase64: str
 }
 
 /**
- * Whether `partyId` has whitespace around it or around its `::`. A party ID is never trimmed, and a space is a Daml-LF
- * Party character, so such an ID would otherwise parse: a leading space, or one before `::`, as part of the hint.
+ * Whether `partyId` has whitespace around it. A party ID is never trimmed: a space is a Daml-LF Party character, so `
+ * alice::…` would otherwise parse with ` alice` as its hint. Whitespace next to `::` is left to the ID's rules, as
+ * Canton reads it: a space before `::` is part of the hint (Canton allocates such a hint), and one after `::` is part
+ * of the namespace, which then is no key's fingerprint.
  */
 export function hasSurroundingWhitespace(partyId: string): boolean {
-  if (partyId !== partyId.trim()) return true;
-  const separator = partyId.indexOf('::');
-  if (separator === -1) return false;
-  const hint = partyId.slice(0, separator);
-  const namespace = partyId.slice(separator + 2);
-  return hint !== hint.trim() || namespace !== namespace.trim();
+  return partyId !== partyId.trim();
 }
 
 /**
  * Checks that `partyId` is an external party of `publicKeyBase64` (its namespace is the key's fingerprint) and that a
- * caller-supplied fingerprint, if any, is the key's; returns the key's fingerprint. An ID with whitespace around it or
- * around its `::` is refused, never trimmed ({@link hasSurroundingWhitespace}).
+ * caller-supplied fingerprint, if any, is the key's; returns the key's fingerprint. An ID with whitespace around it is
+ * refused, never trimmed ({@link hasSurroundingWhitespace}).
  */
 export function assertPartyKey(input: PartyKeyInput): string {
   if (typeof input.partyId === 'string' && hasSurroundingWhitespace(input.partyId)) {
-    throw new ValidationError('Canton party ID must not have whitespace around it or around its namespace', {
+    throw new ValidationError('Canton party ID must not have whitespace around it', {
       partyId: input.partyId,
     });
   }
