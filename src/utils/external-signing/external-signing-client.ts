@@ -46,6 +46,7 @@ import {
   type PrepareExternalTransactionResult,
 } from './prepare-external-transaction';
 import { verifyParticipantPreparedTransaction } from './prepared-transaction';
+import { onboardingHostingOptions } from './onboarding-topology';
 
 export interface CreateExternalPartyWithEd25519SignerOptions extends Omit<
   PrepareExternalPartyOnboardingOptions,
@@ -146,16 +147,7 @@ export async function createExternalPartyWithEd25519Signer(
       ...(options.identityProviderId !== undefined ? { identityProviderId: options.identityProviderId } : {}),
       ...(userId !== undefined ? { userId } : {}),
       allowAlreadyExists: options.allowAlreadyExists ?? true,
-      ...(options.localParticipantObservationOnly !== undefined
-        ? { localParticipantObservationOnly: options.localParticipantObservationOnly }
-        : {}),
-      ...(options.otherConfirmingParticipantUids !== undefined
-        ? { otherConfirmingParticipantUids: options.otherConfirmingParticipantUids }
-        : {}),
-      ...(options.confirmationThreshold !== undefined ? { confirmationThreshold: options.confirmationThreshold } : {}),
-      ...(options.observingParticipantUids !== undefined
-        ? { observingParticipantUids: options.observingParticipantUids }
-        : {}),
+      ...onboardingHostingOptions(options),
       ...(options.signal !== undefined ? { signal: options.signal } : {}),
       async signMultiHash(request) {
         const signed = await signAndVerifyCantonEd25519Payload({

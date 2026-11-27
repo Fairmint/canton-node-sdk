@@ -10,10 +10,10 @@
  * handed to a signer.
  *
  * The expectation is derived from the request: the local participant (its unique identifier read from `GET
- * /v2/parties/participant-id`) hosts the party with `CONFIRMATION`, or `OBSERVATION` when
- * `localParticipantObservationOnly`; each of `otherConfirmingParticipantUids` with `CONFIRMATION`; each of
- * `observingParticipantUids` with `OBSERVATION`; the threshold is `confirmationThreshold`, or every confirming
- * participant when it is omitted or 0 (Canton's default).
+ * /v2/parties/participant-id`, which must be `expectedLocalParticipantUid` when the caller pins it) hosts the party
+ * with `CONFIRMATION`, or `OBSERVATION` when `localParticipantObservationOnly`; each of
+ * `otherConfirmingParticipantUids` with `CONFIRMATION`; each of `observingParticipantUids` with `OBSERVATION`; the
+ * threshold is `confirmationThreshold`, or every confirming participant when it is omitted or 0 (Canton's default).
  */
 import { isCantonProtocolError } from '@fairmint/canton-protocol/party';
 import {
@@ -40,6 +40,8 @@ export interface OnboardingHostingRequest {
   readonly otherConfirmingParticipantUids?: readonly string[] | undefined;
   readonly confirmationThreshold?: number | undefined;
   readonly observingParticipantUids?: readonly string[] | undefined;
+  /** The local participant's unique identifier as the caller knows it; the participant's own answer must match it. */
+  readonly expectedLocalParticipantUid?: string | undefined;
 }
 
 /** A hosting request whose own values are valid; the local participant is not known yet. */
@@ -48,6 +50,35 @@ export interface CheckedOnboardingHosting {
   readonly otherConfirming: readonly string[];
   readonly observing: readonly string[];
   readonly threshold: number;
+  readonly expectedLocalParticipantUid: string | undefined;
+}
+
+/** The fields of an {@link OnboardingHostingRequest} that are set. */
+export interface OnboardingHostingFields {
+  readonly localParticipantObservationOnly?: boolean;
+  readonly otherConfirmingParticipantUids?: readonly string[];
+  readonly confirmationThreshold?: number;
+  readonly observingParticipantUids?: readonly string[];
+  readonly expectedLocalParticipantUid?: string;
+}
+
+/** The fields of {@link OnboardingHostingRequest} that `options` sets, to forward to another onboarding call. */
+export function onboardingHostingOptions(options: OnboardingHostingRequest): OnboardingHostingFields {
+  return {
+    ...(options.localParticipantObservationOnly !== undefined
+      ? { localParticipantObservationOnly: options.localParticipantObservationOnly }
+      : {}),
+    ...(options.otherConfirmingParticipantUids !== undefined
+      ? { otherConfirmingParticipantUids: options.otherConfirmingParticipantUids }
+      : {}),
+    ...(options.confirmationThreshold !== undefined ? { confirmationThreshold: options.confirmationThreshold } : {}),
+    ...(options.observingParticipantUids !== undefined
+      ? { observingParticipantUids: options.observingParticipantUids }
+      : {}),
+    ...(options.expectedLocalParticipantUid !== undefined
+      ? { expectedLocalParticipantUid: options.expectedLocalParticipantUid }
+      : {}),
+  };
 }
 
 /** The hosting the generated topology must state, exactly. */
@@ -58,12 +89,20 @@ export interface OnboardingHostingExpectation {
 
 /**
  * Checks the caller's hosting options before anything is sent: every participant UID is a participant's unique
- * identifier (`name::1220…`, no `PAR::` prefix), none is listed twice, `confirmationThreshold` is a non-negative
- * integer, and at least one participant confirms, at least as many as the threshold. Throws a {@link ValidationError}.
+ * identifier (`name::1220…`, no `PAR::` prefix; `expectedLocalParticipantUid` too), none is listed twice,
+ * `confirmationThreshold` is a non-negative integer, and at least one participant confirms, at least as many as the
+ * threshold. Throws a {@link ValidationError}.
  */
 export function checkOnboardingHosting(request: OnboardingHostingRequest): CheckedOnboardingHosting {
   const otherConfirming = readParticipantUids('otherConfirmingParticipantUids', request.otherConfirmingParticipantUids);
   const observing = readParticipantUids('observingParticipantUids', request.observingParticipantUids);
+  const { expectedLocalParticipantUid } = request;
+  if (expectedLocalParticipantUid !== undefined && !isParticipantUid(expectedLocalParticipantUid)) {
+    throw new ValidationError(
+      'expectedLocalParticipantUid must be a participant unique identifier (name::1220 and 64 lowercase hex, no PAR:: prefix)',
+      { expectedLocalParticipantUid }
+    );
+  }
   const seen = new Set<string>();
   for (const uid of [...otherConfirming, ...observing]) {
     if (seen.has(uid)) {
@@ -91,7 +130,7 @@ export function checkOnboardingHosting(request: OnboardingHostingRequest): Check
       confirmingParticipants: confirmers,
     });
   }
-  return { localPermission, otherConfirming, observing, threshold };
+  return { localPermission, otherConfirming, observing, threshold, expectedLocalParticipantUid };
 }
 
 /**
@@ -118,10 +157,15 @@ export function onboardingHostingExpectation(
 }
 
 /**
- * The local participant's unique identifier (`GET /v2/parties/participant-id`). An answer that is not one
- * (`name::1220…`) fails the operation.
+ * The exact hosting the topology must state: {@link onboardingHostingExpectation} with the local participant's unique
+ * identifier read from `GET /v2/parties/participant-id`. An answer that is not one (`name::1220…`), or not the caller's
+ * `expectedLocalParticipantUid` when it is set, fails the operation. Without `expectedLocalParticipantUid` the local
+ * participant's identity is the participant's own word.
  */
-export async function readLocalParticipantUid(ledgerClient: LedgerJsonApiClient): Promise<string> {
+export async function resolveOnboardingHosting(
+  ledgerClient: LedgerJsonApiClient,
+  hosting: CheckedOnboardingHosting
+): Promise<OnboardingHostingExpectation> {
   const response: unknown = await ledgerClient.getParticipantId();
   const participantId = isRecord(response) ? response['participantId'] : undefined;
   if (!isParticipantUid(participantId)) {
@@ -130,7 +174,14 @@ export async function readLocalParticipantUid(ledgerClient: LedgerJsonApiClient)
       OperationErrorCode.TRANSACTION_FAILED
     );
   }
-  return participantId;
+  if (hosting.expectedLocalParticipantUid !== undefined && participantId !== hosting.expectedLocalParticipantUid) {
+    throw new OperationError(
+      'Canton participant-id response is not the expected local participant',
+      OperationErrorCode.TRANSACTION_FAILED,
+      { expectedLocalParticipantUid: hosting.expectedLocalParticipantUid, participantId }
+    );
+  }
+  return onboardingHostingExpectation(hosting, participantId);
 }
 
 /** The input of {@link verifyGeneratedOnboardingTopology}. */
@@ -178,6 +229,38 @@ export function verifyGeneratedOnboardingTopology(input: GeneratedOnboardingTopo
     );
     Object.defineProperty(operationError, 'cause', { value: error, enumerable: false, writable: true });
     throw operationError;
+  }
+}
+
+/**
+ * Checks topology transactions a caller submits for allocation against the onboarding they must state (the party, its
+ * key, the hosting) and returns their recomputed multi-hash. Every refusal is the caller's input: a
+ * {@link ValidationError} whose `cause` is canton-protocol's refusal and whose context names its `code` and `field`.
+ */
+export function verifySubmittedOnboardingTopology(input: GeneratedOnboardingTopology): string {
+  try {
+    return verifyPartyOnboardingTopology({
+      transactions: input.transactions,
+      multiHash: input.multiHash,
+      expected: {
+        partyId: input.partyId,
+        publicKey: input.publicKeyBase64,
+        threshold: input.hosting.threshold,
+        participants: input.hosting.participants,
+        keyUsages: EXTERNAL_PARTY_KEY_USAGES,
+      },
+    }).multiHash;
+  } catch (error) {
+    if (!isCantonProtocolError(error)) throw error;
+    if (error.code === 'INVALID_INPUT') throw callerInputError(error);
+    const validationError = new ValidationError(
+      error.code === 'HASH_MISMATCH'
+        ? 'multiHashHex is not the multi-hash of topologyTransactions'
+        : 'topologyTransactions do not state the onboarding of partyId with this key and the requested hosting',
+      { code: error.code, ...(error.field === undefined ? {} : { field: error.field }) }
+    );
+    Object.defineProperty(validationError, 'cause', { value: error, enumerable: false, writable: true });
+    throw validationError;
   }
 }
 

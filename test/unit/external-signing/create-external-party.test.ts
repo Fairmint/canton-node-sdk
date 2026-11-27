@@ -410,6 +410,40 @@ describe('createExternalParty', () => {
     }
   );
 
+  it('refuses a participant that is not expectedLocalParticipantUid before generating topology or signing', async () => {
+    const mockClient = createMockLedgerClient();
+    const sign = jest.spyOn(keypair, 'sign');
+    try {
+      const expectedLocalParticipantUid = testParticipantUid('participant9', 0x09);
+      await expect(
+        createExternalParty({
+          ledgerClient: mockClient,
+          keypair,
+          partyName: 'alice',
+          synchronizerId: 'global-sync',
+          expectedLocalParticipantUid,
+        })
+      ).rejects.toMatchObject({
+        name: 'OperationError',
+        context: { expectedLocalParticipantUid, participantId: LOCAL_PARTICIPANT_UID },
+      });
+      expect(mockClient.generateExternalPartyTopology).not.toHaveBeenCalled();
+      expect(sign).not.toHaveBeenCalled();
+
+      await expect(
+        createExternalParty({
+          ledgerClient: mockClient,
+          keypair,
+          partyName: 'alice',
+          synchronizerId: 'global-sync',
+          expectedLocalParticipantUid: LOCAL_PARTICIPANT_UID,
+        })
+      ).resolves.toMatchObject({ partyId: PARTY_ID });
+    } finally {
+      sign.mockRestore();
+    }
+  });
+
   it('refuses invalid hosting options before reading the participant or generating topology', async () => {
     const mockClient = createMockLedgerClient();
 

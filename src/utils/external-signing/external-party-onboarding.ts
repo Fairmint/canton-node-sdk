@@ -22,9 +22,10 @@ import { readMatchingExternalPartyDetails } from './external-party-details';
 import { generateExternalPartyTopology } from './generate-external-party';
 import {
   checkOnboardingHosting,
-  onboardingHostingExpectation,
-  readLocalParticipantUid,
+  onboardingHostingOptions,
+  resolveOnboardingHosting,
   verifyGeneratedOnboardingTopology,
+  verifySubmittedOnboardingTopology,
 } from './onboarding-topology';
 
 export const CANTON_DER_X509_PUBLIC_KEY_FORMAT = 'CRYPTO_KEY_FORMAT_DER_X509_SUBJECT_PUBLIC_KEY_INFO';
@@ -33,11 +34,12 @@ export const CANTON_RAW_SIGNATURE_FORMAT = 'SIGNATURE_FORMAT_RAW';
 export const CANTON_ED25519_SIGNATURE_ALGORITHM = 'SIGNING_ALGORITHM_SPEC_ED25519';
 export const DEFAULT_CANTON_IDENTITY_PROVIDER_ID = '';
 
-export interface PrepareExternalPartyOnboardingOptions {
-  readonly ledgerClient: LedgerJsonApiClient;
-  readonly synchronizerId: string;
-  readonly partyHint: string;
-  readonly publicKeyBase64: string;
+/**
+ * The hosting an external party is onboarded with. {@link prepareExternalPartyOnboarding} asks the participant for it
+ * and checks the generated topology states it; {@link submitExternalPartyOnboarding} checks the submitted topology
+ * states it, so pass the same values to both.
+ */
+export interface ExternalPartyOnboardingHostingOptions {
   /** If true, the local participant will only observe, not confirm (default: false). */
   readonly localParticipantObservationOnly?: boolean;
   /**
@@ -52,6 +54,20 @@ export interface PrepareExternalPartyOnboardingOptions {
   readonly confirmationThreshold?: number;
   /** Other participant UIDs that should only observe (same form and rules as `otherConfirmingParticipantUids`). */
   readonly observingParticipantUids?: readonly string[];
+  /**
+   * The local participant's unique identifier (`name::1220<64 lowercase hex>`, no `PAR::` prefix) as the caller knows
+   * it. When set, a `GET /v2/parties/participant-id` answering any other identifier is refused before anything is
+   * signed or allocated. Without it, which participant hosts the party with the local permission is the participant's
+   * own word.
+   */
+  readonly expectedLocalParticipantUid?: string;
+}
+
+export interface PrepareExternalPartyOnboardingOptions extends ExternalPartyOnboardingHostingOptions {
+  readonly ledgerClient: LedgerJsonApiClient;
+  readonly synchronizerId: string;
+  readonly partyHint: string;
+  readonly publicKeyBase64: string;
 }
 
 export interface PreparedExternalPartyOnboarding {
@@ -69,7 +85,7 @@ export interface PreparedExternalPartyOnboarding {
   readonly raw: unknown;
 }
 
-export interface SubmitExternalPartyOnboardingOptions {
+export interface SubmitExternalPartyOnboardingOptions extends ExternalPartyOnboardingHostingOptions {
   readonly ledgerClient: LedgerJsonApiClient;
   readonly synchronizerId: string;
   readonly partyId: string;
@@ -201,10 +217,7 @@ export async function prepareExternalPartyOnboarding(
   validateRequiredString('partyHint', options.partyHint);
   const publicKeyBase64 = cantonPublicKeyBase64(options.publicKeyBase64);
   const expectedPartyId = requestedExternalPartyId(options.partyHint, publicKeyBase64);
-  const hosting = onboardingHostingExpectation(
-    checkOnboardingHosting(options),
-    await readLocalParticipantUid(options.ledgerClient)
-  );
+  const hosting = await resolveOnboardingHosting(options.ledgerClient, checkOnboardingHosting(options));
 
   const topology = await generateExternalPartyTopology({
     ledgerClient: options.ledgerClient,
@@ -279,16 +292,7 @@ export async function createExternalPartyWithSigner(
     synchronizerId: options.synchronizerId,
     partyHint: options.partyHint,
     publicKeyBase64,
-    ...(options.localParticipantObservationOnly !== undefined
-      ? { localParticipantObservationOnly: options.localParticipantObservationOnly }
-      : {}),
-    ...(options.otherConfirmingParticipantUids !== undefined
-      ? { otherConfirmingParticipantUids: options.otherConfirmingParticipantUids }
-      : {}),
-    ...(options.confirmationThreshold !== undefined ? { confirmationThreshold: options.confirmationThreshold } : {}),
-    ...(options.observingParticipantUids !== undefined
-      ? { observingParticipantUids: options.observingParticipantUids }
-      : {}),
+    ...onboardingHostingOptions(options),
   });
   const signature = await options.signMultiHash({
     partyHint: options.partyHint,
@@ -310,6 +314,7 @@ export async function createExternalPartyWithSigner(
     multiHashHex: prepared.multiHashHex,
     topologyTransactions: prepared.topologyTransactions,
     multiHashSignatureBase64: normalizeExternalPartyHashSignature(signature),
+    ...onboardingHostingOptions(options),
     ...(options.identityProviderId !== undefined ? { identityProviderId: options.identityProviderId } : {}),
     ...(userId !== undefined ? { userId } : {}),
     ...(options.allowAlreadyExists !== undefined ? { allowAlreadyExists: options.allowAlreadyExists } : {}),
@@ -329,14 +334,19 @@ export async function createExternalPartyWithSigner(
 
 /**
  * Verifies the submitted topology and the end-user Ed25519 signature, then submits the prepared external-party topology
- * to Canton. `multiHashHex` must be the multi-hash recomputed from `topologyTransactions`, and the signature must
- * verify over it with `publicKeyBase64`; otherwise a `ValidationError` is thrown and nothing is allocated.
+ * to Canton. `multiHashHex` must be the multi-hash recomputed from `topologyTransactions`, the signature must verify
+ * over it with `publicKeyBase64`, and `topologyTransactions` must state exactly the onboarding of `partyId` with that
+ * key (usages `NAMESPACE`, `PROTOCOL` and `PROOF_OF_OWNERSHIP`) and the hosting options given here (the same as
+ * prepare's; by default the local participant, read from `GET /v2/parties/participant-id`, confirming alone); otherwise
+ * a `ValidationError` is thrown and nothing is allocated. A participant-id answer that is not a participant unique
+ * identifier, or not `expectedLocalParticipantUid`, is an `OperationError`.
  */
 export async function submitExternalPartyOnboarding(
   options: SubmitExternalPartyOnboardingOptions
 ): Promise<SubmittedExternalPartyOnboarding> {
   validateRequiredString('synchronizerId', options.synchronizerId);
   const userId = options.userId === undefined ? undefined : normalizeAllocationUserId(options.userId);
+  const hostingRequest = checkOnboardingHosting(options);
   const publicKeyFingerprint = assertPartyKey({
     partyId: options.partyId,
     publicKeyBase64: options.publicKeyBase64,
@@ -354,6 +364,15 @@ export async function submitExternalPartyOnboarding(
     publicKeyBase64: options.publicKeyBase64,
     hashHex: multiHashHex,
     signatureBase64: options.multiHashSignatureBase64,
+  });
+  // The signed transactions must onboard this party, with this key, on the requested hosting: the participant allocates
+  // whatever they state.
+  verifySubmittedOnboardingTopology({
+    transactions: options.topologyTransactions,
+    multiHash: multiHashHex,
+    partyId: options.partyId,
+    publicKeyBase64: options.publicKeyBase64,
+    hosting: await resolveOnboardingHosting(options.ledgerClient, hostingRequest),
   });
   const multiHashSignature = normalizeExternalPartyHashSignature({ signatureBase64: options.multiHashSignatureBase64 });
 

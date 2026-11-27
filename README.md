@@ -96,9 +96,19 @@ only the multi-hash recomputed from the transactions. A topology that differs is
 (`TRANSACTION_FAILED`) whose `cause` is the `CantonProtocolError`, and nothing is signed. Hosting
 participant UIDs are `name::1220…` (no `PAR::` prefix), each listed once; at least one participant
 must confirm. The hint is used exactly as given: one with leading or trailing whitespace, or one
-canton-protocol's `buildExternalPartyId` refuses, is a `ValidationError` before any request.
-`submitExternalPartyOnboarding` refuses a `multiHashHex` that is not the multi-hash of the submitted
-`topologyTransactions`. Canton 3.4 or later is required.
+canton-protocol's `buildExternalPartyId` refuses, is a `ValidationError` before any request. Pass
+`expectedLocalParticipantUid` to pin the local participant: a `participant-id` answer naming any
+other participant is then an `OperationError` before topology is generated. Without it, which
+participant hosts the party with the local permission is the participant's own word.
+
+`submitExternalPartyOnboarding` (and the wallet bridge's `submitExternalPartySignature`, and
+`createExternalPartyWithSigner` on its own submit) refuses, with a `ValidationError` and before
+allocating, a `multiHashHex` that is not the multi-hash of the submitted `topologyTransactions`, and
+transactions that do not state exactly the onboarding of `partyId` with that key and the hosting
+options it is given (the same options as prepare's: `localParticipantObservationOnly`,
+`otherConfirmingParticipantUids`, `confirmationThreshold`, `observingParticipantUids` and
+`expectedLocalParticipantUid`; by default the local participant confirming alone). It reads the
+local participant's ID for that check. Canton 3.4 or later is required.
 
 ## Signing a prepared transaction
 
@@ -179,10 +189,12 @@ The identity rules and the list-plus-lookups logic are
 `@fairmint/canton-protocol/party`. A naming policy for new hints is the app's own.
 
 Those rules are stricter than the SDK's former helpers. A party ID is never trimmed and must be a
-Daml-LF Party (at most 255 ASCII letters, digits, spaces, `:`, `-` or `_`): an ID with whitespace
-around it or around its `::` is refused wherever the SDK checks a party against its key (every
-external-party submit and the wallet ownership checks), and the directory skips IDs with surrounding
-whitespace in listings. An Ed25519 key must be a point on the curve:
+Daml-LF Party (at most 255 ASCII letters, digits, spaces, `:`, `-` or `_`): an ID with surrounding
+whitespace is refused wherever the SDK checks a party against its key (every external-party submit
+and the wallet ownership checks), and the directory skips such IDs in listings. A space next to `::`
+is read as Canton reads it: before `::` it is part of the hint (`alice ::<fingerprint>` is a party
+of that key, listed and accepted), after it part of the namespace, which then is no key's
+fingerprint. An Ed25519 key must be a point on the curve:
 `deriveSolanaAddressFromEd25519PublicKeyBase64` and `assertEd25519Signature` refuse an off-curve
 32-byte value, such as a Solana program-derived address.
 

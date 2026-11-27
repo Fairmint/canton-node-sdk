@@ -159,6 +159,7 @@ const preparedSetupAcceptance = async (
 
 const createMockLedgerClient = (): jest.Mocked<LedgerJsonApiClient> =>
   ({
+    getParticipantId: jest.fn().mockResolvedValue({ participantId: LOCAL_PARTICIPANT_UID }),
     getConnectedSynchronizers: jest.fn().mockResolvedValue({
       connectedSynchronizers: [{ synchronizerId: SYNCHRONIZER_ID }],
     }),
@@ -351,7 +352,6 @@ describe('external-party wallet bridge', (): void => {
   it('prepares onboarding with the multi-hash recomputed from the checked topology', async (): Promise<void> => {
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient();
-    ledgerClient.getParticipantId = jest.fn().mockResolvedValue({ participantId: LOCAL_PARTICIPANT_UID });
     ledgerClient.generateExternalPartyTopology = jest.fn().mockResolvedValue(fixture.topology);
     const bridge = createBridge({ ledgerClient });
 
@@ -376,7 +376,6 @@ describe('external-party wallet bridge', (): void => {
     // The participant answers privy-test::<this key> (self-consistent, matching multi-hash) to a request for treasury.
     const fixture = createSigningFixture();
     const ledgerClient = createMockLedgerClient();
-    ledgerClient.getParticipantId = jest.fn().mockResolvedValue({ participantId: LOCAL_PARTICIPANT_UID });
     ledgerClient.generateExternalPartyTopology = jest.fn().mockResolvedValue(fixture.topology);
     const bridge = createBridge({ ledgerClient });
 
@@ -409,6 +408,37 @@ describe('external-party wallet bridge', (): void => {
         multiHashSignatureBase64: fixture.signMultiHash(),
       })
     ).rejects.toThrow('multiHashHex is not the multi-hash of topologyTransactions');
+    expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
+  });
+
+  it('refuses submitted onboarding transactions the key signed for another hosting before allocating', async (): Promise<void> => {
+    // The key holder signs a self-consistent topology hosting the party on another participant: nothing binds it to
+    // what prepareExternalParty generated, so the bridge checks it against the onboarding it prepares.
+    const fixture = createSigningFixture();
+    const elsewhere = generatedTopologyAnswer({
+      partyId: fixture.partyId,
+      publicKeyDerBase64: Buffer.concat([
+        Buffer.from('302a300506032b6570032100', 'hex'),
+        Buffer.from(fixture.publicKeyBase64, 'base64'),
+      ]).toString('base64'),
+      participants: [{ participantUid: testParticipantUid('elsewhere', 0x07) }],
+    });
+    const ledgerClient = createMockLedgerClient();
+    const bridge = createBridge({ ledgerClient });
+
+    await expect(
+      bridge.submitExternalPartySignature({
+        partyId: fixture.partyId,
+        publicKeyBase64: fixture.publicKeyBase64,
+        multiHashHex: elsewhere.multiHashHex,
+        synchronizerId: SYNCHRONIZER_ID,
+        topologyTransactions: elsewhere.topologyTransactions,
+        multiHashSignatureBase64: fixture.signPreparedHash(elsewhere.multiHashHex),
+      })
+    ).rejects.toMatchObject({
+      name: 'ValidationError',
+      message: 'topologyTransactions do not state the onboarding of partyId with this key and the requested hosting',
+    });
     expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
   });
 

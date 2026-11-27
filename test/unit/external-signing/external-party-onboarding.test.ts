@@ -1064,6 +1064,42 @@ describe('external-party onboarding topology checks', () => {
     expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
   });
 
+  it('pins the local participant with expectedLocalParticipantUid before generating topology', async () => {
+    const prepareAlice = async (
+      ledgerClient: jest.Mocked<LedgerJsonApiClient>,
+      expectedLocalParticipantUid: string
+    ): Promise<unknown> =>
+      prepareExternalPartyOnboarding({
+        ledgerClient,
+        synchronizerId: 'global-domain::sync',
+        partyHint: 'alice',
+        publicKeyBase64: GENERATED_TOPOLOGY_PUBLIC_KEY,
+        expectedLocalParticipantUid,
+      });
+
+    // The participant names itself participant2 and generates a topology hosting alice there, self-consistently.
+    const impostor = testParticipantUid('participant2', 0x02);
+    const misreporting = vectorLedgerClient('v31');
+    misreporting.getParticipantId.mockResolvedValueOnce({ participantId: impostor });
+    const refused = prepareAlice(misreporting, GENERATED_TOPOLOGY_PARTICIPANT_UID);
+    await expect(refused).rejects.toBeInstanceOf(OperationError);
+    await expect(refused).rejects.toMatchObject({
+      context: { expectedLocalParticipantUid: GENERATED_TOPOLOGY_PARTICIPANT_UID, participantId: impostor },
+    });
+    expect(misreporting.generateExternalPartyTopology).not.toHaveBeenCalled();
+
+    const malformed = vectorLedgerClient('v31');
+    await expect(prepareAlice(malformed, `PAR::${GENERATED_TOPOLOGY_PARTICIPANT_UID}`)).rejects.toBeInstanceOf(
+      ValidationError
+    );
+    expect(malformed.getParticipantId).not.toHaveBeenCalled();
+
+    await expect(prepareAlice(vectorLedgerClient('v31'), GENERATED_TOPOLOGY_PARTICIPANT_UID)).resolves.toMatchObject({
+      partyId: GENERATED_TOPOLOGY_PARTY_ID,
+      multiHashHex: vectorHex(GENERATED_TOPOLOGY.v31.multiHash),
+    });
+  });
+
   it('refuses a topology for another party of the same key', async () => {
     const ledgerClient = vectorLedgerClient('v31', {
       partyId: GENERATED_TOPOLOGY_PARTY_ID.replace(/^alice::/, 'bob::'),
@@ -1338,6 +1374,144 @@ describe('external-party onboarding topology checks', () => {
       const error: unknown = await result.catch((reason: unknown) => reason);
       expect(isCantonProtocolError((error as { cause?: unknown }).cause, 'INVALID_INPUT')).toBe(true);
       expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
+    });
+
+    it('refuses signed transactions that onboard another party, key usage or hosting than the requested one', async () => {
+      const fixture = createSigningFixture();
+      const otherHint = buildExternalPartyId('treasury', fixture.publicKeyFingerprint);
+      const cases: ReadonlyArray<readonly [string, GeneratedTopologyAnswer, string]> = [
+        ['another hint under the same key', fixture.topologyFor({ partyId: otherHint }), 'party'],
+        [
+          'hosting on another participant',
+          fixture.topologyFor({ participants: [{ participantUid: testParticipantUid('elsewhere', 0x07) }] }),
+          'participants',
+        ],
+        [
+          'the local participant observing only',
+          fixture.topologyFor({
+            participants: [{ participantUid: LOCAL_PARTICIPANT_UID, permission: PERMISSION.OBSERVATION }],
+          }),
+          'participants',
+        ],
+        [
+          'an extra confirming participant',
+          fixture.topologyFor({
+            participants: [
+              { participantUid: LOCAL_PARTICIPANT_UID },
+              { participantUid: testParticipantUid('elsewhere', 0x07) },
+            ],
+          }),
+          'participants',
+        ],
+        [
+          'a key without PROOF_OF_OWNERSHIP',
+          fixture.topologyFor({ usage: [KEY_USAGE.NAMESPACE, KEY_USAGE.PROTOCOL] }),
+          'keys',
+        ],
+      ];
+      for (const [name, topology, field] of cases) {
+        const ledgerClient = createMockLedgerClient(fixture);
+        // Self-consistent and signed by the party's key: only the onboarding it states is wrong.
+        const result = submitExternalPartyOnboarding(
+          submitOptions(fixture, ledgerClient, {
+            multiHashHex: topology.multiHashHex,
+            topologyTransactions: topology.topologyTransactions,
+            multiHashSignatureBase64: fixture.sign(topology.multiHashHex),
+          })
+        );
+        const error: unknown = await result.catch((reason: unknown) => reason);
+        expect([name, error]).toEqual([name, expect.any(ValidationError)]);
+        expect((error as ValidationError).message).toBe(
+          'topologyTransactions do not state the onboarding of partyId with this key and the requested hosting'
+        );
+        expect((error as ValidationError).context).toEqual({
+          code: 'UNEXPECTED',
+          field: expect.stringContaining(field) as string,
+        });
+        expect(isCantonProtocolError((error as { cause?: unknown }).cause, 'UNEXPECTED')).toBe(true);
+        expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
+      }
+    });
+
+    it('checks the submitted transactions against the hosting options given to submit', async () => {
+      const fixture = createSigningFixture();
+      const multiHosted = fixture.topologyFor({
+        participants: [{ participantUid: LOCAL_PARTICIPANT_UID }, { participantUid: confirming }],
+        threshold: 1,
+      });
+      const change = {
+        multiHashHex: multiHosted.multiHashHex,
+        topologyTransactions: multiHosted.topologyTransactions,
+        multiHashSignatureBase64: fixture.sign(multiHosted.multiHashHex),
+      };
+
+      // Without the hosting options, the default (the local participant confirming alone) is expected.
+      const defaultClient = createMockLedgerClient(fixture);
+      await expect(submitExternalPartyOnboarding(submitOptions(fixture, defaultClient, change))).rejects.toThrow(
+        'topologyTransactions do not state the onboarding'
+      );
+      expect(defaultClient.allocateExternalParty).not.toHaveBeenCalled();
+
+      // A threshold other than the one asked for is refused too.
+      const thresholdClient = createMockLedgerClient(fixture);
+      await expect(
+        submitExternalPartyOnboarding(
+          submitOptions(fixture, thresholdClient, {
+            ...change,
+            otherConfirmingParticipantUids: [confirming],
+            confirmationThreshold: 2,
+          })
+        )
+      ).rejects.toThrow('topologyTransactions do not state the onboarding');
+      expect(thresholdClient.allocateExternalParty).not.toHaveBeenCalled();
+
+      const ledgerClient = createMockLedgerClient(fixture);
+      await expect(
+        submitExternalPartyOnboarding(
+          submitOptions(fixture, ledgerClient, {
+            ...change,
+            otherConfirmingParticipantUids: [confirming],
+            confirmationThreshold: 1,
+          })
+        )
+      ).resolves.toMatchObject({ partyId: fixture.partyId, alreadyExisted: false });
+      expect(ledgerClient.allocateExternalParty).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses invalid hosting options before reading the participant or allocating', async () => {
+      const fixture = createSigningFixture();
+      const ledgerClient = createMockLedgerClient(fixture);
+
+      const result = submitExternalPartyOnboarding(
+        submitOptions(fixture, ledgerClient, { otherConfirmingParticipantUids: ['PAR::participant2::1220'] })
+      );
+
+      await expect(result).rejects.toBeInstanceOf(ValidationError);
+      expect(ledgerClient.getParticipantId).not.toHaveBeenCalled();
+      expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
+    });
+
+    it('refuses to allocate when the participant is not the expected local participant', async () => {
+      const fixture = createSigningFixture();
+      const ledgerClient = createMockLedgerClient(fixture);
+      const expectedLocalParticipantUid = testParticipantUid('participant9', 0x09);
+
+      const result = submitExternalPartyOnboarding(
+        submitOptions(fixture, ledgerClient, { expectedLocalParticipantUid })
+      );
+
+      await expect(result).rejects.toBeInstanceOf(OperationError);
+      await expect(result).rejects.toMatchObject({
+        context: { expectedLocalParticipantUid, participantId: LOCAL_PARTICIPANT_UID },
+      });
+      expect(ledgerClient.allocateExternalParty).not.toHaveBeenCalled();
+
+      const matching = createMockLedgerClient(fixture);
+      await expect(
+        submitExternalPartyOnboarding(
+          submitOptions(fixture, matching, { expectedLocalParticipantUid: LOCAL_PARTICIPANT_UID })
+        )
+      ).resolves.toMatchObject({ partyId: fixture.partyId });
     });
 
     it('allocates the real v31 transactions under their recomputed multi-hash', async () => {

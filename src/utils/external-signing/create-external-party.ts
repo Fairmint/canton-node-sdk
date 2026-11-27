@@ -4,8 +4,7 @@ import { OperationError, OperationErrorCode } from '../../core/errors';
 import { normalizeAllocationUserId } from './allocation-user-id';
 import {
   checkOnboardingHosting,
-  onboardingHostingExpectation,
-  readLocalParticipantUid,
+  resolveOnboardingHosting,
   verifyGeneratedOnboardingTopology,
 } from './onboarding-topology';
 import { assertPartyKey, requestedExternalPartyId } from './party-identity';
@@ -46,6 +45,12 @@ export interface CreateExternalPartyParams {
   readonly confirmationThreshold?: number;
   /** Other participant UIDs that should only observe (same form and rules as `otherConfirmingParticipantUids`). */
   readonly observingParticipantUids?: readonly string[];
+  /**
+   * The local participant's unique identifier (`name::1220<64 lowercase hex>`, no `PAR::` prefix) as the caller knows
+   * it. When set, a `GET /v2/parties/participant-id` answering any other identifier is refused before anything is
+   * signed. Without it, which participant hosts the party with the local permission is the participant's own word.
+   */
+  readonly expectedLocalParticipantUid?: string;
 }
 
 /** Result of creating an external party. */
@@ -111,6 +116,7 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
     otherConfirmingParticipantUids,
     confirmationThreshold,
     observingParticipantUids,
+    expectedLocalParticipantUid,
   } = params;
   const userId = rawUserId === undefined ? undefined : normalizeAllocationUserId(rawUserId);
   const hostingRequest = checkOnboardingHosting({
@@ -118,6 +124,7 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
     otherConfirmingParticipantUids,
     confirmationThreshold,
     observingParticipantUids,
+    expectedLocalParticipantUid,
   });
 
   // Step 1: Convert Stellar public key to base64 for Ledger API
@@ -126,7 +133,7 @@ export async function createExternalParty(params: CreateExternalPartyParams): Pr
   const expectedPartyId = requestedExternalPartyId(partyName, publicKeyBase64);
 
   // Step 2: Generate external party topology using Ledger JSON API
-  const hosting = onboardingHostingExpectation(hostingRequest, await readLocalParticipantUid(ledgerClient));
+  const hosting = await resolveOnboardingHosting(ledgerClient, hostingRequest);
   const topology = await ledgerClient.generateExternalPartyTopology({
     synchronizer: synchronizerId,
     partyHint: partyName,
