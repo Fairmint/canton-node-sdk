@@ -18,6 +18,10 @@ shapes, and error behavior.
 npm install @fairmint/canton-node-sdk
 ```
 
+It needs Node.js 22.12 or later. The SDK is CommonJS, and its dependency
+[`@fairmint/canton-protocol`](https://www.npmjs.com/package/@fairmint/canton-protocol) is ESM only:
+Node loads it through `require()` of an ES module, which Node 22 supports without a flag from 22.12.
+
 ```ts
 import { Canton } from '@fairmint/canton-node-sdk';
 
