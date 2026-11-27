@@ -147,17 +147,29 @@ describe('party identity (canton-protocol, SDK errors)', () => {
 
   it('does not trim a party ID: whitespace around it or around its namespace is refused', () => {
     const partyId = `privy-test::${PRIVY_CANTON_FINGERPRINT}`;
-    for (const untrimmed of [`${partyId} `, `privy-test:: ${PRIVY_CANTON_FINGERPRINT}`]) {
-      // Space is a Daml-LF Party character, so the namespace reads as `<fingerprint> ` (or ` <fingerprint>`).
+    expect(assertPartyKey({ partyId, publicKeyBase64: PRIVY_SOLANA_PUBLIC_KEY_BASE64 })).toBe(PRIVY_CANTON_FINGERPRINT);
+    // Space is a Daml-LF Party character: a leading space, or one before `::`, would otherwise parse as part of the
+    // hint, with the key's fingerprint as the namespace.
+    for (const untrimmed of [
+      `${partyId} `,
+      ` ${partyId}`,
+      `  ${partyId}`,
+      `privy-test ::${PRIVY_CANTON_FINGERPRINT}`,
+      `privy-test:: ${PRIVY_CANTON_FINGERPRINT}`,
+      `${partyId}\n`,
+      `\t${partyId}`,
+    ]) {
       expect(() => assertPartyKey({ partyId: untrimmed, publicKeyBase64: PRIVY_SOLANA_PUBLIC_KEY_BASE64 })).toThrow(
-        'Canton party ID does not match the submitted public key'
+        'Canton party ID must not have whitespace around it or around its namespace'
       );
     }
-    for (const untrimmed of [`${partyId}\n`, `\t${partyId}`]) {
-      expect(() => assertPartyKey({ partyId: untrimmed, publicKeyBase64: PRIVY_SOLANA_PUBLIC_KEY_BASE64 })).toThrow(
-        'Expected a Canton party ID with one public key fingerprint suffix'
-      );
-    }
+    // Whitespace inside the hint is part of it, as Canton reads it.
+    expect(
+      assertPartyKey({
+        partyId: `privy test::${PRIVY_CANTON_FINGERPRINT}`,
+        publicKeyBase64: PRIVY_SOLANA_PUBLIC_KEY_BASE64,
+      })
+    ).toBe(PRIVY_CANTON_FINGERPRINT);
   });
 
   it('reads a caller-supplied Canton hash as hex only, in canonical form', () => {

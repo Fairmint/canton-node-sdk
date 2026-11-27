@@ -256,14 +256,20 @@ describe('verifyWalletOwnership', () => {
     // The key and a valid signature over the message, with only the party ID untrimmed.
     const proof = loopProof();
     expect(checkKeyAndSignature(proof)).toEqual({ fingerprint: party.namespace });
-    expect(checkKeyAndSignature({ ...proof, partyId: `${party.partyId} ` })).toMatchObject({
-      verified: false,
-      reason: 'key-not-bound-to-party',
-    });
-    expect(checkKeyAndSignature({ ...proof, partyId: `${party.partyId}\n` })).toMatchObject({
-      verified: false,
-      reason: 'party-mismatch',
-    });
+    const [hint, namespace] = party.partyId.split('::') as [string, string];
+    // A leading space, or one before `::`, would otherwise parse as part of the hint (space is a Daml-LF character).
+    for (const untrimmed of [
+      `${party.partyId} `,
+      ` ${party.partyId}`,
+      `${hint} ::${namespace}`,
+      `${hint}:: ${namespace}`,
+      `${party.partyId}\n`,
+    ]) {
+      expect(checkKeyAndSignature({ ...proof, partyId: untrimmed })).toMatchObject({
+        verified: false,
+        reason: 'party-mismatch',
+      });
+    }
     // The message refuses an untrimmed ID before any check, so a proof naming one never verifies.
     expect(() => loopProof({ partyId: `${party.partyId} ` })).toThrow(TypeError);
   });

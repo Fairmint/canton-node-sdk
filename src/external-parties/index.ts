@@ -12,6 +12,8 @@
 export {
   createExternalPartyDirectory,
   type ExternalPartyDirectory,
+  type ExternalPartyDirectoryEntry,
+  type ExternalPartyDirectoryListing,
   type ExternalPartyDirectoryLedgerClient,
   type ExternalPartyDirectoryOptions,
   type ExternalPartyDirectoryRequestConfig,

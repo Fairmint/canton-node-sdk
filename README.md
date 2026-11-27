@@ -179,12 +179,12 @@ The identity rules and the list-plus-lookups logic are
 `@fairmint/canton-protocol/party`. A naming policy for new hints is the app's own.
 
 Those rules are stricter than the SDK's former helpers. A party ID is never trimmed and must be a
-Daml-LF Party (at most 255 ASCII letters, digits, spaces, `:`, `-` or `_`): an ID with surrounding
-whitespace is refused wherever the SDK checks a party against its key (every external-party submit
-and the wallet ownership checks), and the directory skips such IDs in listings. An Ed25519 key must
-be a point on the curve: `deriveSolanaAddressFromEd25519PublicKeyBase64` and
-`assertEd25519Signature` refuse an off-curve 32-byte value, such as a Solana program-derived
-address.
+Daml-LF Party (at most 255 ASCII letters, digits, spaces, `:`, `-` or `_`): an ID with whitespace
+around it or around its `::` is refused wherever the SDK checks a party against its key (every
+external-party submit and the wallet ownership checks), and the directory skips IDs with surrounding
+whitespace in listings. An Ed25519 key must be a point on the curve:
+`deriveSolanaAddressFromEd25519PublicKeyBase64` and `assertEd25519Signature` refuse an off-curve
+32-byte value, such as a Solana program-derived address.
 
 ## Token actions through a CIP-0103 wallet
 

@@ -5,6 +5,7 @@
 import { fingerprintEd25519PublicKey, readPartyNamespace } from '@fairmint/canton-protocol/party';
 import { assertEd25519Signature } from './canton-protocol';
 import { normalizeCantonEd25519Signature } from './canton-ed25519-signer';
+import { hasSurroundingWhitespace } from './party-identity';
 import type { WalletOwnershipFailure, WalletOwnershipProof } from '../../wallets/ownership';
 
 /** A failed check: why, and a sentence for logs or the user. */
@@ -100,6 +101,10 @@ export function checkKeyAndSignature(
       'unsupported-public-key',
       'The public key is not an Ed25519 key in hex (raw 32 bytes) or base64 (raw 32 bytes or DER SubjectPublicKeyInfo)'
     );
+  }
+  // A party id is never trimmed: a leading space, or one before `::`, would otherwise pass as part of the hint.
+  if (hasSurroundingWhitespace(proof.partyId)) {
+    return checkFailure('party-mismatch', 'The party id has whitespace around it or around its namespace');
   }
   const partyFingerprint = readPartyNamespace(proof.partyId);
   if (partyFingerprint === null) {

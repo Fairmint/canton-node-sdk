@@ -11,8 +11,6 @@ import {
   isCantonHash,
   MAX_PARTY_ID_LENGTH,
   parsePartyId,
-  type ExternalPartyEntry,
-  type ExternalPartyListing,
 } from '@fairmint/canton-protocol/party';
 
 /** The request options the directory passes to the ledger client. */
@@ -59,6 +57,26 @@ export type ExternalPartyKey =
   | { readonly publicKeyBase64: string; readonly publicKeyFingerprint?: string }
   | { readonly publicKeyFingerprint: string; readonly publicKeyBase64?: undefined };
 
+/**
+ * One of a key's parties. Declared here (the same shape as canton-protocol's `ExternalPartyEntry`) so the SDK's public
+ * declarations do not import the ESM-only `@fairmint/canton-protocol`, which a CommonJS TypeScript consumer on `module:
+ * node16` cannot type-import without `skipLibCheck`.
+ */
+export interface ExternalPartyDirectoryEntry {
+  readonly partyId: string;
+  /** What precedes `::` in the party ID. */
+  readonly partyHint: string;
+  /** Whether this participant hosts the party (it can prepare and submit for it here). */
+  readonly hostedHere: boolean;
+}
+
+/** What {@link ExternalPartyDirectory.listPartiesForKey} answers: the key's parties, sorted by hint. */
+export interface ExternalPartyDirectoryListing {
+  readonly parties: readonly ExternalPartyDirectoryEntry[];
+  /** False when the scan was cut short (a page or time bound): a party it and the lookups did not show may still exist. */
+  readonly complete: boolean;
+}
+
 /** What {@link ExternalPartyDirectory.findParty} answers. */
 export type ExternalPartyFound = { readonly exists: false } | { readonly exists: true; readonly hostedHere: boolean };
 
@@ -75,7 +93,7 @@ export interface ExternalPartyDirectory {
    */
   listPartiesForKey(
     request: ExternalPartyKey & { readonly hints?: readonly string[]; readonly signal?: AbortSignal }
-  ): Promise<ExternalPartyListing>;
+  ): Promise<ExternalPartyDirectoryListing>;
   /**
    * One party by ID (`GET /v2/parties/{party}`): 404 or an answer that does not list it is not found; else it exists,
    * and `hostedHere` is its `isLocal`. The ledger client's errors pass through; an unreadable answer is
@@ -214,7 +232,7 @@ export function createExternalPartyDirectory(options: ExternalPartyDirectoryOpti
   async function scannedParties(
     publicKeyFingerprint: string,
     signal: AbortSignal | undefined
-  ): Promise<{ readonly parties: readonly ExternalPartyEntry[]; readonly complete: boolean }> {
+  ): Promise<ExternalPartyDirectoryListing> {
     const scan = await raceAbort(currentScan, signal, 'The party listing was aborted.');
     const parties = new Map(scan.byNamespace.get(publicKeyFingerprint) ?? []);
     const suffix = `::${publicKeyFingerprint}`;
@@ -304,8 +322,12 @@ function invalidInput(message: string): CantonProtocolError {
   return new CantonProtocolError('INVALID_INPUT', message);
 }
 
+// sortedEntries, compare, raceAbort and isBoundedIdentifier mirror the non-exported helpers of the same names in
+// canton-protocol's src/discovery.ts (0.1.0), which discoverExternalParties uses. Change the listing order, the abort
+// race or the bounded-identifier rule in both places until canton-protocol exports them.
+
 /** `parties` (party ID → hosted here) as frozen entries, sorted by hint (then party ID), in code-unit order. */
-function sortedEntries(parties: ReadonlyMap<string, boolean>): readonly ExternalPartyEntry[] {
+function sortedEntries(parties: ReadonlyMap<string, boolean>): readonly ExternalPartyDirectoryEntry[] {
   const entries = [...parties].map(([partyId, hostedHere]) =>
     Object.freeze({ partyId, partyHint: partyId.slice(0, partyId.indexOf('::')), hostedHere })
   );

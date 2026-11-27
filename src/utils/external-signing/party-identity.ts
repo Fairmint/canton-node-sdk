@@ -78,10 +78,29 @@ export function requestedExternalPartyId(partyHint: string, publicKeyBase64: str
 }
 
 /**
+ * Whether `partyId` has whitespace around it or around its `::`. A party ID is never trimmed, and a space is a Daml-LF
+ * Party character, so such an ID would otherwise parse: a leading space, or one before `::`, as part of the hint.
+ */
+export function hasSurroundingWhitespace(partyId: string): boolean {
+  if (partyId !== partyId.trim()) return true;
+  const separator = partyId.indexOf('::');
+  if (separator === -1) return false;
+  const hint = partyId.slice(0, separator);
+  const namespace = partyId.slice(separator + 2);
+  return hint !== hint.trim() || namespace !== namespace.trim();
+}
+
+/**
  * Checks that `partyId` is an external party of `publicKeyBase64` (its namespace is the key's fingerprint) and that a
- * caller-supplied fingerprint, if any, is the key's; returns the key's fingerprint.
+ * caller-supplied fingerprint, if any, is the key's; returns the key's fingerprint. An ID with whitespace around it or
+ * around its `::` is refused, never trimmed ({@link hasSurroundingWhitespace}).
  */
 export function assertPartyKey(input: PartyKeyInput): string {
+  if (typeof input.partyId === 'string' && hasSurroundingWhitespace(input.partyId)) {
+    throw new ValidationError('Canton party ID must not have whitespace around it or around its namespace', {
+      partyId: input.partyId,
+    });
+  }
   const parsed = parsePartyId(input.partyId);
   if (parsed === null) {
     throw new ValidationError('Expected a Canton party ID with one public key fingerprint suffix', {

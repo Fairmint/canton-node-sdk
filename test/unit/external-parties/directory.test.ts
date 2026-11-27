@@ -1,7 +1,11 @@
 import { ApiError } from '../../../src/core/errors';
 import type { LedgerJsonApiClient } from '../../../src/clients/ledger-json-api';
-import { isCantonProtocolError } from '@fairmint/canton-protocol/party';
-import { createExternalPartyDirectory, type ExternalPartyDirectoryLedgerClient } from '../../../src/external-parties';
+import { isCantonProtocolError, type ExternalPartyListing } from '@fairmint/canton-protocol/party';
+import {
+  createExternalPartyDirectory,
+  type ExternalPartyDirectoryLedgerClient,
+  type ExternalPartyDirectoryListing,
+} from '../../../src/external-parties';
 import * as Root from '../../../src';
 import * as ExternalPartiesEntry from '../../../src/external-parties';
 import { createKey } from './support';
@@ -379,6 +383,17 @@ describe('createExternalPartyDirectory', () => {
 });
 
 describe('the ./external-parties entry point', () => {
+  it("declares the listing it answers itself, the same shape as canton-protocol's", () => {
+    // Compile-time: each type assigns to the other, so the public declarations need not import the ESM-only package.
+    const ours: ExternalPartyDirectoryListing = {
+      parties: [{ partyId: 'a::b', partyHint: 'a', hostedHere: true }],
+      complete: true,
+    };
+    const theirs: ExternalPartyListing = ours;
+    const back: ExternalPartyDirectoryListing = theirs;
+    expect(back).toBe(ours);
+  });
+
   it('exports only the directory, also as the root ExternalParties namespace; identity and discovery are canton-protocol', () => {
     expect(Object.keys(ExternalPartiesEntry).sort()).toEqual(['createExternalPartyDirectory']);
     expect(Root.ExternalParties.createExternalPartyDirectory).toBe(createExternalPartyDirectory);
